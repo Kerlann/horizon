@@ -744,12 +744,7 @@ pub fn native_entity_invulnerability_check(
     original_invulnerable: bool,
     invulnerable: &mut Option<bool>,
 ) {
-    crate::native_client_hooks::entity_invulnerability_check(
-        entity,
-        damage_type,
-        original_invulnerable,
-        invulnerable,
-    );
+    let _ = (entity, damage_type, original_invulnerable, invulnerable);
 }
 
 impl ImmunityWorld for Environment<'_> {
@@ -781,6 +776,12 @@ impl ImmunityWorld for Environment<'_> {
     fn living_invulnerability_check(&mut self, original_invulnerable: bool) -> bool {
         let mut invulnerable = None;
         native_entity_invulnerability_check(
+            self.entity,
+            &self.source.definition().name,
+            original_invulnerable,
+            &mut invulnerable,
+        );
+        crate::native_client_hooks::entity_invulnerability_check(
             self.entity,
             &self.source.definition().name,
             original_invulnerable,

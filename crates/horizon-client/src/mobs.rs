@@ -2789,9 +2789,14 @@ impl Mob {
             // about, so `Player.attack` goes on with its extra knockback and its aftermath.
             return sulfur_cube::immune_to(&source);
         }
-        // LivingEntity.isInvulnerableTo: only #bypasses_invulnerability gets past it.
-        let original_invulnerable =
-            self.invulnerable_flag && !source.kind.bypasses_invulnerability();
+        // Ghast.hurtServer treats a reflected player fireball specially.
+        let reflected = &*self.kind.id == "minecraft:ghast"
+            && source.kind == DamageKind::Fireball
+            && source.attacker == Some(Who::Player);
+        // Entity's base check includes removal, the flag and fire immunity.
+        let original_invulnerable = self.removed
+            || (self.invulnerable_flag && !source.kind.bypasses_invulnerability())
+            || (source.is_fire() && self.kind.flags.fire_immune && !reflected);
         let mut invulnerable = None;
         crate::health::native_entity_invulnerability_check(
             self.id as i32,
@@ -2799,15 +2804,13 @@ impl Mob {
             original_invulnerable,
             &mut invulnerable,
         );
-        if !self.alive() || self.removed || invulnerable.unwrap_or(original_invulnerable) {
-            return false;
-        }
-        // Ghast.isReflectedFireball: a fireball a player turned back is
-        // no fire to it, and kills it (Ghast.hurtServer: 1000 damage).
-        let reflected = &*self.kind.id == "minecraft:ghast"
-            && source.kind == DamageKind::Fireball
-            && source.attacker == Some(Who::Player);
-        if source.is_fire() && (self.kind.flags.fire_immune) && !reflected {
+        crate::native_client_hooks::entity_invulnerability_check(
+            self.id as i32,
+            damage_type(source.kind, source.attacker.is_some()),
+            original_invulnerable,
+            &mut invulnerable,
+        );
+        if !self.alive() || invulnerable.unwrap_or(original_invulnerable) {
             return false;
         }
         if !ai::accepts_damage(self, &source, amount) {
