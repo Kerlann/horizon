@@ -44,7 +44,7 @@ pub use horizon_world::{
     },
     fluid::FluidState,
     level::{BlockId, Dimension as LevelDimension, PlacementContext},
-    loot::{EnchantedBlockLootContext, LootStack, NativeLootContext},
+    loot::{EnchantedBlockLootContext, EnchantedEntityLootContext, LootStack, NativeLootContext},
     nbt::{Compound, Tag},
     registry::BlockStateId,
 };

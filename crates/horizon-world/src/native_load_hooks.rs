@@ -1,5 +1,7 @@
 //! Callbacks into the executable for data-loading native trait mods.
-use crate::loot::{EnchantedBlockLootContext, EnchantedEntityLootContext, LootStack, NativeLootContext};
+use crate::loot::{
+    EnchantedBlockLootContext, EnchantedEntityLootContext, LootStack, NativeLootContext,
+};
 use serde_json::{Map, Value};
 use std::sync::OnceLock;
 

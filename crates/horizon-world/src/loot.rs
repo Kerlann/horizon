@@ -1376,7 +1376,10 @@ impl<R: RandomSource> Context<'_, R> {
                 "minecraft:killed_by_player" => self.entity.is_some_and(|p| p.player.is_some()),
                 "minecraft:random_chance_with_enchanted_bonus" => {
                     let level = self.living_attacker().map_or(0, |a| {
-                        data.enchantment_level(c["enchantment"].as_str().unwrap_or(""), a)
+                        self.entity_loot_enchantment_level(
+                            c["enchantment"].as_str().unwrap_or(""),
+                            a,
+                        )
                     });
                     let chance = if level > 0 {
                         level_value(&c["enchanted_chance"], level)
