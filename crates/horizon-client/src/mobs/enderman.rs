@@ -314,7 +314,7 @@ impl Goal for LookForPlayer {
     }
     fn stop(&mut self, m: &mut Mob, _: &mut Cx) {
         self.pending = false;
-        m.ai.target = None;
+        m.change_goal_target(None);
     }
     fn can_continue(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {
         let Some(p) = cx.w.player.clone() else {
@@ -338,7 +338,7 @@ impl Goal for LookForPlayer {
             self.aggro -= 1;
             if self.aggro <= 0 {
                 self.pending = false;
-                m.ai.target = Some(Who::Player);
+                m.change_goal_target(Some(Who::Player));
                 cx.events.push(MobEvent::Sound(
                     "entity.enderman.stare",
                     m.center(),
