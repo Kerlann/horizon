@@ -7,6 +7,7 @@ use std::sync::OnceLock;
 pub struct NativeClientHooks {
     pub menu_slot_rules: fn(&str, usize, &ItemStack, &mut bool, &mut u32),
     pub living_breathe: fn(u32, &str, &mut bool, &mut i32, &mut i32),
+    pub mob_despawn: fn(u32, &str, &mut Option<bool>),
     pub ingredient: fn(&str, &Map<String, Value>, &mut Vec<String>),
 }
 
@@ -38,6 +39,12 @@ pub(crate) fn living_breathe(
 ) {
     if let Some(hooks) = HOOKS.get() {
         (hooks.living_breathe)(entity, kind, can_breathe, consume, refill);
+    }
+}
+
+pub(crate) fn mob_despawn(entity: u32, kind: &str, result: &mut Option<bool>) {
+    if let Some(hooks) = HOOKS.get() {
+        (hooks.mob_despawn)(entity, kind, result);
     }
 }
 

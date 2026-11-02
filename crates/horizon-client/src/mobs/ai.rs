@@ -1810,12 +1810,24 @@ pub fn requires_custom_persistence(m: &Mob) -> bool {
         || m.species() == Species::SulfurCube
             && (super::sulfur_cube::has_body(m) || m.extra.scratch[3] != 0)
 }
+/// A server mob is about to check despawning. `result` is None for vanilla,
+/// Some(true) to discard it, or Some(false) to keep it. @API:mob_despawn@.
+#[inline(never)]
+pub fn native_mob_despawn(entity: u32, kind: &str, result: &mut Option<bool>) {
+    crate::native_client_hooks::mob_despawn(entity, kind, result);
+}
+
 /// Mob.checkDespawn, before the tick (players are the only despawn
 /// reference). Returns false when the mob is discarded.
 fn check_despawn(m: &mut Mob, w: &MobWorld) -> bool {
     // A mannequin is a LivingEntity, which never despawns.
     if m.species() == Species::Mannequin {
         return true;
+    }
+    let mut result = None;
+    native_mob_despawn(m.id, &m.kind.id, &mut result);
+    if let Some(despawn) = result {
+        return !despawn;
     }
     // Mob.checkDespawn discards disallowed types even when persistent or NoAI.
     if w.difficulty.effective == 0.0 && !super::spawn_rules::allowed_in_peaceful(m.species()) {

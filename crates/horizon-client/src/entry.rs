@@ -119,6 +119,9 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 refill,
             );
         },
+        mob_despawn: |entity, kind, result| {
+            crate::mod_api::dispatch_mob_despawn(crate::mod_api::mods(), entity, kind, result);
+        },
         ingredient: |kind, data, items| {
             crate::mod_api::dispatch_ingredient(crate::mod_api::mods(), kind, data, items);
         },
