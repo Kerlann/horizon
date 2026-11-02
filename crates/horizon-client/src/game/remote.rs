@@ -1223,7 +1223,14 @@ impl Game<'_> {
         e.visible = p.flags & 2 != 0;
         let mut result = None;
         self.native_mob_effect_applicable(Some(p.id), &e, None, &mut result);
-        if result == Some(false) {
+        let vanilla = is_player || self.mobs.iter().find(|m| m.id == p.id as u32).is_some_and(|m| {
+            super::potions::mob_can_be_affected(
+                &self.stations().enchantments.entity_tags,
+                &m.kind.id,
+                id,
+            )
+        });
+        if !result.unwrap_or(vanilla) {
             return;
         }
         if !is_player {

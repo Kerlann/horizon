@@ -1213,7 +1213,7 @@ impl GameLevel<'_> {
 /// its particle, and whether it is shown at all.
 #[derive(Clone, Debug)]
 pub struct NativeEffectParticle {
-    pub options: horizon_client::particles::ParticleOptions,
+    pub options: Option<horizon_client::particles::ParticleOptions>,
     pub visible: bool,
 }
 

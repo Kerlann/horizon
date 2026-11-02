@@ -2943,7 +2943,7 @@ impl Game<'_> {
                     &mut changed,
                 );
                 match changed {
-                    Some(changed) if changed.visible => particles.push(changed.options),
+                    Some(changed) if changed.visible => particles.push(changed.options.unwrap_or(original)),
                     None if effect.visible => particles.push(original),
                     _ => {}
                 }
