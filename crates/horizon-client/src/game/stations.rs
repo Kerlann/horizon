@@ -2365,6 +2365,13 @@ impl Game<'_> {
             self.native_item_attribute_modifier(stack, &mut entries);
             let mut modifiers: Vec<_> = entries.into_iter().map(Into::into).collect();
             modifiers.extend(e.modifier_rows(stack));
+            let mut selection = horizon_client::item_tooltip::SkippedAttributeTooltips::default();
+            self.native_gather_skipped_attribute_tooltips(stack, &mut selection);
+            modifiers.retain(|(_, id, _, _, group)| {
+                !selection.skip_all
+                    && !selection.ids.contains(id)
+                    && !selection.groups.contains(group)
+            });
             let base = |name: &str, default| {
                 self.player
                     .as_ref()

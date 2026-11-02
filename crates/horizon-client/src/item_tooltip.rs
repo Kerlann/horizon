@@ -168,6 +168,14 @@ impl From<ItemAttributeModifier> for (String, String, f64, String, String) {
     }
 }
 
+/// Selection of attribute modifiers omitted from an item tooltip.
+#[derive(Clone, Debug, Default)]
+pub struct SkippedAttributeTooltips {
+    pub ids: std::collections::BTreeSet<String>,
+    pub groups: std::collections::BTreeSet<String>,
+    pub skip_all: bool,
+}
+
 /// `ItemStack.addAttributeTooltips`: slot groups, colors and optional player
 /// attack damage/speed bases. Recipe search has no player context.
 pub fn attribute_lines(

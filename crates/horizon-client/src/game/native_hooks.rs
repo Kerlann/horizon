@@ -4916,6 +4916,16 @@ impl Game<'_> {
         let _ = (stack, modifiers);
     }
 
+    /// Select attribute modifier IDs and slot groups to omit from the tooltip.
+    /// Both sides. @API:gather_skipped_attribute_tooltips@.
+    pub(super) fn native_gather_skipped_attribute_tooltips(
+        &self,
+        stack: &ItemStack,
+        selection: &mut horizon_client::item_tooltip::SkippedAttributeTooltips,
+    ) {
+        let _ = (stack, selection);
+    }
+
     /// Append attribute tooltip lines, including when normal attributes are hidden.
     /// Both sides. @API:add_attribute_tooltips@.
     pub(super) fn native_add_attribute_tooltips(

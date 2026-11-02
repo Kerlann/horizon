@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "gather_skipped_attribute_tooltips",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_gather_skipped_attribute_tooltips",
+      "neoforge": "GatherSkippedAttributeTooltipsEvent",
+      "side": "both",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "replace",
+        "out": "selection"
+      }
+    }
+  ],
+  "rust_summary": "Skipped item attribute tooltips (`native_gather_skipped_attribute_tooltips`).",
+  "doc_summary": "Mods can select skipped attribute tooltips with `native_gather_skipped_attribute_tooltips`. Bundles need \"hooks\": @API:gather_skipped_attribute_tooltips@."
+}
