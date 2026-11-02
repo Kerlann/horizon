@@ -1824,10 +1824,13 @@ fn check_despawn(m: &mut Mob, w: &MobWorld) -> bool {
     if m.species() == Species::Mannequin {
         return true;
     }
-    let mut result = None;
-    native_mob_despawn(m.id, &m.kind.id, &mut result);
-    if let Some(despawn) = result {
-        return !despawn;
+    // WitherBoss overrides checkDespawn without calling Mob's implementation.
+    if w.mod_effects.is_some() && m.species() != Species::Wither {
+        let mut result = None;
+        native_mob_despawn(m.id, &m.kind.id, &mut result);
+        if let Some(despawn) = result {
+            return !despawn;
+        }
     }
     // Mob.checkDespawn discards disallowed types even when persistent or NoAI.
     if w.difficulty.effective == 0.0 && !super::spawn_rules::allowed_in_peaceful(m.species()) {
