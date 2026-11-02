@@ -4745,7 +4745,7 @@ impl Game<'_> {
     }
 
     /// A chunk's save data has been captured on the server thread. Attachment
-    /// changes made now do not change this save. @API:chunk_data_save@.
+    /// changes made now do not change this save. @API:native_chunk_data_save@.
     pub(super) fn native_chunk_data_save(&mut self, dimension: &str, chunk: [i32; 2]) {
         let _ = (dimension, chunk);
     }

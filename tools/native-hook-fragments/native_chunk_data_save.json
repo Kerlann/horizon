@@ -11,5 +11,5 @@
     }
   ],
   "rust_summary": "A chunk's save data was captured on the server thread (`native_chunk_data_save`).",
-  "doc_summary": "A chunk's save data was captured on the server thread: `native_chunk_data_save(dimension, chunk)` runs before the data is queued for writing. Attachment changes do not affect that captured data. Bundles need \"hooks\": @API:chunk_data_save@."
+  "doc_summary": "A chunk's save data was captured on the server thread: `native_chunk_data_save(dimension, chunk)` runs before the data is queued for writing. Attachment changes do not affect that captured data. Bundles need \"hooks\": @API:native_chunk_data_save@."
 }
