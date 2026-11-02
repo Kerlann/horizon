@@ -3543,6 +3543,7 @@ pub(crate) mod tests {
                 living_breathe: |_, _, _, _, _| {},
                 chunk_watch: |_, _, _| {},
                 chunk_sent: |_, _, _| {},
+                chunk_unwatch: |_, _, _| {},
                 ingredient: |_, _, _| {},
             });
         assert!(installed.is_ok());

@@ -49,6 +49,12 @@ pub fn native_chunk_sent(player: i32, dimension: &str, chunk: [i32; 2]) {
     crate::native_client_hooks::chunk_sent(player, dimension, chunk);
 }
 
+/// A chunk leaves a player's tracking view, whether or not it was sent.
+#[inline(never)]
+pub fn native_chunk_unwatch(player: i32, dimension: &str, chunk: [i32; 2]) {
+    crate::native_client_hooks::chunk_unwatch(player, dimension, chunk);
+}
+
 /// GameEvent types (ClientboundGameEventPacket).
 pub mod chat;
 pub mod chat_filter;
@@ -2008,6 +2014,12 @@ impl Hub {
                 z: cz,
             }));
         }
+        // Pending chunks can leave the view before they are ever sent.
+        for &(x, z) in g.chunk_queue.iter().chain(&g.far_queue) {
+            if !tracked(cx, cz, reach, x, z) && !g.sent_chunks.contains(&(x, z)) {
+                native_chunk_unwatch(g.entity_id, &self.config.dimension, [x, z]);
+            }
+        }
         // Chunks that left the view.
         let forget: Vec<_> = g
             .sent_chunks
@@ -2016,6 +2028,7 @@ impl Hub {
             .filter(|&(x, z)| !tracked(cx, cz, reach, x, z))
             .collect();
         for (x, z) in forget {
+            native_chunk_unwatch(g.entity_id, &self.config.dimension, [x, z]);
             g.sent_chunks.remove(&(x, z));
             g.send(&C::ForgetLevelChunk(play::ForgetLevelChunk { pos: [x, z] }));
         }

@@ -1,0 +1,15 @@
+{
+  "hooks": [
+    {
+      "name": "chunk_unwatch",
+      "target": "horizon_client::lan::hub::native_chunk_unwatch",
+      "side": "server",
+      "neoforge": "ChunkWatchEvent.UnWatch",
+      "mod_api": {
+        "contract": "listen"
+      }
+    }
+  ],
+  "rust_summary": "A player stopped watching a chunk (`native_chunk_unwatch`).",
+  "doc_summary": "A chunk left a player's view: `native_chunk_unwatch(player, dimension, chunk)`. Bundles need \"hooks\": @API:chunk_unwatch@."
+}

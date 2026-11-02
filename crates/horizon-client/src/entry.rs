@@ -125,6 +125,9 @@ pub fn main_with(mods: crate::mod_api::Mods) {
         chunk_sent: |player, dimension, chunk| {
             crate::mod_api::dispatch_chunk_sent(crate::mod_api::mods(), player, dimension, chunk);
         },
+        chunk_unwatch: |player, dimension, chunk| {
+            crate::mod_api::dispatch_chunk_unwatch(crate::mod_api::mods(), player, dimension, chunk);
+        },
         ingredient: |kind, data, items| {
             crate::mod_api::dispatch_ingredient(crate::mod_api::mods(), kind, data, items);
         },

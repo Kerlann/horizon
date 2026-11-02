@@ -9,6 +9,7 @@ pub struct NativeClientHooks {
     pub living_breathe: fn(u32, &str, &mut bool, &mut i32, &mut i32),
     pub chunk_watch: fn(i32, &str, [i32; 2]),
     pub chunk_sent: fn(i32, &str, [i32; 2]),
+    pub chunk_unwatch: fn(i32, &str, [i32; 2]),
     pub ingredient: fn(&str, &Map<String, Value>, &mut Vec<String>),
 }
 
@@ -52,6 +53,12 @@ pub(crate) fn chunk_watch(player: i32, dimension: &str, chunk: [i32; 2]) {
 pub(crate) fn chunk_sent(player: i32, dimension: &str, chunk: [i32; 2]) {
     if let Some(hooks) = HOOKS.get() {
         (hooks.chunk_sent)(player, dimension, chunk);
+    }
+}
+
+pub(crate) fn chunk_unwatch(player: i32, dimension: &str, chunk: [i32; 2]) {
+    if let Some(hooks) = HOOKS.get() {
+        (hooks.chunk_unwatch)(player, dimension, chunk);
     }
 }
 
