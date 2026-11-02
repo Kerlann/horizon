@@ -427,7 +427,7 @@ impl Game<'_> {
                 spawn_data: None,
                 spawn_cancelled: false,
             };
-            spawning::native_finalize_spawn(&kind, at, &mut event, &mut canceled);
+            spawning::dispatch_finalize_spawn(&kind, at, &mut event, &mut canceled);
             difficulty = event.difficulty;
             if !canceled {
                 spawning::finalize(&mut mob, &facts, &difficulty);
@@ -610,10 +610,24 @@ impl Game<'_> {
             at.y.floor() as i32,
             at.z.floor() as i32,
         );
-        let difficulty = self.local_difficulty([at.x, at.y, at.z]);
+        let position = [at.x, at.y, at.z];
+        let mut event = spawning::FinalizeSpawn {
+            reason: horizon_client::mobs::finalize::Reason::Conversion,
+            spawner: None,
+            difficulty: self.local_difficulty(position),
+            spawn_data: None,
+            spawn_cancelled: false,
+        };
+        let mut canceled = false;
+        spawning::dispatch_finalize_spawn("minecraft:frog", position, &mut event, &mut canceled);
         if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-            spawning::finalize(m, &facts, &difficulty);
+            if !canceled {
+                spawning::finalize(m, &facts, &event.difficulty);
+            }
             m.persistent = true;
+        }
+        if event.spawn_cancelled {
+            self.mobs.retain(|m| m.id != id);
         }
     }
     /// `Mob.convertTo(type, ConversionParams.single(...))` for a mob already

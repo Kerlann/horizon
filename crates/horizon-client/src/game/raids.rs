@@ -775,7 +775,7 @@ impl Game<'_> {
             spawn_cancelled: false,
         };
         let mut canceled = false;
-        spawning::native_finalize_spawn(kind, at, &mut spawn, &mut canceled);
+        spawning::dispatch_finalize_spawn(kind, at, &mut spawn, &mut canceled);
         if !canceled {
             spawning::finalize(&mut mob, &facts, &spawn.difficulty);
             raider::finalize(&mut mob, reason);

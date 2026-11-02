@@ -110,6 +110,17 @@ pub fn native_finalize_spawn(
     spawn: &mut FinalizeSpawn,
     canceled: &mut bool,
 ) {
+    let _ = (kind, position, spawn, canceled);
+}
+
+/// Dispatch the finalization event through the installed client-library bridge.
+pub fn dispatch_finalize_spawn(
+    kind: &str,
+    position: [f64; 3],
+    spawn: &mut FinalizeSpawn,
+    canceled: &mut bool,
+) {
+    native_finalize_spawn(kind, position, spawn, canceled);
     crate::native_client_hooks::finalize_spawn(kind, position, spawn, canceled);
 }
 

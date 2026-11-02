@@ -293,7 +293,7 @@ impl StructureMobFinalizer {
             spawn_cancelled: false,
         };
         let mut canceled = false;
-        crate::mobs::spawning::native_finalize_spawn(
+        crate::mobs::spawning::dispatch_finalize_spawn(
             &m.kind.id,
             [m.position.x, m.position.y, m.position.z],
             &mut event,

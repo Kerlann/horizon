@@ -426,7 +426,7 @@ impl<'a> Game<'a> {
             spawn_cancelled: false,
         };
         let mut canceled = false;
-        horizon_client::mobs::spawning::native_finalize_spawn(
+        horizon_client::mobs::spawning::dispatch_finalize_spawn(
             r.entity,
             r.position,
             &mut spawn,

@@ -527,8 +527,15 @@ fn needs_fill(method: &syn::ItemFn, call: &str, in_game: bool) -> Result<bool, S
         },
         _ => None,
     };
-    if in_game && named == Some(params) {
-        return Ok(true);
+    if named == Some(params) {
+        if in_game {
+            return Ok(true);
+        }
+        // Finalize spawn is dispatched by its library bridge after the
+        // placeholder, including from world generation without a Game.
+        if method.sig.ident == "native_finalize_spawn" {
+            return Ok(false);
+        }
     }
     Err(format!(
         "missing {call} call in {}: add it, or leave a Game hook's body as the let _ = (…); placeholder for cargo run -p xtask -- mod-api to fill",

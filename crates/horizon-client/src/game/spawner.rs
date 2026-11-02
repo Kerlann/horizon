@@ -193,7 +193,7 @@ impl Game<'_> {
                 spawn_cancelled: false,
             };
             let mut canceled = false;
-            spawning::native_finalize_spawn(r.id, r.position, &mut spawn, &mut canceled);
+            spawning::dispatch_finalize_spawn(r.id, r.position, &mut spawn, &mut canceled);
             if !canceled {
                 spawning::finalize(&mut mob, &facts, &spawn.difficulty);
                 horizon_client::mobs::raider::finalize(
