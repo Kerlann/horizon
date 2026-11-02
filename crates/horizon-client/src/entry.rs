@@ -121,7 +121,12 @@ pub fn main_with(mods: crate::mod_api::Mods) {
         },
         server_chat: |player, username, raw, message, cancel| {
             crate::mod_api::dispatch_server_chat(
-                crate::mod_api::mods(), player, username, raw, message, cancel,
+                crate::mod_api::mods(),
+                player,
+                username,
+                raw,
+                message,
+                cancel,
             );
         },
         ingredient: |kind, data, items| {

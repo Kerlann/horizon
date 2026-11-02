@@ -241,6 +241,8 @@ impl Hub {
         if cancel {
             return;
         }
+        // logChatMessage logs the decorated content, which a mod may have replaced.
+        let line = format!("<{name}> {}", self.english(&component));
         if component != original {
             message.unsigned_content = Some(component);
         }
@@ -249,7 +251,6 @@ impl Hub {
             name: self.player_display_name(uuid, &name),
             target: None,
         };
-        let line = format!("<{name}> {}", message.content);
         self.broadcast_chat(&message, &bound, line, events);
         events.push(HostEvent::PlayerChat {
             sender: uuid,

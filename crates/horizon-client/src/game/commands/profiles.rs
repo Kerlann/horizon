@@ -81,12 +81,20 @@ impl Game<'_> {
         new_level: i32,
     ) -> bool {
         let online = self.lan.as_ref().is_some_and(|host| {
-            host.hub.guests.iter().any(|guest| guest.uuid == player.id)
+            host.hub
+                .guests
+                .iter()
+                .any(|guest| guest.placed && guest.uuid == player.id)
         });
         if !online {
             return false;
         }
-        let old_level = lists.lock().unwrap().ops.get(player).map_or(0, |op| op.level);
+        let old_level = lists
+            .lock()
+            .unwrap()
+            .ops
+            .get(player)
+            .map_or(0, |op| op.level);
         let mut cancel = false;
         self.native_permissions_changed(player.id, &player.name, old_level, new_level, &mut cancel);
         cancel
@@ -102,14 +110,11 @@ impl Game<'_> {
         match id {
             "op" => {
                 for player in &players {
-                    let level = {
+                    let (exists, level) = {
                         let l = lists.lock().unwrap();
-                        if l.ops.contains(player) {
-                            continue;
-                        }
-                        l.op_level
+                        (l.ops.contains(player), l.op_level)
                     };
-                    if self.cancel_permissions_change(&lists, player, level) {
+                    if !exists && self.cancel_permissions_change(&lists, player, level) {
                         continue;
                     }
                     let added = {
@@ -140,7 +145,7 @@ impl Game<'_> {
                     }
                     let removed = {
                         let mut l = lists.lock().unwrap();
-                        l.ops.remove(player)
+                        l.ops.contains(player) && l.ops.remove(player)
                     };
                     if removed {
                         self.sync_ops(&lists);

@@ -326,10 +326,14 @@ impl Game<'_> {
                 }
             }
             "operators/remove" => {
-                for user in entries.iter().filter_map(|e| self.management_user(e)) {
+                let users: Vec<NameAndId> = entries
+                    .iter()
+                    .filter_map(|e| self.management_user(e))
+                    .collect();
+                for user in users {
+                    rpc(format!("Deop '{}'", shown(&user)));
                     let exists = lists.lock().unwrap().ops.contains(&user);
                     if exists && !self.cancel_permissions_change(&lists, &user, 0) {
-                        rpc(format!("Deop '{}'", shown(&user)));
                         lists.lock().unwrap().ops.remove(&user);
                     }
                 }
@@ -353,8 +357,8 @@ impl Game<'_> {
                     })
                     .collect();
                 for op in current.iter().filter(|o| !wanted.contains(o)) {
+                    rpc(format!("Deop '{}'", shown(&op.user)));
                     if !self.cancel_permissions_change(&lists, &op.user, 0) {
-                        rpc(format!("Deop '{}'", shown(&op.user)));
                         lists.lock().unwrap().ops.remove(&op.user);
                     }
                 }
@@ -365,19 +369,7 @@ impl Game<'_> {
             }
             "operators/clear" => {
                 rpc("Clear operator list".into());
-                let users: Vec<_> = lists
-                    .lock()
-                    .unwrap()
-                    .ops
-                    .entries()
-                    .iter()
-                    .map(|entry| entry.user.clone())
-                    .collect();
-                for user in users {
-                    if !self.cancel_permissions_change(&lists, &user, 0) {
-                        lists.lock().unwrap().ops.remove(&user);
-                    }
-                }
+                lists.lock().unwrap().ops.clear();
                 self.sync_ops(&lists);
             }
             other => return json!({ "error": format!("unknown management method {other:?}") }),
@@ -420,11 +412,13 @@ impl Game<'_> {
     /// `PlayerList.op`: the level asked for, else `op-permission-level`; the bypass asked for, else the one
     /// the player had. The commands an online player may run follow (`sync_ops`, after the edit).
     fn management_add_op(&mut self, rpc: &impl Fn(String), state: &ServerState, op: Op) {
-        let level = op.level.unwrap_or_else(|| state.lists.lock().unwrap().op_level);
+        rpc(format!("Op '{}'", shown(&op.user)));
+        let level = op
+            .level
+            .unwrap_or_else(|| state.lists.lock().unwrap().op_level);
         if self.cancel_permissions_change(&state.lists, &op.user, level) {
             return;
         }
-        rpc(format!("Op '{}'", shown(&op.user)));
         let mut lists = state.lists.lock().unwrap();
         let had = lists
             .ops
