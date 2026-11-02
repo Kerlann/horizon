@@ -43,6 +43,12 @@ pub fn native_chunk_watch(player: i32, dimension: &str, chunk: [i32; 2]) {
     crate::native_client_hooks::chunk_watch(player, dimension, chunk);
 }
 
+/// A ready level chunk was sent to a player on the logical server.
+#[inline(never)]
+pub fn native_chunk_sent(player: i32, dimension: &str, chunk: [i32; 2]) {
+    crate::native_client_hooks::chunk_sent(player, dimension, chunk);
+}
+
 /// GameEvent types (ClientboundGameEventPacket).
 pub mod chat;
 pub mod chat_filter;
@@ -1934,20 +1940,28 @@ impl Hub {
             if size > 0 {
                 g.batch_quota -= size as f32;
                 g.send(&C::ChunkBatchStart(horizon_protocol::packets::Empty));
-                g.sender.send_many(batch.into_iter().map(|body| match body {
-                    Body::Level(j) => {
-                        if memory {
-                            super::handoff::offer(chunks[j]);
+                for body in batch {
+                    match body {
+                        Body::Level(j) => {
+                            if memory {
+                                super::handoff::offer(chunks[j]);
+                            }
+                            uses[j] -= 1;
+                            let body = if uses[j] == 0 {
+                                std::mem::take(&mut encoded[j])
+                            } else {
+                                encoded[j].clone()
+                            };
+                            g.sender.send(body);
+                            native_chunk_sent(
+                                g.entity_id,
+                                &self.config.dimension,
+                                [chunks[j].x, chunks[j].z],
+                            );
                         }
-                        uses[j] -= 1;
-                        if uses[j] == 0 {
-                            std::mem::take(&mut encoded[j])
-                        } else {
-                            encoded[j].clone()
-                        }
+                        Body::Saved(body) => g.sender.send(body.to_vec()),
                     }
-                    Body::Saved(body) => body.to_vec(),
-                }));
+                }
                 g.send(&C::ChunkBatchFinished(play::ChunkBatchFinished {
                     size: size as i32,
                 }));
