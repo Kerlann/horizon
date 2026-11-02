@@ -4906,13 +4906,8 @@ impl Game<'_> {
     pub(super) fn native_menu_closed(&mut self, uuid: u128, window: i32) {
         mod_api::dispatch_menu_closed(self, mod_api::mods(), uuid, window);
     }
-    /// An item's tooltip, wherever the game shows one (slots, the creative
-    /// tabs, the recipe book, chat's hover): the stack, with its components
-    /// (`stack.data()`: a shulker box's contents...), and its lines, the name
-    /// first, each with a colour as `rgba` packs it (`u32::MAX` keeps the
-    /// text's own). Add, change or take out lines; `Text::legacy` reads `§`
-    /// codes. Asked each frame the tooltip shows, never for one the stack
-    /// hides. API 12.
+    /// Replace the item's attribute modifier entries before slot filtering.
+    /// Both sides. @API:item_attribute_modifier@.
     pub(super) fn native_item_attribute_modifier(
         &self,
         stack: &ItemStack,
@@ -4921,6 +4916,13 @@ impl Game<'_> {
         let _ = (stack, modifiers);
     }
 
+    /// An item's tooltip, wherever the game shows one (slots, the creative
+    /// tabs, the recipe book, chat's hover): the stack, with its components
+    /// (`stack.data()`: a shulker box's contents...), and its lines, the name
+    /// first, each with a colour as `rgba` packs it (`u32::MAX` keeps the
+    /// text's own). Add, change or take out lines; `Text::legacy` reads `§`
+    /// codes. Asked each frame the tooltip shows, never for one the stack
+    /// hides. API 12.
     pub(super) fn native_tooltip(&self, stack: &ItemStack, lines: &mut Vec<(Text, u32)>) {
         mod_api::dispatch_tooltip(self, mod_api::mods(), stack, lines);
     }

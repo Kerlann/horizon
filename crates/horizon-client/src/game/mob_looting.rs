@@ -162,11 +162,17 @@ impl Game<'_> {
     /// `Mob.getApproximateAttributeWith` for the item `id` in `slot`: each
     /// attribute starts from the mob's own value. (armour, toughness, damage)
     fn attributes(&self, m: &Mob, id: &str, slot: Slot) -> (f64, f64, f64) {
-        let empty: &[(String, String, f64, String, String)] = &[];
-        let modifiers = self
+        let mut entries: Vec<_> = self
             .items()
             .get(id)
-            .map_or(empty, |i| i.modifiers.as_slice());
+            .into_iter()
+            .flat_map(|info| &info.modifiers)
+            .map(horizon_client::item_tooltip::ItemAttributeModifier::from)
+            .collect();
+        let stack = horizon_client::items::ItemStack::new(id, 1);
+        self.native_item_attribute_modifier(&stack, &mut entries);
+        let rows: Vec<_> = entries.into_iter().map(Into::into).collect();
+        let modifiers = rows.as_slice();
         (
             equip::attribute_with(modifiers, "minecraft:armor", f64::from(m.kind.armor), slot),
             equip::attribute_with(

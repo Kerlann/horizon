@@ -87,17 +87,12 @@ impl Game<'_> {
             let Some(item) = item else {
                 continue;
             };
-            let mut modifiers: Vec<_> = self.items().get(item).into_iter()
+            let mut modifiers: Vec<_> = self
+                .items()
+                .get(item)
+                .into_iter()
                 .flat_map(|info| &info.modifiers)
-                .map(|(attribute, id, amount, operation, slot)| {
-                    horizon_client::item_tooltip::ItemAttributeModifier {
-                        attribute: attribute.clone(),
-                        id: id.clone(),
-                        amount: *amount,
-                        operation: operation.clone(),
-                        slot: slot.clone(),
-                    }
-                })
+                .map(horizon_client::item_tooltip::ItemAttributeModifier::from)
                 .collect();
             let stack = horizon_client::items::ItemStack::new(item.as_ref(), 1);
             self.native_item_attribute_modifier(&stack, &mut modifiers);

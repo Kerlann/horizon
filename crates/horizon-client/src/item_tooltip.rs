@@ -150,6 +150,24 @@ pub struct ItemAttributeModifier {
     pub slot: String,
 }
 
+impl From<&(String, String, f64, String, String)> for ItemAttributeModifier {
+    fn from(row: &(String, String, f64, String, String)) -> Self {
+        Self {
+            attribute: row.0.clone(),
+            id: row.1.clone(),
+            amount: row.2,
+            operation: row.3.clone(),
+            slot: row.4.clone(),
+        }
+    }
+}
+
+impl From<ItemAttributeModifier> for (String, String, f64, String, String) {
+    fn from(entry: ItemAttributeModifier) -> Self {
+        (entry.attribute, entry.id, entry.amount, entry.operation, entry.slot)
+    }
+}
+
 /// `ItemStack.addAttributeTooltips`: slot groups, colors and optional player
 /// attack damage/speed bases. Recipe search has no player context.
 pub fn attribute_lines(
