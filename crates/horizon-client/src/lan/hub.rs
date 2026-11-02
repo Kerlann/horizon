@@ -37,6 +37,12 @@ use horizon_world::{
 };
 use std::sync::{Arc, Mutex, atomic::Ordering};
 
+/// A player is about to receive a ready chunk on the logical server.
+#[inline(never)]
+pub fn native_chunk_watch(player: i32, dimension: &str, chunk: [i32; 2]) {
+    crate::native_client_hooks::chunk_watch(player, dimension, chunk);
+}
+
 /// GameEvent types (ClientboundGameEventPacket).
 pub mod chat;
 pub mod chat_filter;
@@ -1862,6 +1868,13 @@ impl Hub {
             if self.here(&self.guests[i]) {
                 self.update_view(i);
                 if let Some(batch) = self.next_batch(i, world, ctx.streaming) {
+                    for (_, chunk) in &batch.near {
+                        native_chunk_watch(
+                            self.guests[i].entity_id,
+                            &self.config.dimension,
+                            [chunk.x, chunk.z],
+                        );
+                    }
                     batches.push((i, batch));
                 }
             }

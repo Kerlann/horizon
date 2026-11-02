@@ -1617,6 +1617,7 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
 - **`native_raid_spawn_wave(raid, pos, wave, raiders)`**: a raid wave is about to be spawned at `pos`; `raiders` is the count Horizon will spawn.
 - **`native_raid_state_change(raid, pos, state)`**: a raid at `pos` was triggered or changed to `victory`, `loss`, or `stopped`.
 - **`native_world_saved(wait)`**: the server completed its world save cycle; `wait` is true when chunk writes were flushed before returning.
+- **`native_chunk_watch(player, dimension, chunk)`**: the server is about to send a ready level chunk to the player (NeoForge's `ChunkWatchEvent.Watch`). Horizon currently reports it when a send batch is selected, later than vanilla queues it; the player is an entity ID and the chunk is its coordinates, not a `LevelChunk` object. The client does not know the chunk yet; do not use this hook to send chunk data.
 - **`native_entities_load(dimension, chunk, count)`**: saved entity records for `chunk` finished loading into `dimension`.
 - **`native_entities_unload(dimension, chunk, count)`**: entities in `chunk` left the active world and were queued for saving.
 - **`native_game_event(event, pos)`**: a generic world game event was fired at `pos`, including events with no nearby vibration listeners.

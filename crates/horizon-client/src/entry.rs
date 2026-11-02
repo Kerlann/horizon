@@ -119,6 +119,9 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 refill,
             );
         },
+        chunk_watch: |player, dimension, chunk| {
+            crate::mod_api::dispatch_chunk_watch(crate::mod_api::mods(), player, dimension, chunk);
+        },
         ingredient: |kind, data, items| {
             crate::mod_api::dispatch_ingredient(crate::mod_api::mods(), kind, data, items);
         },
