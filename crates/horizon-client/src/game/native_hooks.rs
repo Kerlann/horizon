@@ -4916,6 +4916,17 @@ impl Game<'_> {
         let _ = (stack, modifiers);
     }
 
+    /// Append attribute tooltip lines, including when normal attributes are hidden.
+    /// Both sides. @API:add_attribute_tooltips@.
+    pub(super) fn native_add_attribute_tooltips(
+        &self,
+        stack: &ItemStack,
+        should_show: bool,
+        lines: &mut Vec<Text>,
+    ) {
+        let _ = (stack, should_show, lines);
+    }
+
     /// An item's tooltip, wherever the game shows one (slots, the creative
     /// tabs, the recipe book, chat's hover): the stack, with its components
     /// (`stack.data()`: a shulker box's contents...), and its lines, the name

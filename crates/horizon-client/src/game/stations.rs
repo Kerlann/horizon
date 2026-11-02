@@ -2394,6 +2394,13 @@ impl Game<'_> {
                 push(&mut lines, text, c);
             }
         }
+        let mut additional_attributes = Vec::new();
+        self.native_add_attribute_tooltips(
+            stack,
+            display.shows("minecraft:attribute_modifiers"),
+            &mut additional_attributes,
+        );
+        lines.extend(additional_attributes.into_iter().map(|text| (text, u32::MAX)));
         // ItemStack.UNBREAKABLE_TOOLTIP.
         if let Some(text) =
             horizon_client::item_tooltip::unbreakable_line(stack, &display, &translate)

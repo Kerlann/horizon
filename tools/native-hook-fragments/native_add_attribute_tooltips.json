@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "add_attribute_tooltips",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_add_attribute_tooltips",
+      "neoforge": "AddAttributeTooltipsEvent",
+      "side": "both",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "collect",
+        "out": "lines"
+      }
+    }
+  ],
+  "rust_summary": "Additional item attribute tooltip lines (`native_add_attribute_tooltips`).",
+  "doc_summary": "Mods can append attribute tooltip lines with `native_add_attribute_tooltips`. Bundles need \"hooks\": @API:add_attribute_tooltips@."
+}

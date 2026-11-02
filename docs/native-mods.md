@@ -683,6 +683,8 @@ API 67 adds dispenser item behaviours (`native_dispense_item`): a server hook re
 
 `native_item_attribute_modifier(stack, modifiers)` lets a mod add, replace, remove or clear item attribute modifier entries before slot filtering on either side. Each entry contains an attribute id, modifier id, amount, operation and slot group. Tooltip queries supply the actual stack; the mob and armor stand equipment and mob pickup paths currently reconstruct a stack from its item id, so components are unavailable there. Player equipment, mob knockback and recipe-search tooltip queries are not wired. Bundles need "hooks": @API:item_attribute_modifier@.
 
+`native_add_attribute_tooltips(stack, should_show, lines)` collects additional text lines after the normal attribute tooltip lines, even when `should_show` is false. Recipe and creative search tooltip queries are not wired. Bundles need "hooks": @API:add_attribute_tooltips@.
+
 API 68 adds image tooltip components: `native_tooltip_component(stack, size)` answers finite positive width/height in GUI pixels, and `native_tooltip_component_draw(stack, batch, origin, size)` draws that component with `native_sprite`, `native_fill` and `native_text`. The stack supplies its data. Space and background are reserved after the text and any vanilla bundle component; the component width participates in tooltip positioning. Neither hook changes ordinary tooltips without an answer. Client-side. Bundles need "hooks": 68.
 
 API 69 adds [advancement triggers](#advancement-triggers) of a mod's own: `native_trigger_criterion(uuid, trigger, test)` fires a trigger
