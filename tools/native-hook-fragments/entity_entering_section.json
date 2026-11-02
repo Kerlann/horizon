@@ -1,0 +1,15 @@
+{
+  "hooks": [
+    {
+      "name": "entity_entering_section",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_entity_entering_section",
+      "side": "both",
+      "neoforge": "EntityEvent.EnteringSection",
+      "mod_api": {
+        "contract": "listen"
+      }
+    }
+  ],
+  "rust_summary": "An existing entity enters another section (`native_entity_entering_section`).",
+  "doc_summary": "An existing entity enters another section: `native_entity_entering_section(entity, old_section, new_section, chunk_changed)` reports packed section positions. Bundles need \"hooks\": @API:entity_entering_section@."
+}

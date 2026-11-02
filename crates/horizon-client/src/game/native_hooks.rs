@@ -5753,6 +5753,17 @@ impl Game<'_> {
             canceled,
         );
     }
+    /// An existing entity moved into another section (NeoForge's
+    /// `EntityEvent.EnteringSection`). Section positions use vanilla's packed long format.
+    pub(super) fn native_entity_entering_section(
+        &mut self,
+        entity: u32,
+        old_section: i64,
+        new_section: i64,
+        chunk_changed: bool,
+    ) {
+        let _ = (entity, old_section, new_section, chunk_changed);
+    }
     /// Whether a mod listens to `native_entity_tick_pre` and `native_entity_tick_post`: a mod
     /// that hooks them hooks this one too and sets `listened` (HEAD, `*listened = true`).
     /// Without it the game tells no entity's tick, and keeps no list of them. Asked once for

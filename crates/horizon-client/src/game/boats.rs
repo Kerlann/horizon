@@ -569,6 +569,7 @@ impl Game<'_> {
     /// `AbstractBoat.tick` for one boat (`controlled` when the player rides it).
     pub(super) fn tick_boat(&mut self, mut b: Boat, controlled: bool) -> Boat {
         b.previous = b.position;
+        let section_before = b.position;
         b.previous_yaw = b.yaw;
         // Entity.baseTick ends with Leashable.tickLeash, on a server only
         // (a ridden boat's lead ticks in `tick_boats`).
@@ -700,6 +701,23 @@ impl Game<'_> {
             if (moved.y - b.velocity.y).abs() > 1.0e-7 {
                 b.velocity.y = 0.0;
             }
+        }
+        let section = |p: Vec3| {
+            horizon_core::position::SectionPos::new(
+                p.x.floor() as i32 >> 4,
+                p.y.floor() as i32 >> 4,
+                p.z.floor() as i32 >> 4,
+            )
+        };
+        let old_section = section(section_before);
+        let new_section = section(b.position);
+        if old_section != new_section {
+            self.native_entity_entering_section(
+                b.id,
+                old_section.pack(),
+                new_section.pack(),
+                old_section.x != new_section.x || old_section.z != new_section.z,
+            );
         }
         // Paddle sounds at the top of each stroke.
         for i in 0..2 {
