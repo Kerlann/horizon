@@ -5709,6 +5709,18 @@ impl Game<'_> {
             keep,
         );
     }
+    /// NeoForge's `MobEffectEvent.Applicable`, before effect eligibility.
+    /// `result` is None for DEFAULT, Some(true) for APPLY and Some(false)
+    /// for DO_NOT_APPLY. `entity` and `source` are entity ids when known.
+    pub(super) fn native_mob_effect_applicable(
+        &mut self,
+        entity: Option<i32>,
+        effect: &horizon_client::effects::EffectInstance,
+        source: Option<i32>,
+        result: &mut Option<bool>,
+    ) {
+        let _ = (entity, effect, source, result);
+    }
     /// `MobEffect.onEffectAdded`: `LivingEntity.addEffect` gave `entity`
     /// (as in `native_apply_effect_tick`) the content mod's effect `effect`,
     /// which it didn't have. Server-side. API 56.

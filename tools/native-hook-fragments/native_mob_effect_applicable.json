@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "mob_effect_applicable",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_mob_effect_applicable",
+      "neoforge": "MobEffectEvent.Applicable",
+      "side": "both",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "replace",
+        "out": "result"
+      }
+    }
+  ],
+  "rust_summary": "effect eligibility (`native_mob_effect_applicable`).",
+  "doc_summary": "Effect eligibility can be changed with `native_mob_effect_applicable`. Bundles need \"hooks\": @API:native_mob_effect_applicable@."
+}

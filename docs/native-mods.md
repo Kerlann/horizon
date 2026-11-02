@@ -613,6 +613,8 @@ or NeoForge's event where it has one. On the server, each tick a player or a mob
 two take `&self`: during a mob's tick the mob world borrows the game, so `&mut self` would alias that borrow, and the
 game doesn't hold the mobs being ticked, nor the player's effects. `native_on_effect_added` hears it given to an
 entity that didn't have it, and `native_mob_effect_added` (NeoForge's `MobEffectEvent.Added`) every time it is given.
+
+`native_mob_effect_applicable` (NeoForge's `MobEffectEvent.Applicable`) sees an incoming effect before eligibility is checked. Its result is `None` for the vanilla decision, `Some(true)` to apply, or `Some(false)` to reject. The optional source entity is supplied where known.
 A mob is its `Entity.getId`; a player is None, with their state swapped in (`native_acting_player`). Vanilla's effects
 never reach them. Bundles that use them need `"hooks": 56`.
 
