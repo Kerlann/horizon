@@ -140,8 +140,11 @@ fn visible(m: &mut Mob, w: &MobWorld, who: Who) -> bool {
     match who {
         Who::Player => {
             let Some(p) = &w.player else { return false };
-            let r = (range * p.visibility_percent()).max(2.0);
-            p.alive && !p.spectator && m.distance_sqr(p.position) <= r * r && m.sees(w, who)
+            if !p.alive || p.spectator {
+                return false;
+            }
+            let r = (range * p.visibility_to(m.id)).max(2.0);
+            m.distance_sqr(p.position) <= r * r && m.sees(w, who)
         }
         Who::Mob(id) => {
             let Some(s) = w.seen(id) else { return false };

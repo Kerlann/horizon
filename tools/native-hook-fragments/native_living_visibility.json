@@ -13,5 +13,5 @@
     }
   ],
   "rust_summary": "a living entity's visibility multiplier (`native_living_visibility`).",
-  "doc_summary": "A player's visibility to a targeting mob: `native_living_visibility(player_uuid, looking_entity, visibility_modifier)`. Multiply the modifier to change the targeting range. Bundles need \"hooks\": @API:living_visibility@."
+  "doc_summary": "A player's visibility to a targeting mob: `native_living_visibility(player_uuid, looking_entity, visibility_modifier)`. Multiply the modifier to change the targeting range. Bundles need \"hooks\": @API:native_living_visibility@."
 }

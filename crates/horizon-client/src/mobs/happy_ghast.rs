@@ -380,10 +380,11 @@ impl Goal for GhastTempt {
         let Some(p) = &cx.w.player else { return false };
         // getNearestPlayer(TargetingConditions.forNonCombat()
         // .ignoreLineOfSight().range(TEMPT_RANGE 16)): creative players too.
-        let range = (16.0_f64 * p.visibility_percent()).max(2.0);
-        p.alive
-            && !p.spectator
-            && (Self::wants(m, &p.main_hand) || Self::wants(m, &p.off_hand))
+        if !p.alive || p.spectator {
+            return false;
+        }
+        let range = (16.0_f64 * p.visibility_to(m.id)).max(2.0);
+        (Self::wants(m, &p.main_hand) || Self::wants(m, &p.off_hand))
             && m.distance_sqr(p.position) <= range * range
     }
     fn stop(&mut self, m: &mut Mob, _: &mut Cx) {

@@ -2423,6 +2423,12 @@ impl PlayerView {
         }
         visibility
     }
+    /// Visibility after the targeting mob's modifier.
+    pub fn visibility_to(&self, looking_entity: u32) -> f64 {
+        let mut visibility_modifier = 1.0;
+        native_living_visibility(self.uuid, looking_entity, &mut visibility_modifier);
+        self.visibility_percent().clamp(0.0, 10.0) * visibility_modifier
+    }
     /// `LivingEntity.hasEffect`, by id without namespace.
     pub fn has_effect(&self, effect: &str) -> bool {
         self.effects.contains(&effect)
