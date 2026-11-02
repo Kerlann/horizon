@@ -38,28 +38,29 @@ use horizon_world::{
 use std::sync::{Arc, Mutex, atomic::Ordering};
 
 /// A player is about to receive a ready chunk on the logical server.
+/// API @API:native_chunk_watch@.
 #[inline(never)]
 pub fn native_chunk_watch(player: i32, dimension: &str, chunk: [i32; 2]) {
     crate::native_client_hooks::chunk_watch(player, dimension, chunk);
 }
 
 /// A ready level chunk was sent to a player on the logical server.
+/// API @API:native_chunk_sent@.
 #[inline(never)]
 pub fn native_chunk_sent(player: i32, dimension: &str, chunk: [i32; 2]) {
     crate::native_client_hooks::chunk_sent(player, dimension, chunk);
 }
 
 /// A chunk leaves a player's tracking view, whether or not it was sent.
+/// API @API:native_chunk_unwatch@.
 #[inline(never)]
 pub fn native_chunk_unwatch(player: i32, dimension: &str, chunk: [i32; 2]) {
     crate::native_client_hooks::chunk_unwatch(player, dimension, chunk);
 }
 
 fn unwatch_all(g: &Guest) {
-    let mut chunks = g.sent_chunks.clone();
-    chunks.extend(g.chunk_queue.iter().copied());
-    chunks.extend(g.far_queue.iter().copied());
-    for (x, z) in chunks {
+    let pending = g.chunk_queue.iter().chain(&g.far_queue);
+    for &(x, z) in g.sent_chunks.iter().chain(pending) {
         native_chunk_unwatch(g.entity_id, &g.dimension, [x, z]);
     }
 }
@@ -1767,8 +1768,8 @@ impl Hub {
         if !g.placed {
             return g;
         }
-        // `PlayerList.remove`: the entities it tracked stop (`removePairing`).
         unwatch_all(&g);
+        // `PlayerList.remove`: the entities it tracked stop (`removePairing`).
         g.tracker.clear();
         take_tracking(&mut g, &mut self.native_tracking);
         self.broadcast(&C::PlayerInfoRemove(play::PlayerInfoRemove {
@@ -1890,21 +1891,11 @@ impl Hub {
             if self.here(&self.guests[i]) {
                 self.update_view(i);
                 if let Some(batch) = self.next_batch(i, world, ctx.streaming) {
-                    for (_, chunk) in &batch.near {
-                        native_chunk_watch(
-                            self.guests[i].entity_id,
-                            &self.config.dimension,
-                            [chunk.x, chunk.z],
-                        );
-                    }
-                    for (_, column) in &batch.far {
-                        if let Some(Column::Level(chunk)) = column {
-                            native_chunk_watch(
-                                self.guests[i].entity_id,
-                                &self.config.dimension,
-                                [chunk.x, chunk.z],
-                            );
-                        }
+                    let g = &self.guests[i];
+                    let near = batch.near.iter().map(|&(idx, _)| g.chunk_queue[idx]);
+                    let far = batch.far.iter().filter(|(_, c)| c.is_some());
+                    for (x, z) in near.chain(far.map(|&(idx, _)| g.far_queue[idx])) {
+                        native_chunk_watch(g.entity_id, &self.config.dimension, [x, z]);
                     }
                     batches.push((i, batch));
                 }
@@ -2026,7 +2017,7 @@ impl Hub {
         }
         // Pending chunks can leave the view before they are ever sent.
         for &(x, z) in g.chunk_queue.iter().chain(&g.far_queue) {
-            if !tracked(cx, cz, reach, x, z) && !g.sent_chunks.contains(&(x, z)) {
+            if !tracked(cx, cz, reach, x, z) {
                 native_chunk_unwatch(g.entity_id, &self.config.dimension, [x, z]);
             }
         }

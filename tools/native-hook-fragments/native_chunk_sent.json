@@ -2,7 +2,7 @@
   "hooks": [
     {
       "name": "chunk_sent",
-      "target": "horizon_client::lan::hub::native_chunk_sent",
+      "target": "horizon_client_lib::lan::hub::native_chunk_sent",
       "side": "server",
       "neoforge": "ChunkWatchEvent.Sent",
       "mod_api": {
@@ -11,5 +11,8 @@
     }
   ],
   "rust_summary": "A player was sent a chunk (`native_chunk_sent`).",
-  "doc_summary": "The server sent a ready chunk to a player: `native_chunk_sent(player, dimension, chunk)`. Bundles need \"hooks\": @API:chunk_sent@."
+  "doc_summary": "The server sent a ready chunk to a player: `native_chunk_sent(player, dimension, chunk)`. Bundles need \"hooks\": @API:native_chunk_sent@.",
+  "comments": [
+    "crates/horizon-client/src/lan/hub.rs"
+  ]
 }

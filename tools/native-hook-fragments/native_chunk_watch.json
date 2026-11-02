@@ -2,7 +2,7 @@
   "hooks": [
     {
       "name": "chunk_watch",
-      "target": "horizon_client::lan::hub::native_chunk_watch",
+      "target": "horizon_client_lib::lan::hub::native_chunk_watch",
       "side": "server",
       "neoforge": "ChunkWatchEvent.Watch",
       "mod_api": {
@@ -11,5 +11,8 @@
     }
   ],
   "rust_summary": "A player is about to receive a chunk (`native_chunk_watch`).",
-  "doc_summary": "The server is about to send a ready chunk to a player: `native_chunk_watch(player, dimension, chunk)`. Bundles need \"hooks\": @API:chunk_watch@."
+  "doc_summary": "The server is about to send a ready chunk to a player: `native_chunk_watch(player, dimension, chunk)`. Bundles need \"hooks\": @API:native_chunk_watch@.",
+  "comments": [
+    "crates/horizon-client/src/lan/hub.rs"
+  ]
 }
