@@ -1875,6 +1875,15 @@ impl Hub {
                             [chunk.x, chunk.z],
                         );
                     }
+                    for (_, column) in &batch.far {
+                        if let Some(Column::Level(chunk)) = column {
+                            native_chunk_watch(
+                                self.guests[i].entity_id,
+                                &self.config.dimension,
+                                [chunk.x, chunk.z],
+                            );
+                        }
+                    }
                     batches.push((i, batch));
                 }
             }
