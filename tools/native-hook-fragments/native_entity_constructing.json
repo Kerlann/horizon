@@ -2,7 +2,7 @@
   "hooks": [
     {
       "name": "entity_constructing",
-      "target": "horizon_client::mobs::native_entity_constructing",
+      "target": "horizon_client_lib::mobs::native_entity_constructing",
       "side": "both",
       "neoforge": "EntityEvent.EntityConstructing",
       "mod_api": {

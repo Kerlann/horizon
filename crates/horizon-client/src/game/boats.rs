@@ -588,7 +588,6 @@ impl Game<'_> {
     /// `AbstractBoat.tick` for one boat (`controlled` when the player rides it).
     pub(super) fn tick_boat(&mut self, mut b: Boat, controlled: bool) -> Boat {
         b.previous = b.position;
-        let section_before = b.position;
         b.previous_yaw = b.yaw;
         // Entity.baseTick ends with Leashable.tickLeash, on a server only
         // (a ridden boat's lead ticks in `tick_boats`).
@@ -721,7 +720,7 @@ impl Game<'_> {
                 b.velocity.y = 0.0;
             }
         }
-        self.native_check_entering_section(b.id, section_before, b.position);
+        self.native_check_entering_section(b.id, b.previous, b.position);
         // Paddle sounds at the top of each stroke.
         for i in 0..2 {
             if b.paddling[i] {

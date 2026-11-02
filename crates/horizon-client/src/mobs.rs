@@ -2567,7 +2567,10 @@ impl<'a> Teams<'a> {
         }
     }
 }
-/// Reports an entity constructor to native mods.
+/// An entity is being constructed (`EntityEvent.EntityConstructing`, from
+/// vanilla's `Entity` constructor): `entity` is its ID and `kind` its type
+/// (`minecraft:zombie`, `minecraft:armor_stand`). Told on either side as a
+/// mob or an armor stand is built, loaded or received from a server.
 #[inline(never)]
 pub fn native_entity_constructing(entity: u32, kind: &str) {
     crate::native_client_hooks::entity_constructing(entity, kind);
