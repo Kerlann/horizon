@@ -242,10 +242,8 @@ pub fn set_attack_target(m: &mut Mob, who: Option<Who>) {
         let seed = i64::from(m.id);
         init(m, seed);
     }
-    if m.change_target(who, "behavior_target") {
-        let target = m.ai.target;
-        mem(m).attack_target.set_opt(target);
-    }
+    mem(m).attack_target.set_opt(who);
+    m.ai.target = who;
 }
 /// The attack target the brain remembers.
 pub fn attack_target(m: &Mob) -> Option<Who> {

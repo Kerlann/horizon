@@ -199,7 +199,7 @@ impl Game<'_> {
                     if sedated {
                         bee::set_stay_out_of_hive_countdown(m);
                     } else {
-                        m.ai.target = Some(Who::Player);
+                        m.change_goal_target(Some(Who::Player));
                     }
                 }
             }
@@ -302,7 +302,7 @@ impl Game<'_> {
             if let Some(p) = self.player_view().map(|p| p.position) {
                 for m in self.mobs.iter_mut().filter(|m| released.contains(&m.id)) {
                     if m.distance_sqr(p) <= 16.0 {
-                        m.ai.target = Some(Who::Player);
+                        m.change_goal_target(Some(Who::Player));
                     }
                 }
             }
@@ -357,9 +357,11 @@ impl Game<'_> {
                 .random
                 .next_int_bound(players.len() as i32)
                 .unwrap_or(0) as usize;
-            self.mobs[i].ai.target = Some(Who::Player);
+            self.mobs[i].change_goal_target(Some(Who::Player));
             // The player a mob sees is its guest binding, else the window's.
-            if let Some(host) = self.lan.as_mut() {
+            if self.mobs[i].ai.target == Some(Who::Player)
+                && let Some(host) = self.lan.as_mut()
+            {
                 match players[pick] {
                     Some(conn) => host.mob_players.insert(self.mobs[i].id, conn),
                     None => host.mob_players.remove(&self.mobs[i].id),

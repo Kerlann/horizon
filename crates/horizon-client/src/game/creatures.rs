@@ -2170,14 +2170,14 @@ impl Game<'_> {
                 }
                 MobEvent::SetTarget { mob, target } => {
                     if let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob) {
-                        m.change_goal_target(Some(target));
+                        m.ai.target = Some(target);
                     }
                 }
                 MobEvent::HuntHoglin { mob, target, ticks } => {
                     if let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob) {
                         m.extra.ints[0] = ticks;
                         if m.ai.target.is_none() {
-                            m.change_goal_target(Some(Who::Mob(target)));
+                            m.ai.target = Some(Who::Mob(target));
                         }
                     }
                 }

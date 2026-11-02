@@ -409,7 +409,7 @@ impl Game<'_> {
             }
             let m = &mut self.mobs[i];
             m.extra.anger = 600;
-            m.change_goal_target(Some(Who::Player));
+            m.ai.target = Some(Who::Player);
         }
     }
     /// A clear line of sight between two points (blocks with collision stop it).
