@@ -16280,7 +16280,7 @@ impl Game<'_> {
         // Streaming has removed these columns already. Make each available for
         // attachment access during its save notification, after taking the
         // snapshot but before telling mods that the chunk unloaded.
-        if self.native_authoritative() {
+        if self.native_authoritative() && !horizon_client::mod_api::mods().is_empty() {
             let dimension = self.dim.id();
             for chunk in &modified {
                 let key = (chunk.x, chunk.z);
