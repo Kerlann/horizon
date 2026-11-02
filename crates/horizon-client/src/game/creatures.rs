@@ -4759,18 +4759,20 @@ impl Game<'_> {
                             Some(Who::Mob(id)) => Some(id as i32),
                             _ => Some(p.id as i32),
                         };
-                        let mut result = None;
-                        self.native_mob_effect_applicable(Some(id as i32), &effect, effect_source, &mut result);
                         let vanilla = super::potions::mob_can_be_affected(
                             &self.stations().enchantments.entity_tags,
                             &self.mobs[i].kind.id,
                             "minecraft:levitation",
                         );
-                        if result.unwrap_or(vanilla) {
-                            self.mobs[i].add_effect("minecraft:levitation", 200, 0);
+                        let mut result = None;
+                        self.native_mob_effect_applicable(Some(id as i32), &effect, effect_source, &mut result);
+                        if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
+                            if result.unwrap_or(vanilla) {
+                                m.add_effect("minecraft:levitation", 200, 0);
+                            }
+                            // Shulker.hurtServer: a shulker hit by a bullet.
+                            horizon_client::mobs::shulker::hit_by_bullet(m);
                         }
-                        // Shulker.hurtServer: a shulker hit by a bullet.
-                        horizon_client::mobs::shulker::hit_by_bullet(&mut self.mobs[i]);
                     }
                 }
             },
