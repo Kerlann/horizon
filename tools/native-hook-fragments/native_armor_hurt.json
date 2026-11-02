@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "armor_hurt",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_armor_hurt",
+      "neoforge": "ArmorHurtEvent",
+      "side": "both",
+      "mod_api": {
+        "contract": "cancel",
+        "out": "canceled"
+      }
+    }
+  ],
+  "rust_summary": "armor durability damage, cancellable and adjustable per slot (`native_armor_hurt`).",
+  "doc_summary": "armor durability damage: `native_armor_hurt` can cancel it or change each slot's damage. Bundles need `\"hooks\": @API:native_armor_hurt@`."
+}

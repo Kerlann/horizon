@@ -5767,6 +5767,16 @@ impl Game<'_> {
             canceled,
         );
     }
+    /// Armor is about to lose durability. Slots are head, chest, legs, feet, body.
+    pub(super) fn native_armor_hurt(
+        entity: i32,
+        damage_type: &str,
+        present: [bool; 5],
+        damage: &mut [f32; 5],
+        canceled: &mut bool,
+    ) {
+        let _ = (entity, damage_type, present, damage, canceled);
+    }
     /// A player's health was reduced by a server-side hit.
     pub(super) fn native_living_damage_post(
         entity: i32,

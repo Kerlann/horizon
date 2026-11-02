@@ -526,6 +526,13 @@ player out of `players_sleeping_percentage`'s count until they are in bed (playe
 player's hook only. The players `native_server_players` lists carry where they look (`yaw`, `pitch`). Bundles that
 use them need `"hooks": 49`.
 
+`native_armor_hurt` observes armor durability damage (NeoForge's `ArmorHurtEvent`): `present` and
+`damage` use head, chest, legs, feet and body order. Set `canceled` to prevent the wear, or change
+individual damage values; negative values become zero and empty slots are unaffected. Values are
+converted to unsigned integer durability, truncating fractions. Currently player armor and horse body
+armor are covered; helmet-only damage and wolf armor are not yet wired. Player entity id is 0 when
+not known. Bundles need `"hooks": @API:native_armor_hurt@`.
+
 `native_living_damage_post` observes a server player's health damage after the health change (NeoForge's `LivingDamageEvent.Post`). It reports the damage type, original damage at the inner damage step, armor and magic reductions, absorbed damage and health damage. It cannot change or cancel the hit. Mob paths and shield, invulnerability-tick and side-effect details are not yet exposed.
 
 API 50 adds damage a mod can change or cancel through `native_living_incoming_damage` (NeoForge's

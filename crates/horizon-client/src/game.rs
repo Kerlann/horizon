@@ -12727,7 +12727,7 @@ impl Game<'_> {
         if damage <= 0.0 {
             return;
         }
-        let amount = ((damage / 4.0) as u32).max(1);
+        let amount = (damage / 4.0).max(1.0) as u32;
         let name = self
             .motion
             .health
@@ -12740,6 +12740,19 @@ impl Game<'_> {
             .health
             .damage
             .in_tag(source, "minecraft:is_fire");
+        let mut slot_damage = [amount as f32; 5];
+        let present = [
+            self.armor[0].is_some(),
+            self.armor[1].is_some(),
+            self.armor[2].is_some(),
+            self.armor[3].is_some(),
+            false,
+        ];
+        let mut canceled = false;
+        Self::native_armor_hurt(0, &name, present, &mut slot_damage, &mut canceled);
+        if canceled {
+            return;
+        }
         let mut broke = false;
         let mut broken_items = Vec::new();
         let losses: Vec<u32> = (0..4)
@@ -12752,7 +12765,7 @@ impl Game<'_> {
                         .is_some_and(|info| info.equip_damage_on_hurt)
                         && !(fire && world_items!(self).resists_fire(&s, &name)) =>
                 {
-                    self.wear(&s, amount)
+                    self.wear(&s, slot_damage[i].max(0.0) as u32)
                 }
                 _ => 0,
             })
