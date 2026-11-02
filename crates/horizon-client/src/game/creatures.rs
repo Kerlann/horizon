@@ -945,6 +945,17 @@ impl Game<'_> {
             .split_off(0);
         // The mobs whose bodies go this tick: (id, feet, width, height).
         let mut gone = Vec::new();
+        // The library mob AI cannot borrow Game while its world view is live.
+        // Resolve a separate decision for each mob before creating that view.
+        let griefing = self.ui.rules.bool("mob_griefing");
+        let mob_griefing: Vec<bool> = mobs
+            .iter()
+            .map(|mob| {
+                let mut decision = None;
+                self.native_entity_mob_griefing(mob.id, griefing, &mut decision);
+                decision.unwrap_or(griefing)
+            })
+            .collect();
         let level_random;
         {
             // The level random, lent to the mobs (brain behaviours draw from
@@ -977,6 +988,7 @@ impl Game<'_> {
                     ..base.clone()
                 };
                 let m = &mut mobs[i];
+                w.mob_griefing = mob_griefing[i];
                 // getCurrentDifficultyAt(blockPosition()): the mob's own chunk,
                 // not the local player's (a server thread has no player).
                 w.difficulty = self.local_difficulty([m.position.x, m.position.y, m.position.z]);
