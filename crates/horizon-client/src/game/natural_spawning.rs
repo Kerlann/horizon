@@ -417,10 +417,12 @@ impl<'a> Game<'a> {
             difficulty: self.local_difficulty(r.position),
             spawn_data: None,
             spawn_cancelled: false,
-            canceled: false,
         };
-        horizon_client::mobs::spawning::native_finalize_spawn(r.entity, r.position, &mut event);
-        if !event.canceled {
+        let mut canceled = false;
+        horizon_client::mobs::spawning::native_finalize_spawn(
+            r.entity, r.position, &mut event, &mut canceled,
+        );
+        if !canceled {
             horizon_client::mobs::spawning::finalize(&mut mob, &facts, &event.difficulty);
             horizon_client::mobs::raider::finalize(
                 &mut mob,

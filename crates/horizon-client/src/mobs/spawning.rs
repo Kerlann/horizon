@@ -96,13 +96,17 @@ pub struct FinalizeSpawn {
     /// Horizon does not yet propagate vanilla's SpawnGroupData between mobs.
     pub spawn_data: Option<String>,
     pub spawn_cancelled: bool,
-    pub canceled: bool,
 }
 
 /// Called immediately before a server mob's spawn finalization.
 #[inline(never)]
-pub fn native_finalize_spawn(kind: &str, position: [f64; 3], event: &mut FinalizeSpawn) {
-    crate::native_client_hooks::finalize_spawn(kind, position, event);
+pub fn native_finalize_spawn(
+    kind: &str,
+    position: [f64; 3],
+    event: &mut FinalizeSpawn,
+    canceled: &mut bool,
+) {
+    crate::native_client_hooks::finalize_spawn(kind, position, event, canceled);
 }
 
 /// The armour and toughness each vanilla armour piece adds.

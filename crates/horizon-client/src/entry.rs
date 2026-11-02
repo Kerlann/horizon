@@ -122,8 +122,10 @@ pub fn main_with(mods: crate::mod_api::Mods) {
         mob_despawn: |entity, kind, result| {
             crate::mod_api::dispatch_mob_despawn(crate::mod_api::mods(), entity, kind, result);
         },
-        finalize_spawn: |kind, position, event| {
-            crate::mod_api::dispatch_finalize_spawn(crate::mod_api::mods(), kind, position, event);
+        finalize_spawn: |kind, position, event, canceled| {
+            crate::mod_api::dispatch_finalize_spawn(
+                crate::mod_api::mods(), kind, position, event, canceled,
+            );
         },
         spawn_cluster_size: |kind, position, size| {
             crate::mod_api::dispatch_spawn_cluster_size(

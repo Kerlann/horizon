@@ -179,16 +179,27 @@ impl Game<'_> {
         let bounds = if r.finalize {
             let mut mob = Mob::new(0, kind, at, r.yaw);
             let facts = self.biome_facts(x.floor() as i32, y.floor() as i32, z.floor() as i32);
-            let difficulty = self.local_difficulty(r.position);
-            spawning::finalize(&mut mob, &facts, &difficulty);
+            let mut event = spawning::FinalizeSpawn {
+                difficulty: self.local_difficulty(r.position),
+                spawn_data: None,
+                spawn_cancelled: false,
+            };
+            let mut canceled = false;
+            spawning::native_finalize_spawn(r.id, r.position, &mut event, &mut canceled);
+            if !canceled {
+                spawning::finalize(&mut mob, &facts, &event.difficulty);
+                horizon_client::mobs::raider::finalize(
+                    &mut mob,
+                    horizon_client::mobs::raider::Reason::Other,
+                );
+            }
+            if event.spawn_cancelled {
+                return None;
+            }
             // TrialSpawner.spawnMob: setPersistenceRequired.
             mob.persistent = r.trial;
-            horizon_client::mobs::raider::finalize(
-                &mut mob,
-                horizon_client::mobs::raider::Reason::Other,
-            );
             // Shulker.finalizeSpawn faces it south.
-            if mob.species() == horizon_client::mobs::Species::Shulker {
+            if !canceled && mob.species() == horizon_client::mobs::Species::Shulker {
                 mob.yaw = 0.0;
                 mob.previous_yaw = 0.0;
                 mob.body_yaw = 0.0;
