@@ -13,5 +13,5 @@
     }
   ],
   "rust_summary": "Additional item attribute tooltip lines (`native_add_attribute_tooltips`).",
-  "doc_summary": "Mods can append attribute tooltip lines with `native_add_attribute_tooltips`. Bundles need \"hooks\": @API:add_attribute_tooltips@."
+  "doc_summary": "attribute tooltip lines of a mod's own: `native_add_attribute_tooltips(stack, should_show, lines)` lets each mod append lines after an item tooltip's attribute lines, also when the item hides them (`should_show` false). Recipe and creative search tooltip queries are not wired. Bundles need \"hooks\": @API:add_attribute_tooltips@."
 }

@@ -7,11 +7,11 @@
       "side": "both",
       "cancellable": false,
       "mod_api": {
-        "contract": "replace",
+        "contract": "collect",
         "out": "selection"
       }
     }
   ],
   "rust_summary": "Skipped item attribute tooltips (`native_gather_skipped_attribute_tooltips`).",
-  "doc_summary": "Mods can select skipped attribute tooltips with `native_gather_skipped_attribute_tooltips`. Bundles need \"hooks\": @API:gather_skipped_attribute_tooltips@."
+  "doc_summary": "skipped attribute tooltips: `native_gather_skipped_attribute_tooltips(stack, selection)` lets each mod add modifier IDs (`selection.ids`) and slot groups (`selection.groups`) to omit from an item tooltip's attribute lines, or set `selection.skip_all` to omit all of them. Recipe and creative search tooltip queries are not wired. Bundles need \"hooks\": @API:gather_skipped_attribute_tooltips@."
 }

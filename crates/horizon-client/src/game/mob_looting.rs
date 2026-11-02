@@ -128,7 +128,7 @@ impl Game<'_> {
         if species == Species::Drowned && &*current == "minecraft:nautilus_shell" {
             return false;
         }
-        let (armor, toughness, attack) = self.attributes(m, &stack.item, slot);
+        let (armor, toughness, attack) = self.attributes(m, stack, slot);
         let new = Facts {
             armor,
             armor_toughness: toughness,
@@ -140,7 +140,7 @@ impl Game<'_> {
             // Binding's, the only enchantment that carries one.
             prevents_armor_change: stack.enchantment_level("minecraft:binding_curse") > 0,
         };
-        let (armor, toughness, attack) = self.attributes(m, &current, slot);
+        let (armor, toughness, attack) = self.attributes(m, &worn_stack, slot);
         let worn = Facts {
             armor,
             armor_toughness: toughness,
@@ -159,20 +159,10 @@ impl Game<'_> {
         equip::can_replace_current_item(&new, Some(&worn), slot, preferred)
     }
 
-    /// `Mob.getApproximateAttributeWith` for the item `id` in `slot`: each
+    /// `Mob.getApproximateAttributeWith` for `stack` in `slot`: each
     /// attribute starts from the mob's own value. (armour, toughness, damage)
-    fn attributes(&self, m: &Mob, id: &str, slot: Slot) -> (f64, f64, f64) {
-        let mut entries: Vec<_> = self
-            .items()
-            .get(id)
-            .into_iter()
-            .flat_map(|info| &info.modifiers)
-            .map(horizon_client::item_tooltip::ItemAttributeModifier::from)
-            .collect();
-        let stack = horizon_client::items::ItemStack::new(id, 1);
-        self.native_item_attribute_modifier(&stack, &mut entries);
-        let rows: Vec<_> = entries.into_iter().map(Into::into).collect();
-        let modifiers = rows.as_slice();
+    fn attributes(&self, m: &Mob, stack: &ItemStack, slot: Slot) -> (f64, f64, f64) {
+        let modifiers = &*self.item_modifiers(stack);
         (
             equip::attribute_with(modifiers, "minecraft:armor", f64::from(m.kind.armor), slot),
             equip::attribute_with(

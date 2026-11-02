@@ -4906,7 +4906,8 @@ impl Game<'_> {
     pub(super) fn native_menu_closed(&mut self, uuid: u128, window: i32) {
         mod_api::dispatch_menu_closed(self, mod_api::mods(), uuid, window);
     }
-    /// Replace the item's attribute modifier entries before slot filtering.
+    /// Add, change, remove or clear the item's own attribute modifier entries
+    /// before slot filtering.
     /// Both sides. @API:item_attribute_modifier@.
     pub(super) fn native_item_attribute_modifier(
         &self,

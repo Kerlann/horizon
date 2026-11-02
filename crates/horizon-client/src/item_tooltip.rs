@@ -164,7 +164,13 @@ impl From<&(String, String, f64, String, String)> for ItemAttributeModifier {
 
 impl From<ItemAttributeModifier> for (String, String, f64, String, String) {
     fn from(entry: ItemAttributeModifier) -> Self {
-        (entry.attribute, entry.id, entry.amount, entry.operation, entry.slot)
+        (
+            entry.attribute,
+            entry.id,
+            entry.amount,
+            entry.operation,
+            entry.slot,
+        )
     }
 }
 

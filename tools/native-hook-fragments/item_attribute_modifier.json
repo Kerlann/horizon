@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "item_attribute_modifier",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_item_attribute_modifier",
+      "neoforge": "ItemAttributeModifierEvent",
+      "side": "both",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "collect",
+        "out": "modifiers"
+      }
+    }
+  ],
+  "rust_summary": "Item attribute modifier queries (`native_item_attribute_modifier`).",
+  "doc_summary": "item attribute modifier queries: `native_item_attribute_modifier(stack, modifiers)` lets each mod in turn add, change, remove or clear an item's own attribute modifier entries (attribute id, modifier id, amount, operation and slot group) before slot filtering, on either side; enchantment modifiers are added after it. It is asked for the player's equipment, mob and armor stand equipment, a mob's knockback resistance, a mob comparing equipment to pick up, and item tooltips. Mob and armor stand equipment and knockback reconstruct a stack from the item id, so components are unavailable there. The player's attack speed and recipe-search tooltip queries still read the item's own modifiers. Bundles need \"hooks\": @API:item_attribute_modifier@."
+}

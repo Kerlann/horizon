@@ -2357,13 +2357,7 @@ impl Game<'_> {
         if display.shows("minecraft:attribute_modifiers") {
             // The item's own modifiers, then its enchantments' for each slot
             // group (`ItemStack.forEachModifier`).
-            let mut entries: Vec<_> = item_info
-                .into_iter()
-                .flat_map(|info| &info.modifiers)
-                .map(horizon_client::item_tooltip::ItemAttributeModifier::from)
-                .collect();
-            self.native_item_attribute_modifier(stack, &mut entries);
-            let mut modifiers: Vec<_> = entries.into_iter().map(Into::into).collect();
+            let mut modifiers = self.item_modifiers(stack).into_owned();
             modifiers.extend(e.modifier_rows(stack));
             let mut selection = horizon_client::item_tooltip::SkippedAttributeTooltips::default();
             self.native_gather_skipped_attribute_tooltips(stack, &mut selection);
@@ -2407,7 +2401,11 @@ impl Game<'_> {
             display.shows("minecraft:attribute_modifiers"),
             &mut additional_attributes,
         );
-        lines.extend(additional_attributes.into_iter().map(|text| (text, u32::MAX)));
+        lines.extend(
+            additional_attributes
+                .into_iter()
+                .map(|text| (text, u32::MAX)),
+        );
         // ItemStack.UNBREAKABLE_TOOLTIP.
         if let Some(text) =
             horizon_client::item_tooltip::unbreakable_line(stack, &display, &translate)

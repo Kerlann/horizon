@@ -6,6 +6,8 @@ use super::Game;
 use super::commands::Target;
 use horizon_client::{
     effects,
+    item_tooltip::ItemAttributeModifier,
+    items::ItemStack,
     lan::attributes::{add_modifier, generic_syncable, instance, operation_named},
     mobs::{
         Mob, Species,
@@ -13,7 +15,7 @@ use horizon_client::{
     },
 };
 use horizon_protocol::packets::play::{AttributeModifier, AttributeSnapshot};
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 /// `EquipmentSlotGroup.test`: whether a modifier's slot group covers a slot.
 fn slot_in_group(group: &str, slot: &str) -> bool {
@@ -23,7 +25,36 @@ fn slot_in_group(group: &str, slot: &str) -> bool {
         || (group == "armor" && matches!(slot, "feet" | "legs" | "chest" | "head" | "body"))
 }
 
+/// One item of `item` with no components, for an attribute modifier query.
+fn item_stack(item: &Arc<str>) -> ItemStack {
+    ItemStack {
+        item: item.clone(),
+        count: 1,
+        damage: 0,
+        extra: None,
+    }
+}
+
 impl Game<'_> {
+    /// `IItemStackExtension.getAttributeModifiers`: the item's own modifier
+    /// rows as `native_item_attribute_modifier` changes them, borrowed when
+    /// no mod is loaded.
+    pub(super) fn item_modifiers(
+        &self,
+        stack: &ItemStack,
+    ) -> Cow<'_, [(String, String, f64, String, String)]> {
+        let own = self
+            .items()
+            .get(&stack.item)
+            .map_or(&[][..], |i| i.modifiers.as_slice());
+        if horizon_client::mod_api::mods().is_empty() {
+            return Cow::Borrowed(own);
+        }
+        let mut modifiers = own.iter().map(ItemAttributeModifier::from).collect();
+        self.native_item_attribute_modifier(stack, &mut modifiers);
+        modifiers.into_iter().map(Into::into).collect()
+    }
+
     /// `getAttributeValue(KNOCKBACK_RESISTANCE)` of a mob: its own value plus
     /// the modifiers of the items it wears or holds in matching slots.
     pub(super) fn mob_knockback_resistance(&self, m: &Mob) -> f64 {
@@ -38,10 +69,10 @@ impl Game<'_> {
         ];
         let mut extra = Vec::new();
         for (slot, item) in slots {
-            let Some(info) = item.as_ref().and_then(|i| self.items().get(i)) else {
+            let Some(item) = item else {
                 continue;
             };
-            for (attribute, _, amount, op, group) in &info.modifiers {
+            for (attribute, _, amount, op, group) in &*self.item_modifiers(&item_stack(item)) {
                 if attribute == "minecraft:knockback_resistance" && slot_in_group(group, slot) {
                     let op = match operation_named(op) {
                         1 => Op::AddMultipliedBase,
@@ -87,18 +118,8 @@ impl Game<'_> {
             let Some(item) = item else {
                 continue;
             };
-            let mut modifiers: Vec<_> = self
-                .items()
-                .get(item)
-                .into_iter()
-                .flat_map(|info| &info.modifiers)
-                .map(horizon_client::item_tooltip::ItemAttributeModifier::from)
-                .collect();
-            let stack = horizon_client::items::ItemStack::new(item.as_ref(), 1);
-            self.native_item_attribute_modifier(&stack, &mut modifiers);
-            for modifier in &modifiers {
-                let attribute = &modifier.attribute;
-                if !slot_in_group(&modifier.slot, slot) {
+            for (attribute, id, amount, op, group) in &*self.item_modifiers(&item_stack(item)) {
+                if !slot_in_group(group, slot) {
                     continue;
                 }
                 let Some(a) = self.synced_attribute(entity, attribute) else {
@@ -111,9 +132,9 @@ impl Game<'_> {
                     a,
                     start,
                     AttributeModifier {
-                        id: modifier.id.clone(),
-                        amount: modifier.amount,
-                        operation: operation_named(&modifier.operation),
+                        id: id.clone(),
+                        amount: *amount,
+                        operation: operation_named(op),
                     },
                 );
             }

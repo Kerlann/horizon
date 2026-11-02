@@ -12217,12 +12217,6 @@ impl Game<'_> {
     }
     /// Equipment attribute modifiers (LivingEntity.collectEquipmentChanges).
     fn apply_equipment(&mut self) {
-        let Some(player) = self.player.as_mut() else {
-            return;
-        };
-        for (attribute, id) in std::mem::take(&mut self.applied_modifiers) {
-            let _ = player.set_modifier(&attribute, &id, 0.0, "add_value", false);
-        }
         let slots = ["head", "chest", "legs", "feet"];
         let mut equipped: Vec<(Option<&ItemStack>, &str)> = self
             .armor
@@ -12232,11 +12226,18 @@ impl Game<'_> {
             .collect();
         equipped.push((self.inventory[self.selected].as_ref(), "mainhand"));
         equipped.push((self.offhand.as_ref(), "offhand"));
-        for (stack, slot) in equipped {
-            let Some(info) = stack.and_then(|s| world_items!(self).get(&s.item)) else {
-                continue;
-            };
-            for (attribute, id, amount, op, group) in &info.modifiers {
+        let equipped: Vec<_> = equipped
+            .into_iter()
+            .filter_map(|(stack, slot)| Some((self.item_modifiers(stack?).into_owned(), slot)))
+            .collect();
+        let Some(player) = self.player.as_mut() else {
+            return;
+        };
+        for (attribute, id) in std::mem::take(&mut self.applied_modifiers) {
+            let _ = player.set_modifier(&attribute, &id, 0.0, "add_value", false);
+        }
+        for (modifiers, slot) in equipped {
+            for (attribute, id, amount, op, group) in &modifiers {
                 // The attack code still reads the held item's attack damage and
                 // speed directly; the map copy is what `/attribute` reports.
                 if !equipment_modifier_applies(group, slot) {
