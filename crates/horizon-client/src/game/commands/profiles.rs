@@ -73,6 +73,25 @@ impl Game<'_> {
         }
     }
 
+    /// Ask mods before changing an online player's operator permissions.
+    pub(super) fn cancel_permissions_change(
+        &mut self,
+        lists: &std::sync::Arc<std::sync::Mutex<super::super::dedicated::Lists>>,
+        player: &NameAndId,
+        new_level: i32,
+    ) -> bool {
+        let online = self.lan.as_ref().is_some_and(|host| {
+            host.hub.guests.iter().any(|guest| guest.uuid == player.id)
+        });
+        if !online {
+            return false;
+        }
+        let old_level = lists.lock().unwrap().ops.get(player).map_or(0, |op| op.level);
+        let mut cancel = false;
+        self.native_permissions_changed(player.id, &player.name, old_level, new_level, &mut cancel);
+        cancel
+    }
+
     /// `OpCommand.opPlayers`, `DeOpCommands.deopPlayers`,
     /// `BanPlayerCommands.banPlayers` and `PardonCommand.pardonPlayers`.
     pub(super) fn cmd_profiles(&mut self, id: &str, ctx: &Context) -> R<i32> {
@@ -83,6 +102,16 @@ impl Game<'_> {
         match id {
             "op" => {
                 for player in &players {
+                    let level = {
+                        let l = lists.lock().unwrap();
+                        if l.ops.contains(player) {
+                            continue;
+                        }
+                        l.op_level
+                    };
+                    if self.cancel_permissions_change(&lists, player, level) {
+                        continue;
+                    }
                     let added = {
                         let mut l = lists.lock().unwrap();
                         let level = l.op_level;
@@ -105,9 +134,14 @@ impl Game<'_> {
             }
             "deop" => {
                 for player in &players {
+                    if !lists.lock().unwrap().ops.contains(player)
+                        || self.cancel_permissions_change(&lists, player, 0)
+                    {
+                        continue;
+                    }
                     let removed = {
                         let mut l = lists.lock().unwrap();
-                        l.ops.contains(player) && l.ops.remove(player)
+                        l.ops.remove(player)
                     };
                     if removed {
                         self.sync_ops(&lists);

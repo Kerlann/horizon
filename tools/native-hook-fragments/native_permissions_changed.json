@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "permissions_changed",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_permissions_changed",
+      "neoforge": "PermissionsChangedEvent",
+      "side": "server",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "cancel"
+      }
+    }
+  ],
+  "rust_summary": "An online player's operator permission change, cancellable (`native_permissions_changed`).",
+  "doc_summary": "An online player's permission level is about to change (`native_permissions_changed(player, name, old_level, new_level, cancel)`). Set `cancel` to prevent the operator-list change. Bundles need \"hooks\": @API:permissions_changed@."
+}

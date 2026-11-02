@@ -4340,6 +4340,20 @@ impl Game<'_> {
     pub(super) fn native_player_map_filled(&mut self, player: u128, name: &str, map_id: i32) {
         mod_api::dispatch_player_map_filled(self, mod_api::mods(), player, name, map_id);
     }
+    /// An online player's operator permission level is about to change.
+    /// Set `cancel` to prevent the operator-list mutation. Server-side.
+    /// @API:permissions_changed@.
+    pub(super) fn native_permissions_changed(
+        &mut self,
+        player: u128,
+        name: &str,
+        old_level: i32,
+        new_level: i32,
+        cancel: &mut bool,
+    ) {
+        let _ = (player, name, old_level, new_level, cancel);
+    }
+
     /// A server player is about to travel through an End gateway at `gateway`.
     /// Set `cancel` to leave them at the entrance; the gateway is not consumed
     /// and its cooldown does not start. Helpers may find no guest through
