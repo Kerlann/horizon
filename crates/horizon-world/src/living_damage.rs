@@ -19,6 +19,9 @@ pub trait DamageWorld {
     fn invulnerable(&mut self) -> Result<bool, Self::Error>;
     fn after_armor(&mut self, damage: f32) -> Result<f32, Self::Error>;
     fn after_magic(&mut self, damage: f32) -> Result<f32, Self::Error>;
+    fn damage_pre(&mut self, _damage: &mut f32) -> Result<(), Self::Error> {
+        Ok(())
+    }
     fn absorption(&mut self) -> Result<f32, Self::Error>;
     fn set_absorption(&mut self, value: f32) -> Result<(), Self::Error>;
     fn server_player_attacker(&mut self) -> Result<Option<Self::Attacker>, Self::Error>;
@@ -82,7 +85,9 @@ pub(crate) fn actually_hurt_after_immunity_check<W: DamageWorld>(
 ) -> Result<(), W::Error> {
     let after_armor = world.after_armor(damage)?;
     let armor_reduction = damage - after_armor;
-    let damage = world.after_magic(after_armor)?;
+    let mut damage = world.after_magic(after_armor)?;
+    let magic_reduction = after_armor - damage;
+    world.damage_pre(&mut damage)?;
     let remaining = positive(damage - world.absorption()?);
     let absorption = world.absorption()? - (damage - remaining);
     world.set_absorption(absorption)?;
@@ -106,7 +111,7 @@ pub(crate) fn actually_hurt_after_immunity_check<W: DamageWorld>(
     world.set_health(health - remaining)?;
     world.damage_post(DamagePost {
         armor_reduction,
-        magic_reduction: after_armor - damage,
+        magic_reduction,
         absorbed,
         health_damage: remaining,
     })?;

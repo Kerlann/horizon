@@ -63,6 +63,9 @@ pub trait ServerDamageEnvironment<A: HealthAttributes = EntityAttributes>:
     fn level_is_client(&mut self) -> Result<bool, EnvError<Self>>;
     fn record_damage(&mut self, amount: f32) -> Result<(), EnvError<Self>>;
     fn damage_event(&mut self) -> Result<(), EnvError<Self>>;
+    fn damage_pre(&mut self, _damage: &mut f32) -> Result<(), EnvError<Self>> {
+        Ok(())
+    }
     fn damage_post(&mut self, _post: DamagePost) -> Result<(), EnvError<Self>> {
         Ok(())
     }
@@ -222,6 +225,11 @@ impl<A: HealthAttributes, E: ServerDamageEnvironment<A>> DamageWorld
     }
     fn after_magic(&mut self, v: f32) -> Result<f32, Self::Error> {
         damage_reduction::after_magic(self, v)
+    }
+    fn damage_pre(&mut self, damage: &mut f32) -> Result<(), Self::Error> {
+        self.environment
+            .damage_pre(damage)
+            .map_err(ServerDamageError::Environment)
     }
     fn absorption(&mut self) -> Result<f32, Self::Error> {
         self.health_binding().absorption().map_err(health_error)

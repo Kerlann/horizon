@@ -53,6 +53,8 @@ pub static HURT_SERVER: OnceLock<fn(Hurting<'_>, &mut f32) -> bool> = OnceLock::
 /// Observer for a player's damage after its health changes, with the hit's
 /// original damage.
 pub static DAMAGE_POST: OnceLock<fn(i32, &str, f32, DamagePost)> = OnceLock::new();
+/// A server player's damage after armor and magic, before absorption.
+pub static DAMAGE_PRE: OnceLock<fn(i32, &str, &mut f32)> = OnceLock::new();
 /// Whether [`HURT_SERVER`] canceled the hit (never while it is unset).
 pub fn hurt_server_canceled(hurting: Hurting<'_>, amount: &mut f32) -> bool {
     HURT_SERVER.get().is_some_and(|hook| hook(hurting, amount))
@@ -709,6 +711,12 @@ impl ServerDamageEnvironment<Attributes> for Environment<'_> {
     }
     fn damage_event(&mut self) -> io::Result<()> {
         self.phase("entity-damage")
+    }
+    fn damage_pre(&mut self, damage: &mut f32) -> io::Result<()> {
+        if let Some(hook) = DAMAGE_PRE.get() {
+            hook(self.entity, &self.source.definition().name, damage);
+        }
+        Ok(())
     }
     fn damage_post(&mut self, post: DamagePost) -> io::Result<()> {
         if let Some(hook) = DAMAGE_POST.get() {

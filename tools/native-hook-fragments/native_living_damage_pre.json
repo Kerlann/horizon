@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "living_damage_pre",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_living_damage_pre",
+      "neoforge": "LivingDamageEvent.Pre",
+      "side": "server",
+      "mod_api": {
+        "contract": "replace",
+        "out": "damage"
+      }
+    }
+  ],
+  "rust_summary": "a player's damage before absorption (`native_living_damage_pre`).",
+  "doc_summary": "A server player's damage after armor and magic can be replaced before absorption with `native_living_damage_pre`. Bundles need `\"hooks\": @API:native_living_damage_pre@`."
+}
