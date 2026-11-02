@@ -119,17 +119,35 @@ impl Game<'_> {
             let changed = match (t, effect) {
                 (Target::Player | Target::Guest(_), None) => self
                     .for_player(t, |g| {
-                        let any = !g.potions.effects.list.is_empty();
-                        g.potions.effects.clear();
+                        let effects = g.potions.effects.list.clone();
+                        let mut removed = false;
+                        for instance in effects {
+                            let mut cancel = false;
+                            g.native_mob_effect_remove(
+                                None,
+                                namespaced(instance.id),
+                                Some(&instance),
+                                &mut cancel,
+                            );
+                            if !cancel {
+                                g.potions.effects.list.retain(|x| x.id != instance.id);
+                                removed = true;
+                            }
+                        }
                         g.apply_effect_status();
-                        any
+                        removed
                     })
                     .unwrap_or(false),
                 (Target::Player | Target::Guest(_), Some(e)) => self
                     .for_player(t, |g| {
                         let instance = g.potions.effects.list.iter().find(|x| x.id == e.id).cloned();
                         let mut cancel = false;
-                        g.native_mob_effect_remove(None, namespaced(e.id), instance.as_ref(), &mut cancel);
+                        g.native_mob_effect_remove(
+                            None,
+                            namespaced(e.id),
+                            instance.as_ref(),
+                            &mut cancel,
+                        );
                         if cancel {
                             return false;
                         }
@@ -139,22 +157,37 @@ impl Game<'_> {
                         g.potions.effects.list.len() != before
                     })
                     .unwrap_or(false),
-                (Target::Mob(id), e) => match self.mobs.iter_mut().find(|m| m.id == id) {
-                    Some(m) => {
-                        let before = m.extra.effects.len();
-                        m.extra
-                            .effects
-                            .retain(|x| e.is_some_and(|e| x.0 != namespaced(e.id)));
-                        let left = &m.extra.effects;
-                        m.extra
-                            .hidden_effects
-                            .retain(|h| left.iter().any(|x| x.0 == *h));
-                        m.extra
-                            .ambient_effects
-                            .retain(|h| left.iter().any(|x| x.0 == *h));
-                        m.extra.effects.len() != before
+                (Target::Mob(id), e) => {
+                    let Some(mob) = self.mobs.iter().find(|m| m.id == id) else {
+                        continue;
+                    };
+                    let effects = mob.extra.effects.clone();
+                    let candidates = match e {
+                        Some(e) => vec![namespaced(e.id)],
+                        None => effects.iter().map(|x| x.0).collect(),
+                    };
+                    let mut removed = Vec::new();
+                    for effect in candidates {
+                        let instance = effects.iter().find(|x| x.0 == effect).map(|x| {
+                            EffectInstance::new(x.0, x.1, x.2)
+                        });
+                        let mut cancel = false;
+                        self.native_mob_effect_remove(
+                            Some(id as i32),
+                            effect,
+                            instance.as_ref(),
+                            &mut cancel,
+                        );
+                        if !cancel && instance.is_some() {
+                            removed.push(effect);
+                        }
                     }
-                    None => false,
+                    let mob = self.mobs.iter_mut().find(|m| m.id == id).unwrap();
+                    mob.extra.effects.retain(|x| !removed.contains(&x.0));
+                    let left = &mob.extra.effects;
+                    mob.extra.hidden_effects.retain(|h| left.iter().any(|x| x.0 == *h));
+                    mob.extra.ambient_effects.retain(|h| left.iter().any(|x| x.0 == *h));
+                    !removed.is_empty()
                 },
                 _ => continue,
             };

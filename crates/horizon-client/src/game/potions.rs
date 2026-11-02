@@ -854,8 +854,21 @@ impl Game<'_> {
                     player.position.z + w,
                 ),
             );
-            let ids: Vec<&'static str> = self.potions.effects.list.iter().map(|e| e.id).collect();
-            self.potions.effects.clear();
+            let effects = self.potions.effects.list.clone();
+            let mut ids = Vec::new();
+            for effect in effects {
+                let mut cancel = false;
+                self.native_mob_effect_remove(
+                    None,
+                    brewing::namespaced(effect.id),
+                    Some(&effect),
+                    &mut cancel,
+                );
+                if !cancel {
+                    ids.push(effect.id);
+                    self.potions.effects.list.retain(|e| e.id != effect.id);
+                }
+            }
             if !ids.is_empty() {
                 self.effects_on_death(&ids, bounds, true, None, None);
             }
