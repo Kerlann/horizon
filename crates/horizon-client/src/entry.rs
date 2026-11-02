@@ -119,6 +119,14 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 refill,
             );
         },
+        living_visibility: |player, looking_entity, visibility_modifier| {
+            crate::mod_api::dispatch_living_visibility(
+                crate::mod_api::mods(),
+                player,
+                looking_entity,
+                visibility_modifier,
+            );
+        },
         ingredient: |kind, data, items| {
             crate::mod_api::dispatch_ingredient(crate::mod_api::mods(), kind, data, items);
         },

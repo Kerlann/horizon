@@ -761,6 +761,10 @@ impl Mob {
                 visibility *= 0.5;
             }
         }
+        if scale {
+            visibility = visibility.clamp(0.0, 10.0);
+            super::native_living_visibility(p.uuid, Some(self.id), &mut visibility);
+        }
         let dist = (range * visibility).max(2.0);
         if self.distance_sqr(p.position) > dist * dist {
             return false;

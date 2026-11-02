@@ -2401,6 +2401,17 @@ pub struct Vehicle {
     /// `Entity.getKnownSpeed`: what it moved in its last tick.
     pub velocity: Vec3,
 }
+/// Modify a target's visibility multiplier on the server. The player is
+/// identified by UUID; `looking_entity` is the targeting mob, if any.
+#[inline(never)]
+pub fn native_living_visibility(
+    player: [i32; 4],
+    looking_entity: Option<u32>,
+    visibility_modifier: &mut f64,
+) {
+    crate::native_client_hooks::living_visibility(player, looking_entity, visibility_modifier);
+}
+
 impl PlayerView {
     /// `LivingEntity.getVisibilityPercent` without the worn-skull scaling.
     pub fn visibility_percent(&self) -> f64 {
