@@ -14910,8 +14910,7 @@ impl Game<'_> {
         self.streaming.save(&mut self.world, wait);
         let keys: Vec<_> = self.world.modified.drain().collect();
         let chunks = self.with_entities(keys.iter().filter_map(|k| self.world.chunks.get(k)));
-        self.save
-            .save_later(&chunks, self.pack.assets.registry, world_biomes!(self))?;
+        self.save_chunks_with_hook(&chunks)?;
         // Prepare entities while the chunk writer runs, then use one barrier.
         self.save_entities(false)?;
         self.save_raids();
@@ -14919,6 +14918,28 @@ impl Game<'_> {
             self.save.flush()?;
         }
         Ok(())
+    }
+    /// Capture each chunk before notifying mods, then queue the captured data.
+    fn save_chunks_with_hook(
+        &mut self,
+        chunks: &[Arc<horizon_client::chunk::Chunk>],
+    ) -> Result<()> {
+        let mut records = Vec::with_capacity(chunks.len());
+        for chunk in chunks {
+            let tag = horizon_client::save::encode_with(
+                chunk,
+                self.pack.assets.registry,
+                world_biomes!(self),
+                self.save.tables.get().map(|tables| &**tables),
+                self.save.shape,
+            );
+            let dimension = self.dim.id();
+            if self.native_authoritative() {
+                self.native_chunk_data_save(dimension, [chunk.x, chunk.z]);
+            }
+            records.push(((chunk.x, chunk.z), Some(tag)));
+        }
+        self.save.save_encoded_later(chunks, records)
     }
     /// `GameRenderer.tryTakeScreenshotIfNeeded`: while a local world without a
     /// saved icon is on the screen, grab the rendered frame once a second until

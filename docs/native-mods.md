@@ -1617,6 +1617,7 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
 - **`native_raid_spawn_wave(raid, pos, wave, raiders)`**: a raid wave is about to be spawned at `pos`; `raiders` is the count Horizon will spawn.
 - **`native_raid_state_change(raid, pos, state)`**: a raid at `pos` was triggered or changed to `victory`, `loss`, or `stopped`.
 - **`native_world_saved(wait)`**: the server completed its world save cycle; `wait` is true when chunk writes were flushed before returning.
+- **`native_chunk_data_save(dimension, chunk)`**: the server captured this loaded chunk's save data before queuing it for disk. Use `native_attachments` with `Holder::Chunk(chunk)` to access its attachments; changes do not affect the captured data. The hook currently covers level saves and the closing save, not unloaded or proto chunks. Bundles need `"hooks": @API:chunk_data_save@`.
 - **`native_entities_load(dimension, chunk, count)`**: saved entity records for `chunk` finished loading into `dimension`.
 - **`native_entities_unload(dimension, chunk, count)`**: entities in `chunk` left the active world and were queued for saving.
 - **`native_game_event(event, pos)`**: a generic world game event was fired at `pos`, including events with no nearby vibration listeners.

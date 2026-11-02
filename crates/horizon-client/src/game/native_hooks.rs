@@ -4744,6 +4744,12 @@ impl Game<'_> {
         mod_api::dispatch_world_saved(self, mod_api::mods(), wait);
     }
 
+    /// A chunk's save data has been captured on the server thread. Attachment
+    /// changes made now do not change this save. @API:chunk_data_save@.
+    pub(super) fn native_chunk_data_save(&mut self, dimension: &str, chunk: [i32; 2]) {
+        let _ = (dimension, chunk);
+    }
+
     /// Entities from `chunk` finished loading into the server world. `count`
     /// is the number of saved entity records read. @API:entities_load@.
     pub(super) fn native_entities_load(&mut self, dimension: &str, chunk: [i32; 2], count: usize) {
