@@ -139,8 +139,6 @@ block entity gets one. Horizon sends every write to players whatever the flags: 
 and `UPDATE_IMMEDIATE` change nothing yet. Hooks holding only `GameLevel` cannot call it yet. Bundles that use it need
 `"hooks": 24`.
 
-`native_play_level_sound(at, original_gain, sound, source, gain, cancel)` observes a positional level sound before playback (NeoForge `PlayLevelSoundEvent`). `original_gain` and `gain` contain volume and pitch; mods can change `sound` (including setting it to `None`), `source`, and `gain`, or set `cancel` to prevent playback. Currently this fires only for queued native server sounds, not general level sounds or client playback. Bundles need "hooks": @API:play_level_sound@.
-
 API 25 adds `GameLevel::native_play_sound` for registered vanilla sound events on an authoritative server.
 It queues the sound for nearby players in the level's dimension, including during a guest's turn.
 Pass a `SOUND_SOURCES` index, position, volume and pitch. The return value says whether the call

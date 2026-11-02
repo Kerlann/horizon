@@ -542,11 +542,16 @@ impl Game<'_> {
             return;
         }
         for mut sound in std::mem::take(&mut self.creatures.lan_sounds) {
+            // Level.playSound draws the seed before playSeededSound, cancelled or not.
+            let Some(seed) = self.lan.as_ref().map(|host| host.hub.next_sound_seed()) else {
+                return;
+            };
             let mut name = Some(sound.sound);
             let original_gain = [sound.volume, sound.pitch];
             let mut gain = original_gain;
             let mut cancel = false;
             self.native_play_level_sound(
+                sound.dimension,
                 sound.at,
                 original_gain,
                 &mut name,
@@ -554,7 +559,14 @@ impl Game<'_> {
                 &mut gain,
                 &mut cancel,
             );
-            let Some(name) = name.filter(|_| !cancel) else {
+            // A mod's changes meet `native_play_sound`'s rules: a vanilla
+            // client drops the connection on a bad source or sound id.
+            let source_ok = usize::try_from(sound.source)
+                .is_ok_and(|source| source < horizon_client::settings::SOUND_SOURCES.len());
+            let gain_ok = gain.iter().all(|v| v.is_finite() && *v >= 0.0);
+            let Some(name) = name.filter(|name| {
+                !cancel && source_ok && gain_ok && super::native_hooks::sound_id(name)
+            }) else {
                 continue;
             };
             sound.sound = name;
@@ -576,7 +588,7 @@ impl Game<'_> {
                     sound.volume,
                     sound.pitch,
                     sound.source,
-                    host.hub.next_sound_seed(),
+                    seed,
                 )
                 .encode();
             let range = f64::from(sound.volume.max(1.0)) * 16.0;

@@ -12,6 +12,6 @@
       }
     }
   ],
-  "rust_summary": "A level sound before playback (`native_play_level_sound`).",
-  "doc_summary": "A positional level sound is about to play: `native_play_level_sound(at, original_gain, sound, source, gain, cancel)` can change the nullable sound id, source, volume and pitch or cancel playback. Currently only queued native server sounds are covered. Bundles need \"hooks\": @API:play_level_sound@."
+  "rust_summary": "a level sound before playback (`native_play_level_sound`).",
+  "doc_summary": "`native_play_level_sound(dimension, at, original_gain, sound, source, gain, cancel)`, a positional level sound about to play (NeoForge `PlayLevelSoundEvent`). `original_gain` and `gain` hold volume and pitch; a mod can change the sound id (`None` drops it), source and gain, or cancel playback. Changed values must pass `native_play_sound`'s checks, or the sound is dropped. Currently only sounds queued with `native_play_sound` are covered. Bundles need \"hooks\": @API:play_level_sound@."
 }
