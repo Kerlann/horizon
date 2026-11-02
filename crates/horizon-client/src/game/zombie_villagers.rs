@@ -104,7 +104,12 @@ impl Game<'_> {
                 .unwrap_or(0);
         let mob = &self.mobs[index];
         let instance = mob.extra.effects.iter().find(|e| e.0 == "minecraft:weakness")
-            .map(|e| horizon_client::effects::EffectInstance::new("weakness", e.1, e.2));
+            .map(|e| {
+                let mut instance = horizon_client::effects::EffectInstance::new("weakness", e.1, e.2);
+                instance.ambient = mob.extra.ambient_effects.contains(&e.0);
+                instance.visible = !mob.extra.hidden_effects.contains(&e.0);
+                instance
+            });
         let id = mob.id;
         let mut cancel = false;
         self.native_mob_effect_remove(Some(id as i32), "minecraft:weakness", instance.as_ref(), &mut cancel);

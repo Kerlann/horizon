@@ -1221,6 +1221,11 @@ impl Game<'_> {
         let mut e = horizon_client::effects::EffectInstance::new(id, p.duration, p.amplifier);
         e.ambient = p.flags & 1 != 0;
         e.visible = p.flags & 2 != 0;
+        let mut result = None;
+        self.native_mob_effect_applicable(Some(p.id), &e, None, &mut result);
+        if result == Some(false) {
+            return;
+        }
         let list = &mut self.potions.effects.list;
         match list.iter_mut().find(|x| x.id == id) {
             // forceAddEffect's copyBlendState: an updated effect keeps its fade.

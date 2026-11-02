@@ -2558,6 +2558,9 @@ fn tick_effects(m: &mut Mob, mods: Option<&dyn super::ModEffectTicks>) {
         // MobEffectInstance.tickServer: an infinite (-1) effect times its
         // ticks by the mob's tickCount and never counts down.
         let infinite = *ticks == -1;
+        if !infinite && *ticks <= 0 {
+            continue;
+        }
         let count = if infinite { m.age as i32 } else { *ticks };
         match *effect {
             "minecraft:poison"
@@ -2585,10 +2588,6 @@ fn tick_effects(m: &mut Mob, mods: Option<&dyn super::ModEffectTicks>) {
                 m.health = (m.health + 1.0).min(m.attrs.max_health);
             }
             id if horizon_client_core::potions::is_mod_effect(id) => {
-                // tickServer: one with no ticks left goes unasked.
-                if !infinite && *ticks <= 0 {
-                    continue;
-                }
                 if let Some(mods) = mods
                     && !mods.tick_mod_effect(id, m.id, count, *amp)
                 {
