@@ -219,6 +219,7 @@ pub enum SpawnerEvent {
 #[derive(Clone, Debug)]
 pub struct SpawnerSpawn<'a> {
     pub entity: &'a Compound,
+    pub spawner: [i32; 3],
     pub id: &'a str,
     pub position: [f64; 3],
     pub yaw: f32,
@@ -617,6 +618,7 @@ impl SpawnerExt for Spawner {
             }
             let request = SpawnerSpawn {
                 entity: &data.entity,
+                spawner: pos,
                 id: &id,
                 position: placed,
                 yaw,

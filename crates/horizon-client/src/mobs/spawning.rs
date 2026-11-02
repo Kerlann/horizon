@@ -92,6 +92,9 @@ impl LocalDifficulty {
 /// Mutable inputs and decisions for a mob's spawn finalization.
 #[derive(Clone, Debug)]
 pub struct FinalizeSpawn {
+    /// Vanilla spawn reason and the block position of an associated spawner, if any.
+    pub reason: super::finalize::Reason,
+    pub spawner: Option<[i32; 3]>,
     pub difficulty: LocalDifficulty,
     /// Group data passed to finalization, or none at the start of a pack.
     pub spawn_data: Option<super::finalize::Group>,

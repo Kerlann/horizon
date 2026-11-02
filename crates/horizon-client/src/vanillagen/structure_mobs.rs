@@ -282,6 +282,8 @@ impl StructureMobFinalizer {
         // WorldGenRegion.getCurrentDifficultyAt: no inhabited time.
         let difficulty = LocalDifficulty::new(base, day_time, 0, moon);
         let mut event = crate::mobs::spawning::FinalizeSpawn {
+            reason,
+            spawner: None,
             difficulty,
             spawn_data: group.take(),
             spawn_cancelled: false,

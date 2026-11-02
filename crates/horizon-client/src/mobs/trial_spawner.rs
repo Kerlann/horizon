@@ -1118,6 +1118,7 @@ impl TrialSpawnerExt for TrialSpawner {
         }
         let request = SpawnerSpawn {
             entity: &data.entity,
+            spawner: pos,
             id: &id,
             position: placed,
             yaw,

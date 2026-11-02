@@ -419,6 +419,8 @@ impl<'a> Game<'a> {
         let mut mob = Mob::new(0, kind, Vec3::new(x, y, z), r.yaw);
         let facts = self.biome_facts(x.floor() as i32, y.floor() as i32, z.floor() as i32);
         let mut spawn = horizon_client::mobs::spawning::FinalizeSpawn {
+            reason: horizon_client::mobs::finalize::Reason::Natural,
+            spawner: None,
             difficulty: self.local_difficulty(r.position),
             spawn_data: group.take(),
             spawn_cancelled: false,

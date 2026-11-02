@@ -762,14 +762,34 @@ impl Game<'_> {
             at[1].floor() as i32,
             at[2].floor() as i32,
         );
-        let difficulty = self.local_difficulty(at);
-        spawning::finalize(&mut mob, &facts, &difficulty);
-        raider::finalize(&mut mob, reason);
+        let mut spawn = spawning::FinalizeSpawn {
+            reason: match reason {
+                raider::Reason::Patrol => horizon_client::mobs::finalize::Reason::Patrol,
+                raider::Reason::Event => horizon_client::mobs::finalize::Reason::Event,
+                raider::Reason::Natural => horizon_client::mobs::finalize::Reason::Natural,
+                raider::Reason::Other => horizon_client::mobs::finalize::Reason::MobSummoned,
+            },
+            spawner: None,
+            difficulty: self.local_difficulty(at),
+            spawn_data: None,
+            spawn_cancelled: false,
+        };
+        let mut canceled = false;
+        spawning::native_finalize_spawn(kind, at, &mut spawn, &mut canceled);
+        if !canceled {
+            spawning::finalize(&mut mob, &facts, &spawn.difficulty);
+            raider::finalize(&mut mob, reason);
+        }
+        if spawn.spawn_cancelled {
+            return None;
+        }
         let id = mob.id;
         self.mobs.push(mob);
         self.native_mobs_joined(self.mobs.len() - 1, false);
-        self.enchant_spawn_equipment(id);
-        self.halloween_spawn_head(id);
+        if !canceled {
+            self.enchant_spawn_equipment(id);
+            self.halloween_spawn_head(id);
+        }
         Some(id)
     }
 
