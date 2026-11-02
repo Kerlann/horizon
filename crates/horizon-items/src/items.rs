@@ -1371,9 +1371,13 @@ impl LootContext<'_> {
                 properties: self.properties,
                 tool: horizon_world::loot::NativeLootTool {
                     item: tool.item.to_string(),
-                    enchantments: tool.enchantments().iter().map(|(id, level)| {
-                        (id.to_string(), (*level).min(i32::MAX as u32) as i32)
-                    }).collect(),
+                    enchantments: tool
+                        .enchantments()
+                        .iter()
+                        .map(|(id, level)| {
+                            (id.to_string(), (*level).min(i32::MAX as u32) as i32)
+                        })
+                        .collect(),
                 },
                 place: horizon_world::loot::current_native_loot_place(),
                 broken_by_player: self.this_entity,
@@ -1488,7 +1492,7 @@ impl LootContext<'_> {
             "minecraft:table_bonus" => {
                 // BonusLevelTableCondition: chances[min(level, len - 1)].
                 let level =
-                    self.enchantment_level(c["enchantment"].as_str().unwrap_or("")) as usize;
+                    self.block_loot_enchantment_level(c["enchantment"].as_str().unwrap_or("")) as usize;
                 let chances = c["chances"].as_array().map_or(&[][..], Vec::as_slice);
                 let chance = chances
                     .get(level.min(chances.len().saturating_sub(1)))
