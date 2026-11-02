@@ -751,12 +751,23 @@ impl Game<'_> {
                             }
                         }
                         _ => {
-                            if mob_can_be_affected(tags, &m.kind.id, effect)
-                                && let Some(name) = mob_effect_id(effect)
-                            {
-                                let new = !m.has_effect(name);
-                                m.add_effect(name, duration, amp);
-                                self.mod_effect_added(name, Some(id as i32), amp, new);
+                            let vanilla = mob_can_be_affected(tags, &m.kind.id, effect);
+                            if let Some(name) = mob_effect_id(effect) {
+                                let instance = EffectInstance::new(name, duration, amp);
+                                let mut result = None;
+                                self.native_mob_effect_applicable(
+                                    Some(id as i32),
+                                    &instance,
+                                    None,
+                                    &mut result,
+                                );
+                                if result.unwrap_or(vanilla)
+                                    && let Some(m) = self.mobs.iter_mut().find(|m| m.id == id)
+                                {
+                                    let new = !m.has_effect(name);
+                                    m.add_effect(name, duration, amp);
+                                    self.mod_effect_added(name, Some(id as i32), amp, new);
+                                }
                             }
                         }
                     }
@@ -1366,18 +1377,31 @@ impl Game<'_> {
                         _ => {
                             // `LivingEntity.addEffect` refuses what the mob
                             // cannot be affected by.
-                            if mob_can_be_affected(tags, &m.kind.id, id)
-                                && let Some(name) = mob_effect_id(id)
-                            {
-                                let new = !m.has_effect(name);
-                                m.add_effect_with(
-                                    name,
-                                    scaled(*duration),
-                                    *amp,
-                                    ambient.contains(id),
-                                    !hidden.contains(id),
+                            let vanilla = mob_can_be_affected(tags, &m.kind.id, id);
+                            if let Some(name) = mob_effect_id(id) {
+                                let mut instance = EffectInstance::new(name, scaled(*duration), *amp);
+                                instance.ambient = ambient.contains(id);
+                                instance.visible = !hidden.contains(id);
+                                let mut result = None;
+                                self.native_mob_effect_applicable(
+                                    Some(mob as i32),
+                                    &instance,
+                                    None,
+                                    &mut result,
                                 );
-                                self.mod_effect_added(name, Some(mob as i32), *amp, new);
+                                if result.unwrap_or(vanilla)
+                                    && let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob)
+                                {
+                                    let new = !m.has_effect(name);
+                                    m.add_effect_with(
+                                        name,
+                                        scaled(*duration),
+                                        *amp,
+                                        ambient.contains(id),
+                                        !hidden.contains(id),
+                                    );
+                                    self.mod_effect_added(name, Some(mob as i32), *amp, new);
+                                }
                             }
                         }
                     }
