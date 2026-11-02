@@ -664,10 +664,10 @@ impl Game<'_> {
         let back = self.dim;
         for dim in closing {
             self.enter_level(None, dim)?;
-            // Its chunks leave with it: the mods hear before its last save.
+            // Save while the chunks are still available, before notifying unload.
             let chunks: Vec<_> = self.world.chunks.values().cloned().collect();
-            self.native_chunks_changed(&chunks);
             self.save_level(true)?;
+            self.native_chunks_changed(&chunks);
             // Its entities' attachments are saved with them; they leave memory too.
             for uuid in self.persist.uuids.values() {
                 self.entity_attachments.remove(uuid);

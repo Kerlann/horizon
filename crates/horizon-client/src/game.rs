@@ -16271,6 +16271,26 @@ impl Game<'_> {
             horizon_client::spans::time("streaming", || self.streaming.update(&mut self.world));
         self.streaming.extra.truncate(areas);
         self.spawn_fresh_chunks();
+        let dirty: Vec<_> = unloaded
+            .iter()
+            .filter(|c| self.world.modified.remove(&(c.x, c.z)))
+            .cloned()
+            .collect();
+        let modified = horizon_client::spans::time("with_entities", || self.with_entities(&dirty));
+        // Streaming has removed these columns already. Make each available for
+        // attachment access during its save notification, after taking the
+        // snapshot but before telling mods that the chunk unloaded.
+        if self.native_authoritative() {
+            let dimension = self.dim.id();
+            for chunk in &modified {
+                let key = (chunk.x, chunk.z);
+                if !self.world.chunks.contains_key(&key) {
+                    self.world.chunks.insert(key, chunk.clone());
+                    self.native_chunk_data_save(dimension, [chunk.x, chunk.z]);
+                    self.world.chunks.remove(&key);
+                }
+            }
+        }
         // Before the unloaded chunks' block entities are written and dropped.
         self.native_chunks_changed(&unloaded);
         if let Some(lod) = &mut self.lod {
@@ -16296,12 +16316,6 @@ impl Game<'_> {
                 }
             });
         }
-        let dirty: Vec<_> = unloaded
-            .iter()
-            .filter(|c| self.world.modified.remove(&(c.x, c.z)))
-            .cloned()
-            .collect();
-        let modified = horizon_client::spans::time("with_entities", || self.with_entities(&dirty));
         horizon_client::spans::time("unload_entities", || self.unload_entities(&unloaded));
         if !unloaded.is_empty() {
             let gone: horizon_client::fast_hash::FxHashSet<(i32, i32)> =
@@ -16315,7 +16329,13 @@ impl Game<'_> {
         }
         if !modified.is_empty()
             && let Err(e) =
-                horizon_client::spans::time("save_chunks", || self.save_chunks_later(&modified))
+                horizon_client::spans::time("save_chunks", || {
+                    self.save.save_later(
+                        &modified,
+                        self.pack.assets.registry,
+                        world_biomes!(self),
+                    )
+                })
         {
             log::warn!("Horizon: failed to save unloaded chunks: {e}");
         }
