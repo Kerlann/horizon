@@ -505,8 +505,22 @@ impl Game<'_> {
             return;
         };
         let at = [m.position.x, m.position.y, m.position.z];
-        let amount = ((damage / 4.0) as u32).max(1);
+        let amount = (damage / 4.0).max(1.0) as u32;
         let name = damage_type(kind, false);
+        let present = [
+            false,
+            false,
+            false,
+            false,
+            m.item_by_slot(EquipmentSlot::Body).is_some(),
+        ];
+        let mut slot_damage = [0.0, 0.0, 0.0, 0.0, amount as f32];
+        let mut canceled = false;
+        Self::native_armor_hurt(id as i32, name, present, &mut slot_damage, &mut canceled);
+        if canceled {
+            return;
+        }
+        let amount = slot_damage[4].max(0.0) as u32;
         let fire = self
             .motion
             .health
