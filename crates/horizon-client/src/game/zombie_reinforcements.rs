@@ -102,17 +102,23 @@ impl Game<'_> {
         let (width, height) = (kind.width as f32, kind.height as f32);
         for _ in 0..ATTEMPTS {
             let [x, y, z] = from.map(|v| v + offset(own));
-            if !spawn_rules::is_spawn_position_ok(kind.species, &level, x, y, z)
-                || !spawn_rules::check_spawn_rules(
-                    kind.species,
-                    &level,
-                    Reason::Reinforcement,
-                    rules,
-                    x,
-                    y,
-                    z,
-                )
-            {
+            if !spawn_rules::is_spawn_position_ok(kind.species, &level, x, y, z) {
+                continue;
+            }
+            let default_result = spawn_rules::check_spawn_rules(
+                kind.species,
+                &level,
+                Reason::Reinforcement,
+                rules,
+                x,
+                y,
+                z,
+            );
+            let mut result = None;
+            spawn_selection::native_mob_spawn_placement_check(
+                &kind.id, [x, y, z], "reinforcement", default_result, &mut result,
+            );
+            if !result.unwrap_or(default_result) {
                 continue;
             }
             // setPos(x, y, z): the box is centred on the block's corner.

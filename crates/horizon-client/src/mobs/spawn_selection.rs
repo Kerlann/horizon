@@ -1356,17 +1356,27 @@ pub fn spawn_mobs_for_chunk_generation<L: NaturalLevel, R: RandomSource, Q: Rand
                     );
                     let fy = f64::from(pos[1]);
                     let (bx, bz) = (fx.floor() as i32, fz.floor() as i32);
-                    if !l.no_collision(spawn_aabb(species, fx, fy, fz, width, height))
-                        || !spawn_rules::check_spawn_rules(
-                            species,
-                            l,
-                            Reason::ChunkGeneration,
-                            rules,
-                            bx,
-                            pos[1],
-                            bz,
-                        )
-                    {
+                    if !l.no_collision(spawn_aabb(species, fx, fy, fz, width, height)) {
+                        continue;
+                    }
+                    let default_result = spawn_rules::check_spawn_rules(
+                        species,
+                        l,
+                        Reason::ChunkGeneration,
+                        rules,
+                        bx,
+                        pos[1],
+                        bz,
+                    );
+                    let mut result = None;
+                    native_mob_spawn_placement_check(
+                        &entry.entity,
+                        [bx, pos[1], bz],
+                        "chunk_generation",
+                        default_result,
+                        &mut result,
+                    );
+                    if !result.unwrap_or(default_result) {
                         continue;
                     }
                     let yaw = random.next_float() * 360.0;

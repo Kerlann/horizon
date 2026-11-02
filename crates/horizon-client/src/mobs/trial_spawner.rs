@@ -1069,7 +1069,7 @@ impl TrialSpawnerExt for TrialSpawner {
             return None;
         }
         let block = at.map(|v| v.floor() as i32);
-        if !spawn_rules::check_spawn_rules(
+        let default_result = spawn_rules::check_spawn_rules(
             species,
             l,
             Reason::TrialSpawner,
@@ -1077,7 +1077,12 @@ impl TrialSpawnerExt for TrialSpawner {
             block[0],
             block[1],
             block[2],
-        ) {
+        );
+        let mut result = None;
+        spawn_selection::native_mob_spawn_placement_check(
+            &id, block, "trial_spawner", default_result, &mut result,
+        );
+        if !result.unwrap_or(default_result) {
             return None;
         }
         if let Some(rules) = data.custom_spawn_rules

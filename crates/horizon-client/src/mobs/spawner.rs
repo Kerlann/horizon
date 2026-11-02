@@ -529,18 +529,25 @@ impl SpawnerExt for Spawner {
                 if !SpawnData::valid_position(rules, l, block[0], block[1], block[2]) {
                     continue;
                 }
-            } else if let Some(s) = species
-                && !spawn_rules::check_spawn_rules(
-                    s,
-                    l,
-                    Reason::Spawner,
-                    random,
-                    block[0],
-                    block[1],
-                    block[2],
-                )
-            {
-                continue;
+            } else {
+                let default_result = species.is_none_or(|s| {
+                    spawn_rules::check_spawn_rules(
+                        s,
+                        l,
+                        Reason::Spawner,
+                        random,
+                        block[0],
+                        block[1],
+                        block[2],
+                    )
+                });
+                let mut result = None;
+                spawn_selection::native_mob_spawn_placement_check(
+                    &id, block, "spawner", default_result, &mut result,
+                );
+                if !result.unwrap_or(default_result) {
+                    continue;
+                }
             }
             // loadEntityRecursive: a type the game cannot create delays.
             let Some(s) = species else {
