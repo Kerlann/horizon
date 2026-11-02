@@ -616,7 +616,7 @@ entity that didn't have it, and `native_mob_effect_added` (NeoForge's `MobEffect
 
 `native_mob_effect_applicable` (NeoForge's `MobEffectEvent.Applicable`) sees an incoming effect before eligibility is checked. Its result is `None` for the vanilla decision, `Some(true)` to apply, or `Some(false)` to reject. The optional source entity is supplied where known.
 
-`native_mob_effect_expired` (NeoForge's `MobEffectEvent.Expired`) runs on the server before an expired player effect is removed. Set `canceled` to retain it; the hook can fire again on the next tick. The optional entity id is supplied where known.
+`native_mob_effect_expired` (NeoForge's `MobEffectEvent.Expired`) runs on the server before an expired player effect is removed. Set `cancel` to retain it; the hook can fire again on the next tick. The optional entity id is supplied where known.
 A mob is its `Entity.getId`; a player is None, with their state swapped in (`native_acting_player`). Vanilla's effects
 never reach them. Bundles that use them need `"hooks": 56`.
 

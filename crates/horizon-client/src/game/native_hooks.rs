@@ -5722,14 +5722,14 @@ impl Game<'_> {
         let _ = (entity, effect, source, result);
     }
     /// NeoForge's `MobEffectEvent.Expired`, before an expired effect is removed.
-    /// `entity` is the entity id when known; set `canceled` to retain the effect.
+    /// `entity` is the entity id when known; set `cancel` to retain the effect.
     pub(super) fn native_mob_effect_expired(
         &mut self,
         entity: Option<i32>,
         effect: &horizon_client::effects::EffectInstance,
-        canceled: &mut bool,
+        cancel: &mut bool,
     ) {
-        let _ = (entity, effect, canceled);
+        let _ = (entity, effect, cancel);
     }
     /// `MobEffect.onEffectAdded`: `LivingEntity.addEffect` gave `entity`
     /// (as in `native_apply_effect_tick`) the content mod's effect `effect`,
