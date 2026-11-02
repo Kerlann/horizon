@@ -1487,8 +1487,9 @@ impl LootContext<'_> {
             "minecraft:random_chance" => random.next_float() < Self::number(&c["chance"], random),
             "minecraft:table_bonus" => {
                 // BonusLevelTableCondition: chances[min(level, len - 1)].
-                let level =
-                    self.block_loot_enchantment_level(c["enchantment"].as_str().unwrap_or("")) as usize;
+                let level = self
+                    .block_loot_enchantment_level(c["enchantment"].as_str().unwrap_or(""))
+                    as usize;
                 let chances = c["chances"].as_array().map_or(&[][..], Vec::as_slice);
                 let chance = chances
                     .get(level.min(chances.len().saturating_sub(1)))
