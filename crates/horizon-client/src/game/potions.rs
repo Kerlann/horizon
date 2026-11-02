@@ -684,6 +684,11 @@ impl Game<'_> {
     /// Instant effects act at once: harming hurts and healing heals, the
     /// other way round for the undead.
     pub(super) fn arrow_post_hurt_effects(&mut self, p: &Projectile, who: Who) {
+        let source = match p.owner {
+            Some(Who::Mob(id)) => Some(id as i32),
+            Some(Who::Player) => self.network_entity_id(p.guest.map_or(super::commands::Target::Player, super::commands::Target::Guest)),
+            None => None,
+        }.or(Some(p.id as i32));
         let from_item = p.arrow.as_ref().map(|a| &a.pickup_item);
         let mut effects: Vec<(&'static str, i32, i32)> = match from_item {
             Some(s) if &*s.item == "minecraft:spectral_arrow" => vec![("glowing", 200, 0)],
@@ -718,7 +723,7 @@ impl Game<'_> {
                             self.apply_effect_action(a);
                         }
                     } else {
-                        self.add_player_effect(EffectInstance::new(id, duration, amp));
+                        self.add_player_effect_from(EffectInstance::new(id, duration, amp), source);
                     }
                 }
             }
@@ -762,7 +767,7 @@ impl Game<'_> {
                                 self.native_mob_effect_applicable(
                                     Some(id as i32),
                                     &instance,
-                                    None,
+                                    source,
                                     &mut result,
                                 );
                                 if result.unwrap_or(vanilla)
@@ -934,8 +939,12 @@ impl Game<'_> {
     }
     /// Add an active effect to the player and update attributes / absorption.
     pub(super) fn add_player_effect(&mut self, effect: EffectInstance) -> bool {
+        self.add_player_effect_from(effect, None)
+    }
+
+    pub(super) fn add_player_effect_from(&mut self, effect: EffectInstance, source: Option<i32>) -> bool {
         let mut result = None;
-        self.native_mob_effect_applicable(None, &effect, None, &mut result);
+        self.native_mob_effect_applicable(None, &effect, source, &mut result);
         if result == Some(false) {
             return false;
         }
@@ -1208,14 +1217,19 @@ impl Game<'_> {
                 }
             }
             if let Some((p, mob, block)) = hit {
-                landed.push((t.stack.clone(), p, mob, block, t.age, t.owner.clone()));
+                let source = match t.thrower {
+                    Some(Who::Mob(id)) => Some(id as i32),
+                    Some(Who::Player) => self.network_entity_id(t.guest.map_or(super::commands::Target::Player, super::commands::Target::Guest)),
+                    None => None,
+                }.or(Some(t.id as i32));
+                landed.push((t.stack.clone(), p, mob, block, t.age, t.owner.clone(), source));
                 return false;
             }
             t.position = next;
             t.age < 1200 && t.position.y > -128.0
         });
         self.potions.thrown = thrown;
-        for (stack, at, mob, block, age, owner) in landed {
+        for (stack, at, mob, block, age, owner, source_id) in landed {
             // Projectile.onHit (super.onHit of AbstractThrownPotion): a block
             // is heard at its centre, an entity at the hit.
             let heard = if mob.is_some() {
@@ -1226,7 +1240,7 @@ impl Game<'_> {
             let thrower = owner.is_some().then_some(Who::Player);
             self.projectile_event("minecraft:projectile_land", thrower, heard);
             let item = stack.item.to_string();
-            self.splash(&stack, at, mob, block, age, owner);
+            self.splash(&stack, at, mob, block, age, owner, source_id);
             if item != "minecraft:experience_bottle" {
                 self.native_potion_splash(&item, [at.x, at.y, at.z]);
             }
@@ -1314,6 +1328,7 @@ impl Game<'_> {
                 &effects,
                 (&potion.hidden, &potion.ambient),
                 c.at,
+                c.id as i32,
                 &potion.source,
             );
             // setRadiusOnUse(-0.5).
@@ -1363,6 +1378,7 @@ impl Game<'_> {
         effects: &[(&'static str, i32, i32)],
         (hidden, ambient): (&[&'static str], &[&'static str]),
         at: [f64; 3],
+        source_id: i32,
         source: &Text,
     ) {
         // MobEffectInstance.withScaledDuration: floor(duration * scale), at least 1; an infinite
@@ -1388,7 +1404,7 @@ impl Game<'_> {
                         let mut instance = EffectInstance::new(e.id, scaled(*duration), *amp);
                         instance.visible = !hidden.contains(id);
                         instance.ambient = ambient.contains(id);
-                        g.add_player_effect(instance);
+                        g.add_player_effect_from(instance, Some(source_id));
                     }
                 }
             }),
@@ -1434,7 +1450,7 @@ impl Game<'_> {
                                 self.native_mob_effect_applicable(
                                     Some(mob as i32),
                                     &instance,
-                                    None,
+                                    Some(source_id),
                                     &mut result,
                                 );
                                 if result.unwrap_or(vanilla)
@@ -1575,6 +1591,7 @@ impl Game<'_> {
         at: Vec3,
         age: u32,
         source: &Text,
+        source_id: Option<i32>,
     ) {
         if let Some(p) = self.player.as_ref() {
             let w = f64::from(p.dimensions.width) / 2.0;
@@ -1599,7 +1616,7 @@ impl Game<'_> {
                         if d > 20
                             && let Some(e) = brewing::effect(id)
                         {
-                            self.add_player_effect(EffectInstance::new(e.id, d, *amp));
+                            self.add_player_effect_from(EffectInstance::new(e.id, d, *amp), source_id);
                         }
                     }
                 }
@@ -1618,6 +1635,7 @@ impl Game<'_> {
         hit: Option<([i32; 3], Direction)>,
         age: u32,
         owner: Option<Text>,
+        source_id: Option<i32>,
     ) {
         let block = [at.x, at.y, at.z].map(|v| v.floor() as i32);
         if &*stack.item == "minecraft:experience_bottle" {
@@ -1714,7 +1732,7 @@ impl Game<'_> {
         // message names by the owner, else by the potion.
         let source =
             owner.unwrap_or_else(|| Text::translate("entity.minecraft.splash_potion", &[]));
-        self.for_each_player(|g| g.splash_on_player(def.effects, at, age, &source));
+        self.for_each_player(|g| g.splash_on_player(def.effects, at, age, &source, source_id));
         // Mobs take the instant effects (undead invert healing and harming).
         let undead = &self.stations().enchantments.entity_tags;
         let mut hits = Vec::new();
@@ -1743,7 +1761,7 @@ impl Game<'_> {
                             let instance = EffectInstance::new(id, d, *amp);
                             let mut result = None;
                             self.native_mob_effect_applicable(
-                                Some(self.mobs[i].id as i32), &instance, None, &mut result,
+                                Some(self.mobs[i].id as i32), &instance, source_id, &mut result,
                             );
                             let vanilla = mob_can_be_affected(
                                 &self.stations().enchantments.entity_tags,

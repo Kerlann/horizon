@@ -1210,9 +1210,9 @@ impl Game<'_> {
     }
     /// ClientPacketListener.handleUpdateMobEffect for the player itself
     /// (`LivingEntity.forceAddEffect`): the effect replaces any of its kind.
-    /// Other entities' effects are not shown.
     fn remote_effect(&mut self, p: &play::UpdateMobEffect) {
-        if self.remote.as_ref().is_none_or(|r| r.entity_id != p.id) {
+        let is_player = self.remote.as_ref().is_some_and(|r| r.entity_id == p.id);
+        if !is_player && !self.mobs.iter().any(|m| m.id == p.id as u32) {
             return;
         }
         let Some(id) = self.remote_effect_id(p.effect) else {
@@ -1224,6 +1224,15 @@ impl Game<'_> {
         let mut result = None;
         self.native_mob_effect_applicable(Some(p.id), &e, None, &mut result);
         if result == Some(false) {
+            return;
+        }
+        if !is_player {
+            if let Some(mob) = self.mobs.iter_mut().find(|m| m.id == p.id as u32) {
+                if let Some(name) = super::potions::mob_effect_id(id) {
+                    mob.extra.effects.retain(|e| e.0 != name);
+                    mob.add_effect_with(name, p.duration, p.amplifier, e.ambient, e.visible);
+                }
+            }
             return;
         }
         let list = &mut self.potions.effects.list;

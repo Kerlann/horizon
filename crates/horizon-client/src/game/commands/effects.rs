@@ -61,13 +61,14 @@ impl Game<'_> {
             None if effect.instant => 1,
             None => 600,
         };
+        let source = self.source_entity().and_then(|t| self.network_entity_id(t));
         let mut tracker = Tracker::default();
         for t in self.living_targets(ctx)? {
             let changed = match t {
                 Target::Player | Target::Guest(_) => {
                     let mut instance = EffectInstance::new(effect.id, duration, amplifier);
                     instance.visible = particles;
-                    self.for_player(t, |g| g.add_player_effect(instance))
+                    self.for_player(t, |g| g.add_player_effect_from(instance, source))
                         .unwrap_or(false)
                 }
                 Target::Mob(id) => {
@@ -77,7 +78,7 @@ impl Game<'_> {
                     let mut instance = EffectInstance::new(effect.id, duration, amplifier);
                     instance.visible = particles;
                     let mut result = None;
-                    self.native_mob_effect_applicable(Some(id as i32), &instance, None, &mut result);
+                    self.native_mob_effect_applicable(Some(id as i32), &instance, source, &mut result);
                     let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
                         continue;
                     };

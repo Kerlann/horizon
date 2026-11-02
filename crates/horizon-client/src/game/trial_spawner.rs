@@ -311,8 +311,16 @@ impl Game<'_> {
         }
         let mut cancel = false;
         self.native_mob_effect_remove(entity, "minecraft:bad_omen", instance.as_ref(), &mut cancel);
+        let trial = horizon_client::effects::EffectInstance::new(
+            "trial_omen",
+            TRIAL_OMEN_TICKS_PER_LEVEL * (instance.as_ref().unwrap().amplifier + 1),
+            0,
+        );
+        let mut result = None;
+        self.native_mob_effect_applicable(entity, &trial, None, &mut result);
+        let apply = result != Some(false);
         let eye = if acting {
-            transform_bad_omen(&mut self.potions.effects, cancel)
+            transform_bad_omen(&mut self.potions.effects, cancel, apply)
                 .then(|| self.eye_position().unwrap_or_default())
         } else {
             let acting = self.lan_acting;
@@ -326,7 +334,7 @@ impl Game<'_> {
             };
             let [x, y, z] = guest.position;
             let eye = [x, y + guest.eye_height(), z];
-            transform_bad_omen(&mut guest.effects, cancel).then_some(eye)
+            transform_bad_omen(&mut guest.effects, cancel, apply).then_some(eye)
         };
         if let Some(eye) = eye {
             self.audio
@@ -343,12 +351,15 @@ impl Game<'_> {
 }
 
 /// Swap Bad Omen for Trial Omen on `effects`; true when Trial Omen is new.
-fn transform_bad_omen(effects: &mut horizon_client::effects::PlayerEffects, keep_bad_omen: bool) -> bool {
+fn transform_bad_omen(effects: &mut horizon_client::effects::PlayerEffects, keep_bad_omen: bool, apply: bool) -> bool {
     let Some(amplifier) = effects.amplifier("bad_omen") else {
         return false;
     };
     if !keep_bad_omen {
         effects.list.retain(|e| e.id != "bad_omen");
+    }
+    if !apply {
+        return false;
     }
     let new = effects.get("trial_omen").is_none();
     effects.add(horizon_client::effects::EffectInstance::new(
@@ -374,13 +385,13 @@ mod omen_tests {
         assert_eq!(omen_of(&e), None);
         e.add(EffectInstance::new("bad_omen", 100, 1));
         assert_eq!(omen_of(&e), Some(Omen::Bad));
-        assert!(transform_bad_omen(&mut e, false));
+        assert!(transform_bad_omen(&mut e, false, true));
         assert!(e.get("bad_omen").is_none());
         assert_eq!(
             e.get("trial_omen").unwrap().duration,
             TRIAL_OMEN_TICKS_PER_LEVEL * 2
         );
         assert_eq!(omen_of(&e), Some(Omen::Trial));
-        assert!(!transform_bad_omen(&mut e, false));
+        assert!(!transform_bad_omen(&mut e, false, true));
     }
 }

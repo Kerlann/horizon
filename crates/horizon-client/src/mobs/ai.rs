@@ -2553,7 +2553,8 @@ fn flower_contact_effects(m: &mut Mob, w: &MobWorld) {
 /// regeneration), and a content mod's on a server.
 fn tick_effects(m: &mut Mob, mods: Option<&dyn super::ModEffectTicks>) {
     let mut effects = std::mem::take(&mut m.extra.effects);
-    for (effect, ticks, amp) in &mut effects {
+    let mut ended_early = Vec::new();
+    for (index, (effect, ticks, amp)) in effects.iter_mut().enumerate() {
         let interval = |base: i32| (base >> (*amp).max(0)).max(1);
         // MobEffectInstance.tickServer: an infinite (-1) effect times its
         // ticks by the mob's tickCount and never counts down.
@@ -2591,8 +2592,8 @@ fn tick_effects(m: &mut Mob, mods: Option<&dyn super::ModEffectTicks>) {
                 if let Some(mods) = mods
                     && !mods.tick_mod_effect(id, m.id, count, *amp)
                 {
-                    // Removed before it counts down.
-                    *ticks = 0;
+                    // Expiration is reported before the duration changes.
+                    ended_early.push(index);
                     continue;
                 }
             }
@@ -2602,8 +2603,11 @@ fn tick_effects(m: &mut Mob, mods: Option<&dyn super::ModEffectTicks>) {
             *ticks -= 1;
         }
     }
+    let mut index = 0;
     effects.retain(|(effect, ticks, amp)| {
-        if *ticks > 0 || *ticks == -1 {
+        let early = ended_early.contains(&index);
+        index += 1;
+        if !early && (*ticks > 0 || *ticks == -1) {
             return true;
         }
         let mut instance = crate::effects::EffectInstance::new(

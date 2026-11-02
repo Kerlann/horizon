@@ -49,13 +49,16 @@ pub fn start_converting(
     time: i32,
     events: &mut Vec<MobEvent>,
     keep_weakness: bool,
+    apply_strength: bool,
 ) {
     villager::ext_mut(m).cure = Some(Cure { time, starter });
     if !keep_weakness {
         m.extra.effects.retain(|e| e.0 != "minecraft:weakness");
     }
     // Strength amplifier: min(difficulty id - 1, 0), always 0 with monsters.
-    m.add_effect("minecraft:strength", time, 0);
+    if apply_strength {
+        m.add_effect("minecraft:strength", time, 0);
+    }
     let pitch = m.random.next_float() * 0.7 + 0.3;
     let volume = 1.0 + m.random.next_float();
     events.push(MobEvent::Sound(
@@ -242,7 +245,7 @@ mod tests {
             );
             m.persistent = true;
             m.no_ai = no_ai;
-            start_converting(&mut m, None, 3, &mut Vec::new(), false);
+            start_converting(&mut m, None, 3, &mut Vec::new(), false, true);
             let mut level_random = horizon_core::random::LegacyRandom::new(0);
             let mut ticks = 0;
             while ticks < 10 {
