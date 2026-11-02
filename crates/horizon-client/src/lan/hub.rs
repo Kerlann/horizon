@@ -37,7 +37,7 @@ use horizon_world::{
 };
 use std::sync::{Arc, Mutex, atomic::Ordering};
 
-/// A player is about to receive a ready chunk on the logical server.
+/// A ready chunk has been queued for a player on the logical server.
 /// API @API:native_chunk_watch@.
 #[inline(never)]
 pub fn native_chunk_watch(player: i32, dimension: &str, chunk: [i32; 2]) {
@@ -56,6 +56,23 @@ pub fn native_chunk_sent(player: i32, dimension: &str, chunk: [i32; 2]) {
 #[inline(never)]
 pub fn native_chunk_unwatch(player: i32, dimension: &str, chunk: [i32; 2]) {
     crate::native_client_hooks::chunk_unwatch(player, dimension, chunk);
+}
+
+// ChunkStatus.LIGHT needs its neighbours at INITIALIZE_LIGHT.
+fn chunk_ready(
+    chunk: &Chunk,
+    world: &World,
+    streaming: Option<&crate::streaming::Streaming>,
+) -> bool {
+    chunk.lit
+        && streaming.is_none_or(|streaming| {
+            (-1..=1).all(|dz| {
+                (-1..=1).all(|dx| {
+                    let (x, z) = (chunk.x + dx, chunk.z + dz);
+                    world.chunks.contains_key(&(x, z)) || streaming.proto_sections(x, z).is_some()
+                })
+            })
+        })
 }
 
 fn unwatch_all(g: &Guest) {
@@ -1890,13 +1907,29 @@ impl Hub {
         for i in 0..self.guests.len() {
             if self.here(&self.guests[i]) {
                 self.update_view(i);
-                if let Some(batch) = self.next_batch(i, world, ctx.streaming) {
-                    let g = &self.guests[i];
-                    let near = batch.near.iter().map(|&(idx, _)| g.chunk_queue[idx]);
-                    let far = batch.far.iter().filter(|(_, c)| c.is_some());
-                    for (x, z) in near.chain(far.map(|&(idx, _)| g.far_queue[idx])) {
+                let g = &mut self.guests[i];
+                for (&(x, z), far_chunk) in g
+                    .chunk_queue
+                    .iter()
+                    .map(|p| (p, false))
+                    .chain(g.far_queue.iter().map(|p| (p, true)))
+                {
+                    if g.watched_ready_chunks.contains(&(x, z)) {
+                        continue;
+                    }
+                    let ready = match world.chunks.get(&(x, z)) {
+                        Some(chunk) => chunk_ready(chunk, world, ctx.streaming),
+                        None if far_chunk => self.far.as_mut().is_some_and(|far| {
+                            matches!(far.saved(x, z), super::far::Saved::Body(_))
+                        }),
+                        None => false,
+                    };
+                    if ready {
+                        g.watched_ready_chunks.insert((x, z));
                         native_chunk_watch(g.entity_id, &self.config.dimension, [x, z]);
                     }
+                }
+                if let Some(batch) = self.next_batch(i, world, ctx.streaming) {
                     batches.push((i, batch));
                 }
             }
@@ -1992,6 +2025,8 @@ impl Hub {
                 let key = g.far_queue.remove(idx);
                 if sent {
                     g.sent_chunks.insert(key);
+                } else {
+                    g.watched_ready_chunks.remove(&key);
                 }
             }
         }
@@ -2019,6 +2054,7 @@ impl Hub {
         for &(x, z) in g.chunk_queue.iter().chain(&g.far_queue) {
             if !tracked(cx, cz, reach, x, z) {
                 native_chunk_unwatch(g.entity_id, &self.config.dimension, [x, z]);
+                g.watched_ready_chunks.remove(&(x, z));
             }
         }
         // Chunks that left the view.
@@ -2031,6 +2067,7 @@ impl Hub {
         for (x, z) in forget {
             native_chunk_unwatch(g.entity_id, &self.config.dimension, [x, z]);
             g.sent_chunks.remove(&(x, z));
+            g.watched_ready_chunks.remove(&(x, z));
             g.send(&C::ForgetLevelChunk(play::ForgetLevelChunk { pos: [x, z] }));
         }
         requeue(&mut g.chunk_queue, &g.sent_chunks, (cx, cz), r);
@@ -2060,26 +2097,12 @@ impl Hub {
             return None;
         }
         let budget = g.batch_quota.floor() as usize;
-        // ChunkStatus.LIGHT needs its neighbours at INITIALIZE_LIGHT: a
-        // column whose light layers would leave one out waits for it.
-        let ready = |c: &Chunk| {
-            c.lit
-                && streaming.is_none_or(|streaming| {
-                    (-1..=1).all(|dz| {
-                        (-1..=1).all(|dx| {
-                            let (x, z) = (c.x + dx, c.z + dz);
-                            world.chunks.contains_key(&(x, z))
-                                || streaming.proto_sections(x, z).is_some()
-                        })
-                    })
-                })
-        };
         let near: Vec<_> = g
             .chunk_queue
             .iter()
             .enumerate()
             .filter_map(|(idx, key)| Some((idx, &**world.chunks.get(key)?)))
-            .filter(|(_, c)| ready(c))
+            .filter(|(_, c)| chunk_ready(c, world, streaming))
             .take(budget)
             .collect();
         let mut far = Vec::new();
@@ -2093,7 +2116,7 @@ impl Hub {
                     continue;
                 }
                 let column = match world.chunks.get(&(x, z)) {
-                    Some(c) if ready(c) => Some(Column::Level(c)),
+                    Some(c) if chunk_ready(c, world, streaming) => Some(Column::Level(c)),
                     Some(_) => continue,
                     None => match ring.saved(x, z) {
                         super::far::Saved::Body(body) => Some(Column::Saved(body)),
@@ -3729,6 +3752,7 @@ impl Hub {
         let g = &mut self.guests[i];
         // PlayerList.respawn removes the old player's tracking view first.
         unwatch_all(g);
+        g.watched_ready_chunks.clear();
         // PlayerList.respawn: into the level in place (the respawn level).
         g.dimension = self.config.dimension.clone();
         // restartClientLoadTimerAfterRespawn: the client loads a whole new level before it
@@ -3861,6 +3885,7 @@ impl Hub {
         self.close_container_for(i);
         let g = &mut self.guests[i];
         unwatch_all(g);
+        g.watched_ready_chunks.clear();
         g.dimension = self.config.dimension.clone();
         // The load timer is not restarted: vanilla resets the client's loaded state on death and
         // respawn only, and covers a level change with its separate `isChangingDimension` term.
