@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "mob_effect_expired",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_mob_effect_expired",
+      "neoforge": "MobEffectEvent.Expired",
+      "side": "server",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "canceled"
+      }
+    }
+  ],
+  "rust_summary": "effect expiration (`native_mob_effect_expired`).",
+  "doc_summary": "Effect expiration can be canceled with `native_mob_effect_expired`. Bundles need \"hooks\": @API:native_mob_effect_expired@."
+}

@@ -867,17 +867,24 @@ impl Game<'_> {
             .as_ref()
             .is_some_and(|p| p.health.absorption() <= 0.0);
         let mut effects = std::mem::take(&mut self.potions.effects);
-        let (actions, raid_omen_added) = effects.tick_with(
+        let game = std::cell::RefCell::new(&mut *self);
+        let (actions, raid_omen_added) = effects.tick_with_expiry(
             &mut |e, t| {
+                let mut game = game.borrow_mut();
                 if !brewing::is_mod_effect(e.id) {
-                    self.omen_tick(e)
-                } else if self.mod_effect_tick(e.id, None, t, e.amplifier) {
+                    game.omen_tick(e)
+                } else if game.mod_effect_tick(e.id, None, t, e.amplifier) {
                     OmenTick::Continue
                 } else {
                     OmenTick::Remove
                 }
             },
             absorption_empty,
+            &mut |effect| {
+                let mut canceled = false;
+                game.borrow_mut().native_mob_effect_expired(None, effect, &mut canceled);
+                canceled
+            },
         );
         self.potions.effects = effects;
         if raid_omen_added {

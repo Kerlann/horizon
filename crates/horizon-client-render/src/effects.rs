@@ -252,6 +252,16 @@ impl PlayerEffects {
         omen: &mut dyn FnMut(&EffectInstance, i32) -> OmenTick,
         absorption_empty: bool,
     ) -> (Vec<EffectAction>, bool) {
+        self.tick_with_expiry(omen, absorption_empty, &mut |_| false)
+    }
+
+    /// Tick effects, allowing the server to cancel removal of expired instances.
+    pub fn tick_with_expiry(
+        &mut self,
+        omen: &mut dyn FnMut(&EffectInstance, i32) -> OmenTick,
+        absorption_empty: bool,
+        expired: &mut dyn FnMut(&EffectInstance) -> bool,
+    ) -> (Vec<EffectAction>, bool) {
         self.tick_count = self.tick_count.wrapping_add(1);
         let mut actions = Vec::new();
         let mut added = false;
@@ -259,7 +269,11 @@ impl PlayerEffects {
         while i < self.list.len() {
             let e = &self.list[i];
             if !(e.infinite() || e.duration > 0) {
-                self.list.remove(i);
+                if expired(e) {
+                    i += 1;
+                } else {
+                    self.list.remove(i);
+                }
                 continue;
             }
             let t = if e.infinite() {
@@ -280,13 +294,21 @@ impl PlayerEffects {
             match answer {
                 OmenTick::Continue => {}
                 OmenTick::Remove => {
-                    self.list.remove(i);
+                    if expired(&self.list[i]) {
+                        i += 1;
+                    } else {
+                        self.list.remove(i);
+                    }
                     continue;
                 }
                 OmenTick::Add(effect) => {
                     if let Some(existing) = self.list.iter_mut().find(|x| x.id == effect.id) {
                         existing.update(&effect);
-                        self.list.remove(i);
+                        if expired(&self.list[i]) {
+                            i += 1;
+                        } else {
+                            self.list.remove(i);
+                        }
                         continue;
                     }
                     self.list.push(effect);
@@ -297,7 +319,7 @@ impl PlayerEffects {
             let e = &mut self.list[i];
             e.tick_down();
             e.downgrade();
-            if e.infinite() || e.duration > 0 {
+            if e.infinite() || e.duration > 0 || expired(e) {
                 i += 1;
             } else {
                 self.list.remove(i);
