@@ -22,9 +22,8 @@ type Pos = (i32, i32, i32);
 
 /// What a spawner tick decided to add, created once the level is free.
 pub(super) enum Planned {
-    /// A fresh mob, the spawn data's `equipment`, and whether `finalizeSpawn`
-    /// ran on it (a mod can cancel that).
-    Fresh(Mob, Option<Tag>, bool),
+    /// A fresh mob, its equipment, and the finalization difficulty if finalized.
+    Fresh(Mob, Option<Tag>, Option<f32>),
     /// A mob loaded from the spawn data (with its passengers) and its
     /// `equipment`.
     Loaded(Tag, Option<Tag>),
@@ -141,14 +140,14 @@ impl Game<'_> {
         for (i, plan) in planned.into_iter().enumerate() {
             let provisional = u32::MAX - i as u32;
             let id = match plan {
-                Planned::Fresh(mut mob, equipment, finalized) => {
+                Planned::Fresh(mut mob, equipment, difficulty) => {
                     self.next_entity += 1;
                     mob.id = self.next_entity;
                     let id = mob.id;
                     self.mobs.push(mob);
                     self.native_mobs_joined(self.mobs.len() - 1, false);
-                    if finalized {
-                        self.enchant_spawn_equipment(id);
+                    if let Some(difficulty) = difficulty {
+                        self.enchant_spawn_equipment_with_difficulty(id, difficulty);
                         self.halloween_spawn_head(id);
                         self.spawn_jockeys(id, true);
                     }
@@ -217,7 +216,11 @@ impl Game<'_> {
                 mob.previous_head_yaw = 0.0;
             }
             let bounds = mob.bounds();
-            planned.push(Planned::Fresh(mob, r.equipment.cloned(), !canceled));
+            planned.push(Planned::Fresh(
+                mob,
+                r.equipment.cloned(),
+                (!canceled).then(|| spawn.difficulty.special()),
+            ));
             bounds
         } else {
             // A UUID already in the level is refused.

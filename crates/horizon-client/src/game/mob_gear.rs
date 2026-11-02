@@ -112,13 +112,20 @@ impl Game<'_> {
         let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
             return;
         };
+        let special = self
+            .local_difficulty([m.position.x, m.position.y, m.position.z])
+            .special();
+        self.enchant_spawn_equipment_with_difficulty(id, special);
+    }
+
+    pub(super) fn enchant_spawn_equipment_with_difficulty(&mut self, id: u32, special: f32) {
+        let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
+            return;
+        };
         let species = m.species();
         if !enchants_spawn_gear(species) {
             return;
         }
-        let special = self
-            .local_difficulty([m.position.x, m.position.y, m.position.z])
-            .special();
         self.enchant_slot(id, MAIN, 0.25, special);
         for slot in ARMOR {
             self.enchant_slot(id, slot, 0.5, special);

@@ -787,7 +787,7 @@ impl Game<'_> {
         self.mobs.push(mob);
         self.native_mobs_joined(self.mobs.len() - 1, false);
         if !canceled {
-            self.enchant_spawn_equipment(id);
+            self.enchant_spawn_equipment_with_difficulty(id, spawn.difficulty.special());
             self.halloween_spawn_head(id);
         }
         Some(id)

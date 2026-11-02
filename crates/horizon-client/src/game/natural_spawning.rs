@@ -411,7 +411,7 @@ impl<'a> Game<'a> {
     fn finalize_spawned(
         &self,
         r: &SpawnRequest,
-        pending: &mut Vec<(Mob, bool)>,
+        pending: &mut Vec<(Mob, Option<f32>)>,
         group: &mut Option<horizon_client::mobs::finalize::Group>,
     ) -> Option<Spawned> {
         let kind = self.res.mob_types().get(r.entity)?.clone();
@@ -444,7 +444,7 @@ impl<'a> Game<'a> {
             return None;
         }
         let bounds = mob.bounds();
-        pending.push((mob, !canceled));
+        pending.push((mob, (!canceled).then(|| spawn.difficulty.special())));
         Some(Spawned {
             bounds,
             school: true,
@@ -452,18 +452,18 @@ impl<'a> Game<'a> {
     }
     /// Adds the mobs a spawn pass created: ids, and enchanted gear and jockeys
     /// for those finalized.
-    fn add_spawned(&mut self, pending: Vec<(Mob, bool)>, persistent: bool) {
-        for (mut mob, finalized) in pending {
+    fn add_spawned(&mut self, pending: Vec<(Mob, Option<f32>)>, persistent: bool) {
+        for (mut mob, difficulty) in pending {
             self.next_entity += 1;
             mob.id = self.next_entity;
             mob.persistent = persistent;
             let id = mob.id;
             self.mobs.push(mob);
             self.native_mobs_joined(self.mobs.len() - 1, true);
-            if !finalized {
+            let Some(difficulty) = difficulty else {
                 continue;
-            }
-            self.enchant_spawn_equipment(id);
+            };
+            self.enchant_spawn_equipment_with_difficulty(id, difficulty);
             self.halloween_spawn_head(id);
             if !persistent {
                 self.spawn_jockeys(id, true);
