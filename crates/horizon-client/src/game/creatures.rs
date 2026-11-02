@@ -4710,12 +4710,15 @@ impl Game<'_> {
                     // BaseFireBlock.getState placed with updates (the fire
                     // ticks, ages and goes out where it can't stay).
                     let fire = [pos[0] + face[0], pos[1] + face[1], pos[2] + face[2]];
-                    let mut can_grief = true;
-                    if let Some(Who::Mob(entity)) = p.owner {
-                        let mob_griefing = self.ui.rules.bool("mob_griefing");
-                        can_grief = mob_griefing;
-                        self.native_entity_mob_griefing(entity, mob_griefing, &mut can_grief);
-                    }
+                    let can_grief = match p.owner {
+                        Some(Who::Mob(entity)) => {
+                            let griefing = self.ui.rules.bool("mob_griefing");
+                            let mut can_grief = None;
+                            self.native_entity_mob_griefing(entity, griefing, &mut can_grief);
+                            can_grief.unwrap_or(griefing)
+                        }
+                        _ => true,
+                    };
                     if can_grief
                         && self
                             .res

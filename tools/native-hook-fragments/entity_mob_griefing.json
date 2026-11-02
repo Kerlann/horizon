@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "entity_mob_griefing",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_entity_mob_griefing",
+      "neoforge": "EntityMobGriefingEvent",
+      "side": "server",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "replace",
+        "out": "can_grief"
+      }
+    }
+  ],
+  "rust_summary": "an entity's mob griefing check (`native_entity_mob_griefing`).",
+  "doc_summary": "an entity's mob griefing check on the server: `native_entity_mob_griefing(entity, mob_griefing, can_grief)` (NeoForge's `EntityMobGriefingEvent`) is told the `mob_griefing` gamerule; put `Some` in `can_grief` to allow or refuse the griefing whatever the rule says. Asked so far for each block an Ender Dragon flies into (`EnderDragon.checkWalls`) and for a mob's small fireball hitting a block (`SmallFireball.onHitBlock`), not yet at the other checks of the rule. Bundles need \"hooks\": @API:entity_mob_griefing@."
+}

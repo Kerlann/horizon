@@ -5239,13 +5239,17 @@ impl Game<'_> {
     ) {
         mod_api::dispatch_release_using(self, mod_api::mods(), stack, entity, time_left, used);
     }
-    /// The server checks whether an entity may grief blocks. `mob_griefing`
-    /// is the gamerule; mods can replace `can_grief` independently of it.
+    /// On the server, the mob `entity` checks the `mob_griefing` gamerule
+    /// (`EntityMobGriefingEvent`): put `Some` in `can_grief` to allow or
+    /// refuse the griefing whatever the rule says. Asked for each block an
+    /// Ender Dragon flies into (`EnderDragon.checkWalls`) and for a mob's
+    /// small fireball hitting a block (`SmallFireball.onHitBlock`).
+    /// @API:entity_mob_griefing@.
     pub(super) fn native_entity_mob_griefing(
         &mut self,
         entity: u32,
         mob_griefing: bool,
-        can_grief: &mut bool,
+        can_grief: &mut Option<bool>,
     ) {
         let _ = (entity, mob_griefing, can_grief);
     }
