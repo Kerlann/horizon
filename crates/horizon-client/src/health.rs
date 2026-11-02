@@ -642,9 +642,17 @@ impl ArmorWorld for Environment<'_> {
 impl ServerDamageEnvironment<Attributes> for Environment<'_> {
     fn pre_damage(&mut self, container: &mut DamageContainer) -> io::Result<()> {
         if let Some(hook) = LIVING_DAMAGE_PRE.get() {
-            let mut new_damage = container.new_damage;
-            hook(self.entity, &self.source.definition().name, container, &mut new_damage);
-            container.new_damage = new_damage;
+            let original = container.new_damage;
+            let mut new_damage = original;
+            hook(
+                self.entity,
+                &self.source.definition().name,
+                container,
+                &mut new_damage,
+            );
+            if new_damage.to_bits() != original.to_bits() {
+                container.new_damage = new_damage;
+            }
         }
         Ok(())
     }
