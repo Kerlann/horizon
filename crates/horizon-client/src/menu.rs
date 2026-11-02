@@ -3472,6 +3472,7 @@ pub(crate) mod tests {
                 living_breathe: |_, _, _, _, _| {},
                 mob_despawn: |_, _, _| {},
                 spawn_cluster_size: |_, _, _| {},
+                mob_spawn_position_check: |_, _, _, _, _| {},
                 ingredient: |_, _, _| {},
             });
         assert!(installed.is_ok());

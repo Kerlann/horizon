@@ -1100,10 +1100,17 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
             let bounds = spawn_box(xx, f64::from(y), zz, width, height);
             let despawn = f64::from(type_category.despawn_distance().pow(2));
             let far = distance > despawn && removed_when_far(species);
-            if far
-                || !mob_spawn_rules(species, l, x, y, z)
-                || !spawn_obstruction(species, l, bounds, Some(&spawned), x, y, z)
-            {
+            if far {
+                continue;
+            }
+            let mut position_result = None;
+            native_mob_spawn_position_check(
+                &entry.entity, [xx, f64::from(y), zz], "natural", None, &mut position_result,
+            );
+            if !position_result.unwrap_or_else(|| {
+                mob_spawn_rules(species, l, x, y, z)
+                    && spawn_obstruction(species, l, bounds, Some(&spawned), x, y, z)
+            }) {
                 continue;
             }
             let request = SpawnRequest {
@@ -1202,6 +1209,19 @@ fn right_distance<L: NaturalLevel>(l: &L, chunk: (i32, i32), pos: [i32; 3], dist
     let (cx, cz) = (pos[0] >> 4, pos[2] >> 4);
     (cx, cz) == chunk || l.can_spawn_in_chunk(cx, cz)
 }
+/// Override the server's mob position check. None uses the default rules;
+/// Some(true) accepts and Some(false) rejects. @API:mob_spawn_position_check@.
+#[inline(never)]
+pub fn native_mob_spawn_position_check(
+    kind: &str,
+    position: [f64; 3],
+    reason: &str,
+    spawner: Option<[i32; 3]>,
+    result: &mut Option<bool>,
+) {
+    crate::native_client_hooks::mob_spawn_position_check(kind, position, reason, spawner, result);
+}
+
 /// `isValidSpawnPostitionForType`, for the entry's type (`mob_type`).
 /// `listed`: the position is where the entry was picked from `mobsAt`.
 #[allow(clippy::too_many_arguments)]

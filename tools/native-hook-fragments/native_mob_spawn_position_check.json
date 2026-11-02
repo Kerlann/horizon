@@ -1,0 +1,18 @@
+{
+  "hooks": [
+    {
+      "name": "mob_spawn_position_check",
+      "target": "horizon_client::mobs::spawn_selection::native_mob_spawn_position_check",
+      "side": "server",
+      "cancellable": false,
+      "neoforge": "MobSpawnEvent.PositionCheck",
+      "mod_api": {
+        "contract": "replace",
+        "out": "result"
+      }
+    }
+  ],
+  "rust_summary": "A mob checks its spawn position (`native_mob_spawn_position_check`).",
+  "doc_summary": "A server mob checks its spawn position: `native_mob_spawn_position_check(kind, position, reason, spawner, result)` corresponds to NeoForge's `MobSpawnEvent.PositionCheck`. Set `result` to `Some(true)` to accept, `Some(false)` to reject, or leave `None` for the default mob rules and obstruction check. The spawner position is `None` for natural spawning. Horizon supplies a type and position instead of a mob entity, which is created later. Bundles need \"hooks\": @API:mob_spawn_position_check@.",
+  "comments": ["crates/horizon-client/src/mobs/spawn_selection.rs"]
+}
