@@ -395,7 +395,14 @@ impl Game<'_> {
                         .is_none_or(|(_, r)| r.omen_level < raid::MAX_OMEN_LEVEL)
                 {
                     self.raiding.omen_position = Some(pos);
-                    return OmenTick::Add(EffectInstance::new("raid_omen", 600, e.amplifier));
+                    let effect = EffectInstance::new("raid_omen", 600, e.amplifier);
+                    let mut result = None;
+                    self.native_mob_effect_applicable(None, &effect, None, &mut result);
+                    return if result == Some(false) {
+                        OmenTick::Remove
+                    } else {
+                        OmenTick::Add(effect)
+                    };
                 }
                 OmenTick::Continue
             }

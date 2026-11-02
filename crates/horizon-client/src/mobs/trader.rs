@@ -21,6 +21,28 @@ pub const DESPAWN_DELAY: i32 = 48000;
 const DRINK_TICKS: i32 = 32;
 const INVISIBILITY: &str = "minecraft:invisibility";
 
+/// Eligibility of an effect applied by a trader's consumed item.
+#[inline(never)]
+pub fn native_mob_effect_applicable(
+    entity: Option<i32>,
+    effect: &crate::effects::EffectInstance,
+    source: Option<i32>,
+    result: &mut Option<bool>,
+) {
+    let _ = (entity, effect, source, result);
+}
+
+/// Removal of an effect by a trader's consumed item.
+#[inline(never)]
+pub fn native_mob_effect_remove(
+    entity: Option<i32>,
+    effect: &str,
+    instance: Option<&crate::effects::EffectInstance>,
+    cancel: &mut bool,
+) {
+    let _ = (entity, effect, instance, cancel);
+}
+
 pub fn register(m: &mut Mob) {
     let g = &mut m.ai.goals;
     g.add(0, Float);
@@ -142,8 +164,13 @@ impl Goal for DrinkItem {
         if m.extra.using_item > DRINK_TICKS {
             // LivingEntity.completeUsingItem: the potion or the milk takes effect.
             if self.dark {
-                m.extra.effects.retain(|e| e.0 != INVISIBILITY);
-                m.extra.effects.push((INVISIBILITY, 3600, 0));
+                let effect = crate::effects::EffectInstance::new("invisibility", 3600, 0);
+                let mut result = None;
+                native_mob_effect_applicable(Some(m.id as i32), &effect, None, &mut result);
+                if result != Some(false) {
+                    m.extra.effects.retain(|e| e.0 != INVISIBILITY);
+                    m.extra.effects.push((INVISIBILITY, 3600, 0));
+                }
                 cx.events.push(MobEvent::Sound(
                     "entity.wandering_trader.drink_potion",
                     m.center(),
@@ -151,7 +178,16 @@ impl Goal for DrinkItem {
                     1.0,
                 ));
             } else {
-                m.extra.effects.clear();
+                m.extra.effects.retain(|&(id, duration, amplifier)| {
+                    let effect = crate::effects::EffectInstance::new(
+                        id.strip_prefix("minecraft:").unwrap_or(id),
+                        duration,
+                        amplifier,
+                    );
+                    let mut cancel = false;
+                    native_mob_effect_remove(Some(m.id as i32), id, Some(&effect), &mut cancel);
+                    cancel
+                });
                 cx.events.push(MobEvent::Sound(
                     "entity.wandering_trader.drink_milk",
                     m.center(),
