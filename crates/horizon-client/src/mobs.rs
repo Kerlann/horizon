@@ -2412,6 +2412,37 @@ pub fn native_living_visibility(
     crate::native_client_hooks::living_visibility(player, looking_entity, visibility_modifier);
 }
 
+/// Before a mob changes its goal target. Targets are None, -1 for the
+/// current player, or a nonnegative mob ID. Cancellation keeps the old target.
+#[inline(never)]
+pub fn native_living_change_target(
+    mob: u32,
+    original_target: Option<i64>,
+    new_target: &mut Option<i64>,
+    cancelled: &mut bool,
+) {
+    crate::native_client_hooks::living_change_target(mob, original_target, new_target, cancelled);
+}
+
+impl Mob {
+    fn change_goal_target(&mut self, target: Option<Who>) {
+        let original_target = target.map(|who| match who {
+            Who::Player => -1,
+            Who::Mob(id) => i64::from(id),
+        });
+        let mut new_target = original_target;
+        let mut cancelled = false;
+        native_living_change_target(self.id, original_target, &mut new_target, &mut cancelled);
+        if !cancelled {
+            self.ai.target = match new_target {
+                None => None,
+                Some(-1) => Some(Who::Player),
+                Some(id) => u32::try_from(id).ok().map(Who::Mob),
+            };
+        }
+    }
+}
+
 impl PlayerView {
     /// `LivingEntity.getVisibilityPercent` without the worn-skull scaling.
     pub fn visibility_percent(&self) -> f64 {

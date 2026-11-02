@@ -3471,6 +3471,7 @@ pub(crate) mod tests {
                 },
                 living_breathe: |_, _, _, _, _| {},
                 living_visibility: |_, _, _| {},
+                living_change_target: |_, _, _, _| {},
                 ingredient: |_, _, _| {},
             });
         assert!(installed.is_ok());

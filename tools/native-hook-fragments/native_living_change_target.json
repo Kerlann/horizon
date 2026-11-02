@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "living_change_target",
+      "target": "horizon_client::mobs::native_living_change_target",
+      "neoforge": "LivingChangeTargetEvent",
+      "side": "server",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "cancelled"
+      }
+    }
+  ],
+  "rust_summary": "a mob's changed target (`native_living_change_target`).",
+  "doc_summary": "`native_living_change_target` lets mods cancel or replace a mob's goal target. Bundles need \"hooks\": @API:living_change_target@."
+}

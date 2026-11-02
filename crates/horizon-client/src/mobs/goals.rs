@@ -1708,7 +1708,7 @@ impl Goal for NearestTarget {
         target_continue(&mut self.target_goal, self.must_see, m, cx)
     }
     fn start(&mut self, m: &mut Mob, _: &mut Cx) {
-        m.ai.target = self.found;
+        m.change_goal_target(self.found);
         self.target_goal.unseen = 0;
     }
     fn stop(&mut self, m: &mut Mob, _: &mut Cx) {

@@ -127,6 +127,15 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 visibility_modifier,
             );
         },
+        living_change_target: |mob, original_target, new_target, cancelled| {
+            crate::mod_api::dispatch_living_change_target(
+                crate::mod_api::mods(),
+                mob,
+                original_target,
+                new_target,
+                cancelled,
+            );
+        },
         ingredient: |kind, data, items| {
             crate::mod_api::dispatch_ingredient(crate::mod_api::mods(), kind, data, items);
         },

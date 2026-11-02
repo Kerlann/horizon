@@ -8,6 +8,7 @@ pub struct NativeClientHooks {
     pub menu_slot_rules: fn(&str, usize, &ItemStack, &mut bool, &mut u32),
     pub living_breathe: fn(u32, &str, &mut bool, &mut i32, &mut i32),
     pub living_visibility: fn([i32; 4], Option<u32>, &mut f64),
+    pub living_change_target: fn(u32, Option<i64>, &mut Option<i64>, &mut bool),
     pub ingredient: fn(&str, &Map<String, Value>, &mut Vec<String>),
 }
 
@@ -49,6 +50,17 @@ pub(crate) fn living_visibility(
 ) {
     if let Some(hooks) = HOOKS.get() {
         (hooks.living_visibility)(player, looking_entity, visibility_modifier);
+    }
+}
+
+pub(crate) fn living_change_target(
+    mob: u32,
+    original_target: Option<i64>,
+    new_target: &mut Option<i64>,
+    cancelled: &mut bool,
+) {
+    if let Some(hooks) = HOOKS.get() {
+        (hooks.living_change_target)(mob, original_target, new_target, cancelled);
     }
 }
 
