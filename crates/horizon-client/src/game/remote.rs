@@ -2042,6 +2042,42 @@ impl Game<'_> {
             r.registries = registries;
         }
     }
+    /// Apply the level sound event before a clientbound sound is played.
+    fn play_hooked_remote_level_sound(
+        &mut self,
+        name: String,
+        at: [f64; 3],
+        mut source: i32,
+        volume: f32,
+        pitch: f32,
+    ) {
+        let dimension = self.remote.as_ref().map(|r| r.level.clone()).unwrap_or_default();
+        let original_gain = [volume, pitch];
+        let mut gain = original_gain;
+        let mut sound = Some(name);
+        let mut cancel = false;
+        self.native_play_level_sound(
+            &dimension,
+            at,
+            original_gain,
+            &mut sound,
+            &mut source,
+            &mut gain,
+            &mut cancel,
+        );
+        let Some(name) = sound.filter(|name| {
+            !cancel
+                && super::native_hooks::sound_id(name)
+                && gain.iter().all(|v| v.is_finite() && *v >= 0.0)
+        }) else {
+            return;
+        };
+        let Ok(source) = usize::try_from(source) else { return };
+        if source < horizon_client::settings::SOUND_SOURCES.len() {
+            self.audio.play_on(source, &name, Some(at), gain[0], gain[1]);
+        }
+    }
+
     /// Switch to a (possibly new) dimension: a fresh client level.
     fn enter_remote_dimension(
         &mut self,
@@ -3178,17 +3214,7 @@ impl Game<'_> {
                         f64::from(p.y) / 8.0,
                         f64::from(p.z) / 8.0,
                     ];
-                    // ClientPacketListener.handleSoundEvent plays with packet.getSource().
-                    match usize::try_from(p.source)
-                        .ok()
-                        .filter(|s| *s < horizon_client::settings::SOUND_SOURCES.len())
-                    {
-                        Some(source) => {
-                            self.audio
-                                .play_on(source, &name, Some(at), p.volume, p.pitch)
-                        }
-                        None => self.audio.play(&name, Some(at), p.volume, p.pitch),
-                    }
+                    self.play_hooked_remote_level_sound(name, at, p.source, p.volume, p.pitch);
                 }
             }
             // shortcut: vanilla's `EntityBoundSoundInstance` re-reads the entity's position
@@ -3199,16 +3225,7 @@ impl Game<'_> {
                 if let Some(name) = self.remote_sound_name(&p.sound)
                     && let Some(at) = self.remote_entity_position(p.id)
                 {
-                    match usize::try_from(p.source)
-                        .ok()
-                        .filter(|s| *s < horizon_client::settings::SOUND_SOURCES.len())
-                    {
-                        Some(source) => {
-                            self.audio
-                                .play_on(source, &name, Some(at), p.volume, p.pitch)
-                        }
-                        None => self.audio.play(&name, Some(at), p.volume, p.pitch),
-                    }
+                    self.play_hooked_remote_level_sound(name, at, p.source, p.volume, p.pitch);
                 }
             }
             C::StopSound(p) => self
