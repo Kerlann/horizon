@@ -2401,6 +2401,16 @@ pub struct Vehicle {
     /// `Entity.getKnownSpeed`: what it moved in its last tick.
     pub velocity: Vec3,
 }
+/// Modifies the visibility multiplier for a player observed by a mob.
+#[inline(never)]
+pub fn native_living_visibility(
+    player_uuid: [i32; 4],
+    looking_entity: u32,
+    visibility_modifier: &mut f64,
+) {
+    crate::native_client_hooks::living_visibility(player_uuid, looking_entity, visibility_modifier);
+}
+
 impl PlayerView {
     /// `LivingEntity.getVisibilityPercent` without the worn-skull scaling.
     pub fn visibility_percent(&self) -> f64 {
