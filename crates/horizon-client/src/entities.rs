@@ -1340,6 +1340,7 @@ impl ArmorStand {
         self.previous_yaw = yaw;
     }
     pub fn new(id: u32, position: Vec3, yaw: f32) -> Self {
+        crate::mobs::native_entity_constructing(id, "minecraft:armor_stand");
         Self {
             fire_ticks: 0,
             health: 20.0,

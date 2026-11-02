@@ -11,5 +11,5 @@
     }
   ],
   "rust_summary": "An entity is being constructed (`native_entity_constructing`).",
-  "doc_summary": "An entity is being constructed: `native_entity_constructing(entity, kind)` reports its ID and type. Bundles need \"hooks\": @API:entity_constructing@."
+  "doc_summary": "An entity is being constructed: `native_entity_constructing(entity, kind)` reports its ID and type. Bundles need \"hooks\": @API:native_entity_constructing@."
 }
