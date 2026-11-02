@@ -2297,20 +2297,25 @@ pub(super) struct WorkerState {
     pub(super) structures_only: bool,
     pub(super) structure_mobs: Option<Arc<dyn StructureMobs>>,
 }
+/// Outcome of finalizing a structure entity during generation.
+pub enum StructureMobFinalization {
+    Finalized,
+    Deferred,
+    Cancelled,
+}
+
 /// `Mob.finalizeSpawn(level, difficulty, STRUCTURE, null)` of the entities a
 /// structure places with finalizeEntities, run by the game, which owns mobs.
 pub trait StructureMobs: Send + Sync {
-    /// Finalizes the entity in `nbt` if it is a mob, drawing from the
-    /// region's random. `biome` is the biome at its block, `structures` the
-    /// structures with a piece there. False when it could not: the entity
-    /// keeps its `horizon:finalize` for the game to finish on load.
+    /// Finalizes a mob with the region's random. A deferred entity retains its
+    /// `horizon:finalize` marker for the game to finish on load.
     fn finalize(
         &self,
         nbt: &mut crate::nbt::Compound,
         biome: &str,
         structures: &[String],
         random: &mut dyn super::structure::legacy::PieceRandom,
-    ) -> bool;
+    ) -> StructureMobFinalization;
 }
 
 trait SeededPipeline: Send + Sync {

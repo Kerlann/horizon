@@ -2253,7 +2253,7 @@ impl Game<'_> {
             if self.ui.difficulty == 0 && t.category == "monster" {
                 return Err(err("commands.summon.failed.peaceful", &[]));
             }
-            self.spawn_mob_spawned(&short, pos);
+            self.spawn_mob_spawned(&short, pos, horizon_client::mobs::finalize::Reason::Command);
             name = Text::translate(&entity_name_key(&kind), &[]);
         } else {
             match short.as_str() {

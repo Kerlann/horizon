@@ -373,10 +373,10 @@ impl Game<'_> {
     /// never calls `Mob.setPersistenceRequired` for it, so the mob is not
     /// persistent: the despawn rule holds it like any other mob, and only
     /// its NBT can make it persistent.
-    pub(super) fn spawn_mob_spawned(&mut self, kind: &str, at: [f64; 3]) -> Option<u32> {
+    pub(super) fn spawn_mob_spawned(&mut self, kind: &str, at: [f64; 3], reason: horizon_client::mobs::finalize::Reason) -> Option<u32> {
         // The spawn is not a natural one (no jockeys, the patrol leader roll
         // stays), but the mob is not persistent.
-        let id = self.spawn_mob_for(kind, at, true, false)?;
+        let id = self.spawn_mob_for_reason(kind, at, true, false, Some(reason))?;
         if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
             m.persistent = false;
         }
@@ -390,6 +390,17 @@ impl Game<'_> {
         at: [f64; 3],
         persistent: bool,
         scripted: bool,
+    ) -> Option<u32> {
+        self.spawn_mob_for_reason(kind, at, persistent, scripted, None)
+    }
+
+    fn spawn_mob_for_reason(
+        &mut self,
+        kind: &str,
+        at: [f64; 3],
+        persistent: bool,
+        scripted: bool,
+        reason: Option<horizon_client::mobs::finalize::Reason>,
     ) -> Option<u32> {
         let kind = if kind.contains(':') {
             kind.to_owned()
@@ -406,9 +417,28 @@ impl Game<'_> {
             at[1].floor() as i32,
             at[2].floor() as i32,
         );
-        let difficulty = self.local_difficulty(at);
-        spawning::finalize(&mut mob, &facts, &difficulty);
-        if !scripted {
+        let mut difficulty = self.local_difficulty(at);
+        let mut canceled = false;
+        if let Some(reason) = reason {
+            let mut event = spawning::FinalizeSpawn {
+                reason,
+                spawner: None,
+                difficulty,
+                spawn_data: None,
+                spawn_cancelled: false,
+            };
+            spawning::native_finalize_spawn(&kind, at, &mut event, &mut canceled);
+            difficulty = event.difficulty;
+            if !canceled {
+                spawning::finalize(&mut mob, &facts, &difficulty);
+            }
+            if event.spawn_cancelled {
+                return None;
+            }
+        } else {
+            spawning::finalize(&mut mob, &facts, &difficulty);
+        }
+        if !scripted && !canceled {
             let reason = if persistent {
                 horizon_client::mobs::raider::Reason::Other
             } else {
@@ -419,9 +449,11 @@ impl Game<'_> {
         let id = mob.id;
         self.mobs.push(mob);
         self.native_mobs_joined(self.mobs.len() - 1, false);
-        self.enchant_spawn_equipment(id);
-        self.halloween_spawn_head(id);
-        if !persistent && !scripted {
+        if !canceled {
+            self.enchant_spawn_equipment(id);
+            self.halloween_spawn_head(id);
+        }
+        if !persistent && !scripted && !canceled {
             self.spawn_jockeys(id, true);
         }
         Some(id)
@@ -643,7 +675,7 @@ impl Game<'_> {
             }
         };
         let id = self
-            .spawn_mob_spawned(kind, at)
+            .spawn_mob_spawned(kind, at, horizon_client::mobs::finalize::Reason::Command)
             .ok_or_else(|| format!("unknown or unsupported mob {kind}"))?;
         if baby && let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
             m.extra.age = if m.species() == Species::Sniffer {
@@ -5986,7 +6018,7 @@ impl Game<'_> {
                 .push(Mob::new(id, mob_type, Vec3::new(at[0], at[1], at[2]), 0.0));
             id
         } else {
-            let Some(id) = self.spawn_mob_spawned(&kind, at) else {
+            let Some(id) = self.spawn_mob_spawned(&kind, at, horizon_client::mobs::finalize::Reason::SpawnItemUse) else {
                 return false;
             };
             id
@@ -6084,7 +6116,7 @@ impl Game<'_> {
             f64::from(p[1]),
             f64::from(p[2]) + 0.5,
         ];
-        let Some(id) = self.spawn_mob_spawned(&kind, at) else {
+        let Some(id) = self.spawn_mob_spawned(&kind, at, horizon_client::mobs::finalize::Reason::SpawnItemUse) else {
             return Ok(false);
         };
         // SpawnEggItem.spawnMob: `EntityType.create` finalizes the mob, then

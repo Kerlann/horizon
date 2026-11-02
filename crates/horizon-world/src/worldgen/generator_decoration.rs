@@ -1114,8 +1114,12 @@ impl PlacementContext for World<'_> {
                 .filter(|s| s.pieces.iter().any(|p| p.bounding_box().is_inside(at)))
                 .map(|s| s.name.clone())
                 .collect();
-            if mobs.finalize(&mut nbt, &biome, &structures, self.level_random) {
-                nbt.remove(&"horizon:finalize".into());
+            match mobs.finalize(&mut nbt, &biome, &structures, self.level_random) {
+                super::generator::StructureMobFinalization::Finalized => {
+                    nbt.remove(&"horizon:finalize".into());
+                }
+                super::generator::StructureMobFinalization::Deferred => {}
+                super::generator::StructureMobFinalization::Cancelled => return Ok(()),
             }
         }
         self.entities.push(nbt);

@@ -195,9 +195,10 @@ impl StructureMobs for StructureMobFinalizer {
         biome: &str,
         structures: &[String],
         random: &mut dyn PieceRandom,
-    ) -> bool {
+    ) -> horizon_world::worldgen::generator::StructureMobFinalization {
+        use horizon_world::worldgen::generator::StructureMobFinalization as Outcome;
         let Some(data) = self.data() else {
-            return false;
+            return Outcome::Deferred;
         };
         let mut raw = Tag::Compound(nbt.clone());
         if let Tag::Compound(c) = &mut raw {
@@ -205,7 +206,7 @@ impl StructureMobs for StructureMobFinalizer {
         }
         let Some(m) = entity_nbt::mob_from_nbt(&raw, &data.types, 1, None) else {
             // Not a mob: vanilla finalizes only Mob instances.
-            return true;
+            return Outcome::Finalized;
         };
         let reason = Reason::Structure;
         match self.finish(
@@ -218,11 +219,12 @@ impl StructureMobs for StructureMobFinalizer {
             reason,
             &mut None,
         ) {
-            Some(saved) => {
+            Ok(Some(saved)) => {
                 *nbt = saved;
-                true
+                Outcome::Finalized
             }
-            None => false,
+            Ok(None) => Outcome::Cancelled,
+            Err(()) => Outcome::Deferred,
         }
     }
 }
@@ -255,6 +257,8 @@ impl StructureMobFinalizer {
         let m = Mob::new(1, data.types.get(kind)?.clone(), position, yaw);
         let reason = Reason::ChunkGeneration;
         self.finish(data, m, None, biome, &[], random, reason, group)
+            .ok()
+            .flatten()
     }
     #[allow(clippy::too_many_arguments)]
     fn finish(
@@ -267,7 +271,7 @@ impl StructureMobFinalizer {
         random: &mut dyn PieceRandom,
         reason: Reason,
         group: &mut Option<Group>,
-    ) -> Option<Compound> {
+    ) -> Result<Option<Compound>, ()> {
         let base = self.difficulty.load(Ordering::Relaxed);
         let day_time = self.day_time.load(Ordering::Relaxed);
         let mut level = Level {
@@ -289,14 +293,12 @@ impl StructureMobFinalizer {
             spawn_cancelled: false,
         };
         let mut canceled = false;
-        if matches!(reason, Reason::ChunkGeneration) {
-            crate::mobs::spawning::native_finalize_spawn(
-                &m.kind.id,
-                [m.position.x, m.position.y, m.position.z],
-                &mut event,
-                &mut canceled,
-            );
-        }
+        crate::mobs::spawning::native_finalize_spawn(
+            &m.kind.id,
+            [m.position.x, m.position.y, m.position.z],
+            &mut event,
+            &mut canceled,
+        );
         *group = if canceled { None } else { event.spawn_data };
         let spawn = SpawnData {
             registries: &data.registries,
@@ -314,11 +316,11 @@ impl StructureMobFinalizer {
                 run(&mut level, r, event.difficulty, &spawn, &mut m, reason, group)
             } else {
                 log::error!("Horizon: unknown region random, structure mobs are finalized when loaded");
-                return None;
+                return Err(());
             }
         };
         if event.spawn_cancelled {
-            return None;
+            return Ok(None);
         }
         let mut mobs = vec![(m, raw)];
         mobs.extend(created.into_iter().map(|c| (c, None)));
@@ -326,7 +328,7 @@ impl StructureMobFinalizer {
             .iter()
             .position(|(m, _)| m.extra.mount.is_none())
             .unwrap_or(0);
-        Some(tree(&mobs, root, &self.dimension))
+        Ok(Some(tree(&mobs, root, &self.dimension)))
     }
 }
 
