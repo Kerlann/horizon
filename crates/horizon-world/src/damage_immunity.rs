@@ -51,8 +51,8 @@ pub fn base_immunity<W: ImmunityWorld + ?Sized>(w: &mut W) -> Result<bool, W::Er
     Ok(w.tag(ImmunityTag::Fall)? && w.fall_immune()?)
 }
 pub fn living_immunity<W: ImmunityWorld + ?Sized>(w: &mut W) -> Result<bool, W::Error> {
-    let invulnerable = base_immunity(w)? || w.enchantment_immunity()?;
-    Ok(w.living_invulnerability_check(invulnerable))
+    let invulnerable = base_immunity(w)?;
+    Ok(w.living_invulnerability_check(invulnerable) || w.enchantment_immunity()?)
 }
 pub fn player_immunity<W: ImmunityWorld + ?Sized>(w: &mut W) -> Result<bool, W::Error> {
     if living_immunity(w)? {

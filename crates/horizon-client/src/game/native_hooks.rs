@@ -5781,9 +5781,10 @@ impl Game<'_> {
     pub(super) fn native_living_damage_pre(
         entity: i32,
         damage_type: &str,
-        damage: &mut f32,
+        damage: f32,
+        replacement: &mut Option<f32>,
     ) {
-        let _ = (entity, damage_type, damage);
+        let _ = (entity, damage_type, damage, replacement);
     }
     /// A player's health was reduced by a server-side hit.
     pub(super) fn native_living_damage_post(
@@ -6024,7 +6025,11 @@ pub(super) fn block_contact(
 
 /// `native_living_damage_pre` for the player damage code.
 pub(super) fn damage_pre(entity: i32, damage_type: &str, damage: &mut f32) {
-    Game::native_living_damage_pre(entity, damage_type, damage);
+    let mut replacement = None;
+    Game::native_living_damage_pre(entity, damage_type, *damage, &mut replacement);
+    if let Some(value) = replacement {
+        *damage = value;
+    }
 }
 
 /// `native_living_damage_post` for the damage code (`health::DAMAGE_POST`).
