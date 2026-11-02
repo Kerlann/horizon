@@ -8,6 +8,7 @@ pub struct NativeClientHooks {
     pub menu_slot_rules: fn(&str, usize, &ItemStack, &mut bool, &mut u32),
     pub living_breathe: fn(u32, &str, &mut bool, &mut i32, &mut i32),
     pub ingredient: fn(&str, &Map<String, Value>, &mut Vec<String>),
+    pub server_chat: fn(u128, &str, &str, &mut horizon_world::nbt::Tag, &mut bool),
 }
 
 static HOOKS: OnceLock<NativeClientHooks> = OnceLock::new();
@@ -38,6 +39,18 @@ pub(crate) fn living_breathe(
 ) {
     if let Some(hooks) = HOOKS.get() {
         (hooks.living_breathe)(entity, kind, can_breathe, consume, refill);
+    }
+}
+
+pub(crate) fn server_chat(
+    player: u128,
+    username: &str,
+    raw: &str,
+    message: &mut horizon_world::nbt::Tag,
+    cancel: &mut bool,
+) {
+    if let Some(hooks) = HOOKS.get() {
+        (hooks.server_chat)(player, username, raw, message, cancel);
     }
 }
 

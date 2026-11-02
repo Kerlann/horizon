@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "server_chat",
+      "target": "horizon_client_lib::lan::hub::chat::native_server_chat",
+      "neoforge": "ServerChatEvent",
+      "side": "server",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "cancel"
+      }
+    }
+  ],
+  "rust_summary": "A player chat component before server broadcast, replaceable or cancellable (`native_server_chat`).",
+  "doc_summary": "A validated player chat packet before broadcast: `native_server_chat(player, username, raw, message, cancel)` can replace the component or cancel delivery. Bundles need \"hooks\": @API:server_chat@."
+}

@@ -2620,6 +2620,11 @@ pub trait Hooks: Send + Sync {
         let _ = host;
         let _ = event;
     }
+    /// A player chat packet is about to be broadcast on the server.
+    fn server_chat(&self, event: &mut ServerChatEvent<'_>) -> Flow {
+        let _ = event;
+        Flow::Continue
+    }
     /// A server broadcast line is about to be logged and sent. Change `line`
     /// or set `cancel` to drop it. @API:broadcast_message@.
     ///
@@ -9081,6 +9086,38 @@ pub fn dispatch_brewing_start(
     let mut event = BrewingStartEvent { pos, ingredient };
     for mod_hook in mods {
         mod_hook.brewing_start(host, &mut event);
+    }
+}
+/// What [`Hooks::server_chat`] is told.
+#[non_exhaustive]
+pub struct ServerChatEvent<'a> {
+    pub player: u128,
+    pub username: &'a str,
+    pub raw: &'a str,
+    pub message: &'a mut horizon_world::nbt::Tag,
+}
+pub fn dispatch_server_chat(
+    mods: &[Box<dyn Hooks>],
+    player: u128,
+    username: &str,
+    raw: &str,
+    message: &mut horizon_world::nbt::Tag,
+    cancel: &mut bool,
+) {
+    if *cancel {
+        return;
+    }
+    let mut event = ServerChatEvent {
+        player,
+        username,
+        raw,
+        message,
+    };
+    for mod_hook in mods {
+        if matches!(mod_hook.server_chat(&mut event), Flow::Cancel) {
+            *cancel = true;
+            break;
+        }
     }
 }
 /// What [`Hooks::broadcast_message`] is told. Fields may be added: the struct is `#[non_exhaustive]`.

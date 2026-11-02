@@ -10,6 +10,19 @@ use horizon_protocol::{
 };
 use horizon_world::nbt::{JavaString, Tag};
 
+/// A validated player chat message before broadcast. Mods may replace the
+/// component or cancel delivery. `raw` remains the original signed text.
+#[inline(never)]
+pub fn native_server_chat(
+    player: u128,
+    username: &str,
+    raw: &str,
+    message: &mut Tag,
+    cancel: &mut bool,
+) {
+    crate::native_client_hooks::server_chat(player, username, raw, message, cancel);
+}
+
 /// Now, in epoch milliseconds (Instant.now()).
 pub fn now_millis() -> i64 {
     std::time::SystemTime::now()
@@ -199,7 +212,7 @@ impl Hub {
         let signature = c.signature.as_deref().and_then(secure_chat::signature);
         let g = &mut self.guests[i];
         let (uuid, name) = (g.uuid, g.name.clone());
-        let message = match g
+        let mut message = match g
             .chain
             .unpack(uuid, signature.as_ref(), &body, enforce, now)
         {
@@ -220,6 +233,16 @@ impl Hub {
             events,
         ) {
             return;
+        }
+        let mut component = literal(&message.content);
+        let original = component.clone();
+        let mut cancel = false;
+        native_server_chat(uuid, &name, &message.content, &mut component, &mut cancel);
+        if cancel {
+            return;
+        }
+        if component != original {
+            message.unsigned_content = Some(component);
         }
         let bound = play::ChatTypeBound {
             chat_type: self.chat_type,
