@@ -2047,11 +2047,26 @@ impl Game<'_> {
         &mut self,
         name: String,
         at: [f64; 3],
+        entity_id: Option<i32>,
         mut source: i32,
         volume: f32,
         pitch: f32,
     ) {
-        let dimension = self.remote.as_ref().map(|r| r.level.clone()).unwrap_or_default();
+        if horizon_client::mod_api::mods().is_empty() {
+            match usize::try_from(source)
+                .ok()
+                .filter(|s| *s < horizon_client::settings::SOUND_SOURCES.len())
+            {
+                Some(source) => self.audio.play_on(source, &name, Some(at), volume, pitch),
+                None => self.audio.play(&name, Some(at), volume, pitch),
+            }
+            return;
+        }
+        let dimension = self
+            .remote
+            .as_ref()
+            .map(|r| r.level.clone())
+            .unwrap_or_default();
         let original_gain = [volume, pitch];
         let mut gain = original_gain;
         let mut sound = Some(name);
@@ -2059,6 +2074,7 @@ impl Game<'_> {
         self.native_play_level_sound(
             &dimension,
             at,
+            entity_id,
             original_gain,
             &mut sound,
             &mut source,
@@ -2072,9 +2088,12 @@ impl Game<'_> {
         }) else {
             return;
         };
-        let Ok(source) = usize::try_from(source) else { return };
+        let Ok(source) = usize::try_from(source) else {
+            return;
+        };
         if source < horizon_client::settings::SOUND_SOURCES.len() {
-            self.audio.play_on(source, &name, Some(at), gain[0], gain[1]);
+            self.audio
+                .play_on(source, &name, Some(at), gain[0], gain[1]);
         }
     }
 
@@ -3214,7 +3233,9 @@ impl Game<'_> {
                         f64::from(p.y) / 8.0,
                         f64::from(p.z) / 8.0,
                     ];
-                    self.play_hooked_remote_level_sound(name, at, p.source, p.volume, p.pitch);
+                    self.play_hooked_remote_level_sound(
+                        name, at, None, p.source, p.volume, p.pitch,
+                    );
                 }
             }
             // shortcut: vanilla's `EntityBoundSoundInstance` re-reads the entity's position
@@ -3225,7 +3246,14 @@ impl Game<'_> {
                 if let Some(name) = self.remote_sound_name(&p.sound)
                     && let Some(at) = self.remote_entity_position(p.id)
                 {
-                    self.play_hooked_remote_level_sound(name, at, p.source, p.volume, p.pitch);
+                    self.play_hooked_remote_level_sound(
+                        name,
+                        at,
+                        Some(p.id),
+                        p.source,
+                        p.volume,
+                        p.pitch,
+                    );
                 }
             }
             C::StopSound(p) => self

@@ -553,6 +553,7 @@ impl Game<'_> {
             self.native_play_level_sound(
                 sound.dimension,
                 sound.at,
+                None,
                 original_gain,
                 &mut name,
                 &mut sound.source,

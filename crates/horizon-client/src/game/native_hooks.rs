@@ -1484,20 +1484,31 @@ fn chars_to_type(text: &str, canceled: impl FnMut(char) -> bool) -> Option<Strin
 
 /// The hook points. Each does nothing in Horizon.
 impl Game<'_> {
-    /// A positional level sound in `dimension` before playback. Set `sound`
-    /// to None or `cancel` to suppress it; `gain` holds volume and pitch.
+    /// A level sound in `dimension` before playback. `entity_id` identifies
+    /// entity-bound sounds; otherwise `at` is the position. Set `sound` to
+    /// None or `cancel` to suppress it; `gain` holds volume and pitch.
     /// @API:play_level_sound@.
     pub(super) fn native_play_level_sound(
         &mut self,
         dimension: &str,
         at: [f64; 3],
+        entity_id: Option<i32>,
         original_gain: [f32; 2],
         sound: &mut Option<String>,
         source: &mut i32,
         gain: &mut [f32; 2],
         cancel: &mut bool,
     ) {
-        let _ = (dimension, at, original_gain, sound, source, gain, cancel);
+        let _ = (
+            dimension,
+            at,
+            entity_id,
+            original_gain,
+            sound,
+            source,
+            gain,
+            cancel,
+        );
     }
 
     /// Once a frame, in a world or not, after Horizon's extras.
