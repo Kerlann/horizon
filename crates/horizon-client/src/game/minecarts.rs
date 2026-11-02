@@ -313,6 +313,7 @@ impl Minecart {
         self.on_ground
     }
     pub fn new(id: u32, kind: CartKind, position: Vec3) -> Self {
+        horizon_client::mobs::native_entity_constructing(id, kind.id());
         Self {
             id,
             kind,
