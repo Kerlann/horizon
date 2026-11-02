@@ -4576,30 +4576,26 @@ impl Game<'_> {
         let old = self.tickets.levels();
         self.tickets.update(sources);
         let new = self.tickets.levels();
-        if self.native_authoritative() && !old.same_map(&new) {
+        if self.native_authoritative()
+            && !horizon_client::mod_api::mods().is_empty()
+            && !old.same_map(&new)
+        {
             let dimension = self.dim.id();
+            let mut updated = |x, z, from: u8, to: u8| {
+                let chunk = horizon_core::position::ChunkPos::new(x, z).pack();
+                self.native_chunk_ticket_level_updated(dimension, chunk, from.into(), to.into());
+            };
             new.for_each_loading(|x, z, level| {
                 let previous = old.loading_level(x, z);
                 if previous != level {
-                    let chunk = i64::from(x as u32) | (i64::from(z) << 32);
-                    self.native_chunk_ticket_level_updated(
-                        dimension,
-                        chunk,
-                        i32::from(previous),
-                        i32::from(level),
-                    );
+                    updated(x, z, previous, level);
                 }
             });
+            // Chunks that left the map: their level rose to the cap.
             old.for_each_loading(|x, z, level| {
                 let next = new.loading_level(x, z);
                 if next > horizon_client::ticket_levels::BLOCK_TICKING {
-                    let chunk = i64::from(x as u32) | (i64::from(z) << 32);
-                    self.native_chunk_ticket_level_updated(
-                        dimension,
-                        chunk,
-                        i32::from(level),
-                        i32::from(next),
-                    );
+                    updated(x, z, level, next);
                 }
             });
         }
@@ -14939,7 +14935,7 @@ impl Game<'_> {
         self.streaming.save(&mut self.world, wait);
         let keys: Vec<_> = self.world.modified.drain().collect();
         let chunks = self.with_entities(keys.iter().filter_map(|k| self.world.chunks.get(k)));
-        self.save_chunks_with_hook(&chunks)?;
+        self.save_chunks_later(&chunks)?;
         // Prepare entities while the chunk writer runs, then use one barrier.
         self.save_entities(false)?;
         self.save_raids();
@@ -14948,27 +14944,17 @@ impl Game<'_> {
         }
         Ok(())
     }
-    /// Capture each chunk before notifying mods, then queue the captured data.
-    fn save_chunks_with_hook(
-        &mut self,
-        chunks: &[Arc<horizon_client::chunk::Chunk>],
-    ) -> Result<()> {
-        let mut records = Vec::with_capacity(chunks.len());
-        for chunk in chunks {
-            let tag = horizon_client::save::encode_with(
-                chunk,
-                self.pack.assets.registry,
-                world_biomes!(self),
-                self.save.tables.get().map(|tables| &**tables),
-                self.save.shape,
-            );
+    /// `ChunkMap.save`: the snapshots are `SerializableChunkData.copyOf`; mods
+    /// hear of each before the writer thread encodes and writes it.
+    fn save_chunks_later(&mut self, chunks: &[Arc<horizon_client::chunk::Chunk>]) -> Result<usize> {
+        if self.native_authoritative() {
             let dimension = self.dim.id();
-            if self.native_authoritative() {
+            for chunk in chunks {
                 self.native_chunk_data_save(dimension, [chunk.x, chunk.z]);
             }
-            records.push(((chunk.x, chunk.z), Some(tag)));
         }
-        self.save.save_encoded_later(chunks, records)
+        self.save
+            .save_later(chunks, self.pack.assets.registry, world_biomes!(self))
     }
     /// `GameRenderer.tryTakeScreenshotIfNeeded`: while a local world without a
     /// saved icon is on the screen, grab the rendered frame once a second until
@@ -16328,10 +16314,8 @@ impl Game<'_> {
                 .retain(|p, _| !gone.contains(&(p.0 >> 4, p.2 >> 4)));
         }
         if !modified.is_empty()
-            && let Err(e) = horizon_client::spans::time("save_chunks", || {
-                self.save
-                    .save_later(&modified, self.pack.assets.registry, world_biomes!(self))
-            })
+            && let Err(e) =
+                horizon_client::spans::time("save_chunks", || self.save_chunks_later(&modified))
         {
             log::warn!("Horizon: failed to save unloaded chunks: {e}");
         }

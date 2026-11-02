@@ -2908,15 +2908,6 @@ impl SaveDir {
             .collect();
         self.queue(Folder::Poi, records, wait)
     }
-    /// Queue already encoded chunks, retaining the usual asynchronous POI writes.
-    pub fn save_encoded_later(
-        &self,
-        chunks: &[Arc<Chunk>],
-        records: Vec<((i32, i32), Option<NamedTag>)>,
-    ) -> Result<()> {
-        self.write_records("region", records, false)?;
-        self.save_poi(chunks, false)
-    }
     /// `save` on the writer thread: returns before the files are written;
     /// loads see the chunks meanwhile.
     pub fn save_later(
