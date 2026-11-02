@@ -971,6 +971,13 @@ pub struct Spawned {
     pub school: bool,
 }
 
+/// Change the maximum natural-spawn cluster size for the selected mob.
+/// The mob's type and spawn position identify it; Horizon assigns its ID later.
+#[inline(never)]
+pub fn native_spawn_cluster_size(kind: &str, position: [f64; 3], size: &mut i32) {
+    crate::native_client_hooks::spawn_cluster_size(kind, position, size);
+}
+
 /// `NaturalSpawner.spawnForChunk` for the categories already filtered.
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_for_chunk<L: NaturalLevel, R: RandomSource>(
@@ -1029,7 +1036,7 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
         return;
     }
     let mut spawned: Vec<Aabb> = Vec::new();
-    let mut cluster = 0u32;
+    let mut cluster = 0i32;
     let mut nearest = Nearest::new(start);
     for _ in 0..3 {
         let (mut x, mut z) = (x0, z0);
@@ -1119,7 +1126,9 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
                 [xx, f64::from(y), zz],
                 yaw,
             ));
-            if cluster >= max_cluster_size(species) {
+            let mut size = max_cluster_size(species) as i32;
+            native_spawn_cluster_size(&entry.entity, request.position, &mut size);
+            if cluster >= size {
                 return;
             }
             // TropicalFish.isMaxGroupSizeReached.

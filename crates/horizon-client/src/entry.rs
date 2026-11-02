@@ -122,6 +122,14 @@ pub fn main_with(mods: crate::mod_api::Mods) {
         mob_despawn: |entity, kind, result| {
             crate::mod_api::dispatch_mob_despawn(crate::mod_api::mods(), entity, kind, result);
         },
+        spawn_cluster_size: |kind, position, size| {
+            crate::mod_api::dispatch_spawn_cluster_size(
+                crate::mod_api::mods(),
+                kind,
+                position,
+                size,
+            );
+        },
         ingredient: |kind, data, items| {
             crate::mod_api::dispatch_ingredient(crate::mod_api::mods(), kind, data, items);
         },
