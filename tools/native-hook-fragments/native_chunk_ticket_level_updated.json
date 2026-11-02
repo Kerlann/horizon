@@ -1,0 +1,15 @@
+{
+  "hooks": [
+    {
+      "name": "chunk_ticket_level_updated",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_chunk_ticket_level_updated",
+      "side": "server",
+      "neoforge": "ChunkTicketLevelUpdatedEvent",
+      "mod_api": {
+        "contract": "listen"
+      }
+    }
+  ],
+  "rust_summary": "A tracked chunk's effective loading ticket level changed (`native_chunk_ticket_level_updated`).",
+  "doc_summary": "A tracked chunk's effective loading ticket level changed: `native_chunk_ticket_level_updated(dimension, chunk, old_level, new_level)`. Bundles need \"hooks\": @API:native_chunk_ticket_level_updated@."
+}

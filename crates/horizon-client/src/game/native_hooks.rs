@@ -4744,6 +4744,18 @@ impl Game<'_> {
         mod_api::dispatch_world_saved(self, mod_api::mods(), wait);
     }
 
+    /// A tracked chunk's effective loading ticket level changed.
+    /// @API:native_chunk_ticket_level_updated@.
+    pub(super) fn native_chunk_ticket_level_updated(
+        &mut self,
+        dimension: &str,
+        chunk: i64,
+        old_level: i32,
+        new_level: i32,
+    ) {
+        let _ = (dimension, chunk, old_level, new_level);
+    }
+
     /// A chunk's save data has been captured on the server thread. Attachment
     /// changes made now do not change this save. @API:native_chunk_data_save@.
     pub(super) fn native_chunk_data_save(&mut self, dimension: &str, chunk: [i32; 2]) {

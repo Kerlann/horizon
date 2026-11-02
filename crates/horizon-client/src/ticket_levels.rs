@@ -101,6 +101,53 @@ impl Map {
 }
 
 impl Levels {
+    /// Visit the effective loading levels which this snapshot tracks.
+    pub fn for_each_loading(&self, mut visit: impl FnMut(i32, i32, u8)) {
+        let Some(map) = &self.0 else {
+            return;
+        };
+        match &**map {
+            Map::Grid {
+                x0,
+                z0,
+                width,
+                cells,
+                ..
+            } => {
+                for (i, &(loading, _)) in cells.iter().enumerate() {
+                    if loading < NONE.0 {
+                        visit(
+                            x0.wrapping_add((i as u32 % width) as i32),
+                            z0.wrapping_add((i as u32 / width) as i32),
+                            loading,
+                        );
+                    }
+                }
+            }
+            Map::Sparse(cells) => {
+                for (&(x, z), &(loading, _)) in cells {
+                    if loading < NONE.0 {
+                        visit(x, z, loading);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The tracked loading level, or the capped level outside the map.
+    pub fn loading_level(&self, x: i32, z: i32) -> u8 {
+        self.get(x, z).map_or(NONE.0, |(loading, _)| loading)
+    }
+
+    /// Whether two snapshots share their computed map.
+    pub fn same_map(&self, other: &Self) -> bool {
+        match (&self.0, &other.0) {
+            (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+
     /// Chunk coordinates.
     fn get(&self, x: i32, z: i32) -> Option<(u8, u8)> {
         Some(self.0.as_ref()?.get(x, z))

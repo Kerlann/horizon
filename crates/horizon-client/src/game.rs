@@ -4573,7 +4573,24 @@ impl Game<'_> {
                 simulation_distance: self.settings.simulation_distance.max(2),
             }
         });
+        let old = self.tickets.levels();
         self.tickets.update(sources);
+        let new = self.tickets.levels();
+        if self.native_authoritative() && !old.same_map(&new) {
+            let dimension = self.dim.id();
+            new.for_each_loading(|x, z, level| {
+                let previous = old.loading_level(x, z);
+                if previous != level {
+                    let chunk = i64::from(x as u32) | (i64::from(z) << 32);
+                    self.native_chunk_ticket_level_updated(
+                        dimension,
+                        chunk,
+                        i32::from(previous),
+                        i32::from(level),
+                    );
+                }
+            });
+        }
     }
     /// `ServerLevel.startTickingChunk`: a loaded chunk's saved ticks are
     /// scheduled from the game time at which it becomes a ticking chunk
