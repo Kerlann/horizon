@@ -62,7 +62,7 @@ impl Game<'_> {
             return;
         };
         if let Some(reinforcement) = self.mobs.iter_mut().find(|m| m.id == id) {
-            reinforcement.ai.target = Some(target);
+            reinforcement.change_goal_target(Some(target));
             // ZOMBIE_REINFORCEMENT_CALLEE_CHARGE.
             finalize::add_modifier(
                 reinforcement,

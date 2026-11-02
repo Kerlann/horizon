@@ -304,7 +304,8 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         m.extra.anger -= 1;
     }
     if m.ai.target.is_none() && m.alive() && !m.no_ai {
-        m.ai.target = find_target(m, w);
+        let target = find_target(m, w);
+        m.change_goal_target(target);
     }
 }
 /// `spawnBubbles`: more as it swims faster, from behind its mouth.

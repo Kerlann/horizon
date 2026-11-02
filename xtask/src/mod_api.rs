@@ -667,7 +667,16 @@ fn generate(root: &Path, check: bool) -> Result<(), String> {
                 format!("dispatch_{name}"),
             )
         };
-        let fill = needs_fill(&method, &call, in_game)?;
+        // These library hooks keep their marker bodies; their callers forward
+        // through native_client_hooks after calling the marker.
+        let library_marker = !in_game
+            && matches!(name, "living_visibility" | "living_change_target" | "enderman_anger");
+        let fill = if library_marker {
+            needs_fill(&method, &call, true)?;
+            false
+        } else {
+            needs_fill(&method, &call, in_game)?
+        };
         let sig = &method.sig;
         let mut args = Vec::new();
         let mut receiver_mut = None;
