@@ -2484,6 +2484,7 @@ pub struct MobWorld<'a> {
 /// native mods answer. False removes the effect.
 pub trait ModEffectTicks {
     fn tick_mod_effect(&self, effect: &str, mob: u32, tick_count: i32, amplifier: i32) -> bool;
+    fn effect_expired(&self, mob: u32, effect: &crate::effects::EffectInstance) -> bool;
 }
 /// `Entity.getTeam` of the player and of the mobs on a team.
 #[derive(Clone, Debug, Default)]

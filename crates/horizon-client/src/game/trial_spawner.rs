@@ -295,8 +295,24 @@ impl Game<'_> {
     /// minutes per level, with Trial Omen's sound when it is new. `uuid` is
     /// the player found: the one in the game's frame, else a guest.
     fn bad_omen_to_trial_omen(&mut self, uuid: Uuid) {
-        let eye = if self.acting_uuid() == uuid {
-            transform_bad_omen(&mut self.potions.effects)
+        let acting = self.acting_uuid() == uuid;
+        let (entity, instance) = if acting {
+            (None, self.potions.effects.get("bad_omen").cloned())
+        } else {
+            let Some(guest) = self.lan.as_ref().and_then(|h| h.hub.guests.iter().find(|g| {
+                horizon_client::lan::playerdata::uuid_ints(g.uuid) == uuid && Some(g.conn) != self.lan_acting
+            })) else {
+                return;
+            };
+            (Some(guest.entity_id), guest.effects.get("bad_omen").cloned())
+        };
+        if instance.is_none() {
+            return;
+        }
+        let mut cancel = false;
+        self.native_mob_effect_remove(entity, "minecraft:bad_omen", instance.as_ref(), &mut cancel);
+        let eye = if acting {
+            transform_bad_omen(&mut self.potions.effects, cancel)
                 .then(|| self.eye_position().unwrap_or_default())
         } else {
             let acting = self.lan_acting;
@@ -310,7 +326,7 @@ impl Game<'_> {
             };
             let [x, y, z] = guest.position;
             let eye = [x, y + guest.eye_height(), z];
-            transform_bad_omen(&mut guest.effects).then_some(eye)
+            transform_bad_omen(&mut guest.effects, cancel).then_some(eye)
         };
         if let Some(eye) = eye {
             self.audio
@@ -327,11 +343,13 @@ impl Game<'_> {
 }
 
 /// Swap Bad Omen for Trial Omen on `effects`; true when Trial Omen is new.
-fn transform_bad_omen(effects: &mut horizon_client::effects::PlayerEffects) -> bool {
+fn transform_bad_omen(effects: &mut horizon_client::effects::PlayerEffects, keep_bad_omen: bool) -> bool {
     let Some(amplifier) = effects.amplifier("bad_omen") else {
         return false;
     };
-    effects.list.retain(|e| e.id != "bad_omen");
+    if !keep_bad_omen {
+        effects.list.retain(|e| e.id != "bad_omen");
+    }
     let new = effects.get("trial_omen").is_none();
     effects.add(horizon_client::effects::EffectInstance::new(
         "trial_omen",
@@ -356,13 +374,13 @@ mod omen_tests {
         assert_eq!(omen_of(&e), None);
         e.add(EffectInstance::new("bad_omen", 100, 1));
         assert_eq!(omen_of(&e), Some(Omen::Bad));
-        assert!(transform_bad_omen(&mut e));
+        assert!(transform_bad_omen(&mut e, false));
         assert!(e.get("bad_omen").is_none());
         assert_eq!(
             e.get("trial_omen").unwrap().duration,
             TRIAL_OMEN_TICKS_PER_LEVEL * 2
         );
         assert_eq!(omen_of(&e), Some(Omen::Trial));
-        assert!(!transform_bad_omen(&mut e));
+        assert!(!transform_bad_omen(&mut e, false));
     }
 }

@@ -305,9 +305,16 @@ impl Game<'_> {
             ambient: true,
             ..EffectInstance::new(id, duration, amp)
         };
-        self.potions.effects.add(ambient(primary, amplifier));
+        let mut effects = vec![ambient(primary, amplifier)];
         if let Some(s) = secondary.filter(|&s| b.levels >= 4 && s != primary) {
-            self.potions.effects.add(ambient(s, 0));
+            effects.push(ambient(s, 0));
+        }
+        for effect in effects {
+            let mut result = None;
+            self.native_mob_effect_applicable(None, &effect, None, &mut result);
+            if result != Some(false) {
+                self.potions.effects.add(effect);
+            }
         }
     }
     /// Opening the menu shows the beacon's current powers.

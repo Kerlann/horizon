@@ -70,16 +70,30 @@ impl Game<'_> {
                     self.for_player(t, |g| g.add_player_effect(instance))
                         .unwrap_or(false)
                 }
-                Target::Mob(id) => match self.mobs.iter_mut().find(|m| m.id == id) {
-                    Some(m) => {
-                        let name = namespaced(effect.id);
+                Target::Mob(id) => {
+                    if !self.mobs.iter().any(|m| m.id == id) {
+                        continue;
+                    }
+                    let mut instance = EffectInstance::new(effect.id, duration, amplifier);
+                    instance.visible = particles;
+                    let mut result = None;
+                    self.native_mob_effect_applicable(Some(id as i32), &instance, None, &mut result);
+                    let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
+                        continue;
+                    };
+                    let name = namespaced(effect.id);
+                    let vanilla = super::super::potions::mob_can_be_affected(
+                        &self.stations().enchantments.entity_tags, &m.kind.id, name,
+                    );
+                    if !result.unwrap_or(vanilla) {
+                        false
+                    } else {
                         let new = !m.has_effect(name);
-                        // `new MobEffectInstance(effect, duration, amplifier, false, particles)`.
+                        let m = self.mobs.iter_mut().find(|m| m.id == id).unwrap();
                         m.add_effect_with(name, duration, amplifier, false, particles);
                         self.mod_effect_added(name, Some(id as i32), amplifier, new);
                         true
                     }
-                    None => false,
                 },
                 _ => continue,
             };

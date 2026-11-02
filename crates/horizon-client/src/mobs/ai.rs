@@ -2599,17 +2599,28 @@ fn tick_effects(m: &mut Mob, mods: Option<&dyn super::ModEffectTicks>) {
             }
             _ => {}
         }
-        if !infinite {
+        if !infinite && *ticks > 0 {
             *ticks -= 1;
         }
     }
-    // AbsorptionMobEffect.removeAttributeModifiers: the hearts it gave go with it.
-    for (effect, ticks, amp) in &effects {
-        if *effect == "minecraft:absorption" && *ticks <= 0 && *ticks != -1 {
+    effects.retain(|(effect, ticks, amp)| {
+        if *ticks > 0 || *ticks == -1 {
+            return true;
+        }
+        let mut instance = crate::effects::EffectInstance::new(
+            (*effect).trim_start_matches("minecraft:"), *ticks, *amp,
+        );
+        instance.visible = !m.extra.hidden_effects.contains(effect);
+        instance.ambient = m.extra.ambient_effects.contains(effect);
+        if mods.is_some_and(|mods| mods.effect_expired(m.id, &instance)) {
+            return true;
+        }
+        // AbsorptionMobEffect.removeAttributeModifiers.
+        if *effect == "minecraft:absorption" {
             m.absorption = (m.absorption - 4.0 * (*amp + 1) as f32).max(0.0);
         }
-    }
-    effects.retain(|e| e.1 > 0 || e.1 == -1);
+        false
+    });
     m.extra
         .hidden_effects
         .retain(|h| effects.iter().any(|e| e.0 == *h));

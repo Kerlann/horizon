@@ -5744,7 +5744,7 @@ impl Game<'_> {
     /// NeoForge's `MobEffectEvent.Expired`, before an expired effect is removed.
     /// `entity` is the entity id when known; set `cancel` to retain the effect.
     pub(super) fn native_mob_effect_expired(
-        &mut self,
+        &self,
         entity: Option<i32>,
         effect: &horizon_client::effects::EffectInstance,
         cancel: &mut bool,

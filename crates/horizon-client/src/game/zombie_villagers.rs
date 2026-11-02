@@ -102,8 +102,14 @@ impl Game<'_> {
                 .random
                 .next_int_bound(zombie_villager::WAIT_SPREAD)
                 .unwrap_or(0);
+        let mob = &self.mobs[index];
+        let instance = mob.extra.effects.iter().find(|e| e.0 == "minecraft:weakness")
+            .map(|e| horizon_client::effects::EffectInstance::new("weakness", e.1, e.2));
+        let id = mob.id;
+        let mut cancel = false;
+        self.native_mob_effect_remove(Some(id as i32), "minecraft:weakness", instance.as_ref(), &mut cancel);
         let mut events = Vec::new();
-        zombie_villager::start_converting(&mut self.mobs[index], starter, time, &mut events);
+        zombie_villager::start_converting(&mut self.mobs[index], starter, time, &mut events, cancel);
         let _ = self.handle_mob_events(events);
         self.swing_arm();
         true

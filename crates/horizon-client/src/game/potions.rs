@@ -917,7 +917,11 @@ impl Game<'_> {
         {
             let mut effect = EffectInstance::new("water_breathing", 200, 0);
             effect.visible = false;
-            self.potions.effects.add(effect);
+            let mut result = None;
+            self.native_mob_effect_applicable(None, &effect, None, &mut result);
+            if result != Some(false) {
+                self.potions.effects.add(effect);
+            }
         }
     }
     /// A client's own effects (`LivingEntity.tickEffects` on the client,
@@ -1736,7 +1740,19 @@ impl Game<'_> {
                         if d > 20
                             && let Some(name) = mob_effect_id(id)
                         {
-                            self.mobs[i].add_effect(name, d, *amp);
+                            let instance = EffectInstance::new(id, d, *amp);
+                            let mut result = None;
+                            self.native_mob_effect_applicable(
+                                Some(self.mobs[i].id as i32), &instance, None, &mut result,
+                            );
+                            let vanilla = mob_can_be_affected(
+                                &self.stations().enchantments.entity_tags,
+                                &self.mobs[i].kind.id,
+                                name,
+                            );
+                            if result.unwrap_or(vanilla) {
+                                self.mobs[i].add_effect(name, d, *amp);
+                            }
                         }
                         continue;
                     }
@@ -1827,6 +1843,12 @@ impl Game<'_> {
 impl horizon_client::mobs::ModEffectTicks for Game<'_> {
     fn tick_mod_effect(&self, effect: &str, mob: u32, tick_count: i32, amplifier: i32) -> bool {
         self.mod_effect_tick(effect, Some(mob as i32), tick_count, amplifier)
+    }
+
+    fn effect_expired(&self, mob: u32, effect: &EffectInstance) -> bool {
+        let mut cancel = false;
+        self.native_mob_effect_expired(Some(mob as i32), effect, &mut cancel);
+        cancel
     }
 }
 
