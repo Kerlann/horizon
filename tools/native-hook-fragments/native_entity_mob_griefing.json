@@ -13,5 +13,5 @@
     }
   ],
   "rust_summary": "whether an entity may grief blocks (`native_entity_mob_griefing`).",
-  "doc_summary": "the server checks whether an entity may grief blocks: `native_entity_mob_griefing(entity, mob_griefing, can_grief)` exposes the gamerule and lets mods replace the decision. Currently wired for the Ender Dragon's wall checks only. Bundles need \"hooks\": @API:entity_mob_griefing@."
+  "doc_summary": "the server checks whether an entity may grief blocks: `native_entity_mob_griefing(entity, mob_griefing, can_grief)` exposes the gamerule and lets mods replace the decision. Currently wired for the Ender Dragon's wall checks and mob-owned small fireballs only. Bundles need \"hooks\": @API:entity_mob_griefing@."
 }
