@@ -5720,6 +5720,17 @@ impl Game<'_> {
     ) {
         mod_api::dispatch_on_effect_added(self, mod_api::mods(), effect, entity, amplifier);
     }
+    /// NeoForge's `MobEffectEvent.Applicable`, before an effect is added.
+    /// `result`: None uses vanilla, Some(true) applies, Some(false) rejects.
+    pub(super) fn native_mob_effect_applicable(
+        &mut self,
+        entity: Option<i32>,
+        effect: &horizon_client::effects::EffectInstance,
+        source: Option<i32>,
+        result: &mut Option<bool>,
+    ) {
+        let _ = (entity, effect, source, result);
+    }
     /// NeoForge's `MobEffectEvent.Added`, vanilla's `MobEffect.onEffectStarted`:
     /// every `LivingEntity.addEffect` of the content mod's effect `effect`,
     /// new or not, changed or not, after `native_on_effect_added`.

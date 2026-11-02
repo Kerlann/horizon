@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "mob_effect_applicable",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_mob_effect_applicable",
+      "side": "both",
+      "neoforge": "MobEffectEvent.Applicable",
+      "mod_api": {
+        "contract": "replace",
+        "out": "result"
+      }
+    }
+  ],
+  "rust_summary": "Whether an incoming mob effect is applicable (`native_mob_effect_applicable`).",
+  "doc_summary": "Before an effect is added, `native_mob_effect_applicable(entity, effect, source, result)` may set `result` to `Some(true)` to apply or `Some(false)` to reject; `None` leaves the vanilla decision. Bundles need \"hooks\": @API:mob_effect_applicable@."
+}

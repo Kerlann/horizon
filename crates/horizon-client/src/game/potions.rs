@@ -907,6 +907,11 @@ impl Game<'_> {
     }
     /// Add an active effect to the player and update attributes / absorption.
     pub(super) fn add_player_effect(&mut self, effect: EffectInstance) -> bool {
+        let mut result = None;
+        self.native_mob_effect_applicable(None, &effect, None, &mut result);
+        if !result.unwrap_or(true) {
+            return false;
+        }
         let id = effect.id;
         let amp = effect.amplifier;
         let new = self.potions.effects.get(id).is_none();

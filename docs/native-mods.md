@@ -693,6 +693,8 @@ Authoritative servers only, except the first question. Bundles that use it need 
 
 API 73 adds mod-block entity contacts: `native_block_step_on`, `native_block_entity_inside` and `native_block_fall_on`. Each receives the server dimension, entity id/type, block state and position. The landing hook also receives fall distance and mutable calculated damage; zero prevents fall hurt and its generic fall sounds. Creative and fall-immune entities notify with zero and retain immunity. Invalid non-finite damage changes are ignored; negative damage is clamped to zero. Hooks run synchronously without `self`, like `native_living_incoming_damage`. Bundles need "hooks": 73.
 
+`native_mob_effect_applicable(entity, effect, source, result)` lets a native mod choose whether an incoming effect applies: `None` leaves the vanilla decision, `Some(true)` forces application, and `Some(false)` rejects it. The player is `None` for `entity`. The currently wired paths do not retain the source and pass `None`.
+
 API 74 adds a consumable's effect of a mod's own kind. The item's `on_consume_effects` entry of a type in a namespace of its own — where the old loader dropped it silently — reaches `native_consume_effect(kind, data)` when the
 item is consumed, on the server thread, for the acting player. The kind and the JSON the file wrote are there;
 the game's own effects, sounds, teleports and drops are open to the hook. An unclaimed kind does nothing.
