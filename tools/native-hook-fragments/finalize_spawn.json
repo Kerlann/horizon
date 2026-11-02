@@ -13,7 +13,7 @@
     }
   ],
   "rust_summary": "a server mob's spawn finalization (`native_finalize_spawn`).",
-  "doc_summary": "a server mob's spawn finalization: `native_finalize_spawn(kind, position, spawn, canceled)`, NeoForge's `FinalizeSpawnEvent`, runs before a naturally spawned mob or a spawner's unconfigured mob is finalized. Change `spawn.difficulty` for the finalization, set `canceled` to skip finalization (gear, jockeys and the other spawn choices) without preventing the spawn, or set `spawn.spawn_cancelled` to prevent the spawn either way. Spawn group data is not exposed yet. Bundles need \"hooks\": @API:finalize_spawn@.",
+  "doc_summary": "a server mob's spawn finalization: `native_finalize_spawn(kind, position, spawn, canceled)`, NeoForge's `FinalizeSpawnEvent`, runs before a naturally spawned, chunk-generation, or spawner's unconfigured mob is finalized. Change `spawn.difficulty` for the finalization, set `canceled` to skip finalization (gear, jockeys and the other spawn choices) without preventing the spawn, or set `spawn.spawn_cancelled` to prevent the spawn either way. `spawn.spawn_data` is passed to the chunk-generation finalizer; runtime finalization does not yet consume or produce group data. Bundles need \"hooks\": @API:finalize_spawn@.",
   "comments": [
     "crates/horizon-client/src/mobs/spawning.rs"
   ]

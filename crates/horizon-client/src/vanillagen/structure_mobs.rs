@@ -281,21 +281,43 @@ impl StructureMobFinalizer {
         let moon = MOON_BRIGHTNESS[level.moon_phase([0; 3])];
         // WorldGenRegion.getCurrentDifficultyAt: no inhabited time.
         let difficulty = LocalDifficulty::new(base, day_time, 0, moon);
+        let mut event = crate::mobs::spawning::FinalizeSpawn {
+            difficulty,
+            spawn_data: group.take(),
+            spawn_cancelled: false,
+        };
+        let mut canceled = false;
+        if matches!(reason, Reason::ChunkGeneration) {
+            crate::mobs::spawning::native_finalize_spawn(
+                &m.kind.id,
+                [m.position.x, m.position.y, m.position.z],
+                &mut event,
+                &mut canceled,
+            );
+        }
+        *group = if canceled { None } else { event.spawn_data };
         let spawn = SpawnData {
             registries: &data.registries,
             enchantments: &data.enchantments,
             items: &data.items,
             camel_husk_size: data.camel_husk,
         };
-        let any = random.as_any();
-        let created = if let Some(r) = any.downcast_mut::<LegacyRandom>() {
-            run(&mut level, r, difficulty, &spawn, &mut m, reason, group)
-        } else if let Some(r) = any.downcast_mut::<XoroshiroRandom>() {
-            run(&mut level, r, difficulty, &spawn, &mut m, reason, group)
+        let created = if canceled {
+            Vec::new()
         } else {
-            log::error!("Horizon: unknown region random, structure mobs are finalized when loaded");
-            return None;
+            let any = random.as_any();
+            if let Some(r) = any.downcast_mut::<LegacyRandom>() {
+                run(&mut level, r, event.difficulty, &spawn, &mut m, reason, group)
+            } else if let Some(r) = any.downcast_mut::<XoroshiroRandom>() {
+                run(&mut level, r, event.difficulty, &spawn, &mut m, reason, group)
+            } else {
+                log::error!("Horizon: unknown region random, structure mobs are finalized when loaded");
+                return None;
+            }
         };
+        if event.spawn_cancelled {
+            return None;
+        }
         let mut mobs = vec![(m, raw)];
         mobs.extend(created.into_iter().map(|c| (c, None)));
         let root = mobs

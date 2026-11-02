@@ -412,6 +412,7 @@ impl<'a> Game<'a> {
         &self,
         r: &SpawnRequest,
         pending: &mut Vec<(Mob, bool)>,
+        group: &mut Option<horizon_client::mobs::finalize::Group>,
     ) -> Option<Spawned> {
         let kind = self.res.mob_types().get(r.entity)?.clone();
         let [x, y, z] = r.position;
@@ -419,6 +420,7 @@ impl<'a> Game<'a> {
         let facts = self.biome_facts(x.floor() as i32, y.floor() as i32, z.floor() as i32);
         let mut spawn = horizon_client::mobs::spawning::FinalizeSpawn {
             difficulty: self.local_difficulty(r.position),
+            spawn_data: group.take(),
             spawn_cancelled: false,
         };
         let mut canceled = false;
@@ -428,6 +430,7 @@ impl<'a> Game<'a> {
             &mut spawn,
             &mut canceled,
         );
+        *group = if canceled { None } else { spawn.spawn_data };
         if !canceled {
             horizon_client::mobs::spawning::finalize(&mut mob, &facts, &spawn.difficulty);
             horizon_client::mobs::raider::finalize(
@@ -604,8 +607,12 @@ impl<'a> Game<'a> {
             }
             if !categories.is_empty() {
                 for chunk in scratch.candidates.drain(..) {
+                    let mut group = None;
                     let mut spawn = |l: &GameLevel, r: &SpawnRequest| {
-                        let spawned = l.game.finalize_spawned(r, &mut pending);
+                        if r.group_index == 0 {
+                            group = None;
+                        }
+                        let spawned = l.game.finalize_spawned(r, &mut pending, &mut group);
                         if let Some(s) = &spawned {
                             l.pending.borrow_mut().push(s.bounds);
                         }

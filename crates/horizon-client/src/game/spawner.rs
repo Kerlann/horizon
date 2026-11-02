@@ -184,6 +184,7 @@ impl Game<'_> {
             let facts = self.biome_facts(x.floor() as i32, y.floor() as i32, z.floor() as i32);
             let mut spawn = spawning::FinalizeSpawn {
                 difficulty: self.local_difficulty(r.position),
+                spawn_data: None,
                 spawn_cancelled: false,
             };
             let mut canceled = false;

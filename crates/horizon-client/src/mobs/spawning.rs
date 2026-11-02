@@ -93,6 +93,8 @@ impl LocalDifficulty {
 #[derive(Clone, Debug)]
 pub struct FinalizeSpawn {
     pub difficulty: LocalDifficulty,
+    /// Group data passed to finalization, or none at the start of a pack.
+    pub spawn_data: Option<super::finalize::Group>,
     pub spawn_cancelled: bool,
 }
 
