@@ -2,7 +2,7 @@
   "hooks": [
     {
       "name": "enderman_anger",
-      "target": "horizon_client::mobs::enderman::native_enderman_anger",
+      "target": "horizon_client_lib::mobs::enderman::native_enderman_anger",
       "neoforge": "EnderManAngerEvent",
       "side": "server",
       "cancellable": true,

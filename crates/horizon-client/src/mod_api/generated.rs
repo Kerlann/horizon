@@ -2202,10 +2202,6 @@ pub trait Hooks: Send + Sync {
     fn living_breathe(&self, event: &mut LivingBreatheEvent<'_>) {
         let _ = event;
     }
-    /// Change a player's visibility to a targeting mob on the server.
-    fn living_visibility(&self, event: &mut LivingVisibilityEvent) {
-        let _ = event;
-    }
     /// Blocks this mod adds, declared in code rather than one file each
     /// (NeoForge's `DeferredRegister.Blocks` drained by `RegisterEvent`):
     /// push a `horizon_mods::content::Block` per block, the same declaration
@@ -7939,38 +7935,6 @@ pub fn dispatch_data_map_types(
         mod_hook.data_map_types(host, &mut event);
     }
 }
-/// A player's visibility to a targeting mob on the server.
-#[non_exhaustive]
-pub struct LivingVisibilityEvent {
-    pub player: [i32; 4],
-    pub looking_entity: Option<u32>,
-    pub visibility_modifier: f64,
-}
-
-impl LivingVisibilityEvent {
-    /// Multiply the current visibility, preserving the order of listeners.
-    pub fn modify_visibility(&mut self, modifier: f64) {
-        self.visibility_modifier *= modifier;
-    }
-}
-
-pub fn dispatch_living_visibility(
-    mods: &[Box<dyn Hooks>],
-    player: [i32; 4],
-    looking_entity: Option<u32>,
-    visibility_modifier: &mut f64,
-) {
-    let mut event = LivingVisibilityEvent {
-        player,
-        looking_entity,
-        visibility_modifier: *visibility_modifier,
-    };
-    for mod_hook in mods {
-        mod_hook.living_visibility(&mut event);
-    }
-    *visibility_modifier = event.visibility_modifier;
-}
-
 /// What [`Hooks::living_breathe`] is told. Fields may be added: the struct is `#[non_exhaustive]`.
 #[non_exhaustive]
 pub struct LivingBreatheEvent<'a> {

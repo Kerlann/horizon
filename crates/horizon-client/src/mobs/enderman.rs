@@ -311,10 +311,12 @@ impl Goal for LookForPlayer {
     }
     fn can_use(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {
         let Some(p) = &cx.w.player else { return false };
-        self.pending = p.alive
+        // TargetingConditions.test runs the stare selector before the
+        // creative and range checks.
+        self.pending = !p.spectator
+            && stared_at(m, cx.w)
             && !p.creative
-            && m.distance_sqr(p.position) <= m.attrs.follow_range.powi(2)
-            && stared_at(m, cx.w);
+            && m.distance_sqr(p.position) <= m.attrs.follow_range.powi(2);
         self.pending
     }
     fn start(&mut self, m: &mut Mob, _: &mut Cx) {

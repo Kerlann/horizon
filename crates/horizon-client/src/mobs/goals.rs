@@ -1829,7 +1829,7 @@ impl Goal for HurtByTarget {
         // PolarBearHurtByTargetGoal.start: a cub alerts the adults itself.
         let cub = self.polar_bear && m.is_baby();
         if (self.alert || cub)
-            && let Some(by) = m.ai.target
+            && let Some(by) = m.ai.last_hurt_by
         {
             let range = m.attrs.follow_range;
             let species = m.species();

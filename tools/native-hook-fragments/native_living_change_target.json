@@ -2,7 +2,7 @@
   "hooks": [
     {
       "name": "living_change_target",
-      "target": "horizon_client::mobs::native_living_change_target",
+      "target": "horizon_client_lib::mobs::native_living_change_target",
       "neoforge": "LivingChangeTargetEvent",
       "side": "server",
       "cancellable": true,

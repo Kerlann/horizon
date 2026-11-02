@@ -469,12 +469,12 @@ impl Goal for OwnerHurtBy {
     }
     fn start(&mut self, m: &mut Mob, cx: &mut Cx) {
         if let Some((who, at)) = owner_view(m, cx.w).and_then(|p| p.hurt_by) {
-            m.ai.target = Some(who);
+            m.change_goal_target(Some(who));
             self.timestamp = at;
         }
     }
     fn stop(&mut self, m: &mut Mob, _: &mut Cx) {
-        m.ai.target = None;
+        m.change_goal_target(None);
     }
 }
 /// `OwnerHurtTargetGoal`: attack what the owner attacks.
@@ -503,12 +503,12 @@ impl Goal for OwnerHurt {
     }
     fn start(&mut self, m: &mut Mob, cx: &mut Cx) {
         if let Some((who, at)) = owner_view(m, cx.w).and_then(|p| p.last_hurt) {
-            m.ai.target = Some(who);
+            m.change_goal_target(Some(who));
             self.timestamp = at;
         }
     }
     fn stop(&mut self, m: &mut Mob, _: &mut Cx) {
-        m.ai.target = None;
+        m.change_goal_target(None);
     }
 }
 /// `Wolf.wantsToAttack`: never creepers, ghasts, tame cats and parrots, or a
