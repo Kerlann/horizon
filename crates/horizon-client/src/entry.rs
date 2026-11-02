@@ -109,6 +109,11 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 max_stack,
             );
         },
+        enderman_anger: |enderman, player, cancelled| {
+            crate::mod_api::dispatch_enderman_anger(
+                crate::mod_api::mods(), enderman, player, cancelled,
+            );
+        },
         living_breathe: |entity, kind, can_breathe, consume, refill| {
             crate::mod_api::dispatch_living_breathe(
                 crate::mod_api::mods(),

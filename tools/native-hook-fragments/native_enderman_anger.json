@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "enderman_anger",
+      "target": "horizon_client::mobs::enderman::native_enderman_anger",
+      "side": "server",
+      "neoforge": "EnderManAngerEvent",
+      "mod_api": {
+        "contract": "cancel",
+        "out": "cancelled"
+      }
+    }
+  ],
+  "rust_summary": "An enderman checking a player's stare, cancellable (`native_enderman_anger`).",
+  "doc_summary": "Before an enderman checks a player's stare, `native_enderman_anger(enderman, player, cancelled)` can cancel detection. The player is identified by UUID. Disguised players are excluded. Bundles need \"hooks\": @API:enderman_anger@."
+}

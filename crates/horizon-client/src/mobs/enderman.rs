@@ -47,11 +47,22 @@ pub fn register(m: &mut Mob) {
     );
     m.set_malus(super::path::PathType::Water, -1.0);
 }
+/// A server enderman is checking whether a player provokes anger by looking.
+#[inline(never)]
+pub fn native_enderman_anger(enderman: u32, player: [i32; 4], cancelled: &mut bool) {
+    crate::native_client_hooks::enderman_anger(enderman, player, cancelled);
+}
+
 /// Enderman.isBeingStaredBy: the player's look within a cone of 0.025 / distance
 /// of the eyes, with line of sight, and no carved pumpkin.
 pub fn stared_at(m: &Mob, w: &MobWorld) -> bool {
     let Some(p) = &w.player else { return false };
     if !p.alive || p.head.as_deref() == Some("minecraft:carved_pumpkin") {
+        return false;
+    }
+    let mut cancelled = false;
+    native_enderman_anger(m.id, p.uuid, &mut cancelled);
+    if cancelled {
         return false;
     }
     let look = p.look;

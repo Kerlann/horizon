@@ -1480,6 +1480,15 @@ fn chars_to_type(text: &str, canceled: impl FnMut(char) -> bool) -> Option<Strin
 
 /// The hook points. Each does nothing in Horizon.
 impl Game<'_> {
+    pub(crate) fn native_enderman_anger(
+        &mut self,
+        enderman: u32,
+        player: [i32; 4],
+        cancelled: &mut bool,
+    ) {
+        let _ = (enderman, player, cancelled);
+    }
+
     /// Once a frame, in a world or not, after Horizon's extras.
     pub(super) fn native_frame(&mut self, elapsed: Duration) {
         mod_api::dispatch_frame(self, mod_api::mods(), elapsed);
