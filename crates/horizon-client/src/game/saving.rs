@@ -155,12 +155,11 @@ impl Game<'_> {
                     for _ in 0..SNAPSHOTS_PER_FRAME {
                         let Some(&key) = keys.front() else { break };
                         let chunks = self.with_entities(self.world.chunks.get(&key));
-                        self.save.save_later(
-                            &chunks,
-                            self.pack.assets.registry,
-                            world_biomes!(self),
-                        )?;
                         self.world.modified.remove(&key);
+                        if let Err(error) = self.save_chunks_with_hook(&chunks) {
+                            self.world.modified.insert(key);
+                            return Err(error);
+                        }
                         keys.pop_front();
                         if started.elapsed() >= SNAPSHOT_BUDGET {
                             break;
