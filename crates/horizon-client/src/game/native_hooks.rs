@@ -4531,6 +4531,15 @@ impl Game<'_> {
     ) {
         let _ = (stack, target, enchantments);
     }
+    pub(super) fn gameplay_enchantment_level(&mut self, stack: &ItemStack, target: &str) -> u32 {
+        let mut enchantments = stack
+            .enchantments()
+            .iter()
+            .map(|(id, level)| (id.to_string(), (*level).min(i32::MAX as u32) as i32))
+            .collect();
+        self.native_get_enchantment_level(stack, Some(target), &mut enchantments);
+        enchantments.get(target).copied().unwrap_or(0).max(0) as u32
+    }
     /// Enchanting offers were calculated for a server player at `pos`. Change `costs` before they are sent to the menu. @API:prepare_item_enchant@.
     pub(super) fn native_prepare_item_enchant(
         &mut self,
