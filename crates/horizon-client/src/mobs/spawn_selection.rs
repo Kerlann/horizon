@@ -1353,9 +1353,14 @@ pub fn spawn_mobs_for_chunk_generation<L: NaturalLevel, R: RandomSource, Q: Rand
                     }
                     let yaw = random.next_float() * 360.0;
                     let bounds = spawn_box(fx, fy, fz, width, height);
-                    if mob_spawn_rules(species, l, bx, pos[1], bz)
-                        && spawn_obstruction(species, l, bounds, None, bx, pos[1], bz)
-                    {
+                    let mut position_result = None;
+                    native_mob_spawn_position_check(
+                        &entry.entity, [fx, fy, fz], "chunk_generation", None, &mut position_result,
+                    );
+                    if position_result.unwrap_or_else(|| {
+                        mob_spawn_rules(species, l, bx, pos[1], bz)
+                            && spawn_obstruction(species, l, bounds, None, bx, pos[1], bz)
+                    }) {
                         let request = SpawnRequest {
                             entity: &entry.entity,
                             species,
