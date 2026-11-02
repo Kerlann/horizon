@@ -119,6 +119,9 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 refill,
             );
         },
+        entity_constructing: |entity, kind| {
+            crate::mod_api::dispatch_entity_constructing(crate::mod_api::mods(), entity, kind);
+        },
         ingredient: |kind, data, items| {
             crate::mod_api::dispatch_ingredient(crate::mod_api::mods(), kind, data, items);
         },

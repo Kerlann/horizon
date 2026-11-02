@@ -2567,8 +2567,15 @@ impl<'a> Teams<'a> {
         }
     }
 }
+/// Reports an entity constructor to native mods.
+#[inline(never)]
+pub fn native_entity_constructing(entity: u32, kind: &str) {
+    crate::native_client_hooks::entity_constructing(entity, kind);
+}
+
 impl Mob {
     pub fn new(id: u32, kind: Arc<MobType>, position: Vec3, yaw: f32) -> Self {
+        native_entity_constructing(id, &kind.id);
         let mut random = LegacyRandom::new(
             i64::from(id).wrapping_mul(0x5DEE_CE66D)
                 ^ (position.x.to_bits() as i64)
