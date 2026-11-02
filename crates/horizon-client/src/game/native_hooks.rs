@@ -4534,6 +4534,9 @@ impl Game<'_> {
     /// `target`'s level among `stack`'s enchantments as `EnchantmentHelper.runIterationOnItem`
     /// visits them: a query for all of them (`native_get_enchantment_level` with no target).
     pub(super) fn gameplay_enchantment_level(&mut self, stack: &ItemStack, target: &str) -> u32 {
+        if mod_api::mods().is_empty() {
+            return stack.enchantment_level(target);
+        }
         let mut enchantments = stack
             .enchantments()
             .iter()
