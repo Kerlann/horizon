@@ -2947,6 +2947,9 @@ impl Mob {
                 hook(self.id as i32, name, &mut applied);
             }
             let through = self.soak_absorption(applied);
+            if through != 0.0 {
+                self.record_damage(source, through);
+            }
             self.health -= through;
             if through != 0.0
                 && let Some(hook) = crate::health::DAMAGE_POST.get()
@@ -2958,12 +2961,6 @@ impl Mob {
                     health_damage: through,
                 });
             }
-        }
-        // LivingEntity.actuallyHurt: a hit that reaches the health is
-        // recorded (`CombatTracker.recordDamage`), with the fall it ends;
-        // Wolf.actuallyHurt keeps a hit its armor takes out of it.
-        if !absorbed && dealt != 0.0 {
-            self.record_damage(source, dealt);
         }
         // Horse and wolf wear the body slot through doHurtEquipment. Wolf
         // armor that absorbs the hit instead uses Wolf.actuallyHurt's own rule.
