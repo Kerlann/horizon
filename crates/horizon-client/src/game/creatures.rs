@@ -394,7 +394,7 @@ impl Game<'_> {
         self.spawn_mob_for_reason(kind, at, persistent, scripted, None)
     }
 
-    fn spawn_mob_for_reason(
+    pub(super) fn spawn_mob_for_reason(
         &mut self,
         kind: &str,
         at: [f64; 3],
