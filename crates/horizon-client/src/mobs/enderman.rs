@@ -50,7 +50,7 @@ pub fn register(m: &mut Mob) {
 /// Let native mods cancel a server-side enderman stare check.
 #[inline(never)]
 pub fn native_enderman_anger(enderman: u32, player: [i32; 4], cancelled: &mut bool) {
-    crate::native_client_hooks::enderman_anger(enderman, player, cancelled);
+    let _ = (enderman, player, cancelled);
 }
 
 /// Enderman.isBeingStaredBy: the player's look within a cone of 0.025 / distance
@@ -67,6 +67,7 @@ pub fn stared_at(m: &Mob, w: &MobWorld) -> bool {
     }
     let mut cancelled = false;
     native_enderman_anger(m.id, p.uuid, &mut cancelled);
+    crate::native_client_hooks::enderman_anger(m.id, p.uuid, &mut cancelled);
     if cancelled {
         return false;
     }

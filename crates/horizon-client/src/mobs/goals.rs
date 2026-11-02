@@ -763,7 +763,7 @@ impl Mob {
         }
         if scale {
             visibility = visibility.clamp(0.0, 10.0);
-            super::native_living_visibility(Some(p.uuid), None, Some(self.id), &mut visibility);
+            super::living_visibility(Some(p.uuid), None, Some(self.id), &mut visibility);
         }
         let dist = (range * visibility).max(2.0);
         if self.distance_sqr(p.position) > dist * dist {
@@ -1689,7 +1689,7 @@ impl Goal for NearestTarget {
                     .collect();
                 for (cid, cpos) in candidates {
                     let mut visibility = 1.0;
-                    super::native_living_visibility(None, Some(cid), Some(m.id), &mut visibility);
+                    super::living_visibility(None, Some(cid), Some(m.id), &mut visibility);
                     let effective_range = (range * visibility).max(2.0);
                     if m.distance_sqr(cpos) > effective_range * effective_range {
                         continue;

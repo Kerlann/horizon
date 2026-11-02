@@ -340,7 +340,7 @@ fn targetable(m: &mut Mob, w: &MobWorld, who: Who) -> bool {
                 return false;
             }
             let mut visibility = 1.0;
-            super::native_living_visibility(None, Some(id), Some(m.id), &mut visibility);
+            super::living_visibility(None, Some(id), Some(m.id), &mut visibility);
             let r = (range * visibility).max(2.0);
             m.distance_sqr(s.position) <= r * r && m.sees(w, who)
         }
@@ -378,7 +378,7 @@ fn attackable(m: &mut Mob, w: &MobWorld, who: Who) -> bool {
             let Some(s) = w.seen(id) else { return false };
             let mut visibility = 1.0;
             if !current {
-                super::native_living_visibility(None, Some(id), Some(m.id), &mut visibility);
+                super::living_visibility(None, Some(id), Some(m.id), &mut visibility);
             }
             let r = (range * visibility).max(2.0);
             m.distance_sqr(s.position) <= r * r && m.sees(w, who)

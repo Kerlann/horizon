@@ -2415,6 +2415,16 @@ pub fn native_living_visibility(
     looking_entity: Option<u32>,
     visibility_modifier: &mut f64,
 ) {
+    let _ = (player, mob, looking_entity, visibility_modifier);
+}
+
+pub(crate) fn living_visibility(
+    player: Option<[i32; 4]>,
+    mob: Option<u32>,
+    looking_entity: Option<u32>,
+    visibility_modifier: &mut f64,
+) {
+    native_living_visibility(player, mob, looking_entity, visibility_modifier);
     crate::native_client_hooks::living_visibility(player, mob, looking_entity, visibility_modifier);
 }
 
@@ -2428,13 +2438,7 @@ pub fn native_living_change_target(
     new_target: &mut Option<i64>,
     cancelled: &mut bool,
 ) {
-    crate::native_client_hooks::living_change_target(
-        mob,
-        target_type,
-        original_target,
-        new_target,
-        cancelled,
-    );
+    let _ = (mob, target_type, original_target, new_target, cancelled);
 }
 
 impl Mob {
@@ -2450,6 +2454,13 @@ impl Mob {
         let mut new_target = original_target;
         let mut cancelled = false;
         native_living_change_target(
+            self.id,
+            target_type,
+            original_target,
+            &mut new_target,
+            &mut cancelled,
+        );
+        crate::native_client_hooks::living_change_target(
             self.id,
             target_type,
             original_target,

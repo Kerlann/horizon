@@ -144,7 +144,7 @@ fn visible(m: &mut Mob, w: &MobWorld, who: Who) -> bool {
                 return false;
             }
             let mut visibility = p.visibility_percent().clamp(0.0, 10.0);
-            super::native_living_visibility(Some(p.uuid), None, Some(m.id), &mut visibility);
+            super::living_visibility(Some(p.uuid), None, Some(m.id), &mut visibility);
             let r = (range * visibility).max(2.0);
             m.distance_sqr(p.position) <= r * r && m.sees(w, who)
         }
@@ -154,7 +154,7 @@ fn visible(m: &mut Mob, w: &MobWorld, who: Who) -> bool {
                 return false;
             }
             let mut visibility = 1.0;
-            super::native_living_visibility(None, Some(id), Some(m.id), &mut visibility);
+            super::living_visibility(None, Some(id), Some(m.id), &mut visibility);
             let r = (range * visibility).max(2.0);
             m.distance_sqr(s.position) <= r * r && m.sees(w, who)
         }

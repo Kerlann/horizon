@@ -420,7 +420,7 @@ pub fn iron_ai_step(m: &mut Mob) {
     if m.extra.anger > 0 {
         m.extra.anger -= 1;
         if m.extra.anger == 0 && m.ai.target == Some(Who::Player) {
-            m.ai.target = None;
+            m.change_goal_target(None);
         }
     }
 }
