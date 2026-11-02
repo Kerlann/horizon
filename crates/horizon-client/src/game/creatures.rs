@@ -488,8 +488,8 @@ impl Game<'_> {
         }
     }
     /// `LivingEntity.hurtArmor` -> `LivingEntity.doHurtEquipment`, from the hit
-    /// `MobEvent::ArmorHurt` reported. Only `Horse` overrides `hurtArmor` for a
-    /// mob, and its override asks for the BODY slot alone, so the body piece is
+    /// `MobEvent::ArmorHurt` reported. Horse and wolf ask for the BODY slot
+    /// alone, so the body piece is
     /// the only one this wears: it loses `max(1, damage / 4)` durability,
     /// Unbreaking applied, and at its maximum the slot empties and the break
     /// event goes out (`LivingEntity.entityEventForEquipmentBreak`: 65 for the
@@ -6835,56 +6835,7 @@ pub(super) fn melee(kind: horizon_client::mobs::DamageKind) -> bool {
             | K::Thorns
     )
 }
-/// The damage type id of a Horizon damage kind. `caused`: the source has a
-/// causing entity (only a blast asks).
-pub(super) fn damage_type(kind: horizon_client::mobs::DamageKind, caused: bool) -> &'static str {
-    use horizon_client::mobs::DamageKind as K;
-    match kind {
-        K::PlayerAttack => "minecraft:player_attack",
-        K::MaceSmash => "minecraft:mace_smash",
-        K::Spear => "minecraft:spear",
-        K::MobAttack => "minecraft:mob_attack",
-        K::Arrow => "minecraft:arrow",
-        K::Thrown => "minecraft:thrown",
-        K::Fireball => "minecraft:fireball",
-        K::Explosion if caused => "minecraft:player_explosion",
-        K::Explosion => "minecraft:explosion",
-        K::Fall => "minecraft:fall",
-        K::FallingBlock => "minecraft:falling_block",
-        K::FallingStalactite => "minecraft:falling_stalactite",
-        K::OnFire => "minecraft:on_fire",
-        K::InFire => "minecraft:in_fire",
-        K::Campfire => "minecraft:campfire",
-        K::Lava => "minecraft:lava",
-        K::Drown => "minecraft:drown",
-        K::DryOut => "minecraft:dry_out",
-        K::Magic => "minecraft:magic",
-        K::IndirectMagic => "minecraft:indirect_magic",
-        K::Sting => "minecraft:sting",
-        K::Cactus => "minecraft:cactus",
-        K::SweetBerryBush => "minecraft:sweet_berry_bush",
-        K::Generic => "minecraft:generic",
-        K::InWall => "minecraft:in_wall",
-        K::Thorns => "minecraft:thorns",
-        K::SonicBoom => "minecraft:sonic_boom",
-        K::Freeze => "minecraft:freeze",
-        K::OutOfWorld => "minecraft:out_of_world",
-        K::Cramming => "minecraft:cramming",
-        K::FallingAnvil => "minecraft:falling_anvil",
-        K::Fireworks => "minecraft:fireworks",
-        K::GenericKill => "minecraft:generic_kill",
-        K::LightningBolt => "minecraft:lightning_bolt",
-        K::OutsideBorder => "minecraft:outside_border",
-        K::Spit => "minecraft:spit",
-        K::Stalagmite => "minecraft:stalagmite",
-        K::Starve => "minecraft:starve",
-        K::HotFloor => "minecraft:hot_floor",
-        K::SulfurCubeHot => "minecraft:sulfur_cube_hot",
-        K::WindCharge => "minecraft:wind_charge",
-        K::Wither => "minecraft:wither",
-        K::WitherSkull => "minecraft:wither_skull",
-    }
-}
+pub(super) use horizon_client::mobs::damage_type;
 /// A Horizon item stack as a loot stack (id, count, damage, enchantments).
 fn to_loot(stack: &ItemStack) -> horizon_world::loot::LootStack {
     horizon_world::loot::LootStack {

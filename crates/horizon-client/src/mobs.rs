@@ -586,6 +586,57 @@ pub enum DamageKind {
     /// `wither_skull`: an owned wither skull's hit (`DamageSources.witherSkull`).
     WitherSkull,
 }
+/// The damage type id of a Horizon damage kind. `caused`: the source has a
+/// causing entity (only a blast asks).
+pub fn damage_type(kind: DamageKind, caused: bool) -> &'static str {
+    use DamageKind as K;
+    match kind {
+        K::PlayerAttack => "minecraft:player_attack",
+        K::MaceSmash => "minecraft:mace_smash",
+        K::Spear => "minecraft:spear",
+        K::MobAttack => "minecraft:mob_attack",
+        K::Arrow => "minecraft:arrow",
+        K::Thrown => "minecraft:thrown",
+        K::Fireball => "minecraft:fireball",
+        K::Explosion if caused => "minecraft:player_explosion",
+        K::Explosion => "minecraft:explosion",
+        K::Fall => "minecraft:fall",
+        K::FallingBlock => "minecraft:falling_block",
+        K::FallingStalactite => "minecraft:falling_stalactite",
+        K::OnFire => "minecraft:on_fire",
+        K::InFire => "minecraft:in_fire",
+        K::Campfire => "minecraft:campfire",
+        K::Lava => "minecraft:lava",
+        K::Drown => "minecraft:drown",
+        K::DryOut => "minecraft:dry_out",
+        K::Magic => "minecraft:magic",
+        K::IndirectMagic => "minecraft:indirect_magic",
+        K::Sting => "minecraft:sting",
+        K::Cactus => "minecraft:cactus",
+        K::SweetBerryBush => "minecraft:sweet_berry_bush",
+        K::Generic => "minecraft:generic",
+        K::InWall => "minecraft:in_wall",
+        K::Thorns => "minecraft:thorns",
+        K::SonicBoom => "minecraft:sonic_boom",
+        K::Freeze => "minecraft:freeze",
+        K::OutOfWorld => "minecraft:out_of_world",
+        K::Cramming => "minecraft:cramming",
+        K::FallingAnvil => "minecraft:falling_anvil",
+        K::Fireworks => "minecraft:fireworks",
+        K::GenericKill => "minecraft:generic_kill",
+        K::LightningBolt => "minecraft:lightning_bolt",
+        K::OutsideBorder => "minecraft:outside_border",
+        K::Spit => "minecraft:spit",
+        K::Stalagmite => "minecraft:stalagmite",
+        K::Starve => "minecraft:starve",
+        K::HotFloor => "minecraft:hot_floor",
+        K::SulfurCubeHot => "minecraft:sulfur_cube_hot",
+        K::WindCharge => "minecraft:wind_charge",
+        K::Wither => "minecraft:wither",
+        K::WitherSkull => "minecraft:wither_skull",
+    }
+}
+
 impl DamageKind {
     /// DamageTypeTags.BYPASSES_INVULNERABILITY
     pub fn bypasses_invulnerability(self) -> bool {
@@ -2739,10 +2790,16 @@ impl Mob {
             return sulfur_cube::immune_to(&source);
         }
         // LivingEntity.isInvulnerableTo: only #bypasses_invulnerability gets past it.
-        if !self.alive()
-            || self.removed
-            || (self.invulnerable_flag && !source.kind.bypasses_invulnerability())
-        {
+        let original_invulnerable =
+            self.invulnerable_flag && !source.kind.bypasses_invulnerability();
+        let mut invulnerable = None;
+        crate::health::native_entity_invulnerability_check(
+            self.id as i32,
+            damage_type(source.kind, source.attacker.is_some()),
+            original_invulnerable,
+            &mut invulnerable,
+        );
+        if !self.alive() || self.removed || invulnerable.unwrap_or(original_invulnerable) {
             return false;
         }
         // Ghast.isReflectedFireball: a fireball a player turned back is
@@ -2889,14 +2946,10 @@ impl Mob {
         if !absorbed && dealt != 0.0 {
             self.record_damage(source, dealt);
         }
-        // LivingEntity.hurtArmor: `Horse` is the only mob that overrides it, and
-        // it hands `doHurtEquipment` the body slot alone. A wolf's armour has
-        // its own rule (`Wolf.actuallyHurt`, `hurt_wolf_armor`) and a player's
-        // four pieces theirs, so the other "body slot" species — donkey, mule,
-        // llama, camel, the skeleton and zombie horses — wear nothing, whatever
-        // `drops::head_is_body` says about where the item lives.
+        // Horse and wolf wear the body slot through doHurtEquipment. Wolf
+        // armor that absorbs the hit instead uses Wolf.actuallyHurt's own rule.
         if let Some(damage) = armor_hit
-            && self.species() == Species::Horse
+            && (self.species() == Species::Horse || (self.species() == Species::Wolf && !absorbed))
             && self.extra.head.is_some()
         {
             self.outbox.push(MobEvent::ArmorHurt {
@@ -4378,7 +4431,7 @@ mod armor_hurt_tests {
         );
     }
 
-    /// `Horse` is the only mob that overrides `LivingEntity.hurtArmor` (the
+    /// Donkey does not override `LivingEntity.hurtArmor` (the
     /// base one is empty, `LivingEntity.java:1887`), so a donkey wearing a body
     /// item — `/item replace entity @e[type=minecraft:donkey,limit=1]
     /// armor.body with minecraft:wolf_armor` — wears nothing, even though

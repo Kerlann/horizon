@@ -535,7 +535,7 @@ armor are covered; helmet-only damage and wolf armor are not yet wired. Bundles 
 
 `native_living_damage_post` observes a server player's health damage after the health change (NeoForge's `LivingDamageEvent.Post`). It reports the damage type, the damage `LivingEntity.hurtServer` received before mods changed it, armor and magic reductions, absorbed damage and health damage. It cannot change or cancel the hit. Mob paths and shield, invulnerability-tick and side-effect details are not yet exposed.
 
-`native_entity_invulnerability_check` (NeoForge's `EntityInvulnerabilityCheckEvent`) can replace a living entity's invulnerability result, with the original result and damage type available. Currently only server-player damage queries are wired; player-specific immunity can still override the result. Mob, other entity and client paths are not yet wired. Bundles need `"hooks": @API:native_entity_invulnerability_check@`.
+`native_entity_invulnerability_check` (NeoForge's `EntityInvulnerabilityCheckEvent`) can replace a living entity's invulnerability result, with the original result and damage type available. Server-player and mob damage queries are wired; player-specific and mob-specific immunity can still override the result. Other entity and client paths are not yet wired. Bundles need `"hooks": @API:native_entity_invulnerability_check@`.
 
 API 50 adds damage a mod can change or cancel through `native_living_incoming_damage` (NeoForge's
 `LivingIncomingDamageEvent`): where `LivingEntity.hurtServer` starts, once its guards passed (invulnerable, dead or
