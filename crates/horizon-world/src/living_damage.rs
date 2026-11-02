@@ -5,12 +5,25 @@ pub enum DamageStat {
     DealtAbsorbed,
     Taken,
 }
+/// Mutable state available at the pre-damage hook.
+#[derive(Clone, Copy, Debug)]
+pub struct DamageContainer {
+    pub original_damage: f32,
+    pub new_damage: f32,
+    pub armor_reduction: f32,
+    pub magic_reduction: f32,
+    pub post_attack_invulnerability_ticks: i32,
+    pub side_effects: bool,
+}
 pub trait DamageWorld {
     type Error;
     type Attacker: Copy;
     fn invulnerable(&mut self) -> Result<bool, Self::Error>;
     fn after_armor(&mut self, damage: f32) -> Result<f32, Self::Error>;
     fn after_magic(&mut self, damage: f32) -> Result<f32, Self::Error>;
+    fn pre_damage(&mut self, _container: &mut DamageContainer) -> Result<(), Self::Error> {
+        Ok(())
+    }
     fn absorption(&mut self) -> Result<f32, Self::Error>;
     fn set_absorption(&mut self, value: f32) -> Result<(), Self::Error>;
     fn server_player_attacker(&mut self) -> Result<Option<Self::Attacker>, Self::Error>;
@@ -69,8 +82,18 @@ pub(crate) fn actually_hurt_after_immunity_check<W: DamageWorld>(
     damage: f32,
     player: bool,
 ) -> Result<(), W::Error> {
-    let damage = world.after_armor(damage)?;
-    let damage = world.after_magic(damage)?;
+    let after_armor = world.after_armor(damage)?;
+    let after_magic = world.after_magic(after_armor)?;
+    let mut container = DamageContainer {
+        original_damage: damage,
+        new_damage: after_magic,
+        armor_reduction: damage - after_armor,
+        magic_reduction: after_armor - after_magic,
+        post_attack_invulnerability_ticks: 20,
+        side_effects: true,
+    };
+    world.pre_damage(&mut container)?;
+    let damage = container.new_damage;
     let remaining = positive(damage - world.absorption()?);
     let absorption = world.absorption()? - (damage - remaining);
     world.set_absorption(absorption)?;

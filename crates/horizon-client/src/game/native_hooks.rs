@@ -5747,6 +5747,15 @@ impl Game<'_> {
     /// on the thread that ticks the world (the server thread; the window's
     /// in-frame): state shared with render thread hooks needs synchronising.
     /// No `self`: the game is in the middle of the hit. API 50.
+    /// Server player damage after armor and magic and before absorption.
+    pub(super) fn native_living_damage_pre(
+        entity: i32,
+        damage_type: &str,
+        container: &mut horizon_world::living_damage::DamageContainer,
+        new_damage: &mut f32,
+    ) {
+        let _ = (entity, damage_type, container, new_damage);
+    }
     pub(super) fn native_living_incoming_damage(
         entity: i32,
         kind: &str,

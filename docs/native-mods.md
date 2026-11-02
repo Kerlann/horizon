@@ -526,6 +526,8 @@ player out of `players_sleeping_percentage`'s count until they are in bed (playe
 player's hook only. The players `native_server_players` lists carry where they look (`yaw`, `pitch`). Bundles that
 use them need `"hooks": 49`.
 
+`native_living_damage_pre` (NeoForge's `LivingDamageEvent.Pre`) fires for server player damage after armor and magic, before absorption. It can replace `new_damage`; it is not cancellable. The container's reduction, invulnerability tick and side-effect changes are not yet applied, and mob paths are not yet wired. Bundles need `"hooks": @API:living_damage_pre@`.
+
 API 50 adds damage a mod can change or cancel through `native_living_incoming_damage` (NeoForge's
 `LivingIncomingDamageEvent`): where `LivingEntity.hurtServer` starts, once its guards passed (invulnerable, dead or
 dying, fire with fire resistance; Horizon's mobs don't check the fire resistance effect there yet), with the hurt

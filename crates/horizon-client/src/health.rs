@@ -13,7 +13,7 @@ use horizon_world::{
     damage_reduction::Bypass,
     damage_source::{Catalog, DamageSource, DamageTypeId, Scaling},
     food::{Difficulty, FoodData},
-    living_damage::DamageStat,
+    living_damage::{DamageContainer, DamageStat},
     living_hurt::{HurtState, HurtTag, HurtWorld},
     player_health::{PlayerAttributeHealth, PlayerFloatIds},
     player_hurt::{CausingEntity, PlayerHurtWorld, ServerPlayerHurtWorld},
@@ -50,6 +50,9 @@ pub enum Hurting<'a> {
 /// game: `LivingEntity.hurtServer` once its guards passed. It may change the
 /// amount; true cancels the hit.
 pub static HURT_SERVER: OnceLock<fn(Hurting<'_>, &mut f32) -> bool> = OnceLock::new();
+/// Pre-absorption damage on the server player path.
+pub static LIVING_DAMAGE_PRE: OnceLock<fn(i32, &str, &mut DamageContainer, &mut f32)> =
+    OnceLock::new();
 /// Whether [`HURT_SERVER`] canceled the hit (never while it is unset).
 pub fn hurt_server_canceled(hurting: Hurting<'_>, amount: &mut f32) -> bool {
     HURT_SERVER.get().is_some_and(|hook| hook(hurting, amount))
@@ -637,6 +640,14 @@ impl ArmorWorld for Environment<'_> {
     }
 }
 impl ServerDamageEnvironment<Attributes> for Environment<'_> {
+    fn pre_damage(&mut self, container: &mut DamageContainer) -> io::Result<()> {
+        if let Some(hook) = LIVING_DAMAGE_PRE.get() {
+            let mut new_damage = container.new_damage;
+            hook(self.entity, &self.source.definition().name, container, &mut new_damage);
+            container.new_damage = new_damage;
+        }
+        Ok(())
+    }
     type Attacker = ();
     fn invulnerable(&mut self) -> io::Result<bool> {
         damage_immunity::server_player_immunity(self)

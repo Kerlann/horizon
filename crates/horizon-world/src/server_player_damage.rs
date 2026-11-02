@@ -8,7 +8,7 @@ use crate::{
     compression::invalid,
     damage_reduction::{self, Bypass, DamageReductionWorld},
     food::FoodData,
-    living_damage::{self, DamageStat, DamageWorld},
+    living_damage::{self, DamageContainer, DamageStat, DamageWorld},
     player_health::{PlayerAttributeHealth, PlayerFloatIds, PlayerHealthError},
     synced_floats::{DataError, Observer, SyncedFloats},
 };
@@ -63,6 +63,9 @@ pub trait ServerDamageEnvironment<A: HealthAttributes = EntityAttributes>:
     fn level_is_client(&mut self) -> Result<bool, EnvError<Self>>;
     fn record_damage(&mut self, amount: f32) -> Result<(), EnvError<Self>>;
     fn damage_event(&mut self) -> Result<(), EnvError<Self>>;
+    fn pre_damage(&mut self, _container: &mut DamageContainer) -> Result<(), EnvError<Self>> {
+        Ok(())
+    }
 }
 pub struct ServerPlayerDamage<'a, E, A: HealthAttributes = EntityAttributes> {
     attributes: &'a mut A,
@@ -219,6 +222,11 @@ impl<A: HealthAttributes, E: ServerDamageEnvironment<A>> DamageWorld
     }
     fn after_magic(&mut self, v: f32) -> Result<f32, Self::Error> {
         damage_reduction::after_magic(self, v)
+    }
+    fn pre_damage(&mut self, container: &mut DamageContainer) -> Result<(), Self::Error> {
+        self.environment
+            .pre_damage(container)
+            .map_err(ServerDamageError::Environment)
     }
     fn absorption(&mut self) -> Result<f32, Self::Error> {
         self.health_binding().absorption().map_err(health_error)

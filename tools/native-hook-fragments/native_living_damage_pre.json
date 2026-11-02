@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "living_damage_pre",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_living_damage_pre",
+      "neoforge": "LivingDamageEvent.Pre",
+      "side": "server",
+      "mod_api": {
+        "contract": "replace",
+        "out": "new_damage"
+      }
+    }
+  ],
+  "rust_summary": "server player damage after armor and magic, before absorption (`native_living_damage_pre`).",
+  "doc_summary": "`native_living_damage_pre` observes server player damage after armor and magic and before absorption. A mod can replace `new_damage`. The container's remaining mutable state is not yet applied; mob paths are not yet wired. Bundles need `\"hooks\": @API:living_damage_pre@`."
+}
