@@ -734,7 +734,19 @@ impl Game<'_> {
                     .get("minecraft:inverted_healing_and_harm")
                     .is_some_and(|t| t.contains(&self.mobs[i].kind.id));
                 for (effect, duration, amp) in effects {
-                    let tags = &self.res.stations().enchantments.entity_tags;
+                    let applicable = if !matches!(effect, "instant_damage" | "instant_health") {
+                        let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
+                            return;
+                        };
+                        let tags = &self.res.stations().enchantments.entity_tags;
+                        let vanilla = mob_can_be_affected(tags, &m.kind.id, effect);
+                        let incoming = EffectInstance::new(effect, duration, amp);
+                        let mut result = None;
+                        self.native_mob_effect_applicable(Some(id as i32), &incoming, None, &mut result);
+                        result.unwrap_or(vanilla)
+                    } else {
+                        true
+                    };
                     // A mod's `onEffectAdded` may have changed the mobs.
                     let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) else {
                         return;
@@ -751,8 +763,7 @@ impl Game<'_> {
                             }
                         }
                         _ => {
-                            if mob_can_be_affected(tags, &m.kind.id, effect)
-                                && let Some(name) = mob_effect_id(effect)
+                            if applicable && let Some(name) = mob_effect_id(effect)
                             {
                                 let new = !m.has_effect(name);
                                 m.add_effect(name, duration, amp);
