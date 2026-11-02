@@ -1008,9 +1008,15 @@ impl Game<'_> {
                     keep.push(kept);
                     continue;
                 }
-                // A mod canceled its tick: it stays as it is.
+                // Despawning is checked before the entity tick, even when a
+                // mod cancels that tick.
                 if round.canceled(m.id) {
-                    keep.push(true);
+                    let kept = horizon_client::mobs::ai::despawn_check(m, &w);
+                    if !kept {
+                        died.remove(&m.id);
+                        snapshot[i].alive = false;
+                    }
+                    keep.push(kept);
                     continue;
                 }
                 horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
