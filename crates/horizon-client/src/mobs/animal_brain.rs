@@ -645,7 +645,7 @@ fn targetable(m: &mut Mob, w: &MobWorld, who: Who) -> bool {
                 return false;
             }
             let mut visibility = p.visibility_percent().clamp(0.0, 10.0);
-            super::native_living_visibility(p.uuid, Some(m.id), &mut visibility);
+            super::native_living_visibility(Some(p.uuid), None, Some(m.id), &mut visibility);
             let r = (range * visibility).max(2.0);
             m.distance_sqr(p.position) <= r * r && m.sees(w, who)
         }
@@ -2396,9 +2396,12 @@ fn axolotl_action(m: &mut Mob, cx: &mut Bx, action: AxolotlAction, until: &mut i
             {
                 return false;
             }
-            mem(m).attack_target.set(target);
+            if !m.change_target(Some(target), "behavior_target") {
+                return false;
+            }
+            let target = m.ai.target;
+            mem(m).attack_target.set_opt(target);
             mem(m).cant_reach_walk_target_since.clear();
-            m.ai.target = Some(target);
             true
         }
         StopAttack => {

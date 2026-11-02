@@ -384,7 +384,7 @@ impl Goal for GhastTempt {
             return false;
         }
         let mut visibility = p.visibility_percent().clamp(0.0, 10.0);
-        super::native_living_visibility(p.uuid, Some(m.id), &mut visibility);
+        super::native_living_visibility(Some(p.uuid), None, Some(m.id), &mut visibility);
         let range = (16.0_f64 * visibility).max(2.0);
         (Self::wants(m, &p.main_hand) || Self::wants(m, &p.off_hand))
             && m.distance_sqr(p.position) <= range * range

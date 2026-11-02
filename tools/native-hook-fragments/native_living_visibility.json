@@ -12,5 +12,5 @@
     }
   ],
   "rust_summary": "a living entity's visibility (`native_living_visibility`).",
-  "doc_summary": "`native_living_visibility(player, looking_entity, visibility_modifier)` lets mods multiply a player's visibility to a targeting mob on the server. Bundles need \"hooks\": @API:living_visibility@."
+  "doc_summary": "`native_living_visibility(player, mob, looking_entity, visibility_modifier)` lets mods multiply a living target's visibility to a targeting mob on the server. Bundles need \"hooks\": @API:living_visibility@."
 }

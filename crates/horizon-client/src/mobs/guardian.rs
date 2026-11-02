@@ -96,7 +96,7 @@ impl Goal for GuardianAttack {
     }
     fn stop(&mut self, m: &mut Mob, _cx: &mut Cx) {
         m.extra.flag = false;
-        m.ai.target = None;
+        m.change_goal_target(None);
     }
     fn tick(&mut self, m: &mut Mob, cx: &mut Cx) {
         let (Some(who), Some(t)) = (m.ai.target, m.target_info(cx.w)) else {
@@ -105,7 +105,7 @@ impl Goal for GuardianAttack {
         m.ai.nav.stop();
         m.look_at_speed([t.position.x, t.eye_y, t.position.z], 90.0, 90.0);
         if !m.sees(cx.w, who) {
-            m.ai.target = None;
+            m.change_goal_target(None);
             return;
         }
         self.attack_time += 1;
@@ -144,7 +144,7 @@ impl Goal for GuardianAttack {
                 }),
             }
             super::ai::do_hurt_target(m, who, cx);
-            m.ai.target = None;
+            m.change_goal_target(None);
         }
     }
 }

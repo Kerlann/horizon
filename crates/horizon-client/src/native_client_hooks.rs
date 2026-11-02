@@ -7,8 +7,8 @@ use std::sync::OnceLock;
 pub struct NativeClientHooks {
     pub menu_slot_rules: fn(&str, usize, &ItemStack, &mut bool, &mut u32),
     pub living_breathe: fn(u32, &str, &mut bool, &mut i32, &mut i32),
-    pub living_visibility: fn([i32; 4], Option<u32>, &mut f64),
-    pub living_change_target: fn(u32, Option<i64>, &mut Option<i64>, &mut bool),
+    pub living_visibility: fn(Option<[i32; 4]>, Option<u32>, Option<u32>, &mut f64),
+    pub living_change_target: fn(u32, &str, Option<i64>, &mut Option<i64>, &mut bool),
     pub enderman_anger: fn(u32, [i32; 4], &mut bool),
     pub ingredient: fn(&str, &Map<String, Value>, &mut Vec<String>),
 }
@@ -45,23 +45,25 @@ pub(crate) fn living_breathe(
 }
 
 pub(crate) fn living_visibility(
-    player: [i32; 4],
+    player: Option<[i32; 4]>,
+    mob: Option<u32>,
     looking_entity: Option<u32>,
     visibility_modifier: &mut f64,
 ) {
     if let Some(hooks) = HOOKS.get() {
-        (hooks.living_visibility)(player, looking_entity, visibility_modifier);
+        (hooks.living_visibility)(player, mob, looking_entity, visibility_modifier);
     }
 }
 
 pub(crate) fn living_change_target(
     mob: u32,
+    target_type: &str,
     original_target: Option<i64>,
     new_target: &mut Option<i64>,
     cancelled: &mut bool,
 ) {
     if let Some(hooks) = HOOKS.get() {
-        (hooks.living_change_target)(mob, original_target, new_target, cancelled);
+        (hooks.living_change_target)(mob, target_type, original_target, new_target, cancelled);
     }
 }
 

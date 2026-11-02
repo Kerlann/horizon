@@ -235,7 +235,11 @@ impl Goal for DefendTrader {
         true
     }
     fn can_continue(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {
-        target_continue(&mut self.st, false, m, cx)
+        if !target_continue(&mut self.st, false, m, cx) {
+            return false;
+        }
+        m.change_goal_target(m.ai.target);
+        true
     }
     fn start(&mut self, m: &mut Mob, cx: &mut Cx) {
         m.change_goal_target(self.attacker);

@@ -205,7 +205,7 @@ fn witch_attack(m: &mut Mob, who: Who, _power: f32, cx: &mut Cx) {
         Who::Mob(id) => cx.w.seen(id).is_some_and(|s| s.has_effect(effect)),
     };
     let (effect, ticks, amplifier) = if heals {
-        m.ai.target = None;
+        m.change_goal_target(None);
         if health <= 4.0 {
             ("minecraft:instant_health", 1, 0)
         } else {

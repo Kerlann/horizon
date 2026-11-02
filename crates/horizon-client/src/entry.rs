@@ -119,18 +119,20 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 refill,
             );
         },
-        living_visibility: |player, looking_entity, visibility_modifier| {
+        living_visibility: |player, mob, looking_entity, visibility_modifier| {
             crate::mod_api::dispatch_living_visibility(
                 crate::mod_api::mods(),
                 player,
+                mob,
                 looking_entity,
                 visibility_modifier,
             );
         },
-        living_change_target: |mob, original_target, new_target, cancelled| {
+        living_change_target: |mob, target_type, original_target, new_target, cancelled| {
             crate::mod_api::dispatch_living_change_target(
                 crate::mod_api::mods(),
                 mob,
+                target_type,
                 original_target,
                 new_target,
                 cancelled,

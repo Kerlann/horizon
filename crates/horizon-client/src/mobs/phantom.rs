@@ -83,7 +83,7 @@ impl Goal for AttackPlayerTarget {
             && (d.y - m.position.y).abs() <= 64.0
             && (d.z - m.position.z).abs() <= 16.0 + f64::from(m.width());
         if near && can_attack_seen(m, cx.w) {
-            m.ai.target = Some(Who::Player);
+            m.change_goal_target(Some(Who::Player));
             return true;
         }
         false
@@ -264,7 +264,7 @@ impl Goal for SweepAttack {
         !self.scared
     }
     fn stop(&mut self, m: &mut Mob, _: &mut Cx) {
-        m.ai.target = None;
+        m.change_goal_target(None);
         m.extra.flag = false;
     }
     fn tick(&mut self, m: &mut Mob, cx: &mut Cx) {

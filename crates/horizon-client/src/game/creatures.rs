@@ -2163,6 +2163,11 @@ impl Game<'_> {
                         m.damage(amount, horizon_client::mobs::Damage::of(kind));
                     }
                 }
+                MobEvent::SetGoalTarget { mob, target } => {
+                    if let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob) {
+                        m.change_goal_target(Some(target));
+                    }
+                }
                 MobEvent::SetTarget { mob, target } => {
                     if let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob) {
                         m.ai.target = Some(target);

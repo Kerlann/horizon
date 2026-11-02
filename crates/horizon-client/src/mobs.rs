@@ -1526,7 +1526,12 @@ pub enum MobEvent {
         z: f64,
         source: Damage,
     },
-    /// Set another mob's attack target (HurtByTargetGoal alerts).
+    /// `HurtByTargetGoal.alertOther` calls `Mob.setTarget`.
+    SetGoalTarget {
+        mob: u32,
+        target: Who,
+    },
+    /// Set another mob's attack target for anger and brain alerts.
     SetTarget {
         mob: u32,
         target: Who,
@@ -2401,15 +2406,16 @@ pub struct Vehicle {
     /// `Entity.getKnownSpeed`: what it moved in its last tick.
     pub velocity: Vec3,
 }
-/// Modify a target's visibility multiplier on the server. The player is
-/// identified by UUID; `looking_entity` is the targeting mob, if any.
+/// Modify a target's visibility on the server. Exactly one of `player` and
+/// `mob` identifies the target; `looking_entity` is the targeting mob.
 #[inline(never)]
 pub fn native_living_visibility(
-    player: [i32; 4],
+    player: Option<[i32; 4]>,
+    mob: Option<u32>,
     looking_entity: Option<u32>,
     visibility_modifier: &mut f64,
 ) {
-    crate::native_client_hooks::living_visibility(player, looking_entity, visibility_modifier);
+    crate::native_client_hooks::living_visibility(player, mob, looking_entity, visibility_modifier);
 }
 
 /// Before a mob changes its goal target. Targets are None, -1 for the
@@ -2417,22 +2423,39 @@ pub fn native_living_visibility(
 #[inline(never)]
 pub fn native_living_change_target(
     mob: u32,
+    target_type: &str,
     original_target: Option<i64>,
     new_target: &mut Option<i64>,
     cancelled: &mut bool,
 ) {
-    crate::native_client_hooks::living_change_target(mob, original_target, new_target, cancelled);
+    crate::native_client_hooks::living_change_target(
+        mob,
+        target_type,
+        original_target,
+        new_target,
+        cancelled,
+    );
 }
 
 impl Mob {
-    fn change_goal_target(&mut self, target: Option<Who>) {
+    pub fn change_goal_target(&mut self, target: Option<Who>) {
+        self.change_target(target, "mob_target");
+    }
+
+    fn change_target(&mut self, target: Option<Who>, target_type: &str) -> bool {
         let original_target = target.map(|who| match who {
             Who::Player => -1,
             Who::Mob(id) => i64::from(id),
         });
         let mut new_target = original_target;
         let mut cancelled = false;
-        native_living_change_target(self.id, original_target, &mut new_target, &mut cancelled);
+        native_living_change_target(
+            self.id,
+            target_type,
+            original_target,
+            &mut new_target,
+            &mut cancelled,
+        );
         if !cancelled {
             self.ai.target = match new_target {
                 None => None,
@@ -2440,6 +2463,7 @@ impl Mob {
                 Some(id) => u32::try_from(id).ok().map(Who::Mob),
             };
         }
+        !cancelled
     }
 }
 

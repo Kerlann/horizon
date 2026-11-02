@@ -763,7 +763,7 @@ impl Mob {
         }
         if scale {
             visibility = visibility.clamp(0.0, 10.0);
-            super::native_living_visibility(p.uuid, Some(self.id), &mut visibility);
+            super::native_living_visibility(Some(p.uuid), None, Some(self.id), &mut visibility);
         }
         let dist = (range * visibility).max(2.0);
         if self.distance_sqr(p.position) > dist * dist {
@@ -1688,7 +1688,10 @@ impl Goal for NearestTarget {
                     .map(|s| (s.id, s.position))
                     .collect();
                 for (cid, cpos) in candidates {
-                    if m.distance_sqr(cpos) > range * range {
+                    let mut visibility = 1.0;
+                    super::native_living_visibility(None, Some(cid), Some(m.id), &mut visibility);
+                    let effective_range = (range * visibility).max(2.0);
+                    if m.distance_sqr(cpos) > effective_range * effective_range {
                         continue;
                     }
                     if self.beyond_sqr.is_some_and(|d| m.distance_sqr(cpos) <= d) {
@@ -1705,7 +1708,11 @@ impl Goal for NearestTarget {
         self.found.is_some()
     }
     fn can_continue(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {
-        target_continue(&mut self.target_goal, self.must_see, m, cx)
+        if !target_continue(&mut self.target_goal, self.must_see, m, cx) {
+            return false;
+        }
+        m.change_goal_target(m.ai.target);
+        true
     }
     fn start(&mut self, m: &mut Mob, _: &mut Cx) {
         m.change_goal_target(self.found);
@@ -1819,7 +1826,11 @@ impl Goal for HurtByTarget {
         if self.bee && !super::bee::angry(m, cx.w) {
             return false;
         }
-        target_continue(&mut self.st, true, m, cx)
+        if !target_continue(&mut self.st, true, m, cx) {
+            return false;
+        }
+        m.change_goal_target(m.ai.target);
+        true
     }
     fn start(&mut self, m: &mut Mob, cx: &mut Cx) {
         m.change_goal_target(m.ai.last_hurt_by);
@@ -1876,7 +1887,7 @@ impl Goal for HurtByTarget {
                 return;
             }
             for other in ids {
-                cx.events.push(MobEvent::SetTarget {
+                cx.events.push(MobEvent::SetGoalTarget {
                     mob: other,
                     target: by,
                 });
