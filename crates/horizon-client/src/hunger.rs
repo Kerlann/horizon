@@ -172,6 +172,7 @@ impl FoodWorld for TickWorld<'_> {
             totem: false,
             totem_fired: false,
             canceled: false,
+            original: 0.0,
         };
         if ServerPlayerCombat::new(self.attributes, self.data, food, self.ids, &mut environment)?
             .hurt(self.hurt, amount)?

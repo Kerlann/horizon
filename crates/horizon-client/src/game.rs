@@ -12727,7 +12727,7 @@ impl Game<'_> {
         if damage <= 0.0 {
             return;
         }
-        let amount = (damage / 4.0).max(1.0) as u32;
+        let amount = ((damage / 4.0) as u32).max(1);
         let name = self
             .motion
             .health
@@ -12749,7 +12749,13 @@ impl Game<'_> {
             false,
         ];
         let mut canceled = false;
-        Self::native_armor_hurt(0, &name, present, &mut slot_damage, &mut canceled);
+        Self::native_armor_hurt(
+            self.player.as_ref().map_or(0, |p| p.entity_id),
+            &name,
+            present,
+            &mut slot_damage,
+            &mut canceled,
+        );
         if canceled {
             return;
         }

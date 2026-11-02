@@ -8,7 +8,6 @@ pub enum DamageStat {
 /// Damage amounts observed after a successful health change.
 #[derive(Clone, Copy, Debug)]
 pub struct DamagePost {
-    pub original: f32,
     pub armor_reduction: f32,
     pub magic_reduction: f32,
     pub absorbed: f32,
@@ -81,8 +80,8 @@ pub(crate) fn actually_hurt_after_immunity_check<W: DamageWorld>(
     damage: f32,
     player: bool,
 ) -> Result<(), W::Error> {
-    let original = damage;
     let after_armor = world.after_armor(damage)?;
+    let armor_reduction = damage - after_armor;
     let damage = world.after_magic(after_armor)?;
     let remaining = positive(damage - world.absorption()?);
     let absorption = world.absorption()? - (damage - remaining);
@@ -106,8 +105,7 @@ pub(crate) fn actually_hurt_after_immunity_check<W: DamageWorld>(
     let health = world.health()?;
     world.set_health(health - remaining)?;
     world.damage_post(DamagePost {
-        original,
-        armor_reduction: original - after_armor,
+        armor_reduction,
         magic_reduction: after_armor - damage,
         absorbed,
         health_damage: remaining,

@@ -505,7 +505,7 @@ impl Game<'_> {
             return;
         };
         let at = [m.position.x, m.position.y, m.position.z];
-        let amount = (damage / 4.0).max(1.0) as u32;
+        let amount = ((damage / 4.0) as u32).max(1);
         let name = damage_type(kind, false);
         let present = [
             false,

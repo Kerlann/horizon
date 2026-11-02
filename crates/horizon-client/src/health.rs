@@ -50,8 +50,9 @@ pub enum Hurting<'a> {
 /// game: `LivingEntity.hurtServer` once its guards passed. It may change the
 /// amount; true cancels the hit.
 pub static HURT_SERVER: OnceLock<fn(Hurting<'_>, &mut f32) -> bool> = OnceLock::new();
-/// Observer for a player's damage after its health changes.
-pub static DAMAGE_POST: OnceLock<fn(i32, &str, DamagePost)> = OnceLock::new();
+/// Observer for a player's damage after its health changes, with the hit's
+/// original damage.
+pub static DAMAGE_POST: OnceLock<fn(i32, &str, f32, DamagePost)> = OnceLock::new();
 /// Whether [`HURT_SERVER`] canceled the hit (never while it is unset).
 pub fn hurt_server_canceled(hurting: Hurting<'_>, amount: &mut f32) -> bool {
     HURT_SERVER.get().is_some_and(|hook| hook(hurting, amount))
@@ -429,6 +430,7 @@ impl PlayerMotion {
             totem: totem_ready,
             totem_fired: false,
             canceled: false,
+            original: 0.0,
         };
         let hurt = ServerPlayerCombat::new(
             &mut self.attributes,
@@ -529,6 +531,8 @@ pub(crate) struct Environment<'a> {
     pub(crate) totem_fired: bool,
     /// A native mod canceled the hit (`living_incoming_damage`).
     pub(crate) canceled: bool,
+    /// The damage `hurtServer` received, before the mods changed it.
+    pub(crate) original: f32,
 }
 /// `LivingEntity.applyItemBlocking` inputs for a raised `BlocksAttacks` item:
 /// reductions whose damage-type sets are already matched against the source.
@@ -708,7 +712,12 @@ impl ServerDamageEnvironment<Attributes> for Environment<'_> {
     }
     fn damage_post(&mut self, post: DamagePost) -> io::Result<()> {
         if let Some(hook) = DAMAGE_POST.get() {
-            hook(self.entity, &self.source.definition().name, post);
+            hook(
+                self.entity,
+                &self.source.definition().name,
+                self.original,
+                post,
+            );
         }
         Ok(())
     }
@@ -718,13 +727,14 @@ impl CombatEnvironment<Attributes> for Environment<'_> {
         *self.dead
     }
 }
-/// Allows native mods to replace a living entity's invulnerability result.
+/// Allows native mods to replace a living entity's invulnerability result:
+/// left `None`, `original_invulnerable` stands.
 #[inline(never)]
 pub fn native_entity_invulnerability_check(
     entity: i32,
     damage_type: &str,
     original_invulnerable: bool,
-    invulnerable: &mut bool,
+    invulnerable: &mut Option<bool>,
 ) {
     crate::native_client_hooks::entity_invulnerability_check(
         entity,
@@ -761,14 +771,14 @@ impl ImmunityWorld for Environment<'_> {
         Ok(false)
     }
     fn living_invulnerability_check(&mut self, original_invulnerable: bool) -> bool {
-        let mut invulnerable = original_invulnerable;
+        let mut invulnerable = None;
         native_entity_invulnerability_check(
             self.entity,
             &self.source.definition().name,
             original_invulnerable,
             &mut invulnerable,
         );
-        invulnerable
+        invulnerable.unwrap_or(original_invulnerable)
     }
     fn damage_rule(&mut self, rule: DamageRule) -> io::Result<bool> {
         Ok(match rule {
@@ -818,6 +828,7 @@ impl HurtWorld for Environment<'_> {
             causing: self.causing,
             direct: 0,
         };
+        self.original = *damage;
         let canceled = hurt_server_canceled(Hurting::Player(self.entity, source), damage);
         self.canceled |= canceled;
         Ok(canceled)

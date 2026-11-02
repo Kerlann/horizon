@@ -6014,15 +6014,17 @@ pub(super) fn block_contact(
     }
 }
 
+/// `native_living_damage_post` for the damage code (`health::DAMAGE_POST`).
 pub(super) fn damage_post(
     entity: i32,
     damage_type: &str,
+    original: f32,
     post: horizon_world::living_damage::DamagePost,
 ) {
     Game::native_living_damage_post(
         entity,
         damage_type,
-        post.original,
+        original,
         post.armor_reduction,
         post.magic_reduction,
         post.absorbed,
