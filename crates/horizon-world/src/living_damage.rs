@@ -100,12 +100,6 @@ pub(crate) fn actually_hurt_after_immunity_check<W: DamageWorld>(
         }
     }
     if remaining == 0.0 {
-        world.damage_post(DamagePost {
-            armor_reduction,
-            magic_reduction,
-            absorbed,
-            health_damage: remaining,
-        })?;
         return Ok(());
     }
     if player {

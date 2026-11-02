@@ -2956,7 +2956,6 @@ impl Mob {
         // armor that absorbs the hit instead uses Wolf.actuallyHurt's own rule.
         if let Some(damage) = armor_hit
             && (self.species() == Species::Horse || (self.species() == Species::Wolf && !absorbed))
-            && self.extra.head.is_some()
         {
             self.outbox.push(MobEvent::ArmorHurt {
                 mob: self.id,
