@@ -10,6 +10,7 @@ pub struct NativeClientHooks {
     pub mob_despawn: fn(u32, &str, &mut Option<bool>),
     pub spawn_cluster_size: fn(&str, [f64; 3], &mut i32),
     pub mob_spawn_position_check: fn(&str, [f64; 3], &str, Option<[i32; 3]>, &mut Option<bool>),
+    pub mob_spawn_placement_check: fn(&str, [i32; 3], &str, bool, &mut Option<bool>),
     pub ingredient: fn(&str, &Map<String, Value>, &mut Vec<String>),
 }
 
@@ -65,6 +66,18 @@ pub(crate) fn mob_spawn_position_check(
 ) {
     if let Some(hooks) = HOOKS.get() {
         (hooks.mob_spawn_position_check)(kind, position, reason, spawner, result);
+    }
+}
+
+pub(crate) fn mob_spawn_placement_check(
+    kind: &str,
+    position: [i32; 3],
+    reason: &str,
+    default_result: bool,
+    result: &mut Option<bool>,
+) {
+    if let Some(hooks) = HOOKS.get() {
+        (hooks.mob_spawn_placement_check)(kind, position, reason, default_result, result);
     }
 }
 

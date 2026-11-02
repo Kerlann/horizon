@@ -135,6 +135,11 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 crate::mod_api::mods(), kind, position, reason, spawner, result,
             );
         },
+        mob_spawn_placement_check: |kind, position, reason, default_result, result| {
+            crate::mod_api::dispatch_mob_spawn_placement_check(
+                crate::mod_api::mods(), kind, position, reason, default_result, result,
+            );
+        },
         ingredient: |kind, data, items| {
             crate::mod_api::dispatch_ingredient(crate::mod_api::mods(), kind, data, items);
         },

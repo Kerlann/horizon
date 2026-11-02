@@ -1222,6 +1222,21 @@ pub fn native_mob_spawn_position_check(
     crate::native_client_hooks::mob_spawn_position_check(kind, position, reason, spawner, result);
 }
 
+/// Override the spawn placement predicate; None uses the default result.
+/// @API:mob_spawn_placement_check@.
+#[inline(never)]
+pub fn native_mob_spawn_placement_check(
+    kind: &str,
+    position: [i32; 3],
+    reason: &str,
+    default_result: bool,
+    result: &mut Option<bool>,
+) {
+    crate::native_client_hooks::mob_spawn_placement_check(
+        kind, position, reason, default_result, result,
+    );
+}
+
 /// `isValidSpawnPostitionForType`, for the entry's type (`mob_type`).
 /// `listed`: the position is where the entry was picked from `mobsAt`.
 #[allow(clippy::too_many_arguments)]
@@ -1260,7 +1275,10 @@ fn valid_position_for_type<L: NaturalLevel, R: RandomSource>(
     {
         return false;
     }
-    if !spawn_rules::check_spawn_rules(species, l, Reason::Natural, random, x, y, z) {
+    let default_result = spawn_rules::check_spawn_rules(species, l, Reason::Natural, random, x, y, z);
+    let mut result = None;
+    native_mob_spawn_placement_check(&entry.entity, pos, "natural", default_result, &mut result);
+    if !result.unwrap_or(default_result) {
         return false;
     }
     l.no_collision(spawn_aabb(
