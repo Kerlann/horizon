@@ -535,6 +535,8 @@ not known. Bundles need `"hooks": @API:native_armor_hurt@`.
 
 `native_living_damage_post` observes a server player's health damage after the health change (NeoForge's `LivingDamageEvent.Post`). It reports the damage type, original damage at the inner damage step, armor and magic reductions, absorbed damage and health damage. It cannot change or cancel the hit. Mob paths and shield, invulnerability-tick and side-effect details are not yet exposed.
 
+`native_entity_invulnerability_check` (NeoForge's `EntityInvulnerabilityCheckEvent`) can replace a living entity's invulnerability result, with the original result and damage type available. Currently only server-player damage queries are wired; player-specific immunity can still override the result. Mob, other entity and client paths are not yet wired. Bundles need `"hooks": @API:native_entity_invulnerability_check@`.
+
 API 50 adds damage a mod can change or cancel through `native_living_incoming_damage` (NeoForge's
 `LivingIncomingDamageEvent`): where `LivingEntity.hurtServer` starts, once its guards passed (invulnerable, dead or
 dying, fire with fire resistance; Horizon's mobs don't check the fire resistance effect there yet), with the hurt

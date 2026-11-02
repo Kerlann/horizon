@@ -27,6 +27,9 @@ pub trait ImmunityWorld {
     fn fire_immune(&mut self) -> Result<bool, Self::Error>;
     fn fall_immune(&mut self) -> Result<bool, Self::Error>;
     fn enchantment_immunity(&mut self) -> Result<bool, Self::Error>;
+    fn living_invulnerability_check(&mut self, invulnerable: bool) -> bool {
+        invulnerable
+    }
     fn damage_rule(&mut self, rule: DamageRule) -> Result<bool, Self::Error>;
     fn changing_dimension(&mut self) -> Result<bool, Self::Error>;
     fn ender_pearl(&mut self) -> Result<bool, Self::Error>;
@@ -48,7 +51,8 @@ pub fn base_immunity<W: ImmunityWorld + ?Sized>(w: &mut W) -> Result<bool, W::Er
     Ok(w.tag(ImmunityTag::Fall)? && w.fall_immune()?)
 }
 pub fn living_immunity<W: ImmunityWorld + ?Sized>(w: &mut W) -> Result<bool, W::Error> {
-    Ok(base_immunity(w)? || w.enchantment_immunity()?)
+    let invulnerable = base_immunity(w)? || w.enchantment_immunity()?;
+    Ok(w.living_invulnerability_check(invulnerable))
 }
 pub fn player_immunity<W: ImmunityWorld + ?Sized>(w: &mut W) -> Result<bool, W::Error> {
     if living_immunity(w)? {

@@ -119,6 +119,15 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 refill,
             );
         },
+        entity_invulnerability_check: |entity, damage_type, original_invulnerable, invulnerable| {
+            crate::mod_api::dispatch_entity_invulnerability_check(
+                crate::mod_api::mods(),
+                entity,
+                damage_type,
+                original_invulnerable,
+                invulnerable,
+            );
+        },
         ingredient: |kind, data, items| {
             crate::mod_api::dispatch_ingredient(crate::mod_api::mods(), kind, data, items);
         },

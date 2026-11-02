@@ -718,6 +718,22 @@ impl CombatEnvironment<Attributes> for Environment<'_> {
         *self.dead
     }
 }
+/// Allows native mods to replace a living entity's invulnerability result.
+#[inline(never)]
+pub fn native_entity_invulnerability_check(
+    entity: i32,
+    damage_type: &str,
+    original_invulnerable: bool,
+    invulnerable: &mut bool,
+) {
+    crate::native_client_hooks::entity_invulnerability_check(
+        entity,
+        damage_type,
+        original_invulnerable,
+        invulnerable,
+    );
+}
+
 impl ImmunityWorld for Environment<'_> {
     type Error = io::Error;
     fn removed(&self) -> bool {
@@ -743,6 +759,16 @@ impl ImmunityWorld for Environment<'_> {
     }
     fn enchantment_immunity(&mut self) -> io::Result<bool> {
         Ok(false)
+    }
+    fn living_invulnerability_check(&mut self, original_invulnerable: bool) -> bool {
+        let mut invulnerable = original_invulnerable;
+        native_entity_invulnerability_check(
+            self.entity,
+            &self.source.definition().name,
+            original_invulnerable,
+            &mut invulnerable,
+        );
+        invulnerable
     }
     fn damage_rule(&mut self, rule: DamageRule) -> io::Result<bool> {
         Ok(match rule {
