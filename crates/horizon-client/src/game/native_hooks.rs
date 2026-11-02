@@ -1484,6 +1484,20 @@ fn chars_to_type(text: &str, canceled: impl FnMut(char) -> bool) -> Option<Strin
 
 /// The hook points. Each does nothing in Horizon.
 impl Game<'_> {
+    /// A positional level sound before playback. Set `sound` to None or
+    /// `cancel` to suppress it; `gain` holds volume and pitch.
+    pub(super) fn native_play_level_sound(
+        &mut self,
+        at: [f64; 3],
+        original_gain: [f32; 2],
+        sound: &mut Option<String>,
+        source: &mut i32,
+        gain: &mut [f32; 2],
+        cancel: &mut bool,
+    ) {
+        let _ = (at, original_gain, sound, source, gain, cancel);
+    }
+
     /// Once a frame, in a world or not, after Horizon's extras.
     pub(super) fn native_frame(&mut self, elapsed: Duration) {
         mod_api::dispatch_frame(self, mod_api::mods(), elapsed);
