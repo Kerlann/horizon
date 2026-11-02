@@ -1,10 +1,17 @@
 //! Horizon: native Rust client for Minecraft Java Edition 26.3 gameplay.
 #![forbid(unsafe_code)]
 
-#[cfg(not(any(feature = "system-allocator", feature = "alloc-census")))]
+#[cfg(not(any(
+    feature = "dylib-spike",
+    feature = "system-allocator",
+    feature = "alloc-census"
+)))]
 #[global_allocator]
 static ALLOCATOR: horizon_threads::Allocator = horizon_threads::Allocator;
-#[cfg(all(feature = "alloc-census", not(feature = "system-allocator")))]
+#[cfg(all(
+    feature = "alloc-census",
+    not(any(feature = "dylib-spike", feature = "system-allocator"))
+))]
 #[global_allocator]
 static ALLOCATOR: horizon_threads::CensusAllocator = horizon_threads::CensusAllocator;
 

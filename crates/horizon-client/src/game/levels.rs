@@ -502,6 +502,21 @@ impl Game<'_> {
     /// `tick_server` as a server thread runs it. With `HORIZON_SPIKES=MS`, a
     /// tick longer than MS is logged with its thread CPU time and spans.
     pub(super) fn tick_server_timed(&mut self, paused: bool) -> Result<()> {
+        // Spike-only timing: both static and dynamic comparators use this identical path.
+        // Measure the entire authoritative tick, not console polling, sleeping or logging.
+        if std::env::var_os("HORIZON_DYLIB_SPIKE_TIMINGS").is_some() {
+            let before = self.world.game_time;
+            let started = Instant::now();
+            let result = self.tick_server(paused);
+            if self.world.game_time != before {
+                eprintln!(
+                    "DYLIB_SPIKE_TICK_NS {} {}",
+                    self.world.game_time,
+                    started.elapsed().as_nanos()
+                );
+            }
+            return result;
+        }
         self.tick_server_spans(paused, |_, _, _| {})
     }
 

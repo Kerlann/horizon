@@ -1,5 +1,14 @@
 # Third-party notices
 
+## Dylib spike: official Zoom
+
+`tools/dylib_spike/zoom.rs` adapts the hook glue of
+[horizon-rust/horizon-mods](https://github.com/horizon-rust/horizon-mods/tree/e5d840dabf3f8d21d6f15b793cd1fb83ed79db17/native/zoom),
+commit `e5d840dabf3f8d21d6f15b793cd1fb83ed79db17`, under MIT, Copyright (c) 2026
+Ludovic Marie and the Horizon contributors. The notice and license are in
+`tools/dylib_spike/ZOOM-LICENSE`. The spike build driver reads its runtime without
+modification from a separately fetched checkout; no mod assets are included here.
+
 ## wgpu-hal
 
 `third_party/wgpu-hal` is [wgpu-hal](https://github.com/gfx-rs/wgpu) 30.0.1 by the gfx-rs
