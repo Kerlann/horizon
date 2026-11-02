@@ -489,7 +489,7 @@ enum Column<'w> {
 /// A body in a batch: a column of `Columns`, or one read from the save.
 enum Body {
     Level(usize),
-    Saved(Arc<[u8]>),
+    Saved { body: Arc<[u8]>, chunk: [i32; 2] },
 }
 
 /// The level's columns a tick's batches send, each once, with the number of batches taking it.
@@ -1913,7 +1913,13 @@ impl Hub {
                     far.push((idx, column.is_some()));
                     match column {
                         Some(Column::Level(chunk)) => bodies.push(Body::Level(columns.add(chunk))),
-                        Some(Column::Saved(body)) => bodies.push(Body::Saved(body)),
+                        Some(Column::Saved(body)) => {
+                            let (x, z) = self.guests[i].far_queue[idx];
+                            bodies.push(Body::Saved {
+                                body,
+                                chunk: [x, z],
+                            });
+                        }
                         None => {}
                     }
                 }
@@ -1959,7 +1965,10 @@ impl Hub {
                                 [chunks[j].x, chunks[j].z],
                             );
                         }
-                        Body::Saved(body) => g.sender.send(body.to_vec()),
+                        Body::Saved { body, chunk } => {
+                            g.sender.send(body.to_vec());
+                            native_chunk_sent(g.entity_id, &self.config.dimension, chunk);
+                        }
                     }
                 }
                 g.send(&C::ChunkBatchFinished(play::ChunkBatchFinished {
