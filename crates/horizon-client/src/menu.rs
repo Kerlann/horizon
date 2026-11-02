@@ -3474,6 +3474,7 @@ pub(crate) mod tests {
                 spawn_cluster_size: |_, _, _| {},
                 mob_spawn_position_check: |_, _, _, _, _| {},
                 mob_spawn_placement_check: |_, _, _, _, _| {},
+                finalize_spawn: |_, _, _| {},
                 ingredient: |_, _, _| {},
             });
         assert!(installed.is_ok());

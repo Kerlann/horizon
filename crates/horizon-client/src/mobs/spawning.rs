@@ -89,6 +89,22 @@ impl LocalDifficulty {
         }
     }
 }
+/// Mutable inputs and decisions for a mob's spawn finalization.
+#[derive(Clone, Debug)]
+pub struct FinalizeSpawn {
+    pub difficulty: LocalDifficulty,
+    /// Horizon does not yet propagate vanilla's SpawnGroupData between mobs.
+    pub spawn_data: Option<String>,
+    pub spawn_cancelled: bool,
+    pub canceled: bool,
+}
+
+/// Called immediately before a server mob's spawn finalization.
+#[inline(never)]
+pub fn native_finalize_spawn(kind: &str, position: [f64; 3], event: &mut FinalizeSpawn) {
+    crate::native_client_hooks::finalize_spawn(kind, position, event);
+}
+
 /// The armour and toughness each vanilla armour piece adds.
 pub fn armor_stats(item: &str) -> (f32, f32) {
     let Some(name) = item.strip_prefix("minecraft:") else {

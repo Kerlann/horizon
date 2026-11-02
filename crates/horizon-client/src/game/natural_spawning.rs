@@ -413,12 +413,23 @@ impl<'a> Game<'a> {
         let [x, y, z] = r.position;
         let mut mob = Mob::new(0, kind, Vec3::new(x, y, z), r.yaw);
         let facts = self.biome_facts(x.floor() as i32, y.floor() as i32, z.floor() as i32);
-        let difficulty = self.local_difficulty(r.position);
-        horizon_client::mobs::spawning::finalize(&mut mob, &facts, &difficulty);
-        horizon_client::mobs::raider::finalize(
-            &mut mob,
-            horizon_client::mobs::raider::Reason::Natural,
-        );
+        let mut event = horizon_client::mobs::spawning::FinalizeSpawn {
+            difficulty: self.local_difficulty(r.position),
+            spawn_data: None,
+            spawn_cancelled: false,
+            canceled: false,
+        };
+        horizon_client::mobs::spawning::native_finalize_spawn(r.entity, r.position, &mut event);
+        if !event.canceled {
+            horizon_client::mobs::spawning::finalize(&mut mob, &facts, &event.difficulty);
+            horizon_client::mobs::raider::finalize(
+                &mut mob,
+                horizon_client::mobs::raider::Reason::Natural,
+            );
+        }
+        if event.spawn_cancelled {
+            return None;
+        }
         let bounds = mob.bounds();
         pending.push(mob);
         Some(Spawned {

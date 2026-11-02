@@ -1,0 +1,18 @@
+{
+  "hooks": [
+    {
+      "name": "finalize_spawn",
+      "target": "horizon_client::mobs::spawning::native_finalize_spawn",
+      "side": "server",
+      "cancellable": true,
+      "neoforge": "FinalizeSpawnEvent",
+      "mod_api": {
+        "contract": "cancel",
+        "out": "bool"
+      }
+    }
+  ],
+  "rust_summary": "A server mob is about to be finalized (`native_finalize_spawn`).",
+  "doc_summary": "A server mob is about to be finalized: `native_finalize_spawn(kind, position, event)` corresponds to NeoForge's `FinalizeSpawnEvent`. Change `event.difficulty` before finalization, set `event.canceled` to skip finalization without preventing the spawn, or set `event.spawn_cancelled` to prevent spawning independently. Horizon does not yet propagate spawn group data, so `event.spawn_data` is not applied. Bundles need \"hooks\": @API:finalize_spawn@.",
+  "comments": ["crates/horizon-client/src/mobs/spawning.rs"]
+}
