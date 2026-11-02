@@ -6,7 +6,7 @@
       "side": "server",
       "neoforge": "EnchantedBlockLootEvent",
       "mod_api": {
-        "contract": "replace",
+        "contract": "collect",
         "out": "level"
       }
     }

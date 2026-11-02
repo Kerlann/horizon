@@ -1183,7 +1183,7 @@ impl<R: RandomSource> Context<'_, R> {
             let context = EnchantedEntityLootContext {
                 entity: &params.this,
                 damage,
-                attacker: damage.source.as_ref(),
+                attacker: Some(attacker),
             };
             native_enchanted_entity_loot(&context, enchantment, &mut level);
             level = level.max(0);

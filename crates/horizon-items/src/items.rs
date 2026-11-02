@@ -1365,20 +1365,13 @@ impl LootContext<'_> {
     }
     fn block_loot_enchantment_level(&self, id: &str) -> i32 {
         let mut level = self.enchantment_level(id).min(i32::MAX as u32) as i32;
-        if let Some(tool) = self.held.filter(|_| !self.block.is_empty()) {
+        if !self.block.is_empty()
+            && let Some(tool) = self.native_loot_tool()
+        {
             let context = horizon_world::loot::EnchantedBlockLootContext {
                 block: self.block,
                 properties: self.properties,
-                tool: horizon_world::loot::NativeLootTool {
-                    item: tool.item.to_string(),
-                    enchantments: tool
-                        .enchantments()
-                        .iter()
-                        .map(|(id, level)| {
-                            (id.to_string(), (*level).min(i32::MAX as u32) as i32)
-                        })
-                        .collect(),
-                },
+                tool,
                 place: horizon_world::loot::current_native_loot_place(),
                 broken_by_player: self.this_entity,
             };
@@ -1399,19 +1392,22 @@ impl LootContext<'_> {
             damage: None,
             player: None,
             block: (!self.block.is_empty()).then_some(self.block),
-            tool: self.held.map(|h| horizon_world::loot::NativeLootTool {
-                item: h.item.to_string(),
-                enchantments: h
-                    .enchantments()
-                    .iter()
-                    .map(|(id, lvl)| (id.to_string(), *lvl as i32))
-                    .collect(),
-            }),
+            tool: self.native_loot_tool(),
             luck: 0.0,
             biome: None,
             seed: random.next_long(),
             place: horizon_world::loot::current_native_loot_place(),
         }
+    }
+    fn native_loot_tool(&self) -> Option<horizon_world::loot::NativeLootTool> {
+        self.held.map(|h| horizon_world::loot::NativeLootTool {
+            item: h.item.to_string(),
+            enchantments: h
+                .enchantments()
+                .iter()
+                .map(|(id, lvl)| (id.to_string(), *lvl as i32))
+                .collect(),
+        })
     }
     fn number<R: RandomSource>(v: &Value, random: &mut R) -> f32 {
         match v {

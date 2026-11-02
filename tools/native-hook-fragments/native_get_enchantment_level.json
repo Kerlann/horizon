@@ -6,7 +6,8 @@
       "side": "both",
       "neoforge": "GetEnchantmentLevelEvent",
       "mod_api": {
-        "contract": "replace"
+        "contract": "collect",
+        "out": "enchantments"
       }
     }
   ],
