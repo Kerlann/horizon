@@ -84,11 +84,26 @@ impl Game<'_> {
         out: &mut Vec<AttributeSnapshot>,
     ) {
         for (slot, item) in slots {
-            let Some(info) = item.and_then(|i| self.items().get(i)) else {
+            let Some(item) = item else {
                 continue;
             };
-            for (attribute, id, amount, op, group) in &info.modifiers {
-                if !slot_in_group(group, slot) {
+            let mut modifiers: Vec<_> = self.items().get(item).into_iter()
+                .flat_map(|info| &info.modifiers)
+                .map(|(attribute, id, amount, operation, slot)| {
+                    horizon_client::item_tooltip::ItemAttributeModifier {
+                        attribute: attribute.clone(),
+                        id: id.clone(),
+                        amount: *amount,
+                        operation: operation.clone(),
+                        slot: slot.clone(),
+                    }
+                })
+                .collect();
+            let stack = horizon_client::items::ItemStack::new(item.as_ref(), 1);
+            self.native_item_attribute_modifier(&stack, &mut modifiers);
+            for modifier in &modifiers {
+                let attribute = &modifier.attribute;
+                if !slot_in_group(&modifier.slot, slot) {
                     continue;
                 }
                 let Some(a) = self.synced_attribute(entity, attribute) else {
@@ -101,9 +116,9 @@ impl Game<'_> {
                     a,
                     start,
                     AttributeModifier {
-                        id: id.clone(),
-                        amount: *amount,
-                        operation: operation_named(op),
+                        id: modifier.id.clone(),
+                        amount: modifier.amount,
+                        operation: operation_named(&modifier.operation),
                     },
                 );
             }

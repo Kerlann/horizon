@@ -4913,6 +4913,14 @@ impl Game<'_> {
     /// text's own). Add, change or take out lines; `Text::legacy` reads `§`
     /// codes. Asked each frame the tooltip shows, never for one the stack
     /// hides. API 12.
+    pub(super) fn native_item_attribute_modifier(
+        &self,
+        stack: &ItemStack,
+        modifiers: &mut Vec<horizon_client::item_tooltip::ItemAttributeModifier>,
+    ) {
+        let _ = (stack, modifiers);
+    }
+
     pub(super) fn native_tooltip(&self, stack: &ItemStack, lines: &mut Vec<(Text, u32)>) {
         mod_api::dispatch_tooltip(self, mod_api::mods(), stack, lines);
     }

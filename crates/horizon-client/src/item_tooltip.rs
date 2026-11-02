@@ -140,6 +140,16 @@ fn attribute_color(attribute: &str, rises: bool) -> u32 {
     }
 }
 
+/// An item attribute modifier entry, before filtering by equipment slot.
+#[derive(Clone, Debug)]
+pub struct ItemAttributeModifier {
+    pub attribute: String,
+    pub id: String,
+    pub amount: f64,
+    pub operation: String,
+    pub slot: String,
+}
+
 /// `ItemStack.addAttributeTooltips`: slot groups, colors and optional player
 /// attack damage/speed bases. Recipe search has no player context.
 pub fn attribute_lines(
