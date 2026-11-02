@@ -1037,6 +1037,7 @@ impl Items {
             killed_by_player: false,
             explosion_radius: None,
             this_entity: false,
+            entity_loot: None,
         };
         ctx.evaluate(table, random)
     }
@@ -1195,6 +1196,7 @@ impl Items {
                 killed_by_player: false,
                 explosion_radius,
                 this_entity: breaker,
+                entity_loot: None,
             };
             return ctx.evaluate(table, random);
         }
@@ -1206,6 +1208,7 @@ impl Items {
             killed_by_player: false,
             explosion_radius,
             this_entity: breaker,
+            entity_loot: None,
         };
         ctx.evaluate(table, random)
     }
@@ -1230,6 +1233,7 @@ impl Items {
             killed_by_player,
             explosion_radius: None,
             this_entity: false,
+            entity_loot: None,
         };
         ctx.evaluate(table, random)
     }
@@ -1263,6 +1267,7 @@ impl Items {
             killed_by_player: false,
             explosion_radius: None,
             this_entity: false,
+            entity_loot: None,
         };
         match table.get("random_sequence").and_then(Value::as_str) {
             Some(sequence) => ctx.evaluate(table, sequences.get(sequence, seed)),
@@ -1289,6 +1294,7 @@ impl Items {
             killed_by_player,
             explosion_radius: None,
             this_entity: false,
+            entity_loot: None,
         };
         ctx.evaluate(table, random)
     }
@@ -1297,6 +1303,7 @@ impl Items {
         entity: &str,
         killed_by_player: bool,
         held: Option<&ItemStack>,
+        entity_loot: Option<&horizon_world::loot::EnchantedEntityLootContext<'_>>,
         random: &mut R,
     ) -> Vec<ItemStack> {
         let name = entity.trim_start_matches("minecraft:");
@@ -1312,6 +1319,7 @@ impl Items {
             killed_by_player,
             explosion_radius: None,
             this_entity: false,
+            entity_loot,
         };
         ctx.evaluate(table, random)
     }
@@ -1357,11 +1365,24 @@ struct LootContext<'a> {
     explosion_radius: Option<f32>,
     /// `LootContextParams.THIS_ENTITY` is set (a player broke the block).
     this_entity: bool,
+    entity_loot: Option<&'a horizon_world::loot::EnchantedEntityLootContext<'a>>,
 }
 impl LootContext<'_> {
     /// Level of an enchantment on the tool / killer's weapon.
     fn enchantment_level(&self, id: &str) -> u32 {
         self.held.map_or(0, |h| h.enchantment_level(id))
+    }
+    fn entity_loot_enchantment_level(&self, id: &str) -> u32 {
+        let mut level = self.enchantment_level(id).min(i32::MAX as u32) as i32;
+        if let Some(context) = self.entity_loot {
+            if !context.attacker.is_some_and(|attacker| attacker.living) {
+                return 0;
+            }
+            if context.entity.living {
+                horizon_world::loot::native_enchanted_entity_loot(context, id, &mut level);
+            }
+        }
+        level.max(0) as u32
     }
     fn block_loot_enchantment_level(&self, id: &str) -> i32 {
         let mut level = self.enchantment_level(id).min(i32::MAX as u32) as i32;
@@ -1555,8 +1576,10 @@ impl LootContext<'_> {
             }
             "minecraft:killed_by_player" => self.killed_by_player,
             "minecraft:random_chance_with_enchanted_bonus" => {
-                let level = if self.killed_by_player && self.block.is_empty() {
-                    self.enchantment_level(c["enchantment"].as_str().unwrap_or(""))
+                let level = if self.block.is_empty()
+                    && (self.killed_by_player || self.entity_loot.is_some())
+                {
+                    self.entity_loot_enchantment_level(c["enchantment"].as_str().unwrap_or(""))
                 } else {
                     0
                 };
@@ -1777,8 +1800,14 @@ impl LootContext<'_> {
                 }
                 "minecraft:enchanted_count_increase" => {
                     // Attacker's level x count, rounded (looting).
-                    let level = self.enchantment_level(f["enchantment"].as_str().unwrap_or(""));
-                    if level > 0 && self.killed_by_player && self.block.is_empty() {
+                    let level = if self.block.is_empty()
+                        && (self.killed_by_player || self.entity_loot.is_some())
+                    {
+                        self.entity_loot_enchantment_level(f["enchantment"].as_str().unwrap_or(""))
+                    } else {
+                        0
+                    };
+                    if level > 0 {
                         let add = level as f32 * Self::number(&f["count"], random);
                         stack.count = (stack.count as i32 + add.round() as i32).max(0) as u32;
                         if let Some(limit) = f["limit"].as_i64().filter(|l| *l > 0) {
@@ -2290,6 +2319,7 @@ mod tests {
             killed_by_player: block.is_empty(),
             explosion_radius: None,
             this_entity: false,
+            entity_loot: None,
         }
     }
 

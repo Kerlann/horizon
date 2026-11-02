@@ -1345,7 +1345,7 @@ impl Game<'_> {
     /// from the guest who struck the last blow when a server's player did
     /// (on the server thread that is every player, the window's too), so
     /// Looting on their weapon counts.
-    fn killer_loot_entity(&mut self, guest: Option<u32>) -> horizon_world::loot::LootEntity {
+    pub(super) fn killer_loot_entity(&mut self, guest: Option<u32>) -> horizon_world::loot::LootEntity {
         let own = |g: &Self| {
             let mut e = horizon_world::loot::LootEntity::new("minecraft:player");
             let slots = [

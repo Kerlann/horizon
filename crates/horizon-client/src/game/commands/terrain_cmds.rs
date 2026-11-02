@@ -548,15 +548,59 @@ impl Game<'_> {
                     None | Some(Some(Target::Player))
                 );
                 let held = self.slot_get(&super::items::Slot::Inv(self.selected));
+                let entity = match t {
+                    Target::Guest(id) => Some(self.killer_loot_entity(Some(id))),
+                    Target::Mob(id) => self
+                        .mobs
+                        .iter()
+                        .find(|m| m.id == id)
+                        .map(|m| horizon_client::mobs::drops::loot_entity(m, None)),
+                    _ => None,
+                }
+                .unwrap_or_else(|| horizon_world::loot::LootEntity {
+                    kind: ty.clone(),
+                    ..Default::default()
+                });
+                let source = self.command_source.map_or(Some(Target::Player), |s| s.entity);
+                let attacker = match source {
+                    Some(Target::Player) => Some(self.killer_loot_entity(None)),
+                    Some(Target::Guest(id)) => Some(self.killer_loot_entity(Some(id))),
+                    Some(Target::Mob(id)) => self
+                        .mobs
+                        .iter()
+                        .find(|m| m.id == id)
+                        .map(|m| horizon_client::mobs::drops::loot_entity(m, None)),
+                    Some(other) => Some(horizon_world::loot::LootEntity {
+                        kind: self.target_type(other),
+                        ..Default::default()
+                    }),
+                    None => None,
+                };
+                let damage = horizon_world::loot::LootDamage {
+                    kind: "minecraft:magic".into(),
+                    ..Default::default()
+                };
+                let entity_loot = horizon_world::loot::EnchantedEntityLootContext {
+                    entity: &entity,
+                    damage: &damage,
+                    attacker: attacker.as_ref(),
+                };
                 let drops = match world_items!(self).loot_sequence(&table) {
                     Some(seq) => {
                         let random = self.rand_sequences.get(&seq, self.level.seed);
-                        world_items!(self).entity_drops(&ty, by_player, held.as_ref(), random)
+                        world_items!(self).entity_drops(
+                            &ty,
+                            by_player,
+                            held.as_ref(),
+                            Some(&entity_loot),
+                            random,
+                        )
                     }
                     None => world_items!(self).entity_drops(
                         &ty,
                         by_player,
                         held.as_ref(),
+                        Some(&entity_loot),
                         &mut self.world.random,
                     ),
                 };
