@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "enderman_anger",
+      "target": "horizon_client::mobs::enderman::native_enderman_anger",
+      "neoforge": "EnderManAngerEvent",
+      "side": "server",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "cancelled"
+      }
+    }
+  ],
+  "rust_summary": "an enderman's player stare check (`native_enderman_anger`).",
+  "doc_summary": "`native_enderman_anger` lets mods cancel an enderman's player stare check. Bundles need \"hooks\": @API:enderman_anger@."
+}

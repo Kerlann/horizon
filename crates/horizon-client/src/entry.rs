@@ -136,6 +136,14 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 cancelled,
             );
         },
+        enderman_anger: |enderman, player, cancelled| {
+            crate::mod_api::dispatch_enderman_anger(
+                crate::mod_api::mods(),
+                enderman,
+                player,
+                cancelled,
+            );
+        },
         ingredient: |kind, data, items| {
             crate::mod_api::dispatch_ingredient(crate::mod_api::mods(), kind, data, items);
         },

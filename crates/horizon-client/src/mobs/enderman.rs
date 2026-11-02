@@ -47,6 +47,22 @@ pub fn register(m: &mut Mob) {
     );
     m.set_malus(super::path::PathType::Water, -1.0);
 }
+/// Let native mods cancel a server-side enderman stare check.
+#[inline(never)]
+pub fn native_enderman_anger(enderman: u32, player: [i32; 4], cancelled: &mut bool) {
+    crate::native_client_hooks::enderman_anger(enderman, player, cancelled);
+}
+
+fn stared_at_with_hook(m: &Mob, w: &MobWorld) -> bool {
+    let Some(p) = &w.player else { return false };
+    if !p.alive || p.head.as_deref() == Some("minecraft:carved_pumpkin") {
+        return false;
+    }
+    let mut cancelled = false;
+    native_enderman_anger(m.id, p.uuid, &mut cancelled);
+    !cancelled && stared_at(m, w)
+}
+
 /// Enderman.isBeingStaredBy: the player's look within a cone of 0.025 / distance
 /// of the eyes, with line of sight, and no carved pumpkin.
 pub fn stared_at(m: &Mob, w: &MobWorld) -> bool {
@@ -303,7 +319,7 @@ impl Goal for LookForPlayer {
         self.pending = p.alive
             && !p.creative
             && m.distance_sqr(p.position) <= m.attrs.follow_range.powi(2)
-            && stared_at(m, cx.w);
+            && stared_at_with_hook(m, cx.w);
         self.pending
     }
     fn start(&mut self, m: &mut Mob, _: &mut Cx) {
