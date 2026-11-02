@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "enchanted_entity_loot",
+      "target": "horizon_world::loot::native_enchanted_entity_loot",
+      "side": "server",
+      "neoforge": "EnchantedEntityLootEvent",
+      "mod_api": {
+        "contract": "replace",
+        "out": "level"
+      }
+    }
+  ],
+  "rust_summary": "Replace an entity loot enchantment query (`native_enchanted_entity_loot`).",
+  "doc_summary": "Change the queried level for an entity loot enchantment with `native_enchanted_entity_loot(context, enchantment, level)`. Bundles need \"hooks\": @API:enchanted_entity_loot@."
+}

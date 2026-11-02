@@ -21,6 +21,7 @@ fn load_hooks_are_noops_before_install_and_use_first_callbacks_after() {
         loot_function: |_, _, _, stack| stack.count += 1,
         loot_condition: |kind, _, _, holds| *holds = kind == "mymod:held",
         enchanted_block_loot: |_, _, _| {},
+        enchanted_entity_loot: |_, _, _| {},
     };
     assert!(native_load_hooks::install(hooks()).is_ok());
     assert!(
@@ -30,6 +31,7 @@ fn load_hooks_are_noops_before_install_and_use_first_callbacks_after() {
             loot_function: |_, _, _, stack| stack.count = 0,
             loot_condition: |_, _, _, holds| *holds = false,
             enchanted_block_loot: |_, _, _| {},
+            enchanted_entity_loot: |_, _, _| {},
         })
         .is_err()
     );

@@ -83,6 +83,14 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                     stack,
                 );
             },
+            enchanted_entity_loot: |context, enchantment, level| {
+                crate::mod_api::dispatch_enchanted_entity_loot(
+                    crate::mod_api::mods(),
+                    context,
+                    enchantment,
+                    level,
+                );
+            },
             enchanted_block_loot: |context, enchantment, level| {
                 crate::mod_api::dispatch_enchanted_block_loot(
                     crate::mod_api::mods(),

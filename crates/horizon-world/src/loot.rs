@@ -110,6 +110,23 @@ pub fn native_enchanted_block_loot(
     crate::native_load_hooks::enchanted_block_loot(context, enchantment, level);
 }
 
+/// Context for an enchantment query during living entity loot evaluation.
+pub struct EnchantedEntityLootContext<'a> {
+    pub entity: &'a LootEntity,
+    pub damage: &'a LootDamage,
+    pub attacker: Option<&'a LootEntity>,
+}
+
+/// Replace the enchantment level used by entity loot.
+#[inline(never)]
+pub fn native_enchanted_entity_loot(
+    context: &EnchantedEntityLootContext<'_>,
+    enchantment: &str,
+    level: &mut i32,
+) {
+    crate::native_load_hooks::enchanted_entity_loot(context, enchantment, level);
+}
+
 /// The tool a loot context names: its item id and enchantments.
 pub struct NativeLootTool {
     pub item: String,
@@ -1157,6 +1174,22 @@ impl<R: RandomSource> Context<'_, R> {
     fn living_attacker(&self) -> Option<&LootEntity> {
         self.target("attacker").filter(|a| a.living)
     }
+    fn entity_loot_enchantment_level(&self, enchantment: &str, attacker: &LootEntity) -> i32 {
+        let mut level = self.data.enchantment_level(enchantment, attacker);
+        if let Some(params) = self.entity
+            && params.this.living
+            && let Some(damage) = &params.damage
+        {
+            let context = EnchantedEntityLootContext {
+                entity: &params.this,
+                damage,
+                attacker: damage.source.as_ref(),
+            };
+            native_enchanted_entity_loot(&context, enchantment, &mut level);
+            level = level.max(0);
+        }
+        level
+    }
     /// The `equipment_drops` effects on one entity's equipment
     /// (`runIterationOnEquipment`), for the given `enchanted` target.
     fn equipment_drops(&mut self, holder: &LootEntity, enchanted: &str, chance: &mut f32) {
@@ -1607,8 +1640,10 @@ impl<R: RandomSource> Context<'_, R> {
             "minecraft:discard" => stack.count = 0,
             "minecraft:enchanted_count_increase" => {
                 if let Some(attacker) = self.living_attacker() {
-                    let level =
-                        data.enchantment_level(f["enchantment"].as_str().unwrap_or(""), attacker);
+                    let level = self.entity_loot_enchantment_level(
+                        f["enchantment"].as_str().unwrap_or(""),
+                        attacker,
+                    );
                     if level != 0 {
                         let addition = level as f32 * self.float(&f["count"]);
                         // ItemStack.grow(Math.round(addition)).
