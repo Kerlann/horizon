@@ -1209,6 +1209,13 @@ impl GameLevel<'_> {
     }
 }
 
+/// Replacement particle and visibility for an effect.
+#[derive(Clone, Debug)]
+pub struct EffectParticleModification {
+    pub options: horizon_client::particles::ParticleOptions,
+    pub visible: bool,
+}
+
 /// The camera shake native mods ask for (`native_camera_shake`): turns in
 /// degrees, and an offset in blocks along the camera's right, up and back.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -5708,6 +5715,17 @@ impl Game<'_> {
             amplifier,
             keep,
         );
+    }
+    /// NeoForge's `EffectParticleModificationEvent`: replace the options or
+    /// visibility of an effect's synchronized particle.
+    pub(super) fn native_effect_particle_modification(
+        &mut self,
+        entity: Option<i32>,
+        effect: &horizon_client::effects::EffectInstance,
+        original: &horizon_client::particles::ParticleOptions,
+        result: &mut EffectParticleModification,
+    ) {
+        let _ = (entity, effect, original, result);
     }
     /// NeoForge's `MobEffectEvent.Applicable`, before effect eligibility.
     /// `result` is None for DEFAULT, Some(true) for APPLY and Some(false)

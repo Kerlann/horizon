@@ -614,6 +614,8 @@ two take `&self`: during a mob's tick the mob world borrows the game, so `&mut s
 game doesn't hold the mobs being ticked, nor the player's effects. `native_on_effect_added` hears it given to an
 entity that didn't have it, and `native_mob_effect_added` (NeoForge's `MobEffectEvent.Added`) every time it is given.
 
+`native_effect_particle_modification` (NeoForge's `EffectParticleModificationEvent`) receives an effect, its original particle options and a replacement containing options and visibility. Restore `original` to reset the options. It currently only affects guest models, not synchronized metadata, and runs when those models are updated rather than when effects become dirty.
+
 `native_mob_effect_applicable` (NeoForge's `MobEffectEvent.Applicable`) sees an incoming effect before eligibility is checked. Its result is `None` for the vanilla decision, `Some(true)` to apply, or `Some(false)` to reject. The optional source entity is supplied where known.
 
 `native_mob_effect_expired` (NeoForge's `MobEffectEvent.Expired`) runs on the server before an expired player effect is removed. Set `cancel` to retain it; the hook can fire again on the next tick. The optional entity id is supplied where known.

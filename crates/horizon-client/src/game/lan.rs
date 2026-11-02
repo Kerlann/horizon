@@ -2928,11 +2928,27 @@ impl Game<'_> {
             m.extra.hidden_model_parts = !g.info.model_customisation & 0x7F;
             m.extra.spectator = g.game_mode == horizon_client::lan::guest::SPECTATOR;
             // LivingEntity.DATA_EFFECT_PARTICLES: the swirls of its visible effects.
-            let visible = || g.effects.list.iter().filter(|e| e.visible);
-            m.extra.effect_particles = visible()
-                .filter_map(|e| super::client_ambient::effect_particle(e.id, e.ambient))
-                .collect();
-            m.extra.effect_ambient = visible().all(|e| e.ambient);
+            let mut particles = Vec::new();
+            for effect in &g.effects.list {
+                let Some(original) = super::client_ambient::effect_particle(effect.id, effect.ambient) else {
+                    continue;
+                };
+                let mut result = super::native_hooks::EffectParticleModification {
+                    options: original.clone(),
+                    visible: effect.visible,
+                };
+                self.native_effect_particle_modification(
+                    Some(g.entity_id),
+                    effect,
+                    &original,
+                    &mut result,
+                );
+                if result.visible {
+                    particles.push(result.options);
+                }
+            }
+            m.extra.effect_particles = particles;
+            m.extra.effect_ambient = g.effects.list.iter().filter(|e| e.visible).all(|e| e.ambient);
             // Entity.isInvisible: the invisibility effect hides the body (the
             // model pass, the name tag rules and `trader::is_invisible` read it).
             m.extra.effects.retain(|e| e.0 != "minecraft:invisibility");

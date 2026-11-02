@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "effect_particle_modification",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_effect_particle_modification",
+      "neoforge": "EffectParticleModificationEvent",
+      "side": "server",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "replace",
+        "out": "result"
+      }
+    }
+  ],
+  "rust_summary": "effect particle options and visibility (`native_effect_particle_modification`).",
+  "doc_summary": "Effect particle options and visibility can be changed with `native_effect_particle_modification`. Bundles need \"hooks\": @API:native_effect_particle_modification@."
+}
