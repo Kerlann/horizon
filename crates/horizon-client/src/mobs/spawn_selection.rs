@@ -971,11 +971,17 @@ pub struct Spawned {
     pub school: bool,
 }
 
-/// Change the maximum natural-spawn cluster size for the selected mob.
-/// The mob's type and spawn position identify it; Horizon assigns its ID later.
+/// Replace the maximum natural-spawn cluster size for the selected mob; None
+/// keeps `default_size`. The mob's type and spawn position identify it;
+/// Horizon assigns its ID later. @API:spawn_cluster_size@.
 #[inline(never)]
-pub fn native_spawn_cluster_size(kind: &str, position: [f64; 3], size: &mut i32) {
-    crate::native_client_hooks::spawn_cluster_size(kind, position, size);
+pub fn native_spawn_cluster_size(
+    kind: &str,
+    position: [f64; 3],
+    default_size: i32,
+    size: &mut Option<i32>,
+) {
+    crate::native_client_hooks::spawn_cluster_size(kind, position, default_size, size);
 }
 
 /// `NaturalSpawner.spawnForChunk` for the categories already filtered.
@@ -1105,7 +1111,11 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
             }
             let mut position_result = None;
             native_mob_spawn_position_check(
-                &entry.entity, [xx, f64::from(y), zz], "natural", None, &mut position_result,
+                &entry.entity,
+                [xx, f64::from(y), zz],
+                "natural",
+                None,
+                &mut position_result,
             );
             if !position_result.unwrap_or_else(|| {
                 mob_spawn_rules(species, l, x, y, z)
@@ -1133,9 +1143,10 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
                 [xx, f64::from(y), zz],
                 yaw,
             ));
-            let mut size = max_cluster_size(species) as i32;
-            native_spawn_cluster_size(&entry.entity, request.position, &mut size);
-            if cluster >= size {
+            let default_size = max_cluster_size(species) as i32;
+            let mut size = None;
+            native_spawn_cluster_size(&entry.entity, request.position, default_size, &mut size);
+            if cluster >= size.unwrap_or(default_size) {
                 return;
             }
             // TropicalFish.isMaxGroupSizeReached.
@@ -1233,7 +1244,11 @@ pub fn native_mob_spawn_placement_check(
     result: &mut Option<bool>,
 ) {
     crate::native_client_hooks::mob_spawn_placement_check(
-        kind, position, reason, default_result, result,
+        kind,
+        position,
+        reason,
+        default_result,
+        result,
     );
 }
 
@@ -1275,7 +1290,8 @@ fn valid_position_for_type<L: NaturalLevel, R: RandomSource>(
     {
         return false;
     }
-    let default_result = spawn_rules::check_spawn_rules(species, l, Reason::Natural, random, x, y, z);
+    let default_result =
+        spawn_rules::check_spawn_rules(species, l, Reason::Natural, random, x, y, z);
     let mut result = None;
     native_mob_spawn_placement_check(&entry.entity, pos, "natural", default_result, &mut result);
     if !result.unwrap_or(default_result) {
@@ -1383,7 +1399,11 @@ pub fn spawn_mobs_for_chunk_generation<L: NaturalLevel, R: RandomSource, Q: Rand
                     let bounds = spawn_box(fx, fy, fz, width, height);
                     let mut position_result = None;
                     native_mob_spawn_position_check(
-                        &entry.entity, [fx, fy, fz], "chunk_generation", None, &mut position_result,
+                        &entry.entity,
+                        [fx, fy, fz],
+                        "chunk_generation",
+                        None,
+                        &mut position_result,
                     );
                     if position_result.unwrap_or_else(|| {
                         mob_spawn_rules(species, l, bx, pos[1], bz)

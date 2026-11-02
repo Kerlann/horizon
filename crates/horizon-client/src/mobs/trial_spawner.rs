@@ -1080,7 +1080,11 @@ impl TrialSpawnerExt for TrialSpawner {
         );
         let mut result = None;
         spawn_selection::native_mob_spawn_placement_check(
-            &id, block, "trial_spawner", default_result, &mut result,
+            &id,
+            block,
+            "trial_spawner",
+            default_result,
+            &mut result,
         );
         if !result.unwrap_or(default_result) {
             return None;

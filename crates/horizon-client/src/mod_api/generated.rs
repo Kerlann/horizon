@@ -2202,10 +2202,6 @@ pub trait Hooks: Send + Sync {
     fn living_breathe(&self, event: &mut LivingBreatheEvent<'_>) {
         let _ = event;
     }
-    /// A server mob is about to check despawning.
-    fn mob_despawn(&self, event: &mut MobDespawnEvent<'_>) {
-        let _ = event;
-    }
     /// Blocks this mod adds, declared in code rather than one file each
     /// (NeoForge's `DeferredRegister.Blocks` drained by `RegisterEvent`):
     /// push a `horizon_mods::content::Block` per block, the same declaration
@@ -7969,29 +7965,6 @@ pub fn dispatch_living_breathe(
     *can_breathe = event.can_breathe;
     *consume = event.consume;
     *refill = event.refill;
-}
-/// What [`Hooks::mob_despawn`] is told. Fields may be added: the struct is `#[non_exhaustive]`.
-#[non_exhaustive]
-pub struct MobDespawnEvent<'a> {
-    pub entity: u32,
-    pub kind: &'a str,
-    pub result: Option<bool>,
-}
-pub fn dispatch_mob_despawn(
-    mods: &[Box<dyn Hooks>],
-    entity: u32,
-    kind: &str,
-    result: &mut Option<bool>,
-) {
-    let mut event = MobDespawnEvent {
-        entity,
-        kind,
-        result: *result,
-    };
-    for mod_hook in mods {
-        mod_hook.mob_despawn(&mut event);
-    }
-    *result = event.result;
 }
 /// What [`Hooks::blocks`] is told. Fields may be added: the struct is `#[non_exhaustive]`.
 #[non_exhaustive]

@@ -543,7 +543,11 @@ impl SpawnerExt for Spawner {
                 });
                 let mut result = None;
                 spawn_selection::native_mob_spawn_placement_check(
-                    &id, block, "spawner", default_result, &mut result,
+                    &id,
+                    block,
+                    "spawner",
+                    default_result,
+                    &mut result,
                 );
                 if !result.unwrap_or(default_result) {
                     continue;
@@ -590,7 +594,11 @@ impl SpawnerExt for Spawner {
             );
             let mut position_result = None;
             spawn_selection::native_mob_spawn_position_check(
-                &id, placed, "spawner", Some(pos), &mut position_result,
+                &id,
+                placed,
+                "spawner",
+                Some(pos),
+                &mut position_result,
             );
             if !position_result.unwrap_or_else(|| {
                 (data.custom_spawn_rules.is_some()

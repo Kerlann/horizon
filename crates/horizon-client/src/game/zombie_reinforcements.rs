@@ -116,7 +116,11 @@ impl Game<'_> {
             );
             let mut result = None;
             spawn_selection::native_mob_spawn_placement_check(
-                &kind.id, [x, y, z], "reinforcement", default_result, &mut result,
+                &kind.id,
+                [x, y, z],
+                "reinforcement",
+                default_result,
+                &mut result,
             );
             if !result.unwrap_or(default_result) {
                 continue;

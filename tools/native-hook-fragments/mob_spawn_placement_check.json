@@ -1,0 +1,20 @@
+{
+  "hooks": [
+    {
+      "name": "mob_spawn_placement_check",
+      "target": "horizon_client_lib::mobs::spawn_selection::native_mob_spawn_placement_check",
+      "side": "server",
+      "cancellable": false,
+      "neoforge": "MobSpawnEvent.SpawnPlacementCheck",
+      "mod_api": {
+        "contract": "replace",
+        "out": "result"
+      }
+    }
+  ],
+  "rust_summary": "a mob's spawn placement check on the server (`native_mob_spawn_placement_check`).",
+  "doc_summary": "a mob's spawn placement check on the server: `native_mob_spawn_placement_check(kind, position, reason, default_result, result)`, NeoForge's `MobSpawnEvent.SpawnPlacementCheck`. Set `result` to `Some(true)` or `Some(false)` to override the predicate, or leave `None` to use `default_result`. Mob spawners with custom spawn rules skip this check. Bundles need \"hooks\": @API:mob_spawn_placement_check@.",
+  "comments": [
+    "crates/horizon-client/src/mobs/spawn_selection.rs"
+  ]
+}

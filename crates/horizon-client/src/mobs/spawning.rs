@@ -93,20 +93,19 @@ impl LocalDifficulty {
 #[derive(Clone, Debug)]
 pub struct FinalizeSpawn {
     pub difficulty: LocalDifficulty,
-    /// Horizon does not yet propagate vanilla's SpawnGroupData between mobs.
-    pub spawn_data: Option<String>,
     pub spawn_cancelled: bool,
 }
 
-/// Called immediately before a server mob's spawn finalization.
+/// Called immediately before a server mob's spawn finalization; `canceled`
+/// skips it. @API:finalize_spawn@.
 #[inline(never)]
 pub fn native_finalize_spawn(
     kind: &str,
     position: [f64; 3],
-    event: &mut FinalizeSpawn,
+    spawn: &mut FinalizeSpawn,
     canceled: &mut bool,
 ) {
-    crate::native_client_hooks::finalize_spawn(kind, position, event, canceled);
+    crate::native_client_hooks::finalize_spawn(kind, position, spawn, canceled);
 }
 
 /// The armour and toughness each vanilla armour piece adds.

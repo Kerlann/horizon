@@ -122,27 +122,42 @@ pub fn main_with(mods: crate::mod_api::Mods) {
         mob_despawn: |entity, kind, result| {
             crate::mod_api::dispatch_mob_despawn(crate::mod_api::mods(), entity, kind, result);
         },
-        finalize_spawn: |kind, position, event, canceled| {
+        finalize_spawn: |kind, position, spawn, canceled| {
             crate::mod_api::dispatch_finalize_spawn(
-                crate::mod_api::mods(), kind, position, event, canceled,
+                crate::mod_api::mods(),
+                kind,
+                position,
+                spawn,
+                canceled,
             );
         },
-        spawn_cluster_size: |kind, position, size| {
+        spawn_cluster_size: |kind, position, default_size, size| {
             crate::mod_api::dispatch_spawn_cluster_size(
                 crate::mod_api::mods(),
                 kind,
                 position,
+                default_size,
                 size,
             );
         },
         mob_spawn_position_check: |kind, position, reason, spawner, result| {
             crate::mod_api::dispatch_mob_spawn_position_check(
-                crate::mod_api::mods(), kind, position, reason, spawner, result,
+                crate::mod_api::mods(),
+                kind,
+                position,
+                reason,
+                spawner,
+                result,
             );
         },
         mob_spawn_placement_check: |kind, position, reason, default_result, result| {
             crate::mod_api::dispatch_mob_spawn_placement_check(
-                crate::mod_api::mods(), kind, position, reason, default_result, result,
+                crate::mod_api::mods(),
+                kind,
+                position,
+                reason,
+                default_result,
+                result,
             );
         },
         ingredient: |kind, data, items| {

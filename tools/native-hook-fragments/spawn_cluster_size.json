@@ -1,0 +1,20 @@
+{
+  "hooks": [
+    {
+      "name": "spawn_cluster_size",
+      "target": "horizon_client_lib::mobs::spawn_selection::native_spawn_cluster_size",
+      "side": "server",
+      "cancellable": false,
+      "neoforge": "SpawnClusterSizeEvent",
+      "mod_api": {
+        "contract": "replace",
+        "out": "size"
+      }
+    }
+  ],
+  "rust_summary": "natural spawning's maximum cluster size (`native_spawn_cluster_size`).",
+  "doc_summary": "natural spawning's maximum cluster size on the server: `native_spawn_cluster_size(kind, position, default_size, size)`, NeoForge's `SpawnClusterSizeEvent` at `NaturalSpawner.spawnCategoryForPosition`, asked after each mob of a cluster spawns. Set `size` to `Some(n)` to replace `default_size`, `Mob.getMaxSpawnClusterSize`. Horizon supplies the mob type and position rather than an entity ID because it assigns IDs later. Bundles need \"hooks\": @API:spawn_cluster_size@.",
+  "comments": [
+    "crates/horizon-client/src/mobs/spawn_selection.rs"
+  ]
+}

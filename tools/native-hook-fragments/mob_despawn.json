@@ -1,0 +1,20 @@
+{
+  "hooks": [
+    {
+      "name": "mob_despawn",
+      "target": "horizon_client_lib::mobs::ai::native_mob_despawn",
+      "side": "server",
+      "cancellable": false,
+      "neoforge": "MobDespawnEvent",
+      "mod_api": {
+        "contract": "replace",
+        "out": "result"
+      }
+    }
+  ],
+  "rust_summary": "a mob's despawn check on the server (`native_mob_despawn`).",
+  "doc_summary": "a mob's despawn check on the server: `native_mob_despawn(entity, kind, result)`, NeoForge's `MobDespawnEvent`, runs before vanilla's `Mob.checkDespawn` logic every tick for each loaded mob, persistent ones included (not the wither, which has its own check). Set `result` to `Some(true)` to despawn the mob, `Some(false)` to keep it, also in peaceful, or leave `None` for the default. It is a free function in `horizon_client::mobs::ai`, so it cannot call game helpers. Bundles need \"hooks\": @API:mob_despawn@.",
+  "comments": [
+    "crates/horizon-client/src/mobs/ai.rs"
+  ]
+}

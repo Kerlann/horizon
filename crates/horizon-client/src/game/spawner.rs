@@ -22,8 +22,9 @@ type Pos = (i32, i32, i32);
 
 /// What a spawner tick decided to add, created once the level is free.
 pub(super) enum Planned {
-    /// `finalizeSpawn` ran on a fresh mob; the spawn data's `equipment`.
-    Finalized(Mob, Option<Tag>),
+    /// A fresh mob, the spawn data's `equipment`, and whether `finalizeSpawn`
+    /// ran on it (a mod can cancel that).
+    Fresh(Mob, Option<Tag>, bool),
     /// A mob loaded from the spawn data (with its passengers) and its
     /// `equipment`.
     Loaded(Tag, Option<Tag>),
@@ -140,15 +141,17 @@ impl Game<'_> {
         for (i, plan) in planned.into_iter().enumerate() {
             let provisional = u32::MAX - i as u32;
             let id = match plan {
-                Planned::Finalized(mut mob, equipment) => {
+                Planned::Fresh(mut mob, equipment, finalized) => {
                     self.next_entity += 1;
                     mob.id = self.next_entity;
                     let id = mob.id;
                     self.mobs.push(mob);
                     self.native_mobs_joined(self.mobs.len() - 1, false);
-                    self.enchant_spawn_equipment(id);
-                    self.halloween_spawn_head(id);
-                    self.spawn_jockeys(id, true);
+                    if finalized {
+                        self.enchant_spawn_equipment(id);
+                        self.halloween_spawn_head(id);
+                        self.spawn_jockeys(id, true);
+                    }
                     Some((id, equipment))
                 }
                 Planned::Loaded(tag, equipment) => {
@@ -179,21 +182,20 @@ impl Game<'_> {
         let bounds = if r.finalize {
             let mut mob = Mob::new(0, kind, at, r.yaw);
             let facts = self.biome_facts(x.floor() as i32, y.floor() as i32, z.floor() as i32);
-            let mut event = spawning::FinalizeSpawn {
+            let mut spawn = spawning::FinalizeSpawn {
                 difficulty: self.local_difficulty(r.position),
-                spawn_data: None,
                 spawn_cancelled: false,
             };
             let mut canceled = false;
-            spawning::native_finalize_spawn(r.id, r.position, &mut event, &mut canceled);
+            spawning::native_finalize_spawn(r.id, r.position, &mut spawn, &mut canceled);
             if !canceled {
-                spawning::finalize(&mut mob, &facts, &event.difficulty);
+                spawning::finalize(&mut mob, &facts, &spawn.difficulty);
                 horizon_client::mobs::raider::finalize(
                     &mut mob,
                     horizon_client::mobs::raider::Reason::Other,
                 );
             }
-            if event.spawn_cancelled {
+            if spawn.spawn_cancelled {
                 return None;
             }
             // TrialSpawner.spawnMob: setPersistenceRequired.
@@ -208,7 +210,7 @@ impl Game<'_> {
                 mob.previous_head_yaw = 0.0;
             }
             let bounds = mob.bounds();
-            planned.push(Planned::Finalized(mob, r.equipment.cloned()));
+            planned.push(Planned::Fresh(mob, r.equipment.cloned(), !canceled));
             bounds
         } else {
             // A UUID already in the level is refused.
