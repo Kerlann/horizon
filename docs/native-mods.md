@@ -526,6 +526,8 @@ player out of `players_sleeping_percentage`'s count until they are in bed (playe
 player's hook only. The players `native_server_players` lists carry where they look (`yaw`, `pitch`). Bundles that
 use them need `"hooks": 49`.
 
+`native_living_damage_post` observes a server player's health damage after the health change (NeoForge's `LivingDamageEvent.Post`). It reports the damage type, original damage at the inner damage step, armor and magic reductions, absorbed damage and health damage. It cannot change or cancel the hit. Mob paths and shield, invulnerability-tick and side-effect details are not yet exposed.
+
 API 50 adds damage a mod can change or cancel through `native_living_incoming_damage` (NeoForge's
 `LivingIncomingDamageEvent`): where `LivingEntity.hurtServer` starts, once its guards passed (invulnerable, dead or
 dying, fire with fire resistance; Horizon's mobs don't check the fire resistance effect there yet), with the hurt

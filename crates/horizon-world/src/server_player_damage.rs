@@ -8,7 +8,7 @@ use crate::{
     compression::invalid,
     damage_reduction::{self, Bypass, DamageReductionWorld},
     food::FoodData,
-    living_damage::{self, DamageStat, DamageWorld},
+    living_damage::{self, DamagePost, DamageStat, DamageWorld},
     player_health::{PlayerAttributeHealth, PlayerFloatIds, PlayerHealthError},
     synced_floats::{DataError, Observer, SyncedFloats},
 };
@@ -63,6 +63,9 @@ pub trait ServerDamageEnvironment<A: HealthAttributes = EntityAttributes>:
     fn level_is_client(&mut self) -> Result<bool, EnvError<Self>>;
     fn record_damage(&mut self, amount: f32) -> Result<(), EnvError<Self>>;
     fn damage_event(&mut self) -> Result<(), EnvError<Self>>;
+    fn damage_post(&mut self, _post: DamagePost) -> Result<(), EnvError<Self>> {
+        Ok(())
+    }
 }
 pub struct ServerPlayerDamage<'a, E, A: HealthAttributes = EntityAttributes> {
     attributes: &'a mut A,
@@ -280,6 +283,11 @@ impl<A: HealthAttributes, E: ServerDamageEnvironment<A>> DamageWorld
     fn damage_event(&mut self) -> Result<(), Self::Error> {
         self.environment
             .damage_event()
+            .map_err(ServerDamageError::Environment)
+    }
+    fn damage_post(&mut self, post: DamagePost) -> Result<(), Self::Error> {
+        self.environment
+            .damage_post(post)
             .map_err(ServerDamageError::Environment)
     }
 }

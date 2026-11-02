@@ -5767,6 +5767,26 @@ impl Game<'_> {
             canceled,
         );
     }
+    /// A player's health was reduced by a server-side hit.
+    pub(super) fn native_living_damage_post(
+        entity: i32,
+        damage_type: &str,
+        original: f32,
+        armor_reduction: f32,
+        magic_reduction: f32,
+        absorbed: f32,
+        health_damage: f32,
+    ) {
+        let _ = (
+            entity,
+            damage_type,
+            original,
+            armor_reduction,
+            magic_reduction,
+            absorbed,
+            health_damage,
+        );
+    }
     /// `LivingEntity.knockback` is about to push entity `entity` of type `kind`
     /// (`minecraft:zombie`, `minecraft:player`) `strength` away from the direction (`x`, `z`),
     /// on the raw strength, before the entity's knockback resistance takes its share and its motion
@@ -5982,6 +6002,22 @@ pub(super) fn block_contact(
             damage,
         ),
     }
+}
+
+pub(super) fn damage_post(
+    entity: i32,
+    damage_type: &str,
+    post: horizon_world::living_damage::DamagePost,
+) {
+    Game::native_living_damage_post(
+        entity,
+        damage_type,
+        post.original,
+        post.armor_reduction,
+        post.magic_reduction,
+        post.absorbed,
+        post.health_damage,
+    );
 }
 
 /// `native_living_incoming_damage` for the damage code (`health::HURT_SERVER`): whether

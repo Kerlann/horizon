@@ -5,6 +5,15 @@ pub enum DamageStat {
     DealtAbsorbed,
     Taken,
 }
+/// Damage amounts observed after a successful health change.
+#[derive(Clone, Copy, Debug)]
+pub struct DamagePost {
+    pub original: f32,
+    pub armor_reduction: f32,
+    pub magic_reduction: f32,
+    pub absorbed: f32,
+    pub health_damage: f32,
+}
 pub trait DamageWorld {
     type Error;
     type Attacker: Copy;
@@ -27,6 +36,9 @@ pub trait DamageWorld {
     fn health(&mut self) -> Result<f32, Self::Error>;
     fn set_health(&mut self, value: f32) -> Result<(), Self::Error>;
     fn damage_event(&mut self) -> Result<(), Self::Error>;
+    fn damage_post(&mut self, _post: DamagePost) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 pub(crate) fn positive(value: f32) -> f32 {
     if value.is_nan() {
@@ -69,8 +81,9 @@ pub(crate) fn actually_hurt_after_immunity_check<W: DamageWorld>(
     damage: f32,
     player: bool,
 ) -> Result<(), W::Error> {
-    let damage = world.after_armor(damage)?;
-    let damage = world.after_magic(damage)?;
+    let original = damage;
+    let after_armor = world.after_armor(damage)?;
+    let damage = world.after_magic(after_armor)?;
     let remaining = positive(damage - world.absorption()?);
     let absorption = world.absorption()? - (damage - remaining);
     world.set_absorption(absorption)?;
@@ -92,6 +105,13 @@ pub(crate) fn actually_hurt_after_immunity_check<W: DamageWorld>(
     world.record_damage(remaining)?;
     let health = world.health()?;
     world.set_health(health - remaining)?;
+    world.damage_post(DamagePost {
+        original,
+        armor_reduction: original - after_armor,
+        magic_reduction: after_armor - damage,
+        absorbed,
+        health_damage: remaining,
+    })?;
     if player {
         if remaining < STAT_LIMIT {
             world.award_self(DamageStat::Taken, stat_amount(remaining))?;

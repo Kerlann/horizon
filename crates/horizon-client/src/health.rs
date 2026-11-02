@@ -13,7 +13,7 @@ use horizon_world::{
     damage_reduction::Bypass,
     damage_source::{Catalog, DamageSource, DamageTypeId, Scaling},
     food::{Difficulty, FoodData},
-    living_damage::DamageStat,
+    living_damage::{DamagePost, DamageStat},
     living_hurt::{HurtState, HurtTag, HurtWorld},
     player_health::{PlayerAttributeHealth, PlayerFloatIds},
     player_hurt::{CausingEntity, PlayerHurtWorld, ServerPlayerHurtWorld},
@@ -50,6 +50,8 @@ pub enum Hurting<'a> {
 /// game: `LivingEntity.hurtServer` once its guards passed. It may change the
 /// amount; true cancels the hit.
 pub static HURT_SERVER: OnceLock<fn(Hurting<'_>, &mut f32) -> bool> = OnceLock::new();
+/// Observer for a player's damage after its health changes.
+pub static DAMAGE_POST: OnceLock<fn(i32, &str, DamagePost)> = OnceLock::new();
 /// Whether [`HURT_SERVER`] canceled the hit (never while it is unset).
 pub fn hurt_server_canceled(hurting: Hurting<'_>, amount: &mut f32) -> bool {
     HURT_SERVER.get().is_some_and(|hook| hook(hurting, amount))
@@ -703,6 +705,12 @@ impl ServerDamageEnvironment<Attributes> for Environment<'_> {
     }
     fn damage_event(&mut self) -> io::Result<()> {
         self.phase("entity-damage")
+    }
+    fn damage_post(&mut self, post: DamagePost) -> io::Result<()> {
+        if let Some(hook) = DAMAGE_POST.get() {
+            hook(self.entity, &self.source.definition().name, post);
+        }
+        Ok(())
     }
 }
 impl CombatEnvironment<Attributes> for Environment<'_> {
