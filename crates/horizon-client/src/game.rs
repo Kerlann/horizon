@@ -4590,6 +4590,18 @@ impl Game<'_> {
                     );
                 }
             });
+            old.for_each_loading(|x, z, level| {
+                let next = new.loading_level(x, z);
+                if next > horizon_client::ticket_levels::BLOCK_TICKING {
+                    let chunk = i64::from(x as u32) | (i64::from(z) << 32);
+                    self.native_chunk_ticket_level_updated(
+                        dimension,
+                        chunk,
+                        i32::from(level),
+                        i32::from(next),
+                    );
+                }
+            });
         }
     }
     /// `ServerLevel.startTickingChunk`: a loaded chunk's saved ticks are
