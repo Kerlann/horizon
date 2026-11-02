@@ -1391,6 +1391,7 @@ pub enum MobEvent {
         mob: u32,
         amount: f32,
         kind: DamageKind,
+        caused: bool,
     },
     /// `OfferFlowerGoal.stop`: the item goes to the target's antenna (saddle)
     /// slot if it is empty, as a guaranteed drop.
@@ -2796,7 +2797,9 @@ impl Mob {
         // Entity's base check includes removal, the flag and fire immunity.
         let original_invulnerable = self.removed
             || (self.invulnerable_flag && !source.kind.bypasses_invulnerability())
-            || (source.is_fire() && self.kind.flags.fire_immune && !reflected);
+            || (source.is_fire() && self.kind.flags.fire_immune && !reflected)
+            || (matches!(source.kind, DamageKind::Fall | DamageKind::Stalagmite)
+                && self.kind.flags.fall_immune);
         let mut invulnerable = None;
         crate::health::native_entity_invulnerability_check(
             self.id as i32,
@@ -2959,6 +2962,7 @@ impl Mob {
                 mob: self.id,
                 amount: damage,
                 kind: source.kind,
+                caused: source.attacker.is_some(),
             });
         }
         // Animal.actuallyHurt: damage taken ends love mode (`resetLove`).

@@ -667,7 +667,10 @@ fn generate(root: &Path, check: bool) -> Result<(), String> {
                 format!("dispatch_{name}"),
             )
         };
-        let fill = needs_fill(&method, &call, in_game)?;
+        // This library marker retains its placeholder; its callers forward through
+        // native_client_hooks to the executable's dispatcher.
+        let library_marker = name == "entity_invulnerability_check" && !in_game;
+        let fill = needs_fill(&method, &call, in_game || library_marker)? && !library_marker;
         let sig = &method.sig;
         let mut args = Vec::new();
         let mut receiver_mut = None;

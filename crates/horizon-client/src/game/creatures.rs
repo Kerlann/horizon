@@ -496,7 +496,13 @@ impl Game<'_> {
     /// body — 49 to 52 are the four armour slots, which only a player's own
     /// pieces reach). A fire hit leaves a fire-resistant piece alone
     /// (`ItemStack.canBeHurtBy`).
-    fn hurt_mob_armor(&mut self, id: u32, damage: f32, kind: horizon_client::mobs::DamageKind) {
+    fn hurt_mob_armor(
+        &mut self,
+        id: u32,
+        damage: f32,
+        kind: horizon_client::mobs::DamageKind,
+        caused: bool,
+    ) {
         use horizon_world::player_inventory::EquipmentSlot;
         if damage <= 0.0 {
             return;
@@ -506,7 +512,7 @@ impl Game<'_> {
         };
         let at = [m.position.x, m.position.y, m.position.z];
         let amount = ((damage / 4.0) as u32).max(1);
-        let name = damage_type(kind, false);
+        let name = damage_type(kind, caused);
         let present = [
             false,
             false,
@@ -1768,7 +1774,12 @@ impl Game<'_> {
                     self.drown_particles(at, v);
                 }
                 MobEvent::SunProtectionWear { mob } => self.wear_sun_protection(mob),
-                MobEvent::ArmorHurt { mob, amount, kind } => self.hurt_mob_armor(mob, amount, kind),
+                MobEvent::ArmorHurt {
+                    mob,
+                    amount,
+                    kind,
+                    caused,
+                } => self.hurt_mob_armor(mob, amount, kind, caused),
                 MobEvent::EntityEvent { mob, event, at } => {
                     self.lan_entity_event(mob as i32, event, at)
                 }
