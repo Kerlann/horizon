@@ -55,6 +55,15 @@ pub fn native_chunk_unwatch(player: i32, dimension: &str, chunk: [i32; 2]) {
     crate::native_client_hooks::chunk_unwatch(player, dimension, chunk);
 }
 
+fn unwatch_all(g: &Guest) {
+    let mut chunks = g.sent_chunks.clone();
+    chunks.extend(g.chunk_queue.iter().copied());
+    chunks.extend(g.far_queue.iter().copied());
+    for (x, z) in chunks {
+        native_chunk_unwatch(g.entity_id, &g.dimension, [x, z]);
+    }
+}
+
 /// GameEvent types (ClientboundGameEventPacket).
 pub mod chat;
 pub mod chat_filter;
@@ -1759,6 +1768,7 @@ impl Hub {
             return g;
         }
         // `PlayerList.remove`: the entities it tracked stop (`removePairing`).
+        unwatch_all(&g);
         g.tracker.clear();
         take_tracking(&mut g, &mut self.native_tracking);
         self.broadcast(&C::PlayerInfoRemove(play::PlayerInfoRemove {
@@ -3726,6 +3736,8 @@ impl Hub {
         let info = self.spawn_info(i, 0);
         self.close_container_for(i);
         let g = &mut self.guests[i];
+        // PlayerList.respawn removes the old player's tracking view first.
+        unwatch_all(g);
         // PlayerList.respawn: into the level in place (the respawn level).
         g.dimension = self.config.dimension.clone();
         // restartClientLoadTimerAfterRespawn: the client loads a whole new level before it
@@ -3857,6 +3869,7 @@ impl Hub {
         let info = self.spawn_info(i, portal_cooldown);
         self.close_container_for(i);
         let g = &mut self.guests[i];
+        unwatch_all(g);
         g.dimension = self.config.dimension.clone();
         // The load timer is not restarted: vanilla resets the client's loaded state on death and
         // respawn only, and covers a level change with its separate `isChangingDimension` term.
