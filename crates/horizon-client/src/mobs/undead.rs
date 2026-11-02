@@ -499,7 +499,7 @@ fn zombified_piglin_step(m: &mut Mob, cx: &mut Cx) {
             }
         }
         if m.extra.anger == 0 {
-            m.ai.target = None;
+            m.change_goal_target(None);
             m.extra.flag2 = false;
         }
     } else {
@@ -528,7 +528,7 @@ fn zombified_piglin_step(m: &mut Mob, cx: &mut Cx) {
                         .map(|s| s.id)
                         .collect();
                 for other in others {
-                    cx.events.push(MobEvent::SetTarget { mob: other, target });
+                    cx.events.push(MobEvent::SetGoalTarget { mob: other, target });
                 }
             }
             m.extra.counter2 = 80 + m.random.next_int_bound(41).unwrap_or(0);

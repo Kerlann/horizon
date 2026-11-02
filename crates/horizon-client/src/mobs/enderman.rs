@@ -57,7 +57,12 @@ pub fn native_enderman_anger(enderman: u32, player: [i32; 4], cancelled: &mut bo
 /// of the eyes, with line of sight, and no carved pumpkin.
 pub fn stared_at(m: &Mob, w: &MobWorld) -> bool {
     let Some(p) = &w.player else { return false };
-    if !p.alive || p.head.as_deref() == Some("minecraft:carved_pumpkin") {
+    let disguised = p.head.as_deref().is_some_and(|head| {
+        w.items
+            .and_then(|items| items.item_tags.get("minecraft:gaze_disguise_equipment"))
+            .map_or(head == "minecraft:carved_pumpkin", |tag| tag.contains(head))
+    });
+    if !p.alive || disguised {
         return false;
     }
     let mut cancelled = false;
@@ -195,7 +200,7 @@ pub fn custom_server_ai_step(m: &mut Mob, cx: &mut Cx) {
         );
         if br > 0.5 && cx.w.can_see_sky(x, y, z) && m.random.next_float() * 30.0 < (br - 0.4) * 2.0
         {
-            m.ai.target = None;
+            m.change_goal_target(None);
             teleport_random(m, cx.w, cx.events);
         }
     }

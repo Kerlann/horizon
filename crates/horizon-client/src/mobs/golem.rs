@@ -227,10 +227,10 @@ impl Goal for DefendVillage {
         })
     }
     fn start(&mut self, m: &mut Mob, _cx: &mut Cx) {
-        m.ai.target = Some(Who::Player);
+        m.change_goal_target(Some(Who::Player));
     }
     fn stop(&mut self, m: &mut Mob, _cx: &mut Cx) {
-        m.ai.target = None;
+        m.change_goal_target(None);
     }
 }
 /// `MoveTowardsTargetGoal`: close in on a target within range.

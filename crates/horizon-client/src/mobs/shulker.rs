@@ -209,7 +209,7 @@ fn teleport(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) -> bool {
         });
         m.needs_sync = true;
         m.extra.counter = 0;
-        m.ai.target = None;
+        m.change_goal_target(None);
         return true;
     }
     false
@@ -465,7 +465,7 @@ impl Goal for ShulkerAttack {
         };
         m.look_at_speed([t.position.x, t.eye_y, t.position.z], 180.0, 180.0);
         if t.position.distance_squared(m.position) >= 400.0 {
-            m.ai.target = None;
+            m.change_goal_target(None);
             return;
         }
         if self.attack_time > 0 {

@@ -500,7 +500,7 @@ impl Goal for CrossbowAttack {
     }
     fn stop(&mut self, m: &mut Mob, _: &mut Cx) {
         m.ai.aggressive = false;
-        m.ai.target = None;
+        m.change_goal_target(None);
         self.see_time = 0;
         m.extra.flag = false;
         m.extra.using_item = 0;

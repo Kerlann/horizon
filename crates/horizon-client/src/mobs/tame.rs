@@ -365,14 +365,14 @@ impl Goal for AvoidLlamas {
         self.0.can_continue(m, cx)
     }
     fn start(&mut self, m: &mut Mob, cx: &mut Cx) {
-        m.ai.target = None;
+        m.change_goal_target(None);
         self.0.start(m, cx)
     }
     fn stop(&mut self, m: &mut Mob, cx: &mut Cx) {
         self.0.stop(m, cx)
     }
     fn tick(&mut self, m: &mut Mob, cx: &mut Cx) {
-        m.ai.target = None;
+        m.change_goal_target(None);
         self.0.tick(m, cx)
     }
 }
@@ -596,7 +596,7 @@ fn stop_being_angry(m: &mut Mob) {
     // setLastHurtByMob(null) also stamps the time.
     m.ai.last_hurt_by = None;
     m.ai.last_hurt_by_time = m.age as i32;
-    m.ai.target = None;
+    m.change_goal_target(None);
     m.extra.angry_at = None;
     m.extra.anger = 0;
 }
