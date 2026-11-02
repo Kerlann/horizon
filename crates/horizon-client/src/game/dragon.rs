@@ -2280,11 +2280,12 @@ impl Game<'_> {
             }
         }
         // checkWalls over head, neck and body.
-        let griefing = self.ui.rules.bool("mob_griefing");
+        let mob_griefing = self.ui.rules.bool("mob_griefing");
         let mut in_wall = false;
         let Some(d) = self.dragon.as_ref() else {
             return;
         };
+        let entity = d.id;
         let boxes = [d.part_box(0), d.part_box(1), d.part_box(2)];
         let tags = &self.items().block_tags;
         let transparent = tags
@@ -2306,7 +2307,10 @@ impl Game<'_> {
                         if self.res.facts().is_air(state) || transparent.contains(&**name) {
                             continue;
                         }
-                        if griefing && !immune.contains(&**name) {
+                        let is_immune = immune.contains(&**name);
+                        let mut can_grief = mob_griefing;
+                        self.native_entity_mob_griefing(entity, mob_griefing, &mut can_grief);
+                        if can_grief && !is_immune {
                             removed.push([x, y, z]);
                         } else {
                             in_wall = true;

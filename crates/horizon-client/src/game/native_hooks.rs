@@ -5239,6 +5239,16 @@ impl Game<'_> {
     ) {
         mod_api::dispatch_release_using(self, mod_api::mods(), stack, entity, time_left, used);
     }
+    /// The server checks whether an entity may grief blocks. `mob_griefing`
+    /// is the gamerule; mods can replace `can_grief` independently of it.
+    pub(super) fn native_entity_mob_griefing(
+        &mut self,
+        entity: u32,
+        mob_griefing: bool,
+        can_grief: &mut bool,
+    ) {
+        let _ = (entity, mob_griefing, can_grief);
+    }
     /// A player breaks the block `state` at `pos`, once the game allowed it
     /// (the held item can break blocks, the debug stick didn't take the
     /// click): where `ServerPlayerGameMode.destroyBlock` starts. Set
