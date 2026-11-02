@@ -1915,6 +1915,8 @@ pub struct SpawnSetup {
 /// A snapshot of another entity mobs can see this tick.
 #[derive(Clone, Debug)]
 pub struct Seen {
+    /// Visibility before targeting-entity-specific equipment modifiers.
+    pub visibility: f64,
     pub in_water: bool,
     pub playing_dead: bool,
     pub last_damage: Option<Damage>,
@@ -2110,7 +2112,18 @@ impl Mob {
     pub fn seen(&self, player: Option<[i32; 4]>) -> Seen {
         let m = self;
         let villager = m.species() == Species::Villager;
+        let armor = m.equipment_stacks()[2..6]
+            .iter()
+            .filter(|slot| slot.is_some())
+            .count() as f32
+            / 4.0;
+        let visibility = if m.invisible {
+            0.7 * f64::from(armor.max(0.1))
+        } else {
+            1.0
+        };
         Seen {
+            visibility,
             in_water: self.fluids.in_water,
             playing_dead: axolotl::is_playing_dead(self),
             last_damage: self.last_damage.map(|(d, _)| d),

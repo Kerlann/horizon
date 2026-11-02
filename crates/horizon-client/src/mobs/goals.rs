@@ -1674,7 +1674,7 @@ impl Goal for NearestTarget {
                 let pos = Vec3::new(m.position.x, m.eye_y(), m.position.z);
                 let id = m.id;
                 let attacker = m.species();
-                let candidates: Vec<(u32, Vec3)> =
+                let candidates: Vec<(u32, Vec3, f64)> =
                     cx.w.nearby(pos, range, move |s| {
                         s.id != id
                             && !s.playing_dead
@@ -1685,10 +1685,9 @@ impl Goal for NearestTarget {
                                 Prey::Player => false,
                             }
                     })
-                    .map(|s| (s.id, s.position))
+                    .map(|s| (s.id, s.position, s.visibility))
                     .collect();
-                for (cid, cpos) in candidates {
-                    let mut visibility = 1.0;
+                for (cid, cpos, mut visibility) in candidates {
                     super::living_visibility(None, Some(cid), Some(m.id), &mut visibility);
                     let effective_range = (range * visibility).max(2.0);
                     if m.distance_sqr(cpos) > effective_range * effective_range {

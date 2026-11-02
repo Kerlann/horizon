@@ -339,7 +339,7 @@ fn targetable(m: &mut Mob, w: &MobWorld, who: Who) -> bool {
             if !s.alive {
                 return false;
             }
-            let mut visibility = 1.0;
+            let mut visibility = s.visibility;
             super::living_visibility(None, Some(id), Some(m.id), &mut visibility);
             let r = (range * visibility).max(2.0);
             m.distance_sqr(s.position) <= r * r && m.sees(w, who)
@@ -376,7 +376,7 @@ fn attackable(m: &mut Mob, w: &MobWorld, who: Who) -> bool {
         Who::Player => m.can_target_player(w, range, true),
         Who::Mob(id) => {
             let Some(s) = w.seen(id) else { return false };
-            let mut visibility = 1.0;
+            let mut visibility = if current { 1.0 } else { s.visibility };
             if !current {
                 super::living_visibility(None, Some(id), Some(m.id), &mut visibility);
             }

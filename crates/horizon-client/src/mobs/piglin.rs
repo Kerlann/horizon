@@ -153,7 +153,7 @@ fn visible(m: &mut Mob, w: &MobWorld, who: Who) -> bool {
             if !s.alive {
                 return false;
             }
-            let mut visibility = 1.0;
+            let mut visibility = s.visibility;
             super::living_visibility(None, Some(id), Some(m.id), &mut visibility);
             let r = (range * visibility).max(2.0);
             m.distance_sqr(s.position) <= r * r && m.sees(w, who)
