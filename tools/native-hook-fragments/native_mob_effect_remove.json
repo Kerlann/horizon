@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "mob_effect_remove",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_mob_effect_remove",
+      "neoforge": "MobEffectEvent.Remove",
+      "side": "both",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "cancel"
+      }
+    }
+  ],
+  "rust_summary": "effect removal (`native_mob_effect_remove`).",
+  "doc_summary": "Effect removal can be canceled with `native_mob_effect_remove`. Bundles need \"hooks\": @API:native_mob_effect_remove@."
+}

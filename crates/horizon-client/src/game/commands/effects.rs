@@ -127,6 +127,12 @@ impl Game<'_> {
                     .unwrap_or(false),
                 (Target::Player | Target::Guest(_), Some(e)) => self
                     .for_player(t, |g| {
+                        let instance = g.potions.effects.list.iter().find(|x| x.id == e.id).cloned();
+                        let mut cancel = false;
+                        g.native_mob_effect_remove(None, namespaced(e.id), instance.as_ref(), &mut cancel);
+                        if cancel {
+                            return false;
+                        }
                         let before = g.potions.effects.list.len();
                         g.potions.effects.list.retain(|x| x.id != e.id);
                         g.apply_effect_status();

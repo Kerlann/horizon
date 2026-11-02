@@ -5731,6 +5731,17 @@ impl Game<'_> {
     ) {
         let _ = (entity, effect, cancel);
     }
+    /// NeoForge's `MobEffectEvent.Remove`, before an effect is removed.
+    /// `effect` identifies the holder even when `instance` is absent.
+    pub(super) fn native_mob_effect_remove(
+        &mut self,
+        entity: Option<i32>,
+        effect: &str,
+        instance: Option<&horizon_client::effects::EffectInstance>,
+        cancel: &mut bool,
+    ) {
+        let _ = (entity, effect, instance, cancel);
+    }
     /// `MobEffect.onEffectAdded`: `LivingEntity.addEffect` gave `entity`
     /// (as in `native_apply_effect_tick`) the content mod's effect `effect`,
     /// which it didn't have. Server-side. API 56.
