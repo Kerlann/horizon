@@ -2461,7 +2461,7 @@ pub fn forgive_dead_player(m: &mut Mob) {
             if m.ai.target == Some(Who::Player) {
                 m.ai.last_hurt_by = None;
                 m.ai.last_hurt_by_time = m.age as i32;
-                m.ai.target = None;
+                m.change_goal_target(None);
             }
         }
         // The iron golem keeps a timer and its target (the hurt-by goal
@@ -2471,7 +2471,7 @@ pub fn forgive_dead_player(m: &mut Mob) {
                 m.ai.last_hurt_by = None;
                 m.ai.last_hurt_by_time = m.age as i32;
                 m.extra.anger = 0;
-                m.ai.target = None;
+                m.change_goal_target(None);
             }
         }
         _ => super::tame::forgive_dead_player(m),

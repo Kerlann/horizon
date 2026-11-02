@@ -655,10 +655,9 @@ impl B {
                 if !can_attack(m, cx.w, target) {
                     return false;
                 }
-                if !m.change_target(Some(target), "behavior_target") {
+                let Some(target) = m.change_target(Some(target), "behavior_target") else {
                     return false;
-                }
-                let target = m.ai.target;
+                };
                 mem(m).attack_target.set_opt(target);
                 mem(m).cant_reach_walk_target_since.clear();
                 *running = true;

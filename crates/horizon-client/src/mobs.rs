@@ -2112,12 +2112,17 @@ impl Mob {
     pub fn seen(&self, player: Option<[i32; 4]>) -> Seen {
         let m = self;
         let villager = m.species() == Species::Villager;
-        let armor = m.equipment_stacks()[2..6]
-            .iter()
-            .filter(|slot| slot.is_some())
-            .count() as f32
-            / 4.0;
         let visibility = if m.invisible {
+            let armor = [
+                m.extra.feet.is_some(),
+                m.extra.legs.is_some(),
+                m.extra.chest.is_some(),
+                m.extra.head.is_some() && !drops::head_is_body(m.species()),
+            ]
+            .into_iter()
+            .filter(|worn| *worn)
+            .count() as f32
+                / 4.0;
             0.7 * f64::from(armor.max(0.1))
         } else {
             1.0
@@ -2456,10 +2461,12 @@ pub fn native_living_change_target(
 
 impl Mob {
     pub fn change_goal_target(&mut self, target: Option<Who>) {
-        self.change_target(target, "mob_target");
+        if let Some(target) = self.change_target(target, "mob_target") {
+            self.ai.target = target;
+        }
     }
 
-    fn change_target(&mut self, target: Option<Who>, target_type: &str) -> bool {
+    fn change_target(&mut self, target: Option<Who>, target_type: &str) -> Option<Option<Who>> {
         let original_target = target.map(|who| match who {
             Who::Player => -1,
             Who::Mob(id) => i64::from(id),
@@ -2480,14 +2487,15 @@ impl Mob {
             &mut new_target,
             &mut cancelled,
         );
-        if !cancelled {
-            self.ai.target = match new_target {
+        if cancelled {
+            None
+        } else {
+            Some(match new_target {
                 None => None,
                 Some(-1) => Some(Who::Player),
                 Some(id) => u32::try_from(id).ok().map(Who::Mob),
-            };
+            })
         }
-        !cancelled
     }
 }
 
