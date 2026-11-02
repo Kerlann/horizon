@@ -5777,7 +5777,7 @@ impl Game<'_> {
     ) {
         let _ = (entity, damage_type, present, damage, canceled);
     }
-    /// A player's damage after armor and magic, before absorption.
+    /// Living damage after armor and magic, before absorption.
     pub(super) fn native_living_damage_pre(
         entity: i32,
         damage_type: &str,
@@ -5786,7 +5786,7 @@ impl Game<'_> {
     ) {
         let _ = (entity, damage_type, damage, replacement);
     }
-    /// A player's health was reduced by a server-side hit.
+    /// A living entity's health was reduced by a server-side hit.
     pub(super) fn native_living_damage_post(
         entity: i32,
         damage_type: &str,
@@ -6023,7 +6023,7 @@ pub(super) fn block_contact(
     }
 }
 
-/// `native_living_damage_pre` for the player damage code.
+/// `native_living_damage_pre` for living damage code.
 pub(super) fn damage_pre(entity: i32, damage_type: &str, damage: &mut f32) {
     let mut replacement = None;
     Game::native_living_damage_pre(entity, damage_type, *damage, &mut replacement);

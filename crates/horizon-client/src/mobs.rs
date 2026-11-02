@@ -2870,6 +2870,7 @@ impl Mob {
         // damage the armour, toughness and enchantment reductions have not
         // touched yet, and only a hit outside `#bypasses_armor` asks at all.
         let armor_hit = (!source.bypasses_armor() && amount > 0.0).then_some(amount);
+        let before_armor = amount;
         if !source.bypasses_armor() && self.kind.armor + worn + covered > 0.0 {
             // CombatRules.getDamageAfterAbsorb
             let armor = self.kind.armor + worn + covered;
@@ -2881,6 +2882,8 @@ impl Mob {
             }
             amount *= 1.0 - fraction;
         }
+        let armor_reduction = before_armor - amount;
+        let before_magic = amount;
         // CombatRules.getDamageAfterMagicAbsorb: enchantment protection.
         let epf = gear::protection(self, source.kind);
         if epf > 0.0 {
@@ -2917,6 +2920,7 @@ impl Mob {
                 amount *= 0.15;
             }
         }
+        let magic_reduction = before_magic - amount;
         // Wolf.actuallyHurt: wolf armor takes the damage instead of the wolf.
         let absorbed = self.wolf_armor_absorbs(&source);
         let mut knock = true;
@@ -2925,27 +2929,36 @@ impl Mob {
                 return false;
             }
             let dealt = amount - self.last_hurt;
-            if absorbed {
-                self.hurt_wolf_armor(dealt);
-            } else {
-                let dealt = self.soak_absorption(dealt);
-                self.health -= dealt;
-            }
             self.last_hurt = amount;
             knock = false;
             dealt
         } else {
             self.last_hurt = amount;
             self.invulnerable = 20;
-            if absorbed {
-                self.hurt_wolf_armor(amount);
-            } else {
-                let through = self.soak_absorption(amount);
-                self.health -= through;
-            }
             self.hurt_time = 10;
             amount
         };
+        if absorbed {
+            self.hurt_wolf_armor(dealt);
+        } else {
+            let name = damage_type(source.kind, source.attacker.is_some());
+            let mut applied = dealt;
+            if let Some(hook) = crate::health::DAMAGE_PRE.get() {
+                hook(self.id as i32, name, &mut applied);
+            }
+            let through = self.soak_absorption(applied);
+            self.health -= through;
+            if through != 0.0
+                && let Some(hook) = crate::health::DAMAGE_POST.get()
+            {
+                hook(self.id as i32, name, before_armor, horizon_world::living_damage::DamagePost {
+                    armor_reduction,
+                    magic_reduction,
+                    absorbed: applied - through,
+                    health_damage: through,
+                });
+            }
+        }
         // LivingEntity.actuallyHurt: a hit that reaches the health is
         // recorded (`CombatTracker.recordDamage`), with the fall it ends;
         // Wolf.actuallyHurt keeps a hit its armor takes out of it.
