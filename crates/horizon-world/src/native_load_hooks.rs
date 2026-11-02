@@ -1,5 +1,5 @@
 //! Callbacks into the executable for data-loading native trait mods.
-use crate::loot::{LootStack, NativeLootContext};
+use crate::loot::{EnchantedBlockLootContext, LootStack, NativeLootContext};
 use serde_json::{Map, Value};
 use std::sync::OnceLock;
 
@@ -9,6 +9,7 @@ pub struct NativeLoadHooks {
     pub modify_default_components: fn(&str, &mut Map<String, Value>),
     pub loot_function: fn(&str, &Value, &NativeLootContext<'_>, &mut LootStack),
     pub loot_condition: fn(&str, &Value, &NativeLootContext<'_>, &mut bool),
+    pub enchanted_block_loot: fn(&EnchantedBlockLootContext<'_>, &str, &mut i32),
 }
 
 static HOOKS: OnceLock<NativeLoadHooks> = OnceLock::new();
@@ -16,6 +17,16 @@ static HOOKS: OnceLock<NativeLoadHooks> = OnceLock::new();
 /// Install the process-wide callbacks once; a second installation keeps the first.
 pub fn install(hooks: NativeLoadHooks) -> Result<(), NativeLoadHooks> {
     HOOKS.set(hooks)
+}
+
+pub(crate) fn enchanted_block_loot(
+    context: &EnchantedBlockLootContext<'_>,
+    enchantment: &str,
+    level: &mut i32,
+) {
+    if let Some(hooks) = HOOKS.get() {
+        (hooks.enchanted_block_loot)(context, enchantment, level);
+    }
 }
 
 pub(crate) fn loot_table_load(id: &str, table: &mut Value) {

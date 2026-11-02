@@ -1363,6 +1363,25 @@ impl LootContext<'_> {
     fn enchantment_level(&self, id: &str) -> u32 {
         self.held.map_or(0, |h| h.enchantment_level(id))
     }
+    fn block_loot_enchantment_level(&self, id: &str) -> i32 {
+        let mut level = self.enchantment_level(id).min(i32::MAX as u32) as i32;
+        if let Some(tool) = self.held.filter(|_| !self.block.is_empty()) {
+            let context = horizon_world::loot::EnchantedBlockLootContext {
+                block: self.block,
+                properties: self.properties,
+                tool: horizon_world::loot::NativeLootTool {
+                    item: tool.item.to_string(),
+                    enchantments: tool.enchantments().iter().map(|(id, level)| {
+                        (id.to_string(), (*level).min(i32::MAX as u32) as i32)
+                    }).collect(),
+                },
+                place: horizon_world::loot::current_native_loot_place(),
+                broken_by_player: self.this_entity,
+            };
+            horizon_world::loot::native_enchanted_block_loot(&context, id, &mut level);
+        }
+        level.max(0)
+    }
     /// The context a mod's own loot kind sees in this engine: the block and
     /// the tool it has, and a seed from the roll's random. The entity, the
     /// damage, the player and the biome belong to the main loot engine's
@@ -1726,7 +1745,7 @@ impl LootContext<'_> {
                 }
                 "minecraft:apply_bonus" => {
                     let level =
-                        self.enchantment_level(f["enchantment"].as_str().unwrap_or("")) as i32;
+                        self.block_loot_enchantment_level(f["enchantment"].as_str().unwrap_or(""));
                     let count = stack.count as i32;
                     let params = &f["parameters"];
                     stack.count = match f["formula"].as_str().unwrap_or("") {

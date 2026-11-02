@@ -90,6 +90,26 @@ pub fn native_loot_condition(
     crate::native_load_hooks::loot_condition(kind, data, ctx, holds);
 }
 
+/// A block loot enchantment query and the context available to the items engine.
+pub struct EnchantedBlockLootContext<'a> {
+    pub block: &'a str,
+    pub properties: &'a crate::chunk::BlockProperties,
+    pub tool: NativeLootTool,
+    pub place: Option<Rc<NativeLootPlace>>,
+    /// Whether a player broke the block. The player's identity is not available here.
+    pub broken_by_player: bool,
+}
+
+/// Replace an enchantment level queried by a block loot operation.
+#[inline(never)]
+pub fn native_enchanted_block_loot(
+    context: &EnchantedBlockLootContext<'_>,
+    enchantment: &str,
+    level: &mut i32,
+) {
+    crate::native_load_hooks::enchanted_block_loot(context, enchantment, level);
+}
+
 /// The tool a loot context names: its item id and enchantments.
 pub struct NativeLootTool {
     pub item: String,
