@@ -2930,25 +2930,31 @@ impl Game<'_> {
             // LivingEntity.DATA_EFFECT_PARTICLES: the swirls of its visible effects.
             let mut particles = Vec::new();
             for effect in &g.effects.list {
-                let Some(original) = super::client_ambient::effect_particle(effect.id, effect.ambient) else {
+                let Some(original) =
+                    super::client_ambient::effect_particle(effect.id, effect.ambient)
+                else {
                     continue;
                 };
-                let mut result = super::native_hooks::EffectParticleModification {
-                    options: original.clone(),
-                    visible: effect.visible,
-                };
+                let mut changed = None;
                 self.native_effect_particle_modification(
                     Some(g.entity_id),
                     effect,
                     &original,
-                    &mut result,
+                    &mut changed,
                 );
-                if result.visible {
-                    particles.push(result.options);
+                match changed {
+                    Some(changed) if changed.visible => particles.push(changed.options),
+                    None if effect.visible => particles.push(original),
+                    _ => {}
                 }
             }
             m.extra.effect_particles = particles;
-            m.extra.effect_ambient = g.effects.list.iter().filter(|e| e.visible).all(|e| e.ambient);
+            m.extra.effect_ambient = g
+                .effects
+                .list
+                .iter()
+                .filter(|e| e.visible)
+                .all(|e| e.ambient);
             // Entity.isInvisible: the invisibility effect hides the body (the
             // model pass, the name tag rules and `trader::is_invisible` read it).
             m.extra.effects.retain(|e| e.0 != "minecraft:invisibility");

@@ -753,7 +753,11 @@ impl Game<'_> {
                         _ => {
                             let vanilla = mob_can_be_affected(tags, &m.kind.id, effect);
                             if let Some(name) = mob_effect_id(effect) {
-                                let instance = EffectInstance::new(name, duration, amp);
+                                let instance = EffectInstance::new(
+                                    name.trim_start_matches("minecraft:"),
+                                    duration,
+                                    amp,
+                                );
                                 let mut result = None;
                                 self.native_mob_effect_applicable(
                                     Some(id as i32),
@@ -854,21 +858,8 @@ impl Game<'_> {
                     player.position.z + w,
                 ),
             );
-            let effects = self.potions.effects.list.clone();
-            let mut ids = Vec::new();
-            for effect in effects {
-                let mut cancel = false;
-                self.native_mob_effect_remove(
-                    None,
-                    brewing::namespaced(effect.id),
-                    Some(&effect),
-                    &mut cancel,
-                );
-                if !cancel {
-                    ids.push(effect.id);
-                    self.potions.effects.list.retain(|e| e.id != effect.id);
-                }
-            }
+            let ids: Vec<&'static str> = self.potions.effects.list.iter().map(|e| e.id).collect();
+            self.potions.effects.clear();
             if !ids.is_empty() {
                 self.effects_on_death(&ids, bounds, true, None, None);
             }
@@ -881,7 +872,7 @@ impl Game<'_> {
             .is_some_and(|p| p.health.absorption() <= 0.0);
         let mut effects = std::mem::take(&mut self.potions.effects);
         let game = std::cell::RefCell::new(&mut *self);
-        let (actions, raid_omen_added) = effects.tick_with_expiry(
+        let (actions, raid_omen_added) = effects.tick_with(
             &mut |e, t| {
                 let mut game = game.borrow_mut();
                 if !brewing::is_mod_effect(e.id) {
@@ -895,7 +886,8 @@ impl Game<'_> {
             absorption_empty,
             &mut |effect| {
                 let mut canceled = false;
-                game.borrow_mut().native_mob_effect_expired(None, effect, &mut canceled);
+                game.borrow_mut()
+                    .native_mob_effect_expired(None, effect, &mut canceled);
                 canceled
             },
         );
@@ -957,6 +949,34 @@ impl Game<'_> {
         }
         self.mod_effect_added(id, None, amp, new);
         changed
+    }
+    /// `LivingEntity.removeEffect` for the player, unless
+    /// `native_mob_effect_remove` keeps it: whether it went. The caller
+    /// applies the status (`apply_effect_status`).
+    pub(super) fn remove_player_effect(&mut self, id: &'static str) -> bool {
+        let instance = self.potions.effects.get(id).cloned();
+        let mut cancel = false;
+        self.native_mob_effect_remove(
+            None,
+            brewing::namespaced(id),
+            instance.as_ref(),
+            &mut cancel,
+        );
+        if cancel || instance.is_none() {
+            return false;
+        }
+        self.potions.effects.list.retain(|e| e.id != id);
+        true
+    }
+    /// `LivingEntity.removeAllEffects` for the player, each effect as
+    /// `remove_player_effect`: whether any went.
+    pub(super) fn remove_all_player_effects(&mut self) -> bool {
+        let ids: Vec<&'static str> = self.potions.effects.list.iter().map(|e| e.id).collect();
+        let mut removed = false;
+        for id in ids {
+            removed |= self.remove_player_effect(id);
+        }
+        removed
     }
     /// `LivingEntity.addEffect` for a content mod's effect: its
     /// `onEffectAdded` when it is new, then its `onEffectStarted`, on a
@@ -1399,7 +1419,11 @@ impl Game<'_> {
                             // cannot be affected by.
                             let vanilla = mob_can_be_affected(tags, &m.kind.id, id);
                             if let Some(name) = mob_effect_id(id) {
-                                let mut instance = EffectInstance::new(name, scaled(*duration), *amp);
+                                let mut instance = EffectInstance::new(
+                                    name.trim_start_matches("minecraft:"),
+                                    scaled(*duration),
+                                    *amp,
+                                );
                                 instance.ambient = ambient.contains(id);
                                 instance.visible = !hidden.contains(id);
                                 let mut result = None;
@@ -1415,10 +1439,10 @@ impl Game<'_> {
                                     let new = !m.has_effect(name);
                                     m.add_effect_with(
                                         name,
-                                        scaled(*duration),
+                                        instance.duration,
                                         *amp,
-                                        ambient.contains(id),
-                                        !hidden.contains(id),
+                                        instance.ambient,
+                                        instance.visible,
                                     );
                                     self.mod_effect_added(name, Some(mob as i32), *amp, new);
                                 }

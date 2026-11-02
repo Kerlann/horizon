@@ -119,58 +119,46 @@ impl Game<'_> {
             let changed = match (t, effect) {
                 (Target::Player | Target::Guest(_), None) => self
                     .for_player(t, |g| {
-                        let effects = g.potions.effects.list.clone();
-                        let mut removed = false;
-                        for instance in effects {
-                            let mut cancel = false;
-                            g.native_mob_effect_remove(
-                                None,
-                                namespaced(instance.id),
-                                Some(&instance),
-                                &mut cancel,
-                            );
-                            if !cancel {
-                                g.potions.effects.list.retain(|x| x.id != instance.id);
-                                removed = true;
-                            }
-                        }
+                        let any = g.remove_all_player_effects();
                         g.apply_effect_status();
-                        removed
+                        any
                     })
                     .unwrap_or(false),
                 (Target::Player | Target::Guest(_), Some(e)) => self
                     .for_player(t, |g| {
-                        let instance = g.potions.effects.list.iter().find(|x| x.id == e.id).cloned();
-                        let mut cancel = false;
-                        g.native_mob_effect_remove(
-                            None,
-                            namespaced(e.id),
-                            instance.as_ref(),
-                            &mut cancel,
-                        );
-                        if cancel {
-                            return false;
-                        }
-                        let before = g.potions.effects.list.len();
-                        g.potions.effects.list.retain(|x| x.id != e.id);
+                        let removed = g.remove_player_effect(e.id);
                         g.apply_effect_status();
-                        g.potions.effects.list.len() != before
+                        removed
                     })
                     .unwrap_or(false),
                 (Target::Mob(id), e) => {
                     let Some(mob) = self.mobs.iter().find(|m| m.id == id) else {
                         continue;
                     };
-                    let effects = mob.extra.effects.clone();
-                    let candidates = match e {
-                        Some(e) => vec![namespaced(e.id)],
-                        None => effects.iter().map(|x| x.0).collect(),
+                    let to_instance = |&(effect, ticks, amplifier): &(&'static str, i32, i32)| {
+                        let mut instance = EffectInstance::new(
+                            effect.trim_start_matches("minecraft:"),
+                            ticks,
+                            amplifier,
+                        );
+                        instance.ambient = mob.extra.ambient_effects.contains(&effect);
+                        instance.visible = !mob.extra.hidden_effects.contains(&effect);
+                        instance
+                    };
+                    // `removeEffect` asks even without the effect; `removeAllEffects`
+                    // asks for each one the mob has.
+                    let asked: Vec<_> = match e {
+                        Some(e) => {
+                            let effect = namespaced(e.id);
+                            let active = mob.extra.effects.iter().find(|x| x.0 == effect);
+                            vec![(effect, active.map(to_instance))]
+                        }
+                        None => (mob.extra.effects.iter())
+                            .map(|x| (x.0, Some(to_instance(x))))
+                            .collect(),
                     };
                     let mut removed = Vec::new();
-                    for effect in candidates {
-                        let instance = effects.iter().find(|x| x.0 == effect).map(|x| {
-                            EffectInstance::new(x.0, x.1, x.2)
-                        });
+                    for (effect, instance) in asked {
                         let mut cancel = false;
                         self.native_mob_effect_remove(
                             Some(id as i32),
@@ -182,13 +170,20 @@ impl Game<'_> {
                             removed.push(effect);
                         }
                     }
-                    let mob = self.mobs.iter_mut().find(|m| m.id == id).unwrap();
+                    // A mod's hook may have changed the mobs.
+                    let Some(mob) = self.mobs.iter_mut().find(|m| m.id == id) else {
+                        continue;
+                    };
                     mob.extra.effects.retain(|x| !removed.contains(&x.0));
                     let left = &mob.extra.effects;
-                    mob.extra.hidden_effects.retain(|h| left.iter().any(|x| x.0 == *h));
-                    mob.extra.ambient_effects.retain(|h| left.iter().any(|x| x.0 == *h));
+                    mob.extra
+                        .hidden_effects
+                        .retain(|h| left.iter().any(|x| x.0 == *h));
+                    mob.extra
+                        .ambient_effects
+                        .retain(|h| left.iter().any(|x| x.0 == *h));
                     !removed.is_empty()
-                },
+                }
                 _ => continue,
             };
             tracker.track(t, changed);

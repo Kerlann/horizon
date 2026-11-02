@@ -613,16 +613,16 @@ or NeoForge's event where it has one. On the server, each tick a player or a mob
 two take `&self`: during a mob's tick the mob world borrows the game, so `&mut self` would alias that borrow, and the
 game doesn't hold the mobs being ticked, nor the player's effects. `native_on_effect_added` hears it given to an
 entity that didn't have it, and `native_mob_effect_added` (NeoForge's `MobEffectEvent.Added`) every time it is given.
+A mob is its `Entity.getId`; a player is None, with their state swapped in (`native_acting_player`). Vanilla's effects
+never reach them. Bundles that use them need `"hooks": 56`.
 
-`native_effect_particle_modification` (NeoForge's `EffectParticleModificationEvent`) receives an effect, its original particle options and a replacement containing options and visibility. Restore `original` to reset the options. It currently only affects guest models, not synchronized metadata, and runs when those models are updated rather than when effects become dirty.
+`native_effect_particle_modification` (NeoForge's `EffectParticleModificationEvent`) receives an effect, its original particle options and a replacement holding options and visibility. Leave it None to keep the original options, shown when the effect is visible. It currently only affects guest models, not synchronized metadata, and runs when those models are updated rather than when effects become dirty.
 
 `native_mob_effect_applicable` (NeoForge's `MobEffectEvent.Applicable`) sees an incoming effect before eligibility is checked. Its result is `None` for the vanilla decision, `Some(true)` to apply, or `Some(false)` to reject. The optional source entity is supplied where known.
 
 `native_mob_effect_expired` (NeoForge's `MobEffectEvent.Expired`) runs on the server before an expired player effect is removed. Set `cancel` to retain it; the hook can fire again on the next tick. The optional entity id is supplied where known.
 
-`native_mob_effect_remove` (NeoForge's `MobEffectEvent.Remove`) can cancel explicit effect removal. It receives the effect id even when the optional instance is absent. The optional entity id is supplied where known. Currently it covers `/effect clear` on players and mobs and player death; other removal paths are not yet wired. Mob instances reconstructed from stored effects omit hidden and ambient details.
-A mob is its `Entity.getId`; a player is None, with their state swapped in (`native_acting_player`). Vanilla's effects
-never reach them. Bundles that use them need `"hooks": 56`.
+`native_mob_effect_remove` (NeoForge's `MobEffectEvent.Remove`) can cancel explicit effect removal. It receives the effect id even when the optional instance is absent. The optional entity id is supplied where known. Currently it covers `/effect clear` on players and mobs, and a player's milk, honey and totem of undying; other removal paths are not yet wired.
 
 API 57 adds chunks and players coming and going, on the server: `native_chunk_load` (with whether the chunk is new), `native_chunk_unload`, and
 `native_player_logged_in` and `native_player_logged_out`, which come in pairs however a player leaves, the server stopping included. Bundles that use them need `"hooks": 57`.

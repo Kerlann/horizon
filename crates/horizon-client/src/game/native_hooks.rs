@@ -1209,9 +1209,10 @@ impl GameLevel<'_> {
     }
 }
 
-/// Replacement particle and visibility for an effect.
+/// An effect's swirl as `native_effect_particle_modification` replaces it:
+/// its particle, and whether it is shown at all.
 #[derive(Clone, Debug)]
-pub struct EffectParticleModification {
+pub struct NativeEffectParticle {
     pub options: horizon_client::particles::ParticleOptions,
     pub visible: bool,
 }
@@ -5717,13 +5718,14 @@ impl Game<'_> {
         );
     }
     /// NeoForge's `EffectParticleModificationEvent`: replace the options or
-    /// visibility of an effect's synchronized particle.
+    /// visibility of an effect's synchronized particle; None keeps
+    /// `original`, shown when the effect is visible.
     pub(super) fn native_effect_particle_modification(
         &mut self,
         entity: Option<i32>,
         effect: &horizon_client::effects::EffectInstance,
         original: &horizon_client::particles::ParticleOptions,
-        result: &mut EffectParticleModification,
+        result: &mut Option<NativeEffectParticle>,
     ) {
         let _ = (entity, effect, original, result);
     }

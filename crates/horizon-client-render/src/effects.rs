@@ -240,7 +240,9 @@ impl PlayerEffects {
     /// tick count `shouldApplyEffectTickThisTick` takes); `absorption_empty`
     /// is `AbsorptionMobEffect`'s answer: the effect ends once the
     /// absorption is used up. Returns the actions to apply, in order, and
-    /// whether Raid Omen was newly added.
+    /// whether Raid Omen was newly added. `expired` hears each effect whose
+    /// `tickServer` ended it, before it goes, and true keeps it
+    /// (`MobEffectEvent.Expired` canceled).
     ///
     /// Bad Omen turning into a new Raid Omen adds an entry to the map being
     /// iterated: vanilla's iterator then throws a
@@ -248,15 +250,6 @@ impl PlayerEffects {
     /// Omen stays (not counted down) and the effects after it are not
     /// ticked; the next tick refreshes Raid Omen and drops Bad Omen.
     pub fn tick_with(
-        &mut self,
-        omen: &mut dyn FnMut(&EffectInstance, i32) -> OmenTick,
-        absorption_empty: bool,
-    ) -> (Vec<EffectAction>, bool) {
-        self.tick_with_expiry(omen, absorption_empty, &mut |_| false)
-    }
-
-    /// Tick effects, allowing the server to cancel removal of expired instances.
-    pub fn tick_with_expiry(
         &mut self,
         omen: &mut dyn FnMut(&EffectInstance, i32) -> OmenTick,
         absorption_empty: bool,
@@ -539,13 +532,13 @@ mod tests {
         };
         // The first tick adds Raid Omen and stops there (the iterator's
         // ConcurrentModificationException): Bad Omen and Speed stay as they were.
-        let (_, added) = fx.tick_with(&mut convert, false);
+        let (_, added) = fx.tick_with(&mut convert, false, &mut |_| false);
         assert!(added);
         assert_eq!(fx.get("bad_omen").unwrap().duration, 100);
         assert_eq!(fx.get("speed").unwrap().duration, 50);
         assert_eq!(fx.get("raid_omen").unwrap().duration, 600);
         // The second refreshes Raid Omen and drops Bad Omen.
-        let (_, added) = fx.tick_with(&mut convert, false);
+        let (_, added) = fx.tick_with(&mut convert, false, &mut |_| false);
         assert!(!added);
         assert!(fx.get("bad_omen").is_none());
         assert_eq!(fx.get("speed").unwrap().duration, 49);
@@ -590,8 +583,8 @@ mod tests {
                 _ => OmenTick::Continue,
             }
         };
-        fx.tick_with(&mut answer, false);
-        fx.tick_with(&mut answer, false);
+        fx.tick_with(&mut answer, false, &mut |_| false);
+        fx.tick_with(&mut answer, false, &mut |_| false);
         let ticks = [
             ("ruby:glow", 3),
             ("ruby:bleed", 1),
@@ -611,9 +604,9 @@ mod tests {
             seen.push(e.duration);
             OmenTick::Remove
         };
-        fx.tick_with(&mut watch, false);
+        fx.tick_with(&mut watch, false, &mut |_| false);
         assert!(fx.get("raid_omen").is_some());
-        fx.tick_with(&mut watch, false);
+        fx.tick_with(&mut watch, false, &mut |_| false);
         assert!(fx.get("raid_omen").is_none());
         assert_eq!(seen, vec![1]);
     }

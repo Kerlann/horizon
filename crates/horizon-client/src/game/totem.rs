@@ -68,7 +68,7 @@ impl Game<'_> {
         let ctx = self.player_context(None);
         self.post_game_event("minecraft:item_interact_finish", body.at, ctx);
         // DeathProtection.TOTEM_EFFECTS: clear, then regeneration II, absorption II, fire resistance.
-        self.potions.effects.clear();
+        self.remove_all_player_effects();
         for (id, ticks, amp) in [
             ("regeneration", 900, 1),
             ("absorption", 100, 1),

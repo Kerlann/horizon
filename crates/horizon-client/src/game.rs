@@ -392,7 +392,7 @@ pub use native_block_entity_draw::BlockEntityDraw;
 pub use native_claimed_items::{NativeHeldItem, NativeHit, NativeModEvent};
 pub use native_data_maps::NativeDataMapType;
 pub use native_falling::NativeFalling;
-pub use native_hooks::{NativeClock, NativeShake};
+pub use native_hooks::{NativeClock, NativeEffectParticle, NativeShake};
 pub use native_mob_draw::{NativeMobRender, NativePlayerRender};
 pub use native_server::NativeExperienceOrb;
 pub use native_world_columns::NativeColumnBlocks;
@@ -6740,13 +6740,14 @@ impl Game<'_> {
                 }
             }
             ConsumeEffect::ClearAllEffects => {
-                self.potions.effects.clear();
+                self.remove_all_player_effects();
                 self.apply_effect_status();
             }
             ConsumeEffect::RemoveEffects(to_remove) => {
                 for target in to_remove {
-                    let id = target.trim_start_matches("minecraft:");
-                    self.potions.effects.list.retain(|e| e.id != id);
+                    if let Some(def) = horizon_client::brewing::effect(target) {
+                        self.remove_player_effect(def.id);
+                    }
                 }
                 self.apply_effect_status();
             }
