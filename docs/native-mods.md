@@ -1584,6 +1584,7 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
 - **`native_furnace_start_smelt(pos, item)`**: a furnace at `pos` begins cooking `item`, when its cooking timer first advances. Server-side.
 - **`native_brewing_complete(pos)`**: a brewing stand finished brewing at `pos`, after the bottle contents changed.
 - **`native_brewing_fuel(pos, fuel)`**: a brewing stand at `pos` consumed `fuel` and gained brewing fuel. Server-side.
+- **`native_get_enchantment_level(stack, target, enchantments)`**: change the enchantment-to-level map for a gameplay query. `target` identifies a single enchantment or is `None` for all; currently only the trident-use riptide query is wired. Levels from the stack above `i32::MAX` are clamped.
 - **`native_enchant_item(player, name, pos, item, levels)`**: a player applied an enchantment at `pos`; `item` is the finished item and `levels` the levels charged. Guest state is not swapped in.
 - **`native_prepare_item_enchant(player, name, pos, costs)`**: enchanting offers were calculated at `pos`; change the three offer costs before they are sent to the player's menu. Guest state is not swapped in.
 - **`native_prepare_anvil(player, name, pos, result, cost)`**: an anvil result was prepared for a player at `pos`; change the result or level cost before it is sent to their menu. Guest state is not swapped in.

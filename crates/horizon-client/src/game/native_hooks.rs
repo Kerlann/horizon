@@ -4522,6 +4522,15 @@ impl Game<'_> {
     ) {
         mod_api::dispatch_enchant_item(self, mod_api::mods(), player, name, pos, item, levels);
     }
+    /// A gameplay enchantment query. Change `enchantments` to replace the queried levels. @API:get_enchantment_level@.
+    pub(super) fn native_get_enchantment_level(
+        &mut self,
+        stack: &ItemStack,
+        target: Option<&str>,
+        enchantments: &mut std::collections::BTreeMap<String, i32>,
+    ) {
+        let _ = (stack, target, enchantments);
+    }
     /// Enchanting offers were calculated for a server player at `pos`. Change `costs` before they are sent to the menu. @API:prepare_item_enchant@.
     pub(super) fn native_prepare_item_enchant(
         &mut self,

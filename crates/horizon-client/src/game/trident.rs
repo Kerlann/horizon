@@ -218,7 +218,14 @@ impl Game<'_> {
             .items()
             .get(&stack.item)
             .map_or(250, |i| i.max_damage);
-        let riptide = stack.enchantment_level("minecraft:riptide") > 0;
+        let target = "minecraft:riptide";
+        let mut enchantments = stack
+            .enchantments()
+            .iter()
+            .map(|(id, level)| (id.to_string(), (*level).min(i32::MAX as u32) as i32))
+            .collect();
+        self.native_get_enchantment_level(stack, Some(target), &mut enchantments);
+        let riptide = enchantments.get(target).copied().unwrap_or(0) > 0;
         if stack.damage + 1 >= max || (riptide && !self.in_water_or_rain()) {
             return true;
         }

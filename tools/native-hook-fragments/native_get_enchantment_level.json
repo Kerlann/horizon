@@ -1,0 +1,15 @@
+{
+  "hooks": [
+    {
+      "name": "get_enchantment_level",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_get_enchantment_level",
+      "side": "both",
+      "neoforge": "GetEnchantmentLevelEvent",
+      "mod_api": {
+        "contract": "replace"
+      }
+    }
+  ],
+  "rust_summary": "Gameplay enchantment level query (`native_get_enchantment_level`).",
+  "doc_summary": "Change the enchantment level map for a gameplay query with `native_get_enchantment_level(stack, target, enchantments)`. The optional target identifies a single enchantment, or is None for all. Bundles need \"hooks\": @API:get_enchantment_level@."
+}
