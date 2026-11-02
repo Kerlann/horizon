@@ -1919,9 +1919,7 @@ impl Hub {
                     }
                     let ready = match world.chunks.get(&(x, z)) {
                         Some(chunk) => chunk_ready(chunk, world, ctx.streaming),
-                        None if far_chunk => self.far.as_mut().is_some_and(|far| {
-                            matches!(far.saved(x, z), super::far::Saved::Body(_))
-                        }),
+                        None if far_chunk => self.far.as_ref().is_some_and(|far| far.cached(x, z)),
                         None => false,
                     };
                     if ready {

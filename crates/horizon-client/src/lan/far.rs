@@ -165,6 +165,16 @@ impl Far {
         self.here = Some(i);
     }
 
+    /// Whether a previously read far chunk is still available without scheduling a read.
+    pub fn cached(&self, x: i32, z: i32) -> bool {
+        self.here.is_some_and(|level| {
+            self.levels[level]
+                .bodies
+                .get(&(x, z))
+                .is_some_and(|(at, _)| at.elapsed() < KEPT_FOR)
+        })
+    }
+
     /// A saved chunk of the level in place, asking for it to be read when there is room.
     pub fn saved(&mut self, x: i32, z: i32) -> Saved {
         let Some(level) = self.here else {
