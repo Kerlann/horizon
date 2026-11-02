@@ -74,7 +74,7 @@ impl Game<'_> {
     }
 
     /// Ask mods before changing an online player's operator permissions.
-    pub(super) fn cancel_permissions_change(
+    pub(in crate::game) fn cancel_permissions_change(
         &mut self,
         lists: &std::sync::Arc<std::sync::Mutex<super::super::dedicated::Lists>>,
         player: &NameAndId,
@@ -134,9 +134,8 @@ impl Game<'_> {
             }
             "deop" => {
                 for player in &players {
-                    if !lists.lock().unwrap().ops.contains(player)
-                        || self.cancel_permissions_change(&lists, player, 0)
-                    {
+                    let exists = lists.lock().unwrap().ops.contains(player);
+                    if !exists || self.cancel_permissions_change(&lists, player, 0) {
                         continue;
                     }
                     let removed = {

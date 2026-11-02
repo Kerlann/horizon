@@ -1478,7 +1478,14 @@ impl Game<'_> {
                     return;
                 };
                 let level = state.op_level;
-                let changed = {
+                let exists = state.lists.lock().unwrap().ops.contains(&user);
+                let eligible = if command == "op" { !exists } else { exists };
+                let new_level = if command == "op" { level } else { 0 };
+                let cancelled = eligible
+                    && self.cancel_permissions_change(&state.lists, &user, new_level);
+                let changed = if cancelled {
+                    false
+                } else {
                     let mut l = state.lists.lock().unwrap();
                     if command == "op" {
                         if l.ops.contains(&user) {
