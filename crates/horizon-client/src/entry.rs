@@ -119,6 +119,7 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 refill,
             );
         },
+        server_chat_enabled: || !crate::mod_api::mods().is_empty(),
         server_chat: |player, username, raw, message, cancel| {
             crate::mod_api::dispatch_server_chat(
                 crate::mod_api::mods(),

@@ -234,17 +234,19 @@ impl Hub {
         ) {
             return;
         }
-        let mut component = literal(&message.content);
-        let original = component.clone();
-        let mut cancel = false;
-        native_server_chat(uuid, &name, &message.content, &mut component, &mut cancel);
-        if cancel {
-            return;
-        }
-        // logChatMessage logs the decorated content, which a mod may have replaced.
-        let line = format!("<{name}> {}", self.english(&component));
-        if component != original {
-            message.unsigned_content = Some(component);
+        let mut line = format!("<{name}> {}", message.content);
+        if crate::native_client_hooks::server_chat_enabled() {
+            let mut component = literal(&message.content);
+            let original = component.clone();
+            let mut cancel = false;
+            native_server_chat(uuid, &name, &message.content, &mut component, &mut cancel);
+            if cancel {
+                return;
+            }
+            if component != original {
+                line = format!("<{name}> {}", self.english(&component));
+                message.unsigned_content = Some(component);
+            }
         }
         let bound = play::ChatTypeBound {
             chat_type: self.chat_type,
