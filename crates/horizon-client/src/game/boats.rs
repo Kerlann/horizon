@@ -566,6 +566,25 @@ impl Game<'_> {
             0.0
         }
     }
+    pub(super) fn native_check_entering_section(&mut self, entity: u32, before: Vec3, after: Vec3) {
+        let section = |p: Vec3| {
+            horizon_core::position::SectionPos::new(
+                p.x.floor() as i32 >> 4,
+                p.y.floor() as i32 >> 4,
+                p.z.floor() as i32 >> 4,
+            )
+        };
+        let old = section(before);
+        let new = section(after);
+        if old != new {
+            self.native_entity_entering_section(
+                entity,
+                old.pack(),
+                new.pack(),
+                old.x != new.x || old.z != new.z,
+            );
+        }
+    }
     /// `AbstractBoat.tick` for one boat (`controlled` when the player rides it).
     pub(super) fn tick_boat(&mut self, mut b: Boat, controlled: bool) -> Boat {
         b.previous = b.position;
@@ -702,23 +721,7 @@ impl Game<'_> {
                 b.velocity.y = 0.0;
             }
         }
-        let section = |p: Vec3| {
-            horizon_core::position::SectionPos::new(
-                p.x.floor() as i32 >> 4,
-                p.y.floor() as i32 >> 4,
-                p.z.floor() as i32 >> 4,
-            )
-        };
-        let old_section = section(section_before);
-        let new_section = section(b.position);
-        if old_section != new_section {
-            self.native_entity_entering_section(
-                b.id,
-                old_section.pack(),
-                new_section.pack(),
-                old_section.x != new_section.x || old_section.z != new_section.z,
-            );
-        }
+        self.native_check_entering_section(b.id, section_before, b.position);
         // Paddle sounds at the top of each stroke.
         for i in 0..2 {
             if b.paddling[i] {

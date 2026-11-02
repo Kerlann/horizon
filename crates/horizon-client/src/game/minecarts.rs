@@ -1209,6 +1209,7 @@ impl Game<'_> {
         } else {
             self.come_off_track(c);
         }
+        self.native_check_entering_section(c.id, c.previous, c.position);
         c.first_tick = false;
         // The old behavior derives yaw once per tick; the experiment has
         // already recorded each step's yaw and pitch.
