@@ -2020,6 +2020,8 @@ mod tests {
     fn mod_tick_kills_mob_through_death_and_drops() {
         effect_test_mod();
         super::super::native_entity_refs::tests::with_game(|game| {
+            // Death drops read the server's loot, which a world open loads.
+            game.load_server_loot();
             use horizon_client::chunk::Chunk;
             use std::sync::Arc;
             game.world
