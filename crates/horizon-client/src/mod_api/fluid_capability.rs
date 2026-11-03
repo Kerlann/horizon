@@ -58,7 +58,7 @@ impl FluidStack {
 pub const FLUIDS: CapabilityKey<dyn FluidHandler> = CapabilityKey {
     name: "horizon:fluids",
     default: Some(|host, at| {
-        host.fluid_tank_count(at.pos, None)
+        host.backend(crate::mod_api::BackendToken(())).fluid_tank_count(at.pos, None)
             .map(|_| Box::new(GameFluids) as Box<dyn FluidHandler>)
     }),
     handler: PhantomData,
@@ -117,7 +117,7 @@ pub trait FluidHandler: Send + Sync + 'static {
 struct GameFluids;
 impl FluidHandler for GameFluids {
     fn tanks(&self, host: &dyn Host, at: [i32; 3], side: Option<Direction>) -> usize {
-        host.fluid_tank_count(at, side).unwrap_or(0)
+        host.backend(crate::mod_api::BackendToken(())).fluid_tank_count(at, side).unwrap_or(0)
     }
     fn fluid(
         &self,
@@ -136,7 +136,7 @@ impl FluidHandler for GameFluids {
         tank: usize,
         fluid: &FluidStack,
     ) -> u32 {
-        host.fluid_tank_capacity(at, side, tank, fluid)
+        host.backend(crate::mod_api::BackendToken(())).fluid_tank_capacity(at, side, tank, fluid)
     }
     fn insert(
         &self,
@@ -147,7 +147,7 @@ impl FluidHandler for GameFluids {
         fluid: FluidStack,
         simulate: bool,
     ) -> Option<FluidStack> {
-        host.fluid_tank_insert(at, side, tank, fluid, simulate)
+        host.backend_mut(crate::mod_api::BackendToken(())).fluid_tank_insert(at, side, tank, fluid, simulate)
     }
     fn extract(
         &self,
@@ -158,7 +158,7 @@ impl FluidHandler for GameFluids {
         max: u32,
         simulate: bool,
     ) -> Option<FluidStack> {
-        host.fluid_tank_extract(at, side, tank, max, simulate)
+        host.backend_mut(crate::mod_api::BackendToken(())).fluid_tank_extract(at, side, tank, max, simulate)
     }
 }
 
