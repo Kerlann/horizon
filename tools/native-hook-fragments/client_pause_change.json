@@ -1,0 +1,27 @@
+{
+  "hooks": [
+    {
+      "name": "client_pause_change_pre",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_client_pause_change_pre",
+      "neoforge": "ClientPauseChangeEvent.Pre",
+      "side": "client",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "cancel"
+      }
+    },
+    {
+      "name": "client_pause_change_post",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_client_pause_change_post",
+      "neoforge": "ClientPauseChangeEvent.Post",
+      "side": "client",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "listen"
+      }
+    }
+  ],
+  "rust_summary": "The client pause state changes (`native_client_pause_change_pre` and `native_client_pause_change_post`).",
+  "doc_summary": "Before a client pause-state change, `native_client_pause_change_pre(paused, cancel)` may cancel it. After an accepted change, `native_client_pause_change_post(paused)` observes the updated state. Bundles need \"hooks\": @API:client_pause_change@."
+}

@@ -1,0 +1,12 @@
+{
+  "hooks": [],
+  "helpers": [
+    {"name": "block_state_id", "target": "horizon_client::game::native_block_states::Game<'_>::native_block_state_id"},
+    {"name": "block_state_string", "target": "horizon_client::game::native_block_states::Game<'_>::native_block_state_string"},
+    {"name": "block_state_default", "target": "horizon_client::game::native_block_states::Game<'_>::native_block_state_default"},
+    {"name": "item_stack_in_tag", "target": "horizon_client::game::native_block_states::Game<'_>::native_item_stack_in_tag"}
+  ],
+  "rust_summary": "block state ids and names, and item tags, on `Host` (`native_block_state_id`,\n`native_block_state_string`, `native_block_state_default`, `native_item_stack_in_tag`).",
+  "doc_summary": "block state ids and names on `Host`, with no level: `block_state_id(name)` reads `minecraft:oak_stairs[facing=east]` as `/setblock` does (`BlockStateParser.parseForBlock`, `Block.getId`), `block_state_string(state)` writes a state back the same way (`BlockStateParser.serialize`), and `block_state_default(block)` is `Block.defaultBlockState`. Each is None for a name or id the registry doesn't have. `item_stack_in_tag(stack, tag)` is `ItemStack.is(TagKey)` over the world's merged tags, data packs included, and None on a client or before the tags load. Bundles need \"hooks\": @API:block_state_ids@.",
+  "comments": ["crates/horizon-client/src/game/native_block_states.rs"]
+}

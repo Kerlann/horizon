@@ -132,7 +132,7 @@ def run(command, **kwargs):
 
 
 def source_hashes(sources):
-    return {str(Path(path).resolve().relative_to(lab.ROOT)): lab.digest(Path(path), "sha256") for path in sources}
+    return {str(Path(path).absolute().relative_to(lab.ROOT)): lab.digest(Path(path), "sha256") for path in sources}
 
 
 def ensure_sources_unchanged(sources, expected):

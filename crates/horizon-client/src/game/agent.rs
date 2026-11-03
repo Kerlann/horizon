@@ -315,18 +315,8 @@ pub(super) enum Handled {
 
 impl Game<'_> {
     pub(super) fn state_string(&self, state: BlockStateId) -> String {
-        let Some(s) = self.pack.assets.registry.state(state) else {
-            return "?".into();
-        };
-        if s.properties.is_empty() {
-            return s.name.clone();
-        }
-        let props: Vec<String> = s
-            .properties
-            .iter()
-            .map(|(k, v)| format!("{k}={v}"))
-            .collect();
-        format!("{}[{}]", s.name, props.join(","))
+        self.native_block_state_string(state)
+            .unwrap_or_else(|| "?".into())
     }
     fn block_json(&self, pos: [i32; 3]) -> Value {
         let state = self.world.block(pos[0], pos[1], pos[2]);

@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "client_player_change_game_type",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_client_player_change_game_type",
+      "neoforge": "ClientPlayerChangeGameTypeEvent",
+      "side": "client",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "listen"
+      }
+    }
+  ],
+  "rust_summary": "The client receives a local player info game type change (`native_client_player_change_game_type`).",
+  "doc_summary": "The client observes a local player info game type change with `native_client_player_change_game_type(player_id, player_uuid, current_game_type, new_game_type)`. Bundles need \"hooks\": @API:client_player_change_game_type@."
+}

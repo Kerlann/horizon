@@ -2175,6 +2175,55 @@ impl Game<'_> {
             dimension_changed,
         );
     }
+    /// NeoForge's `ClientChatEvent`: a client is about to send `message`.
+    /// `original_message` is immutable; change `message` or set `cancel` to
+    /// prevent sending. @API:client_chat@.
+    pub(super) fn native_client_chat(
+        &mut self,
+        player_id: i32,
+        player_uuid: u128,
+        original_message: &str,
+        message: &mut String,
+        cancel: &mut bool,
+    ) {
+        mod_api::dispatch_client_chat(
+            self,
+            mod_api::mods(),
+            player_id,
+            player_uuid,
+            original_message,
+            message,
+            cancel,
+        );
+    }
+    /// NeoForge's `ClientPauseChangeEvent.Pre`: cancel a proposed pause change.
+    /// @API:client_pause_change@.
+    pub(super) fn native_client_pause_change_pre(&mut self, paused: bool, cancel: &mut bool) {
+        mod_api::dispatch_client_pause_change_pre(self, mod_api::mods(), paused, cancel);
+    }
+    /// NeoForge's `ClientPauseChangeEvent.Post`: the pause state changed.
+    /// @API:client_pause_change@.
+    pub(super) fn native_client_pause_change_post(&mut self, paused: bool) {
+        mod_api::dispatch_client_pause_change_post(self, mod_api::mods(), paused);
+    }
+    /// NeoForge's `ClientPlayerChangeGameTypeEvent`: observe the local player info game type change.
+    /// @API:client_player_change_game_type@.
+    pub(super) fn native_client_player_change_game_type(
+        &mut self,
+        player_id: i32,
+        player_uuid: u128,
+        current_game_type: i32,
+        new_game_type: i32,
+    ) {
+        mod_api::dispatch_client_player_change_game_type(
+            self,
+            mod_api::mods(),
+            player_id,
+            player_uuid,
+            current_game_type,
+            new_game_type,
+        );
+    }
     /// Once a tick, in every `Game`: the window's (in single player, on LAN
     /// and on servers), and the server's own (`native_window` is false
     /// there: the single player server thread, a dedicated server).

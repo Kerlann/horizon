@@ -303,13 +303,13 @@ fn resource_ids(root: &Path) -> Arc<ResourceIds> {
 }
 
 /// Every block's properties and their values, as `/setblock` completes them.
-type BlockProperties = BTreeMap<String, Vec<(String, Vec<String>)>>;
+pub(super) type BlockProperties = BTreeMap<String, Vec<(String, Vec<String>)>>;
 static BLOCK_PROPERTIES: Mutex<Vec<(usize, Arc<BlockProperties>)>> = Mutex::new(Vec::new());
 
 /// `BlockProperties` of a block registry, listed once: a registry never
 /// changes once built, and walking its tens of thousands of states took
 /// about 30 ms of every world opening.
-fn block_properties(registry: &'static BlockRegistry) -> Arc<BlockProperties> {
+pub(super) fn block_properties(registry: &'static BlockRegistry) -> Arc<BlockProperties> {
     let key = std::ptr::from_ref(registry) as usize;
     let mut cache = BLOCK_PROPERTIES.lock().unwrap_or_else(|e| e.into_inner());
     if let Some((_, properties)) = cache.iter().find(|(cached, _)| *cached == key) {
@@ -975,7 +975,7 @@ impl Game<'_> {
             {
                 return;
             }
-            self.send_chat(&message);
+            self.send_chat_from_screen(&message);
             return;
         }
         if let Some(command) = message.strip_prefix('/') {

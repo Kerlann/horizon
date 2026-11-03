@@ -819,7 +819,8 @@ impl Game<'_> {
             "chat" => {
                 let text = line.trim_start().strip_prefix("chat").unwrap_or("").trim();
                 if self.remote.is_some() {
-                    self.send_chat(text);
+                    // As typed into the chat screen: history, then the client chat event.
+                    self.handle_chat_input(text);
                     return ok();
                 }
                 self.require_world()?;

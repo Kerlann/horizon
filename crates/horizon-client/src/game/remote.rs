@@ -4695,7 +4695,25 @@ impl Game<'_> {
                             }
                         }
                     }
-                    for e in p.entries {
+                }
+                for e in p.entries {
+                    if !horizon_client::mod_api::mods().is_empty()
+                        && self.player.is_some()
+                        && let Some(mode) = e.game_mode
+                        && let Some(r) = self.remote.as_ref()
+                        && r.profile == e.uuid
+                        && let Some(info) = r.tab_players.get(&e.uuid)
+                        && info.game_mode != mode
+                    {
+                        let current = info.game_mode;
+                        self.native_client_player_change_game_type(
+                            self.own_entity_id(),
+                            e.uuid,
+                            current,
+                            mode,
+                        );
+                    }
+                    if let Some(r) = self.remote.as_mut() {
                         if let Some(t) = r.tab_players.get_mut(&e.uuid) {
                             if let Some(mode) = e.game_mode {
                                 t.game_mode = mode;
@@ -8958,6 +8976,20 @@ impl Game<'_> {
             self.send_signed_chat(message);
         }
     }
+    /// ChatScreen.handleChatInput fires the client event for chat, not commands.
+    pub(super) fn send_chat_from_screen(&mut self, message: &str) {
+        if message.starts_with('/') || horizon_client::mod_api::mods().is_empty() {
+            self.send_chat(message);
+        } else if let Some(uuid) = self.remote.as_ref().map(|r| r.profile) {
+            let id = self.own_entity_id();
+            let sent = chat_after_event(message, |outgoing, cancel| {
+                self.native_client_chat(id, uuid, message, outgoing, cancel);
+            });
+            if let Some(outgoing) = sent {
+                self.send_signed_chat(&outgoing);
+            }
+        }
+    }
     /// MultiPlayerGameMode.dropItem (key.drop): predict the removal, then send
     /// the action; swing only if a nonempty stack was removed.
     pub(super) fn remote_drop(&mut self, all: bool) {
@@ -10467,9 +10499,31 @@ fn client_millis() -> u64 {
         .as_millis() as u64
 }
 
+/// What `ChatScreen.handleChatInput` sends of typed chat once `ClientChatEvent` (`ask`, with
+/// the outgoing message and the cancel flag) had its say: nothing when canceled or emptied.
+fn chat_after_event(message: &str, ask: impl FnOnce(&mut String, &mut bool)) -> Option<String> {
+    let mut outgoing = message.to_owned();
+    let mut cancel = false;
+    ask(&mut outgoing, &mut cancel);
+    (!cancel && !outgoing.is_empty()).then_some(outgoing)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{keep_client_state, remote_use_swings, synced_local_use};
+    use super::{chat_after_event, keep_client_state, remote_use_swings, synced_local_use};
+
+    /// `ClientChatEvent`: a mod's edit is what is sent; a cancel or an emptied message sends
+    /// nothing; untouched chat goes out as typed.
+    #[test]
+    fn typed_chat_is_sent_as_the_client_chat_event_leaves_it() {
+        assert_eq!(chat_after_event("hello", |_, _| {}), Some("hello".into()));
+        assert_eq!(
+            chat_after_event("hello", |m, _| m.push_str(" world")),
+            Some("hello world".into())
+        );
+        assert_eq!(chat_after_event("hello", |_, c| *c = true), None);
+        assert_eq!(chat_after_event("hello", |m, _| m.clear()), None);
+    }
     use horizon_client::{
         containers::{Beacon, BlockEntity},
         items::ItemStack,
