@@ -246,6 +246,48 @@ impl Game<'_> {
     }
     /// Put a stack (or nothing) in a slot; false when the slot cannot take it.
     pub(in crate::game) fn slot_set(&mut self, s: &Slot, stack: Option<ItemStack>) -> bool {
+        use super::super::dispenser::{Slot as EquipSlot, mob_equipment_slot_for_item};
+
+        // LivingEntity.createEquipmentSlotAccess permits anything in the head and
+        // hands; other equipment slots require getEquipmentSlotForItem to match.
+        let equipment = match s {
+            Slot::Armor(i) => ["head", "chest", "legs", "feet"].get(*i).copied(),
+            Slot::Equipment(i) => horizon_items::equipment::SLOT_NAMES.get(*i).copied(),
+            Slot::Mob(_, name) => Some(*name),
+            Slot::Stand(_, i) => horizon_client::entities::ArmorStand::SLOTS.get(*i).copied(),
+            _ => None,
+        };
+        if let (Some(name @ ("chest" | "legs" | "feet" | "body" | "saddle")), Some(item)) = (
+            equipment,
+            stack
+                .as_ref()
+                .filter(|s| s.count > 0 && &*s.item != "minecraft:air"),
+        ) {
+            let slot = EquipSlot::from_name(name).expect("equipment slot name");
+            let usable =
+                match s {
+                    Slot::Mob(id, _) => self.mobs.iter().find(|m| m.id == *id).is_some_and(|m| {
+                        mob_equipment_slot_for_item(m, item, self.items()) == slot
+                    }),
+                    Slot::Stand(id, i) => self
+                        .armor_stands
+                        .iter()
+                        .find(|a| a.id == *id)
+                        .is_some_and(|a| {
+                            !a.is_disabled(*i)
+                                && horizon_client::item_sync::equippable_slot(item, self.items())
+                                    .as_deref()
+                                    == Some(name)
+                        }),
+                    _ => {
+                        horizon_client::item_sync::equippable_slot(item, self.items()).as_deref()
+                            == Some(name)
+                    }
+                };
+            if !usable {
+                return false;
+            }
+        }
         match s {
             Slot::Guest(conn, slot) => self
                 .for_player(Target::Guest(*conn), |g| g.slot_set(slot, stack))

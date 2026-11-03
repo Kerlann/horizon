@@ -248,6 +248,23 @@ pub(super) fn mob_slot_item(m: &Mob, slot: Slot) -> Option<Arc<str>> {
         Slot::Saddle => m.saddle_item().map(|s| s.item),
     }
 }
+/// `LivingEntity.getEquipmentSlotForItem`, including the sulfur cube override.
+pub(super) fn mob_equipment_slot_for_item(
+    m: &Mob,
+    item: &ItemStack,
+    items: &horizon_client::items::Items,
+) -> Slot {
+    if m.species() == Species::SulfurCube && sulfur_cube::swallowable(m, &item.item) {
+        Slot::Body
+    } else {
+        horizon_client::item_sync::equippable_slot(item, items)
+            .as_deref()
+            .and_then(Slot::from_name)
+            .filter(|slot| mob_can_use_slot(m, *slot))
+            .unwrap_or(Slot::MainHand)
+    }
+}
+
 /// `LivingEntity.canUseSlot` and its overrides.
 fn mob_can_use_slot(m: &Mob, slot: Slot) -> bool {
     let s = m.species();

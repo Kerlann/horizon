@@ -830,6 +830,27 @@ def loot_set_damage():
     return ops + setup('/setblock 2 220 2 minecraft:air')
 
 
+def equipment_slot_access():
+    return [
+        *setup('/clear @s', '/gamemode survival'),
+        # LivingEntity.getSlot exposes equipment, but rejects incompatible stacks.
+        cmd('/item replace entity @s armor.chest with minecraft:stone'),
+        cmd('/item replace entity @s armor.chest with minecraft:iron_chestplate'),
+        cmd('/item replace entity @s armor.head with minecraft:stone'),
+        cmd('/item replace entity @s armor.body with minecraft:stone'),
+        cmd('/item replace entity @s armor.body with minecraft:wolf_armor'),
+        cmd('/item replace entity @s saddle with minecraft:stone'),
+        cmd('/item replace entity @s saddle with minecraft:saddle'),
+        *setup('/summon minecraft:armor_stand 5 210 5 {Tags:["slot_stand"],DisabledSlots:16}',
+               '/summon minecraft:sulfur_cube 6 210 5 {Tags:["slot_cube"],NoAI:1b}'),
+        cmd('/item replace entity @e[tag=slot_stand,limit=1] armor.chest with minecraft:iron_chestplate'),
+        cmd('/item replace entity @e[tag=slot_stand,limit=1] armor.head with minecraft:stone'),
+        cmd('/item replace entity @e[tag=slot_cube,limit=1] armor.body with minecraft:stone'),
+        cmd('/item replace entity @e[tag=slot_cube,limit=1] armor.body with minecraft:oak_planks'),
+        *setup('/kill @e[tag=slot_stand]', '/kill @e[tag=slot_cube]'),
+    ]
+
+
 def items_and_loot():
     return [
         *setup('/clear @s', '/gamemode survival'),
@@ -2380,6 +2401,7 @@ def groups():
         ('selector missing predicates', selector_missing_predicates()),
         ('levels', levels()),
         ('end portal entities', end_portal_entities()),
+        ('equipment slot access', equipment_slot_access()),
         ('items and loot', items_and_loot()),
         ('summoned fangs lifetime', summoned_fangs_lifetime()),
         ('summoned fangs edits', summoned_fangs_edits()),
