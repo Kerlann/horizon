@@ -78,9 +78,9 @@ pub(super) enum Target {
     /// A simulated lingering, creeper or dragon area-effect cloud.
     Cloud(u32),
 }
-/// `Entity.setXRot`: clamp the pitch, no wrap (`PositionMoveRotation.calculateAbsolute`).
+/// `Entity.setXRot`: wrap, then clamp the pitch.
 pub(super) fn entity_pitch(pitch: f32) -> f32 {
-    pitch.clamp(-90.0, 90.0)
+    (pitch % 360.0).clamp(-90.0, 90.0)
 }
 
 /// `PositionMoveRotation.calculateAbsolute` and `TeleportCommand.performTeleport`.
@@ -1771,10 +1771,9 @@ impl Game<'_> {
     /// with no move: what `/rotate` does (`Entity.forceSetRotation`).
     fn rotate_in_place(&mut self, t: Target, rotation: [f32; 2]) {
         let [yaw, pitch] = rotation;
-        // `Entity.setYRot`/`setXRot` (Entity.java:4010): a non-finite angle
-        // is discarded and the old one kept; the pitch is then clamped.
+        // Clamp pitch before setXRot; discard NaN pitch and non-finite yaw.
         let yaw = yaw.is_finite().then_some(yaw);
-        let pitch = pitch.is_finite().then(|| entity_pitch(pitch));
+        let pitch = (!pitch.is_nan()).then(|| entity_pitch(pitch.clamp(-90.0, 90.0)));
         match t {
             Target::Player => {
                 if let Some(yaw) = yaw {
@@ -4524,11 +4523,10 @@ mod teleport_mob_tests {
         });
     }
 
-    /// An overlong digit string parses to infinity; `Entity.setXRot`
-    /// discards a non-finite angle and keeps the old one (Entity.java:4010).
+    /// Infinite pitch is clamped by `calculateAbsolute` before `setXRot`.
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
-    fn rotate_discards_an_infinite_pitch() {
+    fn rotate_clamps_an_infinite_pitch() {
         use super::super::native_entity_refs::tests::with_game;
         use horizon_client::motion::PlayerMotion;
         use horizon_core::geometry::Vec3;
@@ -4543,7 +4541,9 @@ mod teleport_mob_tests {
             game.pitch = 10.0;
             game.ui.registries.permission = 4;
             assert!(game.run_command(&format!("rotate @s 0 {}", "1".repeat(400))));
-            assert_eq!(game.pitch, 10.0, "a non-finite pitch keeps the old one");
+            assert_eq!(game.pitch, 90.0);
+            assert!(game.run_command(&format!("rotate @s 0 -{}", "1".repeat(400))));
+            assert_eq!(game.pitch, -90.0);
             assert_eq!(game.yaw, 0.0);
         });
     }
