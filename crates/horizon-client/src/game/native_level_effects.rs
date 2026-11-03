@@ -6,6 +6,7 @@
 use super::native_hooks::{mod_particles_ok, mod_sound_ok};
 use super::{Dim, Game, creatures::NativeSound, lan_particles::QueuedParticle};
 use horizon_client::mod_api::{LevelRef, NativeSoundSource, ParticleOptions};
+use horizon_core::random::RandomSource;
 use horizon_world::registry::BlockStateId;
 
 impl Game<'_> {
@@ -52,6 +53,12 @@ impl Game<'_> {
         if !mod_sound_ok(sound, at, source.index(), volume, pitch) {
             return None;
         }
+        let world = if dimension == self.dim.id() {
+            &mut self.world
+        } else {
+            self.levels.parked_world_mut(Dim::from_id(dimension))?
+        };
+        let seed = world.random.next_long();
         self.creatures.lan_sounds.push(NativeSound {
             dimension,
             sound: sound.to_owned(),
@@ -59,6 +66,7 @@ impl Game<'_> {
             source: source.index() as i32,
             volume,
             pitch,
+            seed,
             except,
             entity: None,
         });

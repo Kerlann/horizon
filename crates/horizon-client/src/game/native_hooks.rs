@@ -7102,6 +7102,7 @@ impl GameLevel<'_> {
             source: source as i32,
             volume,
             pitch,
+            seed: self.world.random.next_long(),
             except: None,
             entity: None,
         });
