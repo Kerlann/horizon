@@ -227,6 +227,7 @@ mod native_item_entity_refs;
 mod native_item_places;
 mod native_level_effects;
 mod native_level_events;
+mod native_level_items;
 mod native_level_refs;
 mod native_level_world;
 mod native_lifecycle;
@@ -4431,12 +4432,12 @@ impl Game<'_> {
         let mut removed = removed.into_iter();
         items.retain(|_| !removed.next().unwrap_or(false));
         let Some(p) = self.player.as_ref() else {
-            self.dropped = items;
+            self.put_back_dropped(items);
             self.spawn_destroyed_contents(destroyed);
             return;
         };
         if p.health.dead_or_dying() || self.spectator() {
-            self.dropped = items;
+            self.put_back_dropped(items);
             self.spawn_destroyed_contents(destroyed);
             return;
         }
@@ -4518,8 +4519,18 @@ impl Game<'_> {
             }
             kept.push(item);
         }
-        self.dropped = kept.into();
+        self.put_back_dropped(kept);
         self.spawn_destroyed_contents(destroyed);
+    }
+    /// The item entities `tick_dropped_items` took out, back in the level,
+    /// before those its hooks spawned meanwhile (`addFreshEntity` appends).
+    /// They keep their join numbers; the spawned ones got theirs on joining.
+    fn put_back_dropped(
+        &mut self,
+        items: impl Into<horizon_client::join_seq::JoinList<ItemEntity>>,
+    ) {
+        let spawned = std::mem::replace(&mut self.dropped, items.into());
+        self.dropped.extend(spawned);
     }
     /// `ItemUtils.onContainerDestroyed`: each stack a destroyed item held
     /// becomes an item entity where that item lay (`new ItemEntity(level, x,
@@ -13701,12 +13712,14 @@ impl Game<'_> {
     /// adding their counts and keeping the smaller age. Server only.
     fn merge_orbs(&mut self) {
         let mut removed = vec![false; self.orbs.len()];
-        for i in 0..self.orbs.len() {
+        // Orbs a merge hook awards join after the scan.
+        let scanned = removed.len();
+        for i in 0..scanned {
             if removed[i] || self.orbs[i].ticks % 20 != 1 {
                 continue;
             }
             let area = self.orbs[i].bounds().inflate(Vec3::new(0.5, 0.5, 0.5));
-            for j in 0..self.orbs.len() {
+            for j in 0..scanned {
                 if j == i || removed[j] || !self.orbs[j].bounds().intersects(area) {
                     continue;
                 }
