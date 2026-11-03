@@ -379,14 +379,9 @@ mod tests {
             assert!(handle.set_critical(game, true));
             assert!(game.creatures.projectiles[0].critical());
 
-            // REVERSE: one float from the arrow's random, then the scaled velocity.
-            let draw = game.creatures.projectiles[0]
-                .arrow
-                .as_ref()
-                .unwrap()
-                .random
-                .clone()
-                .next_float();
+            // REVERSE: one float from the projectile's `Entity.random`, then
+            // the scaled velocity.
+            let draw = game.creatures.projectiles[0].random.0.clone().next_float();
             let yaw = game.creatures.projectiles[0].yaw;
             assert!(handle.deflect(game, NativeDeflection::Reverse, None, None, false, [0.2; 3]));
             let p = &game.creatures.projectiles[0];

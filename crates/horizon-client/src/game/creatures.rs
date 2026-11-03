@@ -75,19 +75,6 @@ pub(super) struct DyingDrops<'a> {
     pub(super) recently_hit: bool,
 }
 
-/// The world impact sound after successful arrow damage, including self-shots.
-/// `AbstractArrow.onHitEntity`'s damage: the crit bonus comes from the
-/// arrow's own random.
-fn arrow_damage(arrow: &mut Projectile, fallback: &mut impl RandomSource) -> f32 {
-    let mut state = arrow.arrow.take();
-    let damage = match state.as_mut() {
-        Some(a) => arrow.arrow_damage(&mut a.random),
-        None => arrow.arrow_damage(fallback),
-    };
-    arrow.arrow = state;
-    damage
-}
-
 /// A sound a native mod queued, sent when the host is free.
 pub(super) struct NativeSound {
     pub dimension: &'static str,
@@ -4438,7 +4425,7 @@ impl Game<'_> {
     /// (Impaling's `minecraft:damage` on `#sensitive_to_impaling`).
     fn shot_damage(&mut self, shot: &mut Projectile, victim: Option<&str>) -> f32 {
         if !matches!(shot.kind, ProjectileKind::Trident) {
-            return arrow_damage(shot, &mut self.world.random) + shot.bonus.damage;
+            return shot.arrow_damage() + shot.bonus.damage;
         }
         let Some(trident) = shot.arrow.as_ref().map(|a| a.pickup_item.clone()) else {
             return 8.0;
@@ -4950,12 +4937,12 @@ impl Game<'_> {
                 },
             ) if wind_charge_hit(id).is_some() => {
                 let mut arrow = p.clone();
-                arrow_damage(&mut arrow, &mut self.world.random);
+                arrow.arrow_damage();
                 self.finish_arrow_hit(arrow, EntityHit::Refused);
             }
             (ProjectileKind::Arrow { .. }, Hit::Entity { who, .. }) => {
                 let mut arrow = p.clone();
-                let amount = arrow_damage(&mut arrow, &mut self.world.random) + p.bonus.damage;
+                let amount = arrow.arrow_damage() + p.bonus.damage;
                 let player_fire = self.player.as_ref().map(|pl| pl.fire_ticks);
                 let mut dodged = false;
                 // AbstractArrow.onHitEntity: a burning arrow sets its target alight.
