@@ -5108,6 +5108,9 @@ impl Game<'_> {
                         let from = pl.position;
                         self.spawn_mob("minecraft:endermite", [from.x, from.y, from.z], false);
                     }
+                    // ServerPlayer.teleport: removeVehicle before the
+                    // pearl places its owner (asPassenger is false there).
+                    self.stop_riding();
                     if let Some(pl) = self.player.as_mut() {
                         pl.position = to;
                         pl.velocity = Vec3::ZERO;
@@ -7813,6 +7816,125 @@ mod pearl_tests {
     /// A pearl's water test is `Entity.isInWater`: `wasTouchingWater` from the
     /// last `updateFluidInteraction`, water whose surface reaches its 0.25
     /// box (#3072), not the block at its feet.
+    /// `ServerPlayer.teleport` dismounts its passenger first: a riding
+    /// guest whose pearl lands is off its mount, with the empty
+    /// `SetPassengers` told before its position packet.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_riding_guests_pearl_dismounts_it_first() {
+        use crate::game::lan::LanSettings;
+        use crate::game::native_entity_refs::tests::with_game;
+        use horizon_client::lan::{Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig};
+        use horizon_protocol::packets::configuration::ClientInformation;
+        use horizon_protocol::packets::play::Clientbound as C;
+        use std::sync::{Arc, atomic::AtomicI32, mpsc};
+
+        with_game(|game| {
+            let settings = LanSettings {
+                port: 0,
+                guest_commands: true,
+                force_game_mode: false,
+            };
+            let net = NetConfig {
+                announce: false,
+                ..NetConfig::lan(0, "PearlTest".into(), 2)
+            };
+            let config = HubConfig {
+                default_game_mode: 0,
+                guest_commands: true,
+                force_game_mode: false,
+                hardcore: false,
+                view_distance: 10,
+                simulation_distance: 10,
+                dimension: "minecraft:overworld".into(),
+                allow_flight: false,
+                seed: 0,
+                max_players: 2,
+                integrated: false,
+                levels: Default::default(),
+            };
+            game.lan_host(settings, net, config).unwrap();
+            let (tx, rx) = mpsc::channel();
+            let mut guest = Guest::new(
+                Joined {
+                    conn: 1,
+                    uuid: 123,
+                    name: "guest1".into(),
+                    properties: Vec::new(),
+                    info: ClientInformation::new(8),
+                    brand: String::new(),
+                    sender: PlayerSender::new(tx, Arc::default()),
+                    latency: Arc::new(AtomicI32::new(0)),
+                    address: "127.0.0.1:1".parse().unwrap(),
+                },
+                20,
+                [2.0, 65.25, 3.0],
+                8,
+            );
+            guest.placed = true;
+            guest.vehicle = Some(42);
+            game.lan.as_mut().unwrap().hub.guests.push(guest);
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:skeleton")
+                .unwrap()
+                .clone();
+            game.mobs
+                .push(Mob::new(42, kind, Vec3::new(2.0, 64.0, 3.0), 0.0));
+            let mut pearl = Projectile::new(
+                ProjectileKind::EnderPearl,
+                Vec3::new(10.0, 64.0, 10.0),
+                Some(Who::Player),
+            );
+            pearl.previous = Vec3::new(10.0, 65.5, 10.0);
+            pearl.guest = Some(1);
+            let mut host = game.lan.take().unwrap();
+            game.as_guest(&mut host, 1, |game| {
+                game.projectile_hit(
+                    &pearl,
+                    Hit::Block {
+                        pos: [10, 64, 10],
+                        at: Vec3::new(10.0, 65.5, 10.0),
+                        face: [0; 3],
+                    },
+                )
+                .unwrap();
+            });
+            game.lan = Some(host);
+            let guest = &game.lan.as_ref().unwrap().hub.guests[0];
+            assert_eq!(guest.vehicle, None, "the pearl's teleport dismounts");
+            assert_eq!(guest.position, [10.0, 65.5, 10.0]);
+            let mut dismount_at = None;
+            let mut position_at = None;
+            let mut order = 0usize;
+            while let Ok(out) = rx.try_recv() {
+                let crate::lan::Out::Packet(body) = out else {
+                    continue;
+                };
+                let mut r = horizon_protocol::buf::Reader::new(&body);
+                let id = r.varint().unwrap();
+                let rest = r.rest();
+                if let Ok(C::SetPassengers(p)) = C::decode(id, rest)
+                    && p.passengers.is_empty()
+                {
+                    dismount_at = Some(order);
+                }
+                if let Ok(C::PlayerPosition(_)) = C::decode(id, rest) {
+                    position_at = Some(order);
+                }
+                order += 1;
+            }
+            let (Some(dismount), Some(position)) = (dismount_at, position_at) else {
+                panic!("no dismount and position packet pair");
+            };
+            assert!(
+                dismount < position,
+                "the dismount is told before the teleport"
+            );
+        });
+    }
+
     #[test]
     fn a_pearl_feels_the_water_its_box_touches() {
         // The throwable air drag is the float 0.99 widened to a double.

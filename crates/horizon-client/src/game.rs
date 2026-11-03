@@ -14891,6 +14891,9 @@ impl Game<'_> {
         let Some(at) = self.sleeping_position(head) else {
             return;
         };
+        // LivingEntity.startSleeping: a passenger gets off before the bed
+        // takes it.
+        self.stop_riding();
         self.stop_mining();
         self.left = false;
         self.right = false;

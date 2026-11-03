@@ -4730,10 +4730,11 @@ mod teleport_mob_tests {
                 };
                 let mut r = horizon_protocol::buf::Reader::new(&body);
                 let id = r.varint().unwrap();
-                if let Ok(C::PlayerPosition(p)) = C::decode(id, r.rest()) {
+                let rest = r.rest();
+                if let Ok(C::PlayerPosition(p)) = C::decode(id, rest) {
                     position = Some(p);
                 }
-                if let Ok(C::SetPassengers(p)) = C::decode(id, r.rest())
+                if let Ok(C::SetPassengers(p)) = C::decode(id, rest)
                     && p.passengers.is_empty()
                 {
                     unmounted = true;
