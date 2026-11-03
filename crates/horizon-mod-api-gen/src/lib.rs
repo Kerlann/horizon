@@ -600,10 +600,21 @@ fn host_for(is_level: bool, mutable: Option<bool>, ticks: bool) -> Option<(&'sta
     })
 }
 
-fn catalog_hooks(
-    root: &Path,
-    catalog: &serde_json::Value,
-) -> Result<Vec<serde_json::Value>, String> {
+#[derive(Debug)]
+struct CatalogHook {
+    entry: serde_json::Value,
+    side: HelperSide,
+}
+
+impl std::ops::Deref for CatalogHook {
+    type Target = serde_json::Value;
+
+    fn deref(&self) -> &Self::Target {
+        &self.entry
+    }
+}
+
+fn catalog_hooks(root: &Path, catalog: &serde_json::Value) -> Result<Vec<CatalogHook>, String> {
     let mut hooks = catalog["hooks"]
         .as_array()
         .ok_or("catalog hooks must be an array")?
@@ -629,11 +640,15 @@ fn catalog_hooks(
         );
     }
     let mut seen = HashSet::new();
-    for hook in &hooks {
+    let mut validated = Vec::with_capacity(hooks.len());
+    for hook in hooks {
         let name = hook["name"].as_str().ok_or("hook name missing")?;
         if !seen.insert(name.to_owned()) {
             return Err(format!("duplicate hook {name}"));
         }
+        let side = HelperSide::parse(&hook)
+            .map_err(|e| format!("hook {name}: {e}"))?
+            .ok_or_else(|| format!("hook {name}: side missing"))?;
         for key in ["neoforge", "fabric", "paper"] {
             if let Some(value) = hook.get(key) {
                 let valid = value.is_string()
@@ -647,8 +662,9 @@ fn catalog_hooks(
                 }
             }
         }
+        validated.push(CatalogHook { entry: hook, side });
     }
-    Ok(hooks)
+    Ok(validated)
 }
 
 /// The crate folder and module path of a hook target that is a free function
@@ -1077,6 +1093,12 @@ fn sources(root: &Path, fill: FillMode) -> Result<Sources, String> {
             &mut dispatch
         };
         let mut method_source = doc_comments(&method.attrs, name, false)?;
+        let side = match hook.side {
+            HelperSide::Server => "server",
+            HelperSide::Client => "client",
+            HelperSide::Both => "both",
+        };
+        method_source.push_str(&format!("/// Side: {side}.\n"));
         match (contract, out) {
             ("cancel", Some(out)) => method_source.push_str(&format!(
                 "///\n/// Return `Flow::Cancel` to take it: this sets `{out}`, and later mods are skipped.\n"
@@ -1215,7 +1237,8 @@ fn sources(root: &Path, fill: FillMode) -> Result<Sources, String> {
     }
     for helper in &helpers {
         let name = helper["name"].as_str().ok_or("helper name missing")?;
-        let side = HelperSide::parse(helper)?;
+        let side =
+            HelperSide::parse(helper)?.ok_or_else(|| format!("helper {name}: side missing"))?;
         if !names.insert(name) {
             return Err(format!("duplicate helper {name}"));
         }
@@ -1231,10 +1254,9 @@ fn sources(root: &Path, fill: FillMode) -> Result<Sources, String> {
             matching_helper_signatures(&implementation, &client_implementation, name)?;
         }
         let side_doc = match side {
-            Some(HelperSide::Server) => "/// Side: server.\n",
-            Some(HelperSide::Client) => "/// Side: client.\n",
-            Some(HelperSide::Both) => "/// Side: both.\n",
-            None => "",
+            HelperSide::Server => "/// Side: server.\n",
+            HelperSide::Client => "/// Side: client.\n",
+            HelperSide::Both => "/// Side: both.\n",
         };
         host_traits.push_str(side_doc);
         host_traits.push_str(&declaration);
@@ -1436,6 +1458,7 @@ mod tests {
             .unwrap()
             .hooks;
         assert!(generated.contains("fn recipes_received("));
+        assert!(generated.contains("/// Side: client."));
 
         let dir = root
             .join("target")
@@ -1445,10 +1468,10 @@ mod tests {
         std::fs::write(fragments.join("empty.json"), r#"{"hooks":[]}"#).unwrap();
         std::fs::write(
             fragments.join("duplicate.json"),
-            r#"{"hooks":[{"name":"same"}]}"#,
+            r#"{"hooks":[{"name":"same","side":"server"}]}"#,
         )
         .unwrap();
-        let catalog = serde_json::json!({"hooks":[{"name":"same"}]});
+        let catalog = serde_json::json!({"hooks":[{"name":"same","side":"server"}]});
         assert_eq!(
             super::catalog_hooks(&dir, &catalog).unwrap_err(),
             "duplicate hook same"
@@ -1465,13 +1488,24 @@ mod tests {
             .join(format!("mod-api-counterparts-{}", std::process::id()));
         std::fs::create_dir_all(root.join("tools/native-hook-fragments")).unwrap();
         let catalog = serde_json::json!({"hooks": [
-            {"name": "one", "fabric": "Event.ONE", "neoforge": "OneEvent"},
-            {"name": "two", "fabric": ["Event.TWO", "Event.THREE"], "paper": "SomeEvent"},
-            {"name": "none"}
+            {"name": "one", "side": "server", "fabric": "Event.ONE", "neoforge": "OneEvent"},
+            {"name": "two", "side": "both", "fabric": ["Event.TWO", "Event.THREE"], "paper": "SomeEvent"},
+            {"name": "none", "side": "client"}
         ]});
         assert_eq!(super::catalog_hooks(&root, &catalog).unwrap().len(), 3);
+        for side in [serde_json::json!(null), serde_json::json!("invalid")] {
+            let invalid = serde_json::json!({"hooks": [{"name": "bad", "side": side}]});
+            assert!(super::catalog_hooks(&root, &invalid).is_err());
+        }
+        let missing = serde_json::json!({"hooks": [{"name": "bad"}]});
+        assert!(
+            super::catalog_hooks(&root, &missing)
+                .unwrap_err()
+                .contains("side missing")
+        );
         for key in ["fabric", "neoforge", "paper"] {
-            let invalid = serde_json::json!({"hooks": [{"name": "bad", key: ["ok", 4]}]});
+            let invalid =
+                serde_json::json!({"hooks": [{"name": "bad", "side": "server", key: ["ok", 4]}]});
             assert!(
                 super::catalog_hooks(&root, &invalid)
                     .unwrap_err()
@@ -1808,6 +1842,19 @@ mod tests {
         }
         let catalog_path = root.join("native-hooks.json");
         let original_catalog = std::fs::read_to_string(&catalog_path).unwrap();
+        for group in ["helpers", "hooks"] {
+            let mut missing: Value = serde_json::from_str(&original_catalog).unwrap();
+            let entry = &mut missing[group][0];
+            let name = entry["name"].as_str().unwrap().to_owned();
+            entry.as_object_mut().unwrap().remove("side").unwrap();
+            std::fs::write(&catalog_path, missing.to_string()).unwrap();
+            let kind = if group == "hooks" { "hook" } else { "helper" };
+            assert_eq!(
+                super::sources(&root, super::FillMode::Require).unwrap_err(),
+                format!("{kind} {name}: side missing")
+            );
+        }
+        std::fs::write(&catalog_path, &original_catalog).unwrap();
         let without_counterparts = super::sources(&root, super::FillMode::Require)
             .unwrap()
             .hooks;

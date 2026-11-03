@@ -1,7 +1,7 @@
 {
   "hooks": [
     {
-      "name": "item_container",
+      "name": "item_container", "side": "both",
       "target": "horizon_client::game::native_hooks::Game<'_>::native_item_container",
       "neoforge": "Capabilities.Item.ITEM",
       "mod_api": {

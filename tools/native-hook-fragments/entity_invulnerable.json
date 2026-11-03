@@ -2,22 +2,22 @@
   "hooks": [],
   "helpers": [
     {
-      "name": "entity_permanently_invulnerable",
+      "name": "entity_permanently_invulnerable", "side": "server",
       "target": "horizon_client::game::native_entity_invulnerable::Game<'_>::native_entity_permanently_invulnerable",
       "receiver": "entity"
     },
     {
-      "name": "entity_set_invulnerable",
+      "name": "entity_set_invulnerable", "side": "server",
       "target": "horizon_client::game::native_entity_invulnerable::Game<'_>::native_entity_set_invulnerable",
       "receiver": "entity"
     },
     {
-      "name": "entity_damage_cooldown_time",
+      "name": "entity_damage_cooldown_time", "side": "server",
       "target": "horizon_client::game::native_entity_invulnerable::Game<'_>::native_entity_damage_cooldown_time",
       "receiver": "entity"
     },
     {
-      "name": "entity_set_damage_cooldown_time",
+      "name": "entity_set_damage_cooldown_time", "side": "server",
       "target": "horizon_client::game::native_entity_invulnerable::Game<'_>::native_entity_set_damage_cooldown_time",
       "receiver": "entity"
     }

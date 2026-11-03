@@ -1,7 +1,7 @@
 {
   "hooks": [
     {
-      "name": "recipe_book_categories",
+      "name": "recipe_book_categories", "side": "both",
       "target": "horizon_client::game::native_hooks::Game<'_>::native_recipe_book_categories",
       "mod_api": { "contract": "listen" }
     }
