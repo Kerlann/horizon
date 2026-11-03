@@ -1608,10 +1608,6 @@ impl Game<'_> {
                     }
                 }
                 self.previous_position = v;
-                if let Some([yaw, pitch]) = rotation {
-                    self.yaw = yaw;
-                    self.pitch = entity_pitch(pitch);
-                }
                 // A server player's teleport is told to the mods once their
                 // move is in the hub (`leave_guest`).
                 if !as_passenger
@@ -1652,16 +1648,6 @@ impl Game<'_> {
                     m.position = v;
                     m.previous = v;
                     m.needs_sync = true;
-                    // Entity.teleportSetPosition: setYRot, setYHeadRot, setXRot
-                    // (clamped to -90..90), then setOldRot.
-                    if let Some([yaw, pitch]) = rotation {
-                        m.yaw = yaw;
-                        m.body_yaw = yaw;
-                        m.head_yaw = yaw;
-                        m.head_pitch = entity_pitch(pitch);
-                        m.previous_yaw = m.yaw;
-                        m.previous_head_pitch = m.head_pitch;
-                    }
                 }
             }
             Target::Item(id) => {
@@ -1686,44 +1672,28 @@ impl Game<'_> {
                 if let Some(a) = self.armor_stands.iter_mut().find(|a| a.id == id) {
                     a.position = v;
                     a.previous = v;
-                    if let Some([yaw, _]) = rotation {
-                        a.yaw = yaw;
-                    }
                 }
             }
             Target::Boat(id) => {
                 if let Some(b) = self.boats.iter_mut().find(|b| b.id == id) {
                     b.position = v;
                     b.previous = v;
-                    if let Some([yaw, _]) = rotation {
-                        b.yaw = yaw;
-                    }
                 }
             }
             Target::Cart(id) => {
                 if let Some(c) = self.carts.iter_mut().find(|c| c.id == id) {
                     c.position = v;
                     c.previous = v;
-                    if let Some([yaw, _]) = rotation {
-                        c.yaw = yaw;
-                    }
                 }
             }
             Target::Fangs(id) => {
                 if let Some(f) = self.fangs.list.iter_mut().find(|f| f.id == id) {
                     f.pos = [v.x, v.y, v.z];
-                    if let Some([yaw, _]) = rotation {
-                        f.yaw = yaw;
-                    }
                 }
             }
             Target::Other(id) => {
                 if let Some(o) = self.others.iter_mut().find(|o| o.id == id) {
                     o.position = v;
-                    if let Some([yaw, pitch]) = rotation {
-                        o.yaw = yaw;
-                        o.pitch = entity_pitch(pitch);
-                    }
                 }
             }
             Target::Crystal(id) => {
@@ -1774,12 +1744,104 @@ impl Game<'_> {
             // Wall-mounted entities do not move.
             Target::Frame(_) | Target::Painting(_) => {}
         }
+        if let Some(rotation) = rotation {
+            self.rotate_in_place(t, rotation);
+        }
         if !as_passenger
             && self.options.dedicated.is_some()
             && let (Some(entity), Some(from), Some(to)) =
                 (self.network_entity_id(t), from, self.target_position(t))
         {
             self.native_entity_teleport(self.dim.id(), entity as u32, from, to);
+        }
+    }
+
+    /// The rotation write of a teleport (`Entity.teleportSetPosition`:
+    /// setYRot, setYHeadRot, setXRot clamped to -90..90, then setOldRot),
+    /// with no move: what `/rotate` does (`Entity.forceSetRotation`).
+    fn rotate_in_place(&mut self, t: Target, rotation: [f32; 2]) {
+        let [yaw, pitch] = rotation;
+        match t {
+            Target::Player => {
+                self.yaw = yaw;
+                self.pitch = entity_pitch(pitch);
+            }
+            Target::Mob(id) => {
+                if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
+                    m.yaw = yaw;
+                    m.body_yaw = yaw;
+                    m.head_yaw = yaw;
+                    m.head_pitch = entity_pitch(pitch);
+                    m.previous_yaw = m.yaw;
+                    m.previous_head_pitch = m.head_pitch;
+                    m.needs_sync = true;
+                }
+            }
+            Target::Stand(id) => {
+                if let Some(a) = self.armor_stands.iter_mut().find(|a| a.id == id) {
+                    a.yaw = yaw;
+                }
+            }
+            Target::Boat(id) => {
+                if let Some(b) = self.boats.iter_mut().find(|b| b.id == id) {
+                    b.yaw = yaw;
+                }
+            }
+            Target::Cart(id) => {
+                if let Some(c) = self.carts.iter_mut().find(|c| c.id == id) {
+                    c.yaw = yaw;
+                }
+            }
+            Target::Fangs(id) => {
+                if let Some(f) = self.fangs.list.iter_mut().find(|f| f.id == id) {
+                    f.yaw = yaw;
+                }
+            }
+            Target::Other(id) => {
+                if let Some(o) = self.others.iter_mut().find(|o| o.id == id) {
+                    o.yaw = yaw;
+                    o.pitch = entity_pitch(pitch);
+                }
+            }
+            // The kinds without a stored rotation stay as they are.
+            _ => {}
+        }
+    }
+
+    /// Turns `t` to `rotation` without moving it (`/rotate`,
+    /// `Entity.forceSetRotation`): no passengers move, no velocity or
+    /// riding changes, and no teleport fires. `relative` carries the
+    /// command's relative rotation flags; a server player rotated by the
+    /// rotation argument is told with a rotation-only packet
+    /// (`ServerPlayer.forceSetRotation`), not a teleport — the facing forms
+    /// point their camera with the look-at packet instead.
+    fn rotate_to(&mut self, t: Target, rotation: [f32; 2], relative: Option<[bool; 2]>) {
+        // An entity in another level is turned in the level that holds it.
+        let _ = self.in_target_level(t, |g| {
+            if matches!(t, Target::Guest(_)) {
+                g.for_player(t, |g| g.rotate_in_place(Target::Player, rotation));
+            } else {
+                g.rotate_in_place(t, rotation);
+            }
+        });
+        if let Some([relative_yaw, relative_pitch]) = relative {
+            let packet = C::PlayerRotation(play::PlayerRotation {
+                yaw: rotation[0],
+                relative_yaw,
+                pitch: rotation[1],
+                relative_pitch,
+            });
+            match t {
+                Target::Player if self.lan_acting.is_some() => {
+                    self.guest_packets.push(packet);
+                }
+                Target::Guest(conn) => {
+                    if let Some(host) = self.lan.as_ref() {
+                        host.hub.send_to(conn, &packet);
+                    }
+                }
+                _ => {}
+            }
         }
     }
 
@@ -4161,6 +4223,90 @@ mod teleport_mob_tests {
             );
             game.run_command("tp @e[type=minecraft:zombie] 30000000.0 70 0");
             assert_eq!(game.mobs[0].position.x, -30_000_000.0);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn rotate_command_turns_only_the_vehicle() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::mobs::Mob;
+        use horizon_core::geometry::Vec3;
+
+        with_game(|game| {
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:skeleton")
+                .unwrap()
+                .clone();
+            let mut vehicle = Mob::new(42, kind, Vec3::new(2.0, 64.0, 3.0), 30.0);
+            vehicle.velocity = Vec3::new(0.5, 0.0, -0.25);
+            game.mobs.push(vehicle);
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:zombie")
+                .unwrap()
+                .clone();
+            let mut rider = Mob::new(43, kind, Vec3::new(2.0, 65.25, 3.0), 70.0);
+            rider.extra.mount = Some(42);
+            rider.extra.passenger = true;
+            rider.velocity = Vec3::new(1.0, -2.0, 3.0);
+            game.mobs.push(rider);
+            game.ui.registries.permission = 4;
+            let ok = game.run_command("rotate @e[type=minecraft:skeleton,limit=1] 90 0");
+            assert!(ok, "rotate failed");
+            let vehicle = &game.mobs[0];
+            assert_eq!(vehicle.yaw, 90.0);
+            assert_eq!(vehicle.head_yaw, 90.0);
+            assert_eq!(
+                vehicle.velocity,
+                Vec3::new(0.5, 0.0, -0.25),
+                "RotateCommand touches no velocity"
+            );
+            let rider = &game.mobs[1];
+            assert_eq!(
+                rider.position,
+                Vec3::new(2.0, 65.25, 3.0),
+                "the rider stays"
+            );
+            assert_eq!(rider.yaw, 70.0, "the rider keeps its own rotation");
+            assert_eq!(rider.velocity, Vec3::new(1.0, -2.0, 3.0));
+            assert_eq!(rider.extra.mount, Some(42));
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn rotate_command_turns_the_player_without_teleport_effects() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::motion::PlayerMotion;
+        use horizon_core::geometry::Vec3;
+
+        with_game(|game| {
+            let mut player = PlayerMotion::new(game.motion, Vec3::new(0.0, 64.0, 0.0)).unwrap();
+            player.velocity = Vec3::new(1.0, -2.0, 3.0);
+            game.player = Some(player);
+            game.lan_acting_uuid = Some(123);
+            game.lan_acting_entity = Some(20);
+            game.yaw = 30.0;
+            game.pitch = 10.0;
+            game.ui.registries.permission = 4;
+            assert!(game.run_command("rotate @s ~10 ~-5"));
+            assert_eq!(game.yaw, 40.0, "a relative rotation adds to the view");
+            assert_eq!(game.pitch, 5.0);
+            let player = game.player.as_ref().unwrap();
+            assert_eq!(
+                player.velocity,
+                Vec3::new(1.0, -2.0, 3.0),
+                "forceSetRotation touches no velocity"
+            );
+            assert_eq!(
+                player.position,
+                Vec3::new(0.0, 64.0, 0.0),
+                "the player is not moved"
+            );
         });
     }
 

@@ -1,6 +1,7 @@
 //! `/recipe`, `/damage`, `/rotate`, `/swing`, `/playsound`, `/stopsound`,
 //! `/particle`, `/attribute`, `/ride` and `/spreadplayers`.
 use super::{Arg, Context, Game, R, Target, err, wrap_degrees};
+use horizon_client::command::args::Coordinates;
 use horizon_client::{
     mobs::{
         Damage, DamageKind, Who,
@@ -306,9 +307,13 @@ impl Game<'_> {
         };
         let current = self.target_rotation(t);
         let mut look_at_target = None;
-        let rot = if let Some(Arg::Coords(c)) = ctx.get("rotation") {
+        let (rot, relative) = if let Some(Arg::Coords(c)) = ctx.get("rotation") {
             // Relative parts are offsets from the entity's own rotation.
-            c.rotation(current)
+            let relative = match c {
+                Coordinates::World(w) => [w[0].relative, w[1].relative],
+                Coordinates::Local(_) => [false, false],
+            };
+            (c.rotation(current), Some(relative))
         } else {
             let mut faced_entity = None;
             let to = if ctx.has("entity") {
@@ -336,14 +341,13 @@ impl Game<'_> {
             };
             let from = [pos[0], pos[1] + eye, pos[2]];
             look_at_target = Some((anchored_eyes, to, faced_entity));
-            look_at(from, to)
+            (look_at(from, to), None)
         };
-        self.teleport_to(t, pos, Some(rot));
+        // RotateCommand: forceSetRotation turns the target alone; no move,
+        // no passenger transition, no teleport effect.
+        self.rotate_to(t, rot, relative);
         if let Some((eyes, to, entity)) = look_at_target {
             self.send_player_look_at(t, eyes, to, entity);
-        }
-        if t == Target::Player {
-            self.pitch = rot[1].clamp(-90.0, 90.0);
         }
         let name = self.target_name(t);
         self.feedback(Text::translate("commands.rotate.success", &[name]));
