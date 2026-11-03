@@ -2470,8 +2470,7 @@ a dimension.
 - `host.living(entity)` gives a `LivingRef` for a mob, a player, an armor stand or the dragon (vanilla's
   `LivingEntity`); `living.entity()` goes back. `living.equipment(host, EquipmentSlot::Head)` and `hand_item(host,
   Hand::Main)` read its equipment (an empty slot reads as `None`); `set_equipment(host, slot, stack)` puts a stack in a
-  slot as `LivingEntity.setItemSlot` does (None or air empties it). Mob equipment writes return false until Horizon can
-  preserve complete stacks for all mob slots.
+  slot as `LivingEntity.setItemSlot` does (None, air or zero count empties it). The method docs list supported slots.
 - An `EntityRef` holds the world's open (`NativeWorldEpoch`) and the entity's id, which no other entity of that open
   gets. A handle of an earlier open, of an entity that is gone or moved to another level (it gets a new id there, as in
   vanilla), or used on a client reads as `None`.

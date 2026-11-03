@@ -1250,12 +1250,17 @@ pub fn mob_to_nbt(
             }
         }
         if let Some(id) = &m.extra.body {
-            let mut stack = crate::items::ItemStack::new(id, 1);
+            let mut stack = crate::items::ItemStack::new(id, m.extra.body_count.max(1));
             stack.damage = m.extra.body_damage.max(0) as u32;
             stack.extra = m.extra.body_extra.clone();
             equipment.insert("body".into(), crate::save::item_to_nbt(&stack));
         } else {
             equipment.remove(&"body".into());
+        }
+        if let Some(saddle) = m.saddle_item() {
+            equipment.insert("saddle".into(), crate::save::item_to_nbt(&saddle));
+        } else {
+            equipment.remove(&"saddle".into());
         }
         // Vanilla saves `equipment` only when something is equipped.
         if equipment.is_empty() {
@@ -1468,8 +1473,10 @@ pub fn mob_from_nbt(
         m.extra.head = slot("head");
         m.extra.body = slot("body");
         let body = eq.get("body").and_then(crate::save::item_from_nbt);
+        m.extra.body_count = body.as_ref().map_or(0, |s| s.count);
         m.extra.body_damage = body.as_ref().map_or(0, |s| s.damage as i32);
         m.extra.body_extra = body.and_then(|s| s.extra);
+        m.set_saddle(eq.get("saddle").and_then(crate::save::item_from_nbt));
         m.extra.chest = slot("chest");
         m.extra.legs = slot("legs");
         m.extra.feet = slot("feet");
@@ -5477,9 +5484,27 @@ mod held_item_name_tests {
             .into_iter()
             .map(|(id, kind)| (id, Arc::new(kind)))
             .collect();
+        let mut zombie = Mob::new(3, Arc::clone(&types["minecraft:zombie"]), Vec3::ZERO, 0.0);
+        let saddle = crate::items::ItemStack::new("minecraft:saddle", 3);
+        zombie.set_saddle(Some(saddle.clone()));
+        let mut offhand = crate::items::ItemStack::new("minecraft:shield", 2);
+        offhand.damage = 11;
+        offhand.data_mut().custom_name = Some(horizon_world::nbt::Tag::String("Shield".into()));
+        crate::mobs::finalize::set_item_stack(
+            &mut zombie,
+            crate::mobs::finalize::OFFHAND,
+            offhand.clone(),
+        );
+        let saved = mob_to_nbt(&zombie, [0; 4], None, None);
+        let zombie = mob_from_nbt(&saved, &types, 4, None).unwrap();
+        assert_eq!(zombie.saddle_item(), Some(saddle));
+        assert_eq!(zombie.equipment_stacks()[1], Some(offhand));
         let mut horse = Mob::new(1, Arc::clone(&types["minecraft:horse"]), Vec3::ZERO, 0.0);
         horse.extra.head = Some("minecraft:iron_helmet".into());
-        horse.extra.body = Some("minecraft:diamond_horse_armor".into());
+        let mut armor = crate::items::ItemStack::new("minecraft:diamond_horse_armor", 3);
+        armor.damage = 7;
+        armor.data_mut().custom_name = Some(horizon_world::nbt::Tag::String("Body".into()));
+        horse.extra.set_body_stack(Some(armor.clone()));
         let stacks = horse.equipment_stacks();
         assert_eq!(
             stacks[5].as_ref().unwrap().item.as_ref(),
@@ -5496,6 +5521,7 @@ mod held_item_name_tests {
             horse.extra.body.as_deref(),
             Some("minecraft:diamond_horse_armor")
         );
+        assert_eq!(horse.equipment_stacks()[6], Some(armor.clone()));
         let mut chances = [0.0; 8];
         chances[drops::SLOTS.iter().position(|s| *s == "head").unwrap()] = 2.0;
         chances[drops::SLOTS.iter().position(|s| *s == "body").unwrap()] = 2.0;
@@ -5515,6 +5541,11 @@ mod held_item_name_tests {
             &death,
             &mut crate::random_sequences::RandomSequences::default(),
             &mut horizon_core::random::LegacyRandom::new(7),
+        );
+        assert!(
+            items
+                .iter()
+                .any(|drop| matches!(drop, Drop::Stack(s) if s == &armor))
         );
         let ids: Vec<_> = items
             .into_iter()

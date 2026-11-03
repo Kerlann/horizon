@@ -54,28 +54,7 @@ impl Mob {
     /// sends: the stack it wears or holds in `slot`, with the components
     /// `ClientboundSetEquipmentPacket` gave it where they are kept.
     pub fn item_by_slot(&self, slot: EquipmentSlot) -> Option<ItemStack> {
-        let e = &self.extra;
-        let plain = |id: &Option<std::sync::Arc<str>>| id.as_deref().map(|i| ItemStack::new(i, 1));
-        let worn = |index: usize, id: &Option<std::sync::Arc<str>>| {
-            e.armor[index]
-                .clone()
-                .filter(|s| id.as_ref() == Some(&s.item))
-                .or_else(|| plain(id))
-        };
-        match slot {
-            EquipmentSlot::MainHand => e.main_hand_stack().cloned().or_else(|| plain(&e.main_hand)),
-            EquipmentSlot::OffHand => plain(&e.off_hand),
-            EquipmentSlot::Head => worn(0, &e.head),
-            EquipmentSlot::Chest => worn(1, &e.chest),
-            EquipmentSlot::Legs => worn(2, &e.legs),
-            EquipmentSlot::Feet => worn(3, &e.feet),
-            EquipmentSlot::Body => plain(&e.body).map(|s| ItemStack {
-                damage: e.body_damage.max(0) as u32,
-                extra: e.body_extra.clone(),
-                ..s
-            }),
-            EquipmentSlot::Saddle => self.saddle_item(),
-        }
+        self.equipment_stacks()[slot as usize].clone()
     }
 }
 

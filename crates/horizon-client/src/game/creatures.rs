@@ -497,8 +497,7 @@ impl Game<'_> {
         match (body, broke) {
             (true, false) => m.extra.body_damage = stack.damage as i32,
             (true, true) => {
-                m.extra.body = None;
-                m.extra.body_damage = 0;
+                m.extra.set_body_stack(None);
             }
             (false, false) => m.extra.armor[0] = Some(stack),
             (false, true) => {
@@ -576,8 +575,7 @@ impl Game<'_> {
                 return;
             };
             if lost >= max {
-                m.extra.body = None;
-                m.extra.body_damage = 0;
+                m.extra.set_body_stack(None);
                 true
             } else {
                 m.extra.body_damage = lost as i32;
@@ -5470,12 +5468,8 @@ impl Game<'_> {
                     && m.extra.body.is_some()
                     && !sneaking =>
             {
-                let mut stack = ItemStack::new("minecraft:wolf_armor", 1);
-                stack.damage = m.extra.body_damage.max(0) as u32;
-                stack.extra = m.extra.body_extra.take();
-                armor_drop = Some(stack);
-                m.extra.body = None;
-                m.extra.body_damage = 0;
+                armor_drop = m.equipment_stacks()[6].clone();
+                m.extra.set_body_stack(None);
                 eat = Some(("item.armor.unequip_wolf", 1.0, 1.0));
                 self.damage_held_tool();
             }
@@ -5502,6 +5496,7 @@ impl Game<'_> {
                     && !m.is_baby() =>
             {
                 m.extra.body = Some(item.as_str().into());
+                m.extra.body_count = 0;
                 m.extra.body_damage = held_damage;
                 m.extra.body_extra = held_extra;
                 consume = true;

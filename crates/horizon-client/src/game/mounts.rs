@@ -245,6 +245,7 @@ impl Game<'_> {
             && tamed
             && m.extra.body.is_none()
         {
+            m.extra.body_count = 0;
             m.extra.body = Some(item.into());
             Some("minecraft:entity.horse.armor")
         } else if item == "minecraft:chest"

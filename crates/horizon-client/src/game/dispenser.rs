@@ -308,22 +308,7 @@ fn equip_sound(m: &Mob, slot: Slot, default: Option<String>) -> Option<String> {
     })
 }
 pub(super) fn mob_set_slot(m: &mut Mob, slot: Slot, stack: ItemStack) {
-    let item: Arc<str> = stack.item.clone();
-    let x = &mut m.extra;
-    match slot {
-        Slot::MainHand => x.set_main_hand(Some(item)),
-        Slot::OffHand => x.off_hand = Some(item),
-        Slot::Feet => x.feet = Some(item),
-        Slot::Legs => x.legs = Some(item),
-        Slot::Chest => x.chest = Some(item),
-        Slot::Head => x.head = Some(item),
-        Slot::Body => {
-            x.body = Some(item);
-            x.body_damage = stack.damage as i32;
-            x.body_extra = stack.extra;
-        }
-        Slot::Saddle => m.set_saddle(Some(stack)),
-    }
+    m.set_equipment_stack(slot as usize, Some(stack));
 }
 
 impl Game<'_> {
@@ -2128,7 +2113,7 @@ impl Game<'_> {
                 self.spawn_at_location(at, height, ItemStack::new(&old, 1));
             }
             let m = &mut self.mobs[i];
-            m.extra.body = Some(stack.item.clone());
+            m.extra.set_body_stack(Some(stack.clone()));
             m.persistent = true;
             let (at, id) = (m.position, m.id);
             // setItemSlot: a body item without `equippable` posts UNEQUIP.

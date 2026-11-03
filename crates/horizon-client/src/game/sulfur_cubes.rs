@@ -155,6 +155,7 @@ impl Game<'_> {
                 return false;
             }
             self.eject_sulfur_block(index);
+            self.mobs[index].extra.body_count = 0;
             self.mobs[index].extra.body = Some(item.into());
             self.consume_held();
             self.sulfur_sound(index, "entity.sulfur_cube.absorb");
@@ -264,6 +265,7 @@ impl Game<'_> {
                 self.remove_dropped(j);
             }
             let m = &mut self.mobs[i];
+            m.extra.body_count = 0;
             m.extra.body = Some(item);
             m.extra.point = None;
             self.sulfur_sound(i, "entity.sulfur_cube.absorb");

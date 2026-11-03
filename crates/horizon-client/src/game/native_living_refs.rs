@@ -60,10 +60,6 @@ fn available_living_target(target: Target, swapping: bool) -> Option<Target> {
     }
 }
 
-fn supports_equipment_write(target: Target) -> bool {
-    !matches!(target, Target::Mob(_))
-}
-
 fn equipment_stack(stack: Option<ItemStack>) -> Option<ItemStack> {
     stack.filter(|s| s.count > 0 && &*s.item != "minecraft:air")
 }
@@ -131,9 +127,12 @@ impl Game<'_> {
         player.attributes.value(Some(key), kind).ok()
     }
 
-    /// The stack in equipment slot `slot` (`LivingEntity.getItemBySlot`):
-    /// None when it is empty, unsupported (player body and saddle storage is
-    /// not yet modeled), or the handle is stale. API @API:living_refs@.
+    /// The stack in `slot` (`LivingEntity.getItemBySlot`). Players, guests,
+    /// mobs and armor stands store main hand, off hand, head, chest, legs and
+    /// feet. All mobs also store body and saddle. Dragon equipment and
+    /// player or armor-stand body and
+    /// saddle storage are not yet modeled. None means empty, unsupported or
+    /// stale. API @API:living_refs@.
     pub(super) fn native_living_equipment(
         &self,
         living: LivingRef,
@@ -177,11 +176,11 @@ impl Game<'_> {
         };
         self.native_living_equipment(living, slot)
     }
-    /// Puts `stack` (None: empties it) in equipment slot `slot`
-    /// (`LivingEntity.setItemSlot`). False
-    /// when the entity has no such slot or is a mob. Mob equipment writes
-    /// are not supported until full equipment stacks can be stored.
-    /// API @API:living_refs@.
+    /// Puts `stack` in `slot` (`LivingEntity.setItemSlot`); None, air or a
+    /// zero count empties it. Players, guests, mobs and armor stands store
+    /// main hand, off hand, head, chest, legs and feet. All mobs also store
+    /// body and saddle. Dragon equipment and player or armor-stand body and saddle storage are not
+    /// yet modeled. False means unsupported or stale. API @API:living_refs@.
     pub(super) fn native_living_set_equipment(
         &mut self,
         living: LivingRef,
@@ -191,10 +190,13 @@ impl Game<'_> {
         let Some(t) = self.native_living_target(living) else {
             return false;
         };
-        if !supports_equipment_write(t) {
-            return false;
-        }
         let stack = equipment_stack(stack);
+        if let Target::Mob(id) = t {
+            let Some(mob) = self.mobs.iter_mut().find(|m| m.id == id) else {
+                return false;
+            };
+            return mob.set_equipment_stack(slot as usize, stack);
+        }
         match self
             .slots_named(&Owner::Entity(t), slot_name(slot))
             .as_slice()
@@ -210,6 +212,125 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn mob_equipment_writes_keep_full_stacks() {
+        use horizon_client::mobs::Mob;
+        use horizon_core::geometry::Vec3;
+        super::super::native_entity_refs::tests::with_game(|game| {
+            for (id, kind) in [
+                (12, "minecraft:zombie"),
+                (13, "minecraft:horse"),
+                (14, "minecraft:pillager"),
+            ] {
+                let kind = game.res.mob_types().get(kind).unwrap().clone();
+                game.mobs.push(Mob::new(id, kind, Vec3::ZERO, 0.0));
+            }
+            let zombie = game.native_living(game.native_entity(12).unwrap()).unwrap();
+            let horse = game.native_living(game.native_entity(13).unwrap()).unwrap();
+            let captain = game.native_living(game.native_entity(14).unwrap()).unwrap();
+            let mut helmet = ItemStack::new("minecraft:iron_helmet", 2);
+            helmet.damage = 7;
+            helmet.data_mut().enchantments = vec![("minecraft:protection".into(), 3)];
+            assert!(game.native_living_set_equipment(
+                zombie,
+                EquipmentSlot::Head,
+                Some(helmet.clone())
+            ));
+            assert_eq!(
+                game.native_living_equipment(zombie, EquipmentSlot::Head),
+                Some(helmet.clone())
+            );
+            let mut shield = ItemStack::new("minecraft:shield", 2);
+            shield.damage = 11;
+            assert!(game.native_living_set_equipment(
+                zombie,
+                EquipmentSlot::OffHand,
+                Some(shield.clone())
+            ));
+            assert_eq!(
+                game.native_living_equipment(zombie, EquipmentSlot::OffHand),
+                Some(shield)
+            );
+            assert!(game.native_living_set_equipment(
+                horse,
+                EquipmentSlot::Head,
+                Some(helmet.clone())
+            ));
+            let body = ItemStack::new("minecraft:diamond_horse_armor", 3);
+            assert!(game.native_living_set_equipment(
+                horse,
+                EquipmentSlot::Body,
+                Some(body.clone())
+            ));
+            assert_eq!(
+                game.native_living_equipment(horse, EquipmentSlot::Head),
+                Some(helmet.clone())
+            );
+            assert_eq!(
+                game.native_living_equipment(horse, EquipmentSlot::Body),
+                Some(body)
+            );
+            for slot in [
+                EquipmentSlot::MainHand,
+                EquipmentSlot::Chest,
+                EquipmentSlot::Legs,
+                EquipmentSlot::Feet,
+            ] {
+                let stack = ItemStack::new("minecraft:stone", 4);
+                assert!(game.native_living_set_equipment(zombie, slot, Some(stack.clone())));
+                assert_eq!(game.native_living_equipment(zombie, slot), Some(stack));
+                assert!(game.native_living_set_equipment(
+                    zombie,
+                    slot,
+                    Some(ItemStack::new("minecraft:stone", 0))
+                ));
+                assert_eq!(game.native_living_equipment(zombie, slot), None);
+            }
+            let saddle = ItemStack::new("minecraft:saddle", 3);
+            assert!(game.native_living_set_equipment(
+                horse,
+                EquipmentSlot::Saddle,
+                Some(saddle.clone())
+            ));
+            assert_eq!(
+                game.native_living_equipment(horse, EquipmentSlot::Saddle),
+                Some(saddle)
+            );
+            horizon_client::mobs::raider::set_patrol_leader(&mut game.mobs[2], true);
+            horizon_client::mobs::raider::wear_banner(&mut game.mobs[2]);
+            assert!(horizon_client::mobs::raider::is_captain(&game.mobs[2]));
+            assert!(game.native_living_set_equipment(
+                captain,
+                EquipmentSlot::Head,
+                Some(helmet.clone())
+            ));
+            assert_eq!(
+                game.native_living_equipment(captain, EquipmentSlot::Head),
+                Some(helmet)
+            );
+            assert!(!horizon_client::mobs::raider::is_captain(&game.mobs[2]));
+            assert!(game.native_living_set_equipment(
+                horse,
+                EquipmentSlot::Body,
+                Some(ItemStack::new("minecraft:air", 1))
+            ));
+            assert_eq!(
+                game.native_living_equipment(horse, EquipmentSlot::Body),
+                None
+            );
+            let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
+            dragon.id = 15;
+            game.dragon = Some(dragon);
+            let dragon = game.native_living(game.native_entity(15).unwrap()).unwrap();
+            assert!(!game.native_living_set_equipment(
+                dragon,
+                EquipmentSlot::Saddle,
+                Some(ItemStack::new("minecraft:saddle", 1))
+            ));
+        });
+    }
+
+    #[test]
     fn displaced_guests_are_unavailable_during_a_swap() {
         assert_eq!(available_living_target(Target::Guest(2), true), None);
         assert_eq!(
@@ -220,13 +341,6 @@ mod tests {
             available_living_target(Target::Player, true),
             Some(Target::Player)
         );
-    }
-
-    #[test]
-    fn mob_equipment_writes_are_refused() {
-        assert!(!supports_equipment_write(Target::Mob(1)));
-        assert!(supports_equipment_write(Target::Player));
-        assert!(supports_equipment_write(Target::Stand(2)));
     }
 
     #[test]

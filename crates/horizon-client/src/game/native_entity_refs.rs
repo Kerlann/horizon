@@ -256,8 +256,8 @@ fn uuid_from_words(words: [i32; 4]) -> u128 {
 }
 
 #[cfg(test)]
-mod tests {
-    fn with_game(test: impl FnOnce(&mut super::Game<'_>)) {
+pub(super) mod tests {
+    pub(in crate::game) fn with_game(test: impl FnOnce(&mut super::Game<'_>)) {
         use super::super::{
             Audio, Game, Options, Progress, Settings, execution_role::ExecutionRole, load_resources,
         };

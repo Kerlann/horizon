@@ -975,9 +975,18 @@ pub fn stored_stack(m: &Mob, slot: usize) -> Option<crate::items::ItemStack> {
     let mut stack = if slot == MAINHAND {
         m.extra.main_hand_stack()?.clone()
     } else {
-        gear::gear(m)?.stacks[index]
-            .clone()
-            .filter(|s| s.item == id)?
+        let armor = match slot {
+            HEAD => m.extra.armor[0].as_ref(),
+            CHEST => m.extra.armor[1].as_ref(),
+            LEGS => m.extra.armor[2].as_ref(),
+            FEET => m.extra.armor[3].as_ref(),
+            _ => None,
+        };
+        armor.filter(|s| s.item == id).cloned().or_else(|| {
+            gear::gear(m)?.stacks[index]
+                .clone()
+                .filter(|s| s.item == id)
+        })?
     };
     if let Some(g) = gear::gear(m) {
         if !g.slots[index].is_empty() {
@@ -1025,6 +1034,15 @@ pub fn set_item(m: &mut Mob, slot: usize, id: &str) {
             return;
         }
         _ => return,
+    }
+    if let Some(index) = match slot {
+        HEAD => Some(0),
+        CHEST => Some(1),
+        LEGS => Some(2),
+        FEET => Some(3),
+        _ => None,
+    } {
+        m.extra.armor[index] = None;
     }
     gear::set(m, gear_slot(slot), Vec::new());
 }

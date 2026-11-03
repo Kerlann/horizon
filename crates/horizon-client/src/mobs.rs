@@ -892,6 +892,8 @@ pub struct Extra {
     /// `Mob.canPickUpLoot` (also lets dispensers equip it).
     pub pick_up_loot: bool,
     pub saddled: bool,
+    /// Count of the body stack (zero means an ordinary single item).
+    pub body_count: u32,
     /// The durability a wolf's body armor has lost.
     pub body_damage: i32,
     /// The components (dye, name...) of that armor stack.
@@ -1116,6 +1118,13 @@ pub struct Extra {
     pub equipment_heard: Option<Box<[Option<crate::items::ItemStack>; 8]>>,
 }
 impl Extra {
+    pub fn set_body_stack(&mut self, stack: Option<crate::items::ItemStack>) {
+        self.body = stack.as_ref().map(|s| s.item.clone());
+        self.body_count = stack.as_ref().map_or(0, |s| s.count);
+        self.body_damage = stack.as_ref().map_or(0, |s| s.damage as i32);
+        self.body_extra = stack.and_then(|s| s.extra);
+    }
+
     pub fn set_main_hand(&mut self, item: Option<Arc<str>>) {
         self.main_hand = item;
         self.main_hand_stack = None;
@@ -2114,13 +2123,21 @@ impl Mob {
     pub fn equipment_stacks(&self) -> [Option<crate::items::ItemStack>; 8] {
         use crate::items::ItemStack;
         let e = &self.extra;
+        let offhand = finalize::stored_stack(self, finalize::OFFHAND);
+        let armor = [
+            finalize::HEAD,
+            finalize::CHEST,
+            finalize::LEGS,
+            finalize::FEET,
+        ]
+        .map(|slot| finalize::stored_stack(self, slot));
         let slots = [
             (0usize, &e.main_hand, e.main_hand_stack()),
-            (1, &e.off_hand, None),
-            (2, &e.feet, e.armor[3].as_ref()),
-            (3, &e.legs, e.armor[2].as_ref()),
-            (4, &e.chest, e.armor[1].as_ref()),
-            (5, &e.head, e.armor[0].as_ref()),
+            (1, &e.off_hand, offhand.as_ref()),
+            (2, &e.feet, armor[3].as_ref()),
+            (3, &e.legs, armor[2].as_ref()),
+            (4, &e.chest, armor[1].as_ref()),
+            (5, &e.head, armor[0].as_ref()),
             (6, &e.body, None),
         ];
         let mut out: [Option<ItemStack>; 8] = Default::default();
@@ -2132,7 +2149,7 @@ impl Mob {
             // its colour.
             out[slot] = Some(worn.cloned().unwrap_or_else(|| ItemStack {
                 item: item.clone(),
-                count: 1,
+                count: if slot == 6 { e.body_count.max(1) } else { 1 },
                 // Body equipment retains its damage and components.
                 damage: if slot == 6 {
                     e.body_damage.max(0) as u32
@@ -2156,6 +2173,52 @@ impl Mob {
         }
         out
     }
+    /// Set the complete equipment stack by the protocol slot ordinal.
+    pub fn set_equipment_stack(
+        &mut self,
+        slot: usize,
+        stack: Option<crate::items::ItemStack>,
+    ) -> bool {
+        if slot == 6 {
+            self.extra.set_body_stack(stack);
+            return true;
+        }
+        if slot == 7 {
+            self.set_saddle(stack);
+            return true;
+        }
+        let (gear_slot, armor_index) = match slot {
+            0 => (gear::MAIN, None),
+            1 => (gear::OFF, None),
+            2 => (gear::FEET, Some(3)),
+            3 => (gear::LEGS, Some(2)),
+            4 => (gear::CHEST, Some(1)),
+            5 => (gear::HEAD, Some(0)),
+            _ => return false,
+        };
+        if let Some(stack) = stack {
+            finalize::set_item_stack(self, slot, stack.clone());
+            if let Some(index) = armor_index {
+                self.extra.armor[index] = Some(stack);
+            }
+        } else {
+            match slot {
+                0 => self.extra.set_main_hand(None),
+                1 => self.extra.off_hand = None,
+                2 => self.extra.feet = None,
+                3 => self.extra.legs = None,
+                4 => self.extra.chest = None,
+                5 => self.extra.head = None,
+                _ => unreachable!(),
+            }
+            gear::set(self, gear_slot, Vec::new());
+            if let Some(index) = armor_index {
+                self.extra.armor[index] = None;
+            }
+        }
+        true
+    }
+
     pub fn burning_time(&self) -> f64 {
         let base = finalize::value(self, finalize::Attr::BurningTime);
         let protection: u32 = gear::ARMOR
@@ -3148,9 +3211,7 @@ impl Mob {
         let after = before + damage.ceil() as i32;
         let at = [self.position.x, self.position.y, self.position.z];
         if after >= WOLF_ARMOR_DURABILITY {
-            self.extra.body = None;
-            self.extra.body_damage = 0;
-            self.extra.body_extra = None;
+            self.extra.set_body_stack(None);
             self.outbox
                 .push(MobEvent::Sound("item.wolf_armor.break", at, 1.0, 1.0));
         } else {
@@ -3620,9 +3681,9 @@ impl Mob {
         self.extra.saddled = saddle.is_some();
         // A plain saddle is implied by `saddled`; anything else (a copper
         // golem's antenna flower) is kept as it is.
-        self.extra.saddle_stack = saddle
-            .map(|s| crate::items::ItemStack { count: 1, ..s })
-            .filter(|s| s.damage != 0 || s.extra.is_some() || &*s.item != "minecraft:saddle");
+        self.extra.saddle_stack = saddle.filter(|s| {
+            s.count != 1 || s.damage != 0 || s.extra.is_some() || &*s.item != "minecraft:saddle"
+        });
     }
 }
 
@@ -4480,6 +4541,23 @@ mod armor_hurt_tests {
         k.id = id.into();
         k.species = species;
         Mob::new(1, kind, Vec3::ZERO, 0.0)
+    }
+
+    #[test]
+    fn equipment_stacks_reads_full_offhand() {
+        let mut horse = horse();
+        let mut stack = crate::items::ItemStack::new("minecraft:shield", 3);
+        stack.damage = 17;
+        finalize::set_item_stack(&mut horse, finalize::OFFHAND, stack.clone());
+        assert_eq!(horse.equipment_stacks()[1], Some(stack));
+    }
+
+    #[test]
+    fn saddle_stack_keeps_count() {
+        let mut horse = horse();
+        let stack = crate::items::ItemStack::new("minecraft:saddle", 3);
+        horse.set_saddle(Some(stack.clone()));
+        assert_eq!(horse.saddle_item(), Some(stack));
     }
 
     /// `LivingEntity.hurtArmor` (`doHurtEquipment`): a hit that lands on a mob

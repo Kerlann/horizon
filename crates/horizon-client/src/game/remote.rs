@@ -3776,41 +3776,8 @@ impl Game<'_> {
                         m.extra.charged = charged;
                     }
                     for (slot, item, stack) in items {
-                        let e = &mut m.extra;
-                        match slot {
-                            0 => match stack {
-                                // The components the server sent (a loaded
-                                // crossbow's `charged_projectiles`, dyed
-                                // leather, an enchanted book's id, ...) are
-                                // what the item model draws.
-                                Some(stack) => e.set_main_hand_stack(Some(stack)),
-                                None => e.set_main_hand(item),
-                            },
-                            1 => e.off_hand = item,
-                            2 => {
-                                e.feet = item;
-                                e.armor[3] = stack;
-                            }
-                            3 => {
-                                e.legs = item;
-                                e.armor[2] = stack;
-                            }
-                            4 => {
-                                e.chest = item;
-                                e.armor[1] = stack;
-                            }
-                            5 => {
-                                e.head = item;
-                                e.armor[0] = stack;
-                            }
-                            6 => {
-                                e.body_damage = stack.as_ref().map_or(0, |s| s.damage as i32);
-                                e.body_extra = stack.and_then(|s| s.extra);
-                                e.body = item;
-                            }
-                            7 => m.set_saddle(stack),
-                            _ => {}
-                        }
+                        let stack = stack.or_else(|| item.map(|item| ItemStack::new(&item, 1)));
+                        m.set_equipment_stack(slot as usize, stack);
                     }
                 }
             }

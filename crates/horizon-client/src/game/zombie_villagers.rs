@@ -225,11 +225,14 @@ fn carry_over(from: &Mob, to: &mut Mob) {
     to.extra.off_hand = from.extra.off_hand.clone();
     to.extra.head = from.extra.head.clone();
     to.extra.body = from.extra.body.clone();
+    to.extra.body_count = from.extra.body_count;
     to.extra.body_damage = from.extra.body_damage;
     to.extra.body_extra = from.extra.body_extra.clone();
     to.extra.chest = from.extra.chest.clone();
     to.extra.legs = from.extra.legs.clone();
     to.extra.feet = from.extra.feet.clone();
+    to.extra.armor = from.extra.armor.clone();
+    to.extra.gear = from.extra.gear.clone();
     to.extra.effects = from.extra.effects.clone();
     // VillagerData and the trades, experience and gossip.
     to.extra.variant = from.extra.variant;
