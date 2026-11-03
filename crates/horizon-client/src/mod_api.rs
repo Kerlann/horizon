@@ -456,6 +456,62 @@ impl LevelRef {
     }
 }
 
+/// An online player in one open server world, keyed by UUID.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PlayerRef {
+    pub(crate) entity: EntityRef,
+    pub(crate) uuid: u128,
+}
+
+impl PlayerRef {
+    /// The same player as an entity handle.
+    pub fn entity(self) -> EntityRef {
+        self.entity
+    }
+    /// The player's UUID.
+    pub fn uuid(self) -> u128 {
+        self.uuid
+    }
+}
+
+impl From<PlayerRef> for EntityRef {
+    fn from(player: PlayerRef) -> Self {
+        player.entity
+    }
+}
+
+/// A player's food data.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct NativePlayerFood {
+    /// Food level.
+    pub level: i32,
+    /// Food saturation.
+    pub saturation: f32,
+    /// Food exhaustion.
+    pub exhaustion: f32,
+}
+
+/// A player's server-side abilities.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct NativePlayerAbilities {
+    /// Whether ordinary damage is ignored.
+    pub invulnerable: bool,
+    /// Whether the player is flying.
+    pub flying: bool,
+    /// Whether the player may fly.
+    pub may_fly: bool,
+    /// Whether items are used without consumption.
+    pub instabuild: bool,
+    /// Whether the player may build.
+    pub may_build: bool,
+    /// Flying speed.
+    pub fly_speed: f32,
+    /// Walking speed. Horizon currently keeps no per-player value; this is 0.1.
+    pub walk_speed: f32,
+}
+
 /// Non-paused authoritative server ticks since open (not game or frame time).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NativeTickId(u64);

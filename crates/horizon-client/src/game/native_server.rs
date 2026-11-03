@@ -10,7 +10,13 @@
 use super::{Dim, Game, commands::execute, lan::LanHost};
 // Their old home, for mixin code that names them here.
 pub(crate) use horizon_client::mod_api::{NativeCommand, NativeServerPlayer};
-use horizon_client::{items::ItemStack, lan::data::component_nbt, text::Text};
+use horizon_client::{
+    items::ItemStack,
+    lan::{data::component_nbt, guest::Guest},
+    mod_api::{NativePlayerAbilities, NativePlayerFood, PlayerRef},
+    motion::PlayerMotion,
+    text::Text,
+};
 use horizon_protocol::packets::play::{self, Clientbound as C};
 use serde_json::{Map, Value, json};
 use std::{collections::HashMap, path::PathBuf};
@@ -195,10 +201,184 @@ fn finish(children: &mut Value) {
     }
 }
 
+/// The live player body, or a guest record outside a player swap.
+enum PlayerRead<'a> {
+    Acting {
+        mode: i32,
+        body: Option<&'a PlayerMotion>,
+    },
+    Guest(&'a Guest),
+}
+
+impl PlayerRead<'_> {
+    fn mode(&self) -> i32 {
+        match self {
+            Self::Acting { mode, .. } => *mode,
+            Self::Guest(guest) => guest.game_mode,
+        }
+    }
+
+    fn creative(&self) -> bool {
+        self.mode() == 1
+    }
+
+    fn may_build(&self) -> bool {
+        let mode = self.mode();
+        mode == 0 || mode == 1
+    }
+
+    fn body(&self) -> Option<&PlayerMotion> {
+        match self {
+            Self::Acting { body, .. } => *body,
+            Self::Guest(guest) => guest.motion.as_deref(),
+        }
+    }
+
+    fn food(&self) -> Option<NativePlayerFood> {
+        let food = &self.body()?.health.food;
+        let (level, saturation) = match self {
+            Self::Acting { .. } => (food.food, food.saturation),
+            Self::Guest(guest) => (guest.food, guest.saturation),
+        };
+        Some(NativePlayerFood {
+            level,
+            saturation,
+            exhaustion: food.exhaustion,
+        })
+    }
+
+    fn abilities(&self) -> Option<NativePlayerAbilities> {
+        let (invulnerable, flying, may_fly, fly_speed) = match self {
+            Self::Acting { body, .. } => {
+                let body = body.as_ref()?;
+                (
+                    body.invulnerable,
+                    body.flying,
+                    body.may_fly,
+                    body.flying_speed,
+                )
+            }
+            Self::Guest(guest) => {
+                let flags = guest.ability_flags();
+                (
+                    flags & 1 != 0,
+                    flags & 2 != 0,
+                    flags & 4 != 0,
+                    guest.flying_speed,
+                )
+            }
+        };
+        Some(NativePlayerAbilities {
+            invulnerable,
+            flying,
+            may_fly,
+            instabuild: self.creative(),
+            may_build: self.may_build(),
+            fly_speed,
+            walk_speed: 0.1,
+        })
+    }
+}
+
 /// Helpers for server mods, kept as stable as the hook points.
 // Native mods use these; nothing in Horizon does.
 #[allow(dead_code)]
 impl Game<'_> {
+    /// Resolve an online UUID on this server. During a player swap only the
+    /// acting player is available; other players return None because swaps can
+    /// nest and their records may hold displaced state. API @API:player_read@.
+    pub(super) fn native_player_ref(&self, uuid: u128) -> Option<PlayerRef> {
+        let epoch = self.native_lifecycle.epoch()?;
+        let (_, id) = self.player_lookup(uuid)?;
+        Some(PlayerRef {
+            entity: crate::mod_api::EntityRef::new(epoch, id),
+            uuid,
+        })
+    }
+
+    fn player_lookup(&self, uuid: u128) -> Option<(PlayerRead<'_>, u32)> {
+        if let Some(acting) = self.lan_acting_uuid {
+            if acting != uuid {
+                return None;
+            }
+            return Some((
+                PlayerRead::Acting {
+                    mode: self.mode_id(),
+                    body: self.player.as_ref(),
+                },
+                self.lan_acting_entity?,
+            ));
+        }
+        if let Some(guest) = self.lan.as_ref().and_then(|host| {
+            host.hub
+                .guests
+                .iter()
+                .find(|guest| guest.placed && guest.uuid == uuid)
+        }) {
+            return Some((PlayerRead::Guest(guest), guest.entity_id as u32));
+        }
+        if self.serving.is_some()
+            && self
+                .level
+                .player_uuid
+                .map(horizon_client::lan::playerdata::ints_uuid)
+                == Some(uuid)
+        {
+            let body = self.player.as_ref()?;
+            return Some((
+                PlayerRead::Acting {
+                    mode: self.mode_id(),
+                    body: Some(body),
+                },
+                body.entity_id as u32,
+            ));
+        }
+        None
+    }
+
+    fn player_handle_read(&self, player: PlayerRef) -> Option<PlayerRead<'_>> {
+        (self.native_lifecycle.epoch()? == player.entity.epoch()).then_some(())?;
+        let (read, id) = self.player_lookup(player.uuid)?;
+        (id == player.entity.id()).then_some(read)
+    }
+
+    /// `ServerPlayerGameMode.getGameModeForPlayer`; Paper `HumanEntity#getGameMode`.
+    /// None for stale, offline or unavailable players (including other players during a swap).
+    pub(super) fn native_player_game_mode(&self, player: PlayerRef) -> Option<i32> {
+        Some(self.player_handle_read(player)?.mode())
+    }
+
+    /// `Player.isCreative`; Paper `HumanEntity#getGameMode`.
+    pub(super) fn native_player_is_creative(&self, player: PlayerRef) -> Option<bool> {
+        Some(self.player_handle_read(player)?.creative())
+    }
+
+    /// `Player.isSpectator`; Paper `HumanEntity#getGameMode`.
+    pub(super) fn native_player_is_spectator(&self, player: PlayerRef) -> Option<bool> {
+        Some(self.player_handle_read(player)?.mode() == 3)
+    }
+
+    /// `Player.mayBuild`; Paper `HumanEntity#getGameMode`.
+    pub(super) fn native_player_may_build(&self, player: PlayerRef) -> Option<bool> {
+        Some(self.player_handle_read(player)?.may_build())
+    }
+
+    /// `FoodData.getFoodLevel/getSaturationLevel/getExhaustionLevel`; Paper
+    /// `HumanEntity#getFoodLevel/getSaturation/getExhaustion`. None until the
+    /// guest's body exists, as well as for stale or unavailable players.
+    pub(super) fn native_player_food(&self, player: PlayerRef) -> Option<NativePlayerFood> {
+        self.player_handle_read(player)?.food()
+    }
+
+    /// `Player.getAbilities`; Paper `Player#getAllowFlight/isFlying/getFlySpeed/getWalkSpeed`.
+    /// Horizon currently keeps no per-player walk speed and sends 0.1.
+    pub(super) fn native_player_abilities(
+        &self,
+        player: PlayerRef,
+    ) -> Option<NativePlayerAbilities> {
+        self.player_handle_read(player)?.abilities()
+    }
+
     /// The players on this server, in the order they joined. Empty on a
     /// client and in a world nobody else can join.
     pub(super) fn native_server_players(&self) -> Vec<NativeServerPlayer> {
@@ -1031,6 +1211,76 @@ impl Game<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn player_guest() -> Guest {
+        use horizon_client::lan::{Joined, PlayerSender};
+        use horizon_protocol::packets::configuration::ClientInformation;
+        use std::sync::{
+            Arc,
+            atomic::{AtomicI32, AtomicUsize},
+        };
+        let (tx, _rx) = std::sync::mpsc::channel();
+        Guest::new(
+            Joined {
+                conn: 1,
+                uuid: 123,
+                name: "guest".into(),
+                properties: Vec::new(),
+                info: ClientInformation::new(8),
+                brand: String::new(),
+                sender: PlayerSender::new(tx, Arc::new(AtomicUsize::new(0))),
+                latency: Arc::new(AtomicI32::new(0)),
+                address: "127.0.0.1:1".parse().unwrap(),
+            },
+            1,
+            [0.0; 3],
+            10,
+        )
+    }
+
+    #[test]
+    fn player_reads_use_guest_mode_and_abilities() {
+        let mut guest = player_guest();
+        guest.flying_speed = 0.08;
+        let read = PlayerRead::Guest(&guest);
+        assert_eq!(read.mode(), 0);
+        assert_eq!(
+            read.food(),
+            None,
+            "food is unavailable before body creation"
+        );
+        assert_eq!(
+            read.abilities(),
+            Some(NativePlayerAbilities {
+                invulnerable: false,
+                flying: false,
+                may_fly: false,
+                instabuild: false,
+                may_build: true,
+                fly_speed: 0.08,
+                walk_speed: 0.1,
+            })
+        );
+        guest.game_mode = 1;
+        guest.flying = true;
+        let read = PlayerRead::Guest(&guest);
+        assert_eq!(read.mode(), 1);
+        assert_eq!(
+            read.abilities(),
+            Some(NativePlayerAbilities {
+                invulnerable: true,
+                flying: true,
+                may_fly: true,
+                instabuild: true,
+                may_build: true,
+                fly_speed: 0.08,
+                walk_speed: 0.1,
+            })
+        );
+        guest.game_mode = 3;
+        let abilities = PlayerRead::Guest(&guest).abilities().unwrap();
+        assert!(!abilities.may_build && !abilities.instabuild && abilities.may_fly);
+    }
 
     fn tree(commands: &[NativeCommand]) -> (Value, HashMap<String, u8>, Vec<String>) {
         command_tree(commands, |name| name == "give")
