@@ -34,6 +34,7 @@ pub use crate::items::ItemStack;
 pub use crate::menu::{LogicalSide, StackedOnOther};
 pub use crate::merchant::MerchantOffer;
 pub use crate::mesher::TintSource;
+pub use crate::mod_chunk_tickets::TicketOwner as NativeTicketOwner;
 pub use crate::music::{Music, MusicLayer};
 pub use crate::particles::{ParticleOptions, ParticleType};
 pub use crate::recipe_book::RecipeBookCategory;
@@ -1368,6 +1369,23 @@ pub struct NativeClipHit {
     pub world_border: bool,
 }
 
+/// The client's ordinary crosshair hit (`Minecraft.hitResult`), within the
+/// current interaction ranges. Entity ids identify this world's network
+/// entities, including dragon parts; they are not persistent handles.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum NativeCrosshairTarget {
+    Block {
+        pos: BlockPos,
+        state: BlockStateId,
+        hit: BlockHit,
+    },
+    Entity {
+        id: i32,
+        point: [f64; 3],
+    },
+}
+
 /// One item cooldown a player waits on (`ItemCooldowns.cooldowns`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NativeItemCooldown {
@@ -1379,6 +1397,8 @@ pub struct NativeItemCooldown {
 }
 
 /// An online player in one open server world, keyed by UUID.
+/// A nested guest turn cannot re-enter a player active in an outer turn;
+/// operations requiring that player's swapped state report them unavailable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PlayerRef {
     pub(crate) entity: EntityRef,
@@ -1849,6 +1869,11 @@ pub fn mods() -> &'static [ModEntry] {
     installed().map_or(&[], |installed| &installed.mods)
 }
 
+/// Whether a mod with this `[mod] id` is installed.
+pub fn is_loaded(id: &str) -> bool {
+    mods().iter().any(|entry| entry.id == id)
+}
+
 pub(crate) fn listened(hook: generated::HookId) -> bool {
     installed().is_some_and(|installed| installed.subscribers.contains_any(hook as usize))
 }
@@ -2055,9 +2080,9 @@ pub(in crate::mod_api) fn backend_mut_of(host: &mut dyn Host) -> Option<&mut dyn
     host.backend_mut().map(|wrapper| wrapper.open())
 }
 
-/// A player's right click on a block, for `right_click_block`
-/// (`PlayerInteractEvent.RightClickBlock`): once per hand, where
-/// `useItemOn` starts, on the clicking client and on the server.
+/// A player's right click on a block, shared by the block's use behaviours
+/// and `right_click_block` (`PlayerInteractEvent.RightClickBlock`). The
+/// event hears it once per hand on the clicking client and on the server.
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub struct NativeBlockClick<'a> {

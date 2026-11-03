@@ -827,7 +827,7 @@ impl Game<'_> {
         }
         let back = self.enter_command_level(dim)?;
         let result = f(self);
-        if let Err(e) = self.enter_level(None, back) {
+        if let Err(e) = self.enter_level(back) {
             log::error!("could not return to {}: {e}", back.id());
         }
         Some(result)
@@ -1469,10 +1469,7 @@ impl Game<'_> {
                         self.console_broadcast = Some(true);
                         self.broadcast_to_admins(text);
                         self.console_broadcast = None;
-                        if let Some(mut host) = self.lan.take() {
-                            self.send_admin_feedback(&mut host, None);
-                            self.lan = Some(host);
-                        }
+                        self.send_admin_feedback(None);
                         self.admin_feedback.clear();
                     }
                 }

@@ -6,7 +6,7 @@
 //! feedback and no failure in anyone's chat. A batch waits in a queue and runs
 //! [`PER_TICK`] lines a player a tick, so a mod can't flood a server; each
 //! finished batch is one line in the server's log.
-use super::{Game, lan::LanHost, lan_actions::GuestCommand};
+use super::{Game, lan_actions::GuestCommand};
 use horizon_protocol::quiet;
 use std::collections::{HashMap, VecDeque};
 
@@ -29,7 +29,10 @@ pub(super) struct QuietBatch {
 impl Game<'_> {
     /// A `horizon:quiet_commands` payload from `conn`: queued (or logged as
     /// refused when it breaks the payload's caps).
-    pub(super) fn guest_quiet_commands(&mut self, host: &mut LanHost, conn: u32, data: &[u8]) {
+    pub(super) fn guest_quiet_commands(&mut self, conn: u32, data: &[u8]) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let Some(name) = host.hub.guest(conn).map(|g| g.name.clone()) else {
             return;
         };

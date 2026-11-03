@@ -264,13 +264,13 @@ impl Game<'_> {
     ) {
         let m = &self.mobs[index];
         let at = m.center();
-        let saddle_put_on = saddle.is_some() && !m.extra.saddled;
+        let saddle_put_on = saddle.is_some() && !m.extra.saddled();
         let put_on = if saddle_put_on {
             saddle.as_ref()
         } else {
             body.as_ref()
                 .and_then(Option::as_ref)
-                .filter(|_| m.extra.body.is_none())
+                .filter(|_| m.extra.body_id().is_none())
         };
         let sound = if saddle_put_on && nautilus::is_nautilus(m.species()) {
             // AbstractNautilus.getEquipSound: its own saddle sounds.

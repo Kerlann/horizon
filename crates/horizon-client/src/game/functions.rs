@@ -15,6 +15,7 @@ use horizon_client::{
     text::{self, Text},
 };
 use horizon_world::nbt::Tag;
+use std::sync::Arc;
 
 /// A `TimerQueue` event.
 #[derive(Clone, Debug, PartialEq)]
@@ -27,7 +28,7 @@ pub(super) struct Scheduled {
 #[derive(Default)]
 pub(super) struct FnState {
     pub store: DataStore,
-    packs: Vec<DataPack>,
+    packs: Vec<Arc<DataPack>>,
     /// Enabled pack ids, in load order (later overrides earlier).
     enabled: Vec<String>,
     loaded: bool,
@@ -51,7 +52,7 @@ pub(super) enum Outcome {
 /// enabled ids from `datapacks.json` (`PackRepository.reload`).
 pub(super) struct PackStack {
     pub builtin: Option<DataPack>,
-    pub packs: Vec<DataPack>,
+    pub packs: Vec<Arc<DataPack>>,
     pub enabled: Vec<String>,
 }
 impl PackStack {
@@ -60,7 +61,7 @@ impl PackStack {
     fn enabled_packs(&self) -> impl Iterator<Item = &DataPack> {
         self.enabled
             .iter()
-            .filter_map(|id| self.packs.iter().find(|p| &p.id == id))
+            .filter_map(|id| self.packs.iter().find(|p| &p.id == id).map(Arc::as_ref))
     }
 }
 pub(super) fn pack_stack(
@@ -74,7 +75,7 @@ pub(super) fn pack_stack(
     let enabled = datapack::enabled_ids(world_root, &packs, enabled_features);
     PackStack {
         builtin,
-        packs,
+        packs: packs.into_iter().map(Arc::new).collect(),
         enabled,
     }
 }
@@ -82,13 +83,7 @@ pub(super) fn pack_stack(
 /// The world's enabled packs' content files (`recipe/`, `loot_table/`,
 /// `advancement/`, `tags/…`) for the tables to merge over the resource
 /// root's own. Empty when the world has no packs.
-pub(super) fn content_overlay(
-    world_root: &std::path::Path,
-    resources: &std::path::Path,
-    vanilla_disabled: bool,
-    enabled_features: &[String],
-) -> Vec<(String, Vec<Vec<u8>>)> {
-    let stack = pack_stack(world_root, resources, vanilla_disabled, enabled_features);
+pub(super) fn content_overlay(stack: &PackStack) -> Vec<(String, Vec<Vec<u8>>)> {
     let packs: Vec<&DataPack> = stack.enabled_packs().collect();
     if packs.is_empty() {
         return Vec::new();
@@ -104,13 +99,10 @@ pub(super) fn content_overlay(
 /// its tables through here on a world's first open and on `/reload`, so the
 /// mods are asked once per load.
 pub(super) fn overlay_files(
-    world_root: &std::path::Path,
-    resources: &std::path::Path,
-    vanilla_disabled: bool,
-    enabled_features: &[String],
+    stack: &PackStack,
     contributed: Vec<(String, Vec<u8>)>,
 ) -> Vec<(String, Vec<Vec<u8>>)> {
-    let mut files = content_overlay(world_root, resources, vanilla_disabled, enabled_features);
+    let mut files = content_overlay(stack);
     if contributed.is_empty() {
         return files;
     }
@@ -154,62 +146,61 @@ impl Game<'_> {
     fn datapack_settings_path(&self) -> std::path::PathBuf {
         self.world_root.join("datapacks.json")
     }
-    pub(super) fn reload_datapacks(&mut self, run_load: bool, enabled_features: &[String]) {
+    pub(super) fn reload_datapacks(
+        &mut self,
+        run_load: bool,
+        enabled_features: &[String],
+    ) -> PackStack {
         let stack = pack_stack(
             &self.world_root,
             &self.options.resources,
             self.cmds.vanilla_disabled,
             enabled_features,
         );
-        self.fns.packs = stack.packs;
-        self.fns.enabled = stack.enabled;
-        self.rebuild_store(enabled_features);
+        self.fns.packs = stack.packs.clone();
+        self.fns.enabled = stack.enabled.clone();
+        self.rebuild_store(&stack);
         self.fns.loaded = true;
         self.fns.load_pending = true;
         // An explicit reload (`/reload`, `/datapack`) also rebuilds the
         // content tables, as `ReloadableServerResources` does; on world open
         // `finish_open_world` builds them right after this.
         if run_load {
-            self.reload_world_tables();
+            self.reload_world_tables(&stack);
         }
         if self.fns.schedule.is_empty() {
             self.load_schedule();
         }
+        stack
     }
-    fn rebuild_store(&mut self, enabled_features: &[String]) {
+    fn rebuild_store(&mut self, stack: &PackStack) {
         // The built-in pack first (lowest priority), unless disabled.
-        let stack = pack_stack(
-            &self.world_root,
-            &self.options.resources,
-            self.cmds.vanilla_disabled,
-            enabled_features,
-        );
         let packs: Vec<&DataPack> = stack.builtin.iter().chain(stack.enabled_packs()).collect();
         let store = DataStore::load(&packs);
         for (id, e) in &store.errors {
             log::warn!("Horizon: failed to load function {id}: {e}");
         }
         self.fns.store = store;
-        self.sync_function_registries(enabled_features);
+        self.sync_function_registries(stack);
     }
     fn save_datapack_settings(&self) {
         let disabled: Vec<&String> = self
             .fns
             .packs
             .iter()
+            .filter(|p| !self.fns.enabled.contains(&p.id))
             .map(|p| &p.id)
-            .filter(|id| !self.fns.enabled.contains(id))
             .collect();
         let json = serde_json::json!({"enabled": self.fns.enabled, "disabled": disabled});
         let _ = std::fs::write(self.datapack_settings_path(), json.to_string());
     }
-    pub(super) fn sync_function_registries(&mut self, enabled_features: &[String]) {
+    fn sync_function_registries(&mut self, stack: &PackStack) {
+        self.sync_schedule_registry();
         let reg = &mut self.ui.registries;
         reg.functions = self.fns.store.functions.keys().cloned().collect();
         reg.function_tags = self.fns.store.function_tags.keys().cloned().collect();
         reg.predicates = self.fns.store.predicates.keys().cloned().collect();
         reg.item_modifiers = self.fns.store.item_modifiers.keys().cloned().collect();
-        reg.schedules = self.fns.schedule.iter().map(|s| s.id.clone()).collect();
         reg.datapacks_enabled = std::iter::once("vanilla".to_owned())
             .chain(self.fns.enabled.iter().cloned())
             .collect();
@@ -217,23 +208,14 @@ impl Game<'_> {
             .fns
             .packs
             .iter()
+            .filter(|p| !self.fns.enabled.contains(&p.id))
             .map(|p| p.id.clone())
-            .filter(|id| !self.fns.enabled.contains(id))
             .collect();
         // A pack's worldgen ids join the completion registries
         // (`command-registries.json` lists only the game's own), and so do
         // its worldgen tag ids for the `#tag` completions. The packs are the
         // ones the world's worldgen is built from.
-        let packs = horizon_client::datapack::discover_with_features(
-            &self.world_root,
-            &self.options.resources,
-        );
-        let enabled =
-            horizon_client::datapack::enabled_ids(&self.world_root, &packs, enabled_features);
-        let enabled: Vec<_> = enabled
-            .iter()
-            .filter_map(|id| packs.iter().find(|p| &p.id == id))
-            .collect();
+        let enabled: Vec<_> = stack.enabled_packs().collect();
         let (overrides, _) = horizon_client::datapack::worldgen_overrides(&enabled, |_| true);
         for (bundle, registry) in [
             ("biomes", "minecraft:worldgen/biome"),
@@ -270,6 +252,10 @@ impl Game<'_> {
             }
         }
         entry.tags.sort();
+    }
+
+    fn sync_schedule_registry(&mut self) {
+        self.ui.registries.schedules = self.fns.schedule.iter().map(|s| s.id.clone()).collect();
     }
 
     // ---- scheduled events ------------------------------------------------------
@@ -597,7 +583,7 @@ impl Game<'_> {
                 "commands.schedule.cleared.success",
                 &[Text::literal(count.to_string()), Text::literal(name)],
             ));
-            self.sync_function_registries(&self.level.enabled_features.clone());
+            self.sync_schedule_registry();
             return Ok(count as i32);
         }
         let Some(Arg::Resource(name)) = ctx.get("function").cloned() else {
@@ -655,7 +641,7 @@ impl Game<'_> {
                 Text::literal(tick_time.to_string()),
             ],
         ));
-        self.sync_function_registries(&self.level.enabled_features.clone());
+        self.sync_schedule_registry();
         Ok((tick_time.rem_euclid(i64::from(i32::MAX))) as i32)
     }
     /// ReloadCommand: the message, then the (asynchronous) reload; returns 0.
@@ -680,7 +666,7 @@ impl Game<'_> {
             .packs
             .iter()
             .find(|p| p.id == id)
-            .map_or_else(|| "Default data pack".to_owned(), DataPack::description);
+            .map_or_else(|| "Default data pack".to_owned(), |p| p.description());
         let style = text::Style {
             hover: Some(Box::new(Text::literal(format!("{id}\n{description}")))),
             ..style
@@ -918,9 +904,18 @@ impl Game<'_> {
     /// tables with the functions.
     fn apply_pack_change(&mut self) {
         self.save_datapack_settings();
-        self.rebuild_store(&self.level.enabled_features.clone());
+        // One resolve for the store and the tables, as `/reload`'s is: the
+        // timers already in memory stay, and none come back from disk
+        // (`ServerFunctionManager` keeps its queue over a pack change).
+        let stack = pack_stack(
+            &self.world_root,
+            &self.options.resources,
+            self.cmds.vanilla_disabled,
+            &self.level.enabled_features,
+        );
+        self.rebuild_store(&stack);
         self.fns.load_pending = true;
-        self.reload_world_tables();
+        self.reload_world_tables(&stack);
     }
 
     // ---- predicates -------------------------------------------------------------------
@@ -1029,6 +1024,19 @@ mod tests {
             assert!(game.items().item_tags["test:sample"].contains("minecraft:stone"));
             assert!(game.stations().recipe_index.contains("test:sample"));
 
+            // Changing packs must not reload an old timer from disk.
+            game.fns.schedule.push(Scheduled {
+                id: "test:start".into(),
+                time: 1000,
+                seq: 1,
+            });
+            game.save_schedule();
+            game.fns.schedule.clear();
+            assert!(game.run_command("datapack disable \"file/test\""));
+            assert!(game.fns.schedule.is_empty());
+            assert!(game.run_command("datapack enable \"file/test\""));
+            assert!(game.fns.schedule.is_empty());
+
             // World-open selection and completions must both use the incoming
             // level's flags, even while `self.level` is still the old level.
             game.ui.registries.by_registry.clear();
@@ -1038,12 +1046,14 @@ mod tests {
                 r#"{"features":{"enabled":["test:feature"]}}"#,
             )
             .unwrap();
-            game.reload_datapacks(false, &["test:feature".into()]);
+            let stack = game.reload_datapacks(false, &["test:feature".into()]);
             assert!(
                 game.ui.registries.by_registry["minecraft:worldgen/biome"]
                     .tags
                     .contains(&"test:feature_marker".to_owned())
             );
+            game.world_tables = game.build_world_tables(&stack);
+            assert!(game.items().item_tags["test:sample"].contains("minecraft:diamond"));
         });
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -1067,7 +1077,8 @@ mod tests {
             }
             let json = serde_json::json!({"enabled": order, "disabled": []});
             std::fs::write(dir.join("datapacks.json"), json.to_string()).unwrap();
-            let files = content_overlay(&dir, std::path::Path::new(""), true, &[]);
+            let stack = pack_stack(&dir, std::path::Path::new(""), true, &[]);
+            let files = content_overlay(&stack);
             let (_, versions) = files.iter().find(|(id, _)| id == "recipe/x:r").unwrap();
             let last = versions.last().unwrap();
             assert_eq!(
@@ -1098,11 +1109,9 @@ mod tests {
         let settings = serde_json::json!({"enabled": ["file/pack"], "disabled": []});
         std::fs::write(dir.join("datapacks.json"), settings.to_string()).unwrap();
         let tag = |entry: &str| format!(r#"{{"values": ["{entry}"]}}"#).into_bytes();
+        let stack = pack_stack(&dir, std::path::Path::new(""), true, &[]);
         let files = overlay_files(
-            &dir,
-            std::path::Path::new(""),
-            true,
-            &[],
+            &stack,
             vec![
                 ("tags/pkg:item/both".to_owned(), tag("pkg:from_mod")),
                 ("tags/pkg:item/mod_only".to_owned(), tag("pkg:only_mod")),
@@ -1126,10 +1135,7 @@ mod tests {
         );
         // The next load asks again: the new contribution, not the first's.
         let files = overlay_files(
-            &dir,
-            std::path::Path::new(""),
-            true,
-            &[],
+            &stack,
             vec![("tags/pkg:item/mod_only".to_owned(), tag("pkg:second_load"))],
         );
         let overlay = horizon_world::loot::PackOverlay { files: &files };
@@ -1140,10 +1146,7 @@ mod tests {
         );
         // A file that isn't JSON is skipped alone, not the whole load.
         let files = overlay_files(
-            &dir,
-            std::path::Path::new(""),
-            true,
-            &[],
+            &stack,
             vec![
                 ("tags/pkg:item/mod_only".to_owned(), b"{not json".to_vec()),
                 ("tags/pkg:item/good".to_owned(), tag("pkg:good")),
@@ -1154,10 +1157,7 @@ mod tests {
         assert!(!tags.contains_key("pkg:mod_only"));
         assert!(tags["pkg:good"].contains("pkg:good"));
         // With nothing contributed the overlay is the packs' own.
-        assert_eq!(
-            overlay_files(&dir, std::path::Path::new(""), true, &[], Vec::new()),
-            content_overlay(&dir, std::path::Path::new(""), true, &[])
-        );
+        assert_eq!(overlay_files(&stack, Vec::new()), content_overlay(&stack));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

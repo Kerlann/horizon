@@ -62,7 +62,7 @@ impl Game<'_> {
         stack: &ItemStack,
         unlit: horizon_world::registry::BlockStateId,
     ) -> Option<horizon_world::registry::BlockStateId> {
-        if crate::mod_api::mods().is_empty() {
+        if !crate::mod_api::listened(crate::mod_api::HookId::BlockToolModification) {
             return Some(unlit);
         }
         let tool = crate::mod_api::ToolUse {

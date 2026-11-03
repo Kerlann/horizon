@@ -1247,16 +1247,10 @@ pub fn mob_to_nbt(
                 }
             }
         }
-        let body = m.extra.body.as_ref().map(|id| {
-            let mut stack = crate::items::ItemStack::new(id, m.extra.body_count.max(1));
-            stack.damage = m.extra.body_damage.max(0) as u32;
-            stack.extra = m.extra.body_extra.clone();
-            stack
-        });
         horizon_items::equipment::put(
             &mut equipment,
             horizon_items::equipment::BODY,
-            body.as_ref(),
+            m.extra.body_stack(),
         );
         horizon_items::equipment::put(
             &mut equipment,
@@ -1505,11 +1499,8 @@ pub fn mob_from_nbt(
         m.extra.head = slot("head");
         // Body and saddle: the one `equipment` codec.
         let equipment = horizon_items::equipment::Equipment::read(eq);
-        let body = equipment.get(horizon_items::equipment::BODY);
-        m.extra.body = body.map(|s| s.item.clone());
-        m.extra.body_count = body.map_or(0, |s| s.count);
-        m.extra.body_damage = body.map_or(0, |s| s.damage as i32);
-        m.extra.body_extra = body.and_then(|s| s.extra.clone());
+        m.extra
+            .set_body_stack(equipment.get(horizon_items::equipment::BODY).cloned());
         m.set_saddle(equipment.get(horizon_items::equipment::SADDLE).cloned());
         m.extra.chest = slot("chest");
         m.extra.legs = slot("legs");
@@ -3504,10 +3495,7 @@ mod tests {
             ),
         ]);
         let m = mob_from_nbt(&raw, &types, 1, None).unwrap();
-        assert_eq!(
-            m.extra.body.as_deref(),
-            Some("minecraft:diamond_horse_armor")
-        );
+        assert_eq!(m.extra.body_id(), Some("minecraft:diamond_horse_armor"));
         assert_eq!(m.extra.head.as_deref(), Some("minecraft:iron_helmet"));
         let saved = mob_to_nbt(&m, [0; 4], Some(&raw), None);
         let eq = saved.get("equipment").unwrap();
@@ -3556,8 +3544,8 @@ mod tests {
             ),
         ]);
         let m = mob_from_nbt(&raw, &types, 1, None).unwrap();
-        assert_eq!(m.extra.body.as_deref(), Some("minecraft:wolf_armor"));
-        assert_eq!(m.extra.body_damage, 9);
+        assert_eq!(m.extra.body_id(), Some("minecraft:wolf_armor"));
+        assert_eq!(m.extra.body_damage(), 9);
         assert_eq!(m.extra.head.as_deref(), Some("minecraft:iron_helmet"));
     }
 
@@ -5973,10 +5961,7 @@ mod held_item_name_tests {
         let raw = mob_to_nbt(&horse, [1, 2, 3, 4], None, None);
         let mut horse = mob_from_nbt(&raw, &types, 2, None).unwrap();
         assert_eq!(horse.extra.head.as_deref(), Some("minecraft:iron_helmet"));
-        assert_eq!(
-            horse.extra.body.as_deref(),
-            Some("minecraft:diamond_horse_armor")
-        );
+        assert_eq!(horse.extra.body_id(), Some("minecraft:diamond_horse_armor"));
         assert_eq!(horse.equipment_stacks()[6], Some(armor.clone()));
         let mut chances = [0.0; 8];
         chances[drops::SLOTS.iter().position(|s| *s == "head").unwrap()] = 2.0;

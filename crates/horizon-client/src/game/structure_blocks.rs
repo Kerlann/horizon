@@ -2,7 +2,7 @@
 //! scan, the `StructureTemplateManager` they go through (templates kept in
 //! memory, written to `<world>/generated/<namespace>/structures/<path>.nbt`),
 //! `StructureBlock.neighborChanged` and `handleSetStructureBlock`.
-use super::{Game, lan::LanHost};
+use super::Game;
 use horizon_client::{
     containers::BlockEntity,
     gizmos::{Gizmos, InvisibleBlock},
@@ -565,17 +565,12 @@ impl Game<'_> {
 
     /// `ServerGamePacketListenerImpl.handleSetStructureBlock` for a guest:
     /// only a creative player with game master commands edits the block.
-    pub(super) fn lan_set_structure_block(
-        &mut self,
-        host: &mut LanHost,
-        conn: u32,
-        p: play::SetStructureBlock,
-    ) {
-        let Some(g) = host.hub.guest(conn) else {
+    pub(super) fn lan_set_structure_block(&mut self, conn: u32, p: play::SetStructureBlock) {
+        let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
         let allowed = g.creative() && g.permission >= 2;
-        self.as_guest_messaged(host, conn, |game| {
+        self.as_guest_messaged(conn, |game| {
             if allowed {
                 game.apply_set_structure_block(&p);
             }

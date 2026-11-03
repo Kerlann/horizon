@@ -3,7 +3,7 @@
 //! pixels, 1024 characters, 100 pages), signing it into a written book,
 //! reading written books, and lecterns (placing a book, turning its pages
 //! with a redstone pulse, the comparator output and taking the book).
-use super::{Game, lan::LanHost, screen_info};
+use super::{Game, screen_info};
 use horizon_client::{
     containers::{BlockEntity, Lectern},
     first_person::Hand,
@@ -338,13 +338,12 @@ impl Game<'_> {
     }
     /// `ServerGamePacketListenerImpl.handleEditBook`: a guest's book in a
     /// hotbar slot or its off hand (`updateBookContents`, `signBook`).
-    pub(super) fn lan_edit_book(&mut self, host: &mut LanHost, conn: u32, p: play::EditBook) {
+    pub(super) fn lan_edit_book(&mut self, conn: u32, p: play::EditBook) {
         if !((0..9).contains(&p.slot) || p.slot == super::shield::OFFHAND_SLOT as i32) {
             return;
         }
         if let Some(title) = &p.title
             && !self.chat_filter_text(
-                host,
                 conn,
                 &[title],
                 horizon_client::lan::hub::chat_filter::Place::Book,
@@ -357,7 +356,7 @@ impl Game<'_> {
         } else {
             36 + p.slot as usize
         };
-        let cancelled = self.as_guest(host, conn, |g| {
+        let cancelled = self.as_guest(conn, |g| {
             let mut cancel = false;
             let writable = g
                 .stack_in(p.slot as usize)
@@ -382,7 +381,10 @@ impl Game<'_> {
         // A cancelled edit leaves the client's own copy of the book: forget
         // what was sent so the next broadcast resends the server's stack.
         if cancelled == Some(true)
-            && let Some(g) = host.hub.guests.iter_mut().find(|g| g.conn == conn)
+            && let Some(g) = self
+                .lan
+                .as_mut()
+                .and_then(|host| host.hub.guests.iter_mut().find(|g| g.conn == conn))
         {
             g.menu_sent[menu_slot] = None;
         }

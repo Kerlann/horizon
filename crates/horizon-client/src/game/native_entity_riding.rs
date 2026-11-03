@@ -76,9 +76,8 @@ impl Game<'_> {
             .map(|g| (g.vehicle_order, g.entity_id as u32))
             .collect();
         players.sort_unstable();
-        // A guest action can take the hub out of the game: the acting
-        // player, whose vehicle is in `riding` then, goes first, as
-        // `addPassenger` puts a player first.
+        // An acting player absent from the placed list still rides through
+        // `riding`; `addPassenger` puts that player first.
         if let Some(me) = self.lan_acting_entity
             && self.lan_acting_uuid.is_some()
             && !acting_listed

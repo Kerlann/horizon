@@ -78,7 +78,7 @@ pub fn finalize(m: &mut Mob, warm_ocean: bool) {
 }
 /// `getControllingPassenger`: a player on a saddled nautilus.
 pub fn controlled(m: &Mob) -> bool {
-    m.rider.is_some() && m.extra.saddled
+    m.rider.is_some() && m.extra.saddled()
 }
 /// `AbstractNautilus.isFood`: taming items while wild, food otherwise.
 pub fn is_food(m: &Mob, item: &str, taming: &[String]) -> bool {
@@ -231,7 +231,7 @@ fn dash(m: &mut Mob, amount: f32) {
 /// `AbstractNautilus.getNautilusRestrictionRadius`: 32 blocks, or 16 for a
 /// baby or a saddled one.
 fn restriction_radius(m: &Mob) -> i32 {
-    if !m.is_baby() && !m.extra.saddled {
+    if !m.is_baby() && !m.extra.saddled() {
         32
     } else {
         16
@@ -561,7 +561,7 @@ pub fn anim(m: &Mob, s: &State, p: &mut Poses, animations: &HashMap<String, Anim
     if let Some(a) = animations.get("NautilusAnimation.SWIMMING") {
         a.apply_walk(s.pos + s.age / 5.0, s.speed + 0.2, 2.0, 3.0, p);
     }
-    if m.extra.body.is_some() {
+    if m.extra.body_id().is_some() {
         p.visible("corals", false);
     }
 }

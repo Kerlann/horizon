@@ -42,6 +42,11 @@ pub fn enter_native_mod(call: NativeModCall) -> NativeModGuard {
     }
 }
 
+/// The `[mod] id` of the native mod this thread is inside a hook of, if any.
+pub fn current_native_mod() -> Option<&'static str> {
+    IN_NATIVE_MOD.with(Cell::get).map(|call| call.id)
+}
+
 /// Puts back the call that `enter_native_mod` found.
 #[must_use]
 pub struct NativeModGuard {

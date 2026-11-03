@@ -6,7 +6,6 @@ use super::{
     Game,
     command_blocks::CommandBlockScreen,
     commands::{Target, execute::Source},
-    lan::LanHost,
     minecarts::{CartKind, Minecart},
 };
 use horizon_client::{command_block::Mode, text::Text};
@@ -148,17 +147,12 @@ impl Game<'_> {
         }
     }
     /// `ServerGamePacketListenerImpl.handleSetCommandMinecart` for a guest.
-    pub(super) fn lan_set_command_minecart(
-        &mut self,
-        host: &mut LanHost,
-        conn: u32,
-        p: play::SetCommandMinecart,
-    ) {
-        let Some(g) = host.hub.guest(conn) else {
+    pub(super) fn lan_set_command_minecart(&mut self, conn: u32, p: play::SetCommandMinecart) {
+        let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
         let allowed = g.creative() && g.permission >= 2;
-        self.as_guest_messaged(host, conn, |game| {
+        self.as_guest_messaged(conn, |game| {
             if allowed {
                 game.apply_cart_command(p.entity as u32, p.command, p.track_output);
             } else {

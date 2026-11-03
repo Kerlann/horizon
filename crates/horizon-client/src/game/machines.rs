@@ -1083,7 +1083,7 @@ impl Game<'_> {
         source: &View,
         destination: &View,
     ) -> bool {
-        if horizon_client::mod_api::mods().is_empty() {
+        if !crate::mod_api::listened(crate::mod_api::HookId::InventoryMoveItem) {
             return false;
         }
         let containers = self.containers();
@@ -1208,7 +1208,7 @@ impl Game<'_> {
             // room, the setItem putting the bone meal back into the detached
             // container (whose bone meal is lost with it).
             let bone_meal = c.bone_meal.clone();
-            if !horizon_client::mod_api::mods().is_empty() {
+            if crate::mod_api::listened(crate::mod_api::HookId::InventoryMoveItem) {
                 let mut cancel = false;
                 self.native_inventory_move_item(
                     [above.0, above.1, above.2],

@@ -258,7 +258,7 @@ fn variant(m: &Mob, regs: &SpawnRegistries, v: &mut Vec<String>) {
         v.push(format!("raid={}", st.is_some_and(|s| s.can_join_raid)));
     }
     if s == S::Strider {
-        v.push(format!("saddled={}", m.extra.saddled));
+        v.push(format!("saddled={}", m.extra.saddled()));
     }
 }
 

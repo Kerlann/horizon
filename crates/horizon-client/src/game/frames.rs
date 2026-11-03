@@ -241,16 +241,18 @@ impl Game<'_> {
         }
         best
     }
-    /// Nearer than the targeted block?
-    pub(super) fn before_block(&self, distance: f64) -> bool {
-        self.pick_unfiltered().is_none_or(|h| {
+    pub(super) fn block_distance(&self) -> Option<f64> {
+        self.pick_unfiltered().map(|h| {
             let eye = self.aim().map(|(eye, _)| eye).unwrap_or_default();
             (0..3)
                 .map(|a| (h.point[a] - eye[a]).powi(2))
                 .sum::<f64>()
                 .sqrt()
-                > distance
         })
+    }
+    /// Nearer than the targeted block?
+    pub(super) fn before_block(&self, distance: f64) -> bool {
+        self.block_distance().is_none_or(|block| block > distance)
     }
     /// `ItemFrame.interact` for the frame under the crosshair, or the one a
     /// guest's interact packet named.

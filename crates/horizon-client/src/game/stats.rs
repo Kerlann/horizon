@@ -215,7 +215,7 @@ impl Game<'_> {
             return;
         }
         // No mod, no name copied: the per-tick counters come through here.
-        let acting = if horizon_client::mod_api::mods().is_empty() {
+        let acting = if !crate::mod_api::listened(crate::mod_api::HookId::PlayerStatAward) {
             None
         } else {
             self.lan_acting_uuid.zip(self.lan_acting_name.clone())

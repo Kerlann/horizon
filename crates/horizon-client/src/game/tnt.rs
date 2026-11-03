@@ -271,11 +271,7 @@ impl Game<'_> {
                 self.combat.blast_guest = guest;
                 self.combat.blast_owner = tnt_blast_owner(
                     owner,
-                    || {
-                        self.lan
-                            .as_ref()
-                            .and_then(|host| self.player_attacker(host, guest))
-                    },
+                    || self.player_attacker(guest),
                     |id| self.mob_display_name(id),
                 );
                 let result = self.with_hive_emptying_blast(|g| {

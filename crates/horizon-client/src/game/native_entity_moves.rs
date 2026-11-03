@@ -49,7 +49,6 @@ impl Game<'_> {
                         Target::Player | Target::Guest(_) | Target::Mob(_) | Target::Other(_)
                     )
             })
-            || matches!(t, Target::Guest(_)) && self.lan_acting_uuid.is_some()
         {
             return false;
         }
@@ -75,9 +74,6 @@ impl Game<'_> {
         let pitch = entity_pitch(pitch);
         match t {
             Target::Player | Target::Guest(_) => {
-                if matches!(t, Target::Guest(_)) && self.lan_acting_uuid.is_some() {
-                    return false;
-                }
                 self.for_player(t, |g| {
                     if g.player.is_none() {
                         return false;
@@ -138,7 +134,7 @@ impl Game<'_> {
             Some(t @ (Target::Player | Target::Guest(_))) => {
                 let conn = match t {
                     Target::Player => self.lan_acting,
-                    Target::Guest(conn) if self.lan_acting_uuid.is_none() => Some(conn),
+                    Target::Guest(conn) => Some(conn),
                     _ => None,
                 };
                 let Some(g) = conn.and_then(|conn| self.lan.as_mut()?.hub.guest_mut(conn)) else {
@@ -175,7 +171,7 @@ impl Game<'_> {
         if matches!(target, Target::Player | Target::Guest(_)) {
             let conn = match target {
                 Target::Player => self.lan_acting,
-                Target::Guest(conn) if self.lan_acting_uuid.is_none() => Some(conn),
+                Target::Guest(conn) => Some(conn),
                 _ => None,
             };
             let Some(g) = conn.and_then(|conn| self.lan.as_mut()?.hub.guest_mut(conn)) else {

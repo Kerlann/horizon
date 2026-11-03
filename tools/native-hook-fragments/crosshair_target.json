@@ -1,0 +1,10 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "crosshair_target",
+      "side": "client",
+      "target": "horizon_client::game::pick_entity::Game<'_>::native_crosshair_target"
+    }
+  ]
+}

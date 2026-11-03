@@ -866,7 +866,11 @@ pub(super) fn make_streaming(
             res.threads(),
         )
     };
-    streaming.forced = save.load_forced_chunks();
+    streaming.load_forced(
+        save.load_forced_chunks(),
+        save.load_mod_tickets(),
+        horizon_client::mod_api::is_loaded,
+    );
     streaming.radius = settings.render_distance;
     streaming.biome_blend = settings.biome_blend;
     streaming.smooth_lighting = settings.smooth_lighting;

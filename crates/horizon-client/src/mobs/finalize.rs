@@ -973,7 +973,7 @@ pub fn item(m: &Mob, slot: usize) -> Option<Arc<str>> {
         LEGS => m.extra.legs.clone(),
         CHEST => m.extra.chest.clone(),
         HEAD => m.extra.head.clone(),
-        SADDLE => m.extra.saddled.then(|| Arc::from("minecraft:saddle")),
+        SADDLE => m.extra.saddled().then(|| Arc::from("minecraft:saddle")),
         _ => None,
     }
 }
@@ -1049,8 +1049,7 @@ pub fn set_item(m: &mut Mob, slot: usize, id: &str) {
         CHEST => m.extra.chest = v,
         HEAD => m.extra.head = v,
         SADDLE => {
-            m.extra.saddled = true;
-            m.extra.saddle_stack = None;
+            m.extra.set_saddled(true);
             return;
         }
         _ => return,

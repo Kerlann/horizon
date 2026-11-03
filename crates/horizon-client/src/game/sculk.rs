@@ -539,7 +539,7 @@ impl Game<'_> {
         if self.remote.is_some() {
             return;
         }
-        if !horizon_client::mod_api::mods().is_empty() {
+        if crate::mod_api::listened(crate::mod_api::HookId::VanillaGameEvent) {
             let cause = event_cause(ctx.source, self.lan_acting_entity);
             let mut cancel = false;
             self.native_vanilla_game_event(self.dim.id(), event, pos, cause, &mut cancel);

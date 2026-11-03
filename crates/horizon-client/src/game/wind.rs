@@ -286,7 +286,7 @@ impl Game<'_> {
         // burst) the player is that guest.
         let own = self.wind_push_player(center, radius, multiplier, breeze, wind_charge, blocks);
         let mut pushed: Vec<_> = self.lan_acting.zip(own).into_iter().collect();
-        if let Some(mut host) = self.lan.take() {
+        if let Some(host) = self.lan.as_ref() {
             let guests: Vec<u32> = host
                 .hub
                 .guests
@@ -295,14 +295,13 @@ impl Game<'_> {
                 .map(|g| g.conn)
                 .collect();
             for conn in guests {
-                let push = self.as_guest(&mut host, conn, |g| {
+                let push = self.as_guest(conn, |g| {
                     g.wind_push_player(center, radius, multiplier, breeze, wind_charge, blocks)
                 });
                 if let Some(Some(push)) = push {
                     pushed.push((conn, push));
                 }
             }
-            self.lan = Some(host);
         }
         let multiplier = f64::from(multiplier);
         // Every other entity takes `Entity.pushFromExplosion` alike: its

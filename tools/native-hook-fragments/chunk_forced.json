@@ -2,23 +2,39 @@
   "hooks": [],
   "helpers": [
     {
-      "name": "level_chunk_ref", "side": "server",
+      "name": "level_chunk_ref",
+      "side": "server",
       "target": "horizon_client::game::native_level_refs::Game<'_>::native_level_chunk_ref",
       "receiver": "level"
     },
     {
-      "name": "chunk_forced", "side": "server",
+      "name": "chunk_forced",
+      "side": "server",
       "target": "horizon_client::game::native_level_refs::Game<'_>::native_chunk_forced",
       "receiver": "chunk"
     },
     {
-      "name": "chunk_set_forced", "side": "server",
+      "name": "chunk_set_forced",
+      "side": "server",
       "target": "horizon_client::game::native_level_refs::Game<'_>::native_chunk_set_forced",
       "receiver": "chunk"
     },
     {
-      "name": "level_forced_chunks", "side": "server",
+      "name": "level_forced_chunks",
+      "side": "server",
       "target": "horizon_client::game::native_level_refs::Game<'_>::native_level_forced_chunks",
+      "receiver": "level"
+    },
+    {
+      "name": "chunk_set_mod_forced",
+      "side": "server",
+      "target": "horizon_client::game::native_level_refs::Game<'_>::native_chunk_set_mod_forced",
+      "receiver": "chunk"
+    },
+    {
+      "name": "level_mod_forced_chunks",
+      "side": "server",
+      "target": "horizon_client::game::native_level_refs::Game<'_>::native_level_mod_forced_chunks",
       "receiver": "level"
     }
   ]

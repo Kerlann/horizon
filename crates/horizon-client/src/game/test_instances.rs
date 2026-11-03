@@ -4,7 +4,6 @@
 use super::{
     Game,
     game_tests::Info,
-    lan::LanHost,
     structure_blocks::{create_seed, template_size},
     test_entities::{aabb_of, inflate},
 };
@@ -331,24 +330,21 @@ impl Game<'_> {
     /// `ServerGamePacketListenerImpl.handleTestInstanceBlockAction` for a
     /// guest: only a creative player with game master commands. A query or
     /// the screen's first look answers with a status packet.
-    pub(super) fn lan_test_instance_action(
-        &mut self,
-        host: &mut LanHost,
-        conn: u32,
-        p: play::TestInstanceBlockAction,
-    ) {
-        let Some(g) = host.hub.guest(conn) else {
+    pub(super) fn lan_test_instance_action(&mut self, conn: u32, p: play::TestInstanceBlockAction) {
+        let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
         let allowed = g.creative() && g.permission >= 2;
         let reply = self
-            .as_guest_messaged(host, conn, |game| {
+            .as_guest_messaged(conn, |game| {
                 allowed
                     .then(|| game.apply_test_instance_action(&p))
                     .flatten()
             })
             .flatten();
-        if let Some((status, size)) = reply {
+        if let Some((status, size)) = reply
+            && let Some(host) = self.lan.as_mut()
+        {
             host.hub.send_to(
                 conn,
                 &C::TestInstanceBlockStatus(play::TestInstanceBlockStatus {

@@ -835,11 +835,11 @@ impl Game<'_> {
         if let Some(s) = self.serving.take() {
             s.flags.published.store(0, Ordering::Relaxed);
         }
-        if let Some(mut host) = self.lan.take() {
-            self.flush_native_net(&mut host);
-            // PlayerList.removeAll: the owner and every guest leave the game.
-            self.award_leave_game_to_all(&mut host);
-            self.save_leaving_guests(&mut host);
+        self.flush_native_net();
+        // PlayerList.removeAll: the owner and every guest leave the game.
+        self.award_leave_game_to_all();
+        self.save_leaving_guests();
+        if let Some(host) = self.lan.as_mut() {
             let conns: Vec<u32> = host.hub.guests.iter().map(|g| g.conn).collect();
             for conn in conns {
                 host.hub.kick(
@@ -848,7 +848,6 @@ impl Game<'_> {
                 );
             }
             let has_remote_guests = host.hub.guests.iter().any(|g| g.conn != 0);
-            self.lan = Some(host);
             if has_remote_guests {
                 std::thread::sleep(Duration::from_millis(50));
             }
@@ -894,7 +893,7 @@ impl Game<'_> {
         let Some(owner) = self.serving.as_ref().map(|s| s.owner) else {
             return Vec::new();
         };
-        let Some(mut host) = self.lan.take() else {
+        let Some(host) = self.lan.as_ref() else {
             return Vec::new();
         };
         let mut out = Vec::new();
@@ -902,13 +901,9 @@ impl Game<'_> {
             let conn = g.conn;
             // Commands.performCommand runs in the player's level.
             let (back, theirs) = (self.dim, super::Dim::from_id(&g.dimension));
-            let entered = theirs == back || self.enter_level(Some(&mut host), theirs).is_ok();
-            if entered && let Some(swap) = self.enter_guest(&mut host, conn) {
+            let entered = theirs == back || self.enter_level(theirs).is_ok();
+            if entered && let Some(swap) = self.enter_guest(conn) {
                 let command = command.trim_start_matches('/').to_owned();
-                // The hub is back in place while the command runs, as for a
-                // guest's own (`run_guest_commands`): selectors see every
-                // player (`team join … @a`), and `defaultgamemode` reaches it.
-                self.lan = Some(host);
                 let lines = self.as_console(|g| {
                     g.chat_capture = Some(Vec::new());
                     // A command a native mod registered goes to the mods
@@ -919,36 +914,38 @@ impl Game<'_> {
                     }
                     g.chat_capture.take().unwrap_or_default()
                 });
-                host = self.lan.take().expect("a command puts the hub back");
-                self.leave_guest(&mut host, swap);
-                host.hub.sync_all_effects();
+                self.leave_guest(swap);
+                if let Some(host) = self.lan.as_mut() {
+                    host.hub.sync_all_effects();
+                }
                 // A teleport into another level happens before its feedback is
                 // sent, and what the command earned is announced before it too.
-                self.run_level_teleports(&mut host);
-                self.announce_guest_advancements(&mut host);
+                self.run_level_teleports();
+                self.announce_guest_advancements();
                 for line in lines {
                     out.push(line.plain());
-                    host.hub.send_to(
-                        conn,
-                        &horizon_protocol::packets::play::Clientbound::SystemChat(
-                            horizon_protocol::packets::play::SystemChat {
-                                content: horizon_client::lan::data::component_nbt(
-                                    &line.component(),
-                                ),
-                                overlay: false,
-                            },
-                        ),
-                    );
+                    if let Some(host) = self.lan.as_ref() {
+                        host.hub.send_to(
+                            conn,
+                            &horizon_protocol::packets::play::Clientbound::SystemChat(
+                                horizon_protocol::packets::play::SystemChat {
+                                    content: horizon_client::lan::data::component_nbt(
+                                        &line.component(),
+                                    ),
+                                    overlay: false,
+                                },
+                            ),
+                        );
+                    }
                 }
-                self.send_admin_feedback(&mut host, Some(conn));
+                self.send_admin_feedback(Some(conn));
             }
             if theirs != back
-                && let Err(e) = self.enter_level(Some(&mut host), back)
+                && let Err(e) = self.enter_level(back)
             {
                 log::error!("could not reopen {}: {e}", back.id());
             }
         }
-        self.lan = Some(host);
         out
     }
 
@@ -1015,8 +1012,6 @@ impl Game<'_> {
         self.apply_publish();
         true
     }
-    /// Publish or unpublish for real, once the hub is in its place (a
-    /// player's `/publish` runs while it is out).
     /// IntegratedServer.tickServer: the server follows the window's render
     /// and simulation distances when they change.
     fn follow_distances(&mut self, flags: &Flags) {
