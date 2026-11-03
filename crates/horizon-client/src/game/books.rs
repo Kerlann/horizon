@@ -886,16 +886,7 @@ impl Game<'_> {
     /// with the player's inventory, and the screen follows the block entity.
     fn lectern_button(&mut self, key: (i32, i32, i32), id: i32) {
         if self.remote.is_some() {
-            if let Some((container, _)) = self.remote.as_ref().and_then(|r| r.menu.as_ref()) {
-                self.send(
-                    horizon_protocol::packets::play::Serverbound::ContainerButtonClick(
-                        horizon_protocol::packets::play::ContainerButtonClick {
-                            container: *container,
-                            button: id,
-                        },
-                    ),
-                );
-            }
+            let _ = self.native_click_menu_button(id);
             return;
         }
         let Some(mut menu) = self.lectern_menu(key) else {

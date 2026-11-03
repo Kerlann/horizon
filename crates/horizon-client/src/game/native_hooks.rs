@@ -9933,7 +9933,7 @@ impl Game<'_> {
         let Some(button) = button else {
             return false;
         };
-        // No menu open: the click still sounds, as before.
+        // No menu open: the click still sounds.
         let _ = self.native_click_menu_button(button);
         self.audio.play_button_click();
         true

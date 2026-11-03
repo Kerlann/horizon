@@ -5,7 +5,5 @@
       "name": "click_menu_button", "side": "client",
       "target": "horizon_client::game::native_hooks::Game<'_>::native_click_menu_button"
     }
-  ],
-  "rust_summary": "a client mod presses a button of the open menu (`native_click_menu_button`,\n`MultiPlayerGameMode.handleInventoryButtonClick`).",
-  "doc_summary": "`click_menu_button(button)` presses button `button` of the open menu as a click on one of its buttons does (`MultiPlayerGameMode.handleInventoryButtonClick`, `ServerboundContainerButtonClickPacket`); the server's menu decides what it does (`clickMenuButton`, and `menu_button` for a mod's menu). For a client mod's own input on a menu's screen where `screen_click` doesn't come, such as a key or the wheel (`screen_key_pressed_pre`, `screen_mouse_scrolled_pre`). Refused while no menu the server opened is open. Bundles need \"hooks\": @API:click_menu_button@."
+  ]
 }
