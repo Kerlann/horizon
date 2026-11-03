@@ -71,7 +71,10 @@ impl Game<'_> {
     /// names only displaced state, so they resolve to `None` until their turn
     /// ends (`available_living_target`).
     fn native_living_target(&self, living: LivingRef) -> Option<Target> {
-        available_living_target(self.native_entity_target(living.entity())?, &self.lan_swap_chain)
+        available_living_target(
+            self.native_entity_target(living.entity())?,
+            &self.lan_swap_chain,
+        )
     }
     /// The entity as a living entity (vanilla's `LivingEntity`: a mob, a
     /// player, an armor stand or the dragon), or None for another kind or a
