@@ -4,7 +4,7 @@ USER root
 # apt's sandbox user needs GID 65534, which a host with a short subuid range does not map.
 RUN echo 'APT::Sandbox::User "root";' > /etc/apt/apt.conf.d/10dyna \
     && apt-get update && apt-get install -y --no-install-recommends \
-    build-essential ca-certificates cmake curl jq patchelf pkg-config python3 ripgrep \
+    build-essential ca-certificates cmake curl gcc-mingw-w64-x86-64 jq patchelf pkg-config python3 ripgrep \
     libasound2-dev libfontconfig-dev libudev-dev libvulkan-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev \
     libegl1 libgl1 libx11-6 libxcursor1 libxi6 libxinerama1 libxkbcommon-x11-0 libxrandr2 \
     mesa-vulkan-drivers vulkan-tools xauth xvfb \
@@ -16,7 +16,7 @@ RUN curl -fsSL https://static.rust-lang.org/rustup/archive/1.29.2/x86_64-unknown
     && echo "5be191e8c70a5007074254cb74d78dbfdd25cd5a61c27de7b8e5410122ec24f4  /tmp/rustup-init" | sha256sum -c - \
     && chmod +x /tmp/rustup-init \
     && RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo /tmp/rustup-init -y --no-modify-path --profile minimal \
-       --default-toolchain 1.99.1 --component rustfmt --component clippy \
+       --default-toolchain 1.99.1 --component rustfmt --component clippy --target x86_64-pc-windows-gnu \
     && rm /tmp/rustup-init && chmod -R a+rX /opt/rustup
 USER node
 ENV PATH="/opt/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin:/opt/java/bin:${PATH}" JAVA_HOME=/opt/java VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json HORIZON_NO_AUDIO=1
