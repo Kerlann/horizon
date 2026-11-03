@@ -3068,6 +3068,12 @@ struct Game<'a> {
     /// Their entity id, which the hub (often taken out of `lan` while they
     /// act) would otherwise have to be asked for.
     lan_acting_entity: Option<u32>,
+    /// The guests whose state is swapped into the game, outermost first
+    /// (`enter_guest` pushes, `leave_guest` pops): a nested turn's runner
+    /// comes before its target. A guest in it has no record of their own to
+    /// read (`native_living_target`); the acting player resolves as
+    /// `Target::Player`.
+    lan_swap_chain: Vec<u32>,
     /// Command feedback to forward to a guest.
     chat_capture: Option<Vec<horizon_client::text::Text>>,
     /// Packets for the guest acting now, sent once its action returns.
@@ -18916,6 +18922,7 @@ impl<'a> Game<'a> {
             tnt_refused: None,
             lan_acting_permission: None,
             lan_acting_entity: None,
+            lan_swap_chain: Vec::new(),
             chat_capture: None,
             admin_feedback: Vec::new(),
             console_broadcast: None,

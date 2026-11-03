@@ -48,9 +48,14 @@ fn slot_name(slot: EquipmentSlot) -> &'static str {
     }
 }
 
-fn available_living_target(target: Target, swapping: bool) -> Option<Target> {
+/// What a living handle may name: a player, a mob, an armor stand or the
+/// dragon. A guest whose state is swapped in (`chain`, the swap chain of
+/// nested guest turns) has no record of their own to read — their hub record
+/// holds the state the turn displaced — so they resolve to `None` until their
+/// turn ends; the acting player resolves as `Target::Player` before that.
+fn available_living_target(target: Target, chain: &[u32]) -> Option<Target> {
     match target {
-        Target::Guest(_) if swapping => None,
+        Target::Guest(conn) if chain.contains(&conn) => None,
         t @ (Target::Player
         | Target::Guest(_)
         | Target::Mob(_)
@@ -61,12 +66,12 @@ fn available_living_target(target: Target, swapping: bool) -> Option<Target> {
 }
 
 impl Game<'_> {
-    /// What a living handle names now: a player, a mob, an armor stand or the dragon.
+    /// What a living handle names now: a player, a mob, an armor stand or the
+    /// dragon. A guest whose state is swapped in (a nested turn's runner)
+    /// names only displaced state, so they resolve to `None` until their turn
+    /// ends (`available_living_target`).
     fn native_living_target(&self, living: LivingRef) -> Option<Target> {
-        available_living_target(
-            self.native_entity_target(living.entity())?,
-            self.lan_acting_uuid.is_some(),
-        )
+        available_living_target(self.native_entity_target(living.entity())?, &self.lan_swap_chain)
     }
     /// The entity as a living entity (vanilla's `LivingEntity`: a mob, a
     /// player, an armor stand or the dragon), or None for another kind or a
@@ -167,14 +172,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn displaced_guests_are_unavailable_during_a_swap() {
-        assert_eq!(available_living_target(Target::Guest(2), true), None);
+    fn only_guests_in_the_swap_chain_are_unavailable() {
+        let nested = [1u32, 2];
+        assert_eq!(available_living_target(Target::Guest(1), &nested), None);
+        assert_eq!(available_living_target(Target::Guest(2), &nested), None);
         assert_eq!(
-            available_living_target(Target::Guest(2), false),
-            Some(Target::Guest(2))
+            available_living_target(Target::Guest(3), &nested),
+            Some(Target::Guest(3))
         );
         assert_eq!(
-            available_living_target(Target::Player, true),
+            available_living_target(Target::Guest(3), &[]),
+            Some(Target::Guest(3))
+        );
+        assert_eq!(
+            available_living_target(Target::Player, &nested),
             Some(Target::Player)
         );
     }
