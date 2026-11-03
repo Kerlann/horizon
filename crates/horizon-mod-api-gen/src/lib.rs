@@ -1235,6 +1235,9 @@ enum FillMode {
 mod build;
 pub use build::{generate, inject};
 
+#[cfg(test)]
+mod injection_tests;
+
 /// Generate the dispatch test fixture without preventing xtask from filling new placeholders.
 #[doc(hidden)]
 pub fn generate_test_hooks(root: &Path, out_dir: &Path) -> Result<(), String> {

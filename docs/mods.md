@@ -447,6 +447,10 @@ Behaviour that needs code (a new key, a HUD, a tool that changes how mining work
 a `horizon-mixin.toml` and a few `.rs` helpers that hook into named functions of the game. Start from
 [horizon-native-mod-template](https://github.com/horizon-rust/horizon-native-mod-template). How the launcher builds
 one, what it pins and why it is not sandboxed: [native-mods.md](native-mods.md).
+The typed hook API is generated automatically at build time, in debug and release builds alike; its generated
+Rust files are build output, not files to regenerate or commit. Engine contributors adding a hook only run
+`cargo run -p xtask -- mod-api` to fill its hand-written placeholder body
+([Adding a hook](native-mods.md#adding-a-hook)).
 
 A native mod's config files go in the game's shared `config/` folder, beside `options.txt` (on a dedicated server,
 beside `server.properties`), as Fabric and NeoForge mods' do: the mod picks its own file names, such as

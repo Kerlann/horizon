@@ -9,6 +9,13 @@ import time
 
 TITLE = "Upstream sync failed"
 STAGING = "refs/heads/sync/upstream"
+# Upstream still tracks these; the fork builds them into OUT_DIR instead.
+GENERATED_API = (
+    "crates/horizon-client-render/src/gfx/native_render/generated.rs",
+    "crates/horizon-client/src/mod_api/generated.rs",
+    "crates/horizon-client/src/mod_api/generated_host.rs",
+    "crates/horizon-client/src/game/mod_api_host_generated.rs",
+)
 
 
 def command(*args):
@@ -75,10 +82,22 @@ def sync():
         upstream = command("git", "rev-parse", "upstream/main")
         result = subprocess.run(["bash", str(Path(__file__).with_name("merge_upstream.sh"))], check=False)
         if result.returncode == 2:
+            conflicts = set(command("git", "diff", "--name-only", "--diff-filter=U").splitlines())
+            for path in GENERATED_API:
+                if path in conflicts:
+                    stages = {entry.split()[2] for entry in
+                              command("git", "ls-files", "--unmerged", "--", path).splitlines()}
+                    # Stage 2 absent: deleted by the fork, modified by upstream (stage 3).
+                    if stages == {"1", "3"}:
+                        command("git", "rm", "--", path)
             files = command("git", "diff", "--name-only", "--diff-filter=U")
-            command("git", "merge", "--abort")
-            raise RuntimeError(f"Merge conflicts (nothing pushed):\n\n```text\n{files}\n```")
-        if result.returncode not in (0, 3):
+            if files:
+                command("git", "merge", "--abort")
+                raise RuntimeError(f"Merge conflicts (nothing pushed):\n\n```text\n{files}\n```")
+            # Match merge_upstream.sh's clean-merge identity and message.
+            command("git", "-c", "commit.gpgsign=false", "-c", "user.name=arismoko", "-c",
+                    "user.email=19542195+arismoko@users.noreply.github.com", "commit", "--no-edit", "--cleanup=strip")
+        elif result.returncode not in (0, 3):
             raise RuntimeError(f"Merge failed with exit code {result.returncode}; nothing pushed.")
         if result.returncode == 3 and issue is None:
             return 0

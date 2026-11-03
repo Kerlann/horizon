@@ -31,6 +31,10 @@ class SyncTests(unittest.TestCase):
         git(seed, "config", "user.name", "Test")
         git(seed, "config", "user.email", "test@example.invalid")
         (seed / "shared.txt").write_text("base\n")
+        for name in sync.GENERATED_API:
+            path = seed / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("base generated\n")
         git(seed, "add", ".")
         git(seed, "commit", "-m", "base")
         git(seed, "push", str(self.origin), "main")
@@ -98,6 +102,64 @@ class SyncTests(unittest.TestCase):
             self.assertEqual(sync.sync(), 0)
             check.assert_called_once()
         print("CLEAN: two-parent merge; exact identity/message; verified staging SHA promoted; issue closed; NOOP skips checks")
+
+    def generated_conflicts(self):
+        seed = self.work.parent / "seed"
+        for name in sync.GENERATED_API:
+            (seed / name).write_text("upstream generated\n")
+        git(seed, "commit", "-am", "update generated API")
+        git(seed, "push", str(self.upstream), "main")
+        self.upstream_sha = git(seed, "rev-parse", "HEAD")
+        git(self.work, "rm", "--", *sync.GENERATED_API)
+        git(self.work, "commit", "-m", "build API into OUT_DIR")
+        git(self.work, "push", "origin", "main")
+        self.before = git(self.work, "rev-parse", "HEAD")
+
+    def test_generated_deletions_survive_upstream_modifications(self):
+        self.generated_conflicts()
+        with patch.object(sync, "verify", return_value="https://github.com/checks/1") as check:
+            self.assertEqual(sync.sync(), 0)
+        head = git(self.work, "rev-parse", "HEAD")
+        check.assert_called_once_with("arismoko/horizon", head, "123-1")
+        self.assertEqual(git(self.origin, "rev-parse", "main"), head)
+        self.assertEqual(git(self.work, "show", "-s", "--format=%P"), f"{self.before} {self.upstream_sha}")
+        self.assertEqual(git(self.work, "ls-files", "--", *sync.GENERATED_API), "")
+        for name in sync.GENERATED_API:
+            self.assertFalse((self.work / name).exists())
+        self.assertEqual((self.work / "shared.txt").read_text(), "upstream\n")
+        identity = "arismoko <19542195+arismoko@users.noreply.github.com>"
+        self.assertEqual(git(self.work, "show", "-s", "--format=%an <%ae>%n%cn <%ce>"), f"{identity}\n{identity}")
+        self.assertEqual(git(self.work, "show", "-s", "--format=%B"),
+                         f"Merge upstream main {git(self.work, 'rev-parse', '--short', 'upstream/main')}")
+
+    def test_generated_deletions_do_not_hide_other_conflicts(self):
+        self.generated_conflicts()
+        self.commit_fork("shared.txt")
+        with patch.object(sync, "verify") as check:
+            self.assertEqual(sync.sync(), 1)
+            check.assert_not_called()
+        self.assertEqual(git(self.origin, "rev-parse", "main"), self.before)
+        self.assertEqual(git(self.origin, "for-each-ref", sync.STAGING), "")
+        self.assertEqual(git(self.work, "status", "--porcelain"), "")
+        issue = next(call[-1] for call in self.calls if call[1:3] == ("issue", "create"))
+        self.assertIn("shared.txt", issue)
+        for name in sync.GENERATED_API:
+            self.assertNotIn(name, issue)
+
+    def test_upstream_deletion_of_fork_modified_generated_file_is_not_resolved(self):
+        name = sync.GENERATED_API[0]
+        self.commit_fork(name)
+        seed = self.work.parent / "seed"
+        git(seed, "rm", "--", name)
+        git(seed, "commit", "-m", "delete upstream API")
+        git(seed, "push", str(self.upstream), "main")
+        with patch.object(sync, "verify") as check:
+            self.assertEqual(sync.sync(), 1)
+            check.assert_not_called()
+        self.assertEqual(git(self.origin, "rev-parse", "main"), self.before)
+        self.assertEqual((self.work / name).read_text(), "fork\n")
+        issue = next(call[-1] for call in self.calls if call[1:3] == ("issue", "create"))
+        self.assertIn(name, issue)
 
     def test_conflict_pushes_nothing_and_updates_one_issue(self):
         self.commit_fork("shared.txt")
