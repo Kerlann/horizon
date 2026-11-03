@@ -1817,7 +1817,11 @@ impl Game<'_> {
     /// point their camera with the look-at packet instead.
     fn rotate_to(&mut self, t: Target, rotation: [f32; 2], relative: Option<[bool; 2]>) {
         // An entity in another level is turned in the level that holds it.
+        // `RotateCommand.rotate` measures a relative axis from the target's
+        // own rotation before it turns.
+        let mut current = rotation;
         let _ = self.in_target_level(t, |g| {
+            current = g.target_rotation(t);
             if matches!(t, Target::Guest(_)) {
                 g.for_player(t, |g| g.rotate_in_place(Target::Player, rotation));
             } else {
@@ -1825,10 +1829,22 @@ impl Game<'_> {
             }
         });
         if let Some([relative_yaw, relative_pitch]) = relative {
+            // `ServerPlayer.forceSetRotation` sends the delta (the resolved
+            // angle less the target's rotation) on a relative axis and the
+            // angle on an absolute one; the client adds a delta to its own
+            // rotation.
             let packet = C::PlayerRotation(play::PlayerRotation {
-                yaw: rotation[0],
+                yaw: if relative_yaw {
+                    rotation[0] - current[0]
+                } else {
+                    rotation[0]
+                },
                 relative_yaw,
-                pitch: rotation[1],
+                pitch: if relative_pitch {
+                    rotation[1] - current[1]
+                } else {
+                    rotation[1]
+                },
                 relative_pitch,
             });
             match t {
@@ -4153,6 +4169,7 @@ mod teleport_mob_tests {
     use crate::game::native_entity_refs::tests::with_game;
     use horizon_client::mobs::{Mob, path::Path};
     use horizon_core::geometry::Vec3;
+    use horizon_protocol::packets::play::Clientbound as C;
 
     #[test]
     #[ignore = "needs prepared resources"]
@@ -4306,6 +4323,123 @@ mod teleport_mob_tests {
                 player.position,
                 Vec3::new(0.0, 64.0, 0.0),
                 "the player is not moved"
+            );
+        });
+    }
+
+    /// `RotateCommand.rotate` sends a relative axis as the delta from the
+    /// target's own rotation (`ServerPlayer.forceSetRotation`), and an
+    /// absolute axis as the angle itself.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn relative_rotate_packet_carries_the_delta() {
+        use super::super::native_entity_refs::tests::with_game;
+
+        with_game(|game| {
+            let player =
+                horizon_client::motion::PlayerMotion::new(game.motion, Vec3::new(0.0, 64.0, 0.0))
+                    .unwrap();
+            game.player = Some(player);
+            game.lan_acting = Some(1);
+            game.lan_acting_uuid = Some(123);
+            game.lan_acting_entity = Some(20);
+            game.yaw = 30.0;
+            game.pitch = 10.0;
+            game.ui.registries.permission = 4;
+            assert!(game.run_command("rotate @s ~10 ~-5"));
+            assert_eq!(game.yaw, 40.0, "the player lands on the resolved angle");
+            assert_eq!(game.pitch, 5.0);
+            let rotation = game
+                .guest_packets
+                .iter()
+                .filter_map(|p| match p {
+                    C::PlayerRotation(r) => Some(r),
+                    _ => None,
+                })
+                .last()
+                .expect("the turn reaches the acting guest");
+            assert_eq!(
+                rotation.yaw, 10.0,
+                "a relative axis is the delta, not the angle"
+            );
+            assert_eq!(rotation.pitch, -5.0);
+            assert!(rotation.relative_yaw && rotation.relative_pitch);
+            assert!(game.run_command("rotate @s 90 0"));
+            let rotation = game
+                .guest_packets
+                .iter()
+                .filter_map(|p| match p {
+                    C::PlayerRotation(r) => Some(r),
+                    _ => None,
+                })
+                .last()
+                .unwrap();
+            assert_eq!(rotation.yaw, 90.0, "an absolute axis is the angle itself");
+            assert_eq!(rotation.pitch, 0.0);
+            assert!(!rotation.relative_yaw && !rotation.relative_pitch);
+        });
+    }
+
+    /// `WorldCoordinates.getRotation` resolves `~` from the source's
+    /// rotation, not the target's: a player at yaw 200 turns a yaw-0 zombie
+    /// by `~10` to 210.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn relative_rotate_starts_from_the_source_rotation() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::mobs::Mob;
+        use horizon_core::geometry::Vec3;
+
+        with_game(|game| {
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:zombie")
+                .unwrap()
+                .clone();
+            game.mobs
+                .push(Mob::new(31, kind, Vec3::new(0.0, 64.0, 0.0), 0.0));
+            game.yaw = 200.0;
+            game.pitch = 0.0;
+            game.ui.registries.permission = 4;
+            assert!(game.run_command("rotate @e[type=minecraft:zombie,limit=1] ~10 ~"));
+            assert_eq!(
+                game.mobs[0].yaw, 210.0,
+                "the offset is measured from the source's rotation"
+            );
+        });
+    }
+
+    /// A turned player hears the rotation packet alone: `hub.teleport` sends
+    /// `PlayerPosition`, and a `/rotate` never produces one.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn rotate_sends_no_teleport_packet() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::motion::PlayerMotion;
+        use horizon_core::geometry::Vec3;
+
+        with_game(|game| {
+            let player = PlayerMotion::new(game.motion, Vec3::new(0.0, 64.0, 0.0)).unwrap();
+            game.player = Some(player);
+            game.lan_acting = Some(1);
+            game.lan_acting_uuid = Some(123);
+            game.lan_acting_entity = Some(20);
+            game.yaw = 30.0;
+            game.pitch = 10.0;
+            game.ui.registries.permission = 4;
+            assert!(game.run_command("rotate @s ~10 ~-5"));
+            assert!(
+                game.guest_packets
+                    .iter()
+                    .any(|p| matches!(p, C::PlayerRotation(_)))
+            );
+            assert!(
+                !game
+                    .guest_packets
+                    .iter()
+                    .any(|p| matches!(p, C::PlayerPosition(_))),
+                "a turn is not a teleport"
             );
         });
     }

@@ -305,15 +305,16 @@ impl Game<'_> {
         let Some(pos) = self.target_position(t) else {
             return Ok(0);
         };
-        let current = self.target_rotation(t);
         let mut look_at_target = None;
         let (rot, relative) = if let Some(Arg::Coords(c)) = ctx.get("rotation") {
-            // Relative parts are offsets from the entity's own rotation.
+            // `WorldCoordinates.getRotation` resolves `~` from the source's
+            // rotation; `RotateCommand.rotate` then turns the target by the
+            // difference from its own rotation on a relative axis.
             let relative = match c {
                 Coordinates::World(w) => [w[0].relative, w[1].relative],
                 Coordinates::Local(_) => [false, false],
             };
-            (c.rotation(current), Some(relative))
+            (c.rotation(self.source_rotation()), Some(relative))
         } else {
             let mut faced_entity = None;
             let to = if ctx.has("entity") {

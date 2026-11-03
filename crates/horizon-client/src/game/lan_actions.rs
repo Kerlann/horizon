@@ -991,8 +991,9 @@ impl Game<'_> {
         std::mem::swap(&mut self.armor, &mut g.armor);
         std::mem::swap(&mut self.offhand, &mut g.offhand);
         std::mem::swap(&mut self.carried, &mut g.carried);
-        // A teleport with a rotation (commands) turns the guest.
-        let turned = [self.yaw, self.pitch] != [g.yaw, g.pitch];
+        // The guest's record keeps the turn; the guest itself hears it from
+        // the rotation packet (`ServerPlayer.forceSetRotation` sends only
+        // that), never a teleport for a turn alone.
         [g.yaw, g.pitch] = [self.yaw, self.pitch];
         self.yaw = yaw;
         self.pitch = pitch;
@@ -1045,7 +1046,7 @@ impl Game<'_> {
                     g.position = at;
                     g.previous_position = at;
                 }
-            } else if moved > 0.0001 || turned || teleported {
+            } else if moved > 0.0001 || teleported {
                 host.hub.teleport(i, Some(at));
             }
         }
