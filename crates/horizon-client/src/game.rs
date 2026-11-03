@@ -6685,28 +6685,11 @@ impl Game<'_> {
                     self.with_level(|b, _, _| b.cake_candle_state(cake, item.as_deref()).is_some());
                 let pots_flower = self
                     .with_level(|b, _, _| b.potted_flower_state(cake, item.as_deref()).is_some());
-                let (result, branch) = match block_answer {
-                    Some(answer) => match native_hooks::block_use_result(answer) {
-                        Some(result) => (result, horizon_world::level::UseBranch::ItemOn),
-                        None if self.hand == Hand::Main => (
-                            self.with_level(|b, level, ticks| {
-                                b.use_without_item(
-                                    level,
-                                    ticks,
-                                    BlockPos::new(hit.pos[0], hit.pos[1], hit.pos[2]),
-                                    face,
-                                    at,
-                                    player,
-                                )
-                            }),
-                            horizon_world::level::UseBranch::WithoutItem,
-                        ),
-                        None => (
-                            horizon_world::level::InteractionResult::Pass,
-                            horizon_world::level::UseBranch::ItemOn,
-                        ),
-                    },
-                    None => self.with_level(|b, level, ticks| {
+                let mut empty_answer = None;
+                // Keep the combined level write when no mod can override the
+                // empty-hand phase; otherwise leave it to fire with a full Host.
+                let (result, branch) = if horizon_client::mod_api::mods().is_empty() {
+                    self.with_level(|b, level, ticks| {
                         b.use_item_on_branch(
                             level,
                             ticks,
@@ -6716,11 +6699,53 @@ impl Game<'_> {
                             player,
                             item.as_deref(),
                         )
-                    }),
+                    })
+                } else {
+                    let item_result = match block_answer {
+                        Some(answer) => native_hooks::block_use_result(answer),
+                        None => self.with_level(|b, level, ticks| {
+                            b.block_use_item_on(
+                                level,
+                                ticks,
+                                BlockPos::new(hit.pos[0], hit.pos[1], hit.pos[2]),
+                                face,
+                                at,
+                                player,
+                                item.as_deref(),
+                            )
+                        }),
+                    };
+                    match item_result {
+                        Some(result) => (result, horizon_world::level::UseBranch::ItemOn),
+                        None if self.hand == Hand::Main => {
+                            let click = self.block_click(hit, self.hand, held.as_ref());
+                            self.native_use_without_item(cake, &click, &mut empty_answer);
+                            let result = match empty_answer {
+                                Some(answer) => native_hooks::block_use_result(answer)
+                                    .unwrap_or(horizon_world::level::InteractionResult::Pass),
+                                None => self.with_level(|b, level, ticks| {
+                                    b.use_without_item(
+                                        level,
+                                        ticks,
+                                        BlockPos::new(hit.pos[0], hit.pos[1], hit.pos[2]),
+                                        face,
+                                        at,
+                                        player,
+                                    )
+                                }),
+                            };
+                            (result, horizon_world::level::UseBranch::WithoutItem)
+                        }
+                        None => (
+                            horizon_world::level::InteractionResult::Pass,
+                            horizon_world::level::UseBranch::ItemOn,
+                        ),
+                    }
                 };
                 self.process_level_events()?;
                 // CakeBlock.useItemOn: the candle is used up and counted.
                 if block_answer.is_none()
+                    && branch == horizon_world::level::UseBranch::ItemOn
                     && adds_candle
                     && result == horizon_world::level::InteractionResult::Success
                     && let Some(used) = held.as_ref()
@@ -6730,6 +6755,7 @@ impl Game<'_> {
                 }
                 // FlowerPotBlock.useItemOn: the plant is potted, used up, and counted.
                 if block_answer.is_none()
+                    && branch == horizon_world::level::UseBranch::ItemOn
                     && pots_flower
                     && result == horizon_world::level::InteractionResult::Success
                     && let Some(used) = held.as_ref()
@@ -6748,6 +6774,7 @@ impl Game<'_> {
                 // NoteBlock.useWithoutItem (tuned) and BellBlock.onHit (rung).
                 if (block_answer.is_none()
                     || branch == horizon_world::level::UseBranch::WithoutItem)
+                    && empty_answer.is_none()
                     && result == horizon_world::level::InteractionResult::Success
                 {
                     let name = self

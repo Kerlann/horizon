@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "use_without_item",
+      "side": "server",
+      "version": 1,
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_use_without_item",
+      "mod_api": {
+        "contract": "replace",
+        "out": "answer",
+        "scope": "block",
+        "key": "state"
+      }
+    }
+  ],
+  "helpers": []
+}

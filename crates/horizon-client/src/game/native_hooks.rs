@@ -5339,6 +5339,17 @@ impl Game<'_> {
     ) {
         mod_api::dispatch_use_item_on(self, state, click, answer);
     }
+    /// `BlockBehaviour.useWithoutItem`: the block's own empty-hand
+    /// behaviour on the server, on the main hand only, after `useItemOn`
+    /// answered `TryWithEmptyHand`. An answer replaces the template.
+    pub(super) fn native_use_without_item(
+        &mut self,
+        state: BlockStateId,
+        click: &NativeBlockClick<'_>,
+        answer: &mut Option<NativeInteractionResult>,
+    ) {
+        mod_api::dispatch_use_without_item(self, state, click, answer);
+    }
     /// A player uses `stack` (right click) with `self.hand`: in the air, or
     /// on a block once `native_use_on` let it through, where `Item.use`
     /// starts. Each click reaches it once. Set `claimed` to take the use: the

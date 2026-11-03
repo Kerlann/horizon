@@ -5626,6 +5626,7 @@ mod tests {
         use crate::mod_api::{
             self, BlockPart, CloneItemStackEvent, Flow, Hooks, Host, ItemStack,
             NativeInteractionResult as Answer, Registrar, UseItemOnEvent, UseOnEvent,
+            UseWithoutItemEvent,
         };
         use horizon_client::{
             chunk::Chunk,
@@ -5652,7 +5653,9 @@ mod tests {
         }
         #[derive(Clone)]
         struct User {
-            answer: Arc<Mutex<Answer>>,
+            answer: Arc<Mutex<Option<Answer>>>,
+            empty_answer: Arc<Mutex<Option<Answer>>>,
+            empty_calls: Arc<AtomicUsize>,
             clicks: Arc<Mutex<Vec<(u128, crate::first_person::Hand)>>>,
             item_uses: Arc<AtomicUsize>,
         }
@@ -5666,7 +5669,17 @@ mod tests {
                     .lock()
                     .unwrap()
                     .push((event.click.player, event.click.hand));
-                Some(*self.answer.lock().unwrap())
+                *self.answer.lock().unwrap()
+            }
+            fn use_without_item(
+                &self,
+                _: &mut dyn Host,
+                event: &mut UseWithoutItemEvent<'_>,
+            ) -> Option<Answer> {
+                assert_eq!(event.click.hand, crate::first_person::Hand::Main);
+                self.empty_calls
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                *self.empty_answer.lock().unwrap()
             }
         }
         struct Mod {
@@ -5689,7 +5702,9 @@ mod tests {
         }
         let seen = Arc::new(Mutex::new(Vec::new()));
         let user = User {
-            answer: Arc::new(Mutex::new(Answer::Success)),
+            answer: Arc::new(Mutex::new(Some(Answer::Success))),
+            empty_answer: Arc::new(Mutex::new(None)),
+            empty_calls: Arc::new(AtomicUsize::new(0)),
             clicks: Arc::new(Mutex::new(Vec::new())),
             item_uses: Arc::new(AtomicUsize::new(0)),
         };
@@ -5788,7 +5803,7 @@ mod tests {
                     (Answer::Fail, 2, false, 1),
                     (Answer::TryWithEmptyHand, 2, true, 1),
                 ] {
-                    *user.answer.lock().unwrap() = answer;
+                    *user.answer.lock().unwrap() = Some(answer);
                     game.swing = Default::default();
                     let before = game.swings_started;
                     assert!(game.use_hand(Some(&hit)).unwrap());
@@ -5806,7 +5821,7 @@ mod tests {
                 // The real guest packet follows the same path, with the guest's UUID.
                 game.world.set(0, 64, 0, lever).unwrap();
                 host.hub.guests[0].inventory[0] = Some(ItemStack::new("minecraft:stick", 1));
-                *user.answer.lock().unwrap() = Answer::Success;
+                *user.answer.lock().unwrap() = Some(Answer::Success);
                 game.lan_guest_packet(
                     &mut host,
                     12,
@@ -5823,7 +5838,67 @@ mod tests {
                 assert_eq!(user.clicks.lock().unwrap().last(), Some(&(12, Hand::Main)));
                 assert_eq!(user.item_uses.load(SeqCst), 3);
                 assert_eq!(game.world.block(0, 64, 0), lever);
+
+                // Empty-hand overrides also run for the guest, after the item behaviour.
+                *user.answer.lock().unwrap() = Some(Answer::TryWithEmptyHand);
+                *user.empty_answer.lock().unwrap() = Some(Answer::Success);
+                let before = user.empty_calls.load(SeqCst);
+                game.lan_guest_packet(
+                    &mut host,
+                    12,
+                    play::Serverbound::UseItemOn(play::UseItemOn {
+                        hand: 0,
+                        pos: hit.pos,
+                        face: 1,
+                        cursor: [0.5, 1.0, 0.5],
+                        inside: false,
+                        world_border: false,
+                        sequence: 2,
+                    }),
+                );
+                assert_eq!(user.empty_calls.load(SeqCst), before + 1);
+                assert_eq!(user.item_uses.load(SeqCst), 3);
+                assert_eq!(game.world.block(0, 64, 0), lever);
+
+                for (answer, item_delta, powered) in [
+                    (Some(Answer::Success), 0, false),
+                    (Some(Answer::Consume), 0, false),
+                    (Some(Answer::Pass), 1, false),
+                    (Some(Answer::Fail), 1, false),
+                    (None, 0, true),
+                ] {
+                    game.world.set(0, 64, 0, lever).unwrap();
+                    *user.empty_answer.lock().unwrap() = answer;
+                    let items = user.item_uses.load(SeqCst);
+                    let empty = user.empty_calls.load(SeqCst);
+                    assert!(game.use_hand(Some(&hit)).unwrap());
+                    assert_eq!(user.item_uses.load(SeqCst), items + item_delta);
+                    assert_eq!(user.empty_calls.load(SeqCst), empty + 1);
+                    assert_eq!(game.world.block(0, 64, 0) != lever, powered);
+                }
+                // The template's TryWithEmptyHand also reaches the hook, without
+                // a use_item_on override, but neither Pass nor the off hand does.
+                game.world.set(0, 64, 0, lever).unwrap();
+                *user.answer.lock().unwrap() = None;
+                *user.empty_answer.lock().unwrap() = Some(Answer::Success);
+                let empty = user.empty_calls.load(SeqCst);
+                assert!(game.use_hand(Some(&hit)).unwrap());
+                assert_eq!(user.empty_calls.load(SeqCst), empty + 1);
+                assert_eq!(game.world.block(0, 64, 0), lever);
+                *user.answer.lock().unwrap() = Some(Answer::Pass);
+                assert!(game.use_hand(Some(&hit)).unwrap());
+                assert_eq!(user.empty_calls.load(SeqCst), empty + 1);
+                *user.answer.lock().unwrap() = Some(Answer::TryWithEmptyHand);
+                game.offhand = Some(ItemStack::new("minecraft:stick", 1));
+                assert!(
+                    game.with_hand(Hand::Off, |g| g.use_hand(Some(&hit)))
+                        .unwrap()
+                );
+                assert_eq!(user.empty_calls.load(SeqCst), empty + 1);
+                assert_eq!(game.world.block(0, 64, 0), lever);
                 game.world.set(0, 64, 0, stone).unwrap();
+                assert!(game.use_hand(Some(&hit)).unwrap());
+                assert_eq!(user.empty_calls.load(SeqCst), empty + 1);
 
                 game.lan_guest_packet(
                     &mut host,

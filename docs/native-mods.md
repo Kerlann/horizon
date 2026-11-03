@@ -119,6 +119,13 @@ the catalog, not a global API number, source comments or documentation histories
   NeoForge's separate `UseItemOnBlockEvent` broadcast interceptor. The earlier `right_click_block`
   event still decides whether the block is used at all.
 
+- A block's empty-hand behaviour: `BlockPart::use_without_item(host, event)` is the matching
+  `Block.useWithoutItem` override. It runs only on the main hand, when the block's item behaviour
+  (the template or a part) returned `TryWithEmptyHand`. It has the same state key, click context and
+  result type as `use_item_on`; `Some` replaces the template, `None` lets it run. A consuming result
+  triggers DEFAULT_BLOCK_USE rather than ITEM_USED_ON_BLOCK. The empty-hand result is not retried:
+  `Pass`, `Fail` or `TryWithEmptyHand` lets the item try its `useOn` next.
+
 - Breaking and placing a block, on the server for every player: `native_destroy_block` hears a player break a
   block once the game allowed it (`ServerPlayerGameMode.destroyBlock`) and may cancel it, which keeps the block and its
   drops; `native_place_block` hears a block placed from an item (`BlockItem.place`). To stop a placement, a mod claims
