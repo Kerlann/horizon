@@ -244,7 +244,7 @@ pub fn slot_item(m: &Mob, slot: &str) -> Option<LootStack> {
         "chest" => (m.extra.chest.as_deref(), Some(gear::CHEST)),
         "legs" => (m.extra.legs.as_deref(), Some(gear::LEGS)),
         "feet" => (m.extra.feet.as_deref(), Some(gear::FEET)),
-        "body" => (m.extra.body.as_deref(), None),
+        "body" => (m.extra.body_id(), None),
         "saddle" => {
             let saddle = m.saddle_item()?;
             let mut stack = loot_stack(&saddle.item, 1);
@@ -264,7 +264,7 @@ pub fn slot_item(m: &Mob, slot: &str) -> Option<LootStack> {
     };
     let mut stack = loot_stack(item?, count as i32);
     if slot == "body" && m.species() == Species::Wolf {
-        stack.damage = m.extra.body_damage;
+        stack.damage = m.extra.body_damage();
     }
     if let Some(full) = stored_slot_stack(m, slot) {
         stack.damage = full.damage as i32;
@@ -921,8 +921,8 @@ mod slot_tests {
     #[test]
     fn a_wolfs_slots_read_apart() {
         let mut wolf = mob("minecraft:wolf", Species::Wolf);
-        wolf.extra.body = Some("minecraft:wolf_armor".into());
-        wolf.extra.body_damage = 9;
+        wolf.extra.set_body(Some("minecraft:wolf_armor".into()));
+        wolf.extra.set_body_damage(9);
         wolf.extra.head = Some("minecraft:iron_helmet".into());
         let body = slot_item(&wolf, "body").unwrap();
         let head = slot_item(&wolf, "head").unwrap();
@@ -940,7 +940,7 @@ mod slot_tests {
     #[test]
     fn a_zombies_body_item_drops_by_the_default_chance() {
         let mut zombie = mob("minecraft:zombie", Species::Zombie);
-        zombie.extra.body = Some("minecraft:iron_helmet".into());
+        zombie.extra.set_body(Some("minecraft:iron_helmet".into()));
         assert_eq!(drop_chance(&zombie, "body"), DEFAULT_DROP_CHANCE);
         let body = slot_item(&zombie, "body").unwrap();
         assert_eq!(body.item, "minecraft:iron_helmet");

@@ -3,7 +3,7 @@
 //! then sampled from the level the player is in on the far terrain thread.
 //! The replies come back here and leave with the tick's other packets. A
 //! refused request is answered at once, so the client knows to ask again.
-use super::{Dim, Game, lan::LanHost};
+use super::{Dim, Game};
 use horizon_client::{
     lan::conn::PlayerSender,
     lod_net::{CHANNEL, Delivery, Job, Verdict},
@@ -28,7 +28,10 @@ fn send(sender: &PlayerSender, data: Vec<u8>) {
 
 impl Game<'_> {
     /// A `horizon:lod` payload from `conn`.
-    pub(super) fn guest_far_terrain(&mut self, host: &mut LanHost, conn: u32, data: &[u8]) {
+    pub(super) fn guest_far_terrain(&mut self, conn: u32, data: &[u8]) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let Some(far) = host.far.as_mut() else {
             return;
         };
@@ -42,9 +45,19 @@ impl Game<'_> {
             far.retain(|c| guests.iter().any(|g| g.conn == c));
         }
         let dim = Dim::from_id(&guest.dimension);
+        let position = guest.position;
         let source = self.lod_source_in(dim);
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
+        let Some(far) = host.far.as_mut() else {
+            return;
+        };
+        let Some(guest) = host.hub.guest(conn) else {
+            return;
+        };
         let now = std::time::Instant::now();
-        match far.request(conn, data, guest.position, source.is_some(), now) {
+        match far.request(conn, data, position, source.is_some(), now) {
             Verdict::Serve(request) => far.push(Job {
                 conn,
                 level: dim.id().to_owned(),
@@ -62,7 +75,10 @@ impl Game<'_> {
 
     /// The tiles the far terrain thread finished go to their players, once
     /// their connections have room.
-    pub(super) fn flush_far_terrain(&mut self, host: &mut LanHost) {
+    pub(super) fn flush_far_terrain(&mut self) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let Some(far) = host.far.as_mut() else {
             return;
         };

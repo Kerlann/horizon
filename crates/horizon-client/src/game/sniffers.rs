@@ -100,7 +100,7 @@ impl Game<'_> {
             ];
             // Drawn in this window when it has one, and sent to the players
             // within 32 blocks (the server thread's window is one of them).
-            self.landing_dust(None, below, Vec3::new(dust[0], dust[1], dust[2]), 30, 0.0);
+            self.landing_dust(below, Vec3::new(dust[0], dust[1], dust[2]), 30, 0.0);
             if self.mobs[i].age.is_multiple_of(10) {
                 let hit = self.res.facts().get(below).sounds.hit.clone();
                 self.audio.play(&hit, Some(at), 0.5, 0.5);

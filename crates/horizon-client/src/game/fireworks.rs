@@ -473,11 +473,8 @@ impl Game<'_> {
             } else {
                 self.rocket_blast_player(from, damage);
             }
-            if let Some(conn) = boosted
-                && let Some(mut host) = self.lan.take()
-            {
-                self.as_guest(&mut host, conn, |g| g.rocket_hurt_player(from, damage));
-                self.lan = Some(host);
+            if let Some(conn) = boosted {
+                self.as_guest(conn, |g| g.rocket_hurt_player(from, damage));
             }
             // Every other player in the level (LAN guests, the players of a
             // server thread), each swapped in as the player.
@@ -508,20 +505,17 @@ impl Game<'_> {
             // damageSources().fireworks(this, getOwner()): a guest's rocket
             // hurts as theirs, and the mobs it hit answer to them.
             let owner = r.owner;
-            if let Some(conn) = r.guest.filter(|_| owner.is_some())
-                && let Some(mut host) = self.lan.take()
-            {
+            if let Some(conn) = r.guest.filter(|_| owner.is_some()) {
                 let ran = self
-                    .as_guest(&mut host, conn, |g| g.rocket_hurt_mobs(&hits, owner, at))
+                    .as_guest(conn, |g| g.rocket_hurt_mobs(&hits, owner, at))
                     .is_some();
-                if ran {
+                if ran && let Some(host) = self.lan.as_mut() {
                     for (id, _) in &hits {
                         if self.mobs.iter().any(|m| m.id == *id) {
                             host.mob_players.insert(*id, conn);
                         }
                     }
                 }
-                self.lan = Some(host);
                 if !ran {
                     self.rocket_hurt_mobs(&hits, owner, at);
                 }

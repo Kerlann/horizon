@@ -113,7 +113,7 @@ impl Game<'_> {
             // Equippable.equipOnInteract: a saddle or nautilus armour on a
             // tame adult.
             let m = &mut self.mobs[index];
-            if item == "minecraft:saddle" && tame && !m.extra.saddled {
+            if item == "minecraft:saddle" && tame && !m.extra.saddled() {
                 let held = self.inventory[self.selected].clone();
                 m.set_saddle(held.map(|s| ItemStack { count: 1, ..s }));
                 let sound = nautilus::saddle_sound(m);
@@ -121,7 +121,7 @@ impl Game<'_> {
                 self.consume_held();
                 return true;
             }
-            if item.ends_with("_nautilus_armor") && tame && m.extra.body.is_none() {
+            if item.ends_with("_nautilus_armor") && tame && m.extra.body_id().is_none() {
                 let held = self.inventory[self.selected].clone();
                 m.extra
                     .set_body_stack(held.map(|s| ItemStack { count: 1, ..s }));

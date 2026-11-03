@@ -59,12 +59,15 @@ impl Game<'_> {
     /// too): each slot whose stack differs from what the mods last heard is told, the previous
     /// stack with it, so a hotbar selection that moves the main hand counts. A player new to the
     /// level counts from empty, as for mobs, and only while a mod listens.
-    pub(super) fn native_players_equipment(&mut self, host: &mut super::lan::LanHost) {
+    pub(super) fn native_players_equipment(&mut self) {
         let mut listened = false;
         self.native_living_equipment_listened(&mut listened);
         if !listened {
             return;
         }
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let mut changes = Vec::new();
         for g in host.hub.guests.iter().filter(|g| host.hub.here(g)) {
             let now: [Option<crate::items::ItemStack>; 6] = [

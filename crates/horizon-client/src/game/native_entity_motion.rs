@@ -205,10 +205,10 @@ mod tests {
             }
             // A horse being broken in, unsaddled: its own speed (AbstractHorse.java:962).
             assert!(!game.native_steered(Target::Mob(30)));
-            game.mobs[0].extra.saddled = true;
+            game.mobs[0].extra.set_saddled(true);
             assert!(game.native_steered(Target::Mob(30)));
             // A saddled pig whose rider holds no stick (Pig.java:97-100).
-            game.mobs[1].extra.saddled = true;
+            game.mobs[1].extra.set_saddled(true);
             assert!(!game.native_steered(Target::Mob(31)));
             game.mobs[1].rider.as_mut().unwrap().steer = true;
             assert!(game.native_steered(Target::Mob(31)));

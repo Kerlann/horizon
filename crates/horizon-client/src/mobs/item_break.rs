@@ -149,7 +149,8 @@ mod tests {
             let mut m = mob(name, species);
             m.extra.head = Some("minecraft:iron_helmet".into());
             assert!(m.item_by_slot(m.sun_protection_slot()).is_none());
-            m.extra.body = Some("minecraft:leather_horse_armor".into());
+            m.extra
+                .set_body(Some("minecraft:leather_horse_armor".into()));
             assert_eq!(
                 m.item_by_slot(m.sun_protection_slot())
                     .unwrap()
@@ -159,7 +160,9 @@ mod tests {
             );
         }
         let mut zombie = mob("minecraft:zombie", Species::Zombie);
-        zombie.extra.body = Some("minecraft:leather_horse_armor".into());
+        zombie
+            .extra
+            .set_body(Some("minecraft:leather_horse_armor".into()));
         assert!(zombie.item_by_slot(zombie.sun_protection_slot()).is_none());
         zombie.extra.head = Some("minecraft:iron_helmet".into());
         assert!(zombie.item_by_slot(zombie.sun_protection_slot()).is_some());
@@ -170,8 +173,8 @@ mod tests {
     #[test]
     fn body_armour_and_saddles_break_from_their_slots() {
         let mut wolf = mob("minecraft:wolf", Species::Wolf);
-        wolf.extra.body = Some("minecraft:wolf_armor".into());
-        wolf.extra.body_damage = 63;
+        wolf.extra.set_body(Some("minecraft:wolf_armor".into()));
+        wolf.extra.set_body_damage(63);
         let armour = wolf.item_by_slot(EquipmentSlot::Body).unwrap();
         assert_eq!((&*armour.item, armour.damage), ("minecraft:wolf_armor", 63));
         assert_eq!(wolf.item_by_slot(EquipmentSlot::Head), None);
@@ -190,7 +193,7 @@ mod tests {
     fn a_wolfs_armor_throws_scutes_as_it_cracks() {
         use crate::mobs::MobEvent;
         let mut wolf = mob("minecraft:wolf", Species::Wolf);
-        wolf.extra.body = Some("minecraft:wolf_armor".into());
+        wolf.extra.set_body(Some("minecraft:wolf_armor".into()));
         // Levels change below 95%, 69% and 32% of the 64 points left, that is
         // after 4, 20 and 44 points of wear.
         let hurt = |wolf: &mut Mob, damage: f32| {

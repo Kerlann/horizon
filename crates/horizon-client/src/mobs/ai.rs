@@ -1174,16 +1174,16 @@ fn can_freeze(m: &Mob, w: &MobWorld) -> bool {
     let immune = w
         .items
         .and_then(|i| i.item_tags.get("minecraft:freeze_immune_wearables"));
-    ![
-        &m.extra.head,
-        &m.extra.chest,
-        &m.extra.legs,
-        &m.extra.feet,
-        &m.extra.body,
+    [
+        m.extra.head.as_deref(),
+        m.extra.chest.as_deref(),
+        m.extra.legs.as_deref(),
+        m.extra.feet.as_deref(),
+        m.extra.body_id(),
     ]
     .into_iter()
     .flatten()
-    .any(|item| immune.is_some_and(|t| t.contains(&**item)))
+    .any(|item| immune.is_some_and(|t| t.contains(item)))
 }
 /// `Mob.playAmbientSound` on demand: a spawn egg or a mob bucket just placed `m`.
 pub fn ambient_sound(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
@@ -3310,7 +3310,9 @@ mod same_vehicle_push_tests {
             assert!(horse.fire_ticks > 0);
             assert!(events.is_empty());
             horse.fire_ticks = 0;
-            horse.extra.body = Some("minecraft:leather_horse_armor".into());
+            horse
+                .extra
+                .set_body(Some("minecraft:leather_horse_armor".into()));
             for _ in 0..1000 {
                 burn_undead(&mut horse, &world, &mut events);
             }
@@ -3334,9 +3336,13 @@ mod same_vehicle_push_tests {
                 0.0,
             );
             assert!(can_freeze(&horse, w));
-            horse.extra.body = Some("minecraft:leather_horse_armor".into());
+            horse
+                .extra
+                .set_body(Some("minecraft:leather_horse_armor".into()));
             assert!(!can_freeze(&horse, w));
-            horse.extra.body = Some("minecraft:iron_horse_armor".into());
+            horse
+                .extra
+                .set_body(Some("minecraft:iron_horse_armor".into()));
             assert!(can_freeze(&horse, w));
         }));
     }
@@ -3372,7 +3378,9 @@ mod same_vehicle_push_tests {
             );
             assert_eq!(worn.iter().flatten().count(), 2);
             let mut horse = mob("minecraft:horse");
-            horse.extra.body = Some(std::sync::Arc::from("minecraft:iron_horse_armor"));
+            horse
+                .extra
+                .set_body(Some(std::sync::Arc::from("minecraft:iron_horse_armor")));
             horse.set_saddle(Some(crate::items::ItemStack::new("minecraft:saddle", 1)));
             let gear = horse.equipment_stacks();
             assert_eq!(

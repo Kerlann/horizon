@@ -7,7 +7,7 @@ pub const MANIFEST: &str = "horizon-native.json";
 pub const SOURCE: &str = "native/";
 pub const SOURCE_MANIFEST: &str = "horizon-mixin.toml";
 pub const RUST: &str = "rust";
-pub const MIXINS_REV: &str = "ddd9700b21997c95d95ac6ee5ecafe3830cf622a";
+pub const MIXINS_REV: &str = "e8cd0aa38cffef49cb2e088ef716baa107148c02";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum SourceLayoutError {

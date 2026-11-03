@@ -1,7 +1,7 @@
 //! Attachment sync (docs/native-mods.md, "Server attachments"): the server
 //! sends the synced values of the holders a level pass lent to mods, and whole
 //! snapshots to the players who started seeing a holder; a client keeps them.
-use super::{Game, lan::LanHost};
+use super::Game;
 use crate::lan::{
     guest::Guest,
     hub::{AttachmentSnapshot, Hub},
@@ -80,10 +80,17 @@ impl Game<'_> {
     /// of the level they are in (another's stay queued), then the synced
     /// changes of the holders lent to mods since the last pass to the players
     /// who see them.
-    pub(super) fn flush_attachment_sync(&mut self, host: &mut LanHost) {
-        let hub = &mut host.hub;
-        for snapshot in std::mem::take(&mut hub.attachment_snapshots) {
+    pub(super) fn flush_attachment_sync(&mut self) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
+        let snapshots = std::mem::take(&mut host.hub.attachment_snapshots);
+        for snapshot in snapshots {
             let AttachmentSnapshot { player, holder } = snapshot;
+            let Some(host) = self.lan.as_mut() else {
+                return;
+            };
+            let hub = &mut host.hub;
             let Some(guest) = hub.guests.iter().find(|g| g.uuid == player) else {
                 continue;
             };
@@ -103,8 +110,15 @@ impl Game<'_> {
                     .map_or(holder, |g| Holder::Player(g.uuid)),
                 _ => holder,
             };
-            for message in self.attachment_snapshot(holder) {
-                guest.send_attachment_sync(&message);
+            let messages = self.attachment_snapshot(holder);
+            if let Some(guest) = self
+                .lan
+                .as_ref()
+                .and_then(|host| host.hub.guests.iter().find(|g| g.uuid == player))
+            {
+                for message in messages {
+                    guest.send_attachment_sync(&message);
+                }
             }
         }
         for holder in std::mem::take(&mut self.world.attachment_syncs) {
@@ -120,8 +134,10 @@ impl Game<'_> {
                 replace: false,
                 changes,
             };
-            for guest in recipients(hub, holder) {
-                guest.send_attachment_sync(&message);
+            if let Some(host) = self.lan.as_ref() {
+                for guest in recipients(&host.hub, holder) {
+                    guest.send_attachment_sync(&message);
+                }
             }
         }
     }

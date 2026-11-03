@@ -231,20 +231,13 @@ impl Game<'_> {
                     _ => None,
                 };
                 if let Some(conn) = guest {
-                    if let Some(mut host) = self.lan.take() {
-                        let hurt = self
-                            .as_guest(&mut host, conn, |g| {
-                                g.command_damage_mob(id, amount, damage)
-                            })
-                            .unwrap_or(false);
-                        if hurt {
-                            host.mob_players.insert(id, conn);
-                        }
-                        self.lan = Some(host);
-                        hurt
-                    } else {
-                        false
+                    let hurt = self
+                        .as_guest(conn, |g| g.command_damage_mob(id, amount, damage))
+                        .unwrap_or(false);
+                    if hurt && let Some(host) = self.lan.as_mut() {
+                        host.mob_players.insert(id, conn);
                     }
+                    hurt
                 } else {
                     self.command_damage_mob(id, amount, damage)
                 }

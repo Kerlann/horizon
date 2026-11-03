@@ -9,7 +9,7 @@
         "contract": "replace",
         "out": "stack",
         "scope": "block",
-        "key": "block"
+        "key": "state"
       }
     }
   ]

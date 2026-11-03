@@ -1397,6 +1397,8 @@ pub struct NativeItemCooldown {
 }
 
 /// An online player in one open server world, keyed by UUID.
+/// A nested guest turn cannot re-enter a player active in an outer turn;
+/// operations requiring that player's swapped state report them unavailable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PlayerRef {
     pub(crate) entity: EntityRef,

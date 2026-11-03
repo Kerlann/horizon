@@ -623,7 +623,7 @@ impl Game<'_> {
             blast_source.as_ref(),
         );
         let mut pushed: Vec<_> = self.lan_acting.zip(own).into_iter().collect();
-        if let Some(mut host) = self.lan.take() {
+        if let Some(host) = self.lan.as_ref() {
             let guests: Vec<u32> = host
                 .hub
                 .guests
@@ -632,7 +632,7 @@ impl Game<'_> {
                 .map(|g| g.conn)
                 .collect();
             for conn in guests {
-                let push = self.as_guest(&mut host, conn, |g| {
+                let push = self.as_guest(conn, |g| {
                     g.explosion_hurt_player(
                         &context,
                         radius,
@@ -646,7 +646,6 @@ impl Game<'_> {
                     pushed.push((conn, push));
                 }
             }
-            self.lan = Some(host);
         }
         // Mobs. `WitherBoss.hurtServer`: a wither shrugs off an undead cause.
         let cause = self

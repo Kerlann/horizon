@@ -100,8 +100,7 @@ impl Game<'_> {
             self.add_pickup_toward(taken, collector, target);
         }
     }
-    /// [`Self::add_pickup`] with the collector's first target given (a LAN
-    /// guest's model while the host is taken out for its tick).
+    /// [`Self::add_pickup`] with the collector's first target given.
     pub(super) fn add_pickup_toward(
         &mut self,
         taken: Taken,

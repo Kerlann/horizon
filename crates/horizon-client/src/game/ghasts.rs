@@ -63,7 +63,7 @@ impl Game<'_> {
         }
         let at = m.center();
         let sneaking = self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft);
-        let harnessed = m.extra.body.is_some();
+        let harnessed = m.extra.body_id().is_some();
         // Equippable.equipOnInteract: a harness goes on a bare adult.
         if item.ends_with("_harness") && item.starts_with("minecraft:") && !harnessed {
             let held = self.inventory[self.selected].clone().map(|mut stack| {

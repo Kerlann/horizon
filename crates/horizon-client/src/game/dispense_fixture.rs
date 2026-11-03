@@ -954,11 +954,11 @@ impl Game<'_> {
             .ok_or_else(|| format!("no mob type {kind}"))?;
         let mut mob = Mob::new(id, t, at, yaw);
         // EntityType.create equips nothing (that is finalizeSpawn's job).
+        mob.extra.set_body_stack(None);
         for slot in [
             &mut mob.extra.main_hand,
             &mut mob.extra.off_hand,
             &mut mob.extra.head,
-            &mut mob.extra.body,
             &mut mob.extra.chest,
             &mut mob.extra.legs,
             &mut mob.extra.feet,

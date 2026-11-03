@@ -464,13 +464,9 @@ impl Game<'_> {
             self.player_hit(victim, "minecraft:trident", Some(direct), damage);
             return;
         };
-        let Some(mut host) = self.lan.take() else {
-            return;
-        };
-        self.as_guest(&mut host, conn, |g| {
+        self.as_guest(conn, |g| {
             g.player_hit(victim, "minecraft:trident", Some(direct), damage)
         });
-        self.lan = Some(host);
     }
     /// The players tridents fly back to or land at: this game's player and the
     /// guests in this level. A server has no player of its own, so its
@@ -510,11 +506,7 @@ impl Game<'_> {
             let rest = match by.guest {
                 None => self.give(t.stack.clone()),
                 Some(conn) => {
-                    let Some(mut host) = self.lan.take() else {
-                        return false;
-                    };
-                    let rest = self.as_guest(&mut host, conn, |g| g.give(t.stack.clone()));
-                    self.lan = Some(host);
+                    let rest = self.as_guest(conn, |g| g.give(t.stack.clone()));
                     let Some(rest) = rest else {
                         return false;
                     };

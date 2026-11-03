@@ -1,16 +1,20 @@
 //! Parts (arismoko/horizon#41): code a mod attaches to one block, block entity, item or mod
 //! menu type at startup. The scoped hooks ask the parts attached to the thing they are about,
 //! after every mod's `Hooks` method. Parts attached by tag are resolved by each game against its
-//! own tags, at world open and on `/reload`, into a table kept by that game's thread.
+//! own tags, at world open and on `/reload`, into a table kept by that game's thread; that table
+//! also indexes the block parts by state, so the state-keyed hooks look theirs up without the
+//! block's name.
 use super::{
-    BlockEntityPart, BlockPart, BlockSide, Capability, CapabilityKey, EntityCapabilityKey,
-    EntityRef, Host, ItemCapabilityKey, ItemPart, ItemPlace, MenuPart, ModEntry, PlaceProvider,
+    BlockEntityPart, BlockPart, BlockSide, BlockStateId, Capability, CapabilityKey,
+    EntityCapabilityKey, EntityRef, Host, ItemCapabilityKey, ItemPart, ItemPlace, MenuPart,
+    ModEntry, PlaceProvider,
 };
 use std::{
     any::{Any, TypeId, type_name},
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     marker::PhantomData,
+    num::NonZeroU32,
     rc::Rc,
     sync::{
         Arc, LazyLock, OnceLock,
@@ -51,6 +55,12 @@ impl<P: ?Sized> Clone for Attached<P> {
 pub struct Parts {
     /// Block parts, and block entity parts as the block parts they also are.
     blocks: HashMap<Box<str>, Vec<Attached<dyn BlockPart>>>,
+    /// The same block parts by state for this game's registry: an index into
+    /// `block_slices` (one-based, so `None` names no parts), four bytes a
+    /// state.
+    block_states: Vec<Option<NonZeroU32>>,
+    /// The parts `block_states` indexes, one entry per block that has any.
+    block_slices: Vec<Arc<[Attached<dyn BlockPart>]>>,
     /// Block entity parts by block, for the hooks asked by block (`block_entity`, `screen`).
     block_entities: HashMap<Box<str>, Vec<Attached<dyn BlockEntityPart>>>,
     /// Block entity parts by block entity type, for the hooks asked by the entity
@@ -162,11 +172,11 @@ pub(crate) fn parts(hook: &'static str) -> PartsRef {
     let Some(installed) = installed() else {
         return PartsRef::Shared(&NO_PARTS);
     };
-    if installed.tags.blocks.is_empty() && installed.tags.items.is_empty() {
-        return PartsRef::Shared(&installed.keys);
-    }
     if let Some(parts) = GAME_PARTS.with_borrow(Option::clone) {
         return PartsRef::Game(parts);
+    }
+    if installed.tags.blocks.is_empty() && installed.tags.items.is_empty() {
+        return PartsRef::Shared(&installed.keys);
     }
     if !GAME_THREAD.get() {
         let thread = std::thread::current();
@@ -190,6 +200,8 @@ pub(crate) fn mark_game_thread() {
 pub(crate) struct KnownIds<'a> {
     pub block: &'a dyn Fn(&str) -> bool,
     pub item: &'a dyn Fn(&str) -> bool,
+    pub state_count: usize,
+    pub state_block: &'a dyn Fn(usize) -> &'a str,
 }
 
 /// Resolve this thread's game's parts against its tags (`block_tags`, `item_tags`: flattened,
@@ -211,9 +223,6 @@ pub(crate) fn resolve_parts(
         unknown.sort();
         return Err(unknown);
     }
-    if installed.tags.blocks.is_empty() && installed.tags.items.is_empty() {
-        return Ok(());
-    }
     let mut parts = installed.keys.clone();
     add_tagged(
         &mut parts.blocks,
@@ -222,6 +231,22 @@ pub(crate) fn resolve_parts(
         "block",
     );
     add_tagged(&mut parts.items, &installed.tags.items, item_tags, "item");
+    let mut names: HashMap<&str, NonZeroU32> = HashMap::with_capacity(parts.blocks.len());
+    let mut block_slices: Vec<Arc<[Attached<dyn BlockPart>]>> =
+        Vec::with_capacity(parts.blocks.len());
+    for (name, attached) in &parts.blocks {
+        names.insert(
+            name,
+            NonZeroU32::new(block_slices.len() as u32 + 1).unwrap(),
+        );
+        block_slices.push(Arc::from(attached.clone()));
+    }
+    let mut block_states = Vec::with_capacity(known.state_count);
+    for state in 0..known.state_count {
+        block_states.push(names.get((known.state_block)(state)).copied());
+    }
+    parts.block_slices = block_slices;
+    parts.block_states = block_states;
     GAME_PARTS.set(Some(Rc::new(parts)));
     Ok(())
 }
@@ -289,14 +314,18 @@ fn add_tagged<P: ?Sized>(
 }
 
 impl Parts {
+    pub(crate) fn block_state(&self, state: BlockStateId) -> &[Attached<dyn BlockPart>] {
+        self.block_states
+            .get(state.0 as usize)
+            .and_then(|index| *index)
+            .map_or(
+                &[],
+                |index| &self.block_slices[index.get() as usize - 1][..],
+            )
+    }
+
     // Each takes the thing's id as a closure: with nothing attached in that scope the id is never
     // worked out, so a game with no parts pays no registry read on the hot hooks.
-    pub(crate) fn block<'k>(
-        &self,
-        id: impl FnOnce() -> Option<&'k str>,
-    ) -> &[Attached<dyn BlockPart>] {
-        attached(&self.blocks, id)
-    }
     pub(crate) fn block_entity<'k>(
         &self,
         id: impl FnOnce() -> Option<&'k str>,
@@ -1953,6 +1982,12 @@ pub(crate) mod tests {
             KnownIds {
                 block: &|_| true,
                 item: &|_| true,
+                state_count: 3,
+                state_block: &|state| match state {
+                    1 => "test:gauge",
+                    2 => "test:other",
+                    _ => "minecraft:air",
+                },
             },
         )
     }
@@ -1960,10 +1995,32 @@ pub(crate) mod tests {
     #[test]
     fn a_block_part_answers_for_its_block_only_after_the_mods() {
         game_thread();
-        // Doubled by the mod, then 5 more from the part: (1 * 2) + 5. No world is open, so the
-        // tag part is not attached yet.
+        // No world is open, so no state has its parts yet: only the mod's own hook answers.
+        assert_eq!(read(1), 2);
+        resolve(&[]).unwrap();
+        // Doubled by the mod, then 5 more from the part: (1 * 2) + 5.
         assert_eq!(read(1), 7);
         assert_eq!(read(2), 2);
+    }
+
+    #[test]
+    fn a_state_without_parts_answers_none_and_keeps_the_global_hook() {
+        game_thread();
+        resolve(&[]).unwrap();
+        // Out of range, and in range but a block no part is attached to.
+        assert!(
+            super::parts("analog_output")
+                .block_state(BlockStateId(99))
+                .is_empty()
+        );
+        assert!(
+            super::parts("analog_output")
+                .block_state(BlockStateId(0))
+                .is_empty()
+        );
+        // The mod's hook still hears both: no parts is not no subscribers.
+        assert_eq!(read(0), 2);
+        assert_eq!(read(99), 2);
     }
 
     #[test]
@@ -2006,6 +2063,8 @@ pub(crate) mod tests {
             KnownIds {
                 block: &|id| id != "test:gauge",
                 item: &|_| true,
+                state_count: 0,
+                state_block: &|_| unreachable!(),
             },
         )
         .unwrap_err();
@@ -3790,15 +3849,15 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn with_no_parts_the_block_is_never_named() {
+    fn with_no_parts_the_block_entity_is_never_named() {
         let parts = Parts::default();
         let named = std::cell::Cell::new(false);
         let id = || {
             named.set(true);
-            Some("test:gauge")
+            Some("test:press")
         };
-        assert!(parts.block(id).is_empty());
-        assert!(!named.get(), "an empty table resolved the state's block");
+        assert!(parts.block_entity(id).is_empty());
+        assert!(!named.get(), "an empty table resolved the block's name");
     }
 
     #[test]
@@ -3813,7 +3872,7 @@ pub(crate) mod tests {
         r.block_part("test:gauge", Gauge);
         r.block_part("gauge", Other);
         r.block_part_tag("#test:gauged", Other);
-        assert_eq!(r.parts.block(|| Some("test:gauge")).len(), 2);
+        assert_eq!(r.parts.blocks["test:gauge"].len(), 2);
         assert_eq!(r.refused.len(), 3, "{:?}", r.refused);
         assert!(
             r.refused[0].contains("Gauge is attached to test:gauge twice, by first and second")

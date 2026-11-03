@@ -220,11 +220,9 @@ impl Game<'_> {
 
     /// `ServerLevel.sendParticles` of a mob's particles: a packet to each
     /// player within 32 blocks. The window draws its own copy. `state` is the
-    /// block of a block particle. `host` is the hub of a guest's turn, which
-    /// is out of `self.lan` meanwhile.
+    /// block of a block particle.
     pub(super) fn lan_level_particles(
         &self,
-        host: Option<&LanHost>,
         options: &ParticleOptions,
         at: [f64; 3],
         spread: [f64; 3],
@@ -232,7 +230,7 @@ impl Game<'_> {
         count: u32,
         state: Option<BlockStateId>,
     ) {
-        let Some(hub) = host.or(self.lan.as_ref()).map(|h| &h.hub) else {
+        let Some(hub) = self.lan.as_ref().map(|h| &h.hub) else {
             return;
         };
         send_hub_level_particles(hub, options, at, spread, speed, count, state);
@@ -240,16 +238,8 @@ impl Game<'_> {
 
     /// `LivingEntity.checkFallDamage`'s `ServerLevel.sendParticles` of the
     /// landing block's crumbs: drawn in this window, when it has one, and
-    /// sent to each player within 32 blocks. `host` is the hub of a guest's
-    /// turn, which is out of `self.lan` meanwhile.
-    pub(super) fn landing_dust(
-        &mut self,
-        host: Option<&LanHost>,
-        state: BlockStateId,
-        at: Vec3,
-        count: i32,
-        speed: f64,
-    ) {
+    /// sent to each player within 32 blocks.
+    pub(super) fn landing_dust(&mut self, state: BlockStateId, at: Vec3, count: i32, speed: f64) {
         let at = [at.x, at.y, at.z];
         if self.serving.is_none() && self.options.dedicated.is_none() {
             let block = [
@@ -267,7 +257,7 @@ impl Game<'_> {
                 );
             }
         }
-        let Some(hub) = host.or(self.lan.as_ref()).map(|h| &h.hub) else {
+        let Some(hub) = self.lan.as_ref().map(|h| &h.hub) else {
             return;
         };
         let Some(particle) = Self::hub_particle(
@@ -310,8 +300,7 @@ impl Game<'_> {
         Self::hub_particle(&self.lan.as_ref()?.hub, options, state)
     }
 
-    /// `network_particle` for a hub that is out of `self.lan` meanwhile (a
-    /// guest's turn).
+    /// Convert a particle using the hub's registry.
     pub(super) fn hub_particle(
         hub: &Hub,
         options: &ParticleOptions,

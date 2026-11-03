@@ -225,6 +225,8 @@ mod native_entity_sounds;
 mod native_entity_state;
 mod native_explosions;
 mod native_falling;
+#[cfg(test)]
+mod native_guest_turn_tests;
 mod native_hooks;
 mod native_inventories;
 mod native_item_container;
@@ -3252,9 +3254,8 @@ struct Game<'a> {
     lan_guest_swaps: Vec<u32>,
     player_attachments: horizon_world::attachments::Attachments,
     /// The joined guests' attachments, by UUID: here rather than in their
-    /// records, so a hook in one guest's turn (when the hub is out of
-    /// `self.lan`) still reaches the others'. The acting guest's are in
-    /// `player_attachments` for the turn.
+    /// records, so a hook in one guest's turn still reaches the others'.
+    /// The acting guest's are in `player_attachments` for the turn.
     guest_attachments: HashMap<u128, horizon_world::attachments::Attachments>,
     /// The block the acting player is breaking (`break_block`): its destroy
     /// event, and the ones before it, are the player's own (`Level.levelEvent`
@@ -3269,8 +3270,7 @@ struct Game<'a> {
     tnt_refused: Option<BlockPos>,
     /// Their permission level: an op's above 0 (`PlayerList.isOp`).
     lan_acting_permission: Option<u8>,
-    /// Their entity id, which the hub (often taken out of `lan` while they
-    /// act) would otherwise have to be asked for.
+    /// Their entity id while their player state is in place.
     lan_acting_entity: Option<u32>,
     /// Whether the player currently swapped into the game is connectionless.
     lan_acting_fake: bool,
@@ -15724,16 +15724,14 @@ impl Game<'_> {
         // (`playerdata::load_owner`).
         if self.options.dedicated.is_some()
             && !self.options.execution_role.is_client()
-            && let Some(host) = self.lan.take()
+            && let Some(host) = self.lan.as_mut()
         {
             // The vehicle tree goes into a player's file when they leave
             // (`take_parent_vehicle`); here it stays in the chunk saves.
-            let mut host = host;
             for g in host.hub.guests.iter_mut().filter(|g| g.placed) {
-                self.guest_attachments_into(g);
+                Self::guest_attachments_into(&self.guest_attachments, g);
                 self.player_autosaves.enqueue(g, &self.world_root);
             }
-            self.lan = Some(host);
         }
         self.save_world_state();
         self.message = Some(("Saved the game".into(), Instant::now()));
@@ -16230,6 +16228,12 @@ impl Game<'_> {
             static_block_entities = static_sections;
             visible_static_block_entity_sections = visible_static_sections;
             static_block_entity_stats = static_stats;
+        } else {
+            // No level behind the panorama, so no entity either: the GPU path's
+            // draws are started by `begin_skinning`, which only `entity_geometry`
+            // runs, and would otherwise stay those of the last world frame and
+            // be drawn over the title (#8192). Its models stay stored.
+            self.skin_frame.get_mut().clear_draws();
         }
         let bolts = if title {
             Vec::new()
@@ -20045,6 +20049,8 @@ impl Game<'_> {
             horizon_client::mod_api::KnownIds {
                 block: &|id| registry.default_state(id).is_some(),
                 item: &|id| items.items.contains_key(id),
+                state_count: registry.len(),
+                state_block: &|state| &registry.state(BlockStateId(state as u32)).unwrap().name,
             },
         )
         .map_err(|refused| format!("Mod parts refused:\n{}", refused.join("\n")).into())
@@ -22286,11 +22292,13 @@ mod tests {
                 &game.level.enabled_features,
             );
             game.reload_world_tables(&stack);
-            assert!(
-                !mod_api::parts("test")
-                    .block(|| Some("minecraft:stone"))
-                    .is_empty()
-            );
+            let stone = game
+                .pack
+                .assets
+                .registry
+                .default_state("minecraft:stone")
+                .unwrap();
+            assert!(!mod_api::parts("test").block_state(stone).is_empty());
         });
     }
     use super::*;

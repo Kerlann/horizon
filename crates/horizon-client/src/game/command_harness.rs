@@ -64,28 +64,23 @@ impl Game<'_> {
             .as_ref()
             .ok_or("command harness: not a server")?
             .owner;
-        let mut host = self.lan.take().ok_or("command harness: no hub")?;
+        let host = self.lan.as_ref().ok_or("command harness: no hub")?;
         let guest = host.hub.guests.iter().find(|g| g.uuid == owner && g.placed);
         let Some(guest) = guest else {
-            self.lan = Some(host);
             return Err("command harness: owner is not connected".into());
         };
         let (conn, dim, back) = (guest.conn, super::Dim::from_id(&guest.dimension), self.dim);
-        if let Err(error) = self.enter_level(Some(&mut host), dim) {
-            self.lan = Some(host);
-            return Err(error);
-        }
+        self.enter_level(dim)?;
         let swap = self
-            .enter_guest(&mut host, conn)
-            .expect("the owner is not already acting");
-        self.lan = Some(host);
+            .enter_guest(conn)
+            .ok_or("command harness: owner is already acting")?;
         let result = f(self);
-        let mut host = self.lan.take().expect("the operation puts the hub back");
-        self.leave_guest(&mut host, swap);
-        host.hub.sync_all_effects();
-        self.run_level_teleports(&mut host);
-        let restored = self.enter_level(Some(&mut host), back);
-        self.lan = Some(host);
+        self.leave_guest(swap);
+        if let Some(host) = self.lan.as_mut() {
+            host.hub.sync_all_effects();
+        }
+        self.run_level_teleports();
+        let restored = self.enter_level(back);
         restored?;
         result
     }
@@ -118,9 +113,10 @@ impl Game<'_> {
         // Start travel after restoring the owner's body: change_level updates
         // its hub record, which leave_guest would otherwise overwrite.
         self.in_owner_level(|g| {
-            let mut host = g.lan.take().ok_or("command harness: no hub")?;
-            g.start_server_trip(&mut host, conn, plan.dim, Some(plan));
-            g.lan = Some(host);
+            if g.lan.is_none() {
+                return Err("command harness: no hub".into());
+            }
+            g.start_server_trip(conn, plan.dim, Some(plan));
             Ok(())
         })
     }
@@ -264,7 +260,7 @@ impl Game<'_> {
                     let block = op["block"].as_str().unwrap_or("minecraft:sand");
                     let no_gravity = op["no_gravity"].as_bool().unwrap_or(false);
                     let back = self.dim;
-                    self.enter_level(None, super::Dim::from_id(dimension))?;
+                    self.enter_level(super::Dim::from_id(dimension))?;
                     let facts = self.res.facts();
                     let matches = |f: &super::FallingBlock| {
                         &*facts.get(f.state).name == block && f.no_gravity == no_gravity
@@ -273,7 +269,7 @@ impl Game<'_> {
                     if op["discard"].as_bool() == Some(true) {
                         self.falling.retain(|f| !matches(f));
                     }
-                    self.enter_level(None, back)?;
+                    self.enter_level(back)?;
                     let record = json!({
                         "cmd": format!("#falling {dimension} {block} {no_gravity}"),
                         "messages": [],

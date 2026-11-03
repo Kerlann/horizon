@@ -331,8 +331,8 @@ mod tests {
             assert!(!game.native_chunk_set_forced(chunk, true));
             // Opened, then parked.
             let back = game.dim;
-            game.enter_level(None, other).unwrap();
-            game.enter_level(None, back).unwrap();
+            game.enter_level(other).unwrap();
+            game.enter_level(back).unwrap();
             assert_eq!(game.native_chunk_forced(chunk), Some(false));
             assert!(game.native_chunk_set_forced(chunk, true));
             assert_eq!(game.native_level_forced_chunks(parked), Some(vec![[1, 1]]));
@@ -458,8 +458,8 @@ mod tests {
                 Dim::Nether
             };
             let back = game.dim;
-            game.enter_level(None, other).unwrap();
-            game.enter_level(None, back).unwrap();
+            game.enter_level(other).unwrap();
+            game.enter_level(back).unwrap();
             let parked = horizon_client::mod_api::LevelRef::new(level.epoch(), other.id());
             let chunk = ChunkRef::new(parked, [2, 2]);
             let _guard = in_mod("machines");

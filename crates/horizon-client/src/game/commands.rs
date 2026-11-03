@@ -379,7 +379,6 @@ impl Game<'_> {
     pub(super) fn broadcast_to_admins(&mut self, message: Text) {
         let informs = match self.console_broadcast {
             Some(broadcast) => broadcast,
-            // While a guest acts the host's LanHost is out of `self.lan`.
             None => self.lan_acting.is_some() || self.lan.is_some(),
         };
         if !informs

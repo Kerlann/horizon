@@ -35,7 +35,7 @@ impl Game<'_> {
                     "minecraft:falling_block"
                 };
                 self.falling_hurt_player(block.position, impact.amount, kind);
-                if let Some(mut host) = self.lan.take() {
+                if let Some(host) = self.lan.as_ref() {
                     let bounds = falling_block::bounds(block.position);
                     let conns = host
                         .hub
@@ -52,11 +52,10 @@ impl Game<'_> {
                         .map(|g| g.conn)
                         .collect::<Vec<_>>();
                     for conn in conns {
-                        self.guest_hit_by(&mut host, conn, |g| {
+                        self.guest_hit_by(conn, |g| {
                             g.falling_hurt_player(block.position, impact.amount, kind)
                         });
                     }
-                    self.lan = Some(host);
                 }
             }
             if anvil

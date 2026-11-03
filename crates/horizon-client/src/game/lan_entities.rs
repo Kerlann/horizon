@@ -6,7 +6,6 @@
 use super::Game;
 use horizon_client::lan::{
     entity::{EntityState, Riding, States},
-    hub::Hub,
     playerdata::ints_uuid,
 };
 use horizon_protocol::entity_data::{Value, serializer};
@@ -99,7 +98,7 @@ fn stand_poses(a: &horizon_client::entities::ArmorStand) -> Vec<(u8, i32, Value)
 
 impl Game<'_> {
     /// The entities players started and stopped tracking since the last
-    /// tick, told to the mods in order with the hub back in `self.lan` and
+    /// tick, told to the mods in order with the hub in `self.lan` and
     /// no player's state swapped in (`ServerEntity.addPairing` and
     /// `removePairing`).
     pub(super) fn run_native_tracking(&mut self) {
@@ -153,11 +152,14 @@ impl Game<'_> {
     /// entities kept unsimulated, as guests track them.
     pub(super) fn lan_object_states(
         &mut self,
-        hub: &mut Hub,
         out: &mut States,
         drain_minecart_steps: bool,
         after: u32,
     ) {
+        let Some(host) = self.lan.as_ref() else {
+            return;
+        };
+        let hub = &host.hub;
         let guests: Vec<(u128, i32)> = hub
             .guests
             .iter()
@@ -308,7 +310,10 @@ impl Game<'_> {
             // Stored main hand, off hand, feet, legs, chest, head: the wire's slots 0 to 5.
             for (slot, item) in a.equipment.iter().enumerate() {
                 if item.is_some() {
-                    e.equipment.push((slot as u8, hub.stack(item)));
+                    let Some(host) = self.lan.as_mut() else {
+                        return;
+                    };
+                    e.equipment.push((slot as u8, host.hub.stack(item)));
                 }
             }
             e.attributes = self.stand_attributes(a.id, &a.equipment);
@@ -338,8 +343,14 @@ impl Game<'_> {
                     .push((8, serializer::DIRECTION, Value::Id(i32::from(f.facing))));
             }
             if f.item.is_some() {
-                e.meta
-                    .push((9, serializer::ITEM_STACK, Value::Item(hub.stack(&f.item))));
+                let Some(host) = self.lan.as_mut() else {
+                    return;
+                };
+                e.meta.push((
+                    9,
+                    serializer::ITEM_STACK,
+                    Value::Item(host.hub.stack(&f.item)),
+                ));
             }
             if f.rotation != 0 {
                 e.meta
@@ -369,7 +380,12 @@ impl Game<'_> {
             }
             // Painting.DATA_PAINTING_VARIANT_ID, a registry holder (id + 1),
             // set unless it is the registry's first variant (VariantUtils.getAny).
-            if let Some(id) = hub.registry_id("minecraft:painting_variant", &p.variant)
+            let Some(host) = self.lan.as_ref() else {
+                return;
+            };
+            if let Some(id) = host
+                .hub
+                .registry_id("minecraft:painting_variant", &p.variant)
                 && id != 0
             {
                 e.meta
@@ -399,20 +415,30 @@ impl Game<'_> {
             e.meta.push((
                 8,
                 serializer::ITEM_STACK,
-                Value::Item(
-                    hub.stack(&Some(o.item.clone()).filter(|i| &*i.item != "minecraft:air")),
-                ),
+                Value::Item(self.lan.as_mut().and_then(|host| {
+                    host.hub
+                        .stack(&Some(o.item.clone()).filter(|i| &*i.item != "minecraft:air"))
+                })),
             ));
             out.push(e);
         }
-        self.lan_projectile_states(hub, out, after);
+        self.lan_projectile_states(out, after);
         for o in self.others.iter().filter(|o| o.id > after) {
             let p = o.position;
             let mut e = state(o.id, &o.kind, [p.x, p.y, p.z], o.yaw, false);
             e.pitch = o.pitch;
             e.head_yaw = o.yaw;
-            if let Some(tag) = self.persist.raw.get(&o.id) {
-                self.lan_display_data(tag, hub, &mut e);
+            if let Some(tag) = self.persist.raw.get(&o.id)
+                && let Some(item) = self.lan_display_data(tag, &mut e)
+            {
+                let Some(host) = self.lan.as_mut() else {
+                    return;
+                };
+                if let Some((_, _, Value::Item(stack))) =
+                    e.meta.iter_mut().find(|(index, _, _)| *index == 23)
+                {
+                    *stack = host.hub.stack(&Some(item));
+                }
             }
             out.push(e);
         }
@@ -423,8 +449,13 @@ impl Game<'_> {
     /// The synched data of a text, block or item display kept unsimulated,
     /// from its compound (`Display.readAdditionalSaveData`), with the
     /// defaults to send when a value goes back to one.
-    fn lan_display_data(&self, tag: &Tag, hub: &mut Hub, e: &mut EntityState) {
+    fn lan_display_data(
+        &self,
+        tag: &Tag,
+        e: &mut EntityState,
+    ) -> Option<horizon_client::items::ItemStack> {
         use horizon_client::text_display::{display_data, text_display_data};
+        let mut item_stack = None;
         let empty = Tag::Compound(Default::default());
         let (meta, defaults) = match e.kind.as_str() {
             "minecraft:text_display" => (
@@ -446,7 +477,7 @@ impl Game<'_> {
             }
             "minecraft:item_display" => {
                 // DATA_ITEM_STACK and DATA_ITEM_DISPLAY_ID (`ItemDisplayContext`).
-                let item = tag
+                item_stack = tag
                     .get("item")
                     .and_then(horizon_client::save::item_from_nbt);
                 let context = match tag.get("item_display") {
@@ -466,7 +497,7 @@ impl Game<'_> {
                 };
                 (
                     vec![
-                        (23, serializer::ITEM_STACK, Value::Item(hub.stack(&item))),
+                        (23, serializer::ITEM_STACK, Value::Item(None)),
                         (24, serializer::BYTE, Value::Byte(context)),
                     ],
                     vec![
@@ -475,12 +506,13 @@ impl Game<'_> {
                     ],
                 )
             }
-            _ => return,
+            _ => return None,
         };
         e.meta = display_data(tag, false);
         e.meta.extend(meta);
         e.defaults = display_data(&empty, true);
         e.defaults.extend(defaults);
+        item_stack
     }
 
     /// `ClientboundAddEntityPacket(Entity, ServerEntity, int)`: the entity's
@@ -548,7 +580,11 @@ impl Game<'_> {
 
     /// Primed TNT, falling blocks, projectiles, tridents, firework rockets and
     /// end crystals, as guests track them.
-    fn lan_projectile_states(&self, hub: &mut Hub, out: &mut States, after: u32) {
+    fn lan_projectile_states(&mut self, out: &mut States, after: u32) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
+        let hub = &mut host.hub;
         let owner = |who: Option<horizon_client::mobs::Who>| match who {
             Some(horizon_client::mobs::Who::Mob(id)) => id as i32,
             Some(horizon_client::mobs::Who::Player) | None => 0,
@@ -758,7 +794,6 @@ impl Game<'_> {
         // The dragon's breath and lingering potion clouds (AreaEffectCloud's DATA_RADIUS,
         // DATA_WAITING for its 20-tick wait, and DATA_PARTICLE): the
         // client draws them from these (`tick_remote_clouds`).
-        // The hub is out of `self.lan` meanwhile, so it is passed in.
         let breath = Self::hub_particle(
             hub,
             &horizon_client::particles::ParticleOptions::simple(
@@ -778,7 +813,7 @@ impl Game<'_> {
             if b.waiting() {
                 e.meta.push((9, serializer::BOOLEAN, Value::Bool(true)));
             }
-            // The hub is out of `self.lan` while these states are built, so
+            // These states use the hub's particle registry, so
             // the particle must be encoded through the hub passed in: going
             // through `network_particle` would drop it and leave the client
             // on the default white particle.

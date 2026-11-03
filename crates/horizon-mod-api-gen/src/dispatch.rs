@@ -174,24 +174,23 @@ pub(super) fn emit(
                     .iter()
                     .find(|(arg, _)| arg == key)
                     .ok_or_else(|| format!("key {key} is not an argument of {name}"))?;
-                let mut table = table;
-                let id = match ty.to_token_stream().to_string().as_str() {
+                let lookup = match ty.to_token_stream().to_string().as_str() {
+                    "BlockStateId" if table == "block" => format!("block_state({key})"),
                     "BlockStateId" => {
                         let Some((level, _)) = host.as_ref().filter(|_| is_level) else {
                             return Err(format!("{name} has no level to name {key}'s block"));
                         };
-                        format!("{level}.state_block({key})")
+                        format!("{table}(|| {level}.state_block({key}))")
                     }
-                    "& ItemStack" => format!("Some(&*{key}.item)"),
-                    "& str" => format!("Some({key})"),
+                    "& ItemStack" => format!("{table}(|| Some(&*{key}.item))"),
+                    "& str" => format!("{table}(|| Some({key}))"),
                     // An entity's type id need not be its block's: its own table.
                     "& ModBlockEntity" | "& mut ModBlockEntity" => {
-                        table = "block_entity_kind";
-                        format!("Some(&*{key}.id)")
+                        format!("block_entity_kind(|| Some(&*{key}.id))")
                     }
                     other => return Err(format!("key {key} of {name} has type {other}")),
                 };
-                Some((part_trait, format!("{table}(|| {id})")))
+                Some((part_trait, lookup))
             }
             _ => return Err(format!("{name} needs both scope and key, or neither")),
         };
@@ -368,7 +367,7 @@ pub(super) fn emit(
                 );
                 (
                     format!(
-                        "let {part_table} = super::parts(\"{name}\"); let {part_list} = {part_table}.{lookup};"
+                        "let {part_table} = super::parts(\"{name}\"); let {part_list} = {part_table}.{lookup}; if {part_list}.is_empty() && !super::listened(HookId::{hook_id}) {{ return; }}"
                     ),
                     if matches!(contract, "cancel" | "replace") {
                         format!("'hook: {{ {calls} }}")

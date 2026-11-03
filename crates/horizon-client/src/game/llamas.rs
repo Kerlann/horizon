@@ -107,7 +107,7 @@ impl Game<'_> {
         let m = &self.mobs[index];
         let carpet = |i: &str| i.ends_with("_carpet") && i.starts_with("minecraft:");
         if !item.is_empty() {
-            if item == "minecraft:shears" && m.extra.body.as_deref().is_some_and(carpet) {
+            if item == "minecraft:shears" && m.extra.body_id().is_some_and(carpet) {
                 // Equippable.canBeSheared: the carpet comes off.
                 let at = m.center();
                 let carpet = self.mobs[index].take_body_equipment().unwrap();
@@ -117,7 +117,7 @@ impl Game<'_> {
                 self.damage_held_tool();
                 return true;
             }
-            if carpet(item) && m.extra.body.is_none() {
+            if carpet(item) && m.extra.body_id().is_none() {
                 let held = self.inventory[self.selected].clone().map(|mut stack| {
                     stack.count = 1;
                     stack

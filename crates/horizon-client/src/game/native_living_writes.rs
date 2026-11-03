@@ -310,7 +310,6 @@ mod tests {
                 levels: game.level_shapes,
             };
             game.lan_host(settings, net, config).unwrap();
-            let mut host = game.lan.take().unwrap();
             let (tx, _rx) = std::sync::mpsc::channel();
             let mut guest = Guest::new(
                 Joined {
@@ -329,10 +328,9 @@ mod tests {
                 10,
             );
             guest.placed = true;
-            host.hub.guests.push(guest);
+            game.lan.as_mut().unwrap().hub.guests.push(guest);
             // A first turn starts a fresh combat record: take it first.
-            game.as_guest(&mut host, 12, |_| {}).unwrap();
-            game.lan = Some(host);
+            game.as_guest(12, |_| {}).unwrap();
             let player = game.native_living(game.native_entity(12).unwrap()).unwrap();
 
             // Between its turns the guest's counts are in its combat record.
@@ -352,8 +350,7 @@ mod tests {
             assert!(!game.native_living_set_item_use_remaining(player, 5));
 
             // The acting player's own state: an item in use for 3 of 32 ticks.
-            let mut host = game.lan.take().unwrap();
-            game.as_guest(&mut host, 12, |game| {
+            game.as_guest(12, |game| {
                 let player = game.native_living(game.native_entity(12).unwrap()).unwrap();
                 assert_eq!(game.native_living_arrow_count(player), Some(4));
                 game.using = Some((0, 3));
@@ -415,7 +412,6 @@ mod tests {
                 levels: game.level_shapes,
             };
             game.lan_host(settings, net, config).unwrap();
-            let mut host = game.lan.take().unwrap();
             let (tx, rx) = std::sync::mpsc::channel();
             let mut guest = Guest::new(
                 Joined {
@@ -434,7 +430,7 @@ mod tests {
                 10,
             );
             guest.placed = true;
-            host.hub.guests.push(guest);
+            game.lan.as_mut().unwrap().hub.guests.push(guest);
             let kind = game
                 .res
                 .mob_types()
@@ -456,7 +452,7 @@ mod tests {
                     } else {
                         assert!(game.native_living_swing(zombie, hand, false));
                     }
-                    game.lan_flush_effects(&mut host);
+                    game.lan_flush_effects();
                     while let Ok(Out::Packet(body)) = rx.try_recv() {
                         let mut reader = horizon_protocol::buf::Reader::new(&body);
                         let id = reader.varint().unwrap();
@@ -468,7 +464,7 @@ mod tests {
                     }
                     // The swing runs on, so the next one is a new start.
                     game.mobs[0].ai.swing_time = 3;
-                    game.lan_flush_effects(&mut host);
+                    game.lan_flush_effects();
                     if natural {
                         break;
                     }

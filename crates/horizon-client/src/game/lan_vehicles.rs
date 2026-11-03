@@ -135,16 +135,12 @@ impl Game<'_> {
                 self.native_vehicle_moved(None, &kind, from, to);
                 continue;
             };
-            let Some(mut host) = self.lan.take() else {
-                continue;
-            };
             let hook = |game: &mut Self| game.native_vehicle_moved(Some(uuid), &kind, from, to);
             if self.lan_acting == Some(conn) {
                 hook(self);
             } else {
-                self.as_guest(&mut host, conn, hook);
+                self.as_guest(conn, hook);
             }
-            self.lan = Some(host);
         }
     }
 
@@ -216,7 +212,10 @@ impl Game<'_> {
 
     /// `Player.rideTick` for a server player, before its moves this tick:
     /// it stays in its seat, steers its minecart, or gets out.
-    pub(super) fn guest_vehicle_tick(&mut self, host: &mut LanHost, conn: u32) {
+    pub(super) fn guest_vehicle_tick(&mut self, conn: u32) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
             return;
         };
@@ -262,7 +261,7 @@ impl Game<'_> {
         }
         // Getting out goes through leave_guest, which tells the client and
         // teleports it (ServerPlayer.dismountTo).
-        let seat = self.as_guest(host, conn, |game| {
+        let seat = self.as_guest(conn, |game| {
             // A cushion does not move: the rider sits on it until it sneaks
             // (`Cushion.removePassenger` plays the get-up sound).
             if game.cushions.iter().any(|c| Some(c.id) == game.riding) {
@@ -293,7 +292,9 @@ impl Game<'_> {
             let p = game.player.as_ref()?.position;
             Some([p.x, p.y, p.z])
         });
-        if let Some(Some(at)) = seat {
+        if let Some(Some(at)) = seat
+            && let Some(host) = self.lan.as_mut()
+        {
             let g = &mut host.hub.guests[gi];
             g.previous_position = g.position;
             g.position = at;
@@ -302,7 +303,10 @@ impl Game<'_> {
 
     /// After an interaction: a player that got into a vehicle sits in it,
     /// and its last good vehicle position is where the vehicle is.
-    pub(super) fn guest_boarded(&mut self, host: &mut LanHost, conn: u32, before: Option<u32>) {
+    pub(super) fn guest_boarded(&mut self, conn: u32, before: Option<u32>) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
             return;
         };
@@ -335,6 +339,9 @@ impl Game<'_> {
                     .map(|c| (c.position, c.seat()))
             });
         if let Some((p, seat)) = at {
+            let Some(host) = self.lan.as_mut() else {
+                return;
+            };
             let g = &mut host.hub.guests[gi];
             g.vehicle_good = Some([p.x, p.y, p.z]);
             g.previous_position = g.position;
@@ -343,13 +350,15 @@ impl Game<'_> {
             return;
         }
         // An animal: the rider sits where `positionRider` puts it.
-        let seat = self.as_guest(host, conn, |game| {
+        let seat = self.as_guest(conn, |game| {
             game.position_rider();
             game.player
                 .as_ref()
                 .map(|p| [p.position.x, p.position.y, p.position.z])
         });
-        if let Some(Some(at)) = seat {
+        if let Some(Some(at)) = seat
+            && let Some(host) = self.lan.as_mut()
+        {
             let g = &mut host.hub.guests[gi];
             g.previous_position = g.position;
             g.position = at;
@@ -361,12 +370,10 @@ impl Game<'_> {
     /// saddled horse its rider drives goes where the client says, unless it
     /// moved too quickly or wrongly; then it stays, and the client is told
     /// where it is.
-    pub(super) fn guest_move_vehicle(
-        &mut self,
-        host: &mut LanHost,
-        conn: u32,
-        p: &play::MoveVehicleRequest,
-    ) {
+    pub(super) fn guest_move_vehicle(&mut self, conn: u32, p: &play::MoveVehicleRequest) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
             return;
         };
@@ -523,6 +530,9 @@ impl Game<'_> {
         b.yaw = p.yaw;
         b.on_ground = p.on_ground;
         let seat = self.player_boat_seat(i);
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let g = &mut host.hub.guests[gi];
         g.previous_position = g.position;
         g.position = [seat.x, seat.y, seat.z];
@@ -532,7 +542,10 @@ impl Game<'_> {
     /// boat has two seats, and only its first player passenger drives it. The
     /// window player sits first when it rides; of the server's players it is
     /// the one that got in first.
-    pub(super) fn guest_controls_vehicle(&self, host: &LanHost, conn: u32, vehicle: u32) -> bool {
+    pub(super) fn guest_controls_vehicle(&self, conn: u32, vehicle: u32) -> bool {
+        let Some(host) = self.lan.as_ref() else {
+            return false;
+        };
         if self.riding == Some(vehicle) {
             return false;
         }
@@ -547,14 +560,17 @@ impl Game<'_> {
     /// `handlePaddleBoat`: the paddles of the boat the player controls
     /// (`player.getControlledVehicle()`); a passenger in the second seat moves
     /// no paddle.
-    pub(super) fn guest_paddle_boat(&mut self, host: &LanHost, conn: u32, paddles: [bool; 2]) {
+    pub(super) fn guest_paddle_boat(&mut self, conn: u32, paddles: [bool; 2]) {
+        let Some(host) = self.lan.as_ref() else {
+            return;
+        };
         let vehicle = host
             .hub
             .guests
             .iter()
             .find(|g| g.conn == conn)
             .and_then(|g| g.vehicle);
-        let Some(vehicle) = vehicle.filter(|&v| self.guest_controls_vehicle(host, conn, v)) else {
+        let Some(vehicle) = vehicle.filter(|&v| self.guest_controls_vehicle(conn, v)) else {
             return;
         };
         if let Some(b) = self.boats.iter_mut().find(|b| b.id == vehicle) {

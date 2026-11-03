@@ -589,7 +589,7 @@ impl Game<'_> {
             return;
         };
         match (body, broke) {
-            (true, false) => m.extra.body_damage = stack.damage as i32,
+            (true, false) => m.extra.set_body_damage(stack.damage as i32),
             (true, true) => {
                 m.extra.set_body_stack(None);
             }
@@ -712,7 +712,7 @@ impl Game<'_> {
                 m.extra.set_body_stack(None);
                 true
             } else {
-                m.extra.body_damage = lost as i32;
+                m.extra.set_body_damage(lost as i32);
                 false
             }
         };
@@ -874,7 +874,7 @@ impl Game<'_> {
                     // A player's input this tick, and whether it steers.
                     "ridden": m.rider.map(|r| r.steer),
                     "controlled": horizon_client::mobs::equine::controlled(m),
-                    "saddled": m.extra.saddled,
+                    "saddled": m.extra.saddled(),
                     "enchants": horizon_client::mobs::gear::gear(m).map(|g| g.slots.iter().map(|s| s.iter().map(|(e, l)| format!("{e}:{l}")).collect::<Vec<_>>()).collect::<Vec<_>>()),
                     "ints": m.extra.ints,
                     "pois": [m.extra.home, m.extra.bed, m.extra.meeting],
@@ -896,7 +896,7 @@ impl Game<'_> {
                 // Set apart: one json! with every key goes past the default macro recursion
                 // limit, and horizon-client can't raise it (#8169).
                 state["head"] = m.extra.head.as_deref().into();
-                state["body"] = m.extra.body.as_deref().into();
+                state["body"] = m.extra.body_id().into();
                 state["warden"] = serde_json::json!(horizon_client::mobs::warden::describe(m));
                 state["villager"] = serde_json::json!(horizon_client::mobs::villager::ext(m).map(|e| serde_json::json!({
                     "food_level": e.food_level,
@@ -1465,16 +1465,8 @@ impl Game<'_> {
             // A guest's kill is theirs: their statistics, scores and
             // advancements (LivingEntity.die credits lastHurtByPlayer).
             let guest = killer.flatten().filter(|_| self.lan_acting.is_none());
-            let credited = guest.is_some_and(|conn| {
-                let Some(mut host) = self.lan.take() else {
-                    return false;
-                };
-                let done = self
-                    .as_guest(&mut host, conn, |g| g.credit_kill(m))
-                    .is_some();
-                self.lan = Some(host);
-                done
-            });
+            let credited =
+                guest.is_some_and(|conn| self.as_guest(conn, |g| g.credit_kill(m)).is_some());
             if !credited {
                 self.credit_kill(m);
             }
@@ -1603,13 +1595,9 @@ impl Game<'_> {
             e
         };
         if let Some(conn) = guest.filter(|_| self.lan_acting.is_none())
-            && let Some(mut host) = self.lan.take()
+            && let Some(entity) = self.as_guest(conn, |g| own(g))
         {
-            let entity = self.as_guest(&mut host, conn, |g| own(g));
-            self.lan = Some(host);
-            if let Some(entity) = entity {
-                return entity;
-            }
+            return entity;
         }
         own(self)
     }
@@ -1631,7 +1619,7 @@ impl Game<'_> {
     }
     fn killer_uuid(&mut self, conn: Option<u32>) -> Option<u128> {
         match conn {
-            // During that guest's own turn, the hub is out of `lan`.
+            // During that guest's own turn, the player in place has their UUID.
             Some(conn) if self.lan_acting != Some(conn) => {
                 Some(self.lan.as_ref()?.hub.guest(conn)?.uuid)
             }
@@ -2092,7 +2080,7 @@ impl Game<'_> {
         let options = ParticleOptions::simple(ParticleType::Explosion);
         self.particles
             .send_particles(&options, at, [0.0; 3], 0.0, 1);
-        self.lan_level_particles(None, &options, at, [0.0; 3], 0.0, 1, None);
+        self.lan_level_particles(&options, at, [0.0; 3], 0.0, 1, None);
     }
     /// `Entity.sendBubbleColumnParticles` at the top of the column block `pos`: two
     /// splashes and two bubbles over it, which the level random places, shown here
@@ -2113,19 +2101,11 @@ impl Game<'_> {
             let splash_options = ParticleOptions::simple(ParticleType::Splash);
             self.particles
                 .send_particles(&splash_options, splash, [0.0; 3], 1.0, 1);
-            self.lan_level_particles(None, &splash_options, splash, [0.0; 3], 1.0, 1, None);
+            self.lan_level_particles(&splash_options, splash, [0.0; 3], 1.0, 1, None);
             let bubble_options = ParticleOptions::simple(ParticleType::Bubble);
             self.particles
                 .send_particles(&bubble_options, bubble, [0.0, 0.01, 0.0], 0.2, 1);
-            self.lan_level_particles(
-                None,
-                &bubble_options,
-                bubble,
-                [0.0, 0.01, 0.0],
-                0.2,
-                1,
-                None,
-            );
+            self.lan_level_particles(&bubble_options, bubble, [0.0, 0.01, 0.0], 0.2, 1, None);
         }
     }
     /// A mob's projectile enters the level.
@@ -2180,7 +2160,7 @@ impl Game<'_> {
                     at,
                     count,
                     speed,
-                } => self.landing_dust(None, state, Vec3::new(at[0], at[1], at[2]), count, speed),
+                } => self.landing_dust(state, Vec3::new(at[0], at[1], at[2]), count, speed),
                 MobEvent::SquidCycle { mob, at } => self.lan_entity_event(mob as i32, 19, at),
                 MobEvent::RabbitHop { mob, at } => self.lan_entity_event(mob as i32, 1, at),
                 MobEvent::Drown { mob, at } => {
@@ -2208,7 +2188,7 @@ impl Game<'_> {
                         let options = horizon_client::particles::ParticleOptions::simple(ty);
                         self.particles
                             .send_particles(&options, at, spread, speed, count);
-                        self.lan_level_particles(None, &options, at, spread, speed, count, None);
+                        self.lan_level_particles(&options, at, spread, speed, count, None);
                     }
                 }
                 // The LAN packet has no item for a particle yet: the host's window only.
@@ -3426,12 +3406,7 @@ impl Game<'_> {
     /// it is bound to in `bindings` (game/lan_mobs.rs), else the host's
     /// player, so only the mobs whose binding is `conn` (`None` for the
     /// host's player) hear it.
-    pub(super) fn tell_neutral_mobs_player_died(
-        &mut self,
-        feet: [f64; 3],
-        conn: Option<u32>,
-        bindings: &horizon_client::fast_hash::FxHashMap<u32, u32>,
-    ) {
+    pub(super) fn tell_neutral_mobs_player_died(&mut self, feet: [f64; 3], conn: Option<u32>) {
         // A client of someone else's world has the server's mobs only to show.
         if self.remote.is_some() || !self.ui.rules.bool("forgive_dead_players") {
             return;
@@ -3442,8 +3417,11 @@ impl Game<'_> {
             Vec3::new(block[0] + 1.0, block[1] + 1.0, block[2] + 1.0),
         )
         .inflate(Vec3::new(32.0, 10.0, 32.0));
+        let Some(host) = self.lan.as_ref() else {
+            return;
+        };
         for m in self.mobs.iter_mut() {
-            if bindings.get(&m.id).copied() == conn && m.bounds().intersects(area) {
+            if host.mob_players.get(&m.id).copied() == conn && m.bounds().intersects(area) {
                 horizon_client::mobs::ai::forgive_dead_player(m);
             }
         }
@@ -4394,15 +4372,11 @@ impl Game<'_> {
         }
         for (owner, guest, at) in shoot_events {
             if let Some(conn) = guest.filter(|conn| self.lan_acting != Some(*conn)) {
-                let dispatched = if let Some(mut host) = self.lan.take() {
-                    let result = self.as_guest(&mut host, conn, |g| {
+                let dispatched = self
+                    .as_guest(conn, |g| {
                         g.projectile_event("minecraft:projectile_shoot", owner, at);
-                    });
-                    self.lan = Some(host);
-                    result.is_some()
-                } else {
-                    false
-                };
+                    })
+                    .is_some();
                 // An owner who left cannot resolve to the host. The event
                 // still occurs, with no resolved owner (Projectile.getOwner).
                 if !dispatched {
@@ -4463,20 +4437,17 @@ impl Game<'_> {
     /// `projectile_hit` for a projectile the guest `conn` shot, run as them;
     /// as the host's when they have left.
     fn guest_projectile_hit(&mut self, conn: u32, p: &Projectile, hit: Hit) -> Result<()> {
-        let Some(mut host) = self.lan.take() else {
-            return self.projectile_hit(p, hit);
-        };
-        let result = self.as_guest(&mut host, conn, |g| g.projectile_hit(p, hit));
+        let result = self.as_guest(conn, |g| g.projectile_hit(p, hit));
         // The mob hit now answers to the guest (LivingEntity.lastHurtByPlayer).
         if result.is_some()
             && let Hit::Entity {
                 who: Who::Mob(id), ..
             } = hit
             && self.mobs.iter().any(|m| m.id == id)
+            && let Some(host) = self.lan.as_mut()
         {
             host.mob_players.insert(id, conn);
         }
-        self.lan = Some(host);
         match result {
             Some(r) => r,
             None => self.projectile_hit(p, hit),
@@ -5982,7 +5953,7 @@ impl Game<'_> {
                 if item == "minecraft:shears"
                     && m.extra.tame
                     && m.extra.owner == Some(acting)
-                    && m.extra.body.is_some()
+                    && m.extra.body_id().is_some()
                     && !sneaking =>
             {
                 armor_drop = m.equipment_stacks()[6].clone();
@@ -6009,13 +5980,13 @@ impl Game<'_> {
                 if item == "minecraft:wolf_armor"
                     && m.extra.tame
                     && m.extra.owner == Some(acting)
-                    && m.extra.body.is_none()
+                    && m.extra.body_id().is_none()
                     && !m.is_baby() =>
             {
-                m.extra.body = Some(item.as_str().into());
-                m.extra.body_count = 0;
-                m.extra.body_damage = held_damage;
-                m.extra.body_extra = held_extra;
+                let mut body = ItemStack::new(item.as_str(), 1);
+                body.damage = held_damage.max(0) as u32;
+                body.extra = held_extra;
+                m.extra.set_body_stack(Some(body));
                 consume = true;
                 eat = Some(("item.armor.equip_wolf", 1.0, 1.0));
             }
@@ -6026,12 +5997,13 @@ impl Game<'_> {
                     && m.extra.tame
                     && m.extra.owner == Some(acting)
                     && m.extra.sitting
-                    && m.extra.body.is_some()
-                    && m.extra.body_damage > 0 =>
+                    && m.extra.body_id().is_some()
+                    && m.extra.body_damage() > 0 =>
             {
-                m.extra.body_damage = (m.extra.body_damage
-                    - (horizon_client::mobs::WOLF_ARMOR_DURABILITY as f32 * 0.125) as i32)
-                    .max(0);
+                m.extra.set_body_damage(
+                    m.extra.body_damage()
+                        - (horizon_client::mobs::WOLF_ARMOR_DURABILITY as f32 * 0.125) as i32,
+                );
                 consume = true;
                 eat = Some(("item.wolf_armor.repair", 1.0, 1.0));
             }

@@ -244,7 +244,7 @@ pub(super) fn mob_slot_item(m: &Mob, slot: Slot) -> Option<Arc<str>> {
         Slot::Legs => x.legs.clone(),
         Slot::Chest => x.chest.clone(),
         Slot::Head => x.head.clone(),
-        Slot::Body => x.body.clone(),
+        Slot::Body => x.body_stack().map(|s| s.item.clone()),
         Slot::Saddle => m.saddle_item().map(|s| s.item),
     }
 }
@@ -2109,7 +2109,7 @@ impl Game<'_> {
             .collect();
         for i in cubes {
             let m = &self.mobs[i];
-            if m.is_baby() || m.extra.body.as_deref() == Some(&*stack.item) {
+            if m.is_baby() || m.extra.body_id() == Some(&*stack.item) {
                 continue;
             }
             let (at, height) = (m.position, f64::from(m.height()));

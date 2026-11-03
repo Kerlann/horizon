@@ -262,12 +262,12 @@ pub fn controlled(m: &Mob) -> bool {
     };
     match m.species() {
         // Pig/Strider.getControllingPassenger: saddled, the rider holding the stick.
-        Species::Pig | Species::Strider => m.extra.saddled && r.steer,
+        Species::Pig | Species::Strider => m.extra.saddled() && r.steer,
         Species::HappyGhast => super::happy_ghast::controlled(m),
         Species::Nautilus | Species::ZombieNautilus => super::nautilus::controlled(m),
         // AbstractHorse.getControllingPassenger: saddled with a player on it. A
         // tamed skeleton horse (SkeletonTrapGoal only tames it) needs the saddle too.
-        _ => m.extra.saddled,
+        _ => m.extra.saddled(),
     }
 }
 /// `AbstractHorse`s (camels too, not llamas, which no player steers): the

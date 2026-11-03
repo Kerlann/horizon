@@ -534,12 +534,7 @@ impl Game<'_> {
         equipment[3] = slot(&m.extra.chest);
         equipment[4] = slot(&m.extra.legs);
         equipment[5] = slot(&m.extra.feet);
-        equipment[6] = m.extra.body.as_ref().map(|id| {
-            let mut armor = ItemStack::new(id, 1);
-            armor.damage = m.extra.body_damage.max(0) as u32;
-            armor.extra = m.extra.body_extra.clone();
-            item_view(&armor)
-        });
+        equipment[6] = m.extra.body_stack().map(item_view);
         EntityView {
             kind: m.kind.id.clone(),
             position: [m.position.x, m.position.y, m.position.z],

@@ -165,7 +165,7 @@ pub fn main() -> horizon_client::Result<()> {
                             Some(gear::HEAD)
                         }
                         "body" => {
-                            m.extra.body = item;
+                            m.extra.set_body(item);
                             None
                         }
                         "saddle" => {
