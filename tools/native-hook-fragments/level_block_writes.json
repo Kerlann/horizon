@@ -1,0 +1,18 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "level_set_block",
+      "target": "horizon_client::game::native_entity_refs::Game<'_>::native_level_set_block",
+      "receiver": "level"
+    },
+    {
+      "name": "level_destroy_block",
+      "target": "horizon_client::game::native_entity_refs::Game<'_>::native_level_destroy_block",
+      "receiver": "level"
+    }
+  ],
+  "rust_summary": "level block writes (`LevelRef::set_block`, `destroy_block`).",
+  "doc_summary": "`LevelRef::set_block` and `destroy_block` write blocks in the level in place. Bundles need \"hooks\": @API:level_block_writes@.",
+  "comments": ["crates/horizon-client/src/game/native_entity_refs.rs"]
+}

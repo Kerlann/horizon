@@ -358,6 +358,41 @@ pub enum NativeAuthority {
     RemoteClient,
 }
 
+/// Supported vanilla `Block.UPDATE_*` flags for a level block write.
+/// Horizon currently sends all writes to clients regardless of client flags.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NativeBlockUpdateFlags(i32);
+
+impl NativeBlockUpdateFlags {
+    /// No update flags.
+    pub const NONE: Self = Self(0);
+    /// Notify neighboring blocks.
+    pub const NEIGHBORS: Self = Self(1);
+    /// Skip neighbor shape updates.
+    pub const KNOWN_SHAPE: Self = Self(16);
+    /// Suppress drops caused by neighbor shape updates.
+    pub const SUPPRESS_DROPS: Self = Self(32);
+    /// The replacement is caused by a piston.
+    pub const MOVE_BY_PISTON: Self = Self(64);
+    /// Skip wire shape updates.
+    pub const SKIP_SHAPE_UPDATE_ON_WIRE: Self = Self(128);
+    /// Skip the removed block entity's side effects, including container spills.
+    pub const SKIP_BLOCK_ENTITY_SIDE_EFFECTS: Self = Self(256);
+    /// Skip the new block's on-place behavior.
+    pub const SKIP_ON_PLACE: Self = Self(512);
+    #[doc(hidden)]
+    pub fn bits(self) -> i32 {
+        self.0
+    }
+}
+
+impl std::ops::BitOr for NativeBlockUpdateFlags {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
 /// One open attempt of one world; it rejects a previous open's commands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NativeWorldEpoch(u64);
