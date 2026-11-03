@@ -256,18 +256,6 @@ impl Game<'_> {
         self.kill_target(Target::Mob(id));
         true
     }
-    /// Takes mob `id` out of the world with no death and no loot: false for no
-    /// such mob or another dimension. API 37.
-    pub(super) fn native_remove_mob(&mut self, dimension: &str, id: u32) -> bool {
-        if !self.native_mob_level(dimension) {
-            return false;
-        }
-        let Some(m) = self.mobs.iter_mut().find(|m| m.id == id && !m.removed) else {
-            return false;
-        };
-        m.removed = true;
-        true
-    }
     fn native_mob_of(&self, m: &horizon_client::mobs::Mob) -> NativeMob {
         NativeMob {
             id: m.id,

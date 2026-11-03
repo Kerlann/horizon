@@ -142,6 +142,19 @@ impl Slots {
             .iter()
             .all(|k| world.block_entities.contains_key(k))
     }
+    /// How many slots the block entities behind a block menu show now, a missing one none;
+    /// none for the ender chest's and a mod's chest menu, which no block holds.
+    pub fn block_slots(self, world: &World) -> Option<usize> {
+        match self {
+            Slots::Ender | Slots::Native => None,
+            _ => Some(
+                self.halves()
+                    .into_iter()
+                    .map(|k| shown(world, k).map_or(0, <[_]>::len))
+                    .sum(),
+            ),
+        }
+    }
     /// `Container.stillValid` for the guest: the block entities are there
     /// and the guest is within reach of each (`stillValidBlockEntity`). The
     /// ender chest's block is `at` (`PlayerEnderChestContainer.activeChest`).

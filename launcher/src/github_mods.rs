@@ -1,9 +1,9 @@
 //! Native mods installed from a GitHub link (docs/native-mods.md, "Install from GitHub"), so an
 //! author can ship a version without a registry pull request. The link names a repository (its
 //! latest release), a release tag, a branch or tag (`tree/`) or a commit. It is resolved through
-//! GitHub's public API to an exact **release asset** (a `.hnmod`, kept by its SHA-256) or an exact
-//! **commit** (the archive of that commit, whose mod folder is packed into a `.hnmod`), never to a
-//! branch that moves. The result passes the checks the registry's `.hnmod`s pass
+//! GitHub's public API to an exact **release asset** (a `.hmod`, kept by its SHA-256) or an exact
+//! **commit** (the archive of that commit, whose mod folder is packed into a `.hmod`), never to a
+//! branch that moves. The result passes the checks the registry's `.hmod`s pass
 //! (`horizon_mods::index::native::Bundle::read`) before anything is installed, and the origin is
 //! kept beside the file (`horizon-native-mods/<id>.origin.json`) for "check for updates".
 //!
@@ -144,10 +144,8 @@ pub struct Resolved {
     pub tag: Option<String>,
     /// The full commit: what the source link names, and what a commit install fetches.
     pub commit: String,
-    /// The release's `.hnmod`, installed as it is when there is one.
+    /// The release's `.hmod`, installed as it is when there is one.
     pub asset: Option<Asset>,
-    /// A release that ships only a content mod (`.hmod`): not supported here yet.
-    pub content_only: Option<String>,
 }
 
 impl Resolved {
@@ -236,8 +234,8 @@ fn default_head(api: Api, link: &Link) -> Result<String, String> {
     commit_of(api, link, branch)
 }
 
-/// The `.hnmod` of a release's JSON (and a lone `.hmod`, which is not installed here).
-fn assets(release: &serde_json::Value, link: &Link) -> (Option<Asset>, Option<String>) {
+/// The release's mod package, validated after download.
+fn assets(release: &serde_json::Value, link: &Link) -> Option<Asset> {
     let prefix = format!(
         "https://github.com/{}/{}/releases/download/",
         link.owner, link.repo
@@ -246,28 +244,22 @@ fn assets(release: &serde_json::Value, link: &Link) -> (Option<Asset>, Option<St
         .as_array()
         .map(Vec::as_slice)
         .unwrap_or_default();
-    let named = |ext: &'static str| {
-        list.iter()
-            .filter(move |a| a["name"].as_str().is_some_and(|n| n.ends_with(ext)))
-    };
-    let hnmod = named(".hnmod").find_map(|a| {
-        let url = a["browser_download_url"].as_str()?.to_owned();
-        let name = a["name"].as_str()?.to_owned();
-        // Only this repository's own release files.
-        url.starts_with(&prefix).then(|| Asset {
-            name,
-            url,
-            sha256: a["digest"]
-                .as_str()
-                .and_then(|d| d.strip_prefix("sha256:"))
-                .filter(|d| d.len() == 64)
-                .map(str::to_ascii_lowercase),
+    list.iter()
+        .filter(|a| a["name"].as_str().is_some_and(|n| n.ends_with(".hmod")))
+        .find_map(|a| {
+            let url = a["browser_download_url"].as_str()?.to_owned();
+            let name = a["name"].as_str()?.to_owned();
+            // Only this repository's own release files.
+            url.starts_with(&prefix).then(|| Asset {
+                name,
+                url,
+                sha256: a["digest"]
+                    .as_str()
+                    .and_then(|d| d.strip_prefix("sha256:"))
+                    .filter(|d| d.len() == 64)
+                    .map(str::to_ascii_lowercase),
+            })
         })
-    });
-    let hmod = named(".hmod")
-        .find_map(|a| a["name"].as_str().map(str::to_owned))
-        .filter(|_| hnmod.is_none());
-    (hnmod, hmod)
 }
 
 fn from_release(api: Api, link: &Link, release: &serde_json::Value) -> Result<Resolved, String> {
@@ -275,14 +267,13 @@ fn from_release(api: Api, link: &Link, release: &serde_json::Value) -> Result<Re
         .as_str()
         .ok_or("GitHub did not name the release's tag.")?
         .to_owned();
-    let (asset, content_only) = assets(release, link);
+    let asset = assets(release, link);
     Ok(Resolved {
         owner: link.owner.clone(),
         repo: link.repo.clone(),
         commit: commit_of(api, link, &tag)?,
         tag: Some(tag),
         asset,
-        content_only,
     })
 }
 
@@ -293,7 +284,6 @@ fn at_commit(commit: String, link: &Link) -> Resolved {
         tag: None,
         commit,
         asset: None,
-        content_only: None,
     }
 }
 
@@ -328,7 +318,7 @@ pub struct Origin {
     /// The release asset's name, when it came from one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub asset: Option<String>,
-    /// The SHA-256 of the installed `.hnmod`.
+    /// The SHA-256 of the installed `.hmod`.
     pub sha256: String,
 }
 
@@ -370,7 +360,7 @@ pub fn is_update(origin: &Origin, latest: &Resolved) -> bool {
     }
 }
 
-/// A mod ready to install: its `.hnmod` was read and checked, nothing run.
+/// A mod ready to install: its `.hmod` was read and checked, nothing run.
 #[derive(Clone, Debug)]
 pub struct Packed {
     pub id: String,
@@ -390,24 +380,25 @@ fn scratch(name: &str) -> PathBuf {
     native_mods::root().join("github").join(name)
 }
 
-/// Reads `bytes` as `.hnmod`, with the registry's checks, into a file `Packed` names.
+/// Reads `bytes` as `.hmod`, with the registry's checks, into a file `Packed` names.
 fn checked(bytes: &[u8], dir: &Path) -> Result<Packed, String> {
     let sum = sha256(bytes);
     fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let file = dir.join(format!("{}.hnmod", &sum[..16]));
+    let file = dir.join(format!("{}.hmod", &sum[..16]));
     fs::write(&file, bytes).map_err(|e| format!("{}: {e}", file.display()))?;
-    let bundle = format::Bundle::read(&file).inspect_err(|_| {
-        let _ = fs::remove_file(&file);
-    })?;
+    let facts = horizon_mods::index::inspect(&horizon_mods::index::Kind::NativeMod, &file)
+        .inspect_err(|_| {
+            let _ = fs::remove_file(&file);
+        })?;
     Ok(Packed {
-        id: bundle.manifest.id,
-        version: bundle.manifest.version,
+        id: facts.id.expect("native bundle has an id"),
+        version: facts.version.expect("native bundle has a version"),
         file,
         sha256: sum,
     })
 }
 
-/// Every mod folder under `root`: a `horizon-mixin.toml`, or an unpacked `.hnmod`
+/// Every mod folder under `root`: a `horizon-mixin.toml`, or an unpacked `.hmod`
 /// (`horizon-native.json`), the rules of `native-build <folder>`. A mod's folder is not searched
 /// further.
 pub fn find_mods(root: &Path) -> Result<Vec<Bundle>, String> {
@@ -466,9 +457,9 @@ fn walk_files(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> Resu
     Ok(())
 }
 
-/// The `.hnmod` of a mod folder, as bytes: its source (Rust, TOML and `data/`) with a manifest made
+/// The `.hmod` of a mod folder, as bytes: its source (Rust, TOML and `data/`) with a manifest made
 /// from its `horizon-mixin.toml`, which must pin the Horizon commit it was made for
-/// (`[compatibility] horizon_revision`). An unpacked `.hnmod` (`horizon-native.json`) keeps the
+/// (`[compatibility] horizon_revision`). An unpacked `.hmod` (`horizon-native.json`) keeps the
 /// pins and hook points its manifest names. The zip is the same for the same files.
 pub fn pack(bundle: &Bundle) -> Result<Vec<u8>, String> {
     let horizon = bundle.horizon.clone().filter(|h| format::revision(h)).ok_or_else(|| {
@@ -503,6 +494,27 @@ pub fn pack(bundle: &Bundle) -> Result<Vec<u8>, String> {
             put.push((format!("mixins/{}/{name}", bundle.id), bytes));
         }
     }
+    // An unpacked package may also contain content at its root. Preserve it when repacking.
+    if let Some(root) = bundle.dir.parent().and_then(Path::parent).filter(|root| {
+        root.join(format::MANIFEST).is_file()
+            && root.join(horizon_mods::manifest::MANIFEST).is_file()
+    }) {
+        let manifest = horizon_mods::manifest::MANIFEST;
+        put.push((
+            manifest.to_owned(),
+            fs::read(root.join(manifest)).map_err(|e| e.to_string())?,
+        ));
+        for dir in ["assets", "data"] {
+            if root.join(dir).is_dir() {
+                let mut content = Vec::new();
+                walk_files(root, &root.join(dir), &mut content)?;
+                for (name, path) in content {
+                    let bytes = fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+                    put.push((name, bytes));
+                }
+            }
+        }
+    }
     let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     let options = zip::write::SimpleFileOptions::default()
         .last_modified_time(zip::DateTime::default())
@@ -527,7 +539,7 @@ fn download(url: &str) -> Result<Vec<u8>, String> {
     Ok(body)
 }
 
-/// Downloads what `found` names and checks it: the release's `.hnmod` (its SHA-256 compared with
+/// Downloads what `found` names and checks it: the release's `.hmod` (its SHA-256 compared with
 /// GitHub's when it reports one), else the mods of the commit's archive, each packed. A repository
 /// of several mods gives several `Packed`. Nothing is installed.
 pub fn fetch(found: &Resolved) -> Result<Vec<Packed>, String> {
@@ -551,16 +563,10 @@ pub fn fetch(found: &Resolved) -> Result<Vec<Packed>, String> {
     let top = native_mods::unpack_archive(&url, &dir.join("source"), MAX_ARCHIVE)?;
     let mods = find_mods(&top)?;
     if mods.is_empty() {
-        return Err(match &found.content_only {
-            Some(file) => format!(
-                "{} ships {file}, a content mod: installing .hmod files from GitHub is not supported yet.",
-                found.label()
-            ),
-            None => format!(
-                "{} holds no native mod (a folder with horizon-mixin.toml, or an unpacked .hnmod).",
-                found.label()
-            ),
-        });
+        return Err(format!(
+            "{} holds no native mod (a folder with horizon-mixin.toml, or an unpacked .hmod).",
+            found.label()
+        ));
     }
     let packed: Result<Vec<Packed>, String> = mods
         .iter()
@@ -635,7 +641,7 @@ pub fn origins(home: &Path) -> Vec<Origin> {
 /// it came from. A mod from the registry or the player's own is never replaced; one from GitHub
 /// is (that is how it updates).
 pub fn install(home: &Path, found: &Resolved, packed: &Packed) -> Result<Origin, String> {
-    let target = home.join(INSTALLED).join(format!("{}.hnmod", packed.id));
+    let target = home.join(INSTALLED).join(format!("{}.hmod", packed.id));
     if target.exists() && origin(home, &packed.id).is_none() {
         return Err(format!(
             "{} is already installed and not from GitHub: remove it first.",
@@ -669,7 +675,7 @@ pub fn remove(home: &Path, id: &str) -> Result<bool, String> {
     }
     for path in [
         origin_path(home, id),
-        home.join(INSTALLED).join(format!("{id}.hnmod")),
+        home.join(INSTALLED).join(format!("{id}.hmod")),
     ] {
         if let Err(e) = fs::remove_file(&path) {
             if e.kind() != std::io::ErrorKind::NotFound {

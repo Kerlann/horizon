@@ -9,7 +9,8 @@
 //! it is, journaled: an abort puts it back, at every level of an item inside an item. A handler
 //! answering more than it was asked is a mod bug, named once, and the write aborts.
 use super::{
-    Capability, Direction, Hand, Host, ITEMS, ItemResource, ItemStack, ResourceHandler, Transaction,
+    Capability, Direction, ENTITY_ITEMS, Hand, Host, ITEMS, ItemResource, ItemStack, LevelRef,
+    MenuRef, MenuSlotBacking, ResourceHandler, Transaction,
 };
 use std::{collections::HashSet, fmt::Debug, marker::PhantomData, sync::Mutex};
 
@@ -23,11 +24,13 @@ pub enum ItemPlace {
     PlayerSlot { player: u128, slot: i32 },
     /// What a player holds in `hand` (`forPlayerInteraction`).
     PlayerHand { player: u128, hand: Hand },
-    /// The stack on a player's cursor in a menu (`forPlayerCursor`).
-    PlayerCursor { player: u128 },
+    /// The stack on the cursor of a player's open menu, `menu` (`forPlayerCursor`): nothing
+    /// once the menu is closed, replaced or its player gone.
+    PlayerCursor { menu: MenuRef },
     /// Slot `slot` of the block entity at `pos` as `side` reaches it, through its [`ITEMS`]
     /// handler (`forHandlerIndex`).
     BlockEntity {
+        level: LevelRef,
         pos: [i32; 3],
         side: Option<Direction>,
         slot: usize,
@@ -41,6 +44,12 @@ pub enum ItemPlace {
     /// Slot `slot` of the item at `parent`, through its [`ITEM_ITEMS`] handler: a backpack in a
     /// backpack.
     Nested { parent: Box<ItemPlace>, slot: usize },
+    /// Slot `slot` of a player's open menu, `menu`, a fork addition (NeoForge 26.3 has no
+    /// `ItemAccess` for a menu slot): the storage the slot shows ([`MenuRef::slot_backing`]),
+    /// its own slot only, under the slot's own rules first ([`MenuRef::slot_holds`],
+    /// [`MenuRef::slot_gives`]). Nothing where the menu is closed, replaced or its player gone;
+    /// nothing goes into or out of the crafting result.
+    MenuSlot { menu: MenuRef, slot: usize },
     /// A place a mod keeps, such as an accessory slot: read and written by the [`PlaceProvider`]
     /// it registered as `provider`, which alone knows what `key` means.
     Mod { provider: &'static str, key: u64 },
@@ -218,19 +227,25 @@ impl ItemPlace {
     /// The stack here, if any (`getResource` and `getAmount`).
     pub fn stack(&self, host: &mut dyn Host) -> Option<ItemStack> {
         match self {
-            ItemPlace::BlockEntity { pos, side, slot } => {
-                let handler = host.capability(&ITEMS, *pos, *side)?;
+            ItemPlace::BlockEntity {
+                level,
+                pos,
+                side,
+                slot,
+            } => {
+                let handler = level.capability(host, &ITEMS, *pos, *side)?;
                 let resource = handler.resource(host, *slot)?;
                 Some(resource.to_stack(handler.amount(host, *slot)))
             }
             ItemPlace::Nested { parent, slot } => {
-                let handler = host.item_capability(&ITEM_ITEMS, parent)?;
+                let handler = parent.capability(host, &ITEM_ITEMS)?;
                 let resource = handler.resource(host, *slot)?;
                 Some(resource.to_stack(handler.amount(host, *slot)))
             }
             ItemPlace::Mod { provider, key } => {
                 super::place_provider(provider)?.1.stack(host, *key)
             }
+            ItemPlace::MenuSlot { menu, slot } => menu.slot(host, *slot)?,
             _ => host.game_stack(self),
         }
         .filter(|stack| stack.count > 0)
@@ -297,10 +312,8 @@ impl ItemPlace {
                 false => Err(()),
             }
         };
-        let done = host.transaction(|host, tx| match self {
-            ItemPlace::Nested { parent, .. } => one_of(parent, host, tx, swap),
-            _ => swap(host, tx),
-        });
+        let done =
+            host.transaction(|host, tx| alone(self, host, tx, &mut |host, tx| swap(host, tx)));
         done.unwrap_or(0)
     }
 
@@ -315,19 +328,35 @@ impl ItemPlace {
         insert: bool,
     ) -> u32 {
         let _ = tx;
+        // A menu slot's own rules come before its storage's: `Slot.mayPlace` and
+        // `getMaxStackSize` for what goes in, `Slot.mayPickup` for what comes out.
+        let amount = match self {
+            ItemPlace::MenuSlot { menu, slot } if insert => {
+                let holds = menu.slot_holds(host, *slot, &resource.to_stack(1));
+                let room = holds.unwrap_or(0).saturating_sub(self.amount(host));
+                amount.min(room)
+            }
+            ItemPlace::MenuSlot { menu, slot } if menu.slot_gives(host, *slot) != Some(true) => 0,
+            _ => amount,
+        };
         if amount == 0 {
             return 0;
         }
-        // Through index `slot` of `handler`, then for an insert the whole handler, each in
-        // passes while one moves something (`Inventory.add`'s and NeoForge's loops: a handler
-        // may move less per call than it could): what `slot` doesn't take goes to the other
-        // indices (`forHandlerIndex`).
+        // Through index `slot` of `handler`, then for an insert that `spills` the whole handler,
+        // each in passes while one moves something (`Inventory.add`'s and NeoForge's loops: a
+        // handler may move less per call than it could): what `slot` doesn't take goes to the
+        // other indices (`forHandlerIndex`).
         let through = |handler: Capability<dyn ResourceHandler<ItemResource>>,
                        host: &mut dyn Host,
                        tx: &Transaction,
-                       slot: usize| {
+                       slot: usize,
+                       spills: bool| {
             let mut left = amount;
-            let passes: &[bool] = if insert { &[false, true] } else { &[false] };
+            let passes: &[bool] = if insert && spills {
+                &[false, true]
+            } else {
+                &[false]
+            };
             for &anywhere in passes {
                 while left > 0 {
                     let moved = match (insert, anywhere) {
@@ -344,13 +373,40 @@ impl ItemPlace {
             Ok(amount - left)
         };
         let moved = host.transaction(|host, tx| match self {
-            ItemPlace::BlockEntity { pos, side, slot } => {
-                let handler = host.capability(&ITEMS, *pos, *side).ok_or(())?;
-                through(handler, host, tx, *slot)
+            ItemPlace::BlockEntity {
+                level,
+                pos,
+                side,
+                slot,
+            } => {
+                let handler = level.capability(host, &ITEMS, *pos, *side).ok_or(())?;
+                through(handler, host, tx, *slot, true)
             }
             ItemPlace::Nested { parent, slot } => {
-                let handler = host.item_capability(&ITEM_ITEMS, parent).ok_or(())?;
-                through(handler, host, tx, *slot)
+                let handler = parent.capability(host, &ITEM_ITEMS).ok_or(())?;
+                through(handler, host, tx, *slot, true)
+            }
+            ItemPlace::MenuSlot { menu, slot } => {
+                let (handler, index) = match menu.slot_backing(host, *slot).ok_or(())? {
+                    MenuSlotBacking::Player(index) => {
+                        let player = menu.player.entity();
+                        (player.capability(host, &ENTITY_ITEMS), index)
+                    }
+                    MenuSlotBacking::BlockEntity { level, pos, slot } => {
+                        (level.capability(host, &ITEMS, pos, None), slot)
+                    }
+                    MenuSlotBacking::Entity { entity, slot } => {
+                        (entity.capability(host, &ENTITY_ITEMS), slot)
+                    }
+                    MenuSlotBacking::CraftResult => return Ok(0),
+                    _ => {
+                        return Ok(match insert {
+                            true => host.game_insert(self, resource.to_stack(amount), tx),
+                            false => host.game_extract(self, resource.to_stack(amount), tx),
+                        });
+                    }
+                };
+                through(handler.ok_or(())?, host, tx, index, false)
             }
             ItemPlace::Mod { provider, key } => {
                 let (owner, provider) = super::place_provider(provider).ok_or(())?;
@@ -370,6 +426,23 @@ impl ItemPlace {
             }),
         });
         moved.unwrap_or(0)
+    }
+}
+
+/// Runs `f` with each item `place` is inside alone in its place, the outermost first
+/// ([`one_of`] at every level): the writes `f` makes through them, however many, all reach the
+/// same one, which alone changes.
+fn alone(
+    place: &ItemPlace,
+    host: &mut dyn Host,
+    tx: &Transaction,
+    f: &mut dyn FnMut(&mut dyn Host, &Transaction) -> Result<u32, ()>,
+) -> Result<u32, ()> {
+    match place {
+        ItemPlace::Nested { parent, .. } => alone(parent, host, tx, &mut |host, tx| {
+            one_of(parent, host, tx, &mut *f)
+        }),
+        _ => f(host, tx),
     }
 }
 
@@ -402,34 +475,31 @@ fn one_of(
     Ok(moved)
 }
 
-impl dyn Host + '_ {
-    /// `key`'s handler for the item at `place`: the first provider to answer, of those mods
-    /// registered for its item `before_game`, the game's own, and the mods' others, each in
-    /// registration order.
-    pub fn item_capability<T: ?Sized + 'static>(
-        &mut self,
+impl ItemPlace {
+    /// `key`'s handler for the item here (`ItemAccess.getCapability`): the first provider to
+    /// answer, of those mods registered for its item `before_game`, the game's own, and the
+    /// mods' others, each in registration order.
+    pub fn capability<T: ?Sized + 'static>(
+        &self,
+        host: &mut dyn Host,
         key: &ItemCapabilityKey<T>,
-        place: &ItemPlace,
     ) -> Option<Capability<T>> {
-        let stack = place.stack(self)?;
+        let stack = self.stack(host)?;
         let mut game = None;
-        let parts = super::providers(true, key.name, self, |_| Some(stack.item.to_string()));
-        let answer = super::ask_providers::<super::ItemProvider<T>, T>(
-            parts,
-            self,
-            |provider, host| provider(host, place),
-            |host| {
-                game = key.default.and_then(|default| default(host, place, &stack));
-                game.is_some()
-            },
-        );
-        match answer {
-            super::Answer::Mod(found) => Some(found),
-            super::Answer::Game => game.map(|handler| Capability {
-                handler,
-                owner: None,
-            }),
-            super::Answer::Nobody => None,
-        }
+        let parts = super::providers(super::ProvidedBy::Item, key.name, host, |_| {
+            Some(&*stack.item)
+        });
+        super::answered(
+            super::ask_providers::<super::ItemProvider<T>, T>(
+                parts,
+                host,
+                |provider, host| provider(host, self),
+                |host| {
+                    game = key.default.and_then(|default| default(host, self, &stack));
+                    game.is_some()
+                },
+            ),
+            game,
+        )
     }
 }

@@ -374,6 +374,7 @@ thread_local! {
     /// inside itself (`LootContext.pushVisitedElement`).
     static NESTED_ROLLS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
+#[derive(Clone)]
 pub struct Items {
     pub items: HashMap<Arc<str>, ItemInfo>,
     pub order: Vec<Arc<str>>,
@@ -964,6 +965,11 @@ impl Items {
             enchantments: Arc::new(crate::enchant::Enchantments::load_with(root, overlay)),
         })
     }
+    /// Use the server's loaded loot-table snapshot for item and block drops.
+    pub fn set_loot_tables(&mut self, tables: Arc<horizon_world::loot::LootTables>) {
+        self.loot = tables;
+    }
+
     pub fn get(&self, id: &str) -> Option<&ItemInfo> {
         self.items.get(id)
     }

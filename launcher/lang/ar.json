@@ -554,7 +554,6 @@
   "Native build · {version}": "بناء أصلي · {version}",
   "On: every AI feature is hidden and off. The game opens no control socket, and horizon-ctl and the MCP servers refuse.": "مفعل: يتم إخفاء وتعطيل كل ميزات الذكاء الاصطناعي. لا تفتح اللعبة أي مقبس تحكم، وترفض خوادم horizon-ctl وخوادم MCP ذلك.",
   "the port": "المنفذ",
-  "The source of {source}. Its release ships {file}, a content mod: installing those from GitHub is not supported yet.": "مصدر {source}. يحتوي إصداره على {file}، وهو تعديل محتوى: تثبيت هذه التعديلات من جيت هاب غير مدعوم بعد.",
   "Build anyway": "البناء على أي حال",
   "A name, 3 to 16 letters": "اسم، من 3 إلى 16 حرفًا",
   "Installed {mods} from GitHub ({source}). Build it on the Mods page.": "تم تثبيت {mods} من جيت هاب ({source}). قم ببنائه في صفحة التعديلات.",

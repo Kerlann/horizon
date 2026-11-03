@@ -125,3 +125,107 @@ impl Game<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn discard_other_clears_nbt_and_saved_entity() {
+        use super::super::{commands::OtherEntity, native_entity_refs::tests::with_game};
+        use horizon_client::{chunk::Chunk, save::SaveDir};
+        use horizon_core::geometry::Vec3;
+        use horizon_world::nbt::{Compound, Tag};
+        use std::sync::Arc;
+
+        with_game(|game| {
+            let root = std::path::PathBuf::from(format!(
+                "target/discard-save-test-{}",
+                std::process::id()
+            ));
+            let _ = std::fs::remove_dir_all(&root);
+            let shape = game.save.shape;
+            game.save = Arc::new(SaveDir::new(root.clone(), shape));
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            game.others.push(OtherEntity {
+                id: 12,
+                kind: "minecraft:text_display".into(),
+                position: Vec3::new(1.0, 70.0, 1.0),
+                yaw: 0.0,
+                pitch: 0.0,
+            });
+            let mut tag = Compound::new();
+            tag.insert("teleport_duration".into(), Tag::Int(4));
+            game.persist.raw.insert(12, Tag::Compound(tag));
+            game.save_entities(true).unwrap();
+            assert_eq!(
+                SaveDir::new(root.clone(), shape).load_entities(0, 0).len(),
+                1
+            );
+            let entity = game.native_entity(12).unwrap();
+            assert!(entity.discard(game));
+            assert!(!entity.discard(game));
+            game.native_removals_flush();
+            assert!(!game.persist.raw.contains_key(&12));
+            game.save_entities(true).unwrap();
+            assert!(
+                SaveDir::new(root.clone(), shape)
+                    .load_entities(0, 0)
+                    .is_empty()
+            );
+            std::fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn discard_mob_and_refuse_players_and_stale_handles() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::{mobs::Mob, motion::PlayerMotion};
+        use horizon_core::geometry::Vec3;
+
+        with_game(|game| {
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:zombie")
+                .unwrap()
+                .clone();
+            game.mobs.push(Mob::new(12, kind, Vec3::ZERO, 0.0));
+            let mob = game.native_entity(12).unwrap();
+            assert!(mob.discard(game));
+            assert!(game.mobs[0].removed);
+            assert!(!mob.discard(game));
+            game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
+            game.lan_acting_uuid = Some(123);
+            game.lan_acting_entity = Some(20);
+            let player = game.native_entity(20).unwrap();
+            assert!(!player.discard(game));
+            assert!(game.player.is_some());
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn kill_command_forgets_other_entity_data() {
+        use super::super::{commands::OtherEntity, native_entity_refs::tests::with_game};
+        use horizon_core::geometry::Vec3;
+        use horizon_world::nbt::{Compound, Tag};
+
+        with_game(|game| {
+            game.others.push(OtherEntity {
+                id: 12,
+                kind: "minecraft:marker".into(),
+                position: Vec3::ZERO,
+                yaw: 0.0,
+                pitch: 0.0,
+            });
+            game.persist.raw.insert(12, Tag::Compound(Compound::new()));
+            game.ui.registries.permission = 4;
+            assert!(game.run_command("kill @e[type=minecraft:marker]"));
+            assert!(game.others.is_empty());
+            assert!(!game.persist.raw.contains_key(&12));
+        });
+    }
+}

@@ -12,7 +12,7 @@ pub(super) fn valid_id(id: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
-fn read(path: &Path) -> Result<toml::Table, String> {
+pub(super) fn read(path: &Path) -> Result<toml::Table, String> {
     let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     text.parse().map_err(|e| format!("{}: {e}", path.display()))
 }
@@ -105,10 +105,11 @@ fn main_rs(ids: &[&str], named: bool) -> String {
 #[global_allocator]
 static ALLOCATOR: horizon_threads::Allocator = horizon_threads::ALLOCATOR;
 
-static MOD_API_LEVEL: [u8; horizon_mods::api_level::MARK.len()] = horizon_mods::api_level::MARK;
+static GAME_IDENTITY: [u8; horizon_mods::game_identity::MARK.len()] =
+    horizon_mods::game_identity::MARK;
 
 fn main() {{
-    std::hint::black_box(&MOD_API_LEVEL);
+    std::hint::black_box(&GAME_IDENTITY);
     let mods: horizon_client::mod_api::Mods = vec![
 {entries}    ].into();
 {naming}    horizon_client::entry::main_with(mods);
@@ -359,6 +360,10 @@ mod tests {
             .unwrap();
         let generated = main_rs(&[], false);
         assert!(generated.lines().any(|line| line == allocator));
+        // Both executable shapes must retain the same identity for launcher imports.
+        for line in game.lines().filter(|line| line.contains("GAME_IDENTITY")) {
+            assert!(generated.lines().any(|other| other == line));
+        }
     }
 
     #[test]

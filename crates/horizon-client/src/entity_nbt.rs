@@ -736,6 +736,14 @@ pub fn mob_to_nbt(
                     Tag::compound([("id", string(armor)), ("count", Tag::Int(1))]),
                 ));
             }
+            // A helmet given to the mount (say by `/item ... armor.head`)
+            // keeps its own slot.
+            if let Some(helmet) = &m.extra.head {
+                equipment.push((
+                    "head",
+                    Tag::compound([("id", string(helmet)), ("count", Tag::Int(1))]),
+                ));
+            }
             if equipment.is_empty() {
                 map.remove(&"equipment".into());
             } else {
@@ -2187,6 +2195,7 @@ pub fn item_entity_from_nbt(tag: &Tag, id: u32, bob_offset: f32) -> Option<ItemE
     let stack = item_from_nbt(tag.get("Item")?)?;
     let position = position(tag)?;
     Some(ItemEntity {
+        join: Default::default(),
         no_gravity: flag(tag, "NoGravity"),
         health: number(tag.get("Health")).unwrap_or(5) as i32,
         fire_ticks: number(tag.get("Fire")).unwrap_or(0) as i32,
@@ -2290,6 +2299,7 @@ pub fn orbs_from_nbt(tag: &Tag) -> Vec<ExperienceOrb> {
     };
     let count = number(tag.get("Count")).unwrap_or(1).max(1) as u32;
     let orb = ExperienceOrb {
+        join: Default::default(),
         no_gravity: flag(tag, "NoGravity"),
         id: 0,
         position,
@@ -3479,6 +3489,99 @@ mod tests {
     use super::*;
     use crate::items::ItemStack;
 
+    /// A mount keeps its body armour and a helmet (say
+    /// `/item replace entity <horse> armor.head with minecraft:iron_helmet`)
+    /// in their own slots through a save: vanilla holds both (`equipment.body`
+    /// and `equipment.head`), one in each.
+    #[test]
+    fn a_horses_save_keeps_a_helmet_and_its_body_armour_apart() {
+        let mut kind = crate::mobs::sensor_scan_tests::kind();
+        let ty = Arc::make_mut(&mut kind);
+        ty.id = "minecraft:horse".into();
+        ty.species = crate::mobs::Species::Horse;
+        let types = [("minecraft:horse".into(), kind)].into();
+        let raw = Tag::compound([
+            ("id", string("minecraft:horse")),
+            ("Pos", doubles(&[4.5, 220.0, 4.5])),
+            ("Tame", Tag::Byte(1)),
+            (
+                "equipment",
+                Tag::compound([
+                    (
+                        "body",
+                        Tag::compound([
+                            ("id", string("minecraft:diamond_horse_armor")),
+                            ("count", Tag::Int(1)),
+                        ]),
+                    ),
+                    (
+                        "head",
+                        Tag::compound([
+                            ("id", string("minecraft:iron_helmet")),
+                            ("count", Tag::Int(1)),
+                        ]),
+                    ),
+                ]),
+            ),
+        ]);
+        let m = mob_from_nbt(&raw, &types, 1, None).unwrap();
+        assert_eq!(
+            m.extra.body.as_deref(),
+            Some("minecraft:diamond_horse_armor")
+        );
+        assert_eq!(m.extra.head.as_deref(), Some("minecraft:iron_helmet"));
+        let saved = mob_to_nbt(&m, [0; 4], Some(&raw), None);
+        let eq = saved.get("equipment").unwrap();
+        let id = |key: &str| {
+            eq.get(key)
+                .and_then(|i| text(i.get("id")))
+                .unwrap_or_default()
+        };
+        assert_eq!(id("body"), "minecraft:diamond_horse_armor");
+        assert_eq!(id("head"), "minecraft:iron_helmet");
+    }
+
+    /// A wolf loads its armor (`equipment.body`) into the body slot with the
+    /// durability it lost, and a helmet next to it into the head slot.
+    #[test]
+    fn a_wolfs_save_keeps_its_armour_and_a_helmet_apart() {
+        let mut kind = crate::mobs::sensor_scan_tests::kind();
+        let ty = Arc::make_mut(&mut kind);
+        ty.id = "minecraft:wolf".into();
+        ty.species = crate::mobs::Species::Wolf;
+        let types = [("minecraft:wolf".into(), kind)].into();
+        let armor = Tag::compound([
+            ("id", string("minecraft:wolf_armor")),
+            ("count", Tag::Int(1)),
+            (
+                "components",
+                Tag::compound([("minecraft:damage", Tag::Int(9))]),
+            ),
+        ]);
+        let raw = Tag::compound([
+            ("id", string("minecraft:wolf")),
+            ("Pos", doubles(&[4.5, 220.0, 4.5])),
+            ("Owner", Tag::IntArray([0; 4].to_vec())),
+            (
+                "equipment",
+                Tag::compound([
+                    ("body", armor),
+                    (
+                        "head",
+                        Tag::compound([
+                            ("id", string("minecraft:iron_helmet")),
+                            ("count", Tag::Int(1)),
+                        ]),
+                    ),
+                ]),
+            ),
+        ]);
+        let m = mob_from_nbt(&raw, &types, 1, None).unwrap();
+        assert_eq!(m.extra.body.as_deref(), Some("minecraft:wolf_armor"));
+        assert_eq!(m.extra.body_damage, 9);
+        assert_eq!(m.extra.head.as_deref(), Some("minecraft:iron_helmet"));
+    }
+
     fn fused_creeper(fuse: Option<i16>) -> (Mob, Tag) {
         let mut kind = crate::mobs::sensor_scan_tests::kind();
         let ty = Arc::make_mut(&mut kind);
@@ -3899,6 +4002,7 @@ mod tests {
     #[test]
     fn item_entities_round_trip() {
         let e = ItemEntity {
+            join: Default::default(),
             no_gravity: false,
             health: 2,
             fire_ticks: 73,
@@ -4004,6 +4108,7 @@ mod tests {
     #[test]
     fn orbs_keep_their_count() {
         let o = ExperienceOrb {
+            join: Default::default(),
             no_gravity: false,
             id: 0,
             position: Vec3::new(1.0, 2.0, 3.0),

@@ -687,6 +687,28 @@ mod tests {
         (sync, entry)
     }
 
+    #[test]
+    fn content_recipe_unlock_sends_a_display() {
+        let root = resources("content_display", &[]);
+        std::fs::write(
+            root.join(horizon_items::content_namespaces::MARKER),
+            br#"["example"]"#,
+        )
+        .unwrap();
+        let dir = root.join("data/example/recipe");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("test.json"), r#"{"type":"minecraft:crafting_shaped","pattern":["X"],"key":{"X":"minecraft:raw_copper"},"result":{"id":"minecraft:copper_ingot"}}"#).unwrap();
+        let (sync, display) = entry(&root, "example:test");
+        assert_eq!(display.id, 0);
+        assert_eq!(
+            display.requirements,
+            Some(vec![HolderSet::Items(vec![
+                sync.id("minecraft:item", "minecraft:raw_copper").unwrap()
+            ])])
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     /// A shaped recipe whose key uses one of NeoForge's ingredient shapes
     /// reaches the client with the shape's items, not an empty list.
     #[test]

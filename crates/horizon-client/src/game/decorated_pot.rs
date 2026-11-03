@@ -74,10 +74,7 @@ impl Game<'_> {
                 ("z", Tag::Int(pos[2])),
             ])
         });
-        let loot = horizon_client::structure_blocks::loot_data(
-            &self.options.resources,
-            &self.pack_files(),
-        );
+        let loot = self.server_loot.get();
         unpack_loot(
             &mut tag,
             loot.as_deref(),

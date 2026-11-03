@@ -219,18 +219,6 @@ impl Game<'_> {
         display.write(c);
         true
     }
-    /// Removes entity `id`, one Horizon keeps without simulating, as `/kill`
-    /// does (it drops nothing and isn't saved). False for no such entity or
-    /// another dimension. Mobs go with `native_remove_mob`. API
-    /// 59.
-    pub(super) fn native_remove_entity(&mut self, dimension: &str, id: u32) -> bool {
-        if !self.native_simulates_level(dimension) || !self.others.iter().any(|o| o.id == id) {
-            return false;
-        }
-        self.others.retain(|o| o.id != id);
-        self.persist.raw.remove(&id);
-        true
-    }
 }
 
 /// The entities the walk does not hold: Horizon keeps these in lists of their own.

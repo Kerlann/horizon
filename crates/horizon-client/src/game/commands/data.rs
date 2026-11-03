@@ -388,6 +388,17 @@ impl Game<'_> {
             | Target::Other(id)
             | Target::Fangs(id)
             | Target::Cloud(id) => Some(self.persist.raw.entry(id).or_insert_with(empty)),
+            // `tags_of` reads these two from the same map and a falling
+            // block from its saved compound; without these arms `/tag`
+            // wrote nothing and still reported success.
+            Target::Rocket(id) | Target::Trident(id) => {
+                Some(self.persist.raw.entry(id).or_insert_with(empty))
+            }
+            Target::Falling(id) => {
+                let uuid = self.uuid_for(id);
+                let f = self.falling.iter_mut().find(|f| f.id == id)?;
+                Some(&mut f.saved.get_or_insert_with(|| Box::new((uuid, empty()))).1)
+            }
             _ => None,
         }
     }
@@ -483,17 +494,8 @@ impl Game<'_> {
             DataRef::Entity(t) => self.apply_entity_nbt(*t, tag),
             DataRef::Block(p) => {
                 let key = (p[0], p[1], p[2]);
-                if let Some((_, mut new)) = save::decode_block_entity(&tag) {
-                    self.take_loot_table(key, &tag, &mut new);
-                    self.world.block_entities.insert(key, new);
-                    self.world.set_block_lock(key, &tag);
-                    self.update_spawner_display(key);
-                    // BlockDataAccessor.setData: setChanged and sendBlockUpdated(3),
-                    // even when the block state itself stays the same.
-                    self.mark_block_entity_updated(key);
-                    let state = self.world.block(p[0], p[1], p[2]);
-                    // Redraw what shows the block entity (signs, banners).
-                    let _ = self.world.set(p[0], p[1], p[2], state);
+                if self.load_block_entity_data(key, &tag) {
+                    self.block_entity_updated(key);
                 }
                 Ok(())
             }
@@ -502,6 +504,30 @@ impl Game<'_> {
                 Ok(())
             }
         }
+    }
+    /// `BlockEntity.loadWithComponents` for the block entity at `key` from its full saved
+    /// `tag` (id and position included): false when the tag doesn't decode.
+    pub(in crate::game) fn load_block_entity_data(
+        &mut self,
+        key: (i32, i32, i32),
+        tag: &Tag,
+    ) -> bool {
+        let Some((_, mut new)) = save::decode_block_entity(tag) else {
+            return false;
+        };
+        self.take_loot_table(key, tag, &mut new);
+        self.world.block_entities.insert(key, new);
+        self.world.set_block_lock(key, tag);
+        self.update_spawner_display(key);
+        true
+    }
+    /// What `BlockDataAccessor.setData` tells the world after a load: `setChanged` and
+    /// `sendBlockUpdated(3)`, even when the block state stays the same.
+    pub(in crate::game) fn block_entity_updated(&mut self, key: (i32, i32, i32)) {
+        self.mark_block_entity_updated(key);
+        let state = self.world.block(key.0, key.1, key.2);
+        // Redraw what shows the block entity (signs, banners).
+        let _ = self.world.set(key.0, key.1, key.2, state);
     }
     fn data_name(&self, r: &DataRef) -> Text {
         match r {

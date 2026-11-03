@@ -53,6 +53,10 @@ Install a game program you have, such as a horizon-client built on your fork's A
 - `PATH`: The program (horizon-client, horizon-client.exe on Windows), or a zip holding it
 - `--trust-unsigned`: You picked this build yourself and trust it with full access to this computer
 
+The program must match this computer's executable format and carry the exact `horizon-game-executable;`
+identity signature embedded by ordinary and launcher-generated games. It carries no mod API level or build id,
+and is not a signature of authenticity. Unmarked programs and retired WIT API-level markers are refused.
+
 MCP: none: the player's switch.
 
 ## `horizon-launcher prepare`
@@ -99,7 +103,7 @@ Native mods (docs/native-mods.md): compile mixin bundles on the Horizon revision
 
     horizon-launcher native-build [FOLDER]
 
-- `FOLDER`: A mod folder (horizon-mixin.toml, or an unpacked .hnmod), or a folder of them (default: the native mods installed and turned on in the instance)
+- `FOLDER`: A mod folder (horizon-mixin.toml, or an unpacked .hmod), or a folder of them (default: the native mods installed and turned on in the instance)
 - `--server-output`: Export mode: build a standalone dedicated-server engine into this folder instead of an instance's build. Needs a mod FOLDER; no instance is read or changed, and no launcher config is written
 - `--instance`: The instance whose installed native mods to build, and which then plays the build (default: the selected one)
 - `--update`: Move to the newest installed release or Nightly instead of the Horizon the instance plays (a full rebuild)

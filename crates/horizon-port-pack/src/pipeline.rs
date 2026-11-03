@@ -245,9 +245,7 @@ pub fn loadable(mods: &[std::path::PathBuf]) -> (Vec<std::path::PathBuf>, Vec<St
     let mut on: Vec<(std::path::PathBuf, String, Vec<String>)> = Vec::new();
     let mut off = Vec::new();
     for path in mods {
-        let manifest = fs::read_to_string(path.join(horizon_mods::manifest::MANIFEST))
-            .map_err(|e| e.to_string())
-            .and_then(|t| horizon_mods::Manifest::parse(&t));
+        let manifest = horizon_mods::Package::read(path).map(|package| package.manifest);
         let m = match manifest {
             Ok(m) => m,
             Err(e) => {
@@ -425,6 +423,14 @@ mod tests {
         assert_eq!(on, [mods[0].clone(), mods[2].clone()]);
         assert_eq!(off.len(), 1);
         assert!(off[0].starts_with("betterfortresses not loaded"), "{off:?}");
+        // An invalid first package must not claim the shared namespace.
+        let asset = mods[0].join("assets/betterdungeons/model.bin");
+        fs::create_dir_all(asset.parent().unwrap()).unwrap();
+        fs::write(asset, b"\0asm").unwrap();
+        let (on, off) = loadable(&mods);
+        assert_eq!(on, [mods[1].clone(), mods[2].clone()]);
+        assert_eq!(off.len(), 1);
+        assert!(off[0].contains("unsupported executable file"), "{off:?}");
         fs::remove_dir_all(&root).unwrap();
     }
 }

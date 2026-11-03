@@ -4,7 +4,7 @@
 //! host, so a handler may look up and call a neighbour's capability (a pipe), and it keeps its
 //! state where the game keeps the block entity's (its slots, its saved compound, its
 //! attachments).
-use super::{Direction, Host, ItemResource, ResourceHandler, Transaction};
+use super::{Direction, Host, ItemResource, LevelRef, ResourceHandler, Transaction};
 use std::{fmt::Debug, marker::PhantomData, ops::Deref};
 
 /// A capability: its name (`horizon:items`, `mymod:chemicals`), the handler trait `T` it answers
@@ -15,10 +15,11 @@ pub struct CapabilityKey<T: ?Sized + 'static> {
     pub(super) handler: PhantomData<fn() -> Box<T>>,
 }
 
-/// A block entity a capability is asked of, and the side it is reached through (none: from no
-/// particular side): NeoForge's block capability context.
+/// A block entity a capability is asked of, by its level and position, and the side it is
+/// reached through (none: from no particular side): NeoForge's block capability context.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BlockSide {
+    pub level: LevelRef,
     pub pos: [i32; 3],
     pub side: Option<Direction>,
 }
@@ -72,7 +73,7 @@ impl<T: ?Sized + 'static> CapabilityKey<T> {
 pub const ITEMS: CapabilityKey<dyn ResourceHandler<ItemResource>> = CapabilityKey {
     name: "horizon:items",
     default: Some(|host, at| {
-        host.container_size(at.pos, None)
+        host.container_size(at)
             .map(|_| Box::new(GameItems(at)) as Box<dyn ResourceHandler<ItemResource>>)
     }),
     handler: PhantomData,
@@ -83,18 +84,18 @@ pub const ITEMS: CapabilityKey<dyn ResourceHandler<ItemResource>> = CapabilityKe
 struct GameItems(BlockSide);
 impl ResourceHandler<ItemResource> for GameItems {
     fn size(&self, host: &mut dyn Host) -> usize {
-        host.container_size(self.0.pos, self.0.side).unwrap_or(0)
+        host.container_size(self.0).unwrap_or(0)
     }
     fn resource(&self, host: &mut dyn Host, index: usize) -> Option<ItemResource> {
-        let stack = host.container_stack(self.0.pos, self.0.side, index)?;
+        let stack = host.container_stack(self.0, index)?;
         Some(ItemResource::of(&stack))
     }
     fn amount(&self, host: &mut dyn Host, index: usize) -> u32 {
-        host.container_stack(self.0.pos, self.0.side, index)
+        host.container_stack(self.0, index)
             .map_or(0, |stack| stack.count)
     }
     fn capacity(&self, host: &mut dyn Host, index: usize, resource: &ItemResource) -> u32 {
-        host.container_capacity(self.0.pos, self.0.side, index, &resource.to_stack(1))
+        host.container_capacity(self.0, index, &resource.to_stack(1))
     }
     fn insert(
         &self,
@@ -105,7 +106,7 @@ impl ResourceHandler<ItemResource> for GameItems {
         amount: u32,
     ) -> u32 {
         let stack = resource.to_stack(amount);
-        let rest = host.container_insert(self.0.pos, self.0.side, index, stack, tx);
+        let rest = host.container_insert(self.0, index, stack, tx);
         amount - rest.map_or(0, |rest| rest.count.min(amount))
     }
     fn extract(
@@ -116,44 +117,60 @@ impl ResourceHandler<ItemResource> for GameItems {
         resource: &ItemResource,
         amount: u32,
     ) -> u32 {
-        let held = host.container_stack(self.0.pos, self.0.side, index);
+        let held = host.container_stack(self.0, index);
         if !held.is_some_and(|held| resource.matches(&held)) {
             return 0;
         }
-        host.container_extract(self.0.pos, self.0.side, index, amount, tx)
+        host.container_extract(self.0, index, amount, tx)
             .map_or(0, |out| out.count.min(amount))
     }
 }
 
-impl dyn Host + '_ {
-    /// `key`'s handler for the block entity at `pos`, reached through `side`: the first provider
-    /// to answer, of those mods registered for its type `before_game`, the game's own, and the
-    /// mods' others, each in registration order.
+impl LevelRef {
+    /// `key`'s handler for the block entity at `pos` in this level, reached through `side`
+    /// (`Level.getCapability`): the first provider to answer, of those mods registered for its
+    /// type `before_game`, the game's own, and the mods' others, each in registration order. None
+    /// for a stale handle, and for a level not in place ([`LevelRef::in_place`]), whose block
+    /// entities the game doesn't write: no provider is asked for one.
     pub fn capability<T: ?Sized + 'static>(
-        &mut self,
+        self,
+        host: &mut dyn Host,
         key: &CapabilityKey<T>,
         pos: [i32; 3],
         side: Option<Direction>,
     ) -> Option<Capability<T>> {
-        let at = BlockSide { pos, side };
-        let mut game = None;
-        let parts = super::providers(false, key.name, self, |host| host.block_entity_type(pos));
-        let answer = super::ask_providers::<super::BlockProvider<T>, T>(
-            parts,
-            self,
-            |provider, host| provider(host, at),
-            |host| {
-                game = key.default.and_then(|default| default(host, at));
-                game.is_some()
-            },
-        );
-        match answer {
-            super::Answer::Mod(found) => Some(found),
-            super::Answer::Game => game.map(|handler| Capability {
-                handler,
-                owner: None,
-            }),
-            super::Answer::Nobody => None,
+        if !self.in_place(host) {
+            return None;
         }
+        let at = BlockSide {
+            level: self,
+            pos,
+            side,
+        };
+        let mut game = None;
+        let parts = super::providers(super::ProvidedBy::BlockEntity, key.name, host, |host| {
+            at.kind(host)
+        });
+        super::answered(
+            super::ask_providers::<super::BlockProvider<T>, T>(
+                parts,
+                host,
+                |provider, host| provider(host, at),
+                |host| {
+                    game = key.default.and_then(|default| default(host, at));
+                    game.is_some()
+                },
+            ),
+            game,
+        )
+    }
+}
+
+impl BlockSide {
+    /// The type of the block entity here (`minecraft:chest`, `mymod:press`), which capability
+    /// providers are registered by.
+    pub(super) fn kind(self, host: &dyn Host) -> Option<&str> {
+        let entity = host.block_entity(self.level, self.pos)?;
+        host.block_entity_kind(entity)
     }
 }

@@ -607,16 +607,16 @@ pub fn block_entity_placeholder(entity: &crate::containers::BlockEntity) -> bool
 
 /// The block entity type ID for the block it sits in (a chest-like container
 /// is a chest, trapped chest or barrel).
-pub fn block_entity_id(e: &crate::containers::BlockEntity, block: &str) -> String {
+pub fn block_entity_id<'a>(e: &'a crate::containers::BlockEntity, block: &'a str) -> &'a str {
     match (e, block) {
         (
             crate::containers::BlockEntity::Chest(_),
             "minecraft:trapped_chest" | "minecraft:barrel" | "minecraft:dropper",
-        ) => block.to_owned(),
+        ) => block,
         (crate::containers::BlockEntity::Chest(_), b) if b.ends_with("shulker_box") => {
-            "minecraft:shulker_box".to_owned()
+            "minecraft:shulker_box"
         }
-        _ => e.id().to_owned(),
+        _ => e.id(),
     }
 }
 pub fn encode_block_entity(
@@ -641,7 +641,7 @@ pub fn encode_block_entity(
         _ => Compound::new(),
     };
     let mut entries = vec![
-        ("id", string(&block_entity_id(e, block))),
+        ("id", string(block_entity_id(e, block))),
         ("x", Tag::Int(p.0)),
         ("y", Tag::Int(p.1)),
         ("z", Tag::Int(p.2)),
@@ -838,6 +838,7 @@ fn roll_loaded_loot(
     biomes: &Biomes,
     tag: &Tag,
     be: &mut ((i32, i32, i32), crate::containers::BlockEntity),
+    loot: Option<&horizon_world::loot::LootData>,
 ) -> Option<RolledLoot> {
     let crate::containers::BlockEntity::Chest(slots) = &mut be.1 else {
         return None;
@@ -846,13 +847,13 @@ fn roll_loaded_loot(
     if slots.iter().any(Option::is_some) {
         return None;
     }
-    let loot = crate::structure_blocks::loaded_loot_data()?;
+    let loot = loot?;
     let (x, y, z) = be.0;
     let biome = &biomes.get(chunk.biome(x & 15, y, z & 15)).name;
     let seed = crate::structure_blocks::loot_seed(tag);
     Some(crate::structure_blocks::roll_container(
         slots,
-        Some(&loot),
+        Some(loot),
         table,
         seed,
         be.0,
@@ -1599,10 +1600,21 @@ pub fn decode_with(
     tables: Option<&SaveTables>,
     layout: ColumnLayout,
 ) -> Option<Chunk> {
+    decode_with_loot(root, registry, biomes, tables, layout, None)
+}
+
+fn decode_with_loot(
+    root: &NamedTag,
+    registry: &BlockRegistry,
+    biomes: &Biomes,
+    tables: Option<&SaveTables>,
+    layout: ColumnLayout,
+    loot: Option<&horizon_world::loot::LootData>,
+) -> Option<Chunk> {
     if text(root.tag.get("Status")).is_some_and(|s| s != "minecraft:full" && s != "full") {
         return None;
     }
-    decode_column(root, registry, biomes, tables, layout)
+    decode_column(root, registry, biomes, tables, layout, loot)
 }
 /// A full chunk with the light saved with it (`isLightOn`), as far terrain
 /// reads another client's cache of a server; `None` without its light.
@@ -1625,6 +1637,7 @@ fn decode_column(
     biomes: &Biomes,
     tables: Option<&SaveTables>,
     layout: ColumnLayout,
+    loot: Option<&horizon_world::loot::LootData>,
 ) -> Option<Chunk> {
     let tag = &root.tag;
     let Tag::Int(x) = tag.get("xPos")? else {
@@ -1750,7 +1763,7 @@ fn decode_column(
                     if let Some(name) = text(e.get("CustomName")) {
                         chunk.block_names.push((be.0, name));
                     }
-                    if let Some(rolled) = roll_loaded_loot(&chunk, biomes, e, &mut be) {
+                    if let Some(rolled) = roll_loaded_loot(&chunk, biomes, e, &mut be, loot) {
                         extras.rolled_loot.push(rolled);
                     }
                     extras.block_entity_sources.push((be.0, e.clone()));
@@ -1831,7 +1844,7 @@ pub fn decode_proto(
     if !(ChunkStatus::Terrain..ChunkStatus::Full).contains(&status) {
         return None;
     }
-    let mut column = decode_column(root, registry, biomes, tables, layout)?;
+    let mut column = decode_column(root, registry, biomes, tables, layout, None)?;
     column.block_entities.clear();
     let base = number(root.tag.get("yPos")).map_or(column.min_y(), |y| y as i32 * 16);
     if let Some(Tag::List(sections)) = root.tag.get("PostProcessing") {
@@ -2368,6 +2381,7 @@ pub struct SaveDir {
     outstanding: Arc<Outstanding>,
     /// Set by `Persistent` before the first load.
     pub tables: OnceLock<Arc<SaveTables>>,
+    loot: crate::structure_blocks::LootSnapshot,
     /// The dimension's skylight and height, from its folder name.
     pub shape: LevelShape,
     /// Which chunks each region file holds, for far terrain (`lod_saved`).
@@ -2465,12 +2479,18 @@ impl SaveDir {
             writer: Mutex::new(None),
             outstanding: Default::default(),
             tables: OnceLock::new(),
+            loot: Default::default(),
             shape,
             lod_regions: Default::default(),
             lod_decoded: Default::default(),
             datafix_context: OnceLock::new(),
         }
     }
+    /// Share the world's loot snapshot with this dimension's chunk readers.
+    pub fn set_loot_source(&mut self, loot: crate::structure_blocks::LootSnapshot) {
+        self.loot = loot;
+    }
+
     /// 26.3's TicketStorage: persistent tickets live in each dimension's
     /// data/minecraft/chunk_tickets.dat, with ChunkPos.CODEC's [x, z] int array.
     pub fn load_forced_chunks(&self) -> HashSet<(i32, i32)> {
@@ -2646,7 +2666,15 @@ impl SaveDir {
     pub fn load(&self, x: i32, z: i32, registry: &BlockRegistry, biomes: &Biomes) -> Option<Chunk> {
         let root = self.read_record("region", x, z)?;
         let tables = self.tables.get().map(|t| &**t);
-        let mut chunk = decode_with(&root, registry, biomes, tables, self.shape.column())?;
+        let loot = self.loot.get();
+        let mut chunk = decode_with_loot(
+            &root,
+            registry,
+            biomes,
+            tables,
+            self.shape.column(),
+            loot.as_deref(),
+        )?;
         load_light(&root.tag, &mut chunk, self.shape.sky_light);
         Some(chunk)
     }
@@ -2681,7 +2709,15 @@ impl SaveDir {
             root
         };
         let tables = self.tables.get().map(|t| &**t);
-        let mut chunk = decode_with(&root, registry, biomes, tables, self.shape.column())?;
+        let loot = self.loot.get();
+        let mut chunk = decode_with_loot(
+            &root,
+            registry,
+            biomes,
+            tables,
+            self.shape.column(),
+            loot.as_deref(),
+        )?;
         load_light(&root.tag, &mut chunk, self.shape.sky_light);
         // Without its saved light (`isLightOn`) it would need the light engine: not one for the far ring.
         chunk.light_loaded.then_some(chunk)
@@ -5077,10 +5113,9 @@ impl<G: ChunkGenerator> ChunkGenerator for Persistent<G> {
     }
     fn final_block_entities(
         &self,
-        proto: &crate::streaming::Proto,
-        writes: &[([i32; 3], u32)],
+        entries: &[(&crate::streaming::Proto, &[([i32; 3], u32)])],
     ) -> Vec<((i32, i32, i32), crate::chunk::block_entity::BlockEntity)> {
-        self.inner.final_block_entities(proto, writes)
+        self.inner.final_block_entities(entries)
     }
     fn decorate(&self, worker: &mut G::Worker, region: &mut [crate::streaming::Proto; 9]) {
         self.inner.decorate(worker, region);

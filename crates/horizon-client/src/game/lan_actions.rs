@@ -216,6 +216,8 @@ pub(super) struct GuestSwap {
         Option<u8>,
         Option<u32>,
     ),
+    /// Whether the outer turn is a fake player.
+    acting_fake: bool,
     /// That turn's `known_movement`.
     known_movement: Vec3,
     /// The packets queued for that guest.
@@ -576,6 +578,7 @@ impl Game<'_> {
             self.lan_acting_permission.replace(g.permission),
             self.lan_acting_entity.replace(g.entity_id as u32),
         );
+        let acting_fake = std::mem::replace(&mut self.lan_acting_fake, !g.participates_online());
         let packets = std::mem::take(&mut self.guest_packets);
         let entity_events = std::mem::take(&mut self.guest_entity_events);
         let cooldown_events = std::mem::take(&mut self.guest_cooldowns);
@@ -655,6 +658,7 @@ impl Game<'_> {
             marks,
             death_cause,
             acting,
+            acting_fake,
             known_movement,
             packets,
             entity_events,
@@ -757,6 +761,7 @@ impl Game<'_> {
             death_cause,
             combat,
             acting,
+            acting_fake,
             known_movement,
             packets,
             entity_events,
@@ -868,6 +873,7 @@ impl Game<'_> {
             self.lan_acting_permission,
             self.lan_acting_entity,
         ) = acting;
+        self.lan_acting_fake = acting_fake;
         self.known_movement = known_movement;
         play.death_cause = std::mem::replace(&mut self.ui.death_cause, death_cause);
         // An ender chest the guest opened: the menu shows their inventory
@@ -1020,6 +1026,8 @@ impl Game<'_> {
                 }));
             }
             let teleported = std::mem::take(&mut m.teleported);
+            let teleported_delta = m.teleported_delta;
+            m.teleported_delta = [false; 3];
             let moved: f64 = (0..3).map(|k| (at[k] - g.position[k]).powi(2)).sum();
             g.motion = Some(Box::new(m));
             // Entity.teleportTo takes a rider out of its vehicle.
@@ -1047,7 +1055,13 @@ impl Game<'_> {
                     g.previous_position = at;
                 }
             } else if moved > 0.0001 || teleported {
-                host.hub.teleport(i, Some(at));
+                // A command's teleport carries its relative axes as the
+                // packet's DELTA flags; any other move is absolute.
+                if teleported {
+                    host.hub.teleport_command(i, at, teleported_delta);
+                } else {
+                    host.hub.teleport(i, Some(at));
+                }
             }
         }
         let g = &mut host.hub.guests[i];
@@ -4015,6 +4029,21 @@ impl Game<'_> {
             );
             // LivingEntity.die: the death animation, the dying player included.
             host.hub.entity_event(id, 3, at);
+            // LivingEntity.die: the death is heard, and a sculk catalyst
+            // nearby takes the experience (before the loot is dropped), as it
+            // does for a mob.
+            let mut catalyst_xp = 0;
+            let consumed = self.catalyst_takes_experience(at, |_| {
+                catalyst_xp = reward;
+                catalyst_xp
+            });
+            // CatalystListener: with experience to take, the player who last
+            // hurt them gets KILL_MOB_NEAR_SCULK_CATALYST.
+            if consumed && catalyst_xp > 0 {
+                self.guest_catalyst_trigger(host, gi, conn, at);
+            }
+            // ServerPlayer.die: the drops, then the deathCount objectives, then
+            // the `deaths` statistic and the two timers it resets.
             self.as_guest(host, conn, |game| {
                 if let Some(eyes) = drops {
                     game.drop_inventory(eyes);
@@ -4041,7 +4070,121 @@ impl Game<'_> {
                     attacker,
                     reward as i32,
                 );
-                self.spawn_orbs(at, reward as u32);
+                if !consumed {
+                    self.spawn_orbs(at, reward as u32);
+                }
+            }
+        }
+    }
+
+    /// `SculkCatalystBlockEntity.CatalystListener`'s trigger on a player's
+    /// death: for the player the dying guest's combat record credits
+    /// (`LivingEntity.getKillCredit`), with the death's `killing_blow`.
+    fn guest_catalyst_trigger(&mut self, host: &mut LanHost, gi: usize, conn: u32, at: [f64; 3]) {
+        let now = self.world.game_time;
+        let combat = self.guest_combat.get(&conn);
+        let who = combat.and_then(|c| c.kill_credit(now)).and_then(|id| {
+            if self.lan_acting.is_none()
+                && self
+                    .player
+                    .as_ref()
+                    .is_some_and(|p| p.entity_id as u32 == id)
+            {
+                Some(None)
+            } else {
+                host.hub
+                    .guests
+                    .iter()
+                    .find(|g| g.entity_id as u32 == id)
+                    .map(|g| Some(g.conn))
+            }
+        });
+        let Some(who) = who else { return };
+        let (damage, attacker) = combat
+            .and_then(|c| c.killing_blow())
+            .unwrap_or_else(|| ("minecraft:player_attack".into(), None));
+        let g = &host.hub.guests[gi];
+        let view = horizon_client::advancements::EntityView {
+            kind: "minecraft:player".into(),
+            position: at,
+            sneaking: g.sneaking,
+            input_sneak: g.input & 32 != 0,
+            gamemode: Some(
+                match g.game_mode {
+                    1 => "creative",
+                    2 => "adventure",
+                    3 => "spectator",
+                    _ => "survival",
+                }
+                .into(),
+            ),
+            ..Default::default()
+        };
+        // The damage's causing entity: the player in place, another guest, or
+        // a mob (`DamageSource.getEntity`).
+        let source = attacker.and_then(|id| {
+            if self.lan_acting.is_none()
+                && self
+                    .player
+                    .as_ref()
+                    .is_some_and(|p| p.entity_id as u32 == id)
+            {
+                Some(self.player_entity())
+            } else {
+                host.hub
+                    .guests
+                    .iter()
+                    .find(|g| g.entity_id as u32 == id)
+                    .map(|g| horizon_client::advancements::EntityView {
+                        kind: "minecraft:player".into(),
+                        position: g.position,
+                        sneaking: g.sneaking,
+                        input_sneak: g.input & 32 != 0,
+                        ..Default::default()
+                    })
+                    .or_else(|| {
+                        self.mobs
+                            .iter()
+                            .find(|m| m.id == id)
+                            .map(|m| self.mob_entity(m))
+                    })
+            }
+        });
+        let projectile = match damage.as_str() {
+            "minecraft:arrow" => Some("minecraft:arrow"),
+            "minecraft:fireball" | "minecraft:small_fireball" => Some("minecraft:fireball"),
+            "minecraft:wither_skull" => Some("minecraft:wither_skull"),
+            "minecraft:fireworks" => Some("minecraft:firework_rocket"),
+            _ => None,
+        };
+        let blow = horizon_client::advancements::DamageView {
+            kind: damage,
+            // DamageSource.isDirect: the causing entity is the direct one.
+            is_direct: projectile.is_none(),
+            direct: match projectile {
+                Some(kind) => Some(horizon_client::advancements::EntityView {
+                    kind: kind.into(),
+                    position: at,
+                    ..Default::default()
+                }),
+                None => source.clone(),
+            },
+            source,
+            ..Default::default()
+        };
+        // CatalystListener: trigger(player, killedEntity, damageSource).
+        match who {
+            None => {
+                self.trigger_killed_as("minecraft:kill_mob_near_sculk_catalyst", &view, Some(&blow))
+            }
+            Some(kconn) => {
+                self.as_guest(host, kconn, |g| {
+                    g.trigger_killed_as(
+                        "minecraft:kill_mob_near_sculk_catalyst",
+                        &view,
+                        Some(&blow),
+                    );
+                });
             }
         }
     }
@@ -4568,6 +4711,21 @@ impl Game<'_> {
                         let source = horizon_client::settings::sound_source(name) as i32;
                         self.audio.play_unshared(name, Some(at), volume, pitch);
                         host.hub.sound(name, at, volume, pitch, source, Some(conn));
+                    }
+                }
+                // Player.causeFallDamage, mayfly: the mods hear the landing.
+                MotionEvent::Fall(horizon_client::landing::FallEvent::FlyableFall {
+                    distance,
+                    multiplier,
+                }) => {
+                    if let Some((uuid, id, name)) = host
+                        .hub
+                        .guest(conn)
+                        .map(|g| (g.uuid, g.entity_id, g.name.clone()))
+                    {
+                        self.as_guest(host, conn, |game| {
+                            game.native_player_flyable_fall(uuid, id, &name, distance, multiplier);
+                        });
                     }
                 }
                 MotionEvent::Fall(event) => self.landing_block_updates(&event),

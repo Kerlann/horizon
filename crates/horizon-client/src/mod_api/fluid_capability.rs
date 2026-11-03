@@ -1,7 +1,7 @@
 //! The fluid capability (arismoko/horizon#41 §7): [`FLUIDS`], as NeoForge 26.3's
 //! `Capabilities.Fluid.BLOCK`, in the shape of [`ITEMS`](super::ITEMS). Amounts are millibuckets:
 //! a bucket is 1000.
-use super::{Capability, CapabilityKey, Direction, Host};
+use super::{BlockSide, Capability, CapabilityKey, Direction, Host, LevelRef};
 use crate::item_data::StackData;
 use std::{
     collections::HashSet,
@@ -58,8 +58,8 @@ impl FluidStack {
 pub const FLUIDS: CapabilityKey<dyn FluidHandler> = CapabilityKey {
     name: "horizon:fluids",
     default: Some(|host, at| {
-        host.fluid_tank_count(at.pos, None)
-            .map(|_| Box::new(GameFluids) as Box<dyn FluidHandler>)
+        host.fluid_tank_count(at)
+            .map(|_| Box::new(GameFluids(at.level)) as Box<dyn FluidHandler>)
     }),
     handler: PhantomData,
 };
@@ -114,10 +114,19 @@ pub trait FluidHandler: Send + Sync + 'static {
 }
 
 /// The game's own [`FLUIDS`]: a mod block's tanks by its table's sides, and cauldrons.
-struct GameFluids;
+struct GameFluids(LevelRef);
+impl GameFluids {
+    fn at(&self, pos: [i32; 3], side: Option<Direction>) -> BlockSide {
+        BlockSide {
+            level: self.0,
+            pos,
+            side,
+        }
+    }
+}
 impl FluidHandler for GameFluids {
     fn tanks(&self, host: &dyn Host, at: [i32; 3], side: Option<Direction>) -> usize {
-        host.fluid_tank_count(at, side).unwrap_or(0)
+        host.fluid_tank_count(self.at(at, side)).unwrap_or(0)
     }
     fn fluid(
         &self,
@@ -126,7 +135,7 @@ impl FluidHandler for GameFluids {
         side: Option<Direction>,
         tank: usize,
     ) -> Option<FluidStack> {
-        host.fluid_tank(at, side, tank)
+        host.fluid_tank(self.at(at, side), tank)
     }
     fn capacity(
         &self,
@@ -136,7 +145,7 @@ impl FluidHandler for GameFluids {
         tank: usize,
         fluid: &FluidStack,
     ) -> u32 {
-        host.fluid_tank_capacity(at, side, tank, fluid)
+        host.fluid_tank_capacity(self.at(at, side), tank, fluid)
     }
     fn insert(
         &self,
@@ -147,7 +156,7 @@ impl FluidHandler for GameFluids {
         fluid: FluidStack,
         simulate: bool,
     ) -> Option<FluidStack> {
-        host.fluid_tank_insert(at, side, tank, fluid, simulate)
+        host.fluid_tank_insert(self.at(at, side), tank, fluid, simulate)
     }
     fn extract(
         &self,
@@ -158,7 +167,7 @@ impl FluidHandler for GameFluids {
         max: u32,
         simulate: bool,
     ) -> Option<FluidStack> {
-        host.fluid_tank_extract(at, side, tank, max, simulate)
+        host.fluid_tank_extract(self.at(at, side), tank, max, simulate)
     }
 }
 
@@ -245,72 +254,7 @@ impl End<'_> {
     }
 }
 
-/// `handler` at `at` gave `excess` from tank `tank` beyond what it was asked, or another fluid
-/// than its tank showed: a mod bug, warned once naming its mod. The excess goes back into that
-/// tank, else its others; what none of them takes is lost, with a warning naming that mod.
-fn give_back(
-    host: &mut dyn Host,
-    handler: &Capability<dyn FluidHandler>,
-    at: [i32; 3],
-    side: Option<Direction>,
-    tank: usize,
-    excess: FluidStack,
-) {
-    broken(handler, at, "gave");
-    let end = End { handler, at, side };
-    if let Some(lost) = end.back(host, tank, excess) {
-        log::warn!(
-            "Horizon: {} mB of {} given at {at:?} were lost: {}'s fluid handler gave other than \
-             it was asked",
-            lost.amount,
-            lost.fluid,
-            end.handler.owner()
-        );
-    }
-}
-
 impl dyn Host + '_ {
-    /// Drains up to `max` millibuckets out of `handler`'s tanks at `at`, through `side`: one
-    /// fluid, the first there, and none with components, as the API 54 helper names a fluid by
-    /// its id alone. What came out. A tank giving more than asked, or another fluid than it
-    /// showed, gives it back (`give_back`); the other fluid ends the drain.
-    pub(crate) fn drain_one_named_fluid(
-        &mut self,
-        handler: &Capability<dyn FluidHandler>,
-        at: [i32; 3],
-        side: Option<Direction>,
-        max: u32,
-    ) -> Option<FluidStack> {
-        let mut out: Option<FluidStack> = None;
-        for tank in 0..handler.tanks(self, at, side) {
-            let taken = out.as_ref().map_or(0, |out| out.amount);
-            let want = max - taken;
-            if want == 0 {
-                break;
-            }
-            let Some(there) = handler.fluid(self, at, side, tank) else {
-                continue;
-            };
-            let first = out.as_ref().unwrap_or(&there);
-            if there.has_components() || !there.same_fluid_same_components(first) {
-                continue;
-            }
-            let Some(got) = handler.extract(self, at, side, tank, want, false) else {
-                continue;
-            };
-            if !got.same_fluid_same_components(&there) {
-                give_back(self, handler, at, side, tank, got);
-                break;
-            }
-            if got.amount > want {
-                let excess = got.with_amount(got.amount - want);
-                give_back(self, handler, at, side, tank, excess);
-            }
-            out = Some(there.with_amount(taken + got.amount.min(want)));
-        }
-        out.filter(|out| out.amount > 0)
-    }
-
     /// Moves up to `max` millibuckets of one fluid from the block at `from`, through its side
     /// `from_side`, into the one at `to`, through `to_side`, by their [`FLUIDS`] handlers, in
     /// rounds shaped as NeoForge's `FluidUtil.tryFluidTransfer`, each source tank in turn
@@ -327,31 +271,18 @@ impl dyn Host + '_ {
     /// with a warning naming that mod: the one thing a broken handler can void.
     pub fn transfer_fluids(
         &mut self,
+        level: LevelRef,
         from: [i32; 3],
         from_side: Option<Direction>,
         to: [i32; 3],
         to_side: Option<Direction>,
         max: u32,
-    ) -> Option<FluidStack> {
-        self.transfer_fluids_where(from, from_side, to, to_side, max, &|_| true)
-    }
-
-    /// `transfer_fluids` of the fluids `keep` accepts: the API 55 move, which names a fluid by
-    /// its id, keeps those with components where they are.
-    pub(crate) fn transfer_fluids_where(
-        &mut self,
-        from: [i32; 3],
-        from_side: Option<Direction>,
-        to: [i32; 3],
-        to_side: Option<Direction>,
-        max: u32,
-        keep: &dyn Fn(&FluidStack) -> bool,
     ) -> Option<FluidStack> {
         if from == to {
             return None;
         }
-        let source_handler = self.capability(&FLUIDS, from, from_side)?;
-        let target_handler = self.capability(&FLUIDS, to, to_side)?;
+        let source_handler = level.capability(self, &FLUIDS, from, from_side)?;
+        let target_handler = level.capability(self, &FLUIDS, to, to_side)?;
         let source = End {
             handler: &source_handler,
             at: from,
@@ -383,7 +314,7 @@ impl dyn Host + '_ {
                 }
                 // Plan: what the source has, what the target takes of it, and a request both
                 // ends agree on, smaller each try, so it ends.
-                let Some(available) = extract(self, left, true).filter(|offer| keep(offer)) else {
+                let Some(available) = extract(self, left, true) else {
                     break;
                 };
                 if moved

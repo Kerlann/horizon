@@ -630,9 +630,28 @@ fn resolve_shapes<'a>(
     Ok(shapes)
 }
 
+/// A content farmland declaration names a block absent from the loaded registry.
+#[derive(Debug)]
+pub struct UnknownBaseBlock {
+    /// The farmland declaration.
+    pub block: String,
+    /// The missing base ID.
+    pub base: String,
+}
+impl std::fmt::Display for UnknownBaseBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: base_block {} is not a block", self.block, self.base)
+    }
+}
+impl std::error::Error for UnknownBaseBlock {}
+
+/// A block ID resolved against the complete content and vanilla registry.
+struct KnownBlock<'a>(&'a str);
+
 /// A block being added: its declaration and where its states go.
 struct NewBlock<'a> {
     decl: &'a Block,
+    base_block: Option<KnownBlock<'a>>,
     rename: Rename,
     /// The template's item, if it has one.
     item: Option<String>,
@@ -934,6 +953,10 @@ impl<'a> Plan<'a> {
             (names[start + len..].iter().all(|n| n != name))
                 .then_some(start as u32..(start + len) as u32)
         };
+        let declared_ids: BTreeSet<&str> = mods
+            .iter()
+            .flat_map(|m| m.content.blocks.iter().map(|b| b.id.as_str()))
+            .collect();
         let mut blocks = Vec::new();
         let mut next = names.len() as u32;
         let mut sorted: Vec<&ContentMod> = mods.iter().collect();
@@ -943,6 +966,19 @@ impl<'a> Plan<'a> {
             let mut declared: Vec<&Block> = m.content.blocks.iter().collect();
             declared.sort_by(|a, b| a.id.cmp(&b.id));
             for decl in declared {
+                let base_block = match decl.base_block.as_deref() {
+                    Some(base) if defaults.contains_key(base) || declared_ids.contains(base) => {
+                        Some(KnownBlock(base))
+                    }
+                    Some(base) => {
+                        return Err(UnknownBaseBlock {
+                            block: decl.id.clone(),
+                            base: base.to_owned(),
+                        }
+                        .into());
+                    }
+                    None => None,
+                };
                 if defaults.contains_key(&decl.id) {
                     return Err(format!("{}: {} is already a block", m.id, decl.id).into());
                 }
@@ -1088,6 +1124,7 @@ impl<'a> Plan<'a> {
                 }
                 blocks.push(NewBlock {
                     decl,
+                    base_block,
                     rename,
                     item: None,
                     shapes,
@@ -1441,6 +1478,12 @@ impl<'a> Plan<'a> {
                         {
                             *name = J::Str(wood.clone());
                         }
+                        if let Some(base) = &b.base_block {
+                            let field = v
+                                .at("fields/baseBlock")
+                                .ok_or("farmland template has no base block")?;
+                            *field = J::Str(base.0.to_owned());
+                        }
                         // A connecting block: the chorus plant's PipeBlock
                         // without its rules, joining the declared tag.
                         if let Some(tag) = &b.decl.connects_to {
@@ -1508,9 +1551,18 @@ impl<'a> Plan<'a> {
                     }
                 }
             }
-            "landing-definitions.json" | "worldgen/blocks/survival-rules.json" => {
-                self.names(doc, false)
+            "landing-definitions.json" => {
+                self.names(doc, false);
+                for b in &self.blocks {
+                    if let Some(base) = &b.base_block {
+                        let entry = doc
+                            .get_mut(&b.decl.id)
+                            .ok_or("farmland template has no landing definition")?;
+                        entry.set("base", J::Str(base.0.to_owned()));
+                    }
+                }
             }
+            "worldgen/blocks/survival-rules.json" => self.names(doc, false),
             "worldgen/blocks/survival-extra-definitions.json" => {
                 if let Some(map) = doc.at("ignition_odds") {
                     self.names(map, false);

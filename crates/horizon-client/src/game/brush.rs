@@ -170,10 +170,7 @@ impl Game<'_> {
             "minecraft:brushable_block",
         );
         self.trigger_loot_table(&table);
-        let loot = horizon_client::structure_blocks::loot_data(
-            &self.options.resources,
-            &self.pack_files(),
-        );
+        let loot = self.server_loot.get();
         decorated_pot::unpack_loot(
             &mut tag,
             loot.as_deref(),
@@ -215,11 +212,13 @@ impl Game<'_> {
             let mut drops = vec![item];
             let tool = self.stack_in(slot).cloned();
             let origin = pos.map(|c| f64::from(c) + 0.5);
+            let player = Some(self.native_acting_id());
             self.native_use_drops(
                 "",
                 origin,
                 Some((pos, state)),
                 None,
+                player,
                 tool.as_ref(),
                 &mut drops,
             );

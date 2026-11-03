@@ -46,7 +46,7 @@ const ARMOR: [usize; 4] = [39, 38, 37, 36];
 const OFFHAND: usize = 40;
 
 /// The guest's inventory, armor, off hand, selection and carried stack into `menu`.
-fn load_player(menu: &mut Menu, g: &Guest) {
+pub(super) fn load_player(menu: &mut Menu, g: &Guest) {
     for i in 0..36 {
         menu.set_player_item(i, g.inventory[i].clone());
     }
@@ -58,6 +58,34 @@ fn load_player(menu: &mut Menu, g: &Guest) {
     menu.creative = g.creative();
     menu.levels = g.xp_level;
     menu.carried = g.carried.clone();
+}
+
+/// The vanilla menu engine's kind for a guest's menu over block entity `entity`, with the
+/// container's slots: a furnace's, a brewing stand's, a crafter's, or a content mod's menu type
+/// with its slots' rules. None for the others, whose clicks the hub runs.
+pub(super) fn machine_menu(
+    entity: &BlockEntity,
+    mod_type: Option<&'static horizon_client::containers::ModMenuType>,
+) -> Option<(Kind, Vec<Option<ItemStack>>)> {
+    Some(match entity {
+        BlockEntity::Furnace(f) => {
+            let recipe = match f.kind.recipe_type() {
+                "minecraft:blasting" => "blasting",
+                "minecraft:smoking" => "smoking",
+                _ => "smelting",
+            };
+            (Kind::Furnace(recipe), f.items.to_vec())
+        }
+        BlockEntity::Brewing(b) => (Kind::Brewing, b.items.to_vec()),
+        BlockEntity::Crafter(c) => (Kind::CrafterBlock, c.items.to_vec()),
+        BlockEntity::Mod(m) => {
+            let t = mod_type?;
+            let mut items = m.items.clone();
+            items.resize(t.slots, None);
+            (Kind::Mod(t), items)
+        }
+        _ => return None,
+    })
 }
 
 /// `load_player` back.
@@ -198,6 +226,34 @@ impl Game<'_> {
         result
     }
 
+    /// `InventoryMenu.slotsChanged` for guest `uuid`'s crafting grid written outside a click
+    /// (a mod's menu slot write, at the root commit): the result made again from the grid, with
+    /// `native_prepare_item_craft` as a click has it, kept by the guest and their menu. The
+    /// client hears it with the tick's inventory sync.
+    pub(super) fn guest_craft_result(&mut self, uuid: u128) {
+        let Some(mut host) = self.lan.take() else {
+            return;
+        };
+        if let Some(g) = host
+            .hub
+            .guests
+            .iter_mut()
+            .find(|g| g.placed && g.uuid == uuid)
+        {
+            let mut result = self
+                .recipes()
+                .find(&g.craft_grid, 2)
+                .map(|(_, stack)| stack);
+            self.native_prepare_item_craft(uuid, &g.name, None, &mut result);
+            g.craft_result.clone_from(&result);
+            let play = host.play.get_mut(&g.conn);
+            if let Some(menu) = play.and_then(|p| p.crafting.inventory.as_mut()) {
+                menu.set_slot(&self.menu_env(), 0, result);
+            }
+        }
+        self.lan = Some(host);
+    }
+
     /// A click on the guest's inventory menu (window 0): `InventoryMenu`,
     /// crafting grid included. False for other windows.
     pub(super) fn lan_inventory_click(
@@ -275,27 +331,13 @@ impl Game<'_> {
         else {
             return false;
         };
-        let (kind, items) = match self.world.block_entities.get(&pos) {
-            Some(BlockEntity::Furnace(f)) => {
-                let recipe = match f.kind.recipe_type() {
-                    "minecraft:blasting" => "blasting",
-                    "minecraft:smoking" => "smoking",
-                    _ => "smelting",
-                };
-                (Kind::Furnace(recipe), f.items.to_vec())
-            }
-            Some(BlockEntity::Brewing(b)) => (Kind::Brewing, b.items.to_vec()),
-            Some(BlockEntity::Crafter(c)) => (Kind::CrafterBlock, c.items.to_vec()),
-            // A content mod's menu type, with its slots' rules.
-            Some(BlockEntity::Mod(m)) => match mod_type {
-                Some(t) => {
-                    let mut items = m.items.clone();
-                    items.resize(t.slots, None);
-                    (Kind::Mod(t), items)
-                }
-                None => return false,
-            },
-            _ => return false,
+        let Some((kind, items)) = self
+            .world
+            .block_entities
+            .get(&pos)
+            .and_then(|entity| machine_menu(entity, mod_type))
+        else {
+            return false;
         };
         let furnace = matches!(kind, Kind::Furnace(_));
         // CrafterBlockEntity.containerData: the disabled slots, then triggered.

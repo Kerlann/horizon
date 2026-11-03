@@ -398,11 +398,13 @@ impl Game<'_> {
         }
         if by_player && !drops.is_empty() {
             let tool = self.held().cloned();
+            let player = Some(self.native_acting_id());
             self.native_use_drops(
                 "",
                 c,
                 None,
                 Some((f.id, f.kind())),
+                player,
                 tool.as_ref(),
                 &mut drops,
             );

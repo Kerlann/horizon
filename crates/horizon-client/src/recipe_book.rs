@@ -720,8 +720,7 @@ pub(crate) fn crafting_station(kind: &str) -> &'static str {
     }
 }
 impl RecipeIndex {
-    /// Reads `data/minecraft/recipe/*.json` under `root`, with the world's
-    /// packs' recipe files over it (`overlay`).
+    /// Indexes the same merged, conditioned recipe sources as crafting.
     pub fn load(root: &std::path::Path, overlay: &PackOverlay) -> Self {
         let mut recipes = std::collections::BTreeMap::new();
         let mut insert = |id: String, v: &serde_json::Value| {
@@ -758,48 +757,13 @@ impl RecipeIndex {
                 },
             );
         };
-        let dir = root.join("data/minecraft/recipe");
-        // NeoForge's load conditions: the book lists only what loaded; a
-        // recipe gated on an absent mod isn't in the manager either.
-        let mods: Vec<String> = {
-            let mut mods = horizon_items::content_namespaces::mod_ids(root);
-            if !mods.iter().any(|m| m == "minecraft") {
-                mods.push("minecraft".to_owned());
+        match Recipes::sources(root, overlay) {
+            Ok(sources) => {
+                for (id, v) in sources {
+                    insert(crate::crafting::qualified(&id), &v);
+                }
             }
-            mods
-        };
-        let conditions_hold = |v: &serde_json::Value| {
-            horizon_world::conditions::conditions_hold(v, &|id: &str| mods.iter().any(|m| m == id))
-        };
-        // The whole folder, `brewing/` under it too, in id order
-        // (`SimpleJsonResourceReloadListener` walks it recursively): a
-        // subfolder's recipe keeps it in its id, `minecraft:brewing/<name>`.
-        // The packs' files replace first and the gate answers the merged
-        // file, as the crafting loader's does: a false-conditioned pack
-        // file leaves the lower one gone too.
-        let folder = crate::json_folder::read(&dir).ok();
-        let mut sources: Vec<(String, serde_json::Value)> = folder
-            .iter()
-            .flat_map(|folder| &folder.files)
-            .filter_map(|file| {
-                let v = serde_json::from_slice::<serde_json::Value>(file.bytes().ok()?).ok()?;
-                Some((format!("minecraft:{}", file.name), v))
-            })
-            .collect();
-        for (id, files) in overlay.kind("recipe") {
-            match serde_json::from_slice::<serde_json::Value>(PackOverlay::top(files)) {
-                Ok(v) => match sources.iter_mut().find(|(n, _)| n == id) {
-                    Some(slot) => slot.1 = v,
-                    None => sources.push((id.to_owned(), v)),
-                },
-                Err(e) => log::warn!("Horizon: pack recipe {id} not shown in the book: {e}"),
-            }
-        }
-        let filters = horizon_items::recipe_filters::RecipeFilters::load(root, overlay);
-        for (id, mut v) in sources {
-            if conditions_hold(&v) && filters.apply(&id, &mut v) {
-                insert(id, &v);
-            }
+            Err(e) => log::warn!("Horizon: recipes not shown in the book: {e}"),
         }
         // RecipeManager keeps its recipes sorted by id and numbers the displays in that order.
         let mut next = 0;
@@ -1043,6 +1007,98 @@ mod tests {
     }
 
     use super::*;
+
+    fn content_recipe_root(test: &str, recipe: &str) -> std::path::PathBuf {
+        let root =
+            std::env::temp_dir().join(format!("horizon-recipe-{test}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("data/minecraft/recipe")).unwrap();
+        std::fs::create_dir_all(root.join("data/example/recipe")).unwrap();
+        std::fs::write(
+            root.join(horizon_items::content_namespaces::MARKER),
+            br#"["example"]"#,
+        )
+        .unwrap();
+        std::fs::write(root.join("data/example/recipe/test.json"), recipe).unwrap();
+        root
+    }
+
+    const CONTENT_RECIPE: &str = r#"{"type":"minecraft:crafting_shapeless","ingredients":["minecraft:flint"],"result":{"id":"minecraft:stick"}}"#;
+
+    #[test]
+    fn content_recipe_is_indexed() {
+        let root = content_recipe_root("index", CONTENT_RECIPE);
+        let index = RecipeIndex::load(&root, &PackOverlay::NONE);
+        assert!(index.contains("example:test"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn content_recipe_unlocks_and_appears_in_book() {
+        let root = content_recipe_root("unlock", CONTENT_RECIPE);
+        let items = crate::items::Items::for_tests(HashMap::new());
+        let recipes = Recipes::load(&root, &items, &PackOverlay::NONE).unwrap();
+        let index = RecipeIndex::load(&root, &PackOverlay::NONE);
+        let mut settings = Settings::default();
+        assert_eq!(
+            settings.add_recipes(&index, &["example:test".into()]),
+            (1, vec!["example:test".into()])
+        );
+        let mut book = Book::build(&recipes, &items);
+        book.set_display_ids(&index);
+        let mut client = ClientBook::default();
+        for id in index.display_ids("example:test") {
+            client.add(id);
+        }
+        let collections = client.collections(&book, BookType::Crafting, Tab::Search);
+        assert!(
+            collections
+                .iter()
+                .flat_map(|c| &c.entries)
+                .any(|&i| book.entries[i].id == "example:test")
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn content_recipe_condition_gates_crafting_and_index() {
+        let recipe = r#"{"type":"minecraft:crafting_shapeless","ingredients":["minecraft:flint"],"result":{"id":"minecraft:stick"},"neoforge:conditions":[{"type":"neoforge:false"}]}"#;
+        let root = content_recipe_root("condition", recipe);
+        let items = crate::items::Items::for_tests(HashMap::new());
+        let recipes = Recipes::load(&root, &items, &PackOverlay::NONE).unwrap();
+        assert!(
+            recipes
+                .find(
+                    &[Some(ItemStack::new("minecraft:flint", 1)), None, None, None],
+                    2
+                )
+                .is_none()
+        );
+        assert!(!RecipeIndex::load(&root, &PackOverlay::NONE).contains("example:test"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn overlay_replaces_content_recipe_in_crafting_and_index() {
+        let root = content_recipe_root("overlay", CONTENT_RECIPE);
+        let replacement = br#"{"type":"minecraft:crafting_shapeless","ingredients":["minecraft:flint"],"result":{"id":"minecraft:torch"}}"#;
+        let files = [("recipe/example:test".to_owned(), vec![replacement.to_vec()])];
+        let overlay = PackOverlay { files: &files };
+        let items = crate::items::Items::for_tests(HashMap::new());
+        let recipes = Recipes::load(&root, &items, &overlay).unwrap();
+        let (_, result) = recipes
+            .find(
+                &[Some(ItemStack::new("minecraft:flint", 1)), None, None, None],
+                2,
+            )
+            .unwrap();
+        assert_eq!(&*result.item, "minecraft:torch");
+        assert_eq!(
+            RecipeIndex::load(&root, &overlay).result("example:test"),
+            Some("minecraft:torch")
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn mod_category_mapping_validates_ids_icons_and_conflicts() {

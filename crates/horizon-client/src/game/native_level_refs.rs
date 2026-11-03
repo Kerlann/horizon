@@ -10,18 +10,13 @@ use horizon_client::world::World;
 impl Game<'_> {
     /// The world a handle names now, or None for a stale or foreign one.
     pub(super) fn native_level_world(&self, level: LevelRef) -> Option<&World> {
-        if self.remote.is_some() || self.native_lifecycle.epoch() != Some(level.epoch()) {
+        if !self.is_logical_server() || self.native_lifecycle.epoch() != Some(level.epoch()) {
             return None;
         }
         if level.dimension() == self.dim.id() {
             return Some(&self.world);
         }
-        let dim = self
-            .levels
-            .parked_dims()
-            .into_iter()
-            .find(|d| d.id() == level.dimension())?;
-        self.levels.parked_world(dim)
+        self.levels.parked_world_of(level.dimension())
     }
     /// Find a loaded chunk in an open server level. API @API:chunk_refs@.
     pub(super) fn native_chunk(&self, level: LevelRef, pos: [i32; 2]) -> Option<ChunkRef> {
@@ -87,6 +82,16 @@ impl Game<'_> {
             .properties
             .get(key)
             .cloned()
+    }
+    /// Whether this is the level in place: the one the server ticks now, whose block entities
+    /// the game's own capabilities read and write and whose capabilities
+    /// `LevelRef::capability` looks up. False for a level parked while the server ticks
+    /// another (its blocks can still be read), for a handle of an earlier open, and on a
+    /// client. API @API:level_reads@.
+    pub(super) fn native_level_in_place(&self, level: LevelRef) -> bool {
+        self.is_logical_server()
+            && self.native_lifecycle.epoch() == Some(level.epoch())
+            && self.dim.id() == level.dimension()
     }
     /// Whether `pos` is inside the world's height and its chunk is loaded
     /// (`Level.isLoaded`, which is false outside `isInValidBounds`): a block

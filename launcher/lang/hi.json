@@ -554,7 +554,6 @@
   "Native build · {version}": "मूल बिल्ड · {version}",
   "On: every AI feature is hidden and off. The game opens no control socket, and horizon-ctl and the MCP servers refuse.": "चालू: प्रत्येक AI सुविधा छिपी हुई और बंद है। गेम कोई कंट्रोल सॉकेट नहीं खोलता है, और horizon-ctl तथा MCP सर्वर मना करते हैं।",
   "the port": "पोर्ट",
-  "The source of {source}. Its release ships {file}, a content mod: installing those from GitHub is not supported yet.": "{source} का स्रोत। इसकी रिलीज़ में {file} है, जो एक कंटेंट मॉड है: GitHub से इन्हें इंस्टॉल करना अभी समर्थित नहीं है।",
   "Build anyway": "फिर भी बनाएं",
   "A name, 3 to 16 letters": "एक नाम, 3 से 16 अक्षर",
   "Installed {mods} from GitHub ({source}). Build it on the Mods page.": "GitHub ({source}) से {mods} इंस्टॉल किया गया। इसे मॉड पेज पर बनाएं।",

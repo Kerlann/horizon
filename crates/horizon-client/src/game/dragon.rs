@@ -2295,6 +2295,7 @@ impl Game<'_> {
             return;
         };
         let boxes = [d.part_box(0), d.part_box(1), d.part_box(2)];
+        let dragon_id = d.id;
         let tags = &self.items().block_tags;
         let transparent = tags
             .get("minecraft:dragon_transparent")
@@ -2323,6 +2324,14 @@ impl Game<'_> {
                     }
                 }
             }
+        }
+        // LivingDestroyBlockEvent: a block a mod keeps is still in the wall.
+        if !horizon_client::mod_api::mods().is_empty() {
+            removed.retain(|p| {
+                let kept = !self.may_destroy(dragon_id, "minecraft:ender_dragon", *p);
+                in_wall |= kept;
+                !kept
+            });
         }
         let air = self.world.air;
         let broke = !removed.is_empty();

@@ -89,6 +89,7 @@ impl Game<'_> {
                 .hub
                 .guests
                 .iter()
+                .filter(|g| g.participates_online())
                 .map(|g| {
                     json!({
                         "name": g.name,

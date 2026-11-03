@@ -8,20 +8,17 @@ pub const MANIFEST: &str = "horizon-native.json";
 /// Why a native mod may not carry `mod.wasm`: WebAssembly mods don't run any more.
 pub const WASM_GONE: &str = "mod.wasm: WebAssembly mods don't run any more, port the code to a native mod (docs/native-mods.md)";
 
-/// Whether `path` names a native mod's file: an `.hnmod`, or a `.hmod` holding native code
-/// (one file for content and code, docs/native-mods.md).
+/// Whether `path` names a mod package.
 pub fn is_file(path: &Path) -> bool {
-    path.extension()
-        .is_some_and(|e| e == "hnmod" || e == "hmod")
+    path.extension().is_some_and(|e| e == "hmod")
 }
 
-/// Whether the mod file at `path` carries native code ([`MANIFEST`]): every `.hnmod`, and a
-/// `.hmod` with code beside or instead of its content.
+/// Whether the mod file at `path` carries native code ([`MANIFEST`]).
 pub fn holds(path: &Path) -> bool {
     std::fs::File::open(path)
         .ok()
         .and_then(|f| zip::ZipArchive::new(f).ok())
-        .is_some_and(|mut zip| zip.by_name(MANIFEST).is_ok())
+        .is_some_and(|zip| zip.index_for_name(MANIFEST).is_some())
 }
 
 /// Whether a `.hmod`'s entry `name` is its content's (`horizon-mod.toml`, `assets/`, `data/`),
@@ -40,10 +37,6 @@ pub struct Manifest {
     /// Exact source revisions tested together, never mutable tags.
     pub horizon: String,
     pub mixins: String,
-    /// The version of Horizon's native hook points (`game/native_hooks.rs`,
-    /// `NATIVE_HOOKS_API`) a mod that hooks nothing else needs: the launcher
-    /// builds it on any Horizon with that version or a later one, and
-    /// `horizon` is only the revision it was tested on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hooks: Option<u32>,
 }
@@ -244,7 +237,7 @@ mod tests {
     }
     fn read(name: &str, extras: &[(&str, &[u8])], mixin: &str) -> Result<Bundle, String> {
         let path =
-            std::env::temp_dir().join(format!("native-bundle-{name}-{}.hnmod", std::process::id()));
+            std::env::temp_dir().join(format!("native-bundle-{name}-{}.hmod", std::process::id()));
         let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
         let options = zip::write::SimpleFileOptions::default();
         zip.start_file(MANIFEST, options).unwrap();
@@ -267,6 +260,43 @@ mod tests {
             "[mod]\nid = \"veinminer\"\nversion = \"0.3.0\"\n[compatibility]\nhorizon_revision = \"{}\"\n",
             "a".repeat(40)
         )
+    }
+    #[test]
+    fn package_kind_does_not_depend_on_install_folder() {
+        let root = std::env::temp_dir().join(format!("native-kind-{}", std::process::id()));
+        for (folder, native) in [("content", true), ("native", false)] {
+            let dir = root.join(folder);
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("test.hmod");
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+            zip.start_file(
+                if native { MANIFEST } else { "horizon-mod.toml" },
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.write_all(b"{}").unwrap();
+            zip.finish().unwrap();
+            assert_eq!(holds(&path), native);
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn compressed_manifest_still_identifies_native_package() {
+        let path =
+            std::env::temp_dir().join(format!("native-compression-{}.hmod", std::process::id()));
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        zip.start_file(MANIFEST, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"{}").unwrap();
+        zip.finish().unwrap();
+        let mut bytes = std::fs::read(&path).unwrap();
+        bytes[8..10].copy_from_slice(&99u16.to_le_bytes());
+        let central = bytes.windows(4).position(|w| w == b"PK\x01\x02").unwrap();
+        bytes[central + 10..central + 12].copy_from_slice(&99u16.to_le_bytes());
+        std::fs::write(&path, bytes).unwrap();
+        assert!(holds(&path));
+        assert!(Bundle::read(&path).is_err());
+        std::fs::remove_file(path).unwrap();
     }
     #[test]
     fn source_bundle_carries_exact_compatibility_into_index_facts() {

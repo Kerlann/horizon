@@ -384,6 +384,11 @@ pub struct PlayerMotion {
     /// position packet even when the player lands where they stood. The
     /// server takes it at the end of a guest's turn.
     pub teleported: bool,
+    /// The position packet's `Relative.DELTA_*` flags of the teleport that
+    /// set `teleported` (`TeleportCommand.performTeleport`): a relative axis
+    /// keeps its motion, an absolute one is a zero change. Read with
+    /// `teleported` at the end of a guest's turn.
+    pub teleported_delta: [bool; 3],
     pub events: Vec<MotionEvent>,
     pub attributes: LiveAttributes<Box<dyn horizon_world::attributes::live::Identities>>,
     pub impulse: ImpulseContext,
@@ -608,6 +613,7 @@ impl PlayerMotion {
             needs_sync: false,
             sync_position: false,
             teleported: false,
+            teleported_delta: [false; 3],
             events: Vec::new(),
             attributes,
             fluids: PlayerFluids::default(),

@@ -3563,7 +3563,11 @@ fn harvest_tick(
     let air = w.facts.is_air(w.world.block(p[0], p[1], p[2]));
     let growing = !ripe && super::villager::crop(w, p);
     if ripe {
-        cx.events.push(MobEvent::BreakBlock { pos: p, drop: true });
+        cx.events.push(MobEvent::BreakBlock {
+            pos: p,
+            drop: true,
+            by: None,
+        });
     }
     if air && farmland(w, [p[0], p[1] - 1, p[2]]) {
         let e = super::villager::ext_mut(m);

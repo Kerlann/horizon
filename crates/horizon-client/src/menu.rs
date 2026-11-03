@@ -1747,6 +1747,20 @@ impl Menu {
         matches!(self.slots[s].role, Role::Output | Role::CraftResult)
     }
 
+    /// How many of `stack` slot `s` holds: `Slot.getMaxStackSize(stack)` where `Slot.mayPlace`
+    /// takes it, else none.
+    pub fn slot_holds(&self, env: &Env, s: usize, stack: &ItemStack) -> u32 {
+        match self.may_place(env, s, stack) {
+            true => self.slot_max(env, s, stack),
+            false => 0,
+        }
+    }
+
+    /// `Slot.mayPickup`: whether slot `s` gives up what it holds.
+    pub fn slot_gives(&self, env: &Env, s: usize) -> bool {
+        self.may_pickup(env, s)
+    }
+
     /// Slot `s` takes one more item of `stack` (`Slot.mayPlace`, and room).
     pub fn takes_one(&self, env: &Env, s: usize, stack: &ItemStack) -> bool {
         self.may_place(env, s, stack)

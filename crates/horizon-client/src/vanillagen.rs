@@ -39,7 +39,7 @@ pub struct VanillaTerrain {
     /// Generator biome index -> client biome table index.
     biome_map: Vec<u16>,
     /// Loot tables for generated containers.
-    loot: Option<Arc<horizon_world::loot::LootData>>,
+    loot: crate::structure_blocks::LootSnapshot,
     structure_mobs: Arc<StructureMobFinalizer>,
     /// A worker for structure queries from the game thread.
     query: std::sync::Mutex<Option<GeneratorWorker>>,
@@ -117,6 +117,11 @@ fn add_default_block_entities(kinds: &[Option<&str>], out: &mut Chunk, raw: &mut
 }
 
 impl VanillaTerrain {
+    /// Share the world's loot snapshot with generated container readers.
+    pub fn set_loot_source(&mut self, loot: crate::structure_blocks::LootSnapshot) {
+        self.loot = loot;
+    }
+
     /// A mod's sign takes its template's block entity, whatever its name: a
     /// feature that places one leaves it with text to edit.
     pub fn add_mod_signs(&mut self, facts: &crate::blocks::BlockFacts) {
@@ -313,7 +318,11 @@ impl VanillaTerrain {
         Ok(Self {
             generator,
             biome_map,
-            loot,
+            loot: {
+                let snapshot = crate::structure_blocks::LootSnapshot::default();
+                snapshot.set(loot);
+                snapshot
+            },
             structure_mobs: Arc::new(StructureMobFinalizer::new(
                 dir.parent().unwrap_or(dir).to_owned(),
                 dimension,
@@ -832,18 +841,25 @@ impl ChunkGenerator for VanillaTerrain {
     }
     fn final_block_entities(
         &self,
-        proto: &Proto,
-        writes: &[([i32; 3], u32)],
+        entries: &[(&Proto, &[([i32; 3], u32)])],
     ) -> Vec<((i32, i32, i32), crate::chunk::block_entity::BlockEntity)> {
-        let Some(VanillaProto::Ready(chunk)) = proto.downcast_ref::<VanillaProto>() else {
-            return Vec::new();
-        };
-        if chunk.block_entities.is_empty() {
+        if !entries.iter().any(|(proto, _)| {
+            matches!(proto.downcast_ref::<VanillaProto>(), Some(VanillaProto::Ready(chunk)) if !chunk.block_entities.is_empty())
+        }) {
             return Vec::new();
         }
-        let (made, _rolled) = crate::structure_blocks::block_entities(chunk, self.loot.as_deref());
-        made.into_iter()
-            .filter(|((x, y, z), _)| writes.iter().any(|(p, _)| *p == [*x, *y, *z]))
+        let loot = self.loot.get();
+        entries
+            .iter()
+            .flat_map(|(proto, writes)| {
+                let Some(VanillaProto::Ready(chunk)) = proto.downcast_ref::<VanillaProto>() else {
+                    return Vec::new();
+                };
+                let (made, _) = crate::structure_blocks::block_entities(chunk, loot.as_deref());
+                made.into_iter()
+                    .filter(|((x, y, z), _)| writes.iter().any(|(p, _)| *p == [*x, *y, *z]))
+                    .collect()
+            })
             .collect()
     }
     fn decorate(&self, worker: &mut GeneratorWorker, region: &mut [Proto; 9]) {
@@ -1064,8 +1080,9 @@ impl ChunkGenerator for VanillaTerrain {
             VanillaProto::Failed(x, z) => return Chunk::with_layout(x, z, self.layout()),
         };
         let mut out = self.column(&chunk);
+        let loot = self.loot.get();
         let (block_entities, rolled_loot) =
-            crate::structure_blocks::block_entities(&chunk, self.loot.as_deref());
+            crate::structure_blocks::block_entities(&chunk, loot.as_deref());
         out.block_entities = block_entities;
         // The block entities Horizon does not model (decorated pots with their
         // sherds and loot table) stay as placed, like a

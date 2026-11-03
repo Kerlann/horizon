@@ -781,7 +781,7 @@ enum Cmd {
     /// pin, else the one the instance plays, with the launcher's own Rust, as the version the
     /// instance then plays. Not sandboxed: the mods' code runs with your rights
     NativeBuild {
-        /// A mod folder (horizon-mixin.toml, or an unpacked .hnmod), or a folder of them
+        /// A mod folder (horizon-mixin.toml, or an unpacked .hmod), or a folder of them
         /// (default: the native mods installed and turned on in the instance)
         folder: Option<PathBuf>,
         /// Export mode: build a standalone dedicated-server engine into this folder instead of

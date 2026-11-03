@@ -308,7 +308,6 @@
   "Downloading {source}…": "Baixando {source}…",
   "Installing…": "Instalando…",
   "The release file {file} ({source}).": "O arquivo de versão {file} ({source}).",
-  "The source of {source}. Its release ships {file}, a content mod: installing those from GitHub is not supported yet.": "O código-fonte de {source}. A versão traz {file}, um mod de conteúdo: instalar esses do GitHub ainda não é suportado.",
   "The source at commit {commit}.": "O código-fonte no commit {commit}.",
   "Not reviewed by the Horizon registry": "Não revisado pelo registro do Horizon",
   "Native mods run with full access to this computer. Read the source before you install it.": "Mods nativos rodam com acesso total a este computador. Leia o código-fonte antes de instalar.",

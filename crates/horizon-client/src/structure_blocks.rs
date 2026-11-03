@@ -125,6 +125,22 @@ pub fn has_pending_map(item: &ItemStack) -> bool {
 type LoadedLoot = (u64, Option<Arc<LootData>>);
 static LOOT: Mutex<Option<LoadedLoot>> = Mutex::new(None);
 
+/// A world's atomically replaceable loot snapshot, shared by its chunk workers.
+#[derive(Clone, Default)]
+pub struct LootSnapshot(Arc<std::sync::RwLock<Option<Arc<LootData>>>>);
+
+impl LootSnapshot {
+    /// Capture the snapshot once before doing work.
+    pub fn get(&self) -> Option<Arc<LootData>> {
+        self.0.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Publish a server load or reload to all readers at once.
+    pub fn set(&self, loot: Option<Arc<LootData>>) {
+        *self.0.write().unwrap_or_else(|e| e.into_inner()) = loot;
+    }
+}
+
 /// The resource root and the packs' files the loot data was loaded from.
 fn loot_key(root: &Path, overlay: &horizon_world::loot::PackOverlay) -> u64 {
     use std::hash::{DefaultHasher, Hash, Hasher};
@@ -424,6 +440,14 @@ mod tests {
         let packs = PackOverlay { files: &files };
         let other = reuse_or_load(&mut slot, &root, &packs).unwrap();
         assert!(!Arc::ptr_eq(&first, &other));
+
+        let snapshot = LootSnapshot::default();
+        let worker = snapshot.clone();
+        snapshot.set(Some(first.clone()));
+        let in_flight = worker.get().unwrap();
+        snapshot.set(Some(other.clone()));
+        assert!(Arc::ptr_eq(&in_flight, &first));
+        assert!(Arc::ptr_eq(&worker.get().unwrap(), &other));
         let _ = std::fs::remove_dir_all(&root);
     }
 

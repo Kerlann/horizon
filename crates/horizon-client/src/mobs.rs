@@ -978,6 +978,7 @@ pub struct Extra {
     /// Components of the current held stack; setters clear these on replacement.
     main_hand_stack: Option<crate::items::ItemStack>,
     pub off_hand: Option<Arc<str>>,
+    /// The head item (`getItemBySlot(HEAD)`), on every mob.
     pub head: Option<Arc<str>>,
     /// Equipment in the separate body slot (horse armour, wolf armour, harnesses).
     pub body: Option<Arc<str>>,
@@ -1186,6 +1187,8 @@ impl Extra {
 
 #[derive(Clone, Debug)]
 pub struct Mob {
+    /// When it joined its list ([`crate::join_seq`]); set by the list, not by the spawn site.
+    pub join: crate::join_seq::JoinSeq,
     pub id: u32,
     pub kind: Arc<MobType>,
     pub position: Vec3,
@@ -1340,6 +1343,27 @@ impl MannequinDescription {
         }
     }
 }
+/// Whether breeding experience was drawn in the parent's tick.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BreedExperience {
+    Deferred,
+    Drawn(Option<u32>),
+}
+
+/// Makes the events pushed since `start` (the effects of a break a mod may stop)
+/// conditional on the game having broken one of `mob`'s blocks. Without a mod they
+/// stay plain events: nothing is allocated.
+pub fn after_break(events: &mut Vec<MobEvent>, mob: u32, start: usize) {
+    if crate::native_client_hooks::has_mods() {
+        let effects = events.split_off(start);
+        events.push(MobEvent::IfBroke {
+            mob,
+            effects,
+            otherwise: Vec::new(),
+        });
+    }
+}
+
 /// Events a mob tick asks the game to act on.
 #[derive(Clone, Debug)]
 pub enum MobEvent {
@@ -1821,6 +1845,30 @@ pub enum MobEvent {
     BreakBlock {
         pos: [i32; 3],
         drop: bool,
+        /// The mob whose breaking this is, when it is one `LivingDestroyBlockEvent`
+        /// hears (a wither's, a ravager's, a silverfish's, a zombie's).
+        by: Option<u32>,
+    },
+    /// `EndermanTakeBlockGoal`: the enderman `mob` picks up the block `state` at
+    /// `pos` (it already holds it); the block turns to air unless a mod stops it
+    /// or it is no longer that block.
+    TakeBlock {
+        mob: u32,
+        pos: [i32; 3],
+        state: horizon_world::registry::BlockStateId,
+    },
+    /// What follows a `BreakBlock { by: Some(mob) }` of this batch: `effects` when
+    /// the game broke at least one of the mob's blocks, `otherwise` when a mod kept
+    /// them all (vanilla plays the break's sound and particles only on a destruction).
+    /// Only made while a mod is loaded; without one the effects are plain events.
+    IfBroke {
+        mob: u32,
+        effects: Vec<MobEvent>,
+        otherwise: Vec<MobEvent>,
+    },
+    /// The mob `mob` jumps (`jumpFromGround`'s flag, set after a ravager broke no leaves).
+    Jump {
+        mob: u32,
     },
     Particles {
         kind: &'static str,
@@ -1882,6 +1930,8 @@ pub enum MobEvent {
         /// A llama's baby, drawn from the parent's random as
         /// `Llama.getBreedOffspring` does.
         llama: Option<Box<super::mobs::llama::Offspring>>,
+        /// The parent-RNG experience decision, if already made.
+        experience: BreedExperience,
     },
     /// Replace a block by name (sheep turning grass to dirt), optionally with
     /// the destroy effect.
@@ -2663,6 +2713,11 @@ impl PlayerView {
         self.effects.contains(&effect)
     }
 }
+/// `Animal.finalizeSpawnChildFromBreeding`: draw only when mob drops are enabled.
+pub fn breeding_experience(parent: &mut Mob, mob_drops: bool) -> Option<u32> {
+    mob_drops.then(|| 1 + parent.random.next_int_bound(7).unwrap_or(0) as u32)
+}
+
 #[derive(Clone)]
 pub struct MobWorld<'a> {
     pub world: &'a World,
@@ -2728,7 +2783,8 @@ pub struct MobWorld<'a> {
     /// A server with native mods, which the game asks before a tame or a
     /// baby (`AnimalTameEvent`, `BabyEntitySpawnEvent`): the goals then
     /// leave what a cancel would undo to the game (a horse's `tame`, a
-    /// llama's breeding experience).
+    /// llama's breeding experience). Ravagers also use it to defer their jump
+    /// when `BreakBlock` leaves may be kept by a mod (`IfBroke`).
     pub ask_mods: bool,
     /// The level's world border, whose walls stop a mob's moves
     /// (`Entity.collectColliders`); None: nothing stops them there.
@@ -2764,6 +2820,7 @@ impl Mob {
         );
         let _ = random.next_int();
         let mut mob = Self {
+            join: Default::default(),
             id,
             health: kind.max_health,
             position,
@@ -2862,6 +2919,11 @@ impl Mob {
                 | Species::Fox
                 | Species::Panda
         );
+        // Salmon.defineSynchedData: DATA_TYPE starts at Variant.DEFAULT (MEDIUM,
+        // id 1), so a salmon finalizeSpawn never sized keeps the type's box.
+        if mob.species() == Species::Salmon {
+            mob.extra.variant = 1;
+        }
         // The PathNavigation constructor: the base follow range.
         mob.ai.nav.max_visited_nodes = (mob.kind.follow_range * 16.0).floor() as i32;
         ai::register(&mut mob);
@@ -4839,6 +4901,43 @@ mod armor_hurt_tests {
         );
     }
 
+    /// Vanilla holds a head item and a body item at once on the mobs with a
+    /// body slot (`LivingEntity.setItemSlot` over `EntityEquipment`): the
+    /// packet keeps the helmet on 5 and the armour on 6, `/item` reads each
+    /// back, and the armour value is the body piece's.
+    #[test]
+    fn a_horse_holds_a_helmet_and_its_body_armour_at_once() {
+        use horizon_world::player_inventory::EquipmentSlot;
+        let mut m = horse();
+        m.extra.head = Some("minecraft:iron_helmet".into());
+        m.extra.body = Some("minecraft:diamond_horse_armor".into());
+        let gear = m.equipment_stacks();
+        assert_eq!(
+            gear[5].as_ref().map(|s| s.item.as_ref().to_owned()),
+            Some("minecraft:iron_helmet".to_owned())
+        );
+        assert_eq!(
+            gear[6].as_ref().map(|s| s.item.as_ref().to_owned()),
+            Some("minecraft:diamond_horse_armor".to_owned())
+        );
+        let slot = |s| m.item_by_slot(s).map(|i| i.item.as_ref().to_owned());
+        assert_eq!(
+            slot(EquipmentSlot::Head),
+            Some("minecraft:iron_helmet".to_owned())
+        );
+        assert_eq!(
+            slot(EquipmentSlot::Body),
+            Some("minecraft:diamond_horse_armor".to_owned())
+        );
+        let (armor, _) = m.worn_armor();
+        assert!(armor > 0.0, "the body piece armors the horse");
+        // Death keeps both (`Mob.dropCustomDeathLoot` by slot).
+        let body = crate::mobs::drops::slot_item(&m, "body").unwrap();
+        let head = crate::mobs::drops::slot_item(&m, "head").unwrap();
+        assert_eq!(body.item, "minecraft:diamond_horse_armor");
+        assert_eq!(head.item, "minecraft:iron_helmet");
+    }
+
     /// `getDamageAfterArmorAbsorb` asks `hurtArmor` only when the damage type
     /// is not in `#bypasses_armor` (`LivingEntity.java:1907-1909`), so a horse
     /// that falls keeps its body piece whole.
@@ -4959,3 +5058,4 @@ mod totem_tests {
         );
     }
 }
+crate::impl_joined!(Mob);

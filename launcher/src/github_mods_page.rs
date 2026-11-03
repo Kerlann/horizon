@@ -298,16 +298,12 @@ impl Launcher {
     /// The warning, the exact source, and the only way forward: saying they trust it.
     fn github_review(&self, found: &Resolved, only: Option<String>, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
-        let what = match (&found.asset, &found.content_only) {
-            (Some(asset), _) => trf(
+        let what = match &found.asset {
+            Some(asset) => trf(
                 "The release file {file} ({source}).",
                 &[("file", &asset.name), ("source", &found.label())],
             ),
-            (None, Some(file)) => trf(
-                "The source of {source}. Its release ships {file}, a content mod: installing those from GitHub is not supported yet.",
-                &[("source", &found.label()), ("file", file)],
-            ),
-            (None, None) => trf(
+            None => trf(
                 "The source at commit {commit}.",
                 &[("commit", &found.commit)],
             ),

@@ -15,7 +15,7 @@ pub type Mod = (String, String, Option<String>);
 /// Whether an installed file (`installed::Entry::file`) is a native mod.
 pub fn is_native_file(file: &str) -> bool {
     file.strip_prefix(native_mods::INSTALLED)
-        .is_some_and(|rest| rest.starts_with('/') && rest.ends_with(".hnmod"))
+        .is_some_and(|rest| rest.starts_with('/') && rest.ends_with(".hmod"))
 }
 
 /// Where an instance's native mods stand.
@@ -33,7 +33,7 @@ pub enum State {
 
 /// The state for the mods turned on, `enabled`, and those of the version played, `built` (None
 /// when it is no native build). Order doesn't matter; a mod at another version, or with other
-/// files at the same version (a reinstalled local `.hnmod`), needs a build.
+/// files at the same version (a reinstalled local `.hmod`), needs a build.
 pub fn state(enabled: &[Mod], built: Option<&[Mod]>) -> State {
     if enabled.is_empty() {
         return State::NoMods;
@@ -98,12 +98,12 @@ pub fn horizon_label(version: &str) -> String {
     }
 }
 
-/// The native mods turned on in game folder `home`, read from their `.hnmod`s. One that can't be
+/// The native mods turned on in game folder `home`, read from their `.hmod`s. One that can't be
 /// read always counts, with its file name and no version, so it needs a build (which says why):
 /// the on/off list is keyed by the manifest id, which an unreadable file can't give.
 pub fn enabled(home: &Path) -> Vec<Mod> {
     let mut out = Vec::new();
-    for path in hnmods(home) {
+    for path in hmods(home) {
         match horizon_mods::index::native::Bundle::read(&path) {
             Ok(b) => {
                 if java::is_enabled(home, &b.manifest.id) {
@@ -131,7 +131,7 @@ pub struct Installed {
 /// Discover the actual files, not just GitHub sidecars. Registry files already have a row.
 pub fn untracked(home: &Path) -> Vec<Installed> {
     let tracked = crate::browser::installed::Installed::load(home);
-    hnmods(home)
+    hmods(home)
         .into_iter()
         .filter_map(|path| {
             let file = format!("{}/{}", native_mods::INSTALLED, path.file_name()?.to_str()?);
@@ -179,12 +179,12 @@ fn parse_built(about: &serde_json::Value) -> Vec<Mod> {
 }
 
 /// What [`state`] depends on, cheap to read on every frame: the folder, the version, the on/off
-/// list and each `.hnmod`'s size and time. The Mods page reads the mods again when it changes.
+/// list and each `.hmod`'s size and time. The Mods page reads the mods again when it changes.
 pub fn fingerprint(home: &Path, version: Option<&str>) -> String {
     let mut out = format!("{}\n{version:?}\n", home.display());
     // The on/off list (`browser::java::is_enabled`).
     out += &fs::read_to_string(home.join("horizon-mods.txt")).unwrap_or_default();
-    for path in hnmods(home)
+    for path in hmods(home)
         .into_iter()
         .flat_map(|p| [p.clone(), p.with_extension("origin.json")])
         .chain([home.join("mod-browser.json")])
@@ -196,11 +196,11 @@ pub fn fingerprint(home: &Path, version: Option<&str>) -> String {
     out
 }
 
-fn hnmods(home: &Path) -> Vec<std::path::PathBuf> {
+fn hmods(home: &Path) -> Vec<std::path::PathBuf> {
     let mut paths: Vec<_> = fs::read_dir(home.join(native_mods::INSTALLED))
         .map(|dir| dir.flatten().map(|e| e.path()).collect())
         .unwrap_or_default();
-    paths.retain(|p| p.extension().is_some_and(|e| e == "hnmod"));
+    paths.retain(|p| p.extension().is_some_and(|e| e == "hmod"));
     paths.sort();
     paths
 }
@@ -238,7 +238,7 @@ mod tests {
         ] {
             let path = home
                 .join(native_mods::INSTALLED)
-                .join(format!("{file}.hnmod"));
+                .join(format!("{file}.hmod"));
             let mut zip = zip::ZipWriter::new(fs::File::create(path).unwrap());
             let manifest = serde_json::json!({"schema":1,"id":id,"version":"1.2","game":"26.3","horizon":pin,"mixins":pin});
             let source = format!("[mod]\nid = \"{id}\"\nversion = \"1.2\"\n[compatibility]\nhorizon_revision = \"{pin}\"\n");
@@ -276,7 +276,7 @@ mod tests {
                 kind: Kind::Mod,
                 version: "1.2".into(),
                 number: "1.2".into(),
-                file: format!("{}/registry.hnmod", native_mods::INSTALLED),
+                file: format!("{}/registry.hmod", native_mods::INSTALLED),
                 checksum: String::new(),
                 page: String::new(),
                 dependency: false,
@@ -315,7 +315,7 @@ mod tests {
             "a stale origin is not an installed mod"
         );
         fs::write(
-            home.join(native_mods::INSTALLED).join("broken.hnmod"),
+            home.join(native_mods::INSTALLED).join("broken.hmod"),
             b"broken",
         )
         .unwrap();
@@ -404,9 +404,9 @@ mod tests {
     }
 
     #[test]
-    fn only_hnmods_in_the_native_folder_are_native() {
-        assert!(is_native_file("horizon-native-mods/veinminer.hnmod"));
-        assert!(!is_native_file("horizon-native-mods-old/x.hnmod"));
+    fn only_hmods_in_the_native_folder_are_native() {
+        assert!(is_native_file("horizon-native-mods/veinminer.hmod"));
+        assert!(!is_native_file("horizon-native-mods-old/x.hmod"));
         assert!(!is_native_file("horizon-mods/zoom.hmod"));
         assert!(!is_native_file("resourcepacks/x.zip"));
     }

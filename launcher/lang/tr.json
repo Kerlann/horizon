@@ -308,7 +308,6 @@
   "Downloading {source}…": "{source} indiriliyor…",
   "Installing…": "Yükleniyor…",
   "The release file {file} ({source}).": "Sürüm dosyası {file} ({source}).",
-  "The source of {source}. Its release ships {file}, a content mod: installing those from GitHub is not supported yet.": "{source} kaynağı. Sürümü {file} (bir içerik modu) barındırıyor: Bunları GitHub'dan yüklemek henüz desteklenmiyor.",
   "The source at commit {commit}.": "{commit} commitindeki kaynak.",
   "Not reviewed by the Horizon registry": "Horizon kayıt defteri tarafından incelenmedi",
   "Native mods run with full access to this computer. Read the source before you install it.": "Yerel modlar bu bilgisayara tam erişimle çalışır. Yüklemeden önce kaynağını okuyun.",

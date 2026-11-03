@@ -8,9 +8,9 @@
 //! - `run [--game <horizon-client>] [-- <game args>]`: build, then play with
 //!   the mod.
 //! - `check <file> [--json]`: what the registry checks of a submission
-//!   (`.hmod`, `.hnmod`, `.hpack`, resource pack `.zip`, `.hshader`).
+//!   (`.hmod`, `.hpack`, resource pack `.zip`, `.hshader`).
 //! - `registry build|review|check|list`: the registry repository's CI.
-use horizon_mods::{Capability, Content, Manifest, Package, manifest::MANIFEST};
+use horizon_mods::{Content, Manifest, Package, manifest::MANIFEST};
 mod check;
 mod registry;
 
@@ -140,7 +140,7 @@ fn new(args: &[String]) -> Result<(), String> {
 
 /// A native trait mod's bundle in `dir` (docs/native-mods.md, "Trait mods"): its
 /// `horizon-mixin.toml` and an `[api]` crate with one hook. It is what the launcher
-/// builds (`native-build <dir>`) and packs as `mixins/<id>/` of a `.hnmod`
+/// builds (`native-build <dir>`) and packs as `mixins/<id>/` of a `.hmod`
 /// (docs/api/mod-files.md). `horizon` pins the Horizon commit it is made for.
 fn new_native(
     dir: &Path,
@@ -212,12 +212,7 @@ fn build_in(root: &Path) -> Result<PathBuf, String> {
     if root.join("Cargo.toml").exists() {
         return Err("a Cargo.toml: code mods are native now (docs/native-mods.md)".into());
     }
-    if !manifest.capabilities.contains(&Capability::Registries) {
-        return Err(format!(
-            "a content mod has capability registries in {MANIFEST}"
-        ));
-    }
-    // The same checks as the game's, and the files in the order it lists them.
+    // Content owns the packaged path list; the writer checks exactly those entries.
     let content = Content::read(root, &manifest)?;
     let mut reader = content.reader()?;
     let mut files = Vec::with_capacity(content.files.len());
@@ -230,7 +225,7 @@ fn build_in(root: &Path) -> Result<PathBuf, String> {
     let path = dir.join(format!("{}.hmod", manifest.id));
     // Write then rename, so a running game never reads half a file.
     let partial = path.with_extension("hmod.partial");
-    let bytes = Package::write_files(&manifest_text, None, &files)?;
+    let bytes = Package::write_files(&manifest_text, &files)?;
     std::fs::write(&partial, bytes).map_err(|e| e.to_string())?;
     std::fs::rename(&partial, &path).map_err(|e| e.to_string())?;
     Ok(path)
@@ -307,7 +302,6 @@ mod tests {
         let hmod = build_in(&path).unwrap();
         assert_eq!(hmod, path.join("target/horizon-mod/gems.hmod"));
         let package = Package::read(&hmod).unwrap();
-        assert!(package.wasm.is_none());
         let content = Content::read(&hmod, &package.manifest).unwrap();
         assert!(
             content
@@ -321,6 +315,14 @@ mod tests {
             "{}",
             report.text()
         );
+        let executable = path.join("assets/gems/mod.wasm");
+        std::fs::write(&executable, b"\0asm").unwrap();
+        assert!(
+            build_in(&path)
+                .unwrap_err()
+                .contains("unsupported executable file")
+        );
+        std::fs::remove_file(executable).unwrap();
         // Code is native now.
         std::fs::write(path.join("Cargo.toml"), "").unwrap();
         assert!(build_in(&path).unwrap_err().contains("native"));
@@ -336,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    fn the_native_template_packs_into_an_hnmod_the_registry_accepts() {
+    fn the_native_template_packs_into_an_hmod_the_registry_accepts() {
         use std::io::Write;
         let dir = std::env::temp_dir().join(format!("horizon-mod-native-{}", std::process::id()));
         let path = dir.join("machine-mod");
@@ -357,8 +359,8 @@ mod tests {
             "schema": 1, "id": "machine_mod", "version": "0.1.0", "game": "26.3",
             "horizon": commit, "mixins": "b".repeat(40),
         });
-        let hnmod = dir.join("machine_mod.hnmod");
-        let mut zip = zip::ZipWriter::new(std::fs::File::create(&hnmod).unwrap());
+        let hmod = dir.join("machine_mod.hmod");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&hmod).unwrap());
         let options = zip::write::SimpleFileOptions::default();
         zip.start_file("horizon-native.json", options).unwrap();
         zip.write_all(manifest.to_string().as_bytes()).unwrap();
@@ -375,7 +377,12 @@ mod tests {
                 .unwrap();
         }
         zip.finish().unwrap();
-        let report = check::check(&hnmod, check::kind_of(&hnmod).unwrap(), None, None).unwrap();
+        assert_eq!(
+            check::kind_of(&hmod),
+            Some(horizon_mods::index::Kind::NativeMod)
+        );
+        assert_eq!(check::kind_of(&dir.join("machine_mod.hnmod")), None);
+        let report = check::check(&hmod, check::kind_of(&hmod).unwrap(), None, None).unwrap();
         assert!(report.text().contains("machine_mod"), "{}", report.text());
         // A pin that is not a commit is refused; with none, the folder builds on the
         // instance's Horizon.

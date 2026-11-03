@@ -1,6 +1,9 @@
 use super::*;
 use crate::{assets::Assets, blocks::BlockFacts, items::Items};
 
+#[path = "mod_content_farmland_tests.rs"]
+mod farmland_tests;
+
 #[test]
 fn renames_ids_keys_and_states() {
     let mut r = Rename::new("minecraft:iron_block", "ruby:ruby_block");

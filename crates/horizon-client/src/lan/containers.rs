@@ -327,17 +327,6 @@ impl Hub {
         Some(window)
     }
 
-    /// Replaces what a guest's open native menu shows; the changed slots go
-    /// out with the tick's container sync.
-    pub fn set_native_menu(&mut self, conn: u32, mut items: Vec<Option<ItemStack>>) {
-        if let Some(g) = self.guest_mut(conn)
-            && let Some(m) = g.menu.as_ref().filter(|m| m.slots == Slots::Native)
-        {
-            items.resize(m.size, None);
-            g.native_menu = items;
-        }
-    }
-
     /// Open a trading window for a guest (`Merchant.openTradingScreen`):
     /// its id, or None when the menu type is unknown.
     pub fn open_merchant_window(&mut self, conn: u32, title: Tag) -> Option<i32> {

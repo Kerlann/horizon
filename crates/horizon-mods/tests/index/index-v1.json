@@ -6,8 +6,8 @@
       "id": "coords_hud",
       "kind": "mod",
       "name": "Coordinates HUD",
-      "summary": "Your coordinates, facing and the time of day in a corner of the screen.",
-      "description": "`/where` puts them in chat, `/coords` hides or shows the panel.",
+      "summary": "Sample content: a resource translation.",
+      "description": "A signed content-only package for registry tests.",
       "authors": [
         "Horizon"
       ],
@@ -15,28 +15,25 @@
         "ludovic111"
       ],
       "license": "MIT",
-      "source": "https://github.com/horizon-rust/horizon/tree/main/crates/horizon-mod-sdk/examples/coords-hud",
+      "source": "https://github.com/horizon-rust/horizon",
       "icon": "https://horizon-rust.github.io/horizon-mods/icons/coords_hud.png",
-      "key": "RWTVtuGb/GRXcBf3Re5hzM07EzoStr2sLTJjghJia0xX15ULoZRFFZDb",
+      "key": "RWS/AoT50ekAULLFG7HiTPTE4eTQEONCCMbKsPE7JBxt3XJ37BY4w7bp",
       "versions": [
         {
           "version": "0.1.0",
           "published": "2026-10-24",
-          "api": "0.1",
+          "api": "0.2",
           "side": "client",
           "capabilities": [
-            "game-read",
-            "hud",
-            "chat"
+            "registries"
           ],
-          "api_level": 0,
           "game": "26.3",
           "file": {
             "name": "coords_hud-0.1.0.hmod",
             "url": "https://github.com/horizon-rust/horizon-mods/releases/download/coords_hud-0.1.0/coords_hud-0.1.0.hmod",
-            "size": 438,
-            "sha256": "e1135345692f6dd8fd4c51920151944b82333e17049c9bb7d756f27b8deefc53",
-            "signature": "untrusted comment: signature from minisign secret key\nRUTVtuGb/GRXcIa5yCyCHFGFt55tj3T/FLUDv3ecNLVNNiQqQu7xyBrfc3wsvMHmudsEq6yr+QF21XN3+hnr/Ged3ULr5rv3zgE=\ntrusted comment: coords_hud 0.1.0\nIESQkJdTzLOvWegcGFxOMrQbnwJp2OKSSxoCKAxdfwyRb+9atdF+Q5/OpbdYurMnrNN1X1ybb43AszPVecdiCw==\n"
+            "size": 448,
+            "sha256": "f891bde88f4b841fd35c4f3305bc8904b671ebe9d5ad28d5aecc57e8b23fc3ce",
+            "signature": "untrusted comment: test fixture signature\nRUS/AoT50ekAUNGOFYYzLx14ztEwWHyuuRmX4RMAJRLQZtahDe1pdBarv034NUBDbKubCXPrNlaoGNgyBdLh+yImG01fkAuWdwQ=\ntrusted comment: coords_hud 0.1.0 content fixture\nNgKmC0TYjDjfZkDqfXKlEGOtkB0kq8WiiYU51042pbRhS7Xb9qNLLvqCgks5ehimk5f6AuXx1fcilPYbRf/lDw==\n"
           }
         }
       ]
@@ -64,14 +61,14 @@
             {
               "id": "coords_hud",
               "version": "0.1.0",
-              "sha256": "e1135345692f6dd8fd4c51920151944b82333e17049c9bb7d756f27b8deefc53"
+              "sha256": "f891bde88f4b841fd35c4f3305bc8904b671ebe9d5ad28d5aecc57e8b23fc3ce"
             }
           ],
           "file": {
             "name": "cozy-1.0.0.hpack",
             "url": "https://github.com/horizon-rust/horizon-mods/releases/download/cozy-1.0.0/cozy-1.0.0.hpack",
             "size": 471,
-            "sha256": "241ac840f9c5ea3f6252d849da10c90d36cb1da4d6cd8d1d268c2760a353cd65"
+            "sha256": "4ad64fdf094fe3d4a52d7b0d22ee8ea5889d0b76cc3f12c588db501a0ad0c4bd"
           }
         }
       ]

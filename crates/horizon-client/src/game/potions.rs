@@ -1967,11 +1967,9 @@ mod tests {
                 }
             }
         }
+        crate::mod_api::install(std::sync::Arc::from([Box::new(TestMod) as Box<dyn Hooks>]));
         static ONCE: std::sync::Once = std::sync::Once::new();
         ONCE.call_once(|| {
-            crate::mod_api::MODS
-                .set(std::sync::Arc::from([Box::new(TestMod) as Box<dyn Hooks>]))
-                .unwrap_or_else(|_| panic!("mods already installed"));
             brewing::register_mod_effects([("test:effect".into(), 0, brewing::Category::Neutral)]);
             let _ =
                 horizon_client::health::HURT_SERVER.set(super::super::native_hooks::hurt_server);

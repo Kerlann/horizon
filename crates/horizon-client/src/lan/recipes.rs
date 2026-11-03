@@ -52,34 +52,6 @@ fn ingredient(v: &Value) -> Option<Ingredient> {
     }
 }
 
-/// Every recipe file, by recipe id (the registry's order): read through
-/// `json_folder`, so a load holding the folder shares one read of it. A file
-/// that can't be read or doesn't parse is left out.
-pub(super) fn recipes(dir: &Path, out: &mut BTreeMap<String, Value>) {
-    let Ok(folder) = horizon_world::json_folder::read(dir) else {
-        return;
-    };
-    for file in &folder.files {
-        if let Ok(v) = serde_json::from_slice(file.bytes().unwrap_or_default()) {
-            out.insert(format!("minecraft:{}", file.name), v);
-        }
-    }
-}
-
-/// The packs' recipe files over the game's own: the top pack's file for
-/// each id (`SimpleJsonResourceReloadListener`).
-pub(super) fn overlay_recipes(
-    overlay: &horizon_world::loot::PackOverlay,
-    out: &mut BTreeMap<String, Value>,
-) {
-    for (id, files) in overlay.kind("recipe") {
-        if let Ok(v) = serde_json::from_slice::<Value>(horizon_world::loot::PackOverlay::top(files))
-        {
-            out.insert(id.to_owned(), v);
-        }
-    }
-}
-
 /// The network copy's recipes: every recipe file and overlay recipe, each
 /// ingredient object — NeoForge's shapes, a brewing slot's item predicate —
 /// replaced by the flat item list the crafting copy resolves it to. The
@@ -92,15 +64,17 @@ pub(super) fn network_recipes(
     resources: &Path,
     overlay: &horizon_world::loot::PackOverlay,
 ) -> (BTreeMap<String, Box<str>>, HashMap<String, i32>) {
-    let mut all = BTreeMap::new();
-    recipes(&resources.join("data/minecraft/recipe"), &mut all);
-    overlay_recipes(overlay, &mut all);
-    // The data's recipe filters, as the server's own tables apply them
-    // (#5910), once, before the ingredient normalization, so a swapped
-    // name resolves and every copy — the book's displays, the property
-    // sets — agrees on the swapped recipe.
-    let filters = horizon_items::recipe_filters::RecipeFilters::load(resources, overlay);
-    all.retain(|id, r| filters.apply(id, r));
+    let mut all: BTreeMap<_, _> =
+        match horizon_client::crafting::Recipes::sources(resources, overlay) {
+            Ok(sources) => sources
+                .into_iter()
+                .map(|(id, value)| (horizon_client::crafting::qualified(&id), value))
+                .collect(),
+            Err(e) => {
+                log::warn!("recipes: could not load recipe sources: {e}");
+                BTreeMap::new()
+            }
+        };
     match horizon_client::items::Items::catalog(resources, overlay) {
         Ok(items) => all.retain(|_, r| normalize_ingredients(r, &items)),
         Err(e) => log::warn!("recipes: NeoForge's ingredient shapes stay unresolved: {e}"),

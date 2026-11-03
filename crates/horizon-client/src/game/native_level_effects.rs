@@ -5,7 +5,7 @@
 //! an earlier open, or for arguments the network can't carry.
 use super::native_hooks::{mod_particles_ok, mod_sound_ok};
 use super::{Dim, Game, creatures::NativeSound, lan_particles::QueuedParticle};
-use horizon_client::mod_api::{LevelRef, ParticleOptions};
+use horizon_client::mod_api::{LevelRef, NativeSoundSource, ParticleOptions};
 use horizon_world::registry::BlockStateId;
 
 impl Game<'_> {
@@ -19,32 +19,47 @@ impl Game<'_> {
     }
     /// Plays sound event `sound` at `at` for the players in this level
     /// within range (16 blocks, times the volume above 1), as
-    /// `ServerLevel.playSound(null, ...)` does: `source` indexes
-    /// `SoundSource` (`master` 0, `blocks` 4...). A `minecraft:` event must be
-    /// registered; a mod's goes by name and is heard where its resources
-    /// define it. True means queued, not heard. API @API:level_effects@.
+    /// `ServerLevel.playSound(null, ...)` does, under `source`'s volume
+    /// slider. A `minecraft:` event must be registered; a mod's goes by name
+    /// and is heard where its resources define it. True means queued, not
+    /// heard. API @API:level_effects@.
     pub(super) fn native_level_play_sound(
         &mut self,
         level: LevelRef,
         sound: &str,
         at: [f64; 3],
-        source: usize,
+        source: NativeSoundSource,
         volume: f32,
         pitch: f32,
+    ) -> bool {
+        self.native_queue_sound(level, sound, at, source, volume, pitch, None)
+    }
+    /// `native_level_play_sound`, leaving out the player on connection
+    /// `except` (`Level.playSound(except, ...)`).
+    pub(super) fn native_queue_sound(
+        &mut self,
+        level: LevelRef,
+        sound: &str,
+        at: [f64; 3],
+        source: NativeSoundSource,
+        volume: f32,
+        pitch: f32,
+        except: Option<u32>,
     ) -> bool {
         let Some(dimension) = self.native_level_dimension(level) else {
             return false;
         };
-        if !mod_sound_ok(sound, at, source, volume, pitch) {
+        if !mod_sound_ok(sound, at, source.index(), volume, pitch) {
             return false;
         }
         self.creatures.lan_sounds.push(NativeSound {
             dimension,
             sound: sound.to_owned(),
             at,
-            source: source as i32,
+            source: source.index() as i32,
             volume,
             pitch,
+            except,
         });
         true
     }

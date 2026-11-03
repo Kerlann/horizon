@@ -554,7 +554,6 @@
   "Native build · {version}": "네이티브 빌드 · {version}",
   "On: every AI feature is hidden and off. The game opens no control socket, and horizon-ctl and the MCP servers refuse.": "켜짐: 모든 AI 기능이 숨겨지고 꺼집니다. 게임에서 제어 소켓을 열지 않으며, horizon-ctl 및 MCP 서버가 거부됩니다.",
   "the port": "포트",
-  "The source of {source}. Its release ships {file}, a content mod: installing those from GitHub is not supported yet.": "{source}의 소스입니다. 해당 릴리스에는 콘텐츠 모드인 {file}이(가) 포함되어 있으나, GitHub에서 이러한 모드를 설치하는 기능은 아직 지원되지 않습니다.",
   "Build anyway": "계속 빌드",
   "A name, 3 to 16 letters": "이름 (3~16자)",
   "Installed {mods} from GitHub ({source}). Build it on the Mods page.": "GitHub({source})에서 {mods}을(를) 설치했습니다. 모드 페이지에서 빌드하세요.",

@@ -152,8 +152,7 @@ pub trait ChunkGenerator: Send + Sync + 'static {
     /// contents.
     fn final_block_entities(
         &self,
-        _proto: &Proto,
-        _writes: &[([i32; 3], u32)],
+        _entries: &[(&Proto, &[([i32; 3], u32)])],
     ) -> Vec<((i32, i32, i32), crate::chunk::block_entity::BlockEntity)> {
         Vec::new()
     }
@@ -387,6 +386,7 @@ struct Shared {
     /// Only workers use this pool; frames never wait for its lock. Retaining
     /// cleared buffers avoids racing the renderer for the process heap.
     meshes: Mutex<MeshPool>,
+    aborted: std::sync::atomic::AtomicBool,
 }
 #[derive(Default)]
 struct MeshPool {
@@ -874,6 +874,18 @@ struct Jobs<G: ChunkGenerator> {
 impl<G: ChunkGenerator> Source for Jobs<G> {
     fn next(&self) -> Option<Rank> {
         let queue = self.shared.queue.lock().unwrap();
+        if self
+            .shared
+            .aborted
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            for q in queue.iter() {
+                if matches!(q.job, Job::Save(..)) {
+                    return Some(Rank::new(Class::Urgent, q.priority));
+                }
+            }
+            return None;
+        }
         queue.peek().map(|q| {
             // Jobs without a column (saves, meshes to free) go first.
             let class = if q.at.is_none() {
@@ -888,6 +900,14 @@ impl<G: ChunkGenerator> Source for Jobs<G> {
         let Some(job) = self.shared.queue.lock().unwrap().pop() else {
             return false;
         };
+        if self
+            .shared
+            .aborted
+            .load(std::sync::atomic::Ordering::Relaxed)
+            && !matches!(job.job, Job::Save(..))
+        {
+            return true;
+        }
         let started = job_stats::enabled().then(|| {
             let kind = match &job.job {
                 Job::Generate(..) => 1,
@@ -982,12 +1002,19 @@ impl<G: ChunkGenerator> Jobs<G> {
                 }
                 generator.decorate(&mut *worker, &mut region);
                 let mut writes = FinalWrites::default();
-                for (i, snapshot) in &finals {
-                    let blocks = generator.final_writes(snapshot, &region[*i]);
-                    writes
-                        .block_entities
-                        .extend(generator.final_block_entities(&region[*i], &blocks));
-                    writes.blocks.extend(blocks);
+                let blocks: [Vec<_>; 9] = std::array::from_fn(|n| {
+                    finals.get(n).map_or_else(Vec::new, |(i, snapshot)| {
+                        generator.final_writes(snapshot, &region[*i])
+                    })
+                });
+                let entries: Vec<_> = finals
+                    .iter()
+                    .zip(&blocks)
+                    .map(|((i, _), blocks)| (&region[*i], blocks.as_slice()))
+                    .collect();
+                writes.block_entities = generator.final_block_entities(&entries);
+                writes.blocks.extend(blocks.into_iter().flatten());
+                for (i, _) in &finals {
                     region[*i] = Box::new(());
                 }
                 let finals = finals.into_iter().map(|(i, _)| i).collect();
@@ -1069,6 +1096,7 @@ impl Streaming {
             context: RwLock::new(context.clone()),
             done: Mailbox::default(),
             meshes: Mutex::new(MeshPool::default()),
+            aborted: std::sync::atomic::AtomicBool::new(false),
         });
         let light_tables = context.light.clone();
         let saves: Arc<dyn Saves> = generator.clone();
@@ -1272,18 +1300,20 @@ impl Streaming {
             self.submit(None, 0, Job::Free(meshes));
         }
     }
-    /// The columns the server unloaded (ClientboundForgetLevelChunkPacket),
-    /// often thousands at once (a teleport or a moved view): their pending
-    /// sections go through [`forget_pending_sections`]. Returns the chunks
-    /// they held.
-    pub fn forget_columns(
-        &mut self,
-        world: &mut World,
-        gone: &FxHashSet<(i32, i32)>,
-    ) -> Vec<Arc<Chunk>> {
+    /// Remove resident columns before clearing their streaming and level state.
+    pub fn take_remote_columns(world: &mut World, gone: &FxHashSet<(i32, i32)>) -> Vec<Arc<Chunk>> {
+        let mut chunks = Vec::with_capacity(gone.len());
+        for key in gone {
+            chunks.extend(world.chunks.remove(key));
+        }
+        chunks
+    }
+
+    /// Clear streaming state after resident remote columns have been removed.
+    pub fn forget_columns(&mut self, world: &mut World, gone: &FxHashSet<(i32, i32)>) {
         // Every column held (a far teleport): no pending section is left to keep, and a
         // pass over them all (80,000 at render distance 32) took 1.7 ms of the frame.
-        if world.chunks.keys().all(|column| gone.contains(column)) {
+        if world.chunks.is_empty() {
             self.meshing.clear();
             self.compile_started.clear();
             self.waiting.clear();
@@ -1296,15 +1326,12 @@ impl Streaming {
                 world.layout().sections() as i32,
             );
         }
-        let mut chunks = Vec::with_capacity(gone.len());
         for &(x, z) in gone {
             self.lit.remove(&(x, z));
             self.meshed.remove(&(x, z));
             self.lighting.remove(&(x, z));
             world.dirty_sections.take_column(x, z);
-            chunks.extend(world.chunks.remove(&(x, z)));
         }
-        chunks
     }
     /// Queue a job for the column `at`, nearest first: its distance (`distance`)
     /// times four plus `bias`, which orders a column's jobs. A job without a
@@ -2392,6 +2419,30 @@ impl Streaming {
     fn near_finished(&self, x: i32, z: i32, reach: i32) -> bool {
         self.ranges().near_finished(x, z, reach)
     }
+    /// Abort unvisited background chunk generation, decoration, and meshing on world exit.
+    pub fn abort_generation(&mut self) {
+        self.shared
+            .aborted
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        if let Ok(mut queue) = self.shared.queue.lock() {
+            let mut saves = Vec::new();
+            for item in std::mem::take(&mut *queue).into_vec() {
+                if matches!(item.job, Job::Save(..)) {
+                    saves.push(item);
+                }
+            }
+            *queue = std::collections::BinaryHeap::from(saves);
+        }
+        self.generating.clear();
+        self.decorating = 0;
+        self.decorating_finals.clear();
+        self.finishing.clear();
+        self.viewing.clear();
+        self.waiting.clear();
+        self.meshing.clear();
+        self.lighting.clear();
+        self.jobs.notify_all();
+    }
     /// Save what generation holds outside the world: the proto chunks
     /// decoration wrote to. With `wait`, the decorations, columns and saves
     /// in flight are waited for first (their proto chunks are out in the
@@ -2424,10 +2475,13 @@ impl Streaming {
             let written: Vec<(i32, i32)> = self.written.drain().collect();
             return SaveStep::Protos(self.checkout_protos(written));
         }
-        while self.decorating > 0
-            || !self.finishing.is_empty()
-            || self.saving > 0
-            || !self.viewing.is_empty()
+        let aborted = self
+            .shared
+            .aborted
+            .load(std::sync::atomic::Ordering::Relaxed);
+        while (self.saving > 0)
+            || (!aborted
+                && (self.decorating > 0 || !self.finishing.is_empty() || !self.viewing.is_empty()))
         {
             let left = deadline.saturating_duration_since(std::time::Instant::now());
             match self.shared.done.recv_timeout(left) {
@@ -2507,10 +2561,13 @@ impl Streaming {
         if now() >= deadline {
             return SaveStep::Pending;
         }
-        if self.decorating > 0
-            || !self.finishing.is_empty()
-            || self.saving > 0
-            || !self.viewing.is_empty()
+        let aborted = self
+            .shared
+            .aborted
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if (self.saving > 0)
+            || (!aborted
+                && (self.decorating > 0 || !self.finishing.is_empty() || !self.viewing.is_empty()))
         {
             return SaveStep::Pending;
         }
@@ -3051,6 +3108,7 @@ impl Ranges<'_> {
 }
 impl Drop for Streaming {
     fn drop(&mut self) {
+        self.abort_generation();
         // Saves in flight hold proto chunks nothing else would save.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         while self.saving > 0 {
@@ -3266,6 +3324,24 @@ fn checkout_protos(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn taking_remote_columns_keeps_their_data_until_cleanup() {
+        let mut world = World::new(horizon_world::registry::BlockStateId(0), 0);
+        world.chunks.insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        world.chunks.insert((1, 0), Arc::new(Chunk::empty(1, 0)));
+        world
+            .block_entities
+            .insert((0, 64, 0), crate::containers::BlockEntity::Chest(vec![]));
+        let gone = [(0, 0), (2, 0)].into_iter().collect();
+        let chunks = Streaming::take_remote_columns(&mut world, &gone);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!((chunks[0].x, chunks[0].z), (0, 0));
+        assert!(!world.chunks.contains_key(&(0, 0)));
+        assert!(world.chunks.contains_key(&(1, 0)));
+        assert!(world.block_entities.contains_key(&(0, 64, 0)));
+        assert!(Streaming::take_remote_columns(&mut world, &gone).is_empty());
+    }
 
     #[test]
     #[ignore = "requires HORIZON_TEST_RESOURCES"]

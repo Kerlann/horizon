@@ -75,7 +75,17 @@ pub fn single(from: &Mob, to: &mut Mob, params: Params) {
 
 /// State shared by single and split conversions, without spawn finalization.
 pub fn common(from: &Mob, to: &mut Mob, preserve_can_pick_up_loot: bool) {
-    to.extra.effects = from.extra.effects.clone();
+    // setAbsorptionAmount runs before the effects are copied to the fresh mob.
+    let maximum = *to
+        .kind
+        .attributes
+        .get("minecraft:max_absorption")
+        .unwrap_or(&0.0) as f32;
+    to.absorption = from.absorption.clamp(0.0, maximum);
+    // addEffect for each: Absorption's onEffectStarted raises it again.
+    for &(effect, ticks, amplifier) in &from.extra.effects {
+        to.add_effect(effect, ticks, amplifier);
+    }
     to.extra.hidden_effects = from.extra.hidden_effects.clone();
     to.extra.ambient_effects = from.extra.ambient_effects.clone();
     if from.is_baby() {
@@ -111,6 +121,27 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
+    fn absorption_is_clamped_then_restarted_by_a_copied_absorption_effect() {
+        with_test_world(&[], |_, types| {
+            let mob =
+                |id, kind: &str| Mob::new(id, Arc::new(types.types[kind].clone()), Vec3::ZERO, 0.0);
+            let mut s = mob(1, "minecraft:skeleton");
+            s.absorption = 3.5;
+            let mut plain = mob(2, "minecraft:stray");
+            single(&s, &mut plain, Params::KEEP_ALL);
+            assert_eq!(plain.absorption, 0.0);
+            // AbsorptionMobEffect.onEffectStarted: 4 per level, amplifier 1.
+            s.extra.effects.push(("minecraft:absorption", 600, 1));
+            let mut boosted = mob(3, "minecraft:stray");
+            single(&s, &mut boosted, Params::KEEP_ALL);
+            assert_eq!(boosted.absorption, 8.0);
+            assert_eq!(
+                boosted.extra.effects,
+                vec![("minecraft:absorption", 600, 1)]
+            );
+        });
+    }
+    #[test]
     fn a_frozen_skeleton_becomes_a_stray_that_keeps_its_bow_and_name() {
         with_test_world(&[], |_, types| {
             let mob = |id, kind: &str| {
@@ -125,6 +156,7 @@ mod tests {
             s.yaw = 90.0;
             s.custom_name = Some("Frosty".into());
             s.no_ai = true;
+            s.absorption = 3.5;
             s.extra
                 .set_main_hand_stack(Some(ItemStack::new("minecraft:bow", 1)));
             s.extra.chest = Some("minecraft:chainmail_chestplate".into());
@@ -147,6 +179,7 @@ mod tests {
             single(&s, &mut st, Params::KEEP_ALL);
             assert_eq!(st.custom_name.as_deref(), Some("Frosty"));
             assert!(st.no_ai);
+            assert_eq!(st.absorption, 0.0);
             assert_eq!(st.yaw, 90.0);
             assert_eq!(
                 st.extra.main_hand_stack().map(|s| &*s.item),

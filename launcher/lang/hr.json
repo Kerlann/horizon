@@ -554,7 +554,6 @@
   "Native build · {version}": "Izvorna verzija · {version}",
   "On: every AI feature is hidden and off. The game opens no control socket, and horizon-ctl and the MCP servers refuse.": "Uključeno: svaka AI značajka je skrivena i isključena. Igra ne otvara kontrolnu utičnicu, a horizon-ctl i MCP poslužitelji odbijaju.",
   "the port": "port",
-  "The source of {source}. Its release ships {file}, a content mod: installing those from GitHub is not supported yet.": "Izvor za {source}. Izdanje isporučuje {file}, sadržajni mod: instaliranje takvih s GitHuba još nije podržano.",
   "Build anyway": "Svejedno izgradi",
   "A name, 3 to 16 letters": "Ime, 3 do 16 slova",
   "Installed {mods} from GitHub ({source}). Build it on the Mods page.": "Instalirano {mods} s GitHuba ({source}). Izgradite ga na stranici Modovi.",

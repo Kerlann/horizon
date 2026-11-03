@@ -37,7 +37,7 @@ impl Game<'_> {
             return;
         };
         // Players who left are forgotten once they could matter.
-        if far.players() > host.hub.guests.len() + 8 {
+        if far.players() > host.hub.online_count() + 8 {
             let guests = &host.hub.guests;
             far.retain(|c| guests.iter().any(|g| g.conn == c));
         }

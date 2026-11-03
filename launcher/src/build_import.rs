@@ -129,7 +129,7 @@ fn not_a_game(file: &str) -> String {
 /// "horizon-client (1).exe" as a browser saves a second copy), or from a zip or a .tar.gz, its
 /// entry named as the game is on this platform (`CLIENT`), in any folder. A GitHub Actions
 /// artifact is a zip around the release's own archive: one archive inside is looked into too.
-/// The launcher and horizon-ctl carry the mod API mark too: the name tells them apart.
+/// The name also prevents importing launcher and control-tool downloads.
 fn read_program(path: &Path, file: &str) -> Result<Vec<u8>, String> {
     let open = || fs::File::open(path).map_err(|e| format!("{file}: {e}"));
     let lower = file.to_ascii_lowercase();
@@ -222,7 +222,7 @@ fn read_at_most(from: impl Read, file: &str) -> Result<Vec<u8>, String> {
 
 /// Whether `program` is a Horizon game for this computer: it starts as this platform's programs
 /// do (PE on Windows, Mach-O on macOS, ELF elsewhere: a Linux build picked on Windows would
-/// only fail to start) and carries the mod API mark every game since 0.2.69 does.
+/// only fail to start) and carries the exact game executable identity signature.
 fn is_game(program: &[u8]) -> bool {
     let magic: &[&[u8]] = if cfg!(windows) {
         &[b"MZ"]
@@ -233,7 +233,9 @@ fn is_game(program: &[u8]) -> bool {
         &[b"\x7fELF"]
     };
     magic.iter().any(|m| program.starts_with(m))
-        && horizon_mods::api_level::read_mark(program).is_some()
+        && program
+            .windows(horizon_mods::game_identity::MARK.len())
+            .any(|w| w == horizon_mods::game_identity::MARK)
 }
 
 /// Installs `program` in `versions` as a copy of installed version `base` with it in place of
@@ -357,7 +359,7 @@ mod tests {
             .count()
     }
 
-    /// A program as this platform's are, carrying the mod API mark the game's do.
+    /// A program as this platform's are, carrying the game's identity signature.
     fn program(body: &[u8]) -> Vec<u8> {
         let magic: &[u8] = if cfg!(windows) {
             b"MZ"
@@ -366,7 +368,7 @@ mod tests {
         } else {
             b"\x7fELF"
         };
-        [magic, body, &horizon_mods::api_level::MARK[..]].concat()
+        [magic, body, &horizon_mods::game_identity::MARK[..]].concat()
     }
 
     #[test]
@@ -454,15 +456,25 @@ mod tests {
     #[test]
     fn only_a_horizon_game_for_this_computer_is_imported() {
         assert!(is_game(&program(b"")));
-        // Another program of this platform, without the game's mark.
-        assert!(!is_game(&program(b"")[..program(b"").len() - 27]));
+        let marked = program(b"");
+        let unmarked = &marked[..marked.len() - horizon_mods::game_identity::MARK.len()];
+        assert!(!is_game(unmarked));
+        // Retired WIT levels, partial signatures and mutated signatures aren't game identity.
+        for mark in [
+            &b"horizon-mod-api-level:0007;"[..],
+            &horizon_mods::game_identity::MARK[..horizon_mods::game_identity::MARK.len() - 1],
+            &b"horizon-game-executable:"[..],
+        ] {
+            assert!(!is_game(&[unmarked, mark].concat()));
+        }
+        assert!(!is_game(&horizon_mods::game_identity::MARK));
         let other = if cfg!(windows) {
             &b"\x7fELF"[..]
         } else {
             &b"MZ"[..]
         };
         assert!(!is_game(
-            &[other, &horizon_mods::api_level::MARK[..]].concat()
+            &[other, &horizon_mods::game_identity::MARK[..]].concat()
         ));
         let d = dir("zip");
         let zip_path = d.join("horizon-client-windows-x86_64.zip");
@@ -482,7 +494,7 @@ mod tests {
         let plain = d.join(name);
         fs::write(&plain, program(b"plain")).unwrap();
         assert_eq!(read_program(&plain, name).unwrap(), program(b"plain"));
-        // The launcher carries the mark too.
+        // Even a marked program under another executable's name is refused.
         let launcher = d.join("horizon-launcher");
         fs::write(&launcher, program(b"launcher")).unwrap();
         assert!(read_program(&launcher, "horizon-launcher").is_err());

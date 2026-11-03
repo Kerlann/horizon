@@ -308,7 +308,6 @@
   "Downloading {source}…": "{source} をダウンロード中…",
   "Installing…": "インストール中…",
   "The release file {file} ({source}).": "リリースファイル {file} ({source})。",
-  "The source of {source}. Its release ships {file}, a content mod: installing those from GitHub is not supported yet.": "{source} のソースコードです。このリリースにはコンテンツModである {file} が含まれていますが、GitHubからの此类Modのインストールは現在サポートされていません。",
   "The source at commit {commit}.": "コミット {commit} のソースコード。",
   "Not reviewed by the Horizon registry": "Horizonレジストリで未審査",
   "Native mods run with full access to this computer. Read the source before you install it.": "ネイティブModはこのコンピューターへのフルアクセス権限を持って実行されます。インストール前にソースコードを確認してください。",

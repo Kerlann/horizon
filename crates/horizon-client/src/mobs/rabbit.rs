@@ -23,7 +23,7 @@ const CLIENT_JUMP_TICKS: usize = 4;
 const CLIENT_JUMP_DURATION: usize = 5;
 
 /// The killer bunny's variant id (`Rabbit.Variant.EVIL`).
-const EVIL: u8 = 99;
+pub const EVIL: u8 = 99;
 
 /// Rabbit.registerGoals.
 pub fn register(m: &mut Mob) {
