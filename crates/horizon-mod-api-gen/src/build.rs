@@ -1,5 +1,5 @@
 //! Cargo-facing generation and the launcher's trait injection boundary.
-use super::{Target, catalog_hooks, free_function_source, rustfmt, sources};
+use super::{Target, catalog_hooks, free_function_source, sources};
 use quote::ToTokens;
 use std::{collections::HashSet, fs, path::Path};
 
@@ -30,7 +30,7 @@ pub fn generate(root: &Path, out_dir: &Path, target: Target) -> Result<(), Strin
     };
     for (name, code) in outputs {
         syn::parse_file(&code).map_err(|e| format!("generated Rust: {e}"))?;
-        fs::write(out_dir.join(name), rustfmt(&code)?).map_err(|e| e.to_string())?;
+        fs::write(out_dir.join(name), code).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
