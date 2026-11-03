@@ -104,19 +104,20 @@ pub enum BlockEntity {
 /// (`ModBlockEntityFields`) as a struct's: `entity.nbt`. Each change goes
 /// through `DerefMut` and gives it a new `revision`, so a client tells
 /// whether what it kept of it (`BlockEntityDraw::keep`) is still right
-/// without comparing the whole entity, and no write can skip that.
+/// without comparing the whole entity, and no write can skip that. Its type
+/// identity is fixed at construction and is not part of the mutable fields.
 pub struct ModBlockEntity {
+    id: String,
     fields: ModBlockEntityFields,
     revision: ModRevision,
 }
-/// What a `ModBlockEntity` holds: its type id (`mymod:machine`), its saved
-/// compound without `id`, `x`, `y`, `z` and `Items`, its item slots
+/// What a `ModBlockEntity` can change: its saved compound without `id`,
+/// `x`, `y`, `z` and `Items`, its item slots
 /// (`Items`) when its block has a container (`ModContainer`), and the data
 /// slots its menu shows (`ContainerData`: a furnace menu's flame and arrow),
 /// which the mod sets and nothing saves.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ModBlockEntityFields {
-    pub id: String,
     pub nbt: Compound,
     pub items: Vec<Option<ItemStack>>,
     pub data: Vec<i32>,
@@ -131,14 +132,29 @@ pub struct ModRevision {
 }
 static MOD_BLOCK_ENTITIES_MADE: AtomicU64 = AtomicU64::new(0);
 impl ModBlockEntity {
-    pub fn new(fields: ModBlockEntityFields) -> Self {
+    pub fn new(id: String, fields: ModBlockEntityFields) -> Self {
         Self {
+            id,
             fields,
             revision: ModRevision {
                 born: MOD_BLOCK_ENTITIES_MADE.fetch_add(1, Ordering::Relaxed),
                 changes: 0,
             },
         }
+    }
+    /// The block entity's immutable type id (`mymod:machine`).
+    ///
+    /// ```compile_fail
+    /// let mut entity = horizon_client_render::containers::ModBlockEntity::default();
+    /// entity.id = "other:machine".into();
+    /// ```
+    ///
+    /// ```compile_fail
+    /// let mut entity = horizon_client_render::containers::ModBlockEntity::default();
+    /// entity.id().push_str("_changed");
+    /// ```
+    pub fn id(&self) -> &str {
+        &self.id
     }
     pub fn revision(&self) -> ModRevision {
         self.revision
@@ -155,29 +171,27 @@ impl ModBlockEntity {
         }
     }
 }
-impl From<ModBlockEntityFields> for ModBlockEntity {
-    fn from(fields: ModBlockEntityFields) -> Self {
-        Self::new(fields)
-    }
-}
 impl Default for ModBlockEntity {
     fn default() -> Self {
-        Self::new(ModBlockEntityFields::default())
+        Self::new(String::new(), ModBlockEntityFields::default())
     }
 }
 impl Clone for ModBlockEntity {
     fn clone(&self) -> Self {
-        Self::new(self.fields.clone())
+        Self::new(self.id.clone(), self.fields.clone())
     }
 }
 impl PartialEq for ModBlockEntity {
     fn eq(&self, other: &Self) -> bool {
-        self.fields == other.fields
+        self.id == other.id && self.fields == other.fields
     }
 }
 impl std::fmt::Debug for ModBlockEntity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.fields.fmt(f)
+        f.debug_struct("ModBlockEntity")
+            .field("id", &self.id)
+            .field("fields", &self.fields)
+            .finish()
     }
 }
 impl std::ops::Deref for ModBlockEntity {
@@ -698,13 +712,16 @@ mod tests {
 
     #[test]
     fn a_mod_block_entitys_revision_moves_with_each_change_and_only_then() {
-        let mut machine = ModBlockEntity::new(ModBlockEntityFields {
-            id: "mymod:machine".into(),
-            data: vec![0],
-            ..Default::default()
-        });
+        let mut machine = ModBlockEntity::new(
+            "mymod:machine".into(),
+            ModBlockEntityFields {
+                data: vec![0],
+                ..Default::default()
+            },
+        );
         let made = machine.revision();
         // Reads leave it.
+        assert_eq!(machine.id(), "mymod:machine");
         assert_eq!(machine.data[0] + machine.nbt.len() as i32, 0);
         assert_eq!(machine.revision(), made);
         // Every way to change a field moves it.
@@ -713,10 +730,11 @@ mod tests {
             |m| m.data[0] = 1,
             |m| _ = m.nbt.insert("progress".into(), Tag::Int(3)),
             |m| m.items.push(None),
-            |m| m.id.push('s'),
+            |m| **m = ModBlockEntityFields::default(),
         ];
         for change in changes {
             change(&mut machine);
+            assert_eq!(machine.id(), "mymod:machine");
             assert!(!seen.contains(&machine.revision()));
             seen.push(machine.revision());
         }
@@ -725,6 +743,8 @@ mod tests {
         let copy = machine.clone();
         assert_eq!(copy, machine);
         assert!(!seen.contains(&copy.revision()));
+        let other_kind = ModBlockEntity::new("mymod:other".into(), machine.fields.clone());
+        assert_ne!(other_kind, machine);
         let fresh = ModBlockEntity::default();
         assert_ne!(fresh.revision(), ModBlockEntity::default().revision());
     }

@@ -662,11 +662,7 @@ mod tests {
     }
 
     fn machine() -> ModRevision {
-        ModBlockEntity::new(ModBlockEntityFields {
-            id: "mymod:machine".into(),
-            ..Default::default()
-        })
-        .revision()
+        ModBlockEntity::new("mymod:machine".into(), Default::default()).revision()
     }
 
     fn vertex(x: f32) -> Vertex {
@@ -686,11 +682,13 @@ mod tests {
     fn kept_geometry_is_drawn_again_until_what_it_was_drawn_with_changes() {
         let mut kept = KeptGeometry::default();
         let pos = [1, 2, 3];
-        let mut entity = ModBlockEntity::new(ModBlockEntityFields {
-            id: "mymod:machine".into(),
-            data: vec![0],
-            ..Default::default()
-        });
+        let mut entity = ModBlockEntity::new(
+            "mymod:machine".into(),
+            ModBlockEntityFields {
+                data: vec![0],
+                ..Default::default()
+            },
+        );
         let drawn = entity.revision();
         kept.keep(pos, KEY, drawn, DEFAULT_BOUNDS, &[vertex(0.5)], 0);
         let entry = kept.get(pos, KEY, entity.revision(), 1).expect("kept");
@@ -716,11 +714,13 @@ mod tests {
         }
         assert!(kept.get([1, 2, 4], KEY, drawn, 1).is_none());
         // Another block entity in its place, as the old one was: not it.
-        let replaced = ModBlockEntity::new(ModBlockEntityFields {
-            id: "mymod:machine".into(),
-            data: vec![0],
-            ..Default::default()
-        });
+        let replaced = ModBlockEntity::new(
+            "mymod:machine".into(),
+            ModBlockEntityFields {
+                data: vec![0],
+                ..Default::default()
+            },
+        );
         assert!(kept.get(pos, KEY, replaced.revision(), 1).is_none());
         // Drawn again and kept with the new data, it replaces the old.
         kept.keep(

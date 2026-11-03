@@ -194,7 +194,7 @@ impl Game<'_> {
             // The block entity is out of the world while it ticks.
             return matches!(
                 self.world.block_entities.get(&key),
-                Some(horizon_client::containers::BlockEntity::Mod(m)) if !m.id.is_empty()
+                Some(horizon_client::containers::BlockEntity::Mod(m)) if !m.id().is_empty()
             )
             .then(|| FluidAt::Mod(Arc::clone(tanks)));
         }

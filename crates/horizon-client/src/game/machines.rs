@@ -209,7 +209,7 @@ impl Containers<'_> {
         // ticking now is out of the world (an empty id marks its place): what
         // went into its place would be lost when it comes back.
         if let BlockEntity::Mod(m) = entity {
-            if m.id.is_empty() {
+            if m.id().is_empty() {
                 return None;
             }
             let container = Arc::clone(self.world.block_entities.mod_container(state.0)?);
@@ -1978,7 +1978,7 @@ mod capacity_tests {
 mod part_front_tests {
     use super::super::native_entity_refs::tests::with_game;
     use horizon_client::chunk::Chunk;
-    use horizon_client::containers::{BlockEntity, ModBlockEntity, ModBlockEntityFields};
+    use horizon_client::containers::{BlockEntity, ModBlockEntity};
     use horizon_client::items::ItemStack;
     use horizon_client::mod_api::NativeBlockUpdateFlags;
     use horizon_core::position::BlockPos;
@@ -2020,10 +2020,10 @@ mod part_front_tests {
             ));
             game.world.block_entities.insert(
                 (1, 64, 8),
-                BlockEntity::Mod(Box::new(ModBlockEntity::new(ModBlockEntityFields {
-                    id: "test:pipe".into(),
-                    ..Default::default()
-                }))),
+                BlockEntity::Mod(Box::new(ModBlockEntity::new(
+                    "test:pipe".into(),
+                    Default::default(),
+                ))),
             );
             if let Some(BlockEntity::Crafter(c)) = game.world.block_entities.get_mut(&(2, 64, 8)) {
                 c.items[3] = Some(stack("minecraft:oak_planks", 1));
@@ -2074,10 +2074,10 @@ mod part_front_tests {
             ));
             game.world.block_entities.insert(
                 (1, 64, 8),
-                BlockEntity::Mod(Box::new(ModBlockEntity::new(ModBlockEntityFields {
-                    id: "test:pipe".into(),
-                    ..Default::default()
-                }))),
+                BlockEntity::Mod(Box::new(ModBlockEntity::new(
+                    "test:pipe".into(),
+                    Default::default(),
+                ))),
             );
             if let Some(BlockEntity::Chest(items)) = game.world.block_entities.get_mut(&(2, 64, 8))
             {
@@ -2133,11 +2133,7 @@ mod part_front_tests {
                 .unwrap();
             let flags = NativeBlockUpdateFlags::NEIGHBORS;
             let mod_part = |id: &str| {
-                let fields = ModBlockEntityFields {
-                    id: id.into(),
-                    ..Default::default()
-                };
-                BlockEntity::Mod(Box::new(ModBlockEntity::new(fields)))
+                BlockEntity::Mod(Box::new(ModBlockEntity::new(id.into(), Default::default())))
             };
             let chest_items =
                 |game: &super::Game<'_>, z| match game.world.block_entities.get(&(2, 64, z)) {

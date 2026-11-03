@@ -9533,11 +9533,13 @@ impl Game<'_> {
             // A content mod's menu type: its container's slots, which its
             // mod's screen places.
             _ if mod_type.is_some() => Some(BlockEntity::Mod(Box::new(
-                horizon_client::containers::ModBlockEntityFields {
-                    items: vec![None; mod_type.map_or(0, |t| t.slots)],
-                    ..Default::default()
-                }
-                .into(),
+                horizon_client::containers::ModBlockEntity::new(
+                    String::new(),
+                    horizon_client::containers::ModBlockEntityFields {
+                        items: vec![None; mod_type.map_or(0, |t| t.slots)],
+                        ..Default::default()
+                    },
+                ),
             ))),
             _ => {
                 // Unsupported menu: tell the server we closed it.

@@ -139,7 +139,7 @@ impl Game<'_> {
         }
         if !matches!(
             self.world.block_entities.get(&pos),
-            Some(BlockEntity::Mod(m)) if !m.id.is_empty()
+            Some(BlockEntity::Mod(m)) if !m.id().is_empty()
         ) {
             return false;
         }

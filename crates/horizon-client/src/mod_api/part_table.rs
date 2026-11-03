@@ -3761,8 +3761,7 @@ pub(crate) mod tests {
         assert!(ticks("test:press"));
         assert!(!ticks("test:press_entity"));
         let tick = |kind: &str| {
-            let mut entity = ModBlockEntity::default();
-            entity.id = kind.into();
+            let mut entity = ModBlockEntity::new(kind.into(), Default::default());
             dispatch_block_entity_tick(&mut NoHost, [0, 64, 0], &mut entity);
             entity.data.len()
         };

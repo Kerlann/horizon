@@ -52,7 +52,7 @@ impl Game<'_> {
         });
         // The block entity is out of the world while it ticks.
         match self.world.block_entities.get(&(x, y, z)) {
-            Some(BlockEntity::Mod(m)) if reached && !m.id.is_empty() => {
+            Some(BlockEntity::Mod(m)) if reached && !m.id().is_empty() => {
                 Some((Arc::clone(buffer), read_energy(&m.nbt)))
             }
             _ => None,
@@ -220,14 +220,12 @@ mod tests {
             for (pos, energy) in [(from, 800), (to, 0)] {
                 let flags = NativeBlockUpdateFlags::NEIGHBORS;
                 assert!(game.native_level_set_block(level, pos, block, flags));
-                let mut fields = ModBlockEntityFields {
-                    id: "test:battery".into(),
-                    ..Default::default()
-                };
+                let mut fields = ModBlockEntityFields::default();
                 fields
                     .nbt
                     .insert(JavaString::from("energy"), Tag::Int(energy));
-                let entity = BlockEntity::Mod(Box::new(ModBlockEntity::new(fields)));
+                let entity =
+                    BlockEntity::Mod(Box::new(ModBlockEntity::new("test:battery".into(), fields)));
                 game.world
                     .block_entities
                     .insert((pos[0], pos[1], pos[2]), entity);

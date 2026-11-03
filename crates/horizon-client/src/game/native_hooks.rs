@@ -7569,7 +7569,7 @@ impl Game<'_> {
         let Some(BlockEntity::Mod(m)) = self.world.block_entities.get_mut(&key) else {
             return None;
         };
-        if m.id.is_empty() {
+        if m.id().is_empty() {
             return None;
         }
         let items = m.items.clone();
@@ -8513,14 +8513,13 @@ impl Game<'_> {
         let mut entity = None;
         self.native_block_entity(name, &mut entity);
         let (id, nbt) = entity?;
-        Some(BlockEntity::Mod(Box::new(
+        Some(BlockEntity::Mod(Box::new(ModBlockEntity::new(
+            id,
             ModBlockEntityFields {
-                id,
                 nbt,
                 ..Default::default()
-            }
-            .into(),
-        )))
+            },
+        ))))
     }
     /// The containers of the mod blocks' block entities, by block state
     /// (`native_block_entity_container`), checked.
@@ -8910,7 +8909,7 @@ impl Game<'_> {
         items: &[Option<ItemStack>],
     ) {
         if let Some(BlockEntity::Mod(m)) = self.world.block_entities.get_mut(&pos)
-            && m.id.is_empty()
+            && m.id().is_empty()
         {
             let moved = taken.items != items;
             **m = taken;
@@ -8947,7 +8946,7 @@ impl Game<'_> {
         let Some(BlockEntity::Mod(m)) = self.world.block_entities.get_mut(&pos) else {
             return;
         };
-        if m.id.is_empty() {
+        if m.id().is_empty() {
             return;
         }
         let mut taken = std::mem::take(&mut **m);
@@ -9278,6 +9277,49 @@ fn mod_screen_opens(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn replacing_mod_block_entity_payload_keeps_its_type_and_saved_identity() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::chunk::Chunk;
+        use horizon_client::containers::{BlockEntity, ModBlockEntity, ModBlockEntityFields};
+        use horizon_client::save::{decode_block_entity, encode_block_entity};
+        use std::sync::Arc;
+
+        with_game(|game| {
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let pos = (1, 64, 1);
+            let machine = ModBlockEntity::new("test:machine".into(), Default::default());
+            let made = machine.revision();
+            game.world
+                .block_entities
+                .insert(pos, BlockEntity::Mod(Box::new(machine)));
+            assert_eq!(
+                game.native_with_mod_block_entity([1, 64, 1], |entity| {
+                    **entity = ModBlockEntityFields {
+                        data: vec![7],
+                        ..Default::default()
+                    };
+                }),
+                Some(())
+            );
+            let entity = game.world.block_entities.get(&pos).unwrap();
+            let BlockEntity::Mod(machine) = entity else {
+                panic!("not a mod block entity");
+            };
+            assert_eq!(machine.id(), "test:machine");
+            assert_eq!(machine.data, [7]);
+            assert_ne!(machine.revision(), made);
+            assert!(game.world.modified.contains(&(0, 0)));
+            let saved = encode_block_entity(pos, entity, "minecraft:stone");
+            let (saved_pos, loaded) = decode_block_entity(&saved).unwrap();
+            assert_eq!(saved_pos, pos);
+            assert_eq!(loaded.id(), "test:machine");
+        });
+    }
+
     #[test]
     fn hand_pose_rejects_invalid_components() {
         let identity = super::hand_pose_matrix([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]);

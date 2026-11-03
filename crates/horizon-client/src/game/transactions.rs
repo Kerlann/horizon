@@ -901,12 +901,9 @@ mod tests {
         assert!(game.native_level_set_block(level, [0, 64, 4], hopper, flags));
         assert!(game.native_level_set_block(level, [2, 64, 4], chest, flags));
         let part = |id: &str| {
-            let fields = horizon_client::containers::ModBlockEntityFields {
-                id: id.into(),
-                ..Default::default()
-            };
             BlockEntity::Mod(Box::new(horizon_client::containers::ModBlockEntity::new(
-                fields,
+                id.into(),
+                Default::default(),
             )))
         };
         let slots = |game: &Game<'_>, pos| match game.world.block_entities.get(&pos) {
@@ -965,11 +962,10 @@ mod mod_capability_tests {
                 (1, "test:chem_vat", Compound::new()),
             ] {
                 let fields = ModBlockEntityFields {
-                    id: id.into(),
                     nbt,
                     ..Default::default()
                 };
-                let entity = BlockEntity::Mod(Box::new(ModBlockEntity::new(fields)));
+                let entity = BlockEntity::Mod(Box::new(ModBlockEntity::new(id.into(), fields)));
                 game.world.block_entities.insert((x, 64, 0), entity);
             }
             let host: &mut dyn Host = game;

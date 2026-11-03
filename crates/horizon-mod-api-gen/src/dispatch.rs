@@ -187,7 +187,7 @@ pub(super) fn emit(
                     // An entity's type id need not be its block's: its own table.
                     "& ModBlockEntity" | "& mut ModBlockEntity" => {
                         table = "block_entity_kind";
-                        format!("Some(&*{key}.id)")
+                        format!("Some({key}.id())")
                     }
                     other => return Err(format!("key {key} of {name} has type {other}")),
                 };

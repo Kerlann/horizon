@@ -580,19 +580,16 @@ mod tests {
         // a mod block's, as `Game::new_block_entity` makes it
         let made = |n: &str| {
             (n == "machines:press").then(|| {
-                BlockEntity::Mod(Box::new(
-                    horizon_client::containers::ModBlockEntityFields {
-                        id: "machines:press".into(),
-                        ..Default::default()
-                    }
-                    .into(),
-                ))
+                BlockEntity::Mod(Box::new(horizon_client::containers::ModBlockEntity::new(
+                    "machines:press".into(),
+                    Default::default(),
+                )))
             })
         };
         replace_block_entities(&mut w, &out.tracked, names, made);
         assert!(matches!(
             w.block_entities.get(&(3, 10, 3)),
-            Some(BlockEntity::Mod(e)) if e.id == "machines:press"
+            Some(BlockEntity::Mod(e)) if e.id() == "machines:press"
         ));
     }
 
@@ -768,20 +765,17 @@ mod tests {
             |n| {
                 calls.push(n.to_string());
                 (n == "machines:press").then(|| {
-                    BlockEntity::Mod(Box::new(
-                        horizon_client::containers::ModBlockEntityFields {
-                            id: format!("press-{}", calls.len()),
-                            ..Default::default()
-                        }
-                        .into(),
-                    ))
+                    BlockEntity::Mod(Box::new(horizon_client::containers::ModBlockEntity::new(
+                        format!("press-{}", calls.len()),
+                        Default::default(),
+                    )))
                 })
             },
         );
         let ids: Vec<Option<String>> = made
             .iter()
             .map(|e| match e {
-                Some(BlockEntity::Mod(e)) => Some(e.id.to_string()),
+                Some(BlockEntity::Mod(e)) => Some(e.id().to_string()),
                 _ => None,
             })
             .collect();

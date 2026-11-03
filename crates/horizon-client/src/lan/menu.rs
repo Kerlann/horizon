@@ -1265,7 +1265,7 @@ mod tests {
     /// menu reads and writes only its count, the rest stay saved.
     #[test]
     fn mod_menu_shows_only_its_container_slots() {
-        use crate::containers::{ModBlockEntityFields, ModContainer};
+        use crate::containers::{ModBlockEntity, ModBlockEntityFields, ModContainer};
         let mut world = World::new(horizon_world::registry::BlockStateId(0), 0);
         let container = ModContainer {
             slots: 5,
@@ -1280,14 +1280,13 @@ mod tests {
         let k = (0, 64, 0);
         world.block_entities.insert(
             k,
-            BlockEntity::Mod(Box::new(
+            BlockEntity::Mod(Box::new(ModBlockEntity::new(
+                "gtmod:machine".into(),
                 ModBlockEntityFields {
-                    id: "gtmod:machine".into(),
                     items,
                     ..Default::default()
-                }
-                .into(),
-            )),
+                },
+            ))),
         );
         let mut g = guest();
         let slots = Slots::Block(k);

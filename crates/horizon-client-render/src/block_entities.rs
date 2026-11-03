@@ -331,7 +331,7 @@ impl BlockEntities {
     pub fn insert(&mut self, pos: Pos, entity: BlockEntity) -> Option<BlockEntity> {
         let new_is_mod = matches!(entity, BlockEntity::Mod(_));
         let same_type = |old: &BlockEntity| match (old, &entity) {
-            (BlockEntity::Mod(old), BlockEntity::Mod(new)) => old.id == new.id,
+            (BlockEntity::Mod(old), BlockEntity::Mod(new)) => old.id() == new.id(),
             (old, new) => std::mem::discriminant(old) == std::mem::discriminant(new),
         };
         if !self.map.get(&pos).is_some_and(same_type) {
@@ -608,13 +608,10 @@ mod tests {
         entities.insert(p, hopper());
         assert_eq!(entities.attachments_mut(p).unwrap().get(&ty), Ok(4));
         let machine = |id: &str| {
-            BlockEntity::Mod(Box::new(
-                crate::chunk::block_entity::ModBlockEntityFields {
-                    id: id.into(),
-                    ..Default::default()
-                }
-                .into(),
-            ))
+            BlockEntity::Mod(Box::new(crate::chunk::block_entity::ModBlockEntity::new(
+                id.into(),
+                Default::default(),
+            )))
         };
         entities.insert(p, machine("test:a"));
         assert_eq!(entities.attachments_mut(p).unwrap().get(&ty), Ok(0));
