@@ -13784,14 +13784,15 @@ impl Game<'_> {
     /// adding their counts and keeping the smaller age. Server only.
     fn merge_orbs(&mut self) {
         let mut removed = vec![false; self.orbs.len()];
-        // Orbs a merge hook awards join after the scan.
+        // Only orbs present at the start get a tick, but each scan sees new joins.
         let scanned = removed.len();
         for i in 0..scanned {
             if removed[i] || self.orbs[i].ticks % 20 != 1 {
                 continue;
             }
             let area = self.orbs[i].bounds().inflate(Vec3::new(0.5, 0.5, 0.5));
-            for j in 0..scanned {
+            removed.resize(self.orbs.len(), false);
+            for j in 0..self.orbs.len() {
                 if j == i || removed[j] || !self.orbs[j].bounds().intersects(area) {
                     continue;
                 }

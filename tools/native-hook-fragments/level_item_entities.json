@@ -7,6 +7,6 @@
     {"name": "level_award_experience", "side": "server", "target": "horizon_client::game::native_level_items::Game<'_>::native_level_award_experience", "receiver": "level"}
   ],
   "rust_summary": "item entities and experience orbs in the level in place through a `LevelRef`\n(`native_level_pop_resource`, `native_level_spawn_item`, `native_level_award_experience`).",
-  "doc_summary": "item entities and experience in a level through a `LevelRef`: `level.pop_resource(host, pos, stack)` drops a stack as a broken block does (`Block.popResource`), `level.spawn_item(host, x, y, z, stack)` and `spawn_item_with_motion` spawn a plain item entity (`new ItemEntity`), and `level.award_experience(host, x, y, z, amount)` splits experience into orbs (`ExperienceOrb.award`). Each acts in the level in place on the server, and is None or false on a client or for a level not in place. Bundles need \"hooks\": @API:level_item_entities@.",
+  "doc_summary": "item entities and experience in a level through a `LevelRef`: `level.pop_resource(host, pos, stack)` drops a stack as a broken block does (`Block.popResource`), `level.spawn_item(host, x, y, z, stack)` and `spawn_item_with_motion` spawn a plain item entity (`new ItemEntity`), and `level.award_experience(host, x, y, z, amount)` splits experience into orbs (`ExperienceOrb.award`). Each acts in the level in place on the server, and is None or false on a client or for a level not in place.",
   "comments": ["crates/horizon-client/src/game/native_level_items.rs"]
 }

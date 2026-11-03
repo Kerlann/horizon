@@ -9,12 +9,6 @@ use super::{Game, dispenser, spill};
 use horizon_client::mod_api::{EntityRef, ItemStack, LevelRef};
 
 impl Game<'_> {
-    /// Whether `level` is the level in place of this world's open.
-    fn level_in_place(&self, level: LevelRef) -> bool {
-        self.remote.is_none()
-            && self.native_lifecycle.epoch() == Some(level.epoch())
-            && level.dimension() == self.dim.id()
-    }
     /// Whether vanilla could make an item entity of `stack`: not empty
     /// (`ItemStack.isEmpty`) and of an item the registry has.
     fn stack_spawns(&self, stack: &ItemStack) -> bool {
@@ -57,7 +51,7 @@ impl Game<'_> {
         pos: [i32; 3],
         stack: ItemStack,
     ) -> Option<EntityRef> {
-        if !self.level_in_place(level) {
+        if !self.native_level_in_place(level) {
             return None;
         }
         let at = spill::pop_position(&mut self.world.random, pos);
@@ -112,7 +106,7 @@ impl Game<'_> {
             .into_iter()
             .chain(motion.into_iter().flatten())
             .all(f64::is_finite);
-        if !finite || !self.level_in_place(level) || !self.stack_spawns(&stack) {
+        if !finite || !self.native_level_in_place(level) || !self.stack_spawns(&stack) {
             return None;
         }
         let motion = motion.unwrap_or_else(dispenser::new_item_motion);
@@ -136,7 +130,10 @@ impl Game<'_> {
         z: f64,
         amount: u32,
     ) -> bool {
-        if amount == 0 || ![x, y, z].iter().all(|v| v.is_finite()) || !self.level_in_place(level) {
+        if amount == 0
+            || ![x, y, z].iter().all(|v| v.is_finite())
+            || !self.native_level_in_place(level)
+        {
             return false;
         }
         self.spawn_orbs([x, y, z], amount);
@@ -146,6 +143,53 @@ impl Game<'_> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[ignore = "needs prepared resources and an isolated process for native mods"]
+    fn later_orb_scan_sees_orb_awarded_by_merge_hook() {
+        use crate::mod_api::{
+            self, ExperienceOrbCanMergeEvent, ExperienceOrbMergeEvent, Flow, Hooks, Host,
+        };
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        struct Award(AtomicBool);
+        impl Hooks for Award {
+            fn experience_orb_can_merge(
+                &self,
+                _: &mut dyn Host,
+                event: &mut ExperienceOrbCanMergeEvent<'_>,
+            ) {
+                event.can_merge = event.from != 0;
+            }
+            fn experience_orb_merge(
+                &self,
+                host: &mut dyn Host,
+                event: &mut ExperienceOrbMergeEvent<'_>,
+            ) -> Flow {
+                if !self.0.swap(true, Ordering::Relaxed) {
+                    let level = host.level(event.dimension).unwrap();
+                    assert!(level.award_experience(host, 10.0, 70.0, 0.0, 1));
+                }
+                Flow::Continue
+            }
+        }
+        let mods: mod_api::Mods =
+            vec![Box::new(Award(AtomicBool::new(false))) as Box<dyn Hooks>].into();
+        mod_api::testing::with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                game.add_orb([0.0, 70.0, 0.0], 1);
+                game.add_orb([10.0, 70.0, 0.0], 1);
+                game.add_orb([0.0, 70.0, 0.0], 1);
+                for orb in &mut game.orbs {
+                    orb.ticks = 1;
+                }
+                game.merge_orbs();
+                assert_eq!(game.orbs.len(), 2);
+                assert_eq!(game.orbs[0].count, 2);
+                assert_eq!(game.orbs[1].count, 2);
+            });
+        });
+    }
+
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_level_pops_spawns_and_awards_as_vanilla() {
