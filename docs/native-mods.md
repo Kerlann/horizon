@@ -2480,22 +2480,28 @@ the server entity and level reads available on a client.
   blocks). `chunk.forced(host)` and `level.forced_chunks(host)` read the chunks `/forceload` holds (`/forceload query`);
   `chunk.set_forced(host, bool)` is `/forceload add` or `remove` of one chunk and returns whether the set changed. That
   is the world's own state: it is saved with the level and stays until `/forceload remove`.
-- `chunk.set_mod_forced(host, owner, forced)` (NeoForge's `TicketController.forceChunk`, one implicit controller per mod)
-  holds or releases a chunk for the calling mod and returns whether its tickets changed. `owner` is a `NativeTicketOwner`,
-  `Block([x, y, z])` or `Entity(uuid)`. A ticket is scoped by mod, owner and chunk, so two owners in one chunk release
-  separately; the chunk stays loaded, entity ticking and saved, and its level keeps ticking, while any ticket or
-  `/forceload` holds it. `level.mod_forced_chunks(host)` lists the calling mod's tickets as `(owner, [x, z])`.
-  Tickets are saved in `data/horizon/mod_chunk_tickets.dat`, never in vanilla's `chunk_tickets.dat`; when a world loads,
-  the tickets of a mod that isn't installed are discarded. There is no non-ticking ticket. Outside a mod's hook, and for a
-  stale handle or a chunk past the world's bounds, the calls return `false` or `None`.
+- `chunk.set_mod_forced(host, owner, forced, natural_spawning)` (NeoForge's `TicketController.forceChunk`, one implicit
+  controller per mod) holds or releases a chunk for the calling mod and returns whether its tickets changed. `owner` is a
+  `NativeTicketOwner`, `Block([x, y, z])` or `Entity(uuid)`. A ticket is scoped by mod, owner, chunk and
+  `natural_spawning`, so two owners in one chunk release separately, and one owner holds a plain and a natural-spawning
+  ticket on a chunk apart. The chunk stays loaded, entity ticking and saved, and its level keeps ticking, while any
+  ticket or `/forceload` holds it. With `natural_spawning`, the chunk joins the spawning chunks (`ChunkMap.collectSpawningChunks`, within 8 chunks of
+  a player): it gets inhabited time, thunder and a spawn attempt. The local mob cap then lets mobs spawn there only
+  while a non-spectator player is within 128 blocks of the chunk's centre, as in NeoForge, which does not patch
+  `LocalMobCapCalculator`. `chunk_tickets_validate`'s tickets and removals know this flag too (below). `level.mod_forced_chunks(host)` lists the calling mod's tickets as
+  `(owner, [x, z], natural_spawning)`. Tickets are saved in `data/horizon/mod_chunk_tickets.dat`, never in vanilla's
+  `chunk_tickets.dat`; when a world loads, the tickets of a mod that isn't installed are discarded. Outside a mod's hook,
+  and for a stale handle or a chunk past the world's bounds, the calls return `false` or `None`.
 - `chunk_tickets_validate` (NeoForge's `LoadingValidationCallback.validateTickets`, server) fires once for each level
   that opens, after `level_load`, before its first tick; it is told only while the level's save held mod tickets, and
   only to mods that implement it. It is asked about the tickets read from the save when the level loaded, before they
   take hold: a ticket a mod adds in `level_load` is not among them and is never removed by it. The tickets that
   survive then force their chunks. `event.validation` shows the calling mod's own tickets:
-  `block_tickets()` gives each block position with the chunks it holds, `entity_tickets()` each entity UUID with its
-  chunks. `remove_block_tickets(pos)` and `remove_entity_tickets(uuid)` remove everything an owner holds (and return how
-  many), `remove_block_ticket(pos, chunk)` and `remove_entity_ticket(uuid, chunk)` one ticket. A removed ticket never
+  `block_tickets()` gives each block position and `entity_tickets()` each entity UUID with a `TicketSet`, the chunks it
+  holds apart by kind (`non_natural_spawning` and `natural_spawning`, as NeoForge's `TicketSet`). A plain and a
+  natural-spawning ticket on one chunk are two tickets. `remove_block_tickets(pos)` and `remove_entity_tickets(uuid)`
+  remove everything an owner holds, both kinds (and return how many); `remove_block_ticket(pos, chunk, natural_spawning)`
+  and `remove_entity_ticket(uuid, chunk, natural_spawning)` remove the one kind they name and leave the other. A removed ticket never
   forces its chunk and is left out of the next save. Every call acts as the calling mod: it cannot see or remove another
   mod's tickets or removals.
 - `host.living(entity)` gives a `LivingRef` for a mob, a player, an armor stand or the dragon (vanilla's

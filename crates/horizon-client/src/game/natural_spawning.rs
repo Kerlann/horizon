@@ -68,6 +68,45 @@ fn close_enough_for_spawning(p: &LevelPlayer, (cx, cz): (i32, i32)) -> bool {
     );
     !p.spectator && x * x + z * z < 16384.0
 }
+/// The chunks within 8 of a player, in `scratch.candidates`, and for each in
+/// `scratch.close` whether a non-spectator is within 128 blocks or `forced`
+/// says a ticket holds it for natural spawning. How many there are.
+fn spawn_candidates(
+    players: &[LevelPlayer],
+    scratch: &mut SpawnScratch,
+    forced: impl Fn((i32, i32)) -> bool,
+) -> i32 {
+    let candidates = &mut scratch.candidates;
+    candidates.clear();
+    candidates.reserve(289 * players.len());
+    let seen = &mut scratch.seen;
+    seen.clear();
+    seen.reserve(289 * players.len());
+    let close = &mut scratch.close;
+    close.clear();
+    for p in players {
+        let (pcx, pcz) = (
+            p.position.x.floor() as i32 >> 4,
+            p.position.z.floor() as i32 >> 4,
+        );
+        for dx in -8..=8 {
+            for dz in -8..=8 {
+                let key = (pcx + dx, pcz + dz);
+                let i = *seen.entry(key).or_insert_with(|| {
+                    let i = candidates.len();
+                    candidates.push(key);
+                    close.push(false);
+                    i
+                });
+                close[i] |= close_enough_for_spawning(p, key);
+            }
+        }
+    }
+    for (chunk, close) in candidates.iter().zip(close.iter_mut()) {
+        *close = *close || forced(*chunk);
+    }
+    candidates.len() as i32
+}
 /// `EntityGetter.getNearestPlayer(x, y, z, -1, false)`: the nearest
 /// non-spectator, alive or not.
 pub(super) fn nearest_player(
@@ -604,43 +643,23 @@ impl<'a> Game<'a> {
     }
     /// `ChunkMap.collectSpawningChunks`: the natural spawn chunk tracker's
     /// chunks (within 8 chunks of a player, `getSpawnCandidateChunks`) that
-    /// are ticking and within 128 blocks of a non-spectator. Also returns how
-    /// many chunks the tracker holds (`getNaturalSpawnChunkCount`).
+    /// are ticking and within 128 blocks of a non-spectator, or held by a mod
+    /// ticket that forces natural spawning (NeoForge's
+    /// `shouldForceNaturalSpawning`). Also returns how many chunks the tracker
+    /// holds (`getNaturalSpawnChunkCount`).
     pub(super) fn spawning_chunks(
         &self,
         players: &[LevelPlayer],
         scratch: &mut SpawnScratch,
     ) -> i32 {
-        let candidates = &mut scratch.candidates;
-        candidates.clear();
-        candidates.reserve(289 * players.len());
-        let seen = &mut scratch.seen;
-        seen.clear();
-        seen.reserve(289 * players.len());
-        let close = &mut scratch.close;
-        close.clear();
-        for p in players {
-            let (pcx, pcz) = (
-                p.position.x.floor() as i32 >> 4,
-                p.position.z.floor() as i32 >> 4,
-            );
-            for dx in -8..=8 {
-                for dz in -8..=8 {
-                    let key = (pcx + dx, pcz + dz);
-                    let i = *seen.entry(key).or_insert_with(|| {
-                        let i = candidates.len();
-                        candidates.push(key);
-                        close.push(false);
-                        i
-                    });
-                    close[i] |= close_enough_for_spawning(p, key);
-                }
-            }
-        }
-        let count = candidates.len() as i32;
+        let tickets = self.streaming.mod_tickets();
+        let count = spawn_candidates(players, scratch, |chunk| {
+            tickets.forces_natural_spawning(chunk)
+        });
+        let close = &scratch.close;
         let levels = self.tickets.levels();
         let mut i = 0;
-        candidates.retain(|&(cx, cz)| {
+        scratch.candidates.retain(|&(cx, cz)| {
             let keep = close[i]
                 && levels.loaded_ticking(cx, cz)
                 && super::ticking_chunk(&self.world, cx, cz);
@@ -823,6 +842,27 @@ mod tests {
             creative: false,
             spectator,
         }
+    }
+
+    /// A chunk in a player's spawning area but past 128 blocks is a spawning
+    /// chunk only while a ticket forces it; a chunk outside the area never is.
+    #[test]
+    fn a_forcing_ticket_makes_a_far_chunk_in_the_area_a_spawning_chunk() {
+        let players = [player(8.0, 64.0, 8.0, false)];
+        let mut scratch = SpawnScratch::default();
+        let corner = (8, 8);
+        let count = spawn_candidates(&players, &mut scratch, |_| false);
+        let at = |scratch: &SpawnScratch, chunk| {
+            let i = scratch.candidates.iter().position(|&c| c == chunk).unwrap();
+            scratch.close[i]
+        };
+        assert_eq!(count, 289);
+        assert!(!at(&scratch, corner), "no player within 128 blocks");
+        assert!(at(&scratch, (1, 1)));
+        spawn_candidates(&players, &mut scratch, |c| c == corner || c == (30, 30));
+        assert!(at(&scratch, corner));
+        assert!(!at(&scratch, (-8, -8)), "only the held chunk");
+        assert!(!scratch.candidates.contains(&(30, 30)), "outside the area");
     }
 
     /// The grid finds the same player a look at every one finds, the first of

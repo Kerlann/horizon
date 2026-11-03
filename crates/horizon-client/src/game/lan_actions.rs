@@ -3658,7 +3658,10 @@ impl Game<'_> {
         }
         // Horizon's `/tempban` (game/tempban.rs), on dedicated servers.
         if super::tempban::TEMPBAN_COMMANDS.contains(&words[0]) && self.server_lists.is_some() {
-            self.guest_tempban_command(host, conn, &words);
+            if let Some(mut host) = self.lan.take() {
+                self.guest_tempban_command(&mut host, conn, &words);
+                self.lan = Some(host);
+            }
             return;
         }
         // A native mod's command, for every player its level allows,

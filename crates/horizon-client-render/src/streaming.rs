@@ -596,7 +596,7 @@ pub struct Streaming {
     pub radius: i32,
     /// Chunks kept loaded whatever the distance: the `/forceload`ed ones and
     /// those a mod holds a ticket for. Changed only through `set_forced_area`,
-    /// `clear_forced`, `set_mod_forced` and `load_forced`.
+    /// `clear_forced`, `set_mod_forced` and `load_forced`, through `settle`.
     pub forced: HashSet<(i32, i32)>,
     /// The `/forceload`ed chunks, the ones saved in `chunk_tickets.dat`.
     commanded: HashSet<(i32, i32)>,
@@ -2608,9 +2608,10 @@ impl Streaming {
     /// Release every `/forceload`ed chunk (`/forceload remove all`, a game-test
     /// batch's end). Chunks a mod holds a ticket for stay forced.
     pub fn clear_forced(&mut self) {
-        self.commanded.clear();
-        self.forced.clear();
-        self.forced.extend(self.mod_tickets.chunks());
+        let cleared: Vec<_> = self.commanded.drain().collect();
+        for chunk in cleared {
+            self.settle(chunk);
+        }
     }
     /// The level's saved forced state: `/forceload`'s chunks, and the mods'
     /// tickets of the mods `loaded` accepts (the rest are discarded), which
@@ -2623,7 +2624,11 @@ impl Streaming {
     ) {
         self.mod_tickets = ModTickets::from_saved(tickets, loaded);
         self.commanded = commanded;
-        self.forced.clone_from(&self.commanded);
+        self.forced.clear();
+        let held: Vec<_> = self.commanded.iter().copied().collect();
+        for chunk in held {
+            self.settle(chunk);
+        }
     }
     /// The mods' tickets read from the save, which hold nothing until the
     /// mods have validated them and the survivors are put back with
@@ -2643,18 +2648,26 @@ impl Streaming {
     /// chunk stays forced while `/forceload` or any ticket holds it; one
     /// newly forced is ranked for decoration as `/forceload add` does.
     pub fn set_mod_forced(&mut self, ticket: ModTicket, forced: bool) -> bool {
-        let (x, z) = ticket.chunk;
+        let chunk = ticket.chunk;
         let changed = if forced {
             self.mod_tickets.insert(ticket)
         } else {
             self.mod_tickets.remove(&ticket)
         };
-        if forced && self.forced.insert((x, z)) {
-            self.rank_forced(x, z, x, z);
-        } else if !forced && !self.commanded.contains(&(x, z)) && !self.mod_tickets.holds((x, z)) {
-            self.forced.remove(&(x, z));
+        if self.settle(chunk) {
+            self.rank_forced(chunk.0, chunk.1, chunk.0, chunk.1);
         }
         changed
+    }
+    /// Bring `forced` in line with who holds `chunk`: true when it just
+    /// became forced. The one writer of `forced`.
+    fn settle(&mut self, chunk: (i32, i32)) -> bool {
+        if self.commanded.contains(&chunk) || self.mod_tickets.holds(chunk) {
+            self.forced.insert(chunk)
+        } else {
+            self.forced.remove(&chunk);
+            false
+        }
     }
     /// `ServerLevel.setChunkForced` over chunks `(x0, z0)..=(x1, z1)`, x then
     /// z: `each` hears whether each chunk changed in `/forceload`'s set. An
@@ -2669,14 +2682,11 @@ impl Streaming {
         for x in x0..=x1 {
             for z in z0..=z1 {
                 let changed = if forced {
-                    self.forced.insert((x, z));
                     self.commanded.insert((x, z))
                 } else {
-                    if !self.mod_tickets.holds((x, z)) {
-                        self.forced.remove(&(x, z));
-                    }
                     self.commanded.remove(&(x, z))
                 };
+                self.settle((x, z));
                 each(x, z, changed);
             }
         }

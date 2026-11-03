@@ -2444,6 +2444,10 @@ fn mod_ticket_to_nbt(ticket: &ModTicket) -> Tag {
             "chunk_pos",
             Tag::IntArray(vec![ticket.chunk.0, ticket.chunk.1]),
         ),
+        (
+            "natural_spawning",
+            Tag::Byte(i8::from(ticket.natural_spawning)),
+        ),
     ])
 }
 fn mod_ticket_from_nbt(tag: &Tag) -> Option<ModTicket> {
@@ -2467,6 +2471,8 @@ fn mod_ticket_from_nbt(tag: &Tag) -> Option<ModTicket> {
         mod_id,
         owner,
         chunk: (pos[0], pos[1]),
+        // Tickets saved without the flag don't force natural spawning.
+        natural_spawning: matches!(tag.get("natural_spawning"), Some(Tag::Byte(b)) if *b != 0),
     })
 }
 fn is_forced_ticket(ticket: &Tag) -> bool {
