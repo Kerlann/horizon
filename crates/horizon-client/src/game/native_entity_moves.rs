@@ -79,14 +79,14 @@ impl Game<'_> {
                 if matches!(t, Target::Guest(_)) && self.lan_acting_uuid.is_some() {
                     return false;
                 }
-                self.for_player(t, |g| {
-                    if g.player.is_none() {
-                        return false;
-                    }
-                    g.yaw = yaw;
-                    g.pitch = pitch;
-                    true
-                }) == Some(true)
+                if self.for_player(t, |g| g.player.is_some()) != Some(true) {
+                    return false;
+                }
+                // One turn-a-player path: `rotate_in_place` and the absolute
+                // `PlayerRotation` packet of `ServerPlayer.forceSetRotation`
+                // (`/rotate`).
+                self.rotate_to(t, [yaw, pitch], Some([false, false]));
+                true
             }
             Target::Mob(id) => {
                 let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) else {
@@ -306,6 +306,47 @@ mod tests {
             let painting = game.native_entity(15).unwrap();
             assert!(!painting.teleport_to(game, [1.0, 64.0, 0.0], None));
             assert!(!painting.set_rotation(game, 30.0, 10.0));
+        });
+    }
+
+    /// `EntityRef::set_rotation` on a player is the one turn-a-player
+    /// path: the turn reaches the client as the absolute `PlayerRotation`
+    /// of `ServerPlayer.forceSetRotation`, with no teleport.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn set_rotation_of_a_player_sends_one_rotation_packet() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::motion::PlayerMotion;
+        use horizon_core::geometry::Vec3;
+        use horizon_protocol::packets::play::Clientbound;
+
+        with_game(|game| {
+            game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
+            game.lan_acting = Some(1);
+            game.lan_acting_uuid = Some(123);
+            game.lan_acting_entity = Some(20);
+            let entity = game.native_entity(20).unwrap();
+            assert!(entity.set_rotation(game, 90.0, -10.0));
+            assert_eq!(entity.rotation(game), Some([90.0, -10.0]));
+            let rotations: Vec<_> = game
+                .guest_packets
+                .iter()
+                .filter_map(|p| match p {
+                    Clientbound::PlayerRotation(r) => Some(r.clone()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(rotations.len(), 1, "exactly one rotation packet");
+            assert_eq!(rotations[0].yaw, 90.0);
+            assert_eq!(rotations[0].pitch, -10.0);
+            assert!(!rotations[0].relative_yaw && !rotations[0].relative_pitch);
+            assert!(
+                !game
+                    .guest_packets
+                    .iter()
+                    .any(|p| matches!(p, Clientbound::PlayerPosition(_))),
+                "a turn is not a teleport"
+            );
         });
     }
 

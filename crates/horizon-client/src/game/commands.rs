@@ -1815,7 +1815,12 @@ impl Game<'_> {
     /// rotation argument is told with a rotation-only packet
     /// (`ServerPlayer.forceSetRotation`), not a teleport — the facing forms
     /// point their camera with the look-at packet instead.
-    fn rotate_to(&mut self, t: Target, rotation: [f32; 2], relative: Option<[bool; 2]>) {
+    pub(in crate::game) fn rotate_to(
+        &mut self,
+        t: Target,
+        rotation: [f32; 2],
+        relative: Option<[bool; 2]>,
+    ) {
         // An entity in another level is turned in the level that holds it.
         // `RotateCommand.rotate` measures a relative axis from the target's
         // own rotation before it turns.
@@ -4356,7 +4361,7 @@ mod teleport_mob_tests {
                     C::PlayerRotation(r) => Some(r),
                     _ => None,
                 })
-                .last()
+                .next_back()
                 .expect("the turn reaches the acting guest");
             assert_eq!(
                 rotation.yaw, 10.0,
@@ -4372,7 +4377,7 @@ mod teleport_mob_tests {
                     C::PlayerRotation(r) => Some(r),
                     _ => None,
                 })
-                .last()
+                .next_back()
                 .unwrap();
             assert_eq!(rotation.yaw, 90.0, "an absolute axis is the angle itself");
             assert_eq!(rotation.pitch, 0.0);
