@@ -421,6 +421,13 @@ pub struct EntityType {
     pub damage: f32,
 }
 
+/// A block entity type declared in code, with the blocks it supports.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlockEntityType {
+    pub id: String,
+    pub blocks: Vec<String>,
+}
+
 /// a menu type the mod adds (vanilla's `MenuType`, NeoForge's
 /// `IMenuTypeExtension.create`): its container's slot count, the
 /// `ContainerData` count its menu syncs, and its take-only slots
@@ -450,7 +457,7 @@ pub const MAX_MENU_SLOTS: u16 = 256;
 enum Source {
     Dir(PathBuf),
     Zip(PathBuf),
-    /// No files: blocks and items a native mod declares in code.
+    /// No files: content a native mod declares in code.
     Code,
 }
 
@@ -466,6 +473,8 @@ pub struct Content {
     /// Its creative inventory tabs, by id.
     pub creative_tabs: Vec<CreativeTab>,
     pub entity_types: Vec<EntityType>,
+    /// Block entity types declared by native code, not content files.
+    pub block_entity_types: Vec<BlockEntityType>,
     pub menu_types: Vec<MenuType>,
     /// The namespaces it owns: the mod id, then the manifest's `namespaces`.
     pub namespaces: Vec<String>,
@@ -562,6 +571,7 @@ impl Content {
             effects: Vec::new(),
             creative_tabs: Vec::new(),
             entity_types: Vec::new(),
+            block_entity_types: Vec::new(),
             menu_types: Vec::new(),
             namespaces: manifest.owned_namespaces().map(str::to_owned).collect(),
         };
@@ -569,8 +579,8 @@ impl Content {
         Ok(content)
     }
 
-    /// Content with no files, for the blocks and items native mods declare
-    /// in code in `namespace` ([`Content::declare`]).
+    /// Content with no files, for native declarations in `namespace`
+    /// ([`Content::declare`]).
     pub fn declared(namespace: &str) -> Content {
         Content {
             source: Source::Code,
@@ -580,6 +590,7 @@ impl Content {
             effects: Vec::new(),
             creative_tabs: Vec::new(),
             entity_types: Vec::new(),
+            block_entity_types: Vec::new(),
             menu_types: Vec::new(),
             namespaces: vec![namespace.to_owned()],
         }

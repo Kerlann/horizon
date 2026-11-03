@@ -17,8 +17,8 @@
 use crate::{Result, blocks::MAP_COLORS};
 use horizon_core::geometry::{Aabb, Axis, ShapeOp, Vec3, VoxelShape};
 use horizon_mods::content::{
-    Block, BlockShapes, Content, CreativeTab, EntityType, MenuType, MobEffect, Rarity,
-    StateProperty,
+    Block, BlockEntityType, BlockShapes, Content, CreativeTab, EntityType, MenuType, MobEffect,
+    Rarity, StateProperty,
 };
 use horizon_world::nbt::{self, Compound, JavaString, Limits, Tag};
 use serde::{Deserialize, Serialize, de};
@@ -697,6 +697,8 @@ struct Plan<'a> {
     vanilla_items: BTreeSet<String>,
     effects: Vec<&'a MobEffect>,
     entity_types: Vec<&'a EntityType>,
+    block_entity_types: Vec<&'a BlockEntityType>,
+    block_entity_membership: BTreeMap<&'a str, &'a str>,
     menu_types: Vec<&'a MenuType>,
     /// Vanilla's state count (the tables' length before).
     states: usize,
@@ -957,6 +959,57 @@ impl<'a> Plan<'a> {
             .iter()
             .flat_map(|m| m.content.blocks.iter().map(|b| b.id.as_str()))
             .collect();
+        let mut block_entity_types: Vec<(&str, &BlockEntityType)> = mods
+            .iter()
+            .flat_map(|m| {
+                m.content
+                    .block_entity_types
+                    .iter()
+                    .map(move |kind| (m.id.as_str(), kind))
+            })
+            .collect();
+        block_entity_types.sort_by(|(_, a), (_, b)| a.id.cmp(&b.id));
+        let mut block_entity_membership = BTreeMap::new();
+        if !block_entity_types.is_empty() {
+            let registry = read_json(&base.join("registries.json"))?;
+            let Some(J::Obj(entries)) = registry
+                .get("minecraft:block_entity_type")
+                .and_then(|r| r.get("entries"))
+            else {
+                return Err("no minecraft:block_entity_type entries".into());
+            };
+            let mut ids: BTreeSet<&str> = entries.iter().map(|(id, _)| id.as_str()).collect();
+            for (mod_id, kind) in &block_entity_types {
+                if !ids.insert(&kind.id) {
+                    return Err(format!("block entity type {} is already declared", kind.id).into());
+                }
+                for block in &kind.blocks {
+                    if block.starts_with("minecraft:") {
+                        return Err(format!(
+                            "mod {mod_id}: block entity type {} cannot own vanilla block {block}",
+                            kind.id
+                        )
+                        .into());
+                    }
+                    if !declared_ids.contains(block.as_str()) {
+                        return Err(format!(
+                            "block entity type {}: {block} is not a block",
+                            kind.id
+                        )
+                        .into());
+                    }
+                    if let Some(previous) =
+                        block_entity_membership.insert(block.as_str(), kind.id.as_str())
+                    {
+                        return Err(format!(
+                            "block {block} belongs to both block entity types {previous} and {}",
+                            kind.id
+                        )
+                        .into());
+                    }
+                }
+            }
+        }
         let mut blocks = Vec::new();
         let mut next = names.len() as u32;
         let mut sorted: Vec<&ContentMod> = mods.iter().collect();
@@ -1236,6 +1289,11 @@ impl<'a> Plan<'a> {
             vanilla_items,
             effects: mob_effects(mods),
             entity_types: entity_types(mods),
+            block_entity_types: block_entity_types
+                .into_iter()
+                .map(|(_, kind)| kind)
+                .collect(),
+            block_entity_membership,
             menu_types: menu_types(mods),
             states: names.len(),
             defaults,
@@ -1575,17 +1633,18 @@ impl<'a> Plan<'a> {
             "registries.json" => {
                 // Network ids: the game and its server map items, blocks, mob
                 // effects and entity types through this report, so new ones get
-                // the ids after vanilla's, in plan order. A block entity type for
-                // each block too, named after it: a mod names its types only when
-                // one is made (`native_block_entity`), and the chunk packet
-                // carries the type of each block's entity.
+                // the ids after vanilla's, in plan order. Chunk packets carry
+                // the declared block entity type, not its block's id.
                 let new_items = self.items.iter().map(|i| i.rename.to.clone());
-                let new_blocks: Vec<_> = self.blocks.iter().map(|b| b.decl.id.clone()).collect();
+                let new_blocks = self.blocks.iter().map(|b| b.decl.id.clone());
                 let mut registries = vec![
                     ("minecraft:item", new_items.collect::<Vec<_>>()),
-                    ("minecraft:block", new_blocks.clone()),
-                    ("minecraft:block_entity_type", new_blocks),
+                    ("minecraft:block", new_blocks.collect()),
                 ];
+                if !self.block_entity_types.is_empty() {
+                    let new_types = self.block_entity_types.iter().map(|t| t.id.clone());
+                    registries.push(("minecraft:block_entity_type", new_types.collect()));
+                }
                 if !self.effects.is_empty() {
                     let new_effects = self.effects.iter().map(|e| e.id.clone());
                     registries.push(("minecraft:mob_effect", new_effects.collect()));
@@ -1603,10 +1662,6 @@ impl<'a> Plan<'a> {
                     let Some(J::Obj(entries)) =
                         doc.get_mut(registry).and_then(|r| r.get_mut("entries"))
                     else {
-                        // A report without block entity types gets none.
-                        if registry == "minecraft:block_entity_type" {
-                            continue;
-                        }
                         return Err(format!("no {registry} entries").into());
                     };
                     let next = entries
@@ -2722,12 +2777,17 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
             &serde_json::to_vec(&placed_blocks)?,
         )?;
     }
+    overlay.write(
+        BLOCK_ENTITY_TYPES,
+        &serde_json::to_vec(&plan.block_entity_membership)?,
+    )?;
     // clients must agree on the block states and the items', mob effects',
-    // entity types' and menu types' network ids.
+    // entity types', block entity types' and menu types' network ids.
     if !plan.blocks.is_empty()
         || !plan.items.is_empty()
         || !plan.effects.is_empty()
         || !plan.entity_types.is_empty()
+        || !plan.block_entity_types.is_empty()
         || !plan.menu_types.is_empty()
     {
         overlay.write(crate::content_identity::MARKER, b"1")?;
@@ -2743,10 +2803,12 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
 /// and mod files reuse it. With ATM10's carried mods a build takes about
 /// 25 s and peaks above 3 GB, more than everything the game keeps.
 pub fn resource_root(base: &Path, mods: &[ContentMod], cache: &Path) -> Result<PathBuf> {
-    if mods
-        .iter()
-        .all(|m| m.content.is_empty() && m.content.blocks.is_empty() && m.content.items.is_empty())
-    {
+    if mods.iter().all(|m| {
+        m.content.is_empty()
+            && m.content.blocks.is_empty()
+            && m.content.items.is_empty()
+            && m.content.block_entity_types.is_empty()
+    }) {
         return Ok(base.to_owned());
     }
     let out = cache.join("mod-content");
@@ -2763,6 +2825,9 @@ pub fn resource_root(base: &Path, mods: &[ContentMod], cache: &Path) -> Result<P
     fs::write(out.join(STAMP), stamp)?;
     Ok(out)
 }
+
+/// Canonical block-to-declared-block-entity-type mapping, sorted by block id.
+pub const BLOCK_ENTITY_TYPES: &str = "horizon-block-entity-types.json";
 
 /// In a root built by [`build`]: its warnings, one per line.
 const WARNINGS: &str = "horizon-mod-content-warnings.txt";
@@ -2802,7 +2867,10 @@ fn stamp(base: &Path, mods: &[ContentMod]) -> Result<String> {
     for m in mods {
         parts.push(m.id.clone());
         // What it declares, so blocks and items from code count too.
-        parts.push(format!("{:?} {:?}", m.content.blocks, m.content.items));
+        parts.push(format!(
+            "{:?} {:?} {:?}",
+            m.content.blocks, m.content.items, m.content.block_entity_types
+        ));
         let source = m.content.source();
         if m.content.files.is_empty() {
             // Declared in code only: nothing to read.

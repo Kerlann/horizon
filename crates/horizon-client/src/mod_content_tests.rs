@@ -1,6 +1,8 @@
 use super::*;
 use crate::{assets::Assets, blocks::BlockFacts, items::Items};
 
+#[path = "mod_content_block_entity_tests.rs"]
+mod block_entity_tests;
 #[path = "mod_content_farmland_tests.rs"]
 mod farmland_tests;
 
@@ -91,6 +93,8 @@ fn creative_tabs_keep_vanilla_items_missing_from_search() {
         vanilla_items: tab.items.iter().cloned().collect(),
         effects: Vec::new(),
         entity_types: Vec::new(),
+        block_entity_types: Vec::new(),
+        block_entity_membership: BTreeMap::new(),
         menu_types: Vec::new(),
         states: 0,
         defaults: BTreeMap::new(),
@@ -296,6 +300,14 @@ fn allocated_ids_follow_mod_and_entry_order_after_vanilla() {
         ],
     );
     let mut mods = vec![ruby, alpha];
+    mods[0].content.block_entity_types.push(BlockEntityType {
+        id: "ruby:machine".into(),
+        blocks: vec!["alpha:zblock".into()],
+    });
+    mods[1].content.block_entity_types.push(BlockEntityType {
+        id: "alpha:machine".into(),
+        blocks: vec!["ruby:zblock".into()],
+    });
     for index in 0..2 {
         let plan = Plan::new(&base, &mods).unwrap();
         let blocks: Vec<_> = plan
@@ -349,10 +361,12 @@ fn allocated_ids_follow_mod_and_entry_order_after_vanilla() {
         assert_eq!(id("minecraft:block", "minecraft:iron_block"), 11);
         assert_eq!(id("minecraft:block", "alpha:zblock"), 12);
         assert_eq!(id("minecraft:block", "ruby:zblock"), 13);
-        // Each mod block names a block entity type, after vanilla's.
+        // Only declared block entity types get IDs, sorted independently of blocks.
         assert_eq!(id("minecraft:block_entity_type", "minecraft:chest"), 1);
-        assert_eq!(id("minecraft:block_entity_type", "alpha:zblock"), 2);
-        assert_eq!(id("minecraft:block_entity_type", "ruby:zblock"), 3);
+        assert_eq!(id("minecraft:block_entity_type", "alpha:machine"), 2);
+        assert_eq!(id("minecraft:block_entity_type", "ruby:machine"), 3);
+        assert!(registry["minecraft:block_entity_type"]["entries"]["alpha:zblock"].is_null());
+        assert!(registry["minecraft:block_entity_type"]["entries"]["ruby:zblock"].is_null());
 
         assert_eq!(id("minecraft:mob_effect", "minecraft:luck"), 25);
         assert_eq!(id("minecraft:mob_effect", "alpha:dull"), 26);
@@ -383,6 +397,10 @@ fn allocated_ids_follow_mod_and_entry_order_after_vanilla() {
         assert_eq!(
             built, registry,
             "the built root must use the tested allocation"
+        );
+        assert_eq!(
+            fs::read_to_string(output.join(BLOCK_ENTITY_TYPES)).unwrap(),
+            r#"{"alpha:zblock":"ruby:machine","ruby:zblock":"alpha:machine"}"#
         );
         mods.reverse();
     }
