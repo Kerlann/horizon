@@ -2495,6 +2495,8 @@ a dimension.
   vanilla), or used on a client reads as `None`.
 - The entities are those of the level in place (the one a hook runs in) and the server's players, whatever their level.
 
+`level.set_block(host, pos, state, flags)` and `level.destroy_block(host, pos, drop)` change the level in place. Both return false for a stale handle, client, parked level, unloaded chunk or out-of-height position; parked writes wait for a safe level swap. `NativeBlockUpdateFlags` combines supported vanilla update flags with `|`. Skipping block-entity side effects suppresses container-content drops when replacing a chest; without it, the contents spill. Horizon sends all block changes to clients regardless of client-update flags. Bundles need `"hooks": ["level_block_writes"]`.
+
 Each read is a `Host` method too (`host.entity_position(entity)`): a helper whose catalog entry names a `receiver`
 (`entity`, `level`) also becomes a method of that handle.
 
