@@ -6155,9 +6155,9 @@ mod tests {
     fn block_parts_pick_and_use_on_the_server_and_for_a_guest() {
         use super::super::{lan::LanSettings, native_entity_refs::tests::with_game};
         use crate::mod_api::{
-            self, BlockPart, CloneItemStackEvent, Flow, Hooks, Host, ItemStack,
-            NativeInteractionResult as Answer, Registrar, UseItemOnEvent, UseOnEvent,
-            UseWithoutItemEvent,
+            self, BlockPart, BlockStateId, CloneItemStackEvent, Flow, Hooks, Host, ItemStack,
+            NativeBlockUpdateFlags, NativeInteractionResult as Answer, Registrar, UseItemOnEvent,
+            UseOnEvent, UseWithoutItemEvent,
         };
         use horizon_client::{
             chunk::Chunk,
@@ -6186,6 +6186,7 @@ mod tests {
         struct User {
             answer: Arc<Mutex<Option<Answer>>>,
             empty_answer: Arc<Mutex<Option<Answer>>>,
+            replace_with: Arc<Mutex<Option<BlockStateId>>>,
             empty_calls: Arc<AtomicUsize>,
             clicks: Arc<Mutex<Vec<(u128, crate::first_person::Hand)>>>,
             item_uses: Arc<AtomicUsize>,
@@ -6193,9 +6194,22 @@ mod tests {
         impl BlockPart for User {
             fn use_item_on(
                 &self,
-                _: &mut dyn Host,
+                host: &mut dyn Host,
                 event: &mut UseItemOnEvent<'_>,
             ) -> Option<Answer> {
+                if let Some(state) = *self.replace_with.lock().unwrap() {
+                    let level = host
+                        .entity(event.click.player)
+                        .unwrap()
+                        .level(host)
+                        .unwrap();
+                    assert!(level.set_block(
+                        host,
+                        event.click.pos,
+                        state,
+                        NativeBlockUpdateFlags::KNOWN_SHAPE,
+                    ));
+                }
                 self.clicks
                     .lock()
                     .unwrap()
@@ -6213,9 +6227,21 @@ mod tests {
                 *self.empty_answer.lock().unwrap()
             }
         }
+        struct Replacement(Arc<AtomicUsize>);
+        impl BlockPart for Replacement {
+            fn use_without_item(
+                &self,
+                _: &mut dyn Host,
+                _: &mut UseWithoutItemEvent<'_>,
+            ) -> Option<Answer> {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Some(Answer::Success)
+            }
+        }
         struct Mod {
             picks: Arc<Mutex<Vec<bool>>>,
             user: User,
+            replacement_calls: Arc<AtomicUsize>,
         }
         impl Hooks for Mod {
             fn register(&self, r: &mut Registrar) {
@@ -6223,6 +6249,10 @@ mod tests {
                 r.block_part("minecraft:beehive", Picker(self.picks.clone()));
                 r.block_part("minecraft:chest", Picker(self.picks.clone()));
                 r.block_part("minecraft:lever", self.user.clone());
+                r.block_part(
+                    "minecraft:cobblestone",
+                    Replacement(self.replacement_calls.clone()),
+                );
             }
             fn use_on(&self, _: &mut dyn Host, _: &mut UseOnEvent<'_>) -> Flow {
                 self.user
@@ -6232,9 +6262,11 @@ mod tests {
             }
         }
         let seen = Arc::new(Mutex::new(Vec::new()));
+        let replacement_calls = Arc::new(AtomicUsize::new(0));
         let user = User {
             answer: Arc::new(Mutex::new(Some(Answer::Success))),
             empty_answer: Arc::new(Mutex::new(None)),
+            replace_with: Arc::new(Mutex::new(None)),
             empty_calls: Arc::new(AtomicUsize::new(0)),
             clicks: Arc::new(Mutex::new(Vec::new())),
             item_uses: Arc::new(AtomicUsize::new(0)),
@@ -6244,6 +6276,7 @@ mod tests {
             Box::new(Mod {
                 picks: seen.clone(),
                 user: user.clone(),
+                replacement_calls: replacement_calls.clone(),
             }),
         )]
         .into();
@@ -6322,6 +6355,7 @@ mod tests {
                     point: [0.5, 65.0, 4.5],
                     inside: false,
                 };
+                game.world.set(0, 63, 4, stone).unwrap();
                 game.world.set(0, 64, 4, lever).unwrap();
                 game.inventory[game.selected] = Some(ItemStack::new("minecraft:stick", 1));
                 for (answer, item_uses, powered, swings) in [
@@ -6388,18 +6422,23 @@ mod tests {
                 assert_eq!(user.item_uses.load(SeqCst), 3);
                 assert_eq!(game.world.block(0, 64, 4), lever);
 
-                for (answer, item_delta, powered) in [
-                    (Some(Answer::Success), 0, false),
-                    (Some(Answer::Consume), 0, false),
-                    (Some(Answer::Pass), 1, false),
-                    (Some(Answer::Fail), 1, false),
-                    (None, 0, true),
+                for (answer, item_delta, powered, swings) in [
+                    (Some(Answer::Success), 0, false, 1),
+                    (Some(Answer::SuccessServer), 0, false, 1),
+                    (Some(Answer::Consume), 0, false, 0),
+                    (Some(Answer::Pass), 1, false, 1),
+                    (Some(Answer::Fail), 1, false, 1),
+                    (Some(Answer::TryWithEmptyHand), 1, false, 1),
+                    (None, 0, true, 1),
                 ] {
                     game.world.set(0, 64, 4, lever).unwrap();
                     *user.empty_answer.lock().unwrap() = answer;
                     let items = user.item_uses.load(SeqCst);
                     let empty = user.empty_calls.load(SeqCst);
+                    game.swing = Default::default();
+                    let before = game.swings_started;
                     assert!(game.use_hand(Some(&hit)).unwrap());
+                    assert_eq!(game.swings_started - before, swings);
                     assert_eq!(user.item_uses.load(SeqCst), items + item_delta);
                     assert_eq!(user.empty_calls.load(SeqCst), empty + 1);
                     assert_eq!(game.world.block(0, 64, 4) != lever, powered);
@@ -6427,6 +6466,32 @@ mod tests {
                 game.world.set(0, 64, 4, stone).unwrap();
                 assert!(game.use_hand(Some(&hit)).unwrap());
                 assert_eq!(user.empty_calls.load(SeqCst), empty + 1);
+
+                // Both phases keep the clicked state, even if the first part replaces it.
+                let replacement = game
+                    .pack
+                    .assets
+                    .registry
+                    .default_state("minecraft:cobblestone")
+                    .unwrap();
+                *user.replace_with.lock().unwrap() = Some(replacement);
+                game.world.set(0, 64, 4, lever).unwrap();
+                let empty = user.empty_calls.load(SeqCst);
+                assert!(game.use_hand(Some(&hit)).unwrap());
+                assert_eq!(user.empty_calls.load(SeqCst), empty + 1);
+                assert_eq!(replacement_calls.load(SeqCst), 0);
+                assert_eq!(game.world.block(0, 64, 4), replacement);
+
+                // None runs the original lever's template, not the replacement's.
+                *user.empty_answer.lock().unwrap() = None;
+                game.world.set(0, 64, 4, lever).unwrap();
+                assert!(game.use_hand(Some(&hit)).unwrap());
+                let powered = game.with_props(lever, &[("powered", "true")]).unwrap();
+                assert_eq!(game.world.block(0, 64, 4), powered);
+                assert_eq!(replacement_calls.load(SeqCst), 0);
+                *user.replace_with.lock().unwrap() = None;
+                game.world.set(0, 64, 4, stone).unwrap();
+
                 game.lan_guest_packet(
                     12,
                     play::Serverbound::PickItemFromBlock(play::PickItemFromBlock {

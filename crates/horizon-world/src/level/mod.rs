@@ -79,7 +79,8 @@
 //! // Player actions:
 //! behaviours.place_block(&mut level, &mut ticks, &PlaceContext { clicked_pos, face, hit, inside: false,
 //!     yaw, pitch, sneaking, item: "minecraft:oak_stairs".into(), can_use_game_master_blocks: false });
-//! behaviours.use_without_item(&mut level, &mut ticks, pos, face, hit, player_context);
+//! let state = level.block_state(pos);
+//! behaviours.use_without_item(&mut level, &mut ticks, state, pos, face, hit, player_context);
 //! behaviours.player_destroy_block(&mut level, &mut ticks, pos, creative, correct_tool);
 //! // Falling-block entity landed:
 //! behaviours.falling_block_landed(&mut level, &mut ticks, landing_pos, carried_state, false);

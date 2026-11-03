@@ -117,6 +117,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
 
     pub(crate) fn use_without_item(
         &mut self,
+        state: BlockStateId,
         pos: BlockPos,
         face: Direction,
         hit: Vec3,
@@ -125,7 +126,6 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let b = self.b;
         let p = b.props;
         let table = &b.table;
-        let state = self.state(pos);
         let data = b.data(state);
         let block = b.block(state);
         use InteractionResult::*;
@@ -696,18 +696,20 @@ impl Behaviours {
     }
 
     /// `BlockState.useWithoutItem` for a right-click on `pos` (hit face and
-    /// absolute hit location as in `BlockHitResult`).
+    /// absolute hit location as in `BlockHitResult`), with the state captured
+    /// before the item phase, as in `ServerPlayerGameMode.useItemOn`.
     pub fn use_without_item<L: LevelAccess + ?Sized>(
         &self,
         level: &mut L,
         ticks: &mut Ticks,
+        state: BlockStateId,
         pos: BlockPos,
         face: Direction,
         hit: Vec3,
         player: PlayerContext,
     ) -> InteractionResult {
         self.sim(level, ticks)
-            .use_without_item(pos, face, hit, player)
+            .use_without_item(state, pos, face, hit, player)
     }
     /// `DoorBlock.setOpen`: a mob opens or closes the door at `pos` (either half), with its sound
     /// and game event. False when it is no door or already so.
@@ -837,10 +839,11 @@ impl Behaviours {
         player: PlayerContext,
         item: Option<&str>,
     ) -> (InteractionResult, UseBranch) {
-        match self.block_use_item_on(level, ticks, pos, face, hit, player, item) {
+        let state = level.block_state(pos);
+        match self.block_use_item_on(level, ticks, state, pos, face, hit, player, item) {
             Some(result) => (result, UseBranch::ItemOn),
             None => (
-                self.use_without_item(level, ticks, pos, face, hit, player),
+                self.use_without_item(level, ticks, state, pos, face, hit, player),
                 UseBranch::WithoutItem,
             ),
         }
@@ -852,13 +855,13 @@ impl Behaviours {
         &self,
         level: &mut L,
         ticks: &mut Ticks,
+        state: BlockStateId,
         pos: BlockPos,
         face: Direction,
         hit: Vec3,
         player: PlayerContext,
         item: Option<&str>,
     ) -> Option<InteractionResult> {
-        let state = level.block_state(pos);
         if item == Some("minecraft:bone_meal")
             && self.data(state).chain.contains(&Class::SweetBerryBush)
             && self.table.int(state, self.props.age) < 3

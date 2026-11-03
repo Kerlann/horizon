@@ -607,6 +607,7 @@ impl Game<'_> {
             b.use_without_item(
                 level,
                 ticks,
+                state,
                 BlockPos::new(pos[0], pos[1], pos[2]),
                 Direction::Up,
                 at,

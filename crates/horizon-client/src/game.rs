@@ -6665,9 +6665,9 @@ impl Game<'_> {
                     Some(BlockEntity::Sign(_))
                 )
                 && !self.sign_can_execute_click_commands((hit.pos[0], hit.pos[1], hit.pos[2]));
+            let state = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
             let mut block_answer = None;
             if !anchor_passed && !chains_sign && !horizon_client::mod_api::mods().is_empty() {
-                let state = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
                 let click = self.block_click(hit, self.hand, held.as_ref());
                 self.native_use_item_on(state, &click, &mut block_answer);
             }
@@ -6686,11 +6686,10 @@ impl Game<'_> {
                 let player = self.use_context();
                 let at = Vec3::new(hit.point[0], hit.point[1], hit.point[2]);
                 let item = held.as_ref().map(|s| s.item.to_string());
-                let cake = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
-                let adds_candle =
-                    self.with_level(|b, _, _| b.cake_candle_state(cake, item.as_deref()).is_some());
+                let adds_candle = self
+                    .with_level(|b, _, _| b.cake_candle_state(state, item.as_deref()).is_some());
                 let pots_flower = self
-                    .with_level(|b, _, _| b.potted_flower_state(cake, item.as_deref()).is_some());
+                    .with_level(|b, _, _| b.potted_flower_state(state, item.as_deref()).is_some());
                 let mut empty_answer = None;
                 // Keep the combined level write when no mod can override the
                 // empty-hand phase; otherwise leave it to fire with a full Host.
@@ -6713,6 +6712,7 @@ impl Game<'_> {
                             b.block_use_item_on(
                                 level,
                                 ticks,
+                                state,
                                 BlockPos::new(hit.pos[0], hit.pos[1], hit.pos[2]),
                                 face,
                                 at,
@@ -6725,7 +6725,7 @@ impl Game<'_> {
                         Some(result) => (result, horizon_world::level::UseBranch::ItemOn),
                         None if self.hand == Hand::Main => {
                             let click = self.block_click(hit, self.hand, held.as_ref());
-                            self.native_use_without_item(cake, &click, &mut empty_answer);
+                            self.native_use_without_item(state, &click, &mut empty_answer);
                             let result = match empty_answer {
                                 Some(answer) => native_hooks::block_use_result(answer)
                                     .unwrap_or(horizon_world::level::InteractionResult::Pass),
@@ -6733,6 +6733,7 @@ impl Game<'_> {
                                     b.use_without_item(
                                         level,
                                         ticks,
+                                        state,
                                         BlockPos::new(hit.pos[0], hit.pos[1], hit.pos[2]),
                                         face,
                                         at,

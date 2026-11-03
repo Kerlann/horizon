@@ -476,10 +476,12 @@ impl Game<'_> {
                 f64::from(pos.y) + 1.0,
                 f64::from(pos.z) + 0.5,
             );
+            let state = self.world.block(pos.x, pos.y, pos.z);
             let result = self.with_level(|b, level, ticks| {
                 b.use_without_item(
                     level,
                     ticks,
+                    state,
                     pos,
                     horizon_core::geometry::Direction::Up,
                     hit,

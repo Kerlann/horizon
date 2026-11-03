@@ -1275,9 +1275,11 @@ impl World<'_> {
             f64::from(pos.y) + 0.5,
             f64::from(pos.z),
         );
+        let state = self.level.block_state(pos);
         self.f.behaviours.use_without_item(
             &mut self.level,
             &mut self.ticks,
+            state,
             pos,
             Direction::North,
             hit,
