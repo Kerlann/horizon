@@ -104,8 +104,7 @@ the catalog, not a global API number, source comments or documentation histories
   [`ENTITY_ITEMS`](#an-entitys-items) handlers in one transaction ([Server menus](#server-menus)).
 
 - Item tooltips: an `ItemPart`'s `tooltip` adds its item's own lines where `Item.appendHoverText` does, after
-  the name and before the components' lines; `native_item_tooltip` (NeoForge's `ItemTooltipEvent`) is given every
-  line once the tooltip is built, and a mod can add to, change or take out of them, for any item.
+  the name and before the components' lines, never for a tooltip the stack hides.
 
 - Using an item, on the server for every player: `native_use_on` hears a right click with an item on a
   block once the block let it through (`ItemStack.useOn`), and `native_use_item` hears the item's own use, in the air or
@@ -986,7 +985,17 @@ listeners run after vanilla by default, in registration order; an explicit depen
 `functions()` works without a false cycle. Use these anchors rather than their string values. The read-only `get_registry`,
 `get_graph`, `get_name_lookup(listener)` and `get_last_vanilla_listener` expose the registered
 objects, dependencies and vanilla anchor. Horizon does not expose NeoForge's condition
-context or retained-listener lookup here.
+context here.
+
+`event.listeners.add_retained_listener(id, converter, listener)` also keeps the listener object
+for other hooks, the counterpart of NeoForge's `addRetainedListener`: it returns a typed
+`ListenerKey<T>` that reads the object back from any server hook through
+`host.reload_resources().listener(&key)` — an `Arc<T>` of the live object the last successful
+reload installed, as NeoForge's `ReloadableServerResources.getListener`. Registration rules and
+prepare/apply semantics are `add_listener`'s. Retention follows the reload: a new reload
+registers fresh objects and the store is replaced whole by the first successful apply, so a key
+held across a reload keeps addressing the new object. Before the first successful reload, or
+for a key whose id or type does not match a registration, `listener` gives `None`.
 
 ```rust,ignore
 use std::sync::{Arc, RwLock};
@@ -2375,7 +2384,7 @@ place; `native_server_tick` does not define one, so name the dimension and expec
   `no_ai`, `invisible`, `silent`, `invulnerable` and `no_gravity` flags; its default is a plain mob. The mob is finalized as a natural spawn
   is, and kept when its chunk unloads. Nothing is spawned outside `/summon`'s bounds, in a chunk that isn't loaded, or a monster on peaceful.
 - `native_mob(dimension, id)` and `native_mobs(dimension)` read the living mobs: id, dimension, kind, position, yaw, health and maximum health.
-- `native_set_mob_health(dimension, id, health)` changes a mob's health, and answers false for no such mob or a value that isn't finite or above 0.
+- A mob's health is set with `living.set_health(host, health)` on its `LivingRef`.
 - `native_kill_mob(dimension, id)` kills as `/kill` does, with its loot. `EntityRef::discard` removes an entity without death or loot.
 - While the game ticks its mobs they are out of the level: from a hook inside that tick, a spawned mob joins after the tick, and the others
   read as gone.
@@ -2511,7 +2520,15 @@ the server entity and level reads available on a client.
   Hand::Main)` read its equipment (an empty slot reads as `None`); `set_equipment(host, slot, stack)` puts a stack in a
   slot as `LivingEntity.setItemSlot` does (None or air empties it). Mobs store all eight slots (`Mob::equipment_stacks` reads them as a `horizon_items::equipment::Equipment`); players (the host and guests) hold an `Equipment` for body and saddle beside their own hand and armor fields, and save through its `read` / `write`. A player's
   `body` and `saddle` are kept and saved in the `equipment` compound as vanilla does, and dropped on death, but nothing
-  renders or sends them. Armor stands store the six armor and hand slots, and the dragon none yet.
+  renders or sends them. Armor stands and the dragon hold all eight slots in the same `Equipment`, saved in `equipment`
+  (omitted when empty). A stand keeps a body or saddle a mod writes (`setItemSlot` stores it; `ArmorStand.canUseSlot`
+  only stops a player equipping it), and pops it with the rest, after the other six slots, when it breaks. A write to a
+  stand or the dragon runs `LivingEntity.onEquipItem` like a mob's: the equip sound and the `equip` or `unequip` game
+  event, unless the entity has not ticked yet or the item did not change. `native_living_equipment_change` hears all
+  eight slots of a stand. `/item replace` keeps vanilla's predicate for a stand's or the dragon's chest, legs, feet, body
+  and saddle (an empty stack, or an item made for that slot; a stand's `canUseSlot` refuses body and saddle), while
+  `set_equipment` stays permissive. This is not full dragon equipment parity: the dragon keeps its equipment for mods and
+  saves, and does not drop it on death (the death drops are built on `Mob`, which the dragon is not).
 - `living.swing(host, hand, send_to_self)` (`LivingEntity.swing`) starts an arm swing, shortened by haste and lengthened
   by mining fatigue, unless one is under way and past its first half (it returns whether one started). The players around
   see it at the end of the tick, the swinger too with `send_to_self`; clients see a mob swing the hand asked for. Mobs and
@@ -2571,6 +2588,15 @@ the server entity and level reads available on a client.
   (Paper's `Entity#isDead` is its inverse; a dying mob, mid death animation, is not alive). During a nested
   player swap an outer player's displaced record is unavailable, and during a player's turn the other
   players' handles read `None` until the hub is back.
+- `living.set_health(host, health)` is `LivingEntity.setHealth` (Paper's `Damageable#setHealth`), cut to the
+  range from zero to the maximum, with no hook; a non-finite value is refused. This raw write can set zero
+  or change a dead entity's health without running the death pipeline.
+  `living.heal(host, amount)` is `LivingEntity.heal`, through the `living_heal` hook: a signed amount changes
+  health only when current health is above zero. Both write players, guests
+  (in their own turn) and mobs, and answer false for armor stands and the dragon.
+  `living.last_attacker(host)` is `LivingEntity.getLastHurtByMob`: who last hurt the entity, within a hundred
+  ticks of the hurt, as an `EntityRef` of the current open; `None` once the window has passed or the attacker
+  is gone, and for armor stands, the dragon and clients.
 - An `EntityRef` holds the world's open (`NativeWorldEpoch`) and the entity's id, which no other entity of that open
   gets. A handle of an earlier open, of an entity that is gone or moved to another level (it gets a new id there, as in
   vanilla), or used on a client reads as `None`.

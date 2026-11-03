@@ -30,7 +30,7 @@ pub(super) struct FnState {
     pub store: DataStore,
     packs: Vec<Arc<DataPack>>,
     /// Enabled pack ids, in load order (later overrides earlier).
-    pub(super) enabled: Vec<String>,
+    enabled: Vec<String>,
     loaded: bool,
     /// Run the `minecraft:load` tag on the next tick.
     load_pending: bool,
@@ -131,6 +131,11 @@ pub(super) fn overlay_files(
 }
 
 impl FnState {
+    /// Enabled pack ids, in load order (later overrides earlier).
+    #[cfg(test)]
+    pub(super) fn enabled(&self) -> &[String] {
+        &self.enabled
+    }
     /// The level function files compile at (`ServerFunctionLibrary`'s
     /// `functionCompilationPermissions`): `function-permission-level` on a
     /// dedicated server, game master (2) otherwise. Whoever runs a function,

@@ -21,10 +21,6 @@
       "target": "horizon_client::game::native_hooks::Game<'_>::native_attachments", "side": "both"
     },
     {
-      "name": "set_mob_health",
-      "target": "horizon_client::game::native_mobs::Game<'_>::native_set_mob_health", "side": "server"
-    },
-    {
       "name": "kill_mob",
       "target": "horizon_client::game::native_mobs::Game<'_>::native_kill_mob", "side": "server"
     },

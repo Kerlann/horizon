@@ -387,10 +387,13 @@ pub(super) struct Dragon {
     pub(super) flame_ended: bool,
     flame_count: i32,
     sitting_damage: f32,
+    /// `LivingEntity.equipment`: nothing in the fight reads it; it is kept
+    /// for mods and saves.
+    pub equipment: horizon_items::equipment::Equipment,
     growl: i32,
     /// `Mob.ambientSoundTime`.
     ambient_time: i32,
-    ticks: i32,
+    pub(super) ticks: i32,
     /// DragonFlightHistory: (y, yRot) samples, newest at `head`.
     history: [(f64, f32); 64],
     head: usize,
@@ -525,6 +528,7 @@ impl Dragon {
             flame_ended: false,
             flame_count: 0,
             sitting_damage: 0.0,
+            equipment: Default::default(),
             growl: 100,
             ambient_time: 0,
             ticks: 0,
@@ -3259,6 +3263,10 @@ impl Game<'_> {
 }
 /// Saving and loading the dragon and the crystals as chunk entities.
 impl Dragon {
+    /// `Entity.firstTick`: no tick has run yet.
+    pub(super) fn first_tick(&self) -> bool {
+        self.ticks == 0
+    }
     pub(super) fn to_nbt(&self, uuid: [i32; 4], raw: Option<&Tag>) -> Tag {
         let mut tag = horizon_client::entity_nbt::vehicle_to_nbt(
             "minecraft:ender_dragon",
@@ -3279,6 +3287,7 @@ impl Dragon {
                 "sitting_damage_received".into(),
                 Tag::Float(self.sitting_damage.to_bits()),
             );
+            self.equipment.store(map);
         }
         tag
     }
@@ -3296,6 +3305,9 @@ impl Dragon {
             d.death_time = *t;
         }
         d.persistent = horizon_client::entity_nbt::flag(tag, "PersistenceRequired");
+        if let Some(equipment) = tag.get("equipment") {
+            d.equipment = horizon_items::equipment::Equipment::read(equipment);
+        }
         Some(d)
     }
 }
@@ -4305,6 +4317,27 @@ fn push_seen_with_hurt(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_dragon_save_keeps_equipment_only_while_something_is_equipped() {
+        use horizon_client::items::ItemStack;
+        use horizon_items::equipment::{BODY, SADDLE};
+        let mut d = Dragon::new(Vec3::ZERO, 0.0, 0);
+        // An old save has no `equipment` key: the dragon loads empty and saves none.
+        let old = d.to_nbt([0; 4], None);
+        assert!(old.get("equipment").is_none());
+        assert!(Dragon::from_nbt(&old, 0).unwrap().equipment.is_empty());
+        // Body and saddle round-trip with their name and damage.
+        let mut body = ItemStack::new("minecraft:diamond_horse_armor", 1);
+        body.damage = 6;
+        body.data_mut().custom_name = Some(Tag::String("Plate".into()));
+        d.equipment[BODY] = Some(body);
+        d.equipment[SADDLE] = Some(ItemStack::new("minecraft:saddle", 1));
+        let saved = d.to_nbt([0; 4], None);
+        assert_eq!(Dragon::from_nbt(&saved, 0).unwrap().equipment, d.equipment);
+        // Saving over a raw save that holds a stale key removes it once emptied.
+        d.equipment.take_all().for_each(drop);
+        assert!(d.to_nbt([0; 4], Some(&saved)).get("equipment").is_none());
+    }
 
     fn player_box(feet: [f64; 3]) -> (Aabb, Vec3) {
         (

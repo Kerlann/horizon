@@ -349,9 +349,7 @@ impl Game<'_> {
                 // LivingEntity.hurtServer reached resolvePlayerResponsibleForDamage:
                 // every hit that got past the cooldown, absorbed or blocked too.
                 MotionEvent::Health(HealthEvent::Criterion { source, .. }) => {
-                    if !horizon_client::mod_api::mods().is_empty()
-                        && let Some(d) = self.motion.health.damage.definition(*source)
-                    {
+                    if let Some(d) = self.motion.health.damage.definition(*source) {
                         let attacker = match recorded.take() {
                             Some((t, id)) if t == d.name => Some(id),
                             _ => self
@@ -359,9 +357,15 @@ impl Game<'_> {
                                 .pending
                                 .iter()
                                 .find(|(t, _, _)| *t == d.name)
-                                .map(|(_, (id, _), _)| *id),
+                                .map(|(_, attacker, _)| {
+                                    self.combat.last_hurt_by =
+                                        Some((attacker.clone(), self.world.game_time));
+                                    attacker.0
+                                }),
                         };
-                        if let Some(id) = attacker {
+                        if let Some(id) = attacker
+                            && !horizon_client::mod_api::mods().is_empty()
+                        {
                             self.resolve_player_responsible_for_player(id);
                         }
                     }
@@ -843,6 +847,25 @@ mod noted_tests {
         arrow(&mut c, 4);
         c.forget_noted(true);
         assert_eq!(c.pending.iter().map(|p| p.1.0).collect::<Vec<_>>(), [1, 3]);
+    }
+}
+#[cfg(test)]
+mod kill_credit_tests {
+    use super::CombatTracker;
+    use horizon_client::text::Text;
+
+    /// `CombatTracker.getKiller`'s window: a hundred ticks after the hurt
+    /// still counts (`getLastHurtByMob` answers), the next tick no longer
+    /// does — the same `<= 100` a mob's hurt-by memory reads.
+    #[test]
+    fn the_hundredth_tick_after_the_hurt_still_counts_and_the_next_does_not() {
+        let hurt_at = |at: i64| CombatTracker {
+            last_hurt_by: Some(((7, Text::literal("zombie")), at)),
+            ..CombatTracker::default()
+        };
+        assert_eq!(hurt_at(1_000).kill_credit(1_099), Some(7));
+        assert_eq!(hurt_at(1_000).kill_credit(1_100), Some(7));
+        assert_eq!(hurt_at(1_000).kill_credit(1_101), None);
     }
 }
 #[cfg(test)]

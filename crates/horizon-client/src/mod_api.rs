@@ -12,8 +12,8 @@ pub(crate) mod server_reload;
 pub use horizon_world::identifier::Identifier;
 pub use reload_order::ReloadOrderError;
 pub use server_reload::{
-    ServerReloadApply, ServerReloadContext, ServerReloadError, ServerReloadListener,
-    ServerReloadListeners, VanillaServerListeners,
+    ListenerKey, ServerReloadApply, ServerReloadContext, ServerReloadError, ServerReloadListener,
+    ServerReloadListeners, ServerReloadResources, VanillaServerListeners,
 };
 
 pub use crate::biome::{BiomeColors, SpawnEntry};

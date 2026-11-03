@@ -295,8 +295,8 @@ impl Game<'_> {
         }
     }
 
-    /// `handleSetEquipment` for an armor stand (EquipmentSlot ordinals 0 to
-    /// 5: main hand, off hand, feet, legs, chest, head, its storage order).
+    /// `handleSetEquipment` for an armor stand (`EquipmentSlot` ordinals,
+    /// its storage order).
     pub(super) fn remote_object_equipment(
         &mut self,
         id: i32,
@@ -311,9 +311,7 @@ impl Game<'_> {
             .collect();
         if let Some(a) = self.armor_stands.iter_mut().find(|a| a.id == id as u32) {
             for (slot, item) in items {
-                if let Some(s) = a.equipment.get_mut(slot) {
-                    *s = item;
-                }
+                a.equipment.set(slot, item);
             }
         }
     }

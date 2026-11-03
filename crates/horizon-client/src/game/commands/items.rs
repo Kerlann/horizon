@@ -25,8 +25,10 @@ pub(in crate::game) enum Slot {
     Ender(usize),
     /// A mob's equipment by name (`mainhand`, `offhand`, `head`, ...).
     Mob(u32, &'static str),
-    /// An armor stand's equipment (`ArmorStand::SLOTS` index).
+    /// An armor stand's equipment (`EquipmentSlot` ordinal).
     Stand(u32, usize),
+    /// The ender dragon's equipment (`EquipmentSlot` ordinal).
+    Dragon(u32, usize),
     Frame(u32),
     /// A chest or hopper minecart's slot (`ContainerEntity.getChestVehicleSlot`).
     Cart(u32, usize),
@@ -171,21 +173,25 @@ impl Game<'_> {
                     }
                 }
             }
-            Owner::Entity(Target::Stand(id)) => {
-                for (i, key) in horizon_client::entities::ArmorStand::SLOTS
-                    .iter()
-                    .enumerate()
-                {
+            // A stand and the dragon hold the shared `Equipment`: every slot.
+            Owner::Entity(target @ (Target::Stand(id) | Target::Dragon(id))) => {
+                for (i, key) in horizon_items::equipment::SLOT_NAMES.iter().enumerate() {
                     let aliases: &[&str] = match *key {
                         "mainhand" => &["weapon", "weapon.mainhand"],
                         "offhand" => &["weapon.offhand"],
                         "feet" => &["armor.feet"],
                         "legs" => &["armor.legs"],
                         "chest" => &["armor.chest"],
-                        _ => &["armor.head"],
+                        "head" => &["armor.head"],
+                        "body" => &["armor.body"],
+                        _ => &["saddle"],
                     };
                     if aliases.iter().any(|a| matches_name(name, a)) {
-                        add(Slot::Stand(*id, i));
+                        add(if matches!(target, Target::Dragon(_)) {
+                            Slot::Dragon(*id, i)
+                        } else {
+                            Slot::Stand(*id, i)
+                        });
                     }
                 }
             }
@@ -232,8 +238,14 @@ impl Game<'_> {
                 .find(|a| a.id == *id)?
                 .equipment
                 .get(*i)
-                .cloned()
-                .flatten(),
+                .cloned(),
+            Slot::Dragon(id, i) => self
+                .dragon
+                .as_ref()
+                .filter(|d| d.id == *id)?
+                .equipment
+                .get(*i)
+                .cloned(),
             Slot::Frame(id) => self.item_frames.iter().find(|f| f.id == *id)?.item.clone(),
             Slot::Cart(id, i) => self.cart_slots(*id)?.get(*i).cloned().flatten(),
             Slot::Block(p, i) => match self.world.block_entities.get(&(p[0], p[1], p[2])) {
@@ -243,6 +255,40 @@ impl Game<'_> {
                 _ => None,
             },
         }
+    }
+    /// `LivingEntity.createEquipmentSlotAccess`'s predicate for the slots of a
+    /// stand or the dragon that are not the head or a hand: an empty stack, or
+    /// one whose `getEquipmentSlotForItem` is this very slot. A stand's
+    /// `canUseSlot` refuses body, saddle and the slots its `DisabledSlots`
+    /// lock, so such an item is MAINHAND's. Every other slot takes anything.
+    fn equipment_slot_accepts(&self, slot: &Slot, stack: &Option<ItemStack>) -> bool {
+        use horizon_items::equipment::{BODY, CHEST, FEET, LEGS, MAINHAND, SADDLE};
+        let (index, stand) = match slot {
+            Slot::Stand(id, i) => (*i, self.armor_stands.iter().find(|a| a.id == *id)),
+            Slot::Dragon(_, i) => (*i, None),
+            _ => return true,
+        };
+        let Some(stack) = stack else { return true };
+        if ![FEET, LEGS, CHEST, BODY, SADDLE].contains(&index) {
+            return true;
+        }
+        let worn = self.equippable_slot_sound(stack).map(|(s, _)| s as usize);
+        let usable = |s: usize| match (&stand, slot) {
+            (Some(a), _) => s != BODY && s != SADDLE && !a.is_disabled(s),
+            (None, Slot::Stand(..)) => false,
+            _ => true,
+        };
+        worn.filter(|s| usable(*s)).unwrap_or(MAINHAND) == index
+    }
+    /// `SlotAccess.set` of a command: `slot_set` when the slot's predicate
+    /// takes the stack. A mod's `set_equipment` calls `slot_set` itself and is
+    /// not asked.
+    pub(in crate::game) fn slot_set_by_command(
+        &mut self,
+        slot: &Slot,
+        stack: Option<ItemStack>,
+    ) -> bool {
+        self.equipment_slot_accepts(slot, &stack) && self.slot_set(slot, stack)
     }
     /// Put a stack (or nothing) in a slot; false when the slot cannot take it.
     pub(in crate::game) fn slot_set(&mut self, s: &Slot, stack: Option<ItemStack>) -> bool {
@@ -306,18 +352,16 @@ impl Game<'_> {
                 };
                 mob_slot(key).is_some_and(|slot| m.set_equipment_stack(slot, stack))
             }
-            Slot::Stand(id, i) => match self
+            Slot::Stand(id, i) => self
                 .armor_stands
                 .iter_mut()
                 .find(|a| a.id == *id)
-                .and_then(|a| a.equipment.get_mut(*i))
-            {
-                Some(slot) => {
-                    *slot = stack;
-                    true
-                }
-                None => false,
-            },
+                .is_some_and(|a| a.equipment.set(*i, stack)),
+            Slot::Dragon(id, i) => self
+                .dragon
+                .as_mut()
+                .filter(|d| d.id == *id)
+                .is_some_and(|d| d.equipment.set(*i, stack)),
             Slot::Frame(id) => match self.item_frames.iter_mut().find(|f| f.id == *id) {
                 Some(f) => {
                     f.item = stack;
@@ -749,7 +793,7 @@ impl Game<'_> {
                     s.count = s.count.min(max);
                     s
                 });
-                if self.slot_set(slot, new) {
+                if self.slot_set_by_command(slot, new) {
                     changed += 1;
                 }
             }
@@ -886,7 +930,7 @@ impl Game<'_> {
                 // ItemStack.isEmpty: air (or a count of 0) is an empty slot.
                 // SlotAccess.set counts every slot it sets, the same item too.
                 let item = item.filter(|s| &*s.item != "minecraft:air" && s.count > 0);
-                if self.slot_set(slot, item) {
+                if self.slot_set_by_command(slot, item) {
                     changed += 1;
                 }
             }

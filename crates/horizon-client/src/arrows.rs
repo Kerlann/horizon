@@ -16,7 +16,7 @@ use crate::{
 use horizon_core::{
     geometry::{Aabb, Direction, Vec3, sweep_intersected_blocks},
     position::BlockPos,
-    random::{LegacyRandom, RandomSource},
+    random::RandomSource,
 };
 use horizon_world::{
     block_collision::BlockCollisionRegistry,
@@ -196,8 +196,6 @@ pub struct ArrowState {
     /// for over 4 ticks) and hits no more.
     pub dealt_damage: bool,
     pub removed: bool,
-    /// The arrow's own random (`Entity.random`).
-    pub random: LegacyRandom,
     pub events: Vec<ArrowEvent>,
     /// The speed (`deltaMovement.length()`) it hit a block at, before it stuck.
     pub hit_speed: f64,
@@ -225,8 +223,13 @@ impl PartialEq for ArrowState {
             && self.fire_ticks == other.fire_ticks
     }
 }
+impl Default for ArrowState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl ArrowState {
-    pub fn new(random: LegacyRandom) -> Self {
+    pub fn new() -> Self {
         Self {
             in_ground: false,
             canceled_impact_inside: false,
@@ -251,7 +254,6 @@ impl ArrowState {
             has_been_shot: false,
             dealt_damage: false,
             removed: false,
-            random,
             events: Vec::new(),
             hit_speed: 0.0,
             spawn_pos: None,
@@ -847,9 +849,9 @@ impl Ticker<'_, '_, '_, '_> {
     fn start_falling(&mut self) {
         self.st.in_ground = false;
         let v = self.p.velocity;
-        let x = f64::from(self.st.random.next_float() * 0.2);
-        let y = f64::from(self.st.random.next_float() * 0.2);
-        let z = f64::from(self.st.random.next_float() * 0.2);
+        let x = f64::from(self.p.entity_random().next_float() * 0.2);
+        let y = f64::from(self.p.entity_random().next_float() * 0.2);
+        let z = f64::from(self.p.entity_random().next_float() * 0.2);
         self.p.velocity = Vec3::new(v.x * x, v.y * y, v.z * z);
         self.st.life = 0;
     }
@@ -956,7 +958,7 @@ impl Ticker<'_, '_, '_, '_> {
     }
     /// `playSound(soundEvent, 1, 1.2 / (random * 0.2 + 0.9))`.
     fn hit_sound(&mut self) {
-        let pitch = 1.2 / (self.st.random.next_float() * 0.2 + 0.9);
+        let pitch = 1.2 / (self.p.entity_random().next_float() * 0.2 + 0.9);
         // CrossbowItem.createProjectile: its arrows hit with the crossbow's sound.
         let crossbow = self
             .st
@@ -987,7 +989,7 @@ impl Ticker<'_, '_, '_, '_> {
             pitch: 1.0,
         });
         // ProjectileDeflection.REVERSE.
-        let rotation = 170.0 + self.st.random.next_float() * 20.0;
+        let rotation = 170.0 + self.p.entity_random().next_float() * 20.0;
         let v = self.p.velocity;
         self.p.velocity = Vec3::new(v.x * (-0.02 * 0.5), v.y * (-0.2 * 0.5), v.z * (-0.02 * 0.5));
         self.p.yaw += rotation;
@@ -997,7 +999,7 @@ impl Ticker<'_, '_, '_, '_> {
     /// left almost still drops its pickup (ALLOWED) and is discarded.
     fn turn_back(&mut self) {
         let power = 0.2;
-        let rotation = 170.0 + self.st.random.next_float() * 20.0;
+        let rotation = 170.0 + self.p.entity_random().next_float() * 20.0;
         let v = self.p.velocity;
         let k = -power * 0.5;
         self.p.velocity = Vec3::new(v.x * k, v.y * k, v.z * k);
@@ -1103,7 +1105,8 @@ impl Ticker<'_, '_, '_, '_> {
         }
         if was_on_fire && !self.st.on_fire() {
             // Entity.playEntityOnFireExtinguishedSound.
-            let pitch = 1.6 + (self.st.random.next_float() - self.st.random.next_float()) * 0.4;
+            let pitch = 1.6
+                + (self.p.entity_random().next_float() - self.p.entity_random().next_float()) * 0.4;
             self.st.events.push(ArrowEvent::Sound {
                 sound: ArrowSound::Extinguish,
                 volume: 0.7,
@@ -1449,10 +1452,10 @@ impl WaterSplashWorld for Ticker<'_, '_, '_, '_> {
         Ok(())
     }
     fn random_float(&mut self) -> Result<f32, Error> {
-        Ok(self.st.random.next_float())
+        Ok(self.p.entity_random().next_float())
     }
     fn random_double(&mut self) -> Result<f64, Error> {
-        Ok(self.st.random.next_double())
+        Ok(self.p.entity_random().next_double())
     }
     fn play_sound(&mut self, _: (), volume: f32, pitch: f32) -> Result<(), Error> {
         self.st.events.push(ArrowEvent::Sound {

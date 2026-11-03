@@ -232,24 +232,6 @@ impl Game<'_> {
             .map(|m| self.native_mob_of(m))
             .collect()
     }
-    /// Sets the living mob `id`'s health, cut to its maximum: false for no such
-    /// mob, another dimension or a health that isn't above 0 (`native_kill_mob`
-    /// kills).
-    pub(super) fn native_set_mob_health(&mut self, dimension: &str, id: u32, health: f32) -> bool {
-        if !self.native_mob_level(dimension) || !health.is_finite() || health <= 0.0 {
-            return false;
-        }
-        let Some(m) = self
-            .mobs
-            .iter_mut()
-            .find(|m| m.id == id && !m.removed && m.alive())
-        else {
-            return false;
-        };
-        m.health = health.min(m.attrs.max_health);
-        m.needs_sync = true;
-        true
-    }
     /// Kills mob `id` as `/kill` does: it falls and drops its loot. False for
     /// no such living mob or another dimension.
     pub(super) fn native_kill_mob(&mut self, dimension: &str, id: u32) -> bool {

@@ -2235,10 +2235,13 @@ impl Game<'_> {
                 lines.push((random.with_color(horizon_client::text::GRAY), u32::MAX));
             }
         }
-        // A mod item's own `Item.appendHoverText`, its parts' lines, before the components.
-        let mut own = Vec::new();
-        self.native_tooltip(stack, &mut own);
-        lines.extend(own);
+        // A mod item's own `Item.appendHoverText`, its parts' lines, before the components; a
+        // tooltip the stack hides, and a crossbow's projectile, stay without them.
+        if !nested && !lines.is_empty() {
+            let mut own = Vec::new();
+            self.native_tooltip(stack, &mut own);
+            lines.extend(own);
+        }
         // TropicalFish.Pattern.addToTooltip.
         for text in horizon_client::item_tooltip::tropical_fish_lines(stack, &display) {
             lines.push((text, gray));
@@ -2593,11 +2596,6 @@ impl Game<'_> {
                     rgba(255, 85, 85, 255),
                 ));
             }
-        }
-        // ItemTooltipEvent, last, once getTooltipLines has built every line; a
-        // tooltip the stack hides stays hidden.
-        if !nested && !lines.is_empty() {
-            self.native_item_tooltip(stack, advanced, creative, &mut lines);
         }
         lines
     }
@@ -3131,13 +3129,12 @@ mod tests {
         });
     }
     /// A stick's part adds its line where `Item.appendHoverText` does, after the name and before
-    /// the advanced id line; `ItemTooltipEvent` comes last and sees every line.
+    /// the advanced id line; a stick whose tooltip is hidden doesn't ask it.
     #[test]
     #[ignore = "needs prepared resources"]
-    fn tooltip_part_lines_come_before_the_event_which_sees_them_all() {
+    fn tooltip_part_lines_come_after_the_name_and_never_for_a_hidden_tooltip() {
         use crate::mod_api::{
-            self, ClientHost, Hooks, ItemPart, ItemTooltipEvent, ModEntry, Mods, Registrar,
-            TooltipEvent,
+            self, ClientHost, Hooks, ItemPart, ModEntry, Mods, Registrar, TooltipEvent,
         };
         use horizon_client::text::Text;
 
@@ -3154,13 +3151,6 @@ mod tests {
         impl Hooks for Mod {
             fn register(&self, r: &mut Registrar) {
                 r.item_part("minecraft:stick", Lore);
-            }
-            fn item_tooltip(&self, _: &dyn ClientHost, event: &mut ItemTooltipEvent<'_>) {
-                assert!(event.advanced && !event.creative);
-                let seen = event.lines.len();
-                event
-                    .lines
-                    .push((Text::literal(format!("event saw {seen}")), u32::MAX));
             }
         }
         let mods: Mods = vec![ModEntry::new("lore", Box::new(Mod))].into();
@@ -3179,12 +3169,25 @@ mod tests {
                     .collect();
                 let id_and_components = ["minecraft:stick", "14 component(s)"];
                 assert_eq!(lines[..2], ["Stick", "part"]);
-                assert_eq!(lines[2..4], id_and_components);
-                assert_eq!(lines[4..], ["event saw 4"]);
-                // An item without the part: no part line, and the event still comes last.
-                let apple = super::ItemStack::new("minecraft:apple", 1);
-                let lines = game.stack_tooltip_lines(&apple, false, false);
-                assert_eq!(lines.last().unwrap().0.plain(), "event saw 3");
+                assert_eq!(lines[2..], id_and_components);
+                // `hide_tooltip`: no name, and the part isn't asked; the advanced lines stay.
+                let mut hidden = stick.clone();
+                hidden.data_mut().set_other(
+                    "minecraft:tooltip_display",
+                    Some(horizon_world::nbt::Tag::compound([(
+                        "hide_tooltip",
+                        horizon_world::nbt::Tag::Byte(1),
+                    )])),
+                );
+                let lines: Vec<String> = game
+                    .stack_tooltip_lines(&hidden, false, false)
+                    .iter()
+                    .map(|(text, _)| text.plain())
+                    .collect();
+                assert!(
+                    !lines.iter().any(|l| l == "Stick" || l == "part"),
+                    "{lines:?}"
+                );
             });
         });
     }

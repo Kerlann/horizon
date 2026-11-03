@@ -47,7 +47,7 @@ fn registry_views_and_explicit_order_before_vanilla() {
             .get_graph()
             .any(|edge| edge == (&id("test_mod:second"), &VanillaServerListeners::functions()))
     );
-    let sorted = listeners.finish().unwrap();
+    let sorted = listeners.finish().unwrap().listeners;
     assert_eq!(
         sorted.into_iter().map(|entry| entry.id).collect::<Vec<_>>(),
         [
@@ -94,6 +94,81 @@ fn duplicate_objects_cannot_make_the_reverse_lookup_ambiguous() {
 }
 
 #[test]
+fn retained_listeners_read_back_typed_from_the_resources() {
+    struct OtherListener;
+    impl ServerReloadListener for OtherListener {
+        fn prepare(&self, _: &ServerReloadContext) -> Result<ServerReloadApply, ServerReloadError> {
+            Ok(ServerReloadApply::new(|| {}))
+        }
+    }
+    let mut listeners = ServerReloadListeners::new();
+    let original = Arc::new(Boundary);
+    let key = listeners
+        .add_retained_listener(id("test_mod:kept"), files(), original.clone())
+        .unwrap();
+    assert_eq!(key.id(), &id("test_mod:kept"));
+    let ordered = listeners.finish().unwrap();
+    let mut resources = ServerReloadResources::default();
+    resources.install(ordered.retained);
+    let kept = resources.listener(&key).unwrap();
+    assert!(Arc::ptr_eq(&original, &kept));
+    assert!(
+        resources
+            .listener(&ListenerKey::<OtherListener>::new(id("test_mod:kept")))
+            .is_none()
+    );
+    assert!(
+        resources
+            .listener(&ListenerKey::<Boundary>::new(id("test_mod:absent")))
+            .is_none()
+    );
+}
+
+#[test]
+fn reload_replaces_the_retained_store_whole() {
+    let mut listeners = ServerReloadListeners::new();
+    let first = listeners
+        .add_retained_listener(id("test_mod:first"), files(), Arc::new(Boundary))
+        .unwrap();
+    let mut resources = ServerReloadResources::default();
+    resources.install(listeners.finish().unwrap().retained);
+    assert!(resources.listener(&first).is_some());
+
+    let later = ServerReloadListeners::new().finish().unwrap();
+    resources.install(later.retained);
+    assert!(resources.listener(&first).is_none());
+}
+
+#[test]
+fn retained_registration_follows_the_same_rules_as_plain_listeners() {
+    let mut listeners = ServerReloadListeners::new();
+    let listener = Arc::new(Boundary);
+    listeners
+        .add_listener(id("one:listener"), files(), listener.clone())
+        .unwrap();
+    assert_eq!(
+        listeners.add_retained_listener(id("two:listener"), files(), listener),
+        Err(ReloadOrderError::DuplicateObject {
+            id: id("two:listener"),
+            registered_as: id("one:listener"),
+        })
+    );
+    let key = listeners
+        .add_retained_listener(id("one:kept"), files(), Arc::new(Boundary))
+        .unwrap();
+    assert!(
+        listeners
+            .add_retained_listener(id("one:kept"), files(), Arc::new(Boundary))
+            .is_err()
+    );
+    assert!(matches!(
+        listeners.finish(),
+        Err(ReloadOrderError::DuplicateObject { .. })
+    ));
+    drop(key);
+}
+
+#[test]
 fn add_listener_attributes_its_calls_to_the_registering_mod() {
     struct Noop;
     impl ServerReloadListener for Noop {
@@ -118,6 +193,7 @@ fn add_listener_attributes_its_calls_to_the_registering_mod() {
     let listener = owned
         .finish()
         .unwrap()
+        .listeners
         .into_iter()
         .find(|listener| listener.id == id("test_mod:data"))
         .unwrap();
@@ -125,6 +201,7 @@ fn add_listener_attributes_its_calls_to_the_registering_mod() {
     let listener = unowned
         .finish()
         .unwrap()
+        .listeners
         .into_iter()
         .find(|listener| listener.id == id("game:data"))
         .unwrap();

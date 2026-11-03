@@ -83,7 +83,7 @@ pub fn main() -> Result<()> {
             effect: None,
         };
         let mut arrow = Projectile::new(kind, vector(&f["position"]), None)
-            .with_arrow_random(LegacyRandom::new(seed(&f["seed"])));
+            .with_entity_random(LegacyRandom::new(seed(&f["seed"])));
         arrow.velocity = vector(&f["velocity"]);
         arrow.arrow.as_mut().unwrap().no_physics = f["no_physics"].as_bool().unwrap();
         // ProjectileWeaponItem.useAmmo's stack, intangible when no ammo was used.
@@ -116,10 +116,9 @@ pub fn main() -> Result<()> {
                         let targets: Vec<_> = target.iter().map(|t| (Who::Mob(2), t.0)).collect();
                         let (_, hit) = arrows::tick(&mut arrow, &view, &targets);
                         if let (Hit::Entity { .. }, Some((_, takes))) = (hit, target) {
-                            let mut st = arrow.arrow.take().unwrap();
-                            let damage = arrow.arrow_damage(&mut st.random);
-                            hurt = Some((st.events.len(), damage));
-                            arrow.arrow = Some(st);
+                            let damage = arrow.arrow_damage();
+                            let events = arrow.arrow.as_ref().unwrap().events.len();
+                            hurt = Some((events, damage));
                             let outcome = if takes {
                                 EntityHit::Hurt
                             } else {

@@ -811,6 +811,7 @@ impl Game<'_> {
                 continue;
             }
             self.armor_stand_location_effects(i, false);
+            self.armor_stands[i].first_tick = false;
             let a = &mut self.armor_stands[i];
             a.previous = a.position;
             a.previous_yaw = a.yaw;
@@ -1691,6 +1692,34 @@ mod burn_drop_tests {
         let (pos, drops) = broken_armor_stand_equipment(stand);
         assert_eq!(pos, [-1, 5, 0]);
         assert_eq!(drops, vec![kept]);
+    }
+    #[test]
+    fn a_broken_stand_pops_body_and_saddle_after_the_other_six_slots() {
+        use horizon_items::equipment::{BODY, HEAD, MAINHAND, SADDLE};
+        let mut stand = ArmorStand::new(1, Vec3::new(0.5, 4.0, 0.5), 0.0);
+        let stacks: Vec<_> = [SADDLE, BODY, HEAD, MAINHAND]
+            .into_iter()
+            .map(|slot| {
+                let mut stack = ItemStack::new("minecraft:stone", 1 + slot as u32);
+                stack.damage = slot as u32;
+                stand.equipment[slot] = Some(stack.clone());
+                (slot, stack)
+            })
+            .collect();
+        let (_, drops) = broken_armor_stand_equipment(stand);
+        let order = |slots: [usize; 4]| {
+            slots
+                .map(|s| {
+                    stacks
+                        .iter()
+                        .find(|(slot, _)| *slot == s)
+                        .unwrap()
+                        .1
+                        .clone()
+                })
+                .to_vec()
+        };
+        assert_eq!(drops, order([MAINHAND, HEAD, BODY, SADDLE]));
     }
 }
 #[cfg(test)]

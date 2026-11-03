@@ -1,0 +1,11 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "reload_resources",
+      "side": "server",
+      "target": "horizon_client::game::server_reload::Game<'_>::native_reload_resources",
+      "mod_api": {}
+    }
+  ]
+}

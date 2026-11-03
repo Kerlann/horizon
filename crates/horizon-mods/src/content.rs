@@ -123,6 +123,9 @@ pub struct BlockProperties {
     /// Vanilla's piston push reaction, or the template's when unset.
     #[serde(default, deserialize_with = "deserialize_push_reaction")]
     pub push_reaction: Option<PushReaction>,
+    /// `false`: the block occludes nothing, so its neighbours' faces are drawn and light passes
+    /// it (`BlockBehaviour.Properties.noOcclusion`); unset or `true`: as its template.
+    pub occludes: Option<bool>,
 }
 
 /// Vanilla's `PushReaction`, by its constant's name.
@@ -1675,6 +1678,22 @@ capabilities = ["registries"]
         ];
         let e = hmod("type-shared", MANIFEST_TEXT, files).unwrap_err();
         assert!(e.contains("already throws another entity type"), "{e}");
+    }
+
+    #[test]
+    fn a_block_may_occlude_nothing() {
+        let block = |occludes: &str| {
+            let text = format!(
+                r#"{{"template": "minecraft:barrel", "properties": {{"occludes": {occludes}}}}}"#
+            );
+            let files: &[(&str, &[u8])] =
+                &[("data/ruby/horizon/block/panel.json", text.as_bytes())];
+            hmod("occludes", MANIFEST_TEXT, files)
+        };
+        let occludes = |c: Result<Content, String>| c.unwrap().blocks[0].properties.occludes;
+        assert_eq!(occludes(block("false")), Some(false));
+        assert_eq!(occludes(block("true")), Some(true));
+        assert!(block(r#""no""#).is_err());
     }
 
     #[test]

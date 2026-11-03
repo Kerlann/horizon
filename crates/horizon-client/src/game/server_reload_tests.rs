@@ -1,7 +1,7 @@
 use super::*;
 use crate::game::{native_entity_refs::tests::with_game, world_loading::WorldRequest};
 use horizon_client::mod_api::{
-    self, AddServerReloadListenersEvent, Hooks, Host, ModEntry, ServerReloadListener,
+    self, AddServerReloadListenersEvent, Hooks, Host, ListenerKey, ModEntry, ServerReloadListener,
 };
 use std::{
     path::Path,
@@ -177,7 +177,7 @@ fn server_reload_delivers_mod_files_overrides_and_preserves_all_data_on_failure(
             assert_eq!(*live.lock().unwrap(), 8);
             let old_function = game.fns.store.functions["reload_test:keep"].clone();
             let old_selection = std::fs::read(world.join("datapacks.json")).unwrap();
-            let old_enabled = game.fns.enabled.clone();
+            let old_enabled = game.fns.enabled().to_vec();
             let old_vanilla_disabled = game.cmds.vanilla_disabled;
             write(&data, "4");
             write(&function, "say new");
@@ -204,7 +204,8 @@ fn server_reload_delivers_mod_files_overrides_and_preserves_all_data_on_failure(
                 old_selection
             );
             assert_eq!(
-                game.fns.enabled, old_enabled,
+                game.fns.enabled(),
+                old_enabled,
                 "the refused change publishes nothing"
             );
             assert_eq!(
@@ -413,5 +414,146 @@ fn server_reload_registration_failure_stops_world_open_and_quiet_mods_never_list
             })
         },
     );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+struct RetainedData {
+    live: Arc<Mutex<u64>>,
+    reject: Arc<AtomicBool>,
+}
+impl ServerReloadListener for RetainedData {
+    fn prepare(
+        &self,
+        context: &ServerReloadContext,
+    ) -> Result<ServerReloadApply, ServerReloadError> {
+        let mut value = 0;
+        for id in context.list() {
+            value += serde_json::from_slice::<u64>(context.read(id).unwrap())
+                .map_err(|error| ServerReloadError::new(id.clone(), error))?;
+        }
+        if self.reject.load(Ordering::Relaxed) {
+            return Err(ServerReloadError::new(
+                Identifier::parse("reload_test:value").unwrap(),
+                std::io::Error::other("rejected new machine data"),
+            ));
+        }
+        let live = self.live.clone();
+        Ok(ServerReloadApply::new(move || {
+            *live.lock().unwrap() = value
+        }))
+    }
+}
+#[mod_api::__subscriptions]
+impl Hooks for RetainedData {
+    fn add_server_reload_listeners(
+        &self,
+        _host: &dyn Host,
+        event: &mut AddServerReloadListenersEvent<'_>,
+    ) {
+        event
+            .listeners
+            .add_retained_listener(
+                Identifier::parse("reload_test:kept").unwrap(),
+                FileToIdConverter::json("machines").unwrap(),
+                Arc::new(Self {
+                    live: self.live.clone(),
+                    reject: self.reject.clone(),
+                }),
+            )
+            .unwrap();
+    }
+}
+
+#[test]
+#[ignore = "needs prepared resources"]
+fn server_reload_retains_listeners_for_other_hooks() {
+    let root = std::env::current_dir()
+        .unwrap()
+        .join("target")
+        .join(format!("server-reload-retained-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let manifest = "id = \"reload_test\"\nname = \"Reload Test\"\nversion = \"0.1.0\"\napi = \"0.2\"\nside = \"both\"\ncapabilities = [\"registries\"]\n";
+    let package = root.join("reload_test.hmod");
+    write(
+        &package,
+        horizon_mods::Package::write_files(
+            manifest,
+            &[("data/reload_test/machines/value.json", b"1")],
+        )
+        .unwrap(),
+    );
+    let package_manifest = horizon_mods::Package::read(&package).unwrap().manifest;
+    let content = horizon_mods::Content::read(&package, &package_manifest).unwrap();
+    let resources = root.join("resources");
+    let base = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+    horizon_client::mod_content::build(
+        &base,
+        &[horizon_client::mod_content::ContentMod {
+            id: "reload_test".into(),
+            content,
+        }],
+        &resources,
+    )
+    .unwrap();
+    let world = root.join("world");
+    let pack = world.join("datapacks/test");
+    write(&pack.join("pack.mcmeta"), "{}");
+    let data = pack.join("data/reload_test/machines/value.json");
+    write(&data, "2");
+    write(
+        &world.join("datapacks.json"),
+        r#"{"enabled":["file/test"],"disabled":[]}"#,
+    );
+    let live = Arc::new(Mutex::new(0));
+    let reject = Arc::new(AtomicBool::new(false));
+    let mods = vec![ModEntry::new(
+        "reload_test",
+        Box::new(RetainedData {
+            live: live.clone(),
+            reject: reject.clone(),
+        }),
+    )]
+    .into();
+    let key = ListenerKey::<RetainedData>::new(Identifier::parse("reload_test:kept").unwrap());
+    let wrong_type =
+        ListenerKey::<CheckListener>::new(Identifier::parse("reload_test:kept").unwrap());
+    mod_api::testing::with_mods(mods, || {
+        with_game(|game| {
+            assert!(game.native_reload_resources().listener(&key).is_none());
+            game.options.resources = resources;
+            game.load_world(request(&world)).unwrap();
+            let kept = game.native_reload_resources().listener(&key).unwrap();
+            assert_eq!(*kept.live.lock().unwrap(), 2);
+            assert!(Arc::ptr_eq(
+                &kept,
+                &game.native_reload_resources().listener(&key).unwrap()
+            ));
+            assert!(
+                game.native_reload_resources()
+                    .listener(&wrong_type)
+                    .is_none()
+            );
+            let before = Arc::as_ptr(&kept);
+            write(&data, "3");
+            assert!(game.run_command("reload"));
+            let kept = game.native_reload_resources().listener(&key).unwrap();
+            assert_eq!(*kept.live.lock().unwrap(), 3);
+            assert_ne!(
+                Arc::as_ptr(&kept),
+                before,
+                "each reload retains fresh objects"
+            );
+            write(&data, "4");
+            reject.store(true, Ordering::Relaxed);
+            assert!(!game.run_command("reload"));
+            let kept = game.native_reload_resources().listener(&key).unwrap();
+            assert_eq!(
+                *kept.live.lock().unwrap(),
+                3,
+                "a failed reload keeps the last successful store"
+            );
+        })
+    });
     std::fs::remove_dir_all(root).unwrap();
 }

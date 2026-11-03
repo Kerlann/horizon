@@ -8,8 +8,10 @@ use super::{
     reload_order::{ReloadOrder, ReloadOrderError},
 };
 use std::{
+    any::{Any, TypeId},
     collections::BTreeMap,
     error::Error,
+    marker::PhantomData,
     sync::{Arc, LazyLock},
 };
 
@@ -169,6 +171,7 @@ impl Drop for ReloadMark {
 pub struct ServerReloadListeners {
     order: ReloadOrder<ServerListener>,
     failure: Option<ReloadOrderError>,
+    retained: Vec<RetainedEntry>,
 }
 impl ServerReloadListeners {
     pub(crate) fn new() -> Self {
@@ -205,6 +208,7 @@ impl ServerReloadListeners {
         Self {
             order,
             failure: None,
+            retained: Vec::new(),
         }
     }
     /// Register a unique listener and converter, e.g. `FileToIdConverter::json("machines")`.
@@ -221,6 +225,23 @@ impl ServerReloadListeners {
             self.failure.get_or_insert_with(|| error.clone());
         }
         result
+    }
+    /// Register a listener whose object is also kept in the reload resources, as
+    /// NeoForge's `addRetainedListener`: the returned `ListenerKey` reads it
+    /// back through `ReloadResources` after the reload, from any server hook.
+    pub fn add_retained_listener<T: ServerReloadListener>(
+        &mut self,
+        id: Identifier,
+        converter: FileToIdConverter,
+        listener: Arc<T>,
+    ) -> Result<ListenerKey<T>, ReloadOrderError> {
+        self.add_listener(id.clone(), converter, listener.clone())?;
+        self.retained.push(RetainedEntry {
+            id: id.clone(),
+            type_id: TypeId::of::<T>(),
+            any: listener,
+        });
+        Ok(ListenerKey::new(id))
     }
     fn insert(
         &mut self,
@@ -286,10 +307,95 @@ impl ServerReloadListeners {
             .unwrap()
             .1
     }
-    pub(crate) fn finish(self) -> Result<Vec<ServerListener>, ReloadOrderError> {
+    pub(crate) fn finish(self) -> Result<OrderedServerReload, ReloadOrderError> {
         if let Some(error) = self.failure {
             return Err(error);
         }
-        self.order.sort(Some(&VanillaServerListeners::functions()))
+        Ok(OrderedServerReload {
+            listeners: self
+                .order
+                .sort(Some(&VanillaServerListeners::functions()))?,
+            retained: self.retained,
+        })
+    }
+}
+
+/// The ordered listeners and retained entries of one completed registration.
+pub(crate) struct OrderedServerReload {
+    pub(crate) listeners: Vec<ServerListener>,
+    pub(crate) retained: Vec<RetainedEntry>,
+}
+
+/// One listener retained in the reload resources, as NeoForge's
+/// `ReloadableServerResources` keeps a manager.
+pub(crate) struct RetainedEntry {
+    pub(crate) id: Identifier,
+    pub(crate) type_id: TypeId,
+    pub(crate) any: Arc<dyn Any + Send + Sync>,
+}
+
+/// A typed key to a retained reload listener, handed out by
+/// `add_retained_listener` and read back through `ReloadResources`.
+/// `ListenerKey::new` accepts any id; a key whose type or id does not match a
+/// registration reads back as `None`.
+pub struct ListenerKey<T: ?Sized> {
+    id: Identifier,
+    marker: PhantomData<fn() -> T>,
+}
+impl<T: ?Sized> ListenerKey<T> {
+    pub fn new(id: Identifier) -> Self {
+        Self {
+            id,
+            marker: PhantomData,
+        }
+    }
+    /// The registered listener's name.
+    pub fn id(&self) -> &Identifier {
+        &self.id
+    }
+}
+impl<T: ?Sized> Clone for ListenerKey<T> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id.clone(),
+            marker: PhantomData,
+        }
+    }
+}
+impl<T: ?Sized> std::fmt::Debug for ListenerKey<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ListenerKey").field("id", &self.id).finish()
+    }
+}
+impl<T: ?Sized> PartialEq for ListenerKey<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl<T: ?Sized> Eq for ListenerKey<T> {}
+
+/// The retained server reload listeners of the last successful reload, as
+/// NeoForge's `ReloadableServerResources`, reached from
+/// `ServerHost::reload_resources`. A new reload replaces the whole store.
+#[derive(Default)]
+pub struct ServerReloadResources {
+    entries: BTreeMap<Identifier, (TypeId, Arc<dyn Any + Send + Sync>)>,
+}
+impl ServerReloadResources {
+    pub(crate) fn install(&mut self, retained: Vec<RetainedEntry>) {
+        self.entries = retained
+            .into_iter()
+            .map(|entry| (entry.id, (entry.type_id, entry.any)))
+            .collect();
+    }
+    /// The retained listener registered under `key` in the last successful
+    /// reload; `None` when nothing is registered under it, its type differs, or
+    /// no reload has succeeded yet.
+    pub fn listener<T: ServerReloadListener>(&self, key: &ListenerKey<T>) -> Option<Arc<T>> {
+        let (type_id, any) = self.entries.get(key.id())?;
+        if *type_id != TypeId::of::<T>() {
+            return None;
+        }
+        any.clone().downcast::<T>().ok()
     }
 }

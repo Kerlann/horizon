@@ -151,6 +151,8 @@ mod interaction_shapes;
 mod interactions;
 mod item_draw;
 mod item_particles;
+#[cfg(test)]
+mod item_slot_command_tests;
 mod item_use;
 mod jigsaw_blocks;
 mod jigsaw_edit;
@@ -344,6 +346,8 @@ mod spectator;
 mod spill;
 mod splash_water;
 mod split;
+#[cfg(test)]
+mod stand_equipment_change_tests;
 mod startup_menu;
 mod station_control;
 mod stations;
@@ -3361,6 +3365,8 @@ struct Game<'a> {
     server_lists: Option<std::sync::Arc<std::sync::Mutex<dedicated::Lists>>>,
     /// State of `/spectate`, `/posteffect`, `/debug`, `/waypoint` and friends.
     cmds: commands::extra::CommandExtras,
+    /// The retained server reload listeners of the last successful reload.
+    reload_resources: crate::mod_api::ServerReloadResources,
     ui: chat::UiState,
     combat: combat::CombatTracker,
     /// Each guest's own `CombatTracker`, out of `combat` between turns.
@@ -7349,13 +7355,14 @@ impl Game<'_> {
                                     self.apply_effect_action(a);
                                 }
                             } else {
-                                self.add_player_effect(
-                                    horizon_client::effects::EffectInstance::new(
-                                        def.id,
-                                        eff.duration,
-                                        eff.amplifier,
-                                    ),
+                                let mut instance = horizon_client::effects::EffectInstance::new(
+                                    def.id,
+                                    eff.duration,
+                                    eff.amplifier,
                                 );
+                                instance.ambient = eff.ambient;
+                                instance.visible = eff.show_particles;
+                                self.add_player_effect(instance);
                             }
                         }
                     }
@@ -19803,6 +19810,7 @@ impl<'a> Game<'a> {
             server_loot: Default::default(),
             server_items: None,
             cmds: Default::default(),
+            reload_resources: Default::default(),
             ui: chat::UiState::new(),
             combat: Default::default(),
             guest_combat: Default::default(),

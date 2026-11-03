@@ -70,6 +70,18 @@ impl Equipment {
         }
         (!compound.is_empty()).then_some(Tag::Compound(compound))
     }
+    /// Sets the `equipment` key of an entity's save compound from `write`,
+    /// removing a stale one when nothing is equipped.
+    pub fn store(&self, entity: &mut Compound) {
+        match self.write() {
+            Some(tag) => {
+                entity.insert("equipment".into(), tag);
+            }
+            None => {
+                entity.remove(&"equipment".into());
+            }
+        }
+    }
 }
 impl std::ops::Index<usize> for Equipment {
     type Output = Option<ItemStack>;

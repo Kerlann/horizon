@@ -730,7 +730,7 @@ impl Game<'_> {
                     };
                     let Some(slot) = slot else { continue };
                     let item = drops.get(i).cloned();
-                    if self.slot_set(&slot, item.clone()) {
+                    if self.slot_set_by_command(&slot, item.clone()) {
                         used.push(item.unwrap_or(ItemStack {
                             item: "minecraft:air".into(),
                             count: 0,

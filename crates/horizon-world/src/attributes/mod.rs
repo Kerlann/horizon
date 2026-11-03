@@ -134,8 +134,8 @@ pub struct Packed {
 pub struct Instance {
     definition: Definition,
     base: f64,
-    dirty: bool,
-    cached: f64,
+    dirty: std::cell::Cell<bool>,
+    cached: std::cell::Cell<f64>,
     by_id: Vec<Modifier>,
     permanent: Vec<Modifier>,
     operations: [Option<OperationMap>; 3],
@@ -145,8 +145,8 @@ impl Instance {
         Self {
             definition,
             base: definition.default,
-            dirty: true,
-            cached: 0.0,
+            dirty: std::cell::Cell::new(true),
+            cached: std::cell::Cell::new(0.0),
             by_id: Vec::new(),
             permanent: Vec::new(),
             operations: [None, None, None],
@@ -156,10 +156,10 @@ impl Instance {
         self.base
     }
     pub fn is_dirty(&self) -> bool {
-        self.dirty
+        self.dirty.get()
     }
     pub fn cached_value(&self) -> f64 {
-        self.cached
+        self.cached.get()
     }
     pub fn modifiers(&self) -> &[Modifier] {
         &self.by_id
@@ -177,7 +177,7 @@ impl Instance {
         &mut self,
         observer: &mut O,
     ) -> Result<(), AttributeError<O::Error>> {
-        self.dirty = true;
+        self.dirty.set(true);
         observer.dirty(self).map_err(AttributeError::Observer)
     }
     pub fn set_base_value<O: Observer>(
@@ -276,8 +276,8 @@ impl Instance {
         }
         Ok(())
     }
-    pub fn value(&mut self) -> f64 {
-        if self.dirty {
+    pub fn value(&self) -> f64 {
+        if self.dirty.get() {
             let mut base = self.base;
             for m in self.operation_modifiers(Operation::AddValue) {
                 base += m.amount();
@@ -289,10 +289,10 @@ impl Instance {
             for m in self.operation_modifiers(Operation::AddMultipliedTotal) {
                 value *= 1.0 + m.amount();
             }
-            self.cached = self.definition.sanitize(value);
-            self.dirty = false;
+            self.cached.set(self.definition.sanitize(value));
+            self.dirty.set(false);
         }
-        self.cached
+        self.cached.get()
     }
     pub fn replace_from<O: Observer>(
         &mut self,

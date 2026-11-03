@@ -307,7 +307,7 @@ impl Game<'_> {
                     Value::Floats(default.to_vec()),
                 ));
             }
-            // Stored main hand, off hand, feet, legs, chest, head: the wire's slots 0 to 5.
+            // Every stored slot, by `EquipmentSlot` ordinal: the wire's slot numbers.
             for (slot, item) in a.equipment.iter().enumerate() {
                 if item.is_some() {
                     let Some(host) = self.lan.as_mut() else {

@@ -6,12 +6,12 @@
       "target": "horizon_client::game::native_living_refs::Game<'_>::native_living"
     },
     {
-      "name": "living_attribute_value", "side": "server",
+      "name": "living_attribute_value", "side": "server", "host": "read",
       "target": "horizon_client::game::native_living_refs::Game<'_>::native_living_attribute_value",
       "receiver": "living"
     },
     {
-      "name": "living_attribute_base", "side": "server",
+      "name": "living_attribute_base", "side": "server", "host": "read",
       "target": "horizon_client::game::native_living_refs::Game<'_>::native_living_attribute_base",
       "receiver": "living"
     },

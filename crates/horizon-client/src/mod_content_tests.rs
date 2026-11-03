@@ -415,7 +415,7 @@ fn ruby_mod_with_pistons(dir: &Path, pistons: bool) -> ContentMod {
             "data/ruby/horizon/block/ruby_block.json",
             r##"{"template": "minecraft:iron_block", "properties": {"hardness": 4.0, "light": 3,
                 "sounds": "minecraft:amethyst_block", "map_color": 28, "friction": 0.8,
-                "random_ticks": true},
+                "random_ticks": true, "occludes": false},
                 "components": {"minecraft:max_stack_size": 16,
                     "minecraft:damage_resistant": {"types": "#minecraft:is_fire"}}}"##,
         ),
@@ -591,6 +591,21 @@ fn content_root_loads_with_every_table() {
         independent_behaviours.facts(ruby).push,
         independent_behaviours.facts(iron).push
     );
+    // `occludes: false` (noOcclusion): the iron-template block occludes nothing, iron still does.
+    assert!(!facts.get(ruby).can_occlude && !facts.get(ruby).solid_render);
+    // Its light dampening is a non-solid full block's, as leaves' and spawners' are (iron's is 15).
+    assert_eq!(
+        (facts.get(ruby).dampening, facts.get(iron).dampening),
+        (1, 15)
+    );
+    assert!(facts.get(iron).can_occlude && facts.get(iron).solid_render);
+    let definitions: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join("render-definitions.json")).unwrap()).unwrap();
+    assert_eq!(
+        definitions["ruby:ruby_block"]["can_occlude"], false,
+        "faces beside it are drawn"
+    );
+    assert_eq!(definitions["minecraft:iron_block"]["can_occlude"], true);
     // `render_shape` leaves the glass's model out of the chunk mesh; the block keeps the template's.
     assert_eq!(
         facts.get(BlockStateId(n + 65)).render_shape,

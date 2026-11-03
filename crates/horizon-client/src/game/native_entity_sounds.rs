@@ -180,8 +180,10 @@ impl Game<'_> {
 #[cfg(test)]
 mod tests {
     use super::super::dispense_fixture;
+    use super::super::lan::LanSettings;
     use super::super::native_entity_refs::tests::with_game;
     use horizon_client::command::args::GameMode;
+    use horizon_client::lan::{NetConfig, hub::HubConfig};
     use horizon_client::mobs::Mob;
     use horizon_client::mod_api::{EntityRef, NativeSoundSource, NativeWorldEpoch};
     use horizon_client::motion::PlayerMotion;
@@ -236,6 +238,34 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn play_sound_queues_at_the_entity_in_its_source() {
         with_game(|game| {
+            // The seed comes from the hub's sound-seed generator, so only a
+            // hosting game queues sounds.
+            let config = HubConfig {
+                default_game_mode: 0,
+                guest_commands: false,
+                force_game_mode: false,
+                hardcore: false,
+                view_distance: 2,
+                simulation_distance: 2,
+                dimension: game.dim.id().to_owned(),
+                allow_flight: true,
+                seed: 0,
+                max_players: 3,
+                integrated: true,
+                levels: game.level_shapes,
+            };
+            let net = NetConfig {
+                listen: false,
+                announce: false,
+                lod_distance: 0,
+                ..NetConfig::lan(0, String::new(), 3)
+            };
+            let settings = LanSettings {
+                port: 0,
+                guest_commands: false,
+                force_game_mode: false,
+            };
+            game.lan_host(settings, net, config).unwrap();
             let cow = spawn(game, 10, "minecraft:cow");
             assert!(game.native_entity_play_sound(cow, "minecraft:entity.cow.ambient", 0.5, 1.5));
             let sound = &game.creatures.lan_sounds[0];

@@ -867,16 +867,18 @@ impl Game<'_> {
         let stand = &mut self.armor_stands[index];
         let block = BlockPos::containing(stand.position);
         let moved = !landed && stand.enchantment_block.replace(block) != Some(block);
-        let changed: [bool; 6] =
+        // `collectEquipmentChanges` walks every `EquipmentSlot`, body and
+        // saddle included; only the six slots below wear enchantments.
+        let changed: [bool; 8] =
             std::array::from_fn(|i| stand.equipment[i] != stand.enchantment_equipment[i]);
         if !moved && !landed && !changed.iter().any(|c| *c) {
             return;
         }
         let id = stand.id;
-        let told: Vec<_> = (0..6)
+        let told: Vec<_> = (0..changed.len())
             .filter(|&i| changed[i])
             .map(|i| {
-                let slot = horizon_client::entities::ArmorStand::SLOTS[i];
+                let slot = horizon_items::equipment::SLOT_NAMES[i];
                 (
                     slot,
                     stand.enchantment_equipment[i].clone(),

@@ -5265,26 +5265,10 @@ impl Game<'_> {
     /// lines to `lines`, which arrives empty, each with a colour as `rgba` packs
     /// it (`u32::MAX` keeps the text's own); `Text::legacy` reads `§` codes.
     /// The stack has its components (`stack.data()`). Asked each frame the
-    /// tooltip shows, a crossbow's loaded projectiles' too.
+    /// tooltip shows, never for one the stack hides or a crossbow's loaded
+    /// projectile.
     pub(super) fn native_tooltip(&self, stack: &ItemStack, lines: &mut Vec<(Text, u32)>) {
         mod_api::dispatch_tooltip(self, stack, lines);
-    }
-    /// NeoForge's `ItemTooltipEvent`: an item's tooltip, wherever the game
-    /// shows one (slots, the creative tabs, the recipe book, chat's hover),
-    /// once `ItemStack.getTooltipLines` built every line. `lines` holds them,
-    /// the name first, each with a colour as `rgba` packs it (`u32::MAX` keeps
-    /// the text's own): add, change or take out lines. `advanced` and
-    /// `creative` are the `TooltipFlag`'s (advanced tooltips on, a creative
-    /// tab's own slot). Asked each frame the tooltip shows, never for one the
-    /// stack hides. Client-side.
-    pub(super) fn native_item_tooltip(
-        &self,
-        stack: &ItemStack,
-        advanced: bool,
-        creative: bool,
-        lines: &mut Vec<(Text, u32)>,
-    ) {
-        mod_api::dispatch_item_tooltip(self, stack, advanced, creative, lines);
     }
     /// Change a tooltip box's background and border gradient colors, as ARGB.
     /// Stack is None for tooltips not associated with an item.

@@ -8,7 +8,7 @@ use horizon_client::{
     datapack::DataStore,
     mod_api::{
         FileToIdConverter, Identifier, ReloadOrderError, ServerReloadApply, ServerReloadContext,
-        ServerReloadError, ServerReloadListeners, VanillaServerListeners,
+        ServerReloadError, ServerReloadListeners, ServerReloadResources, VanillaServerListeners,
         server_reload::ReloadMark,
     },
 };
@@ -59,6 +59,13 @@ fn functions_store(stack: &PackStack) -> DataStore {
     store
 }
 
+/// Everything one successful reload publishes: its apply steps, then the
+/// retained listeners' store.
+pub(super) struct PreparedServerReload {
+    pub(super) steps: Vec<PreparedReload>,
+    pub(super) resources: ServerReloadResources,
+}
+
 impl PackStack {
     fn reload_context(
         &self,
@@ -100,18 +107,19 @@ impl Game<'_> {
     pub(super) fn prepare_server_reload(
         &self,
         stack: &PackStack,
-    ) -> Result<Vec<PreparedReload>, ServerDataReloadError> {
+    ) -> Result<PreparedServerReload, ServerDataReloadError> {
         // Nobody listens: no registration graph, only the vanilla function library.
         if !crate::mod_api::listened(crate::mod_api::HookId::AddServerReloadListeners) {
-            return Ok(vec![PreparedReload::Functions(Box::new(functions_store(
-                stack,
-            )))]);
+            return Ok(PreparedServerReload {
+                steps: vec![PreparedReload::Functions(Box::new(functions_store(stack)))],
+                resources: ServerReloadResources::default(),
+            });
         }
         let mut listeners = ServerReloadListeners::new();
         self.native_add_server_reload_listeners(&mut listeners);
-        let listeners = listeners.finish().map_err(ServerDataReloadError::Order)?;
+        let ordered = listeners.finish().map_err(ServerDataReloadError::Order)?;
         let mut prepared = Vec::new();
-        for listener in listeners {
+        for listener in ordered.listeners {
             if let Some(converter) = &listener.converter {
                 let context = stack.reload_context(&listener.id, converter);
                 let _mark =
@@ -131,10 +139,19 @@ impl Game<'_> {
                 prepared.push(PreparedReload::Functions(Box::new(functions_store(stack))));
             }
         }
-        Ok(prepared)
+        let mut resources = ServerReloadResources::default();
+        resources.install(ordered.retained);
+        Ok(PreparedServerReload {
+            steps: prepared,
+            resources,
+        })
     }
-    pub(super) fn apply_server_reload(&mut self, prepared: Vec<PreparedReload>, stack: &PackStack) {
-        for listener in prepared {
+    pub(super) fn apply_server_reload(
+        &mut self,
+        prepared: PreparedServerReload,
+        stack: &PackStack,
+    ) {
+        for listener in prepared.steps {
             match listener {
                 PreparedReload::Functions(store) => {
                     self.fns.store = *store;
@@ -146,5 +163,10 @@ impl Game<'_> {
                 }
             }
         }
+        self.reload_resources = prepared.resources;
+    }
+    /// The retained server reload listeners of the last successful reload.
+    pub(super) fn native_reload_resources(&self) -> &ServerReloadResources {
+        &self.reload_resources
     }
 }
