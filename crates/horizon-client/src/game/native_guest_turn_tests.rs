@@ -12,7 +12,7 @@ use std::sync::{
     atomic::{AtomicI32, AtomicUsize},
 };
 
-fn with_guests(test: impl FnOnce(&mut super::Game<'_>)) {
+pub(in crate::game) fn with_guests(test: impl FnOnce(&mut super::Game<'_>)) {
     with_game(|game| {
         let settings = LanSettings {
             port: 0,

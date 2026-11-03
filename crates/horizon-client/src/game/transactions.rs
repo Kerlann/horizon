@@ -229,22 +229,27 @@ impl Game<'_> {
             carried: self.carried.clone(),
         });
     }
-    /// Keeps the menu storage of guest `uuid` as it is, if a transaction is open and hasn't yet.
+    /// Keeps `player`'s menu storage as it is, if a transaction is open and hasn't yet.
     pub(super) fn journal_menus(&mut self, player: horizon_client::mod_api::PlayerRef) {
+        let Some(level) = self.transactions.last() else {
+            return;
+        };
         let Some(super::native_server::PlayerRead::Guest(g)) = self.player_handle_read(player)
         else {
             return;
         };
         let conn = g.conn;
+        if level.menus.contains_key(&conn) {
+            return;
+        }
         let kept = KeptMenus {
             ender_items: g.ender_items.clone(),
             craft_grid: g.craft_grid.clone(),
             native_menu: g.native_menu.clone(),
         };
-        let Some(level) = self.transactions.last_mut() else {
-            return;
-        };
-        level.menus.entry(conn).or_insert(kept);
+        if let Some(level) = self.transactions.last_mut() {
+            level.menus.insert(conn, kept);
+        }
     }
     /// Keeps entity `id`'s inventory as it is, if a transaction is open and hasn't yet.
     pub(super) fn journal_entity(&mut self, id: u32) {
@@ -466,6 +471,36 @@ mod tests {
         },
     };
     use std::{sync::Arc, time::Instant};
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn menu_journals_keep_only_the_first_write_inside_a_transaction() {
+        super::super::native_guest_turn_tests::with_guests(|game| {
+            let player = game.native_player_ref(12).unwrap();
+            let menu = game.native_menu_ref(player).unwrap();
+            let stone = ItemStack::new("minecraft:stone", 4);
+            // A server storage write outside a transaction keeps no snapshot.
+            game.journal_menus(player);
+            *game.native_menu_storage(menu, 1).unwrap() = Some(stone.clone());
+            assert!(game.transactions.is_empty());
+            assert_eq!(menu.slot(game, 1), Some(Some(stone.clone())));
+
+            let place = crate::mod_api::ItemPlace::MenuSlot { menu, slot: 1 };
+            let resource = ItemResource::of(&stone);
+            let aborted: Result<(), ()> = game.transaction(|game, tx| {
+                assert_eq!(place.insert(game, tx, &resource, 2), 2);
+                assert_eq!(place.insert(game, tx, &resource, 3), 3);
+                let journal = &game.transactions.last().unwrap().menus;
+                assert_eq!(journal.len(), 1);
+                assert_eq!(journal[&12].craft_grid[0], Some(stone.clone()));
+                assert_eq!(menu.slot(game, 1).unwrap().unwrap().count, 9);
+                Err(())
+            });
+            assert_eq!(aborted, Err(()));
+            assert!(game.transactions.is_empty());
+            assert_eq!(menu.slot(game, 1), Some(Some(stone)));
+        });
+    }
 
     fn insert(
         host: &mut dyn ServerHost,
