@@ -115,12 +115,9 @@ impl Game<'_> {
                 Some(t) if t == "sticky" => "minecraft:sticky_piston",
                 _ => "minecraft:piston",
             });
-        let item = clone_item(&facts.name, head.unwrap_or(&facts.item));
-        if item == "minecraft:air" {
-            return None;
-        }
         // FlowerPotBlock.getCloneItemStack: a potted plant picks as that plant
-        // (`new ItemStack(potted)`), an empty pot as the pot itself.
+        // (`new ItemStack(potted)`), an empty pot as the pot itself. A potted
+        // plant's block has no item of its own, so this comes before the air check.
         let behaviours = self.res.behaviours();
         let plant = behaviours.data(state);
         let plant_item = plant
@@ -129,7 +126,13 @@ impl Game<'_> {
             .flatten()
             .map(|block| behaviours.block_data(block).item.clone())
             .filter(|item| &**item != "minecraft:air");
-        let mut stack = ItemStack::new(plant_item.as_deref().unwrap_or(item), 1);
+        let item = plant_item
+            .as_deref()
+            .unwrap_or_else(|| clone_item(&facts.name, head.unwrap_or(&facts.item)));
+        if item == "minecraft:air" {
+            return None;
+        }
+        let mut stack = ItemStack::new(item, 1);
         let mut patch = Compound::new();
         // BeehiveBlock.getCloneItemStack: the honey level as the item's block state.
         if include_data
@@ -355,5 +358,30 @@ mod tests {
             clone_item("minecraft:cake", "minecraft:cake"),
             "minecraft:cake"
         );
+    }
+
+    /// `FlowerPotBlock.getCloneItemStack`: a potted plant, whose block has no
+    /// item, picks as the plant; an empty pot picks as the pot.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn potted_plants_pick_as_their_plant() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::chunk::Chunk;
+        use std::sync::Arc;
+        with_game(|game| {
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            for (x, block, item) in [
+                (0, "minecraft:potted_dandelion", "minecraft:dandelion"),
+                (1, "minecraft:potted_oak_sapling", "minecraft:oak_sapling"),
+                (2, "minecraft:flower_pot", "minecraft:flower_pot"),
+            ] {
+                let state = game.pack.assets.registry.default_state(block).unwrap();
+                game.world.set(x, 64, 0, state).unwrap();
+                let picked = game.clone_stack([x, 64, 0], false).map(|s| s.item);
+                assert_eq!(picked.as_deref(), Some(item), "{block}");
+            }
+        });
     }
 }
