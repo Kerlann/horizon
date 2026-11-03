@@ -86,10 +86,7 @@ impl TrialSpawnerLevel for GameLevel<'_, '_> {
             .is_empty()
     }
     fn loot_items(&self, table: &str, seed: i64) -> Vec<ItemStack> {
-        let Some(loot) = horizon_client::structure_blocks::loot_data(
-            &self.game.options.resources,
-            &self.game.pack_files(),
-        ) else {
+        let Some(loot) = self.game.server_loot.get() else {
             return Vec::new();
         };
         loot.roll_split(table, &mut LegacyRandom::new(seed))
@@ -155,10 +152,7 @@ impl Game<'_> {
         let mut ejected: Vec<(ItemStack, [f64; 3])> = Vec::new();
         let next = {
             let level = self.natural_level();
-            let loot = horizon_client::structure_blocks::loot_data(
-                &self.options.resources,
-                &self.pack_files(),
-            );
+            let loot = self.server_loot.get();
             let seed = self.level.seed;
             let mut spawn = |l: &GameLevel, r: &SpawnerSpawn| {
                 let added = l.game.plan_spawner_mob(l, r, &mut planned)?;

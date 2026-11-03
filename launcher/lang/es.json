@@ -554,7 +554,6 @@
   "Native build · {version}": "Compilación nativa · {version}",
   "On: every AI feature is hidden and off. The game opens no control socket, and horizon-ctl and the MCP servers refuse.": "Activado: todas las funciones de IA están ocultas y desactivadas. El juego no abre ningún socket de control, y tanto horizon-ctl como los servidores MCP rechazan conexiones.",
   "the port": "el puerto",
-  "The source of {source}. Its release ships {file}, a content mod: installing those from GitHub is not supported yet.": "El código fuente de {source}. Su versión incluye {file}, un mod de contenido: aún no se admite instalarlos desde GitHub.",
   "Build anyway": "Compilar de todos modos",
   "A name, 3 to 16 letters": "Un nombre, de 3 a 16 letras",
   "Installed {mods} from GitHub ({source}). Build it on the Mods page.": "Se instaló {mods} desde GitHub ({source}). Compílalo en la página Mods.",

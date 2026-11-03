@@ -29,16 +29,8 @@
       "target": "horizon_client::game::native_mobs::Game<'_>::native_kill_mob", "side": "server"
     },
     {
-      "name": "remove_mob",
-      "target": "horizon_client::game::native_mobs::Game<'_>::native_remove_mob", "side": "server"
-    },
-    {
       "name": "summon",
       "target": "horizon_client::game::native_entities::Game<'_>::native_summon", "side": "server"
-    },
-    {
-      "name": "remove_entity",
-      "target": "horizon_client::game::native_entities::Game<'_>::native_remove_entity", "side": "server"
     },
     {
       "name": "server_players",
@@ -93,34 +85,6 @@
       "target": "horizon_client::game::native_server::Game<'_>::native_world_dir", "side": "server"
     },
     {
-      "name": "held",
-      "target": "horizon_client::game::native_server::Game<'_>::native_held", "side": "server"
-    },
-    {
-      "name": "count_items",
-      "target": "horizon_client::game::native_server::Game<'_>::native_count_items", "side": "server"
-    },
-    {
-      "name": "carried_items",
-      "target": "horizon_client::game::native_server::Game<'_>::native_carried_items", "side": "server"
-    },
-    {
-      "name": "take_items",
-      "target": "horizon_client::game::native_server::Game<'_>::native_take_items", "side": "server"
-    },
-    {
-      "name": "room_for",
-      "target": "horizon_client::game::native_server::Game<'_>::native_room_for", "side": "server"
-    },
-    {
-      "name": "give_items",
-      "target": "horizon_client::game::native_server::Game<'_>::native_give_items", "side": "server"
-    },
-    {
-      "name": "give_stack",
-      "target": "horizon_client::game::native_server::Game<'_>::native_give_stack", "side": "server"
-    },
-    {
       "name": "give_experience",
       "target": "horizon_client::game::native_server::Game<'_>::native_give_experience", "side": "server"
     },
@@ -135,10 +99,6 @@
     {
       "name": "flame_particle",
       "target": "horizon_client::game::native_hooks::Game<'_>::native_flame_particle", "side": "client"
-    },
-    {
-      "name": "carried_stack",
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_carried_stack", "side": "server"
     },
     {
       "name": "edit_blocks",
@@ -353,10 +313,6 @@
       "target": "horizon_client::game::native_motion::Game<'_>::native_push_player", "side": "client"
     },
     {
-      "name": "set_flying_speed",
-      "target": "horizon_client::game::native_motion::Game<'_>::native_set_flying_speed", "side": "server"
-    },
-    {
       "name": "net_send_to_player",
       "target": "horizon_client::game::native_net::Game<'_>::native_net_send_to_player", "side": "server"
     },
@@ -373,32 +329,8 @@
       "target": "horizon_client::game::native_menus::Game<'_>::native_open_menu", "side": "server"
     },
     {
-      "name": "set_menu_items",
-      "target": "horizon_client::game::native_menus::Game<'_>::native_set_menu_items", "side": "server"
-    },
-    {
       "name": "close_menu",
       "target": "horizon_client::game::native_menus::Game<'_>::native_close_menu", "side": "server"
-    },
-    {
-      "name": "player_stacks",
-      "target": "horizon_client::game::native_menus::Game<'_>::native_player_stacks", "side": "server"
-    },
-    {
-      "name": "exchange_items",
-      "target": "horizon_client::game::native_menus::Game<'_>::native_exchange_items", "side": "server"
-    },
-    {
-      "name": "fluid_insert",
-      "target": "horizon_client::game::machines::native_fluids::Game<'_>::native_fluid_insert", "side": "server"
-    },
-    {
-      "name": "fluid_extract",
-      "target": "horizon_client::game::machines::native_fluids::Game<'_>::native_fluid_extract", "side": "server"
-    },
-    {
-      "name": "move_fluids",
-      "target": "horizon_client::game::machines::native_fluids::Game<'_>::native_move_fluids", "side": "server"
     },
     {
       "name": "dimension",
@@ -1334,6 +1266,7 @@
       "name": "loot_table_load", "side": "both",
       "version": 1,
       "target": "horizon_world::loot::native_loot_table_load",
+      "side": "server",
       "mod_api": {
         "contract": "collect",
         "out": "table"
@@ -2520,7 +2453,7 @@
       "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_critical_hit",
       "neoforge": "CriticalHitEvent",
-      "side": "both",
+      "side": "server",
       "cancellable": false,
       "mod_api": {
         "contract": "listen"
@@ -2704,16 +2637,6 @@
       "name": "entity_toggle_glide",
       "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_entity_toggle_glide",
-      "neoforge": "none (NeoForge has no such event)",
-      "side": "server",
-      "mod_api": {
-        "contract": "listen"
-      }
-    },
-    {
-      "name": "entity_transform",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_entity_transform",
       "neoforge": "none (NeoForge has no such event)",
       "side": "server",
       "mod_api": {

@@ -184,7 +184,7 @@ impl Game<'_> {
                 .find(|a| a.name == "targets")
                 .and_then(|a| command.get(a.range.0..a.range.1));
             let guests = &host.hub.guests;
-            let placed = |k: &usize| guests[*k].placed;
+            let placed = |k: &usize| guests[*k].placed && guests[*k].participates_online();
             let targets: Vec<usize> = match (raw, &selector.player_name, selector.uuid) {
                 (Some("@s"), ..) => vec![i],
                 (Some("@a"), ..) => (0..guests.len()).filter(placed).collect(),

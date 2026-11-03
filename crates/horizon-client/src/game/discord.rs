@@ -20,7 +20,7 @@ impl Game<'_> {
         }
         let play = if let Some(host) = &self.lan {
             Play::Hosting {
-                players: 1 + host.hub.guests.len(),
+                players: 1 + host.hub.online_count(),
             }
         } else if let Some(server) = &self.integrated {
             match (server.published(), &self.remote) {

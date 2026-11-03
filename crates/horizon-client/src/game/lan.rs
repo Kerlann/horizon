@@ -182,7 +182,7 @@ pub(super) struct LanHost {
     pub far: Option<horizon_client::lod_net::Service>,
     /// Native mods' commands and the level each needs, once asked
     /// (game/native_server.rs).
-    pub native_commands: Option<HashMap<String, u8>>,
+    pub(super) native_commands: Option<super::native_server::NativeCommands>,
     /// The players a native mod leaves out of the sleep count when they
     /// aren't in bed (`native_sleep_ignored`).
     pub sleep_ignored: std::collections::HashSet<u128>,
@@ -1816,18 +1816,54 @@ impl Game<'_> {
                     action,
                 } => self.chat_filtered(&mut host, sender, &name, place, &text, count, action),
                 HostEvent::PlayerChat { sender, text } => {
-                    if let Some(g) = host.hub.guests.iter().find(|g| g.uuid == sender) {
-                        if self.options.dedicated.is_some() {
-                            super::dedicated::events::record(
-                                "chat",
-                                &g.name,
-                                sender,
-                                serde_json::json!({ "message": text }),
-                            );
-                        }
-                        let conn = g.conn;
-                        self.detect_rate_spam(&mut host, conn, false);
+                    self.lan_player_chatted(&mut host, sender, &text);
+                }
+                HostEvent::ChatSubmitted {
+                    message,
+                    bound,
+                    name,
+                } => {
+                    let Some(id) = host
+                        .hub
+                        .guests
+                        .iter()
+                        .find(|g| g.placed && g.uuid == message.sender)
+                        .map(|g| g.entity_id)
+                    else {
+                        continue;
+                    };
+                    let mut message = *message;
+                    let sender = message.sender;
+                    let raw = message.content.clone();
+                    // `PlayerChatMessage.decoratedContent`: the text as a literal.
+                    let original = Text::literal(raw.clone());
+                    let mut text = original.clone();
+                    let mut cancel = false;
+                    self.lan = Some(host);
+                    self.native_server_chat(id, sender, &name, &raw, &mut text, &mut cancel);
+                    // A hook's command can close the hub.
+                    host = self.lan.take()?;
+                    // Canceled, NeoForge returns before `detectRateSpam`.
+                    if cancel {
+                        continue;
                     }
+                    let mut line = format!("<{name}> {raw}");
+                    if text != original {
+                        // `withUnsignedContent`: clients show the mod's text,
+                        // the signature still covers what was typed.
+                        message.unsigned_content =
+                            Some(horizon_client::lan::data::component_nbt(&text.component()));
+                        line = format!("<{name}> {}", text.plain());
+                    }
+                    let mut chat = Vec::new();
+                    host.hub.broadcast_chat(&message, &bound, line, &mut chat);
+                    for event in chat {
+                        self.lan_log_event(event);
+                    }
+                    self.lan_player_chatted(&mut host, sender, &raw);
+                }
+                HostEvent::ChatSessionStarted(update) => {
+                    host.hub.broadcast(&C::PlayerInfoUpdate(*update));
                 }
                 HostEvent::Joined(conn) => {
                     // The mods may refuse the login before the player is placed.
@@ -2439,7 +2475,7 @@ impl Game<'_> {
         }
     }
 
-    fn lan_guest_joined(
+    pub(super) fn lan_guest_joined(
         &mut self,
         host: &mut LanHost,
         conn: u32,
@@ -2470,6 +2506,8 @@ impl Game<'_> {
         playerdata::face_world_spawn(g, known, self.level.world_spawn_angle);
         if !known || force {
             g.game_mode = default_mode;
+            // ServerPlayerGameMode.setGameModeForPlayer: the abilities of the mode chosen.
+            g.abilities.update_for_mode(default_mode);
         }
         if !known {
             // ServerPlayer.adjustSpawnLocation: a player new to the world
@@ -2701,7 +2739,7 @@ impl Game<'_> {
         }
     }
     /// Send the tick's level events, sounds and mob animations.
-    fn lan_flush_effects(&mut self, host: &mut LanHost) {
+    pub(super) fn lan_flush_effects(&mut self, host: &mut LanHost) {
         let critical_hits = std::mem::take(&mut self.lan_critical_hits);
         let kinetic_hits = std::mem::take(&mut self.lan_kinetic_hits);
         for (state, at) in std::mem::take(&mut self.lan_cushion_breaks) {
@@ -2812,7 +2850,8 @@ impl Game<'_> {
                 && !dead
                 && old.and_then(|o| o.2).is_none_or(|before| time < before)
             {
-                host.hub.swing(m.id as i32, 0, at, None);
+                host.hub
+                    .swing(m.id as i32, i32::from(m.swing_is_off_hand()), at, None);
             }
             seen.insert(m.id, (m.hurt_time, dead, swing));
         }
@@ -2853,7 +2892,7 @@ impl Game<'_> {
     }
 
     /// Keep the chunks around every guest loaded.
-    fn lan_update_streaming(&mut self, host: &LanHost) {
+    pub(super) fn lan_update_streaming(&mut self, host: &LanHost) {
         // DistanceManager.PlayerTicketTracker: every chunk within the server's
         // view distance (Chebyshev) of a player holds a PLAYER_LOADING ticket
         // at the entity-ticking level (31), whatever the player asked for;
@@ -2925,6 +2964,22 @@ impl Game<'_> {
 }
 
 impl Game<'_> {
+    /// After a player's chat was broadcast: the dedicated server's event
+    /// log, and `detectRateSpam`.
+    fn lan_player_chatted(&mut self, host: &mut LanHost, sender: u128, text: &str) {
+        if let Some(g) = host.hub.guests.iter().find(|g| g.uuid == sender) {
+            if self.options.dedicated.is_some() {
+                super::dedicated::events::record(
+                    "chat",
+                    &g.name,
+                    sender,
+                    serde_json::json!({ "message": text }),
+                );
+            }
+            let conn = g.conn;
+            self.detect_rate_spam(host, conn, false);
+        }
+    }
     /// A hub's chat and log lines: a dedicated server logs them
     /// (MinecraftServer.logChatMessage, `[Not Secure]` for unsigned or
     /// expired messages); a LAN host shows the chat.

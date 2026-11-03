@@ -39,7 +39,7 @@ impl Game<'_> {
                 respawned.push(g.uuid);
             }
             // Player.updatePlayerPose: the shift key crouches unless flying.
-            let crouching = g.sneaking && !g.flying && !g.fall_flying && !g.sleeping;
+            let crouching = g.sneaking && !g.abilities.flying && !g.fall_flying && !g.sleeping;
             players.push((
                 &g.dimension,
                 waypoints::Player {

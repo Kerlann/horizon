@@ -23,8 +23,8 @@ impl Game<'_> {
     }
     /// Whether this game simulates a world, as `native_set_block` asks
     /// (the fluid helpers ask it too).
-    pub(super) fn native_simulates(&self) -> bool {
-        self.serving.is_some() || self.options.dedicated.is_some()
+    pub(in crate::game) fn native_simulates(&self) -> bool {
+        self.is_logical_server()
     }
     /// The level in place, as a handle: where the game's capability lookups (a hopper's) are.
     /// None where no world is simulated.

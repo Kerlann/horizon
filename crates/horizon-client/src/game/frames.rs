@@ -181,6 +181,7 @@ impl Game<'_> {
             return false;
         }
         let frame = ItemFrame {
+            join: Default::default(),
             id: self.next_entity + 1,
             pos,
             facing: facing_of(hit.face),
@@ -398,11 +399,13 @@ impl Game<'_> {
         }
         if by_player && !drops.is_empty() {
             let tool = self.held().cloned();
+            let player = Some(self.native_acting_id());
             self.native_use_drops(
                 "",
                 c,
                 None,
                 Some((f.id, f.kind())),
+                player,
                 tool.as_ref(),
                 &mut drops,
             );

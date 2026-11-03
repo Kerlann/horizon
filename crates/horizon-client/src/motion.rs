@@ -384,6 +384,11 @@ pub struct PlayerMotion {
     /// position packet even when the player lands where they stood. The
     /// server takes it at the end of a guest's turn.
     pub teleported: bool,
+    /// The position packet's `Relative.DELTA_*` flags of the teleport that
+    /// set `teleported` (`TeleportCommand.performTeleport`): a relative axis
+    /// keeps its motion, an absolute one is a zero change. Read with
+    /// `teleported` at the end of a guest's turn.
+    pub teleported_delta: [bool; 3],
     pub events: Vec<MotionEvent>,
     pub attributes: LiveAttributes<Box<dyn horizon_world::attributes::live::Identities>>,
     pub impulse: ImpulseContext,
@@ -608,6 +613,7 @@ impl PlayerMotion {
             needs_sync: false,
             sync_position: false,
             teleported: false,
+            teleported_delta: [false; 3],
             events: Vec::new(),
             attributes,
             fluids: PlayerFluids::default(),
@@ -842,6 +848,24 @@ impl PlayerMotion {
                 .edit(&handle, |value, observer| value.apply(&packed, observer))
                 .map_err(attribute_error)?;
         }
+        Ok(())
+    }
+    /// `Player.readAdditionalSaveData`: the movement speed's base is the abilities' walking speed.
+    pub fn set_walking_speed_base(&mut self, speed: f32) -> Result<()> {
+        let key = self
+            .attributes
+            .key("minecraft:movement_speed")
+            .ok_or("missing movement speed")?;
+        let handle = self
+            .attributes
+            .get_instance(Some(key))
+            .map_err(attribute_error)?
+            .ok_or("player has no movement speed")?;
+        self.attributes
+            .edit(&handle, |value, observer| {
+                value.set_base_value(f64::from(speed), observer)
+            })
+            .map_err(attribute_error)?;
         Ok(())
     }
     pub fn set_sprinting(&mut self, sprinting: bool) -> Result<()> {

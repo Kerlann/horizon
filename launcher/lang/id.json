@@ -554,7 +554,6 @@
   "Native build · {version}": "Build natif · {version}",
   "On: every AI feature is hidden and off. The game opens no control socket, and horizon-ctl and the MCP servers refuse.": "Aktif: Setiap fitur AI disembunyikan dan dinonaktifkan. Game tidak membuka soket kontrol, serta horizon-ctl dan server MCP menolak.",
   "the port": "port",
-  "The source of {source}. Its release ships {file}, a content mod: installing those from GitHub is not supported yet.": "Sumber dari {source}. Rilisnya menyertakan {file}, sebuah mod konten: menginstal mod tersebut dari GitHub belum didukung.",
   "Build anyway": "Tetap bangun",
   "A name, 3 to 16 letters": "Nama, terdiri dari 3 hingga 16 huruf",
   "Installed {mods} from GitHub ({source}). Build it on the Mods page.": "Menginstal {mods} dari GitHub ({source}). Bangun di halaman Mod.",

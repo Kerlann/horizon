@@ -774,7 +774,7 @@ impl HandWorld for GameHands<'_, '_> {
         self.game.spectator()
     }
     fn instabuild(&self) -> bool {
-        self.game.creative
+        self.game.instabuild()
     }
     fn hands_busy(&self) -> bool {
         self.game.hands_busy()

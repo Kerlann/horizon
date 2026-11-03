@@ -226,12 +226,43 @@ impl Hub {
             name: self.player_display_name(uuid, &name),
             target: None,
         };
+        // NeoForge's `broadcastChatMessage` fires `ServerChatEvent` here:
+        // the game tells the mods, then broadcasts what they left.
+        if crate::native_client_hooks::has_mods() {
+            events.push(HostEvent::ChatSubmitted {
+                message: Box::new(message),
+                bound: Box::new(bound),
+                name,
+            });
+            return;
+        }
         let line = format!("<{name}> {}", message.content);
         self.broadcast_chat(&message, &bound, line, events);
         events.push(HostEvent::PlayerChat {
             sender: uuid,
             text: message.content,
         });
+    }
+
+    /// Announces a new chat session to everyone. Vanilla runs this on the same
+    /// `chatMessageChain` as chat, so a message that came first is relayed
+    /// first. A message the game still has to hand to the mods
+    /// (`HostEvent::ChatSubmitted`) is relayed when the game reaches it, so
+    /// the announcement then waits behind it: clients would check that
+    /// message against the new session and mark the sender's chain broken.
+    pub(super) fn announce_chat_session(
+        &mut self,
+        update: play::PlayerInfoUpdate,
+        events: &mut Vec<HostEvent>,
+    ) {
+        if events
+            .iter()
+            .any(|e| matches!(e, HostEvent::ChatSubmitted { .. }))
+        {
+            events.push(HostEvent::ChatSessionStarted(Box::new(update)));
+        } else {
+            self.broadcast(&C::PlayerInfoUpdate(update));
+        }
     }
 
     /// handleChatSessionUpdate: a new profile key, validated against the
@@ -274,14 +305,17 @@ impl Hub {
                 let data = session.data();
                 self.guests[i].chain = Chain::keyed(session);
                 // resetPlayerChatState: INITIALIZE_CHAT to every player.
-                self.broadcast(&C::PlayerInfoUpdate(play::PlayerInfoUpdate {
-                    actions: 2,
-                    entries: vec![play::PlayerInfo {
-                        uuid,
-                        chat_session: Some(data),
-                        ..Default::default()
-                    }],
-                }));
+                self.announce_chat_session(
+                    play::PlayerInfoUpdate {
+                        actions: 2,
+                        entries: vec![play::PlayerInfo {
+                            uuid,
+                            chat_session: Some(data),
+                            ..Default::default()
+                        }],
+                    },
+                    events,
+                );
             }
             Err(reason) => {
                 events.push(HostEvent::Error(

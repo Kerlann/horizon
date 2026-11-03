@@ -160,6 +160,8 @@ pub(super) struct GuestSwap {
     selected: usize,
     mode: horizon_client::command::args::GameMode,
     creative: bool,
+    /// The abilities of the turn this one nests in.
+    abilities: Option<horizon_client::lan::abilities::PlayerAbilities>,
     /// The host's cached interaction ranges, restored after the guest turn.
     entity_reach: f64,
     block_reach: f64,
@@ -216,6 +218,8 @@ pub(super) struct GuestSwap {
         Option<u8>,
         Option<u32>,
     ),
+    /// Whether the outer turn is a fake player.
+    acting_fake: bool,
     /// That turn's `known_movement`.
     known_movement: Vec3,
     /// The packets queued for that guest.
@@ -240,6 +244,14 @@ impl GuestPlay {
     /// The item in use: its slot and for how many ticks.
     pub(super) fn using(&self) -> Option<(usize, u32)> {
         self.using
+    }
+    /// `LivingEntity.useItemRemaining` of the item in use, 0 when none is.
+    pub(super) fn use_remaining(&self) -> i32 {
+        super::item_use::remaining_of(self.using, self.use_duration)
+    }
+    /// Sets `useItemRemaining`; false when no item is in use.
+    pub(super) fn set_use_remaining(&mut self, remaining: i32) -> bool {
+        super::item_use::set_remaining(self.using, &mut self.use_duration, remaining)
     }
     /// The `ServerPlayerGameMode.destroyProgressStart` a STOP on `pos` is measured from: the clock
     /// belongs to the block the START named (`destroyPos`), and only a START writes either, so a
@@ -396,6 +408,8 @@ impl Game<'_> {
                 // LivingEntity.readAdditionalSaveData: the saved attributes.
                 let _ =
                     m.apply_saved_attributes(g.saved.as_ref().and_then(|t| t.get("attributes")));
+                // The abilities' walking speed is the movement speed's base.
+                let _ = m.set_walking_speed_base(g.abilities.walking_speed);
             }
             // ServerPlayer.restoreFrom: a body that follows another takes its
             // attributes (a scale of 0.1 stays 0.1 after a respawn or a trip
@@ -455,12 +469,13 @@ impl Game<'_> {
         motion.yaw = g.yaw;
         motion.pitch = g.pitch;
         motion.sprinting = g.sprinting;
-        motion.may_fly = g.creative() || g.game_mode == SPECTATOR;
-        motion.flying = g.flying;
-        motion.flying_speed = g.flying_speed;
+        let abilities = g.abilities;
+        motion.may_fly = abilities.may_fly;
+        motion.flying = abilities.flying;
+        motion.flying_speed = abilities.flying_speed;
         // FireworkRocketItem.use boosts only a gliding player.
         motion.fall_flying = g.fall_flying;
-        motion.invulnerable = motion.may_fly;
+        motion.invulnerable = abilities.invulnerable;
         // `ServerPlayer.isInvulnerableTo`'s connection term, as of now.
         motion.client_loaded = g.client_loaded();
         let _ = motion.set_health(g.health, false);
@@ -479,6 +494,7 @@ impl Game<'_> {
         std::mem::swap(&mut self.carried, &mut g.carried);
         let selected = std::mem::replace(&mut self.selected, g.selected);
         let (mode, creative) = (self.mode, self.creative);
+        let outer_abilities = self.acting_abilities.replace(g.abilities);
         let (entity_reach, block_reach) = (self.entity_reach, self.block_reach);
         self.set_mode_raw(g.game_mode);
         let xp = std::mem::replace(
@@ -576,6 +592,7 @@ impl Game<'_> {
             self.lan_acting_permission.replace(g.permission),
             self.lan_acting_entity.replace(g.entity_id as u32),
         );
+        let acting_fake = std::mem::replace(&mut self.lan_acting_fake, !g.participates_online());
         let packets = std::mem::take(&mut self.guest_packets);
         let entity_events = std::mem::take(&mut self.guest_entity_events);
         let cooldown_events = std::mem::take(&mut self.guest_cooldowns);
@@ -614,6 +631,7 @@ impl Game<'_> {
             selected,
             mode,
             creative,
+            abilities: outer_abilities,
             entity_reach,
             block_reach,
             permission,
@@ -655,6 +673,7 @@ impl Game<'_> {
             marks,
             death_cause,
             acting,
+            acting_fake,
             known_movement,
             packets,
             entity_events,
@@ -715,6 +734,7 @@ impl Game<'_> {
             selected,
             mode,
             creative,
+            abilities: outer_abilities,
             entity_reach,
             block_reach,
             permission,
@@ -757,6 +777,7 @@ impl Game<'_> {
             death_cause,
             combat,
             acting,
+            acting_fake,
             known_movement,
             packets,
             entity_events,
@@ -868,6 +889,7 @@ impl Game<'_> {
             self.lan_acting_permission,
             self.lan_acting_entity,
         ) = acting;
+        self.lan_acting_fake = acting_fake;
         self.known_movement = known_movement;
         play.death_cause = std::mem::replace(&mut self.ui.death_cause, death_cause);
         // An ender chest the guest opened: the menu shows their inventory
@@ -982,6 +1004,7 @@ impl Game<'_> {
         g.xp_progress = new_xp.progress;
         g.xp_total = new_xp.total;
         let new_mode = self.mode_id();
+        let turn_abilities = std::mem::replace(&mut self.acting_abilities, outer_abilities);
         self.mode = mode;
         self.creative = creative;
         self.entity_reach = entity_reach;
@@ -1019,6 +1042,8 @@ impl Game<'_> {
                 }));
             }
             let teleported = std::mem::take(&mut m.teleported);
+            let teleported_delta = m.teleported_delta;
+            m.teleported_delta = [false; 3];
             let moved: f64 = (0..3).map(|k| (at[k] - g.position[k]).powi(2)).sum();
             g.motion = Some(Box::new(m));
             // Entity.teleportTo takes a rider out of its vehicle.
@@ -1039,7 +1064,13 @@ impl Game<'_> {
                 }));
             }
             if g.vehicle.is_none() && (moved > 0.0001 || turned || teleported) {
-                host.hub.teleport(i, Some(at));
+                // A command's teleport carries its relative axes as the
+                // packet's DELTA flags; any other move is absolute.
+                if teleported {
+                    host.hub.teleport_command(i, at, teleported_delta);
+                } else {
+                    host.hub.teleport(i, Some(at));
+                }
             }
         }
         let g = &mut host.hub.guests[i];
@@ -1062,6 +1093,15 @@ impl Game<'_> {
             let conn = g.conn;
             host.hub
                 .set_game_mode(conn, new_mode, &self.world, Some(self.collision));
+        }
+        // The turn's abilities: a mode change made in it set the flags first
+        // (`Game::set_mode`), then a mod's writes won, as in vanilla.
+        let g = &mut host.hub.guests[i];
+        if let Some(now) = turn_abilities
+            && now != g.abilities
+        {
+            g.abilities = now;
+            g.send(&g.abilities_packet());
         }
         // LivingEntity.checkTotemDeathProtection's entity event, to every
         // client around, the guest's own included; this window draws it too.
@@ -1740,12 +1780,8 @@ impl Game<'_> {
             return;
         }
         if let Some(g) = host.hub.guest_mut(conn) {
-            g.flying = !flying;
-            g.send(&C::PlayerAbilities(play::PlayerAbilities {
-                flags: g.ability_flags(),
-                flying_speed: 0.05,
-                walking_speed: 0.1,
-            }));
+            g.abilities.flying = !flying;
+            g.send(&g.abilities_packet());
         }
     }
 
@@ -4691,6 +4727,21 @@ impl Game<'_> {
                         host.hub.sound(name, at, volume, pitch, source, Some(conn));
                     }
                 }
+                // Player.causeFallDamage, mayfly: the mods hear the landing.
+                MotionEvent::Fall(horizon_client::landing::FallEvent::FlyableFall {
+                    distance,
+                    multiplier,
+                }) => {
+                    if let Some((uuid, id, name)) = host
+                        .hub
+                        .guest(conn)
+                        .map(|g| (g.uuid, g.entity_id, g.name.clone()))
+                    {
+                        self.as_guest(host, conn, |game| {
+                            game.native_player_flyable_fall(uuid, id, &name, distance, multiplier);
+                        });
+                    }
+                }
                 MotionEvent::Fall(event) => self.landing_block_updates(&event),
                 // PowderSnowBlock.entityInside: every player around sees the
                 // snowflake (`ServerLevel.sendParticles`).
@@ -4811,7 +4862,7 @@ impl Game<'_> {
     /// a glider that its next point of wear won't break.
     fn guest_can_glide(&mut self, host: &mut LanHost, conn: u32) -> Option<bool> {
         let g = host.hub.guest_mut(conn)?;
-        if g.flying || g.on_ground || g.vehicle.is_some() {
+        if g.abilities.flying || g.on_ground || g.vehicle.is_some() {
             return Some(false);
         }
         self.as_guest(host, conn, |game| {
@@ -5454,7 +5505,7 @@ impl Game<'_> {
 
 /// ClientboundSwingAnimationPacket: the hand and the animation (its type and
 /// base duration; each client applies the swinger's haste and fatigue).
-fn swing_packet(id: i32, hand: Hand, animation: SwingAnimation) -> C {
+pub(super) fn swing_packet(id: i32, hand: Hand, animation: SwingAnimation) -> C {
     C::SwingAnimation(play::SwingAnimation {
         id,
         hand: i32::from(hand == Hand::Off),

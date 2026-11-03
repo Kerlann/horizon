@@ -30,7 +30,7 @@ http-body-util = "0.1"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
-# A native mod's `.hnmod` for the tests (already one of horizon-mods').
+# A native mod's `.hmod` for the tests (already one of horizon-mods').
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [profile.release]

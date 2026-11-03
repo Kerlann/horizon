@@ -512,6 +512,34 @@ impl World {
             }
         });
     }
+    /// The fields Horizon keeps beside a block entity's model, for a journal: the tag it was
+    /// loaded or set with (its `lock`) and its loot table roll.
+    pub fn block_entity_extras(&self, key: (i32, i32, i32)) -> BlockEntityExtras {
+        let saved = self
+            .chunks
+            .get(&(key.0 >> 4, key.2 >> 4))
+            .and_then(|chunk| chunk.saved.as_ref());
+        BlockEntityExtras {
+            source: saved.and_then(|s| {
+                s.block_entity_sources
+                    .iter()
+                    .find(|(p, _)| *p == key)
+                    .map(|(_, tag)| tag.clone())
+            }),
+            rolled_loot: saved.and_then(|s| s.rolled_loot.iter().find(|r| r.pos == key).cloned()),
+        }
+    }
+    /// Puts back what [`World::block_entity_extras`] kept.
+    pub fn set_block_entity_extras(&mut self, key: (i32, i32, i32), kept: BlockEntityExtras) {
+        self.with_chunk_extras(key, |extras| {
+            extras.block_entity_sources.retain(|(p, _)| *p != key);
+            extras
+                .block_entity_sources
+                .extend(kept.source.map(|tag| (key, tag)));
+            extras.rolled_loot.retain(|r| r.pos != key);
+            extras.rolled_loot.extend(kept.rolled_loot);
+        });
+    }
     /// `LevelChunk.removeBlockEntity`: the tag a block entity was loaded or set
     /// with goes with it, so a container placed there later starts unlocked.
     pub fn forget_block_entity_source(&mut self, key: (i32, i32, i32)) {
@@ -644,4 +672,11 @@ mod tests {
         assert!(!world.may_hold([0, 400, 0], [0, 401, 0], nine));
         assert!(world.may_hold([0, 400, 0], [0, 401, 0], |s| s.0 == 0));
     }
+}
+
+/// A block entity's fields kept beside its model ([`World::block_entity_extras`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlockEntityExtras {
+    source: Option<horizon_world::nbt::Tag>,
+    rolled_loot: Option<crate::chunk::RolledLoot>,
 }

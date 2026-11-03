@@ -70,17 +70,10 @@ pub(super) fn content_root(
     use horizon_client::mod_content::{self, ContentMod};
     use horizon_mods::{Content, Package};
     let here = std::env::current_dir().unwrap_or_default();
-    let mut paths: Vec<_> = horizon_mods::find(&here.join(mod_list::DIR))
-        .into_iter()
-        .map(|path| (path, false))
-        .collect();
-    paths.extend(
-        horizon_mods::find(&here.join(mod_list::NATIVE_DIR))
-            .into_iter()
-            .map(|path| (path, true)),
-    );
-    paths.retain(|(path, _)| !dev.contains(path));
-    paths.extend(dev.iter().cloned().map(|path| (path, false)));
+    let mut paths = horizon_mods::find(&here.join(mod_list::DIR));
+    paths.extend(horizon_mods::find(&here.join(mod_list::NATIVE_DIR)));
+    paths.retain(|path| !dev.contains(path));
+    paths.extend(dev.iter().cloned());
     let built = std::env::current_exe()
         .ok()
         .and_then(|exe| std::fs::read_to_string(exe.with_file_name(BUILD_INFO)).ok())
@@ -91,12 +84,13 @@ pub(super) fn content_root(
     // The first load's list stays (`set_local`): a reload does not hash the files again.
     let announce = !horizon_protocol::mod_list::is_set();
     let mut announced = Vec::new();
-    for (path, native) in &paths {
+    for path in &paths {
         let Ok(package) = Package::read(path) else {
             continue;
         };
         let m = &package.manifest;
-        let on = content_enabled(&m.id, *native, enabled, &built) || dev.contains(path);
+        let native = horizon_mods::index::native::holds(path);
+        let on = content_enabled(&m.id, native, enabled, &built) || dev.contains(path);
         if !on || mods.iter().any(|c| c.id == m.id) {
             continue;
         }
@@ -335,7 +329,7 @@ fn native_mods_detail(built: &str) -> Option<String> {
     (!list.is_empty()).then_some(list)
 }
 
-/// A row for each native mod the launcher installed in `dir` (`<id>.hnmod`) that this game wasn't
+/// A row for each native mod the launcher installed in `dir` (`<id>.hmod`) that this game wasn't
 /// built with (`built`: its [`BUILD_INFO`], empty for a release or Nightly) and that has no row
 /// yet. The page said "No mods" before, and players copied the files into `horizon-mods` (#4770).
 /// Its toggle is the `mod.<id>` line the launcher's next build follows.
@@ -344,7 +338,7 @@ fn not_built(dir: &std::path::Path, built: &str, rows: &[Installed]) -> Vec<Inst
     let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
         .map(|d| d.flatten().map(|e| e.path()).collect())
         .unwrap_or_default();
-    paths.retain(|p| p.extension().is_some_and(|e| e == "hnmod"));
+    paths.retain(|p| p.extension().is_some_and(|e| e == "hmod"));
     paths.sort();
     let mut out: Vec<Installed> = Vec::new();
     for path in paths {
@@ -460,6 +454,37 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn misplaced_packages_follow_their_actual_kind() {
+        let dir = std::env::temp_dir().join(format!("horizon-misplaced-{}", std::process::id()));
+        let content = dir.join("horizon-mods");
+        let native = dir.join("horizon-native-mods");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::create_dir_all(&native).unwrap();
+        hmod(&content, "built");
+        let file = std::fs::File::create(native.join("plain.hmod")).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file("horizon-mod.toml", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"content").unwrap();
+        zip.finish().unwrap();
+        let built = built_ids(r#"{"mods":[{"id":"built"}]}"#);
+        let enabled = std::collections::BTreeSet::from(["plain".to_string()]);
+        assert!(content_enabled(
+            "built",
+            horizon_mods::index::native::holds(&content.join("built.hmod")),
+            &enabled,
+            &built
+        ));
+        assert!(content_enabled(
+            "plain",
+            horizon_mods::index::native::holds(&native.join("plain.hmod")),
+            &enabled,
+            &built
+        ));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     /// Only a build whose `native-mods.json` lists a mod counts as built with mods.
     #[test]
     fn only_a_listed_mod_makes_a_build_a_mod_build() {
@@ -470,8 +495,8 @@ mod tests {
         assert!(build_lists_mods(r#"{"mods":[{"id":"worldmap"}]}"#));
     }
 
-    /// A minimal `.hnmod` the registry accepts: its manifest and its mixin's.
-    fn hnmod(dir: &std::path::Path, id: &str) {
+    /// A minimal `.hmod` the registry accepts: its manifest and its mixin's.
+    fn hmod(dir: &std::path::Path, id: &str) {
         let horizon = "a".repeat(40);
         let manifest = serde_json::json!({
             "schema": 1, "id": id, "version": "0.3.0", "game": "26.3",
@@ -480,12 +505,12 @@ mod tests {
         let mixin = format!(
             "[mod]\nid = \"{id}\"\nversion = \"0.3.0\"\n[compatibility]\nhorizon_revision = \"{horizon}\"\n"
         );
-        let file = std::fs::File::create(dir.join(format!("{id}.hnmod"))).unwrap();
+        let file = std::fs::File::create(dir.join(format!("{id}.hmod"))).unwrap();
         let mut zip = zip::ZipWriter::new(file);
         let options = zip::write::SimpleFileOptions::default();
         zip.start_file("horizon-native.json", options).unwrap();
         zip.write_all(manifest.to_string().as_bytes()).unwrap();
-        zip.start_file(format!("mixins/{id}/horizon-mixin.toml"), options)
+        zip.start_file("native/horizon-mixin.toml", options)
             .unwrap();
         zip.write_all(mixin.as_bytes()).unwrap();
         zip.finish().unwrap();
@@ -509,10 +534,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         for id in ["veinminer", "zoom", "minimap"] {
-            hnmod(&dir, id);
+            hmod(&dir, id);
         }
         std::fs::write(dir.join("notes.txt"), "not a mod").unwrap();
-        std::fs::write(dir.join("broken.hnmod"), "not a zip").unwrap();
+        std::fs::write(dir.join("broken.hmod"), "not a zip").unwrap();
         // A release: none is built in; the page lists them, sorted, instead of "No mods".
         let rows = not_built(&dir, "", &[]);
         let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();

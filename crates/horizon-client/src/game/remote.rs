@@ -1158,6 +1158,9 @@ impl Game<'_> {
         // A world is leaving either way: its icon attempt goes with it.
         self.world_icon = None;
         // Minecraft.disconnect: the client level goes.
+        if self.remote.is_some() {
+            self.forget_all_remote_columns();
+        }
         if let Some(old) = self.remote.as_mut().and_then(|r| r.heard_level.take()) {
             self.native_client_level_unload(&old);
         }
@@ -1795,7 +1798,7 @@ impl Game<'_> {
                 forgotten.insert((p.pos[0], p.pos[1]));
                 continue;
             }
-            self.forget_remote_columns(&mut forgotten);
+            self.forget_remote_columns(&mut forgotten, true);
             let chunk = matches!(item, Received::Chunk(_));
             if chunk && !overdue && chunks >= CHUNK_PACKETS_PER_FRAME {
                 events.push_front(item);
@@ -1901,6 +1904,7 @@ impl Game<'_> {
                     // clearClientLevel drops the client level now, so its
                     // unload comes before the configuration screen, not
                     // after the next login's load.
+                    self.forget_all_remote_columns();
                     if let Some(old) = self.remote.as_mut().and_then(|r| r.heard_level.take()) {
                         self.native_client_level_unload(&old);
                     }
@@ -1992,7 +1996,7 @@ impl Game<'_> {
             }
         }
         if self.remote.is_some() {
-            self.forget_remote_columns(&mut forgotten);
+            self.forget_remote_columns(&mut forgotten, true);
         }
         if let Some(r) = self.remote.as_mut() {
             r.backlog_since = if events.is_empty() {
@@ -2106,9 +2110,16 @@ impl Game<'_> {
         // server switched levels without closing the previous container.
         self.remote_close_local();
         self.screen = Screen::Playing;
-        let Some(r) = self.remote.as_mut() else {
+        let Some(r) = self.remote.as_ref() else {
             return;
         };
+        // handleRespawn keeps the ClientLevel only for the same level key:
+        // two levels sharing a dimension type are still two levels.
+        let same = keep_world && r.heard_level.as_deref() == Some(spawn.dimension.as_str());
+        if !same {
+            self.forget_all_remote_columns();
+        }
+        let r = self.remote.as_mut().unwrap();
         let dimension = r.registries.dimension(spawn.dimension_type);
         // The server's dimension type gives the level's shape, and its
         // chunks the shape's column.
@@ -2120,9 +2131,6 @@ impl Game<'_> {
             dimension.has_ceiling,
         )
         .unwrap_or_else(|_| super::Dim::from_id(&dimension.name).shape());
-        // handleRespawn keeps the ClientLevel only for the same level key:
-        // two levels sharing a dimension type are still two levels.
-        let same = keep_world && r.heard_level.as_deref() == Some(spawn.dimension.as_str());
         r.chunk_format = Arc::new(
             r.chunk_format
                 .with_dimension(&dimension)
@@ -2170,9 +2178,6 @@ impl Game<'_> {
                 self.world.day_time,
                 self.world.weather,
             );
-            let old = std::mem::take(&mut self.world.chunks);
-            let count = old.len();
-            horizon_client::chunk::free_columns(old, count);
             self.world = World::new(self.res.facts().air, spawn.seed);
             self.world.shape = shape;
             self.world.game_time = time;
@@ -2233,35 +2238,45 @@ impl Game<'_> {
     /// view centre, `calculateStorageRange` (the server's radius, at least
     /// two, plus three) chunks each way.
     pub(super) fn remote_chunk_in_range(&self, x: i32, z: i32) -> bool {
-        self.remote.as_ref().is_none_or(|r| {
-            let range = r.view_distance.max(2) + 3;
-            (x - r.chunk_center.0).abs() <= range && (z - r.chunk_center.1).abs() <= range
-        })
+        self.remote
+            .as_ref()
+            .is_none_or(|r| Self::chunk_inside_remote_range(r.chunk_center, r.view_distance, x, z))
+    }
+    fn chunk_inside_remote_range(center: (i32, i32), distance: i32, x: i32, z: i32) -> bool {
+        let range = distance.max(2) + 3;
+        (x - center.0).abs() <= range && (z - center.1).abs() <= range
     }
     /// The columns a moved or resized storage no longer holds.
-    fn drop_remote_chunks_out_of_range(&mut self) {
+    fn drop_remote_chunks_out_of_range(&mut self, center: (i32, i32), distance: i32) {
         let mut gone: horizon_client::fast_hash::FxHashSet<(i32, i32)> = self
             .world
             .chunks
             .keys()
             .copied()
-            .filter(|&(x, z)| !self.remote_chunk_in_range(x, z))
+            .filter(|&(x, z)| !Self::chunk_inside_remote_range(center, distance, x, z))
             .collect();
-        self.forget_remote_columns(&mut gone);
+        self.forget_remote_columns(&mut gone, true);
+    }
+    fn forget_all_remote_columns(&mut self) {
+        let mut gone = self.world.chunks.keys().copied().collect();
+        self.forget_remote_columns(&mut gone, false);
     }
     /// Forgets the `gone` columns (and empties the set): their chunks (freed on a thread
     /// of their own when there are many), their sections in the renderer and their block
-    /// entities, each store once for all of them. Far terrain keeps them as they were last
-    /// (`server_terrain`).
+    /// entities, each store once for all of them. When the level stays open,
+    /// far terrain keeps their last state (`server_terrain`).
     fn forget_remote_columns(
         &mut self,
         gone: &mut horizon_client::fast_hash::FxHashSet<(i32, i32)>,
+        keep_terrain: bool,
     ) {
         if gone.is_empty() {
             return;
         }
-        let freed = self.streaming.forget_columns(&mut self.world, gone);
-        if let Some(lod) = &mut self.lod {
+        let freed =
+            horizon_client::streaming::Streaming::take_remote_columns(&mut self.world, gone);
+        self.streaming.forget_columns(&mut self.world, gone);
+        if keep_terrain && let Some(lod) = &mut self.lod {
             for chunk in &freed {
                 lod.observe(chunk.clone(), self.res.facts());
             }
@@ -3213,7 +3228,7 @@ impl Game<'_> {
             C::ChunksBiomes(p) => self.remote_chunks_biomes(&p),
             // `poll_remote` forgets a run of them at once.
             C::ForgetLevelChunk(p) => {
-                self.forget_remote_columns(&mut [(p.pos[0], p.pos[1])].into_iter().collect());
+                self.forget_remote_columns(&mut [(p.pos[0], p.pos[1])].into_iter().collect(), true);
             }
             C::ChunkBatchFinished(_) => {
                 // ChunkBatchSizeCalculator's ceiling; meshing runs on workers.
@@ -4834,15 +4849,17 @@ impl Game<'_> {
                 self.streaming.radius = self.render_distance_in_use().min(p.distance + 1).max(2);
                 if let Some(r) = self.remote.as_mut() {
                     r.view_distance = p.distance;
+                    let center = r.chunk_center;
+                    // ClientChunkCache.updateViewRadius: a new storage of that size.
+                    self.drop_remote_chunks_out_of_range(center, p.distance);
                 }
-                // ClientChunkCache.updateViewRadius: a new storage of that size.
-                self.drop_remote_chunks_out_of_range();
             }
             C::SetChunkCacheCenter(p) => {
                 if let Some(r) = self.remote.as_mut() {
                     r.chunk_center = (p.x, p.z);
+                    let distance = r.view_distance;
+                    self.drop_remote_chunks_out_of_range((p.x, p.z), distance);
                 }
-                self.drop_remote_chunks_out_of_range();
             }
             C::BlockEntityData(p) => self.remote_block_entity_data(p.pos, p.kind, &p.tag),
             C::OpenSignEditor(p) => self.remote_open_sign_editor(p),
@@ -10584,6 +10601,58 @@ fn hold_server_fire(fire_ticks: i32, server_on_fire: bool) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn forgetting_and_closing_remote_columns_clear_their_data() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::{chunk::Chunk, containers::BlockEntity};
+
+        with_game(|game| {
+            for x in 0..2 {
+                game.streaming
+                    .insert_remote(&mut game.world, Chunk::empty(x, 0));
+                game.world
+                    .block_entities
+                    .insert((x * 16, 64, 0), BlockEntity::Chest(vec![]));
+            }
+            // A same-position resend replaces the data without removing the column.
+            game.streaming
+                .replace_remote(&mut game.world, Chunk::empty(0, 0));
+            assert_eq!(game.world.chunks.len(), 2);
+            assert!(game.world.chunks.contains_key(&(0, 0)));
+            assert!(game.streaming.is_lit(0, 0));
+            let mut forgotten = [(0, 0)].into_iter().collect();
+            game.forget_remote_columns(&mut forgotten, true);
+            assert!(!game.world.chunks.contains_key(&(0, 0)));
+            assert!(!game.world.block_entities.contains_key(&(0, 64, 0)));
+            assert!(!game.streaming.is_lit(0, 0));
+            assert!(game.world.chunks.contains_key(&(1, 0)));
+            game.forget_remote_columns(&mut [(0, 0)].into_iter().collect(), true);
+            for x in [7, 13] {
+                game.streaming
+                    .insert_remote(&mut game.world, Chunk::empty(x, 0));
+                game.world
+                    .block_entities
+                    .insert((x * 16, 64, 0), BlockEntity::Chest(vec![]));
+            }
+            // Cache-centre packet: move to (15, 0), at radius 10.
+            game.drop_remote_chunks_out_of_range((15, 0), 10);
+            assert!(!game.world.chunks.contains_key(&(1, 0)));
+            assert!(game.world.chunks.contains_key(&(7, 0)));
+            assert!(game.world.chunks.contains_key(&(13, 0)));
+            // Cache-radius packet: shrinking to 2 keeps radius 5 around (15, 0).
+            game.drop_remote_chunks_out_of_range((15, 0), 2);
+            assert!(!game.world.chunks.contains_key(&(7, 0)));
+            assert!(game.world.chunks.contains_key(&(13, 0)));
+            assert!(!game.world.block_entities.contains_key(&(7 * 16, 64, 0)));
+            // A later forget for an evicted column is harmless.
+            game.forget_remote_columns(&mut [(7, 0)].into_iter().collect(), true);
+            game.forget_all_remote_columns();
+            assert!(game.world.chunks.is_empty());
+            assert!(game.world.block_entities.is_empty());
+        });
+    }
+
     use super::{
         chat_after_event, hold_server_fire, keep_client_state, remote_use_swings, synced_local_use,
     };

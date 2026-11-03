@@ -43,8 +43,7 @@ pub struct Index {
 pub enum Kind {
     /// A `.hmod` of content only.
     Mod,
-    /// A source-only native mixin bundle, compiled into an isolated game build. Published as an
-    /// `.hnmod` until launchers and the game read native `.hmod`s (#5865, docs/api/mod-files.md).
+    /// A native source bundle, compiled into an isolated game build and published as a `.hmod`.
     NativeMod,
     /// A `.hpack`: registry mods played together as a profile.
     Modpack,
@@ -72,7 +71,7 @@ impl Kind {
     pub fn extension(&self) -> Option<&'static str> {
         match self {
             Kind::Mod => Some("hmod"),
-            Kind::NativeMod => Some("hnmod"),
+            Kind::NativeMod => Some("hmod"),
             Kind::Modpack => Some("hpack"),
             Kind::ResourcePack => Some("zip"),
             Kind::Shader => Some(horizon_shader_api::EXTENSION),
@@ -152,11 +151,6 @@ pub struct Version {
     pub side: Option<Side>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub capabilities: Vec<Capability>,
-    /// The mod API level a mod's code needs ([`crate::api_level`]), read
-    /// from its file; none for content and other kinds, and in indexes
-    /// built before levels.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub api_level: Option<u32>,
     /// The Minecraft version it is for.
     pub game: String,
     /// A modpack's mods, as its manifest lists them.
@@ -336,20 +330,12 @@ impl Index {
         Ok(())
     }
 
-    /// A project's newest version for Minecraft `game` that wasn't taken
-    /// down and that a Horizon serving mod API `level` can run (an unknown
-    /// level counts as runnable: the game still checks when it starts it).
-    pub fn installable<'a>(
-        &self,
-        project: &'a Project,
-        game: &str,
-        level: u32,
-    ) -> Option<&'a Version> {
-        project.versions.iter().find(|v| {
-            v.game == game
-                && v.api_level.is_none_or(|l| l <= level)
-                && self.revoked(&project.id, &v.file.sha256).is_none()
-        })
+    /// A project's newest version for Minecraft `game` that wasn't taken down.
+    pub fn installable<'a>(&self, project: &'a Project, game: &str) -> Option<&'a Version> {
+        project
+            .versions
+            .iter()
+            .find(|v| v.game == game && self.revoked(&project.id, &v.file.sha256).is_none())
     }
     pub fn project(&self, id: &str) -> Option<&Project> {
         self.projects.iter().find(|p| p.id == id)
@@ -506,8 +492,6 @@ pub struct Facts {
     pub side: Option<Side>,
     /// In the manifest's order.
     pub capabilities: Vec<Capability>,
-    /// The mod API level a mod's code needs, from the functions it imports.
-    pub api_level: Option<u32>,
     /// The Minecraft version, when the file names one (a modpack does).
     pub game: Option<String>,
     pub requires: Vec<Requirement>,
@@ -524,7 +508,6 @@ impl Facts {
             || self.api != version.api
             || self.side != version.side
             || caps != listed
-            || version.api_level.is_some() && self.api_level != version.api_level
             || self.game.as_ref().is_some_and(|g| *g != version.game)
             || self.requires != version.requires;
         if !differs {

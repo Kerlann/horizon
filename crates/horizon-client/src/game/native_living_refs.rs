@@ -54,7 +54,7 @@ fn equipment_stack(stack: Option<ItemStack>) -> Option<ItemStack> {
 
 impl Game<'_> {
     /// What a living handle names now: a player, a mob, an armor stand or the dragon.
-    fn native_living_target(&self, living: LivingRef) -> Option<Target> {
+    pub(super) fn native_living_target(&self, living: LivingRef) -> Option<Target> {
         match self.native_entity_target(living.entity())? {
             t @ (Target::Player
             | Target::Guest(_)

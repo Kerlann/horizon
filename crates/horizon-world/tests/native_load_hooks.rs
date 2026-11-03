@@ -35,6 +35,24 @@ fn load_hooks_are_noops_before_install_and_use_first_callbacks_after() {
     item_defaults::native_modify_default_components("item", &mut components);
     assert_eq!(table, json!(["table"]));
     assert_eq!(components["item"], json!("item"));
+
+    // Client/shared loads keep raw tables; each server load gets exactly one
+    // callback per table, even when the raw map is already cached.
+    let root = std::env::temp_dir().join(format!("horizon-load-hooks-{}", std::process::id()));
+    let dir = root.join("data/minecraft/loot_table");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(root.join("items.json"), "{}").unwrap();
+    std::fs::write(dir.join("test.json"), "[]").unwrap();
+    let raw = loot::shared_tables(&root, &loot::PackOverlay::NONE).unwrap();
+    assert_eq!(raw["minecraft:test"], json!([]));
+    for _ in 0..2 {
+        let mut server = loot::LootData::load(&root, &loot::PackOverlay::NONE).unwrap();
+        server.apply_native_table_loads();
+        assert_eq!(server.tables()["minecraft:test"], json!(["minecraft:test"]));
+        assert_eq!(raw["minecraft:test"], json!([]));
+    }
+    std::fs::remove_dir_all(&root).unwrap();
+
     let ctx = loot::NativeLootContext {
         entity: None,
         damage: None,

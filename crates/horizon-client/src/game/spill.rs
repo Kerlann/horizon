@@ -710,9 +710,18 @@ impl Game<'_> {
         let mut spill = std::mem::take(&mut self.spill);
         let used = std::mem::take(&mut spill.used);
         let tool = self.held().cloned();
+        let player = Some(self.native_acting_id());
         retell_runs(&mut spill.spawns, &used, |used, origin, drops| {
             let block = Some((used.pos, used.state));
-            self.native_use_drops(used.table, origin, block, None, tool.as_ref(), drops);
+            self.native_use_drops(
+                used.table,
+                origin,
+                block,
+                None,
+                player,
+                tool.as_ref(),
+                drops,
+            );
         });
         for s in spill.spawns {
             let motion = s.motion.unwrap_or_else(new_item_motion);

@@ -11,15 +11,15 @@ use super::{Dim, Game, commands::execute, lan::LanHost};
 // Their old home, for mixin code that names them here.
 pub(crate) use horizon_client::mod_api::{NativeCommand, NativeServerPlayer};
 use horizon_client::{
-    items::ItemStack,
-    lan::{data::component_nbt, guest::Guest},
+    command::{ArgType, Dispatcher},
+    lan::{abilities::PlayerAbilities, data::component_nbt, guest::Guest},
     mod_api::{GameMode, NativePlayerAbilities, NativePlayerFood, PlayerRef},
     motion::PlayerMotion,
     text::Text,
 };
 use horizon_protocol::packets::play::{self, Clientbound as C};
 use serde_json::{Map, Value, json};
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 /// A sidebar a server mod shows one player (`native_sidebar`): its title and
 /// up to 15 lines, top first, each a text on the left and, where the score's
@@ -35,20 +35,54 @@ pub(crate) struct NativeSidebar {
 /// server's scoreboard never holds it.
 const SIDEBAR_OBJECTIVE: &str = "horizon:native_sidebar";
 
-/// The brigadier parser of an argument kind, and its properties.
-fn parser(kind: &str) -> Option<(&'static str, Value)> {
+/// The argument kinds a native usage may name, each with a [`parser`].
+const KINDS: [&str; 8] = [
+    "word",
+    "text",
+    "integer",
+    "number",
+    "boolean",
+    "player",
+    "item",
+    "block_pos",
+];
+
+/// The brigadier parser of an argument kind, its properties and its dispatcher type.
+fn parser(kind: &str) -> Option<(&'static str, Value, ArgType)> {
     Some(match kind {
-        "word" => ("brigadier:string", json!({"type": "word"})),
-        "text" => ("brigadier:string", json!({"type": "greedy"})),
-        "integer" => ("brigadier:integer", Value::Null),
-        "number" => ("brigadier:double", Value::Null),
-        "boolean" => ("brigadier:bool", Value::Null),
+        "word" => ("brigadier:string", json!({"type": "word"}), ArgType::Word),
+        "text" => (
+            "brigadier:string",
+            json!({"type": "greedy"}),
+            ArgType::Greedy,
+        ),
+        "integer" => (
+            "brigadier:integer",
+            Value::Null,
+            ArgType::Integer {
+                min: i32::MIN,
+                max: i32::MAX,
+            },
+        ),
+        "number" => (
+            "brigadier:double",
+            Value::Null,
+            ArgType::Double {
+                min: f64::MIN,
+                max: f64::MAX,
+            },
+        ),
+        "boolean" => ("brigadier:bool", Value::Null, ArgType::Bool),
         "player" => (
             "minecraft:entity",
             json!({"amount": "single", "type": "players"}),
+            ArgType::Entity {
+                single: true,
+                players: true,
+            },
         ),
-        "item" => ("minecraft:item_stack", Value::Null),
-        "block_pos" => ("minecraft:block_pos", Value::Null),
+        "item" => ("minecraft:item_stack", Value::Null, ArgType::Item),
+        "block_pos" => ("minecraft:block_pos", Value::Null, ArgType::BlockPos),
         _ => return None,
     })
 }
@@ -91,7 +125,7 @@ fn usage_nodes(usage: &str) -> Result<Vec<(String, Value, bool)>, String> {
         if optional_seen && !optional {
             return Err(format!("`{usage}`: `{word}` follows an optional argument"));
         }
-        let Some((parser, properties)) = parser(kind) else {
+        let Some((parser, properties, _)) = parser(kind) else {
             return Err(format!("`{usage}`: unknown kind `{kind}`"));
         };
         optional_seen |= optional;
@@ -141,7 +175,11 @@ pub(super) fn command_tree(
                 n["level"] = 4.into();
                 n
             });
-            if entry["type"] != node["type"] || entry["parser"] != node["parser"] {
+            // `word` and `text` share a parser; their properties tell them apart.
+            if entry["type"] != node["type"]
+                || entry["parser"] != node["parser"]
+                || entry["properties"] != node["properties"]
+            {
                 problems.push(format!(
                     "`{}`: `{name}` is another kind in an earlier usage",
                     command.usage
@@ -201,11 +239,47 @@ fn finish(children: &mut Value) {
     }
 }
 
+/// Add the already validated native report tree to the server's dispatcher.
+fn register_dispatcher(dispatcher: &mut Dispatcher, tree: &Value) {
+    fn add(dispatcher: &mut Dispatcher, parent: usize, children: &Map<String, Value>) {
+        for (name, node) in children {
+            let id = if node["type"] == "literal" {
+                dispatcher.literal(parent, name)
+            } else {
+                let ty = KINDS
+                    .into_iter()
+                    .filter_map(parser)
+                    .find_map(|(id, properties, ty)| {
+                        (node["parser"] == id && node["properties"] == properties).then_some(ty)
+                    })
+                    .expect("native command tree contains registered parsers");
+                dispatcher.argument(parent, name, ty)
+            };
+            let level = node["permissions"]["permission"]["level"]
+                .as_str()
+                .and_then(|level| LEVELS.iter().position(|known| *known == level))
+                .unwrap_or(0) as u8;
+            dispatcher.requires(id, level);
+            if node["executable"] == true {
+                dispatcher.executes(id, "native_mod_command");
+            }
+            if let Some(children) = node["children"].as_object() {
+                add(dispatcher, id, children);
+            }
+        }
+    }
+    if let Some(children) = tree["children"].as_object() {
+        add(dispatcher, 0, children);
+    }
+}
+
 /// The live player body, or a guest record outside a player swap.
 enum PlayerRead<'a> {
     Acting {
         mode: i32,
         body: Option<&'a PlayerMotion>,
+        /// The player's stored abilities, when it is a server player's turn.
+        abilities: Option<PlayerAbilities>,
     },
     Guest(&'a Guest),
 }
@@ -223,8 +297,13 @@ impl PlayerRead<'_> {
     }
 
     fn may_build(&self) -> bool {
-        let mode = self.mode();
-        mode == 0 || mode == 1
+        match self {
+            Self::Acting {
+                abilities: Some(a), ..
+            } => a.may_build,
+            Self::Guest(guest) => guest.abilities.may_build,
+            Self::Acting { mode, .. } => *mode < 2,
+        }
     }
 
     fn body(&self) -> Option<&PlayerMotion> {
@@ -248,34 +327,32 @@ impl PlayerRead<'_> {
     }
 
     fn abilities(&self) -> Option<NativePlayerAbilities> {
-        let (invulnerable, flying, may_fly, fly_speed) = match self {
-            Self::Acting { body, .. } => {
+        let a = match self {
+            Self::Acting {
+                abilities: Some(a), ..
+            } => *a,
+            Self::Acting { mode, body, .. } => {
+                // No server turn: what the mode gives, with the body's flight.
                 let body = body.as_ref()?;
-                (
-                    body.invulnerable,
-                    body.flying,
-                    body.may_fly,
-                    body.flying_speed,
-                )
+                let mut a = PlayerAbilities {
+                    flying: body.flying,
+                    flying_speed: body.flying_speed,
+                    ..Default::default()
+                };
+                a.update_for_mode(*mode);
+                a.flying = body.flying;
+                a
             }
-            Self::Guest(guest) => {
-                let flags = guest.ability_flags();
-                (
-                    flags & 1 != 0,
-                    flags & 2 != 0,
-                    flags & 4 != 0,
-                    guest.flying_speed,
-                )
-            }
+            Self::Guest(guest) => guest.abilities,
         };
         Some(NativePlayerAbilities {
-            invulnerable,
-            flying,
-            may_fly,
-            instabuild: self.creative(),
-            may_build: self.may_build(),
-            fly_speed,
-            walk_speed: 0.1,
+            invulnerable: a.invulnerable,
+            flying: a.flying,
+            may_fly: a.may_fly,
+            instabuild: a.instabuild,
+            may_build: a.may_build,
+            fly_speed: a.flying_speed,
+            walk_speed: a.walking_speed,
         })
     }
 }
@@ -301,6 +378,7 @@ impl Game<'_> {
                 PlayerRead::Acting {
                     mode: self.mode_id(),
                     body: self.player.as_ref(),
+                    abilities: self.acting_abilities,
                 },
                 self.lan_acting_entity?,
             ));
@@ -325,6 +403,7 @@ impl Game<'_> {
                 PlayerRead::Acting {
                     mode: self.mode_id(),
                     body: Some(body),
+                    abilities: self.acting_abilities,
                 },
                 body.entity_id as u32,
             ));
@@ -363,9 +442,61 @@ impl Game<'_> {
         }) && changed
     }
 
+    /// Stores a server player's `Abilities` and tells their client
+    /// (`ServerPlayer.onUpdateAbilities`). They stay as written until the
+    /// player's game mode changes (`GameType.updatePlayerAbilities`), and are
+    /// saved with the player. A speed that is not finite refuses the write
+    /// (vanilla's setters take any float). Returns false for a
+    /// stale or unavailable player, another player during a swap, and a speed
+    /// that is not finite.
+    pub(super) fn native_player_set_abilities(
+        &mut self,
+        player: PlayerRef,
+        abilities: NativePlayerAbilities,
+    ) -> bool {
+        if !abilities.fly_speed.is_finite() || !abilities.walk_speed.is_finite() {
+            return false;
+        }
+        let stored = PlayerAbilities {
+            invulnerable: abilities.invulnerable,
+            flying: abilities.flying,
+            may_fly: abilities.may_fly,
+            instabuild: abilities.instabuild,
+            may_build: abilities.may_build,
+            flying_speed: abilities.fly_speed,
+            walking_speed: abilities.walk_speed,
+        };
+        if self.native_player_ref(player.uuid()) != Some(player) {
+            return false;
+        }
+        let mut stored_here = false;
+        self.native_as_player(player.uuid(), |game| {
+            let Some(slot) = game.acting_abilities.as_mut() else {
+                return;
+            };
+            *slot = stored;
+            if let Some(body) = game.player.as_mut() {
+                body.invulnerable = stored.invulnerable;
+                body.may_fly = stored.may_fly;
+                body.flying = stored.flying;
+                body.flying_speed = stored.flying_speed;
+            }
+            stored_here = true;
+        }) && stored_here
+    }
+
     /// `Player.isCreative`; Paper `HumanEntity#getGameMode`.
     pub(super) fn native_player_is_creative(&self, player: PlayerRef) -> Option<bool> {
         Some(self.player_handle_read(player)?.creative())
+    }
+
+    /// `Inventory.getSelectedSlot`: the hotbar slot the player holds, 0..9. API
+    /// @API:item_places@.
+    pub(super) fn native_player_selected_slot(&self, player: PlayerRef) -> Option<usize> {
+        Some(match self.player_handle_read(player)? {
+            PlayerRead::Acting { .. } => self.selected,
+            PlayerRead::Guest(guest) => guest.selected,
+        })
     }
 
     /// `Player.isSpectator`; Paper `HumanEntity#getGameMode`.
@@ -386,7 +517,6 @@ impl Game<'_> {
     }
 
     /// `Player.getAbilities`; Paper `Player#getAllowFlight/isFlying/getFlySpeed/getWalkSpeed`.
-    /// Horizon currently keeps no per-player walk speed and sends 0.1.
     pub(super) fn native_player_abilities(
         &self,
         player: PlayerRef,
@@ -401,9 +531,7 @@ impl Game<'_> {
             return Vec::new();
         };
         host.hub
-            .guests
-            .iter()
-            .filter(|g| g.placed)
+            .online_players()
             .map(|g| NativeServerPlayer {
                 uuid: g.uuid,
                 name: g.name.clone(),
@@ -678,269 +806,6 @@ impl Game<'_> {
     }
 }
 
-/// Plain stacks: no components beyond the count (no damage, name,
-/// enchantment...), the only ones the item helpers count, take or give, so
-/// a mod never prices a worn or enchanted item as a new one.
-fn plain(stack: &ItemStack) -> bool {
-    stack.damage == 0 && stack.extra.is_none()
-}
-
-/// The slots the item helpers look at, in `Inventory.add`'s order: the
-/// selected slot, the off hand, then the hotbar and the main inventory.
-fn order(selected: usize) -> impl Iterator<Item = usize> {
-    std::iter::once(selected)
-        .chain(std::iter::once(OFFHAND))
-        .chain((0..36).filter(move |&i| i != selected))
-}
-const OFFHAND: usize = 36;
-
-/// The 36 inventory slots and the off hand as one list ([`OFFHAND`] last).
-fn slots<'a>(
-    inventory: &'a mut [Option<ItemStack>],
-    offhand: &'a mut Option<ItemStack>,
-) -> Vec<&'a mut Option<ItemStack>> {
-    inventory
-        .iter_mut()
-        .take(36)
-        .chain(std::iter::once(offhand))
-        .collect()
-}
-
-/// How many of plain `item` the slots hold.
-fn count_in(slots: &[&mut Option<ItemStack>], item: &str) -> u32 {
-    slots
-        .iter()
-        .filter_map(|s| s.as_ref())
-        .filter(|s| &*s.item == item && plain(s))
-        .map(|s| s.count)
-        .sum()
-}
-
-/// Takes up to `count` plain `item`, selected slot first; what it took.
-fn take_from(
-    mut slots: Vec<&mut Option<ItemStack>>,
-    selected: usize,
-    item: &str,
-    count: u32,
-) -> u32 {
-    let mut taken = 0;
-    for i in order(selected) {
-        let slot = &mut *slots[i];
-        if let Some(s) = slot
-            && &*s.item == item
-            && plain(s)
-        {
-            let n = s.count.min(count - taken);
-            s.count -= n;
-            taken += n;
-            if s.count == 0 {
-                *slot = None;
-            }
-        }
-        if taken == count {
-            break;
-        }
-    }
-    taken
-}
-
-/// How many plain `item` (stacking to `max`) still fit.
-fn room_in(slots: &[&mut Option<ItemStack>], item: &str, max: u32) -> u32 {
-    slots
-        .iter()
-        .enumerate()
-        .map(|(i, s)| match s.as_ref() {
-            // getFreeSlot: never into an empty off hand.
-            None if i == OFFHAND => 0,
-            None => max,
-            Some(s) if &*s.item == item && plain(s) => max.saturating_sub(s.count),
-            Some(_) => 0,
-        })
-        .sum()
-}
-
-/// Adds up to `count` plain `item`, onto its stacks first
-/// (`getSlotWithRemainingSpace`: the off hand's too), then into empty slots
-/// of the inventory (`getFreeSlot`), in [`order`]; what it added. Nothing
-/// is dropped.
-fn add_to(
-    mut slots: Vec<&mut Option<ItemStack>>,
-    selected: usize,
-    item: &str,
-    max: u32,
-    count: u32,
-) -> u32 {
-    let mut added = 0;
-    for pass in 0..2 {
-        for i in order(selected) {
-            let slot = &mut *slots[i];
-            let n = match slot {
-                Some(s) if pass == 0 && &*s.item == item && plain(s) => {
-                    let n = max.saturating_sub(s.count).min(count - added);
-                    s.count += n;
-                    n
-                }
-                None if pass == 1 && i != OFFHAND => {
-                    let n = max.min(count - added);
-                    *slot = Some(ItemStack {
-                        item: item.into(),
-                        count: n,
-                        damage: 0,
-                        extra: None,
-                    });
-                    n
-                }
-                _ => 0,
-            };
-            added += n;
-            if added == count {
-                return added;
-            }
-        }
-    }
-    added
-}
-
-/// The acting player's items, for server mods (API 9): the player whose
-/// action or command a hook hears (`native_perform_command`), as their
-/// state is swapped in. Only plain stacks count; the inventory's 36 slots
-/// and the off hand, never the armour. Each change reaches the player's
-/// screen as any change to their inventory does.
-#[allow(dead_code)]
-impl Game<'_> {
-    /// The main hand's stack: its item, count, and whether it is plain. On a
-    /// client, the player's own.
-    pub(super) fn native_held(&self) -> Option<(String, u32, bool)> {
-        let s = self.inventory.get(self.selected)?.as_ref()?;
-        Some((s.item.to_string(), s.count, plain(s)))
-    }
-    /// How many of plain `item` (`minecraft:diamond`) the player carries.
-    pub(super) fn native_count_items(&mut self, item: &str) -> u32 {
-        count_in(&slots(&mut self.inventory, &mut self.offhand), item)
-    }
-    /// Every plain item the player carries, with how many, by id.
-    pub(super) fn native_carried_items(&self) -> Vec<(String, u32)> {
-        let mut out: Vec<(String, u32)> = Vec::new();
-        let held = self
-            .inventory
-            .iter()
-            .take(36)
-            .chain(std::iter::once(&self.offhand));
-        for s in held.flatten().filter(|s| plain(s)) {
-            match out.iter_mut().find(|(i, _)| *i == *s.item) {
-                Some((_, n)) => *n += s.count,
-                None => out.push((s.item.to_string(), s.count)),
-            }
-        }
-        out
-    }
-    /// Takes up to `count` plain `item`, the main hand first; what it took.
-    pub(super) fn native_take_items(&mut self, item: &str, count: u32) -> u32 {
-        if self.player.is_none() {
-            return 0;
-        }
-        let selected = self.selected;
-        take_from(
-            slots(&mut self.inventory, &mut self.offhand),
-            selected,
-            item,
-            count,
-        )
-    }
-    /// How many plain `item` still fit; 0 for an unknown item.
-    pub(super) fn native_room_for(&mut self, item: &str) -> u32 {
-        let Some(max) = self.res.items().get(item).map(|i| i.max_stack) else {
-            return 0;
-        };
-        room_in(
-            &slots(&mut self.inventory, &mut self.offhand),
-            item,
-            max.max(1),
-        )
-    }
-    /// Gives up to `count` plain `item` where they fit, as `Inventory.add`
-    /// places them; what it gave (nothing is dropped). 0 for an unknown item.
-    pub(super) fn native_give_items(&mut self, item: &str, count: u32) -> u32 {
-        let Some(max) = self.res.items().get(item).map(|i| i.max_stack) else {
-            return 0;
-        };
-        if self.player.is_none() {
-            return 0;
-        }
-        let selected = self.selected;
-        add_to(
-            slots(&mut self.inventory, &mut self.offhand),
-            selected,
-            item,
-            max.max(1),
-            count,
-        )
-    }
-    /// Gives `stack` whole (its damage, name, enchantments... kept) to the
-    /// player `uuid`, as `Inventory.add` places it: onto equal stacks first,
-    /// then into empty inventory slots, never the armour or an empty off
-    /// hand. What did not fit comes back (nothing is dropped): all of it for
-    /// a player who isn't here, is dead, or whose state is swapped out by
-    /// another player's (inside that player's hook, only they are reached).
-    /// The player's screen follows as for any change to their inventory.
-    /// What an auto-pickup or a machine's output to a player needs, from any
-    /// server hook. API 98.
-    pub(super) fn native_give_stack(
-        &mut self,
-        uuid: u128,
-        mut stack: ItemStack,
-    ) -> Option<ItemStack> {
-        if stack.count == 0 {
-            return None;
-        }
-        if uuid == self.native_acting_id() {
-            // Their state is in place: the host's, or a guest's swapped in.
-            if self
-                .player
-                .as_ref()
-                .is_none_or(|p| p.health.health() <= 0.0)
-            {
-                return Some(stack);
-            }
-            return self.give(stack);
-        }
-        // Inside a player's hook their state is in place and the records of
-        // the others may hold swapped state (turns nest): only they are
-        // reached, as the doc says.
-        if self.lan_acting.is_some() {
-            return Some(stack);
-        }
-        let max = self
-            .res
-            .items()
-            .get(&stack.item)
-            .map_or(64, |i| i.max_stack);
-        let Some(host) = self.lan.as_mut() else {
-            return Some(stack);
-        };
-        let Some(g) = host
-            .hub
-            .guests
-            .iter_mut()
-            .find(|g| g.placed && !g.dead && g.uuid == uuid)
-        else {
-            return Some(stack);
-        };
-        // inventory_add indexes the 36 main slots.
-        if g.inventory.len() < 36 {
-            g.inventory.resize(36, None);
-        }
-        let left = super::inventory_add(
-            &mut g.inventory,
-            &mut g.offhand,
-            g.selected,
-            max,
-            &mut stack,
-        );
-        left.then_some(stack)
-    }
-}
-
 /// An experience orb as a server mod reads it (`native_experience_orbs`).
 /// Read by mods only.
 #[derive(Clone, Debug)]
@@ -1094,6 +959,12 @@ fn system_chat(line: &Text) -> C {
     })
 }
 
+/// Native command metadata and the server dispatcher containing their parsed usages.
+pub(super) struct NativeCommands {
+    levels: HashMap<String, u8>,
+    pub(super) dispatcher: Arc<Dispatcher>,
+}
+
 /// Where the game calls the server hook points.
 impl Game<'_> {
     /// Asks the mods for their commands once per hub, and puts them in every
@@ -1104,13 +975,20 @@ impl Game<'_> {
         }
         let mut commands = Vec::new();
         self.native_register_commands(&mut commands);
-        let (tree, levels, problems) =
-            command_tree(&commands, |name| host.hub.vanilla_command(name));
+        let vanilla = horizon_client::command::vanilla::game_dispatcher_with_features(
+            &self.level.enabled_features,
+        );
+        let (tree, levels, problems) = command_tree(&commands, |name| {
+            host.hub.vanilla_command(name) || vanilla.find(name).is_some()
+        });
         for p in problems {
             log::warn!("Horizon: a native mod's command was left out: {p}");
         }
+        let mut dispatcher = Dispatcher::new();
+        register_dispatcher(&mut dispatcher, &tree);
+        let dispatcher = Arc::new(dispatcher);
         host.hub.set_mod_commands(0, tree);
-        host.native_commands = Some(levels);
+        host.native_commands = Some(NativeCommands { levels, dispatcher });
     }
 
     /// Asks the mods what root commands each player's tree keeps
@@ -1160,7 +1038,27 @@ impl Game<'_> {
     /// slash), when a mod registered it.
     pub(super) fn native_command_level(host: &LanHost, line: &str) -> Option<u8> {
         let name = line.split(' ').next().unwrap_or_default();
-        host.native_commands.as_ref()?.get(name).copied()
+        host.native_commands.as_ref()?.levels.get(name).copied()
+    }
+
+    /// Parse a registered command using the source's permission before dispatching it.
+    fn native_command_valid(&mut self, line: &str, permission: u8) -> bool {
+        let Some(commands) = self
+            .lan
+            .as_ref()
+            .and_then(|host| host.native_commands.as_ref())
+        else {
+            return false;
+        };
+        let dispatcher = commands.dispatcher.clone();
+        let previous = std::mem::replace(&mut self.ui.registries.permission, permission);
+        let parse = dispatcher.parse(line, &self.ui.registries);
+        self.ui.registries.permission = previous;
+        if let Err(error) = parse.executable() {
+            self.syntax_failure(&error, line);
+            return false;
+        }
+        true
     }
 
     /// A guest's command for the mods, inside their swap
@@ -1186,6 +1084,9 @@ impl Game<'_> {
             yaw: g.yaw,
             pitch: g.pitch,
         };
+        if !self.native_command_valid(line, permission) {
+            return true;
+        }
         let mut ran = false;
         self.native_perform_command(&player, line, &mut ran);
         if !ran {
@@ -1211,6 +1112,9 @@ impl Game<'_> {
         if Self::native_command_level(host, line).is_none() {
             return false;
         }
+        if !self.native_command_valid(line, 4) {
+            return true;
+        }
         let mut ran = false;
         self.native_perform_console_command(line, &mut ran);
         if !ran {
@@ -1226,6 +1130,7 @@ impl Game<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use horizon_client::items::ItemStack;
 
     fn player_guest() -> Guest {
         use horizon_client::lan::{Joined, PlayerSender};
@@ -1256,7 +1161,7 @@ mod tests {
     #[test]
     fn player_reads_use_guest_mode_and_abilities() {
         let mut guest = player_guest();
-        guest.flying_speed = 0.08;
+        guest.abilities.flying_speed = 0.08;
         let read = PlayerRead::Guest(&guest);
         assert_eq!(read.mode(), 0);
         assert_eq!(
@@ -1277,7 +1182,8 @@ mod tests {
             })
         );
         guest.game_mode = 1;
-        guest.flying = true;
+        guest.abilities.update_for_mode(1);
+        guest.abilities.flying = true;
         let read = PlayerRead::Guest(&guest);
         assert_eq!(read.mode(), 1);
         assert_eq!(
@@ -1293,6 +1199,7 @@ mod tests {
             })
         );
         guest.game_mode = 3;
+        guest.abilities.update_for_mode(3);
         let abilities = PlayerRead::Guest(&guest).abilities().unwrap();
         assert!(!abilities.may_build && !abilities.instabuild && abilities.may_fly);
     }
@@ -1308,59 +1215,6 @@ mod tests {
             damage: 0,
             extra: None,
         })
-    }
-
-    #[test]
-    fn items_are_taken_from_the_hand_first_and_only_plain() {
-        let mut inv = vec![None; 36];
-        inv[0] = stack("minecraft:diamond", 10);
-        inv[4] = stack("minecraft:diamond", 5);
-        inv[8] = stack("minecraft:diamond", 7);
-        inv[8].as_mut().unwrap().damage = 3;
-        let mut off = stack("minecraft:diamond", 2);
-        assert_eq!(
-            count_in(&slots(&mut inv, &mut off), "minecraft:diamond"),
-            17
-        );
-        assert_eq!(
-            take_from(slots(&mut inv, &mut off), 4, "minecraft:diamond", 6),
-            6
-        );
-        assert!(inv[4].is_none(), "the selected slot first");
-        assert_eq!(off.as_ref().unwrap().count, 1, "then the off hand");
-        assert_eq!(
-            take_from(slots(&mut inv, &mut off), 4, "minecraft:diamond", 100),
-            11
-        );
-        assert_eq!(inv[8].as_ref().unwrap().count, 7, "a damaged stack stays");
-        assert!(inv[0].is_none() && off.is_none());
-    }
-
-    #[test]
-    fn items_are_given_only_where_they_fit() {
-        let mut inv = vec![stack("minecraft:dirt", 64); 36];
-        inv[3] = stack("minecraft:diamond", 60);
-        inv[9] = None;
-        let mut off = None;
-        assert_eq!(
-            room_in(&slots(&mut inv, &mut off), "minecraft:diamond", 64),
-            4 + 64
-        );
-        assert_eq!(
-            add_to(slots(&mut inv, &mut off), 0, "minecraft:diamond", 64, 200),
-            68
-        );
-        assert_eq!(inv[3].as_ref().unwrap().count, 64, "onto its stack first");
-        assert!(off.is_none(), "never into an empty off hand (getFreeSlot)");
-        assert_eq!(inv[9].as_ref().unwrap().count, 64);
-        assert_eq!(
-            room_in(&slots(&mut inv, &mut off), "minecraft:diamond", 64),
-            0
-        );
-        assert_eq!(
-            add_to(slots(&mut inv, &mut off), 0, "minecraft:diamond", 64, 1),
-            0
-        );
     }
 
     #[test]
@@ -1444,6 +1298,102 @@ mod tests {
         assert!(c["pay"].get("permissions").is_none());
         assert_eq!(levels["eco"], 3);
         assert_eq!(levels["pay"], 0);
+    }
+
+    #[test]
+    fn a_usage_with_another_string_kind_is_left_out_in_either_order() {
+        for (first, second, line, other) in [
+            (
+                "foo <value:word>",
+                "foo <value:text>",
+                "foo hello",
+                "foo hello world",
+            ),
+            (
+                "foo <value:text>",
+                "foo <value:word>",
+                "foo hello world",
+                "foo hello",
+            ),
+        ] {
+            let (tree, _, problems) =
+                tree(&[NativeCommand::new(first), NativeCommand::new(second)]);
+            assert_eq!(problems.len(), 1, "{first} then {second}: {problems:?}");
+            assert!(problems[0].starts_with(&format!("`{second}`")));
+            let mut dispatcher = Dispatcher::new();
+            register_dispatcher(&mut dispatcher, &tree);
+            let registries = horizon_client::command::Registries::default();
+            assert!(dispatcher.parse(line, &registries).executable().is_ok());
+            // The kept kind decides: `word` stops at the space, `text` takes it all.
+            let kept_greedy = first.contains(":text");
+            assert_eq!(
+                dispatcher.parse(other, &registries).executable().is_ok(),
+                kept_greedy,
+                "{first} then {second}: {other}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_supported_kind_has_a_parser() {
+        assert!(KINDS.into_iter().all(|kind| parser(kind).is_some()));
+    }
+
+    #[test]
+    fn native_usages_parse_with_their_permissions_in_the_server_dispatcher() {
+        let (tree, _, problems) = tree(&[
+            NativeCommand::new("warp [name:word]"),
+            NativeCommand::op("warp set <amount:integer>", 2),
+            NativeCommand::new("toggle <enabled:boolean>"),
+        ]);
+        assert!(problems.is_empty(), "{problems:?}");
+        let mut dispatcher = Dispatcher::new();
+        register_dispatcher(&mut dispatcher, &tree);
+        let mut registries = horizon_client::command::Registries::default();
+        assert!(dispatcher.parse("warp", &registries).executable().is_ok());
+        assert!(
+            dispatcher
+                .parse("warp home", &registries)
+                .executable()
+                .is_ok()
+        );
+        assert!(
+            dispatcher
+                .parse("warp set 7", &registries)
+                .executable()
+                .is_err()
+        );
+        registries.permission = 2;
+        assert!(
+            dispatcher
+                .parse("warp set 7", &registries)
+                .executable()
+                .is_ok()
+        );
+        assert!(
+            dispatcher
+                .parse("warp set nope", &registries)
+                .executable()
+                .is_err()
+        );
+        assert!(
+            dispatcher
+                .parse("warp set", &registries)
+                .executable()
+                .is_err()
+        );
+        assert!(
+            dispatcher
+                .parse("toggle true", &registries)
+                .executable()
+                .is_ok()
+        );
+        assert!(
+            dispatcher
+                .parse("toggle maybe", &registries)
+                .executable()
+                .is_err()
+        );
     }
 
     #[test]

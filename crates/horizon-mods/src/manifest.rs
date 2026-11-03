@@ -141,7 +141,10 @@ impl Package {
     pub fn read(path: &Path) -> Result<Self, String> {
         let metadata = std::fs::symlink_metadata(path).map_err(|e| e.to_string())?;
         let toml = if metadata.is_dir() {
-            check_folder(path, path)?;
+            check_folder_file(path, MANIFEST)?;
+            for (name, _) in crate::content::folder_files(path)? {
+                check_folder_file(path, &name)?;
+            }
             std::fs::read_to_string(path.join(MANIFEST)).map_err(|e| format!("{MANIFEST}: {e}"))?
         } else {
             if !metadata.is_file() {
@@ -159,8 +162,7 @@ impl Package {
                 if entry.is_dir() && matches!(mode & 0o170000, 0 | 0o040000) {
                     continue;
                 }
-                check_entry(&name, mode)?;
-                check_header(&name, &mut entry)?;
+                check_file(&name, mode, || Ok(&mut entry)).map_err(|e| e.to_string())?;
             }
             let mut toml = String::new();
             zip.by_name(MANIFEST)
@@ -202,18 +204,56 @@ impl Package {
         put(MANIFEST, manifest_text.as_bytes())?;
         for (name, bytes) in files {
             crate::content::check_path(name)?;
-            check_entry(name, 0)?;
-            check_header(name, *bytes)?;
+            check_file(name, 0, || Ok(*bytes)).map_err(|e| e.to_string())?;
             put(name, bytes)?;
         }
         Ok(zip.finish().map_err(err)?.into_inner())
     }
 }
 
-/// Check entry types before opening anything: links and special files are not content.
-fn check_entry(name: &str, mode: u32) -> Result<(), String> {
+/// A content entry that cannot be safely loaded as data.
+#[derive(Debug)]
+pub enum ContentFileError {
+    UnsupportedType(String),
+    Executable(String),
+    Read {
+        name: String,
+        source: std::io::Error,
+    },
+}
+
+impl std::fmt::Display for ContentFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedType(name) => {
+                write!(f, "{name}: unsupported file type in a content mod")
+            }
+            Self::Executable(name) => {
+                write!(f, "{name}: unsupported executable file in a content mod")
+            }
+            Self::Read { name, source } => write!(f, "{name}: {source}"),
+        }
+    }
+}
+
+impl std::error::Error for ContentFileError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Read { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+/// The shared content-file boundary. Refuse type/mode before opening a file,
+/// then inspect its header even when its name has no executable extension.
+pub(crate) fn check_file<R: Read>(
+    name: &str,
+    mode: u32,
+    open: impl FnOnce() -> std::io::Result<R>,
+) -> Result<(), ContentFileError> {
     if !matches!(mode & 0o170000, 0 | 0o100000) {
-        return Err(format!("{name}: unsupported file type in a content mod"));
+        return Err(ContentFileError::UnsupportedType(name.into()));
     }
     let extension = name
         .rsplit(['/', '\\'])
@@ -227,21 +267,17 @@ fn check_entry(name: &str, mode: u32) -> Result<(), String> {
         .any(|kind| ext.eq_ignore_ascii_case(kind))
     });
     if executable || mode & 0o111 != 0 {
-        return Err(format!(
-            "{name}: unsupported executable file in a content mod"
-        ));
+        return Err(ContentFileError::Executable(name.into()));
     }
-    Ok(())
-}
-
-/// File names and permissions are not enough: executable bytes may have any name.
-fn check_header(name: &str, mut file: impl Read) -> Result<(), String> {
+    let error = |source| ContentFileError::Read {
+        name: name.into(),
+        source,
+    };
+    let mut file = open().map_err(error)?;
     let mut header = [0; 4];
     let mut read = 0;
     while read < header.len() {
-        let size = file
-            .read(&mut header[read..])
-            .map_err(|e| format!("{name}: {e}"))?;
+        let size = file.read(&mut header[read..]).map_err(error)?;
         if size == 0 {
             break;
         }
@@ -260,40 +296,28 @@ fn check_header(name: &str, mut file: impl Read) -> Result<(), String> {
     ) || header.starts_with(b"MZ")
         || (header.starts_with(b"#!") && header[2] != b'[');
     if executable {
-        return Err(format!(
-            "{name}: unsupported executable file in a content mod"
-        ));
+        return Err(ContentFileError::Executable(name.into()));
     }
     Ok(())
 }
 
-fn check_folder(root: &Path, dir: &Path) -> Result<(), String> {
-    for entry in std::fs::read_dir(dir).map_err(|e| e.to_string())? {
-        let path = entry.map_err(|e| e.to_string())?.path();
-        let metadata = std::fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
-        if metadata.is_dir() {
-            check_folder(root, &path)?;
-            continue;
+fn check_folder_file(root: &Path, name: &str) -> Result<(), String> {
+    let path = root.join(name);
+    let metadata = std::fs::symlink_metadata(&path).map_err(|e| format!("{name}: {e}"))?;
+    let mode = if metadata.is_file() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            metadata.mode()
         }
-        let name = path.strip_prefix(root).unwrap().to_string_lossy();
-        let mode = if metadata.is_file() {
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::MetadataExt;
-                metadata.mode()
-            }
-            #[cfg(not(unix))]
-            {
-                0
-            }
-        } else {
-            0o120000
-        };
-        check_entry(&name, mode)?;
-        let file = std::fs::File::open(&path).map_err(|e| format!("{name}: {e}"))?;
-        check_header(&name, file)?;
-    }
-    Ok(())
+        #[cfg(not(unix))]
+        {
+            0
+        }
+    } else {
+        0o120000
+    };
+    check_file(name, mode, || std::fs::File::open(&path)).map_err(|e| e.to_string())
 }
 
 /// The `.hmod` files and mod folders in `dir`, by name.
@@ -401,12 +425,19 @@ capabilities = ["registries"]
             zip.start_file(*name, options).unwrap();
             zip.write_all(bytes).unwrap();
             zip.finish().unwrap();
-            for source in [&dir, &archive] {
-                let error = Package::read(source).err().unwrap();
+            let error = Package::read(&archive).err().unwrap();
+            assert!(
+                error.contains("unsupported executable file"),
+                "{name}: {error}"
+            );
+            if name.starts_with("assets/") {
+                let error = Package::read(&dir).err().unwrap();
                 assert!(
                     error.contains("unsupported executable file"),
                     "{name}: {error}"
                 );
+            } else {
+                assert!(Package::read(&dir).is_ok(), "unpackaged {name}");
             }
             std::fs::remove_file(file).unwrap();
         }
@@ -419,6 +450,49 @@ capabilities = ["registries"]
             )
             .is_ok()
         );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn project_folder_loads_without_packaging_git_hooks() {
+        let root = std::env::temp_dir().join(format!("horizon-mod-git-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(
+            std::process::Command::new("git")
+                .args(["init", "-q"])
+                .arg(&root)
+                .status()
+                .unwrap()
+                .success()
+        );
+        std::fs::write(root.join(MANIFEST), EXAMPLE).unwrap();
+        std::fs::create_dir_all(root.join(".git/hooks")).unwrap();
+        std::fs::write(root.join(".git/hooks/pre-commit"), b"#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                root.join(".git/hooks/pre-commit"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+        }
+        std::fs::create_dir_all(root.join("assets/ruby")).unwrap();
+        std::fs::write(root.join("assets/ruby/icon.png"), b"image").unwrap();
+        assert_eq!(Package::read(&root).unwrap().manifest.id, "ruby");
+        std::fs::write(root.join("assets/ruby/icon.png"), b"\0asm").unwrap();
+        assert!(
+            Package::read(&root)
+                .err()
+                .unwrap()
+                .contains("unsupported executable")
+        );
+        std::fs::remove_file(root.join("assets/ruby/icon.png")).unwrap();
+        std::fs::create_dir_all(root.join("assets/minecraft/lang")).unwrap();
+        std::fs::write(root.join("assets/minecraft/lang/en_us.json"), "{}").unwrap();
+        let package = Package::read(&root).unwrap();
+        assert!(crate::Content::read(&root, &package.manifest).is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -464,13 +538,14 @@ capabilities = ["registries"]
         let dir = root.join("folder");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join(MANIFEST), EXAMPLE).unwrap();
-        let file = dir.join("program");
+        std::fs::create_dir_all(dir.join("assets/ruby")).unwrap();
+        let file = dir.join("assets/ruby/program");
         std::fs::write(&file, b"ordinary bytes").unwrap();
         std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
         let error = Package::read(&dir).err().unwrap();
         assert!(error.contains("unsupported executable"), "{error}");
         std::fs::remove_file(&file).unwrap();
-        for name in ["mod.wasm", "nested/link"] {
+        for name in ["assets/ruby/mod.wasm", "assets/ruby/nested/link"] {
             let link = dir.join(name);
             std::fs::create_dir_all(link.parent().unwrap()).unwrap();
             symlink("missing", &link).unwrap();
@@ -478,6 +553,14 @@ capabilities = ["registries"]
             assert!(error.contains("unsupported file type"), "{error}");
             std::fs::remove_file(link).unwrap();
         }
+        std::fs::remove_dir_all(dir.join("assets")).unwrap();
+        symlink("missing", dir.join("assets")).unwrap();
+        assert!(
+            Package::read(&dir)
+                .err()
+                .unwrap()
+                .contains("unsupported file type")
+        );
         let link = root.join("linked-folder");
         symlink(&dir, &link).unwrap();
         let error = Package::read(&link).err().unwrap();

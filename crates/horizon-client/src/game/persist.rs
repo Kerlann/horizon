@@ -44,8 +44,8 @@ pub struct EntityMemory {
     /// Entities a native mod kept out of the level (`native_entity_join_level`),
     /// counted so `/summon` can fail as vanilla's refused add does.
     pub(super) joins_canceled: u32,
-    /// The highest entity id `native_entity_join_level` has been told of.
-    pub(super) joined_mark: u32,
+    /// The latest insertion considered for `native_entity_join_level`.
+    pub(super) joined_seq: horizon_client::join_seq::JoinSeq,
     /// The entities mods were told of and that have not left since: id (in
     /// increasing order), type, and whether the last leave sweep saw it.
     /// Only filled while a mod is loaded.
@@ -716,6 +716,7 @@ impl Game<'_> {
             self.next_entity += 9;
             self.remember_tags(d.id, &tag);
             self.remember_uuid(d.id, uuid, &tag);
+            d.join = horizon_client::join_seq::JoinSeq::next();
             self.dragon = Some(d);
         }
     }
@@ -761,6 +762,7 @@ impl Game<'_> {
             let id = self.next_entity;
             self.remember(id, uuid, tag);
             self.paintings.push(horizon_client::entities::Painting {
+                join: Default::default(),
                 id,
                 pos,
                 facing,
@@ -1175,10 +1177,7 @@ impl Game<'_> {
         if cart.items.is_empty() || cart.items.iter().any(Option::is_some) {
             return;
         }
-        let loot = horizon_client::structure_blocks::loot_data(
-            &self.options.resources,
-            &self.pack_files(),
-        );
+        let loot = self.server_loot.get();
         let p = cart.position;
         let pos = (p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32);
         let biome = self.biome_name_at(p).unwrap_or_default();

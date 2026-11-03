@@ -1343,6 +1343,27 @@ impl MannequinDescription {
         }
     }
 }
+/// Whether breeding experience was drawn in the parent's tick.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BreedExperience {
+    Deferred,
+    Drawn(Option<u32>),
+}
+
+/// Makes the events pushed since `start` (the effects of a break a mod may stop)
+/// conditional on the game having broken one of `mob`'s blocks. Without a mod they
+/// stay plain events: nothing is allocated.
+pub fn after_break(events: &mut Vec<MobEvent>, mob: u32, start: usize) {
+    if crate::native_client_hooks::has_mods() {
+        let effects = events.split_off(start);
+        events.push(MobEvent::IfBroke {
+            mob,
+            effects,
+            otherwise: Vec::new(),
+        });
+    }
+}
+
 /// Events a mob tick asks the game to act on.
 #[derive(Clone, Debug)]
 pub enum MobEvent {
@@ -1824,6 +1845,30 @@ pub enum MobEvent {
     BreakBlock {
         pos: [i32; 3],
         drop: bool,
+        /// The mob whose breaking this is, when it is one `LivingDestroyBlockEvent`
+        /// hears (a wither's, a ravager's, a silverfish's, a zombie's).
+        by: Option<u32>,
+    },
+    /// `EndermanTakeBlockGoal`: the enderman `mob` picks up the block `state` at
+    /// `pos` (it already holds it); the block turns to air unless a mod stops it
+    /// or it is no longer that block.
+    TakeBlock {
+        mob: u32,
+        pos: [i32; 3],
+        state: horizon_world::registry::BlockStateId,
+    },
+    /// What follows a `BreakBlock { by: Some(mob) }` of this batch: `effects` when
+    /// the game broke at least one of the mob's blocks, `otherwise` when a mod kept
+    /// them all (vanilla plays the break's sound and particles only on a destruction).
+    /// Only made while a mod is loaded; without one the effects are plain events.
+    IfBroke {
+        mob: u32,
+        effects: Vec<MobEvent>,
+        otherwise: Vec<MobEvent>,
+    },
+    /// The mob `mob` jumps (`jumpFromGround`'s flag, set after a ravager broke no leaves).
+    Jump {
+        mob: u32,
     },
     Particles {
         kind: &'static str,
@@ -1885,6 +1930,8 @@ pub enum MobEvent {
         /// A llama's baby, drawn from the parent's random as
         /// `Llama.getBreedOffspring` does.
         llama: Option<Box<super::mobs::llama::Offspring>>,
+        /// The parent-RNG experience decision, if already made.
+        experience: BreedExperience,
     },
     /// Replace a block by name (sheep turning grass to dirt), optionally with
     /// the destroy effect.
@@ -2666,6 +2713,11 @@ impl PlayerView {
         self.effects.contains(&effect)
     }
 }
+/// `Animal.finalizeSpawnChildFromBreeding`: draw only when mob drops are enabled.
+pub fn breeding_experience(parent: &mut Mob, mob_drops: bool) -> Option<u32> {
+    mob_drops.then(|| 1 + parent.random.next_int_bound(7).unwrap_or(0) as u32)
+}
+
 #[derive(Clone)]
 pub struct MobWorld<'a> {
     pub world: &'a World,
@@ -2731,7 +2783,8 @@ pub struct MobWorld<'a> {
     /// A server with native mods, which the game asks before a tame or a
     /// baby (`AnimalTameEvent`, `BabyEntitySpawnEvent`): the goals then
     /// leave what a cancel would undo to the game (a horse's `tame`, a
-    /// llama's breeding experience).
+    /// llama's breeding experience). Ravagers also use it to defer their jump
+    /// when `BreakBlock` leaves may be kept by a mod (`IfBroke`).
     pub ask_mods: bool,
     /// The level's world border, whose walls stop a mob's moves
     /// (`Entity.collectColliders`); None: nothing stops them there.

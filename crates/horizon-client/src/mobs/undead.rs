@@ -1241,7 +1241,10 @@ impl Goal for AttackTurtleEgg {
             cx.events.push(MobEvent::BreakBlock {
                 pos: eat,
                 drop: false,
+                by: Some(m.id),
             });
+            // The egg's particles and sound follow only a destruction.
+            let effects = cx.events.len();
             // `sendParticles(POOF, ..., 1, xa, ya, za, 0.15)`, twenty times.
             for _ in 0..20 {
                 let spread = [
@@ -1268,6 +1271,7 @@ impl Goal for AttackTurtleEgg {
                 0.7,
                 1.0,
             ));
+            super::after_break(cx.events, m.id, effects);
         }
         self.since_reached += 1;
     }

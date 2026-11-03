@@ -21,6 +21,7 @@ pub(super) struct PreparedWorld {
     pub session_lock: horizon_client::save::SessionLock,
     pub rand_sequences: horizon_client::random_sequences::RandomSequences,
     pub locator: Option<Arc<VanillaTerrain>>,
+    pub loot: horizon_client::structure_blocks::LootSnapshot,
 }
 
 impl WorldRequest {
@@ -226,6 +227,7 @@ impl WorldRequest {
         let shapes = level_shapes(&save_root, res.biomes());
         let shape = shapes.get(dim.id());
         let streaming_step = startup::step("world.make_streaming");
+        let loot = horizon_client::structure_blocks::LootSnapshot::default();
         let (mut streaming, save, locator) = make_streaming(
             res,
             pack,
@@ -236,6 +238,7 @@ impl WorldRequest {
             shape,
             level.seed,
             &level.enabled_features,
+            loot.clone(),
         )?;
         drop(streaming_step);
         streaming.radius = settings.render_distance;
@@ -274,6 +277,7 @@ impl WorldRequest {
             session_lock,
             rand_sequences,
             locator,
+            loot,
         })
     }
 }
@@ -663,11 +667,14 @@ pub(super) fn make_streaming(
     shape: horizon_client::chunk::LevelShape,
     seed: i64,
     enabled_features: &[String],
+    loot: horizon_client::structure_blocks::LootSnapshot,
 ) -> Result<(Streaming, Arc<SaveDir>, Option<Arc<VanillaTerrain>>)> {
-    let save = Arc::new(SaveDir::new(
+    let mut save = SaveDir::new(
         horizon_client::save::dimension_dir(world_root, dim.id()),
         shape,
-    ));
+    );
+    save.set_loot_source(loot.clone());
+    let save = Arc::new(save);
     if dim == Dim::End {
         // Migrate before any chunk reader can cache the old block entities. A side file it
         // can't read stays where it is and costs only its old exits: the End still opens.
@@ -731,6 +738,7 @@ pub(super) fn make_streaming(
             automatic_structures,
         ) {
             Ok(mut terrain) => {
+                terrain.set_loot_source(loot.clone());
                 terrain.add_mod_signs(res.facts());
                 Some(Arc::new(terrain))
             }
@@ -821,6 +829,7 @@ pub(super) fn make_streaming(
                     format!("{e}\nThe world's data packs change its world generation: one of them may not be made for this version")
                 }
             })?;
+        inner.set_loot_source(loot);
         inner.add_mod_signs(res.facts());
         let inner = Arc::new(inner);
         if dim == Dim::Overworld && structures {

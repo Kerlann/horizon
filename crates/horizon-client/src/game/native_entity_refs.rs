@@ -20,7 +20,7 @@ use horizon_world::registry::BlockStateId;
 impl Game<'_> {
     /// What a handle names now, or None for a stale or foreign one.
     pub(super) fn native_entity_target(&self, entity: EntityRef) -> Option<Target> {
-        if self.remote.is_some() || self.native_lifecycle.epoch() != Some(entity.epoch()) {
+        if !self.is_logical_server() || self.native_lifecycle.epoch() != Some(entity.epoch()) {
             return None;
         }
         let id = i32::try_from(entity.id()).ok()?;
@@ -65,7 +65,7 @@ impl Game<'_> {
     /// client, with no world open, or for a dimension the server hasn't
     /// loaded. API @API:entity_handles@.
     pub(super) fn native_level(&self, dimension: &str) -> Option<LevelRef> {
-        if self.remote.is_some() {
+        if !self.is_logical_server() {
             return None;
         }
         let epoch = self.native_lifecycle.epoch()?;
@@ -93,7 +93,7 @@ impl Game<'_> {
         min: [f64; 3],
         max: [f64; 3],
     ) -> Option<Vec<EntityRef>> {
-        if self.remote.is_some()
+        if !self.is_logical_server()
             || self.native_lifecycle.epoch() != Some(level.epoch())
             || level.dimension() != self.dim.id()
         {
@@ -166,7 +166,7 @@ impl Game<'_> {
         drop: bool,
     ) -> bool {
         if !self.native_level_write_allowed(level, pos)
-            || (self.serving.is_none() && self.options.dedicated.is_none())
+            || !self.is_logical_server()
             || self.dim.id() != level.dimension()
         {
             return false;
@@ -177,7 +177,7 @@ impl Game<'_> {
         changed
     }
     fn native_level_write_allowed(&self, level: LevelRef, pos: [i32; 3]) -> bool {
-        self.remote.is_none()
+        self.is_logical_server()
             && self.native_lifecycle.epoch() == Some(level.epoch())
             && self.world.loaded(pos[0], pos[2])
             && self.world.shape.contains_y(pos[1])
@@ -193,7 +193,7 @@ impl Game<'_> {
         pos: [i32; 3],
         kind: NativeBlockShapeKind,
     ) -> Option<Vec<[f64; 6]>> {
-        if self.remote.is_some() || self.native_lifecycle.epoch() != Some(level.epoch()) {
+        if !self.is_logical_server() || self.native_lifecycle.epoch() != Some(level.epoch()) {
             return None;
         }
         let (world, anims) = if self.dim.id() == level.dimension() {
@@ -403,6 +403,42 @@ pub(super) mod tests {
         game.native_lifecycle
             .begin_open(NativeAuthority::IntegratedServer);
         test(&mut game);
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn side_guards_agree_across_integrated_dedicated_and_client() {
+        use super::super::execution_role::ExecutionRole;
+        use horizon_client::chunk::Chunk;
+        use std::sync::Arc;
+        with_game(|game| {
+            game.world
+                .chunks
+                .insert((-2, 3), Arc::new(Chunk::empty(-2, 3)));
+            let level = game.native_level(game.dim.id()).unwrap();
+            // The integrated server thread (game/integrated.rs sets the role and
+            // `dedicated` on the serving Game) and a dedicated server simulate;
+            // a client never does. A remote client runs with the `Client` role
+            // (connecting changes `remote`, not the role), and the guards read
+            // only the role, so it answers like the title-screen game here.
+            for (role, dedicated) in [
+                (ExecutionRole::IntegratedServer, true),
+                (ExecutionRole::DedicatedServer, true),
+            ] {
+                game.options.execution_role = role;
+                game.options.dedicated = dedicated.then(Vec::new);
+                assert!(game.native_simulates());
+                assert!(game.native_level(game.dim.id()).is_some());
+                assert!(game.native_level_in_place(level));
+                assert!(game.native_level_write_allowed(level, [-32, 64, 48]));
+            }
+            game.options.execution_role = ExecutionRole::Client;
+            game.options.dedicated = None;
+            assert!(!game.native_simulates());
+            assert!(game.native_level(game.dim.id()).is_none());
+            assert!(!game.native_level_in_place(level));
+            assert!(!game.native_level_write_allowed(level, [-32, 64, 48]));
+        });
     }
 
     #[test]
@@ -660,6 +696,15 @@ pub(super) mod tests {
                     10,
                 );
                 guest.placed = true;
+                if id == 12 {
+                    // A player loaded from a file saved with a walking speed.
+                    guest.abilities.walking_speed = 0.25;
+                    guest.loaded_body = Some(horizon_client::lan::guest::SavedBody {
+                        fire_ticks: 0,
+                        air: 300,
+                        fall_distance: 0.0,
+                    });
+                }
                 guest.inventory[0] = Some(ItemStack::new("minecraft:stone", 1));
                 host.hub.guests.push(guest);
             }
@@ -680,6 +725,24 @@ pub(super) mod tests {
             );
             let abilities = game.native_player_abilities(player).unwrap();
             assert!(!abilities.invulnerable && !abilities.may_fly && !abilities.instabuild);
+            // A write sticks, is refused for a speed that is not a number, and a
+            // mode change sets the flags again (the speeds stay).
+            let mut written = abilities;
+            written.may_build = false;
+            written.walk_speed = 0.2;
+            written.fly_speed = 0.1;
+            assert!(game.native_player_set_abilities(player, written));
+            assert_eq!(game.native_player_abilities(player), Some(written));
+            assert_eq!(game.native_player_may_build(player), Some(false));
+            let mut bad = written;
+            bad.walk_speed = f32::NAN;
+            assert!(!game.native_player_set_abilities(player, bad));
+            assert_eq!(game.native_player_abilities(player), Some(written));
+            assert!(game.native_player_set_game_mode(player, GameMode::Creative));
+            let abilities = game.native_player_abilities(player).unwrap();
+            assert!(abilities.may_build && abilities.instabuild && abilities.may_fly);
+            assert_eq!((abilities.walk_speed, abilities.fly_speed), (0.2, 0.1));
+            assert!(game.native_player_set_game_mode(player, GameMode::Survival));
             let mut stale = player;
             stale.entity = horizon_client::mod_api::EntityRef::new(
                 horizon_client::mod_api::NativeWorldEpoch::new(0),
@@ -708,10 +771,45 @@ pub(super) mod tests {
                     "minecraft:stone"
                 );
                 assert_eq!(game.player.as_ref().unwrap().health.health(), 20.0);
+                // The loaded walking speed is the movement speed's base.
+                assert_eq!(
+                    game.player
+                        .as_mut()
+                        .unwrap()
+                        .attribute("minecraft:movement_speed")
+                        .unwrap(),
+                    f64::from(0.25f32)
+                );
+                // In the player's own turn the write reaches the body as well.
+                let mut a = game.native_player_abilities(player).unwrap();
+                a.may_fly = true;
+                a.walk_speed = 0.3;
+                assert!(game.native_player_set_abilities(player, a));
+                assert_eq!(game.native_player_abilities(player), Some(a));
+                assert!(game.player.as_ref().unwrap().may_fly);
                 assert!(other.position(game).is_none());
                 assert!(game.native_living(other).is_none());
             })
             .unwrap();
+            // A mode change in a turn, then a write in the same turn: the write wins.
+            game.as_guest(&mut host, 12, |game| {
+                let player = game.native_player_ref(12).unwrap();
+                assert!(game.native_player_set_game_mode(player, GameMode::Creative));
+                let mut a = game.native_player_abilities(player).unwrap();
+                assert!(a.instabuild && a.may_fly);
+                a.fly_speed = 0.4;
+                a.walk_speed = 0.3;
+                assert!(game.native_player_set_abilities(player, a));
+            })
+            .unwrap();
+            let kept = host.hub.guest(12).unwrap();
+            assert_eq!(kept.game_mode, 1);
+            assert!(kept.abilities.instabuild);
+            assert_eq!(kept.abilities.flying_speed, 0.4);
+            assert_eq!(kept.abilities.walking_speed, 0.3);
+            // The turn's write is stored in the guest's record.
+            let stored = host.hub.guest(12).unwrap().abilities;
+            assert!(stored.may_fly && stored.walking_speed == 0.3);
             let swap = game.enter_guest(&mut host, 12).unwrap();
             game.lan = Some(host);
             assert!(game.native_entity(12).is_some());
@@ -752,6 +850,37 @@ pub(super) mod tests {
             game.leave_guest(&mut host, nested);
             game.leave_guest(&mut host, swap);
             assert!(game.lan_guest_swaps.is_empty());
+            // A player saved in creative (game mode 1, mayfly and instabuild)
+            // joins again: without force they stay creative; forced into the
+            // default mode (survival) they get its abilities.
+            let root = std::env::temp_dir().join(format!("abilities-force-{}", std::process::id()));
+            game.world_root = root.clone();
+            let g = host.hub.guest_mut(13).unwrap();
+            g.game_mode = 1;
+            g.abilities.update_for_mode(1);
+            assert!(g.abilities.may_fly && g.abilities.instabuild);
+            horizon_client::lan::playerdata::save(g, &root);
+            let joined = |game: &mut super::super::Game<'_>,
+                          host: &mut super::super::lan::LanHost,
+                          force| {
+                host.hub.config.default_game_mode = 0;
+                host.hub.config.force_game_mode = force;
+                let g = host.hub.guest_mut(13).unwrap();
+                g.game_mode = 0;
+                g.abilities = Default::default();
+                game.lan_guest_joined(host, 13, &[], [0.0, 64.0, 0.0]);
+                let g = host.hub.guest(13).unwrap();
+                (
+                    g.game_mode,
+                    g.abilities.may_fly,
+                    g.abilities.instabuild,
+                    g.abilities.may_build,
+                )
+            };
+            assert_eq!(joined(game, &mut host, false), (1, true, true, true));
+            assert_eq!(joined(game, &mut host, true), (0, false, false, true));
+            let _ = std::fs::remove_dir_all(root);
+            game.lan = Some(host);
         });
     }
 
@@ -870,6 +999,8 @@ pub(super) mod tests {
             real.placed = true;
             hub.guests.push(real);
             hub.guests.push(fake);
+            assert!(hub.here(&hub.guests[0]));
+            assert!(!hub.here(&hub.guests[1]));
             let packet = Clientbound::SetSimulationDistance(Distance { distance: 8 });
             let hold = Holding::start();
             hub.send_to(fake_id, &packet);
@@ -894,9 +1025,64 @@ pub(super) mod tests {
             .unwrap();
             let mut host = game.lan.take().unwrap();
             host.hub.guests = std::mem::take(&mut hub.guests);
+            host.hub.guests[1].position = [1600.0, 64.0, 0.0];
+            game.lan_update_streaming(&host);
+            assert!(
+                game.streaming
+                    .extra
+                    .iter()
+                    .any(|(chunk, _)| *chunk == (0, 0))
+            );
+            assert!(
+                !game
+                    .streaming
+                    .extra
+                    .iter()
+                    .any(|(chunk, _)| *chunk == (100, 0))
+            );
+            game.lan = Some(host);
+            let players = game.native_server_players();
+            assert_eq!(players.len(), 1);
+            assert_eq!(players[0].uuid, 1);
+            game.lan_acting = Some(real_id);
+            let selector = horizon_client::command::args::Selector {
+                kind: 'a',
+                limit: usize::MAX,
+                ..Default::default()
+            };
+            assert_eq!(game.select(&selector).len(), 1);
+            let named = horizon_client::command::args::Selector {
+                player_name: Some("fake".into()),
+                ..Default::default()
+            };
+            assert!(game.select(&named).is_empty());
+            assert!(game.run_command_quietly("list"));
+            assert!(!game.run_command_quietly("tp fake 0 64 0"));
+            game.lan_acting = None;
+            let mut host = game.lan.take().unwrap();
             game.guest_packets
                 .push(Clientbound::SetSimulationDistance(Distance { distance: 4 }));
             game.as_guest(&mut host, fake_id, |game| {
+                assert!(game.lan_acting_fake);
+                let source = horizon_client::command::args::Selector {
+                    kind: 's',
+                    limit: 1,
+                    ..Default::default()
+                };
+                assert_eq!(
+                    game.select(&source),
+                    vec![super::super::commands::Target::Player]
+                );
+                let named = horizon_client::command::args::Selector {
+                    player_name: Some("fake".into()),
+                    ..Default::default()
+                };
+                assert!(game.select(&named).is_empty());
+                let uuid = horizon_client::command::args::Selector {
+                    uuid: Some(2),
+                    ..Default::default()
+                };
+                assert!(game.select(&uuid).is_empty());
                 game.guest_packets
                     .push(Clientbound::SetSimulationDistance(Distance {
                         distance: 12,
@@ -910,13 +1096,16 @@ pub(super) mod tests {
             assert_eq!(host.hub.guests[1].sender.pending.load(Ordering::Relaxed), 0);
             assert!(rx.try_recv().is_err());
             let outer = game.enter_guest(&mut host, real_id).unwrap();
+            assert!(!game.lan_acting_fake);
             game.guest_cooldowns.push(("minecraft:real".into(), 7));
             game.guest_player_sounds
                 .push(("outer".into(), [0.0; 3], 1.0, 1.0));
             game.as_guest(&mut host, fake_id, |game| {
+                assert!(game.lan_acting_fake);
                 game.guest_cooldowns.push(("minecraft:fake".into(), 20));
             })
             .unwrap();
+            assert!(!game.lan_acting_fake);
             assert_eq!(game.guest_cooldowns.len(), 1);
             assert_eq!(&*game.guest_cooldowns[0].0, "minecraft:real");
             assert_eq!(game.guest_player_sounds[0].0, "outer");
@@ -938,15 +1127,18 @@ pub(super) mod tests {
 
             // A real turn nested in a fake must not receive the fake's cooldown.
             let outer = game.enter_guest(&mut host, fake_id).unwrap();
+            assert!(game.lan_acting_fake);
             game.guest_cooldowns
                 .push(("minecraft:fake_outer".into(), 8));
             game.guest_player_sounds
                 .push(("fake_outer".into(), [0.0; 3], 1.0, 1.0));
             game.as_guest(&mut host, real_id, |game| {
+                assert!(!game.lan_acting_fake);
                 game.guest_cooldowns
                     .push(("minecraft:real_inner".into(), 9));
             })
             .unwrap();
+            assert!(game.lan_acting_fake);
             assert_eq!(&*game.guest_cooldowns[0].0, "minecraft:fake_outer");
             assert_eq!(game.guest_player_sounds[0].0, "fake_outer");
             game.guest_player_sounds.clear();

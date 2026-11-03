@@ -10,7 +10,7 @@ use horizon_client::world::World;
 impl Game<'_> {
     /// The world a handle names now, or None for a stale or foreign one.
     pub(super) fn native_level_world(&self, level: LevelRef) -> Option<&World> {
-        if self.remote.is_some() || self.native_lifecycle.epoch() != Some(level.epoch()) {
+        if !self.is_logical_server() || self.native_lifecycle.epoch() != Some(level.epoch()) {
             return None;
         }
         if level.dimension() == self.dim.id() {
@@ -89,8 +89,7 @@ impl Game<'_> {
     /// another (its blocks can still be read), for a handle of an earlier open, and on a
     /// client. API @API:level_reads@.
     pub(super) fn native_level_in_place(&self, level: LevelRef) -> bool {
-        self.remote.is_none()
-            && (self.serving.is_some() || self.options.dedicated.is_some())
+        self.is_logical_server()
             && self.native_lifecycle.epoch() == Some(level.epoch())
             && self.dim.id() == level.dimension()
     }

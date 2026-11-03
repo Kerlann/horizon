@@ -219,18 +219,6 @@ impl Game<'_> {
         display.write(c);
         true
     }
-    /// Removes entity `id`, one Horizon keeps without simulating, as `/kill`
-    /// does (it drops nothing and isn't saved). False for no such entity or
-    /// another dimension. Mobs go with `native_remove_mob`. API
-    /// 59.
-    pub(super) fn native_remove_entity(&mut self, dimension: &str, id: u32) -> bool {
-        if !self.native_simulates_level(dimension) || !self.others.iter().any(|o| o.id == id) {
-            return false;
-        }
-        self.others.retain(|o| o.id != id);
-        self.persist.raw.remove(&id);
-        true
-    }
 }
 
 /// The entities the walk does not hold: Horizon keeps these in lists of their own.
@@ -254,20 +242,14 @@ enum Slot {
 /// `native_entity_leave_level`), for every kind in the entity walk and the
 /// five kept apart from it. Kept out of `native_hooks.rs`, whose lines may not hold macros.
 impl Game<'_> {
-    /// Whether an entity may be waiting to be told of: one with an id above
-    /// the last announced, or one of the kinds that take their id late and
-    /// have none. Reads a counter and five lists' ids; no walk.
+    /// Whether an entity may have joined since the last announcement. A join
+    /// in another level may cause one harmless walk of this level.
     fn joins_pending(&self) -> bool {
-        self.next_entity > self.persist.joined_mark
-            || self.tnts.iter().any(|t| t.id == 0)
-            || self.falling.iter().any(|f| f.id == 0)
-            || self.creatures.projectiles.iter().any(|p| p.id == 0)
-            || self.tridents.iter().any(|t| t.id == 0)
-            || self.rockets.iter().any(|r| r.id == 0)
+        horizon_client::join_seq::JoinSeq::latest() > self.persist.joined_seq
     }
     /// Tells `native_entity_join_level` once for every entity added since the
-    /// last call, of any kind, in the order they were created (ids count up
-    /// from one counter). A mod that cancels takes the entity back out here,
+    /// last call, of any kind, in insertion order. A mod that cancels takes
+    /// the entity back out here,
     /// before it ticks again, and `/summon` of it fails (`joins_canceled`).
     /// `loaded_from_disk` is for the entities that came with a chunk. Returns
     /// whether `watch` (an id, or 0) is still in the level. Walks the lists
@@ -278,24 +260,11 @@ impl Game<'_> {
         if self.remote.is_some() || crate::mod_api::mods().is_empty() || !self.joins_pending() {
             return true;
         }
-        for t in &mut self.tnts {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut t.id);
-        }
-        for f in &mut self.falling {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut f.id);
-        }
-        for p in &mut self.creatures.projectiles {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut p.id);
-        }
-        for t in &mut self.tridents {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut t.id);
-        }
-        for r in &mut self.rockets {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut r.id);
-        }
+        let observed = horizon_client::join_seq::JoinSeq::latest();
+        self.assign_pending_join_ids();
         let mut kept = true;
-        while let Some((slot, id)) = self.next_unannounced() {
-            self.persist.joined_mark = id;
+        while let Some((slot, id, seq)) = self.next_unannounced() {
+            self.persist.joined_seq = seq;
             let (kind, at) = self.slot_kind_and_position(slot);
             let mut canceled = false;
             let dimension = self.dim.id();
@@ -315,46 +284,71 @@ impl Game<'_> {
                 self.discard_slot(slot);
                 kept &= id != watch;
             } else {
-                self.persist.live.push((id, kind.into_owned(), true));
+                self.remember_join(id, kind.into_owned());
             }
         }
-        // Ids taken and never announced (the dragon's parts, another level's
-        // entities) must not keep the next flush walking.
-        self.persist.joined_mark = self.persist.joined_mark.max(self.next_entity);
+        self.persist.joined_seq = self.persist.joined_seq.max(observed);
         kept
     }
-    /// The entity with the lowest id above the last one announced.
-    fn next_unannounced(&self) -> Option<(Slot, u32)> {
+
+    fn assign_pending_join_ids(&mut self) {
+        self.assign_dragon_and_crystal_ids();
+        for t in &mut self.tnts {
+            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut t.id);
+        }
+        for f in &mut self.falling {
+            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut f.id);
+        }
+        for p in &mut self.creatures.projectiles {
+            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut p.id);
+        }
+        for t in &mut self.tridents {
+            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut t.id);
+        }
+        for r in &mut self.rockets {
+            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut r.id);
+        }
+    }
+    /// The entity inserted earliest after the last one announced.
+    fn next_unannounced(&self) -> Option<(Slot, u32, horizon_client::join_seq::JoinSeq)> {
         use super::entity::Entity;
-        let mark = self.persist.joined_mark;
-        let mut best: Option<(Slot, u32)> = None;
-        let mut offer = |slot: Slot, id: u32| {
-            if id > mark && best.is_none_or(|(_, b)| id < b) {
-                best = Some((slot, id));
+        use horizon_client::join_seq::{JoinSeq, Joined};
+        let mark = self.persist.joined_seq;
+        let mut best: Option<(Slot, u32, JoinSeq)> = None;
+        let mut offer = |slot: Slot, id: u32, seq: JoinSeq| {
+            if seq > mark && best.is_none_or(|(_, _, previous)| seq < previous) {
+                best = Some((slot, id, seq));
             }
         };
         for handle in self.entity_handles() {
-            offer(
-                Slot::Walk(handle),
-                super::entity::with_entity!(self, handle, e => e.id()),
-            );
+            let (id, seq) = super::entity::with_entity!(self, handle, e => (e.id(), e.join_seq()));
+            offer(Slot::Walk(handle), id, seq);
         }
         for (i, c) in self.crystals.iter().enumerate() {
-            offer(Slot::Apart(Apart::Crystal(i)), c.id);
+            offer(Slot::Apart(Apart::Crystal(i)), c.id, c.join);
         }
         for (i, c) in self.cushions.iter().enumerate() {
-            offer(Slot::Apart(Apart::Cushion(i)), c.id);
+            offer(Slot::Apart(Apart::Cushion(i)), c.id, c.join);
         }
         for (i, p) in self.paintings.iter().enumerate() {
-            offer(Slot::Apart(Apart::Painting(i)), p.id);
+            offer(Slot::Apart(Apart::Painting(i)), p.id, p.join);
         }
         for (i, f) in self.item_frames.iter().enumerate() {
-            offer(Slot::Apart(Apart::Frame(i)), f.id);
+            offer(Slot::Apart(Apart::Frame(i)), f.id, f.join);
         }
         if let Some(d) = &self.dragon {
-            offer(Slot::Apart(Apart::Dragon), d.id);
+            offer(Slot::Apart(Apart::Dragon), d.id, d.join);
         }
         best
+    }
+
+    fn remember_join(&mut self, id: u32, kind: String) {
+        let index = self
+            .persist
+            .live
+            .binary_search_by_key(&id, |entry| entry.0)
+            .unwrap_or_else(|i| i);
+        self.persist.live.insert(index, (id, kind, true));
     }
     /// The type id and position a mod is told of.
     fn slot_kind_and_position(&self, slot: Slot) -> (std::borrow::Cow<'static, str>, Vec3) {
@@ -409,14 +403,16 @@ impl Game<'_> {
     /// silent): everything now in the level counts as announced, and will
     /// be told when it leaves.
     pub(super) fn native_joins_skip(&mut self) {
+        let observed = horizon_client::join_seq::JoinSeq::latest();
         if self.remote.is_none() && !crate::mod_api::mods().is_empty() {
-            while let Some((slot, id)) = self.next_unannounced() {
-                self.persist.joined_mark = id;
+            self.assign_pending_join_ids();
+            while let Some((slot, id, seq)) = self.next_unannounced() {
+                self.persist.joined_seq = seq;
                 let kind = self.slot_kind_and_position(slot).0.into_owned();
-                self.persist.live.push((id, kind, true));
+                self.remember_join(id, kind);
             }
         }
-        self.persist.joined_mark = self.persist.joined_mark.max(self.next_entity);
+        self.persist.joined_seq = self.persist.joined_seq.max(observed);
     }
     /// An entity taken out of the level without leaving it (an item through
     /// an End gateway): forgotten, not told of.
@@ -477,6 +473,165 @@ impl Game<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "needs prepared resources and an isolated process for native mods"]
+    fn joins_follow_insertion_order_and_canceled_entities_never_leave() {
+        use crate::mod_api::{
+            self, EntityJoinLevelEvent, EntityLeaveLevelEvent, Flow, Hooks, Host,
+        };
+        use horizon_client::mobs::Mob;
+        use horizon_core::geometry::Vec3;
+        use std::sync::{Arc, Mutex};
+
+        type Joins = Arc<Mutex<Vec<(u32, String, bool)>>>;
+        struct Observer {
+            joins: Joins,
+            leaves: Arc<Mutex<Vec<u32>>>,
+        }
+        impl Hooks for Observer {
+            fn entity_join_level(
+                &self,
+                _: &mut dyn Host,
+                event: &mut EntityJoinLevelEvent<'_>,
+            ) -> Flow {
+                self.joins.lock().unwrap().push((
+                    event.entity,
+                    event.kind.into(),
+                    event.loaded_from_disk,
+                ));
+                if event.kind == "minecraft:sheep" {
+                    Flow::Cancel
+                } else {
+                    Flow::Continue
+                }
+            }
+            fn entity_leave_level(&self, _: &mut dyn Host, event: &mut EntityLeaveLevelEvent<'_>) {
+                self.leaves.lock().unwrap().push(event.entity);
+            }
+        }
+        let joins = Joins::default();
+        let leaves = Arc::new(Mutex::new(Vec::new()));
+        let mods: mod_api::Mods = vec![Box::new(Observer {
+            joins: joins.clone(),
+            leaves: leaves.clone(),
+        }) as Box<dyn Hooks>]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                game.native_joins_skip();
+                let base = game.next_entity;
+                let cow = game.res.mob_types().get("minecraft:cow").unwrap().clone();
+                let sheep = game.res.mob_types().get("minecraft:sheep").unwrap().clone();
+                let child = Mob::new(base + 1, cow.clone(), Vec3::ZERO, 0.0);
+                game.next_entity += 2;
+                game.mobs.push(Mob::new(base + 2, cow, Vec3::ZERO, 0.0));
+                game.native_joins_flush(false, 0);
+                game.mobs.push(child);
+                game.native_joins_flush(false, 0);
+                game.native_joins_flush(false, 0);
+                assert_eq!(
+                    *joins.lock().unwrap(),
+                    vec![
+                        (base + 2, "minecraft:cow".into(), false),
+                        (base + 1, "minecraft:cow".into(), false)
+                    ]
+                );
+                game.next_entity += 1;
+                game.mobs.push(Mob::new(base + 3, sheep, Vec3::ZERO, 0.0));
+                assert!(!game.native_joins_flush(true, base + 3));
+                assert!(!game.mobs.iter().any(|mob| mob.id == base + 3));
+                game.native_entity_left(base + 3);
+                assert!(leaves.lock().unwrap().is_empty());
+                assert_eq!(
+                    joins.lock().unwrap().last(),
+                    Some(&(base + 3, "minecraft:sheep".into(), true))
+                );
+
+                game.crystals.push(super::super::dragon::Crystal {
+                    join: Default::default(),
+                    id: base + 4,
+                    position: Vec3::ZERO,
+                    show_bottom: true,
+                    time: 0,
+                    beam: None,
+                    invulnerable: false,
+                });
+                game.cushions.push(horizon_client::entities::Cushion {
+                    join: Default::default(),
+                    id: base + 5,
+                    position: Vec3::ZERO,
+                    pos: [0; 3],
+                    yaw: 0.0,
+                    color: 0,
+                    check_interval: 0,
+                });
+                game.paintings.push(horizon_client::entities::Painting {
+                    join: Default::default(),
+                    id: base + 6,
+                    pos: [0; 3],
+                    facing: 0,
+                    variant: "minecraft:kebab".into(),
+                    width: 1,
+                    height: 1,
+                    check_interval: 0,
+                });
+                game.item_frames.push(horizon_client::entities::ItemFrame {
+                    join: Default::default(),
+                    id: base + 7,
+                    pos: [0; 3],
+                    facing: 0,
+                    glow: false,
+                    item: None,
+                    rotation: 0,
+                    drop_chance: 1.0,
+                    fixed: false,
+                    invisible: false,
+                    check_interval: 0,
+                });
+                let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
+                dragon.id = base + 8;
+                dragon.join = horizon_client::join_seq::JoinSeq::next();
+                game.dragon = Some(dragon);
+                game.next_entity = base + 8;
+                game.native_joins_flush(true, 0);
+                game.native_joins_flush(true, 0);
+                let seen = joins.lock().unwrap();
+                assert_eq!(
+                    &seen[3..],
+                    &[
+                        (base + 4, "minecraft:end_crystal".into(), true),
+                        (base + 5, "minecraft:cushion".into(), true),
+                        (base + 6, "minecraft:painting".into(), true),
+                        (base + 7, "minecraft:item_frame".into(), true),
+                        (base + 8, "minecraft:ender_dragon".into(), true)
+                    ]
+                );
+                drop(seen);
+                game.tnts.push(super::super::tnt::PrimedTnt {
+                    join: Default::default(),
+                    id: 0,
+                    position: Vec3::ZERO,
+                    previous: Vec3::ZERO,
+                    velocity: Vec3::ZERO,
+                    fuse: 80,
+                    on_ground: false,
+                    owner: None,
+                    guest: None,
+                    no_gravity: false,
+                    power: 4.0,
+                });
+                game.native_joins_flush(false, 0);
+                game.native_joins_flush(false, 0);
+                assert_eq!(game.tnts.last().unwrap().id, base + 9);
+                assert_eq!(
+                    joins.lock().unwrap().last(),
+                    Some(&(base + 9, "minecraft:tnt".into(), false))
+                );
+                assert_eq!(joins.lock().unwrap().len(), 9);
+            });
+        });
+    }
 
     #[test]
     fn a_display_write_flips_the_start_so_clients_restart_the_ease() {

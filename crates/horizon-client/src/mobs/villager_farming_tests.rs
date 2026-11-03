@@ -178,7 +178,7 @@ fn mod_crops_are_harvested_only_at_their_vanilla_templates_max_age() {
                     &mut Some([x, 1, 0]),
                     &mut Vec::new(),
                 );
-                assert_eq!(events.iter().any(|e| matches!(e, MobEvent::BreakBlock { pos, drop: true } if *pos == [x, 1, 0])), ripe, "x={x}");
+                assert_eq!(events.iter().any(|e| matches!(e, MobEvent::BreakBlock { pos, drop: true, .. } if *pos == [x, 1, 0])), ripe, "x={x}");
             }
         }
     ));

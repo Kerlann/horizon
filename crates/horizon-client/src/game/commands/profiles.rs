@@ -143,6 +143,13 @@ impl Game<'_> {
         match id {
             "op" => {
                 for player in &players {
+                    let (known, level) = {
+                        let l = lists.lock().unwrap();
+                        (l.ops.contains(player), l.op_level)
+                    };
+                    if !known && self.permission_change(&lists, player, level) {
+                        continue;
+                    }
                     let added = {
                         let mut l = lists.lock().unwrap();
                         let level = l.op_level;
@@ -165,6 +172,10 @@ impl Game<'_> {
             }
             "deop" => {
                 for player in &players {
+                    let known = lists.lock().unwrap().ops.contains(player);
+                    if known && self.permission_change(&lists, player, 0) {
+                        continue;
+                    }
                     let removed = {
                         let mut l = lists.lock().unwrap();
                         l.ops.contains(player) && l.ops.remove(player)
@@ -274,8 +285,7 @@ impl Game<'_> {
         // PlayerList.getPlayerByName, then ServerPlayer.getIpAddress.
         let address = |name: &str| {
             let hub = &self.lan.as_ref()?.hub;
-            hub.guests
-                .iter()
+            hub.online_players()
                 .find(|g| g.name.eq_ignore_ascii_case(name))
                 .map(|g| g.address.ip().to_string())
         };
@@ -295,8 +305,7 @@ impl Game<'_> {
             .as_ref()
             .map(|h| {
                 h.hub
-                    .guests
-                    .iter()
+                    .online_players()
                     .filter(|g| g.address.ip().to_string() == ip)
                     .map(|g| (g.uuid, g.name.clone()))
                     .collect()

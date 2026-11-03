@@ -674,14 +674,15 @@ impl Game<'_> {
             self.entities(ctx, "viewers", true)?
         } else {
             let acting = self.lan_acting;
-            let guests = self.lan.iter().flat_map(|h| h.hub.guests.iter());
+            let guests = self.lan.iter().flat_map(|h| h.hub.online_players());
             self.player
                 .as_ref()
+                .filter(|_| !self.lan_acting_fake)
                 .map(|_| Target::Player)
                 .into_iter()
                 .chain(
                     guests
-                        .filter(|g| g.placed && Some(g.conn) != acting)
+                        .filter(|g| Some(g.conn) != acting)
                         .map(|g| Target::Guest(g.conn)),
                 )
                 .collect()

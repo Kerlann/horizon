@@ -424,7 +424,9 @@ mod tests {
         assert_eq!(off.len(), 1);
         assert!(off[0].starts_with("betterfortresses not loaded"), "{off:?}");
         // An invalid first package must not claim the shared namespace.
-        fs::write(mods[0].join("mod.wasm"), b"\0asm").unwrap();
+        let asset = mods[0].join("assets/betterdungeons/model.bin");
+        fs::create_dir_all(asset.parent().unwrap()).unwrap();
+        fs::write(asset, b"\0asm").unwrap();
         let (on, off) = loadable(&mods);
         assert_eq!(on, [mods[1].clone(), mods[2].clone()]);
         assert_eq!(off.len(), 1);

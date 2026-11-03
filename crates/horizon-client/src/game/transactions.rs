@@ -9,7 +9,7 @@
 //! work to the transaction around it; an abort puts every storage back quietly and drops the
 //! waiting work, which nothing outside had seen.
 //!
-//! Covered here: block entities (slots, saved compound, attachments), a hopper's cooldown and
+//! Covered here: block entities (slots, saved compound, custom name, lock, loot roll, attachments), a hopper's cooldown and
 //! cauldron block states. A block's tentative state is stored only (`World::set_stored`): the
 //! one real write, with its remesh, relight and logs, is at the root commit. A jukebox is
 //! told at the root commit from its record before and after, so a disc swapped in one
@@ -17,10 +17,12 @@
 //! whole on its first write, from wherever the player's state lives then: the local player's or
 //! a guest's, swapped in by `native_as_player`. An item a write drops from a player waits for
 //! the root commit too. An item entity's stack is kept on its first write; one emptied stays,
-//! empty, until the root commit removes it.
+//! empty, until the root commit removes it. A guest's menu storage (ender chest, crafting grid,
+//! a mod's chest menu) is kept whole on its first write through a menu slot; a crafting grid
+//! changed by the transaction has its result made again at the root commit.
 use super::{BlockEntity, BlockStateId, Game, machines::HopperState};
-use horizon_client::items::ItemStack;
 use horizon_client::mod_api::TransactionSeal;
+use horizon_client::{items::ItemStack, world::BlockEntityExtras};
 use horizon_world::attachments::Attachments;
 use std::collections::HashMap;
 
@@ -42,6 +44,8 @@ pub(super) struct Level {
     mob_lengths: HashMap<u32, usize>,
     /// Each item entity's stack before this transaction first wrote it.
     item_entities: HashMap<u32, ItemStack>,
+    /// Each guest's menu storage before this transaction first wrote it, by UUID.
+    menus: HashMap<u128, KeptMenus>,
     /// What the root commit does, in order.
     after: Vec<After>,
 }
@@ -51,6 +55,10 @@ struct Kept {
     /// None where it had no map: an abort removes one a write made.
     attachments: Option<Attachments>,
     hopper: Option<HopperState>,
+    /// The custom name Horizon keeps beside the model (`World::block_names`).
+    name: Option<String>,
+    /// The container lock and loot table roll kept beside the model.
+    extras: BlockEntityExtras,
 }
 
 #[derive(Clone)]
@@ -61,10 +69,19 @@ struct KeptPlayer {
     carried: Option<ItemStack>,
 }
 
+#[derive(Clone)]
+struct KeptMenus {
+    ender_items: Vec<Option<ItemStack>>,
+    craft_grid: [Option<ItemStack>; 4],
+    native_menu: Vec<Option<ItemStack>>,
+}
+
 /// What a write tells the world, at the root commit.
 pub(super) enum After {
     /// `BlockEntity.setChanged`.
     Changed(Pos),
+    /// `BlockEntity.setChanged` and `Level.sendBlockUpdated` after its data was loaded.
+    Updated(Pos),
     /// The block's new state, set with its updates (`Level.setBlock`, `UPDATE_ALL`).
     Block(Pos),
     /// `Block.popResource`.
@@ -131,6 +148,9 @@ impl Game<'_> {
                 for (id, len) in level.mob_lengths {
                     outer.mob_lengths.entry(id).or_insert(len);
                 }
+                for (uuid, kept) in level.menus {
+                    outer.menus.entry(uuid).or_insert(kept);
+                }
                 outer.after.extend(level.after);
             }
             (true, None) => self.root_commit(level),
@@ -155,6 +175,8 @@ impl Game<'_> {
             entity: self.world.block_entities.get(&pos).cloned(),
             attachments: self.world.block_entities.attachments(pos).cloned(),
             hopper: self.hoppers.get(&pos).copied(),
+            name: self.world.block_names.get(&pos).cloned(),
+            extras: self.world.block_entity_extras(pos),
         });
     }
     /// Keeps the inventory of the player whose state is in `Game` now, `uuid`, as it is, if a
@@ -168,6 +190,21 @@ impl Game<'_> {
             armor: self.armor.clone(),
             offhand: self.offhand.clone(),
             carried: self.carried.clone(),
+        });
+    }
+    /// Keeps the menu storage of guest `uuid` as it is, if a transaction is open and hasn't yet.
+    pub(super) fn journal_menus(&mut self, uuid: u128) {
+        let Some(level) = self.transactions.last_mut() else {
+            return;
+        };
+        let mut guests = self.lan.iter().flat_map(|host| host.hub.guests.iter());
+        let Some(g) = guests.find(|g| g.placed && g.uuid == uuid) else {
+            return;
+        };
+        level.menus.entry(uuid).or_insert_with(|| KeptMenus {
+            ender_items: g.ender_items.clone(),
+            craft_grid: g.craft_grid.clone(),
+            native_menu: g.native_menu.clone(),
         });
     }
     /// Keeps entity `id`'s inventory as it is, if a transaction is open and hasn't yet.
@@ -235,6 +272,7 @@ impl Game<'_> {
     fn run_after(&mut self, after: After) {
         match after {
             After::Changed(pos) => self.container_changed(pos),
+            After::Updated(pos) => self.block_entity_updated(pos),
             // Only reached through a root commit, which sets the block itself.
             After::Block(_) => {}
             After::Drop(pos, stack) => {
@@ -277,6 +315,16 @@ impl Game<'_> {
                 after => self.run_after(after),
             }
         }
+        // A crafting grid the transaction changed has its result made again, once for each
+        // player however many writes it took (`InventoryMenu.slotsChanged`).
+        for (uuid, kept) in &level.menus {
+            let mut guests = self.lan.iter().flat_map(|host| host.hub.guests.iter());
+            let changed =
+                guests.any(|g| g.placed && g.uuid == *uuid && g.craft_grid != kept.craft_grid);
+            if changed {
+                self.guest_craft_result(*uuid);
+            }
+        }
         for (pos, kept) in level.block_entities {
             let record = |entity: Option<&BlockEntity>| match entity {
                 Some(BlockEntity::Jukebox(j)) => j.record().cloned(),
@@ -307,6 +355,11 @@ impl Game<'_> {
             self.world
                 .block_entities
                 .set_attachments(pos, kept.attachments);
+            match kept.name {
+                Some(name) => self.world.block_names.insert(pos, name),
+                None => self.world.block_names.remove(&pos),
+            };
+            self.world.set_block_entity_extras(pos, kept.extras);
             match kept.hopper {
                 Some(hopper) => self.hoppers.insert(pos, hopper),
                 None => self.hoppers.remove(&pos),
@@ -330,6 +383,17 @@ impl Game<'_> {
         for (id, kept) in level.item_entities {
             if let Some(e) = self.dropped.iter_mut().find(|e| e.id == id) {
                 e.stack = kept;
+            }
+        }
+        let guests = self
+            .lan
+            .iter_mut()
+            .flat_map(|host| host.hub.guests.iter_mut());
+        for g in guests {
+            if let Some(kept) = level.menus.get(&g.uuid).filter(|_| g.placed) {
+                g.ender_items.clone_from(&kept.ender_items);
+                g.craft_grid.clone_from(&kept.craft_grid);
+                g.native_menu.clone_from(&kept.native_menu);
             }
         }
         for (uuid, kept) in level.players {
@@ -433,7 +497,7 @@ mod tests {
                 host.container_insert(on([0, 64, 0], None), 1, sticks(3), tx);
                 Err::<(), ()>(())
             });
-            let water = host.fluid_tank_extract(on([2, 64, 0], None), 0, 1000, false);
+            let water = host.fluid_tank_extract(on([2, 64, 0], None), 0, 1000, tx);
             assert_eq!(water.map(|w| w.amount), Some(1000));
             Err(())
         });
@@ -454,7 +518,7 @@ mod tests {
                 host.container_insert(on([0, 64, 0], None), 1, sticks(3), tx);
                 Err::<(), ()>(())
             });
-            host.fluid_tank_extract(on([2, 64, 0], None), 0, 1000, false);
+            host.fluid_tank_extract(on([2, 64, 0], None), 0, 1000, tx);
             Ok(())
         });
         assert_eq!(done, Ok(()));
@@ -509,8 +573,8 @@ mod tests {
         };
         let before = queues(&game);
         let host: &mut dyn Host = &mut game;
-        let _ = host.transaction(|host, _| {
-            host.fluid_tank_extract(on([2, 64, 0], None), 0, 1000, false);
+        let _ = host.transaction(|host, tx| {
+            host.fluid_tank_extract(on([2, 64, 0], None), 0, 1000, tx);
             Err::<(), ()>(())
         });
         assert_eq!(game.world.block(2, 64, 0), full);
@@ -551,9 +615,8 @@ mod tests {
         assert_eq!(j.ticks, 0, "the new disc's song starts from its beginning");
 
         // A player's place: one of three buckets in the hand is exchanged for a filled one; the
-        // hand keeps two and the filled one goes to the inventory, the cursor changes too, and
-        // what doesn't fit would be thrown. Aborted, the hand, the inventory and the cursor are as
-        // they were, and nothing was thrown.
+        // hand keeps two and the filled one goes to the inventory, and what doesn't fit would be
+        // thrown. Aborted, the hand and the inventory are as they were, and nothing was thrown.
         game.player = Some(
             super::super::PlayerMotion::new(
                 game.motion,
@@ -579,12 +642,10 @@ mod tests {
             player: me,
             hand: horizon_client::first_person::Hand::Main,
         };
-        let cursor = horizon_client::mod_api::ItemPlace::PlayerCursor { player: me };
         let water = ItemResource::of(&bucket("minecraft:water_bucket", 1));
         let host: &mut dyn Host = &mut game;
         let _ = host.transaction(|host, tx| {
             assert_eq!(hand.exchange(host, tx, &water, 1), 1);
-            assert_eq!(cursor.insert(host, tx, &stick, 4), 4);
             Err::<(), ()>(())
         });
         assert_eq!(

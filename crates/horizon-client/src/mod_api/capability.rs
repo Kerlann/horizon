@@ -148,7 +148,9 @@ impl LevelRef {
             side,
         };
         let mut game = None;
-        let parts = super::providers(false, key.name, host, |host| at.kind(host));
+        let parts = super::providers(super::ProvidedBy::BlockEntity, key.name, host, |host| {
+            at.kind(host)
+        });
         super::answered(
             super::ask_providers::<super::BlockProvider<T>, T>(
                 parts,

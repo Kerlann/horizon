@@ -178,7 +178,7 @@ impl Game<'_> {
         let cpu = horizon_bench::cpu_seconds(std::process::id())
             .zip(r.cpu_s)
             .map(|(end, start)| round((end - start) / window_s.max(1e-9)));
-        let players = self.lan.as_ref().map_or(0, |h| h.hub.guests.len());
+        let players = self.lan.as_ref().map_or(0, |h| h.hub.online_count());
         let report = json!({
             "format": 1,
             "horizon": horizon_client::crash::version(),

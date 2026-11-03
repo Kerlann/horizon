@@ -295,6 +295,7 @@ mod tests {
             assert_eq!(marker.head_yaw(game), Some(0.0));
             assert!(!marker.set_head_yaw(game, 10.0));
             game.paintings.push(horizon_client::entities::Painting {
+                join: Default::default(),
                 id: 15,
                 pos: [0, 64, 0],
                 facing: 0,

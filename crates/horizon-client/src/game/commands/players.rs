@@ -38,8 +38,8 @@ impl Game<'_> {
         let acting = self.lan_acting;
         self.lan
             .iter()
-            .flat_map(|h| h.hub.guests.iter())
-            .filter(move |g| g.placed && Some(g.conn) != acting)
+            .flat_map(|h| h.hub.online_players())
+            .filter(move |g| Some(g.conn) != acting)
     }
 
     /// The entity the command runs as (`CommandSourceStack.getEntity`): a
@@ -67,7 +67,10 @@ impl Game<'_> {
     /// by it, without its `~` or with it (quoted), so `/msg` and `/tell`
     /// reach a player by the name chat shows. No nickname, no change.
     pub(super) fn player_named(&self, name: &str) -> Option<Target> {
-        if self.player.is_some() && name.eq_ignore_ascii_case(self.acting_player_name()) {
+        if !self.lan_acting_fake
+            && self.player.is_some()
+            && name.eq_ignore_ascii_case(self.acting_player_name())
+        {
             return Some(Target::Player);
         }
         self.command_players()
@@ -102,7 +105,7 @@ impl Game<'_> {
             })
         });
         if self.player.is_some() && own == Some(uuid) {
-            return Some(Target::Player);
+            return (!self.lan_acting_fake).then_some(Target::Player);
         }
         if let Some(g) = self.command_players().find(|g| g.uuid == uuid) {
             return Some(Target::Guest(g.conn));
@@ -124,8 +127,7 @@ impl Game<'_> {
         let in_place = self.lan_acting.filter(|_| self.player.is_some());
         self.lan
             .iter()
-            .flat_map(|h| h.hub.guests.iter())
-            .filter(|g| g.placed)
+            .flat_map(|h| h.hub.online_players())
             .filter(|g| !limited || g.dimension == here || Some(g.conn) == in_place)
             .filter(|g| !alive || (!g.dead && g.health > 0.0))
             .map(|g| {

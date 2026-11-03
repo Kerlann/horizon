@@ -261,7 +261,7 @@ impl Game<'_> {
         self.command_source = outer;
         ok
     }
-    fn syntax_failure(&mut self, e: &CommandError, command: &str) {
+    pub(super) fn syntax_failure(&mut self, e: &CommandError, command: &str) {
         self.command_failure(e.message.clone());
         let Some(input) = &e.input else { return };
         let cursor = e.cursor.min(input.len());
@@ -1561,9 +1561,14 @@ impl Game<'_> {
                     .map(|p| [p.position.x, p.position.y, p.position.z]);
                 if let Some(p) = self.player.as_mut() {
                     p.position = v;
-                    p.velocity = Vec3::new(0.0, 0.0, 0.0);
-                    p.fall_distance = 0.0;
-                    p.ground.on_ground = false;
+                    p.velocity = teleport_velocity(p.velocity, relative, p.fall_flying);
+                    if !p.fall_flying {
+                        p.ground.on_ground = true;
+                    }
+                    // The end of a guest's turn sends the position packet
+                    // with the command's relatives, even without a move.
+                    p.teleported = true;
+                    p.teleported_delta = relative;
                 }
                 self.previous_position = v;
                 if let Some([yaw, pitch]) = rotation {
@@ -2215,7 +2220,10 @@ impl Game<'_> {
                 self.release_vehicle_container(id);
                 self.carts.retain(|c| c.id != id);
             }
-            Target::Other(id) => self.others.retain(|o| o.id != id),
+            Target::Other(id) => {
+                self.others.retain(|o| o.id != id);
+                self.forget_entity(id);
+            }
             Target::Fangs(id) => self.fangs.list.retain(|f| f.id != id),
             Target::Crystal(id) => self.kill_crystal(id),
             Target::Dragon(id) => self.kill_dragon(id),
@@ -2351,6 +2359,7 @@ impl Game<'_> {
                     // counter, and the crystal is shown with its base.
                     self.next_entity += 1;
                     self.crystals.push(super::dragon::Crystal {
+                        join: Default::default(),
                         id: self.next_entity,
                         position: Vec3::new(pos[0], pos[1], pos[2]),
                         show_bottom: true,
@@ -2682,7 +2691,7 @@ impl Game<'_> {
         let table = save::text(tag.get("LootTable"));
         let rolled = match (table, entity) {
             (Some(table), BlockEntity::Chest(slots)) if slots.iter().all(Option::is_none) => {
-                let loot = structure_blocks::loot_data(&self.options.resources, &self.pack_files());
+                let loot = self.server_loot.get();
                 let at = Vec3::new(f64::from(key.0), f64::from(key.1), f64::from(key.2));
                 let biome = self.biome_name_at(at).unwrap_or_default();
                 Some(structure_blocks::roll_container(
@@ -3767,8 +3776,7 @@ impl Game<'_> {
         let players: Vec<(u128, String)> = self
             .lan
             .iter()
-            .flat_map(|h| h.hub.guests.iter())
-            .filter(|g| g.placed)
+            .flat_map(|h| h.hub.online_players())
             .map(|g| (g.uuid, g.name.clone()))
             .collect();
         let max = self
@@ -4109,6 +4117,63 @@ mod teleport_mob_tests {
             );
             game.run_command("tp @e[type=minecraft:zombie] 30000000.0 70 0");
             assert_eq!(game.mobs[0].position.x, -30_000_000.0);
+        });
+    }
+}
+
+#[cfg(test)]
+mod teleport_player_tests {
+    use crate::game::native_entity_refs::tests::with_game;
+    use horizon_client::motion::PlayerMotion;
+    use horizon_core::geometry::Vec3;
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn command_moves_velocity_per_axis_and_keeps_fall_distance() {
+        with_game(|game| {
+            game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
+            let player = game.player.as_mut().unwrap();
+            player.position = Vec3::new(0.0, 64.0, 0.0);
+            player.velocity = Vec3::new(1.0, -2.0, 3.0);
+            player.fall_distance = 7.0;
+            game.ui.registries.permission = 4;
+            // An absolute teleport zeroes every axis and stands the player
+            // on the ground, keeping the fall distance (performTeleport).
+            assert!(game.run_command("tp 10 70 10"));
+            let player = game.player.as_ref().unwrap();
+            assert_eq!(player.position, Vec3::new(10.5, 70.0, 10.5));
+            assert_eq!(player.velocity, Vec3::ZERO);
+            assert!(player.ground.on_ground);
+            assert_eq!(player.fall_distance, 7.0);
+            assert!(player.teleported);
+            assert_eq!(player.teleported_delta, [false; 3]);
+            // A fall-flying player keeps the velocity of a relative axis
+            // (calculateAbsolute's DELTA flags) and is not stood on the
+            // ground; an absolute axis still loses its velocity.
+            let player = game.player.as_mut().unwrap();
+            player.velocity = Vec3::new(1.0, -3.0, 2.0);
+            player.fall_flying = true;
+            player.ground.on_ground = false;
+            assert!(game.run_command("tp ~ 70 ~"));
+            let player = game.player.as_ref().unwrap();
+            assert_eq!(player.position, Vec3::new(10.5, 70.0, 10.5));
+            assert_eq!(player.velocity, Vec3::new(1.0, 0.0, 2.0));
+            assert_eq!(player.teleported_delta, [true, false, true]);
+            assert!(!player.ground.on_ground);
+            let player = game.player.as_mut().unwrap();
+            player.velocity = Vec3::new(1.0, -3.0, 2.0);
+            assert!(game.run_command("tp 12 ~ 12"));
+            let player = game.player.as_ref().unwrap();
+            assert_eq!(player.position, Vec3::new(12.5, 70.0, 12.5));
+            assert_eq!(player.velocity, Vec3::new(0.0, -3.0, 0.0));
+            // Without fall flying a relative Y axis loses its velocity too
+            // (performTeleport zeroes it and sets onGround).
+            game.player.as_mut().unwrap().fall_flying = false;
+            assert!(game.run_command("tp ~ ~ ~"));
+            let player = game.player.as_ref().unwrap();
+            assert_eq!(player.velocity.y, 0.0);
+            assert!(player.ground.on_ground);
+            assert_eq!(player.fall_distance, 7.0);
         });
     }
 }

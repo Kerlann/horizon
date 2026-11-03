@@ -1,37 +1,18 @@
 //! Read-only handles to supported server menus.
-use super::Game;
+use super::{
+    Game,
+    lan_crafting::{load_player, machine_menu},
+};
 use horizon_client::{
+    containers::BlockEntity,
     items::ItemStack,
     lan::{
         guest::Guest,
-        menu::{SlotBacking, VEHICLE_KEY_Y},
+        menu::{SlotBacking, Slots, VEHICLE_KEY_Y},
     },
-    mod_api::{LevelRef, MenuRef, PlayerRef},
+    menu::{Kind, Menu},
+    mod_api::{EntityRef, MenuRef, MenuSlotBacking, PlayerRef},
 };
-
-/// A supported menu slot's underlying storage, for the item-place journal.
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum MenuBacking {
-    Block {
-        level: LevelRef,
-        pos: [i32; 3],
-        slot: usize,
-    },
-    Entity {
-        level: LevelRef,
-        id: u32,
-        slot: usize,
-    },
-    Inventory(usize),
-    Armor(usize),
-    Offhand,
-    CraftGrid(usize),
-    CraftResult,
-    Ender(usize),
-    /// A native menu's transient slots, not a mod block entity's slots.
-    Native(usize),
-}
 
 impl Game<'_> {
     fn native_menu_guest(&self, menu: MenuRef) -> Option<&Guest> {
@@ -112,64 +93,164 @@ impl Game<'_> {
         Some(guest.menu.as_ref().map_or(46, |m| m.size + 36))
     }
 
-    /// Map a menu slot to its actual backing storage for item-place writes.
-    pub(super) fn native_menu_backing(&self, menu: MenuRef, slot: usize) -> Option<MenuBacking> {
+    /// The storage menu slot `slot` shows (`Slot.container` and `getContainerSlot`): the
+    /// player's inventory by `ENTITY_ITEMS` index (`InventoryMenu`'s armour slots 5..9 go head
+    /// to feet), a block entity's or an entity's slot, the ender chest's, the crafting grid's
+    /// or a mod's chest menu's. API @API:menu_slots@.
+    pub(super) fn native_menu_slot_backing(
+        &self,
+        menu: MenuRef,
+        slot: usize,
+    ) -> Option<MenuSlotBacking> {
         let guest = self.native_menu_guest(menu)?;
         let Some(open) = &guest.menu else {
             return match slot {
-                0 => Some(MenuBacking::CraftResult),
-                1..=4 => Some(MenuBacking::CraftGrid(slot - 1)),
-                5..=8 => Some(MenuBacking::Armor(slot - 5)),
-                9..=35 => Some(MenuBacking::Inventory(slot)),
-                36..=44 => Some(MenuBacking::Inventory(slot - 36)),
-                45 => Some(MenuBacking::Offhand),
+                0 => Some(MenuSlotBacking::CraftResult),
+                1..=4 => Some(MenuSlotBacking::CraftGrid(slot - 1)),
+                5..=8 => Some(MenuSlotBacking::Player(39 - (slot - 5))),
+                9..=35 => Some(MenuSlotBacking::Player(slot)),
+                36..=44 => Some(MenuSlotBacking::Player(slot - 36)),
+                45 => Some(MenuSlotBacking::Player(40)),
                 _ => None,
             };
         };
+        // A block menu whose block entities no longer show its slots (a chest's, over a
+        // furnace set in its place) backs none of them, the player's included, until the close
+        // pass ends it (`Container.stillValid`).
+        let level = self.native_level(&guest.dimension)?;
+        let world = self.native_level_world(level)?;
+        if open
+            .slots
+            .block_slots(world)
+            .is_some_and(|n| n != open.size)
+        {
+            return None;
+        }
         if slot >= open.size {
             return match slot - open.size {
-                n @ 0..=26 => Some(MenuBacking::Inventory(n + 9)),
-                n @ 27..=35 => Some(MenuBacking::Inventory(n - 27)),
+                n @ 0..=26 => Some(MenuSlotBacking::Player(n + 9)),
+                n @ 27..=35 => Some(MenuSlotBacking::Player(n - 27)),
                 _ => None,
             };
         }
-        let level = self.native_level(&guest.dimension)?;
-        let world = self.native_level_world(level)?;
         Some(match open.slots.backing(world, slot)? {
-            SlotBacking::Block(pos, n) if pos.1 == VEHICLE_KEY_Y => MenuBacking::Entity {
-                level,
-                id: pos.2 as u32,
+            SlotBacking::Block(pos, n) if pos.1 == VEHICLE_KEY_Y => MenuSlotBacking::Entity {
+                entity: EntityRef::new(level.epoch(), pos.2 as u32),
                 slot: n,
             },
-            SlotBacking::Block(pos, n) => MenuBacking::Block {
+            SlotBacking::Block(pos, n) => MenuSlotBacking::BlockEntity {
                 level,
                 pos: [pos.0, pos.1, pos.2],
                 slot: n,
             },
-            SlotBacking::Ender(n) => MenuBacking::Ender(n),
-            SlotBacking::Native(n) => MenuBacking::Native(n),
+            SlotBacking::Ender(n) => MenuSlotBacking::Ender(n),
+            SlotBacking::Native(n) => MenuSlotBacking::Native(n),
         })
     }
 
     /// Full stack at a menu index. Outer None means unavailable or out of
     /// range; Some(None) means an empty slot. API @API:menu_refs@.
     pub(super) fn native_menu_slot(&self, menu: MenuRef, slot: usize) -> Option<Option<ItemStack>> {
-        let backing = self.native_menu_backing(menu, slot)?;
+        let backing = self.native_menu_slot_backing(menu, slot)?;
         let guest = self.native_menu_guest(menu)?;
         Some(match backing {
-            MenuBacking::Block { level, .. } | MenuBacking::Entity { level, .. } => guest
-                .menu
-                .as_ref()?
-                .slots
-                .get(self.native_level_world(level)?, guest, slot),
-            MenuBacking::Inventory(n) => guest.inventory.get(n)?.clone(),
-            MenuBacking::Armor(n) => guest.armor.get(n)?.clone(),
-            MenuBacking::Offhand => guest.offhand.clone(),
-            MenuBacking::CraftGrid(n) => guest.craft_grid.get(n)?.clone(),
-            MenuBacking::CraftResult => guest.craft_result.clone(),
-            MenuBacking::Ender(n) => guest.ender_items.get(n)?.clone(),
-            MenuBacking::Native(n) => guest.native_menu.get(n)?.clone(),
+            MenuSlotBacking::BlockEntity { .. } | MenuSlotBacking::Entity { .. } => {
+                let world = self.native_level_world(self.native_level(&guest.dimension)?)?;
+                guest.menu.as_ref()?.slots.get(world, guest, slot)
+            }
+            MenuSlotBacking::Player(n @ 0..36) => guest.inventory.get(n)?.clone(),
+            MenuSlotBacking::Player(n @ 36..40) => guest.armor[39 - n].clone(),
+            MenuSlotBacking::Player(_) => guest.offhand.clone(),
+            MenuSlotBacking::CraftGrid(n) => guest.craft_grid.get(n)?.clone(),
+            MenuSlotBacking::CraftResult => guest.craft_result.clone(),
+            MenuSlotBacking::Ender(n) => guest.ender_items.get(n)?.clone(),
+            MenuSlotBacking::Native(n) => guest.native_menu.get(n)?.clone(),
         })
+    }
+
+    /// How many of `stack` menu slot `slot` holds (`Slot.mayPlace`, then `Slot.getMaxStackSize`):
+    /// a furnace's fuel slot one bucket, an armour slot one piece that fits it, a crafting result
+    /// none. API @API:menu_slots@.
+    pub(super) fn native_menu_slot_holds(
+        &self,
+        menu: MenuRef,
+        slot: usize,
+        stack: &ItemStack,
+    ) -> Option<u32> {
+        let rules = self.native_menu_rules(menu, slot)?;
+        Some(rules.slot_holds(&self.menu_env(), slot, stack))
+    }
+
+    /// Whether menu slot `slot` gives up what it holds (`Slot.mayPickup`): bound armour stays
+    /// on outside creative. API @API:menu_slots@.
+    pub(super) fn native_menu_slot_gives(&self, menu: MenuRef, slot: usize) -> Option<bool> {
+        let rules = self.native_menu_rules(menu, slot)?;
+        Some(rules.slot_gives(&self.menu_env(), slot))
+    }
+
+    /// The menu engine's model of `menu`, holding slot `slot`, for its slots' rules: the
+    /// inventory menu, a furnace's, brewing stand's, crafter's or content mod's menu over its
+    /// block entity, a shulker box's, or a plain container of the menu's size. None for a slot
+    /// with no backing (`native_menu_slot_backing`), and for one the model hasn't.
+    fn native_menu_rules(&self, menu: MenuRef, slot: usize) -> Option<Box<Menu>> {
+        self.native_menu_slot_backing(menu, slot)?;
+        let guest = self.native_menu_guest(menu)?;
+        let (kind, disabled) = match &guest.menu {
+            None => (Kind::Inventory, None),
+            Some(open) => {
+                let world = self.native_level_world(self.native_level(&guest.dimension)?)?;
+                let name = self
+                    .lan
+                    .as_ref()?
+                    .hub
+                    .registry_name("minecraft:menu", open.kind);
+                let entity = match open.slots {
+                    Slots::Block(pos) => world.block_entities.get(&pos),
+                    _ => None,
+                };
+                let kind = match entity.and_then(|e| machine_menu(e, open.mod_type)) {
+                    Some((kind, _)) => kind,
+                    None if name == Some("minecraft:shulker_box") => Kind::Shulker,
+                    None if open.size == 5 => Kind::Hopper,
+                    None if open.size == 9 => Kind::Dispenser,
+                    None => Kind::Chest(open.size / 9),
+                };
+                // `CrafterSlot.mayPlace`: a disabled slot takes nothing.
+                let disabled = match entity {
+                    Some(BlockEntity::Crafter(c)) => Some(c.disabled),
+                    _ => None,
+                };
+                (kind, disabled)
+            }
+        };
+        let mut rules = Box::new(Menu::new(kind));
+        (slot < rules.slot_count()).then_some(())?;
+        load_player(&mut rules, guest);
+        for (k, off) in disabled.iter().flatten().enumerate() {
+            rules.data[k] = i32::from(*off);
+        }
+        Some(rules)
+    }
+
+    /// The game's own storage menu slot `slot` shows, for a write: the ender chest's, the
+    /// crafting grid's or a mod's chest menu's slot, kept on the guest. None for any other.
+    pub(super) fn native_menu_storage(
+        &mut self,
+        menu: MenuRef,
+        slot: usize,
+    ) -> Option<&mut Option<ItemStack>> {
+        let backing = self.native_menu_slot_backing(menu, slot)?;
+        let mut guests = self
+            .lan
+            .iter_mut()
+            .flat_map(|host| host.hub.guests.iter_mut());
+        let g = guests.find(|g| g.placed && g.uuid == menu.player.uuid())?;
+        match backing {
+            MenuSlotBacking::Ender(n) => g.ender_items.get_mut(n),
+            MenuSlotBacking::CraftGrid(n) => g.craft_grid.get_mut(n),
+            MenuSlotBacking::Native(n) => g.native_menu.get_mut(n),
+            _ => None,
+        }
     }
 
     /// Carried (cursor) stack; outer None means unavailable. API @API:menu_refs@.
@@ -248,12 +329,12 @@ mod tests {
             assert_eq!(inventory.slot_count(game), Some(46));
             assert_eq!(inventory.slot(game, 0), Some(None));
             assert_eq!(
-                game.native_menu_backing(inventory, 36),
-                Some(MenuBacking::Inventory(0))
+                game.native_menu_slot_backing(inventory, 36),
+                Some(MenuSlotBacking::Player(0))
             );
             assert_eq!(
-                game.native_menu_backing(inventory, 45),
-                Some(MenuBacking::Offhand)
+                game.native_menu_slot_backing(inventory, 45),
+                Some(MenuSlotBacking::Player(40))
             );
             assert_eq!(inventory.slot(game, 46), None);
             let stone = ItemStack::new("minecraft:stone", 4);
@@ -275,18 +356,18 @@ mod tests {
             assert_eq!(menu.slot(game, 9), Some(Some(stone.clone())));
             assert_eq!(menu.carried(game), Some(Some(stone)));
             assert_eq!(
-                game.native_menu_backing(menu, 0),
-                Some(MenuBacking::Native(0))
+                game.native_menu_slot_backing(menu, 0),
+                Some(MenuSlotBacking::Native(0))
             );
             assert_eq!(
-                game.native_menu_backing(menu, 9),
-                Some(MenuBacking::Inventory(9))
+                game.native_menu_slot_backing(menu, 9),
+                Some(MenuSlotBacking::Player(9))
             );
             assert_eq!(
-                game.native_menu_backing(menu, 36),
-                Some(MenuBacking::Inventory(0))
+                game.native_menu_slot_backing(menu, 36),
+                Some(MenuSlotBacking::Player(0))
             );
-            assert_eq!(game.native_menu_backing(menu, 45), None);
+            assert_eq!(game.native_menu_slot_backing(menu, 45), None);
             let host = game.lan.as_mut().unwrap();
             for _ in 0..100 {
                 host.hub
@@ -336,8 +417,8 @@ mod tests {
             );
             let menu = game.native_menu_ref(player).unwrap();
             assert_eq!(
-                game.native_menu_backing(menu, 2),
-                Some(MenuBacking::Block {
+                game.native_menu_slot_backing(menu, 2),
+                Some(MenuSlotBacking::BlockEntity {
                     level: game.native_level("minecraft:overworld").unwrap(),
                     pos: [b.0, b.1, b.2],
                     slot: 0
@@ -358,10 +439,12 @@ mod tests {
             );
             let menu = game.native_menu_ref(player).unwrap();
             assert_eq!(
-                game.native_menu_backing(menu, 0),
-                Some(MenuBacking::Entity {
-                    level: game.native_level("minecraft:overworld").unwrap(),
-                    id: 42,
+                game.native_menu_slot_backing(menu, 0),
+                Some(MenuSlotBacking::Entity {
+                    entity: EntityRef::new(
+                        game.native_level("minecraft:overworld").unwrap().epoch(),
+                        42
+                    ),
                     slot: 0
                 })
             );
@@ -410,8 +493,8 @@ mod tests {
             let nether = game.native_level("minecraft:the_nether").unwrap();
             assert_eq!(overworld_menu.slot(game, 0), Some(Some(gold)));
             assert_eq!(
-                game.native_menu_backing(overworld_menu, 0),
-                Some(MenuBacking::Block {
+                game.native_menu_slot_backing(overworld_menu, 0),
+                Some(MenuSlotBacking::BlockEntity {
                     level: overworld,
                     pos: [a.0, a.1, a.2],
                     slot: 0
@@ -423,8 +506,8 @@ mod tests {
             );
             assert_eq!(nether_menu.slot(game, 0), Some(Some(emerald)));
             assert_eq!(
-                game.native_menu_backing(nether_menu, 0),
-                Some(MenuBacking::Block {
+                game.native_menu_slot_backing(nether_menu, 0),
+                Some(MenuSlotBacking::BlockEntity {
                     level: nether,
                     pos: [a.0, a.1, a.2],
                     slot: 0

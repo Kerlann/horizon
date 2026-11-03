@@ -26,7 +26,7 @@ why Java jars cannot run in Horizon, so we port instead). The ATM10 inventory be
    ├─ carry-over (mechanical, no agent): assets/ + data/ upgraded to 26.3 formats,
    │    block and item registrations from the oracle's facts export  →  <mod>.hmod
    ├─ port (one agent per mod, tiers logic and up): a Rust native mod (a horizon-mixins
-   │    bundle), iterating until its harness passes                  →  <mod>.hnmod
+   │    bundle), iterating until its harness passes                  →  <mod>.hmod
    ├─ harness per mod: the Java mod in a dev-only NeoForge/Fabric oracle vs the port
    ▼
  coverage report: ported · partial · not yet · not needed, per mod and per class
@@ -780,7 +780,7 @@ budget allows:
   harness, [native-mods.md](native-mods.md), the ports of its dependencies, and the mod's public
   documentation. Never its code: the agent doesn't decompile, read or quote it.
 - **Output:** a native mod, a horizon-mixins bundle started from
-  [horizon-native-mod-template](https://github.com/horizon-rust/horizon-native-mod-template), and its `.hnmod`.
+  [horizon-native-mod-template](https://github.com/horizon-rust/horizon-native-mod-template), and its `.hmod`.
 - **Loop:** write → build → run the harness → read the differences → fix, until the harness
   passes or the agent reports what blocks it. Usually that is a place in the game's code the
   mixins can't reach yet, which becomes an issue ("needs a scheduled-tick hook point"), the way version ports

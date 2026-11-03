@@ -35,26 +35,10 @@ pub(super) fn strip(bundle: &Bundle) -> Result<(), String> {
 }
 
 /// Read and validate the trait package folder at the manifest boundary.
-pub(super) fn folder(dir: &Path, table: &toml::Value) -> Result<String, String> {
+pub(super) fn folder(dir: &Path) -> Result<String, String> {
     let manifest = dir.join(MANIFEST);
-    if !table
-        .as_table()
-        .is_some_and(|t| t.len() == 1 && t.contains_key("path"))
-    {
-        return Err(format!("{}: [api] accepts only path", manifest.display()));
-    }
-    let folder = table
-        .get("path")
-        .and_then(toml::Value::as_str)
-        .ok_or_else(|| format!("{}: [api] needs a path", manifest.display()))?;
+    let folder = horizon_mods::index::native::RUST;
     let relative = Path::new(folder);
-    // An absolute path would bypass the incoming copy when joined later.
-    if relative.is_absolute() {
-        return Err(format!(
-            "{}: invalid [api] path {folder:?}",
-            manifest.display()
-        ));
-    }
     let source = dir.join(relative);
     let root = dir
         .canonicalize()
@@ -105,10 +89,11 @@ fn main_rs(ids: &[&str], named: bool) -> String {
 #[global_allocator]
 static ALLOCATOR: horizon_threads::Allocator = horizon_threads::ALLOCATOR;
 
-static MOD_API_LEVEL: [u8; horizon_mods::api_level::MARK.len()] = horizon_mods::api_level::MARK;
+static GAME_IDENTITY: [u8; horizon_mods::game_identity::MARK.len()] =
+    horizon_mods::game_identity::MARK;
 
 fn main() {{
-    std::hint::black_box(&MOD_API_LEVEL);
+    std::hint::black_box(&GAME_IDENTITY);
     let mods: horizon_client::mod_api::Mods = vec![
 {entries}    ].into();
 {naming}    horizon_client::entry::main_with(mods);
@@ -301,17 +286,17 @@ mod tests {
     fn fixture(manifest: &str) -> std::path::PathBuf {
         let name = std::thread::current().name().unwrap().replace(':', "-");
         let dir = super::super::tests::dir(&name);
-        fs::create_dir_all(dir.join("engine/src")).unwrap();
+        fs::create_dir_all(dir.join("rust/src")).unwrap();
         fs::write(dir.join(MANIFEST), manifest).unwrap();
-        fs::write(dir.join("engine/Cargo.toml"), "[package]\nname = 'example-mod'\nversion = '0.1.0'\nedition = '2024'\n[dependencies]\nhorizon-client = '0.1'\n").unwrap();
-        fs::write(dir.join("engine/src/lib.rs"), "").unwrap();
+        fs::write(dir.join("rust/Cargo.toml"), "[package]\nname = 'example-mod'\nversion = '0.1.0'\nedition = '2024'\n[dependencies]\nhorizon-client = '0.1'\n").unwrap();
+        fs::write(dir.join("rust/src/lib.rs"), "").unwrap();
         dir
     }
 
     #[test]
     fn validates_the_api_folder() {
         for (path, valid) in [
-            ("engine", true),
+            ("rust", true),
             ("missing", false),
             ("../engine", false),
             ("/engine", false),
@@ -327,7 +312,7 @@ mod tests {
     #[test]
     fn rejects_an_entry_override() {
         let dir = fixture(
-            "[mod]\nid = 'example'\nversion = '1'\n[api]\npath = 'engine'\nentry = 'other'\n",
+            "[mod]\nid = 'example'\nversion = '1'\n[api]\npath = 'rust'\nentry = 'other'\n",
         );
         assert!(super::super::bundle(&dir, None)
             .unwrap_err()
@@ -338,7 +323,7 @@ mod tests {
     #[test]
     fn removes_only_the_api_table_for_mixins() {
         let dir = fixture(
-            "[mod]\nid = 'example'\nversion = '1'\n[api]\npath = 'engine'\n[dependencies]\nbase = '^1'\n[[injection]]\nid = 'test'\n",
+            "[mod]\nid = 'example'\nversion = '1'\n[api]\npath = 'rust'\n[dependencies]\nbase = '^1'\n[[injection]]\nid = 'test'\n",
         );
         let bundle = super::super::bundle(&dir, None).unwrap();
         assert!(bundle.mixins_content);
@@ -359,6 +344,10 @@ mod tests {
             .unwrap();
         let generated = main_rs(&[], false);
         assert!(generated.lines().any(|line| line == allocator));
+        // Both executable shapes must retain the same identity for launcher imports.
+        for line in game.lines().filter(|line| line.contains("GAME_IDENTITY")) {
+            assert!(generated.lines().any(|other| other == line));
+        }
     }
 
     #[test]
@@ -386,7 +375,7 @@ mod tests {
 
     #[test]
     fn stages_api_without_a_dependency_cycle() {
-        let dir = fixture("[mod]\nid = 'example'\nversion = '1'\n[api]\npath = 'engine'\n");
+        let dir = fixture("[mod]\nid = 'example'\nversion = '1'\n[api]\npath = 'rust'\n");
         let bundle = super::super::bundle(&dir, None).unwrap();
         let stage_dir = dir.join("workspace");
         fs::create_dir_all(stage_dir.join("crates/horizon-client")).unwrap();
@@ -467,7 +456,7 @@ mod tests {
 
     #[test]
     fn api_only_skips_mixins() {
-        let dir = fixture("[mod]\nid = 'example'\nversion = '1'\n[api]\npath = 'engine'\n");
+        let dir = fixture("[mod]\nid = 'example'\nversion = '1'\n[api]\npath = 'rust'\n");
         let bundle = super::super::bundle(&dir, None).unwrap();
         assert!(!bundle.mixins_content);
         fs::remove_dir_all(dir).unwrap();

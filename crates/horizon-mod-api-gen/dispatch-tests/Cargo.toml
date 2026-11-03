@@ -7,6 +7,7 @@ publish = false
 description = "Generated mod API dispatch contract tests"
 
 [dependencies]
+horizon-client-core = { path = "../../horizon-client-core" }
 serde_json = "1"
 
 [build-dependencies]

@@ -1191,6 +1191,7 @@ impl Experience {
 /// 2D data value of the direction it faces, and its variant.
 #[derive(Clone, Debug)]
 pub struct Painting {
+    pub join: crate::join_seq::JoinSeq,
     pub id: u32,
     pub pos: [i32; 3],
     /// Direction.get2DDataValue: south 0, west 1, north 2, east 3.
@@ -1253,6 +1254,7 @@ pub fn dye_index(name: &str) -> u8 {
 /// height, and is coloured by its `DyeColor`.
 #[derive(Clone, Debug)]
 pub struct Cushion {
+    pub join: crate::join_seq::JoinSeq,
     pub id: u32,
     /// `Entity.position`: the bottom centre of the cushion.
     pub position: Vec3,
@@ -1294,6 +1296,7 @@ impl Cushion {
 /// An item frame or glow item frame (`ItemFrame`).
 #[derive(Clone, Debug)]
 pub struct ItemFrame {
+    pub join: crate::join_seq::JoinSeq,
     pub id: u32,
     pub pos: [i32; 3],
     /// Direction.get3DDataValue: down 0, up 1, north 2, south 3, west 4, east 5.
@@ -3523,4 +3526,11 @@ mod experience_cost_tests {
         );
     }
 }
-crate::impl_joined!(ItemEntity, ExperienceOrb, ArmorStand);
+crate::impl_joined!(
+    ItemEntity,
+    ExperienceOrb,
+    ArmorStand,
+    Painting,
+    Cushion,
+    ItemFrame
+);

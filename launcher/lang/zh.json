@@ -554,7 +554,6 @@
   "Native build · {version}": "原生构建 · {version}",
   "On: every AI feature is hidden and off. The game opens no control socket, and horizon-ctl and the MCP servers refuse.": "开启：所有 AI 功能均被隐藏并关闭。游戏不会打开控制套接字，horizon-ctl 和 MCP 服务器也会拒绝连接。",
   "the port": "端口",
-  "The source of {source}. Its release ships {file}, a content mod: installing those from GitHub is not supported yet.": "{source} 的源代码。其发布版包含内容模组 {file}：暂不支持从 GitHub 安装此类模组。",
   "Build anyway": "仍然构建",
   "A name, 3 to 16 letters": "名称，3 到 16 个字母",
   "Installed {mods} from GitHub ({source}). Build it on the Mods page.": "已从 GitHub（{source}）安装 {mods}。请在“模组”页面中构建。",

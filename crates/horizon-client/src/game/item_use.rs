@@ -217,8 +217,28 @@ pub(super) fn bow_release_power(has_ammo: bool, charge: i32, canceled: bool) -> 
 }
 
 /// `useItemRemaining` of a use of `duration` ticks, `ticks` old.
-fn ticks_left(duration: i32, ticks: u32) -> i32 {
+pub(super) fn ticks_left(duration: i32, ticks: u32) -> i32 {
     duration.saturating_sub_unsigned(ticks)
+}
+
+/// `LivingEntity.useItemRemaining` of the use `using` (its slot and ticks so
+/// far) of `duration` ticks, 0 when nothing is in use.
+pub(super) fn remaining_of(using: Option<(usize, u32)>, duration: i32) -> i32 {
+    using.map_or(0, |(_, ticks)| ticks_left(duration, ticks))
+}
+
+/// Sets `useItemRemaining` of the use `using` by moving its `duration`, as a
+/// mod's tick does; false when nothing is in use.
+pub(super) fn set_remaining(
+    using: Option<(usize, u32)>,
+    duration: &mut i32,
+    remaining: i32,
+) -> bool {
+    let Some((_, ticks)) = using else {
+        return false;
+    };
+    *duration = duration_leaving(ticks, remaining);
+    true
 }
 
 /// `getUseDuration(stack) - remainingTime` of a use of `own` ticks with
@@ -229,7 +249,7 @@ fn held(own: i32, remaining: i32) -> u32 {
 
 /// The duration that leaves `remaining` ticks of a use `ticks` old, as a
 /// mod's `Tick` set them.
-fn duration_leaving(ticks: u32, remaining: i32) -> i32 {
+pub(super) fn duration_leaving(ticks: u32, remaining: i32) -> i32 {
     remaining.saturating_add_unsigned(ticks)
 }
 

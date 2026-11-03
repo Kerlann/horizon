@@ -142,7 +142,11 @@ impl Goal for SilverfishWakeUpFriends {
                         continue;
                     }
                     if cx.w.mob_griefing {
-                        cx.events.push(MobEvent::BreakBlock { pos, drop: true });
+                        cx.events.push(MobEvent::BreakBlock {
+                            pos,
+                            drop: true,
+                            by: Some(m.id),
+                        });
                     } else {
                         cx.events.push(MobEvent::Infest {
                             pos,

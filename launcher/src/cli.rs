@@ -712,6 +712,9 @@ enum Cmd {
     /// Install a game program you have, such as a horizon-client built on your fork's Actions,
     /// as its own version on an installed release or Nightly's game files, and select it.
     /// Nothing signed it: it runs with your rights, and updates never replace it
+    #[command(
+        after_help = "The program must match this computer's executable format and carry the exact `horizon-game-executable;`\nidentity signature embedded by ordinary and launcher-generated games. It carries no mod API level or build id,\nand is not a signature of authenticity. Unmarked programs and retired WIT API-level markers are refused."
+    )]
     ImportBuild {
         /// The program (horizon-client, horizon-client.exe on Windows), or a zip holding it
         path: PathBuf,
@@ -781,7 +784,7 @@ enum Cmd {
     /// pin, else the one the instance plays, with the launcher's own Rust, as the version the
     /// instance then plays. Not sandboxed: the mods' code runs with your rights
     NativeBuild {
-        /// A mod folder (horizon-mixin.toml, or an unpacked .hnmod), or a folder of them
+        /// A mod folder (horizon-mixin.toml, or an unpacked .hmod), or a folder of them
         /// (default: the native mods installed and turned on in the instance)
         folder: Option<PathBuf>,
         /// Export mode: build a standalone dedicated-server engine into this folder instead of

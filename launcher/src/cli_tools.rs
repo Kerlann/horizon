@@ -323,6 +323,9 @@ With No AI on, `mcp` and `agent-config` are hidden and refuse; every other comma
         if !args.is_empty() {
             out += "\n";
         }
+        if let Some(after_help) = cmd.get_after_help() {
+            out += &format!("{after_help}\n\n");
+        }
         let mcp = if generated.contains(&words) {
             let path: Vec<String> = words.split(' ').map(str::to_owned).collect();
             let mut text = format!("`{}`", tool_name(&path));

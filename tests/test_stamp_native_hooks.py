@@ -1,8 +1,6 @@
 import importlib.util
 import json
-import re
 import shutil
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,75 +20,44 @@ class StampTests(unittest.TestCase):
         self.original = stamp.ROOT
         stamp.ROOT = self.root
         self.addCleanup(setattr, stamp, "ROOT", self.original)
-        subprocess.run(["git", "init", "-q", "-b", "master", str(self.root)], check=True)
-        for path, content in {
-            stamp.SOURCE: "//! API 7 adds old.\n//!\npub(crate) const NATIVE_HOOKS_API: u32 = 7;\n",
-            stamp.DOCS: "API 7 adds old.\n\n## What the launcher does\n",
-            stamp.CATALOG: '{"hooks": []}\n',
-        }.items():
-            (self.root / path).parent.mkdir(parents=True, exist_ok=True)
-            (self.root / path).write_text(content)
+        (self.root / stamp.CATALOG).write_text('{"hooks": []}\n')
         (self.root / stamp.FRAGMENTS).mkdir(parents=True)
-
-    def git(self, *args):
-        subprocess.run(["git", "-C", str(self.root), "-c", "user.name=Test",
-                        "-c", "user.email=test@example.invalid", *args],
-                       check=True, capture_output=True)
 
     def fragment(self, name):
         path = self.root / stamp.FRAGMENTS / f"{name}.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({
-            "hooks": [{"name": name, "target": f"target::{name}"}],
-            "rust_summary": f"{name}.",
-            "doc_summary": f'{name}; requires @API:{name}@.',
-        }))
+        path.write_text(json.dumps({"hooks": [{"name": name, "target": f"target::{name}", "side": "server"}]}))
         return path
 
-    def test_merge_order_and_idempotence(self):
-        self.git("add", ".")
-        self.git("commit", "-qm", "base")
-        self.git("checkout", "-qb", "first")
-        self.fragment("z")
-        self.git("add", ".")
-        self.git("commit", "-qm", "first")
-        self.git("checkout", "-q", "master")
-        self.git("checkout", "-qb", "second")
-        self.fragment("a")
-        self.git("add", ".")
-        self.git("commit", "-qm", "second")
-        self.git("checkout", "-q", "master")
-        self.git("merge", "--no-ff", "-qm", "merge first", "first")
-        self.git("merge", "--no-ff", "-qm", "merge second", "second")
-        self.assertTrue(stamp.stamp(True))
-        self.assertFalse(stamp.stamp(False))
-        source = (self.root / stamp.SOURCE).read_text()
-        docs = (self.root / stamp.DOCS).read_text()
-        self.assertIn("API 8 adds z.", source)
-        self.assertIn("API 9 adds a.", source)
-        self.assertIn("API 8 adds z; requires 8.", docs)
-        self.assertIn("API 9 adds a; requires 9.", docs)
-        self.assertIn("NATIVE_HOOKS_API: u32 = 9;", source)
-        hooks = json.loads((self.root / stamp.CATALOG).read_text())["hooks"]
-        self.assertEqual([(h["name"], h["version"]) for h in hooks], [("a", 1), ("z", 1)])
-        self.assertFalse(stamp.stamp(False))
+    def test_check_collection_order_and_idempotence(self):
+        catalog = self.root / stamp.CATALOG
+        catalog.write_text('{"hooks": [{"name": "existing", "version": 3, "side": "server"}]}\n')
+        z = self.fragment("z")
+        a = self.fragment("a")
+        before = catalog.read_bytes()
+        self.assertTrue(stamp.collect_fragments(True))
+        self.assertEqual(catalog.read_bytes(), before)
+        self.assertTrue(a.exists())
+        self.assertTrue(z.exists())
+        self.assertFalse(stamp.collect_fragments(False))
+        hooks = json.loads(catalog.read_text())["hooks"]
+        self.assertEqual([(h["name"], h["version"]) for h in hooks],
+                         [("existing", 3), ("a", 1), ("z", 1)])
+        self.assertFalse(a.exists())
+        self.assertFalse(z.exists())
+        after = catalog.read_bytes()
+        self.assertFalse(stamp.collect_fragments(False))
+        self.assertEqual(catalog.read_bytes(), after)
 
-    def test_helper_only_gets_a_number(self):
-        self.git("add", ".")
-        self.git("commit", "-qm", "base")
+    def test_helper_only_fragment_is_collected(self):
         path = self.fragment("helper")
-        fragment = json.loads(path.read_text())
-        fragment["hooks"] = []
-        fragment["helpers"] = [{"name": "helper", "target": "target::helper"}]
-        path.write_text(json.dumps(fragment))
-        self.assertFalse(stamp.stamp(False))
-        self.assertIn("NATIVE_HOOKS_API: u32 = 8;", (self.root / stamp.SOURCE).read_text())
-        self.assertEqual(json.loads((self.root / stamp.CATALOG).read_text())["hooks"], [])
-        self.assertEqual(json.loads((self.root / stamp.CATALOG).read_text())["helpers"], fragment["helpers"])
+        helpers = [{"name": "helper", "target": "target::helper", "side": "server"}]
+        path.write_text(json.dumps({"hooks": [], "helpers": helpers}))
+        self.assertFalse(stamp.collect_fragments(False))
+        catalog = json.loads((self.root / stamp.CATALOG).read_text())
+        self.assertEqual(catalog, {"hooks": [], "helpers": helpers})
+        self.assertFalse(path.exists())
 
     def test_catalog_facts_travel_with_the_hook(self):
-        self.git("add", ".")
-        self.git("commit", "-qm", "base")
         path = self.fragment("served")
         fragment = json.loads(path.read_text())
         contract = {"kind": "listen", "receiver": "game"}
@@ -98,69 +65,67 @@ class StampTests(unittest.TestCase):
             {"neoforge": "SomeEvent", "fabric": ["SomeCallback", "OtherCallback"], "paper": "SomePaperEvent",
              "side": "server", "cancellable": True, "mod_api": contract, "other": 1})
         path.write_text(json.dumps(fragment))
-        self.assertFalse(stamp.stamp(False))
+        self.assertFalse(stamp.collect_fragments(False))
         hooks = json.loads((self.root / stamp.CATALOG).read_text())["hooks"]
         self.assertEqual(hooks, [{"name": "served", "version": 1, "target": "target::served",
                                   "neoforge": "SomeEvent", "fabric": ["SomeCallback", "OtherCallback"],
                                   "paper": "SomePaperEvent", "side": "server", "cancellable": True, "mod_api": contract}])
 
-    def test_markers_are_stamped_in_hand_written_api_types(self):
-        self.git("add", ".")
-        self.git("commit", "-qm", "base")
-        self.fragment("drops")
-        path = self.root / stamp.MOD_API
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("/// Since API @API:drops@.\n")
-        self.assertFalse(stamp.stamp(False))
-        self.assertEqual(path.read_text(), "/// Since API 8.\n")
+    def test_collection_does_not_read_or_write_source_and_docs(self):
+        path = self.fragment("drops")
+        fragment = json.loads(path.read_text())
+        fragment.update({"rust_summary": "pending source note", "doc_summary": "pending docs note",
+                         "comments": ["notes.rs"]})
+        path.write_text(json.dumps(fragment))
+        notes = self.root / "notes.rs"
+        notes.write_text("/// A hook's documentation.\n")
+        before = notes.read_bytes()
+        self.assertFalse(stamp.collect_fragments(False))
+        self.assertEqual(notes.read_bytes(), before)
+        self.assertEqual({p.relative_to(self.root).as_posix() for p in self.root.rglob("*") if p.is_file()},
+                         {"notes.rs", stamp.CATALOG.as_posix()})
 
-    def test_stamping_leaves_stale_generated_copies_alone(self):
-        # Old checkouts may still have these files; only the generator's inputs are stamped now.
-        generated = (
-            "crates/horizon-client/src/mod_api/generated.rs",
-            "crates/horizon-client/src/mod_api/generated_host.rs",
-            "crates/horizon-client/src/game/mod_api_host_generated.rs",
-            "crates/horizon-client-render/src/gfx/native_render/generated.rs",
-        )
-        self.git("add", ".")
-        self.git("commit", "-qm", "base")
-        self.fragment("drops")
-        for name in generated:
-            path = self.root / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("/// Since API @API:drops@.\n")
-        self.assertFalse(stamp.stamp(False))
-        self.assertIn("NATIVE_HOOKS_API: u32 = 8;", (self.root / stamp.SOURCE).read_text())
-        for name in generated:
-            self.assertEqual((self.root / name).read_text(), "/// Since API @API:drops@.\n")
+    def test_duplicates_fail_before_writes(self):
+        catalog_path = self.root / stamp.CATALOG
+        for kind in ("hooks", "helpers"):
+            for origin in ("catalog", "fragment"):
+                with self.subTest(kind=kind, origin=origin):
+                    for path in (self.root / stamp.FRAGMENTS).glob("*.json"):
+                        path.unlink()
+                    entry = {"name": "same", "target": "target::same", "side": "server"}
+                    fragment = {"hooks": []}
+                    fragment[kind] = [entry]
+                    first = self.root / stamp.FRAGMENTS / "first.json"
+                    first.write_text(json.dumps(fragment))
+                    catalog = {"hooks": []}
+                    if origin == "catalog":
+                        catalog[kind] = [entry]
+                    else:
+                        (self.root / stamp.FRAGMENTS / "second.json").write_text(json.dumps(fragment))
+                    catalog_path.write_text(json.dumps(catalog))
+                    paths = [catalog_path, *(self.root / stamp.FRAGMENTS).glob("*.json")]
+                    before = {path: path.read_bytes() for path in paths}
+                    with self.assertRaisesRegex(ValueError, "duplicate"):
+                        stamp.collect_fragments(False)
+                    self.assertEqual({path: path.read_bytes() for path in paths}, before)
 
-    def test_duplicate_fails_before_writes(self):
-        self.git("add", ".")
-        self.git("commit", "-qm", "base")
-        self.fragment("same")
-        (self.root / stamp.CATALOG).write_text('{"hooks": [{"name": "same"}]}')
-        before = (self.root / stamp.SOURCE).read_text()
-        with self.assertRaisesRegex(ValueError, "duplicate"):
-            stamp.stamp(False)
-        self.assertEqual((self.root / stamp.SOURCE).read_text(), before)
-
-    def test_the_repository_stamps_every_marker(self):
-        # A copy of this checkout's pending fragments and the files they stamp: stamping must
-        # succeed and leave no marker, or the stamp workflow fails or ships unnumbered docs.
+    def test_repository_catalog_collection_needs_no_source_tree(self):
         repo = self.original
-        fragments = [p.relative_to(repo) for p in (repo / stamp.FRAGMENTS).glob("*.json")]
-        comments = {Path(c) for p in fragments for c in json.loads((repo / p).read_text()).get("comments", [])}
-        stamped = [stamp.SOURCE, stamp.DOCS, stamp.MOD_API, *comments]
-        for path in [stamp.CATALOG, *stamped, *fragments]:
-            if (repo / path).exists():
-                (self.root / path).parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(repo / path, self.root / path)
-        self.git("add", ".")
-        self.git("commit", "-qm", "base")
-        self.assertFalse(stamp.stamp(False))
-        left = {str(p): re.findall(r"@API:\w+@", (self.root / p).read_text())
-                for p in stamped if (self.root / p).exists()}
-        self.assertEqual({p: m for p, m in left.items() if m}, {})
+        fragments = sorted((repo / stamp.FRAGMENTS).glob("*.json"))
+        expected = json.loads((repo / stamp.CATALOG).read_text())
+        expected_hooks = [(h["name"], h["side"]) for h in expected["hooks"]]
+        expected_helpers = expected.get("helpers", []).copy()
+        for path in fragments:
+            fragment = json.loads(path.read_text())
+            expected_hooks.extend((h["name"], h["side"]) for h in fragment["hooks"])
+            expected_helpers.extend(fragment.get("helpers", []))
+            shutil.copyfile(path, self.root / stamp.FRAGMENTS / path.name)
+        shutil.copyfile(repo / stamp.CATALOG, self.root / stamp.CATALOG)
+        self.assertFalse(stamp.collect_fragments(False))
+        catalog = json.loads((self.root / stamp.CATALOG).read_text())
+        self.assertEqual([(h["name"], h["side"]) for h in catalog["hooks"]], expected_hooks)
+        self.assertEqual(catalog.get("helpers", []), expected_helpers)
+        self.assertFalse(list((self.root / stamp.FRAGMENTS).glob("*.json")))
 
 
 if __name__ == "__main__":

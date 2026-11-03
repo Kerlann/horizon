@@ -181,16 +181,16 @@ mod tests {
         let root =
             std::env::temp_dir().join(format!("horizon-inject-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(root.join("engine/src")).unwrap();
+        fs::create_dir_all(root.join("rust/src")).unwrap();
         fs::write(
-            root.join("engine/Cargo.toml"),
+            root.join("rust/Cargo.toml"),
             "[package]\nname = 'mod-example'\nversion = '1.0.0'\n",
         )
         .unwrap();
-        fs::write(root.join("engine/src/lib.rs"), "").unwrap();
+        fs::write(root.join("rust/src/lib.rs"), "").unwrap();
         fs::write(
             root.join(MANIFEST),
-            format!("[mod]\nid = 'example'\nversion = '1'\n[api]\npath = 'engine'\n{injection}"),
+            format!("[mod]\nid = 'example'\nversion = '1'\n[api]\npath = 'rust'\n{injection}"),
         )
         .unwrap();
         let bundle = super::super::bundle(&root, None).unwrap();
@@ -363,7 +363,7 @@ mod tests {
             .unwrap()
         };
         let before = key();
-        fs::write(root.join("engine/src/lib.rs"), "// one line edit").unwrap();
+        fs::write(root.join("rust/src/lib.rs"), "// one line edit").unwrap();
         assert_eq!(before, key());
         fs::write(root.join("other.rs"), "// mixin input").unwrap();
         assert_ne!(before, key());
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn mixin_inputs_inside_api_are_not_excluded_from_cache() {
-        let (root, bundle) = fixture("api-helper", "[[injection]]\nid = 'hook'\ntarget = 'horizon_client::game::tick'\nkind = 'HEAD'\nhelper = 'engine/src/lib.rs'\n");
+        let (root, bundle) = fixture("api-helper", "[[injection]]\nid = 'hook'\ntarget = 'horizon_client::game::tick'\nkind = 'HEAD'\nhelper = 'rust/src/lib.rs'\n");
         let key = || {
             super::super::inject_cache::key(
                 "revision",
@@ -383,26 +383,19 @@ mod tests {
             .unwrap()
         };
         let before = key();
-        fs::write(root.join("engine/src/lib.rs"), "fn changed() {}\n").unwrap();
+        fs::write(root.join("rust/src/lib.rs"), "fn changed() {}\n").unwrap();
         assert_ne!(before, key());
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
-    fn mixin_crate_containing_api_is_not_excluded_from_cache() {
-        let (root, bundle) = fixture("api-parent", "[[crate]]\nid = 'whole_bundle'\npath = '.'\n");
-        let key = || {
-            super::super::inject_cache::key(
-                "revision",
-                "mixins",
-                super::super::Profile::Performance,
-                std::slice::from_ref(&bundle),
-            )
-            .unwrap()
-        };
-        let before = key();
-        fs::write(root.join("engine/src/lib.rs"), "// changed\n").unwrap();
-        assert_ne!(before, key());
+    fn rejects_two_routes_for_the_same_source_folder() {
+        let (root, _) = fixture("dual-route", "");
+        let path = root.join(MANIFEST);
+        let text = fs::read_to_string(&path).unwrap();
+        fs::write(path, text + "[[crate]]\nid = 'code'\npath = 'rust'\n").unwrap();
+        let error = super::super::bundle(&root, None).unwrap_err();
+        assert!(error.contains("both [api] and [[crate]]"), "{error}");
         fs::remove_dir_all(root).unwrap();
     }
 

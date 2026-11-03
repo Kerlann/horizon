@@ -21,4 +21,22 @@ impl ExecutionRole {
     pub fn writes_singleplayer_player(self) -> bool {
         self != Self::DedicatedServer
     }
+
+    /// A logical server simulates the world: the integrated server thread or a
+    /// dedicated server. A client — connected, or at a screen with no world —
+    /// does not, whatever `remote` happens to say.
+    pub fn is_logical_server(self) -> bool {
+        self != Self::Client
+    }
+}
+
+use super::Game;
+
+impl Game<'_> {
+    /// This game's side: a server simulates the world, a client does not. The
+    /// one source for a helper's side; `remote` says whether a client is
+    /// connected, not which side this game is.
+    pub(super) fn is_logical_server(&self) -> bool {
+        self.options.execution_role.is_logical_server()
+    }
 }

@@ -129,6 +129,7 @@ impl Respawn {
 }
 #[derive(Clone, Debug)]
 pub(super) struct Crystal {
+    pub join: horizon_client::join_seq::JoinSeq,
     /// The entity id a server tracks it by (0 until it is tracked).
     pub id: u32,
     pub position: Vec3,
@@ -139,6 +140,7 @@ pub(super) struct Crystal {
     /// `setPermanentlyInvulnerable` (respawned spike crystals).
     pub invulnerable: bool,
 }
+horizon_client::impl_joined!(Crystal);
 impl Crystal {
     /// `EntityType.END_CRYSTAL`: 2 x 2.
     pub(super) fn bounds(&self) -> Aabb {
@@ -307,6 +309,7 @@ impl Phase {
     }
 }
 pub(super) struct Dragon {
+    pub join: horizon_client::join_seq::JoinSeq,
     /// `Entity.id` once tracked to guests (0 before); its parts take the
     /// eight ids after it (`EnderDragon`'s constructor reserves them).
     pub id: u32,
@@ -442,6 +445,7 @@ const ADJACENCY: [u32; 24] = [
 impl Dragon {
     pub(super) fn new(position: Vec3, yaw: f32, seed: i64) -> Self {
         Self {
+            join: Default::default(),
             id: 0,
             position,
             previous: position,
@@ -1002,6 +1006,11 @@ impl Game<'_> {
                 }
             }
         }
+        self.assign_dragon_and_crystal_ids();
+        self.tick_dragon();
+    }
+
+    pub(super) fn assign_dragon_and_crystal_ids(&mut self) {
         // EnderDragon's constructor takes its id and its parts' from the
         // entity counter (a dragon loaded from the save gets them here too).
         if let Some(d) = self.dragon.as_mut()
@@ -1016,7 +1025,6 @@ impl Game<'_> {
             self.next_entity += 1;
             c.id = self.next_entity;
         }
-        self.tick_dragon();
     }
     /// EndSpikeFeature's crystals (with fire under them on the bedrock).
     fn place_spike_crystals(&mut self) {
@@ -1037,6 +1045,7 @@ impl Game<'_> {
             // EndCrystal's constructor takes an id from the entity counter.
             self.next_entity += 1;
             self.crystals.push(Crystal {
+                join: Default::default(),
                 id: self.next_entity,
                 position: at,
                 show_bottom: true,
@@ -2295,6 +2304,7 @@ impl Game<'_> {
             return;
         };
         let boxes = [d.part_box(0), d.part_box(1), d.part_box(2)];
+        let dragon_id = d.id;
         let tags = &self.items().block_tags;
         let transparent = tags
             .get("minecraft:dragon_transparent")
@@ -2323,6 +2333,14 @@ impl Game<'_> {
                     }
                 }
             }
+        }
+        // LivingDestroyBlockEvent: a block a mod keeps is still in the wall.
+        if !horizon_client::mod_api::mods().is_empty() {
+            removed.retain(|p| {
+                let kept = !self.may_destroy(dragon_id, "minecraft:ender_dragon", *p);
+                in_wall |= kept;
+                !kept
+            });
         }
         let air = self.world.air;
         let broke = !removed.is_empty();
@@ -3228,6 +3246,7 @@ impl Crystal {
     pub(super) fn from_nbt(tag: &Tag, time: i32) -> Option<Self> {
         let (position, _, _) = horizon_client::entity_nbt::boat_from_nbt(tag)?;
         Some(Self {
+            join: Default::default(),
             id: 0,
             position,
             show_bottom: !matches!(tag.get("ShowBottom"), Some(Tag::Byte(0))),
@@ -3420,6 +3439,7 @@ impl Game<'_> {
         // the crystal is an entity a command can name (`@e[type=end_crystal]`).
         self.next_entity += 1;
         self.crystals.push(Crystal {
+            join: Default::default(),
             id: self.next_entity,
             position: Vec3::new(x + 0.5, y, z + 0.5),
             show_bottom: false,
@@ -3704,6 +3724,7 @@ impl Game<'_> {
             .retain(|c| c.position.distance_squared(at) > 0.01);
         let time = self.world.random.next_int_bound(100_000).unwrap_or(0);
         self.crystals.push(Crystal {
+            join: Default::default(),
             id: 0,
             position: at,
             show_bottom: true,
@@ -3752,7 +3773,9 @@ impl Game<'_> {
     fn create_new_dragon(&mut self) {
         let yaw = self.world.random.next_float() * 360.0;
         let seed = self.world.random.next_long();
-        self.dragon = Some(Dragon::new(Vec3::new(0.0, 128.0, 0.0), yaw, seed));
+        let mut dragon = Dragon::new(Vec3::new(0.0, 128.0, 0.0), yaw, seed);
+        dragon.join = horizon_client::join_seq::JoinSeq::next();
+        self.dragon = Some(dragon);
     }
     /// The END stage: the portal crystals blow up (no block damage) and a
     /// new dragon takes over.
@@ -3865,6 +3888,7 @@ impl Game<'_> {
         let mut d = Dragon::new(at, yaw, i64::from(id));
         d.id = id as u32;
         d.phase = Phase::from_id(10);
+        d.join = horizon_client::join_seq::JoinSeq::next();
         self.dragon = Some(d);
         self.place_dragon_parts();
         if let Some(d) = self.dragon.as_mut() {

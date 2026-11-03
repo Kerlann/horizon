@@ -233,6 +233,8 @@ struct BlockFile {
     wood_type: Option<String>,
     #[serde(default)]
     wall_block: Option<String>,
+    #[serde(default)]
+    base_block: Option<String>,
     #[serde(default = "yes")]
     item: bool,
     #[serde(default)]
@@ -279,6 +281,8 @@ pub struct Block {
     /// template is the matching wall sign and which has no item. The
     /// template's when unset.
     pub wall_block: Option<String>,
+    /// The block farmland turns into; the template's base when unset.
+    pub base_block: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -485,11 +489,7 @@ impl Content {
         declared: &[String],
     ) -> Result<Content, String> {
         let (source, sized) = if path.is_dir() {
-            let mut out = Vec::new();
-            for top in ["assets", "data"] {
-                walk(path, &path.join(top), &mut out)?;
-            }
-            (Source::Dir(path.to_owned()), out)
+            (Source::Dir(path.to_owned()), folder_files(path)?)
         } else {
             let mut zip = open_zip(path)?;
             let mut out = Vec::new();
@@ -742,6 +742,7 @@ impl Content {
                 thickness: file.thickness,
                 wood_type: file.wood_type,
                 wall_block: file.wall_block,
+                base_block: file.base_block,
             };
             check_block(&block).map_err(|e| format!("{name}: {e}"))?;
             if block.item {
@@ -1029,6 +1030,14 @@ fn check_block(file: &Block) -> Result<(), String> {
         }
         _ => {}
     }
+    if let Some(base) = &file.base_block {
+        if file.template != "minecraft:farmland" {
+            return Err("base_block needs template minecraft:farmland".into());
+        }
+        if !namespaced_id(base) {
+            return Err("base_block is a block id, namespace:path".into());
+        }
+    }
     // Every vanilla `SignBlock`'s id ends in `_sign`, and no other block's does.
     let sign = file.template.ends_with("_sign");
     if let Some(wood) = &file.wood_type {
@@ -1102,12 +1111,29 @@ fn open_zip(path: &Path) -> Result<zip::ZipArchive<std::fs::File>, String> {
 
 /// Files under `dir`, relative to `root` with `/` separators. Symbolic links
 /// are not followed: a mod folder holds its own files.
+pub(crate) fn folder_files(root: &Path) -> Result<Vec<(String, u64)>, String> {
+    let mut out = Vec::new();
+    for top in ["assets", "data"] {
+        walk(root, &root.join(top), &mut out)?;
+    }
+    Ok(out)
+}
+
 fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, u64)>) -> Result<(), String> {
-    let Ok(read) = std::fs::read_dir(dir) else {
-        return Ok(());
-    };
-    for entry in read.flatten() {
-        let path = entry.path();
+    match std::fs::symlink_metadata(dir) {
+        Ok(m) if !m.is_dir() => {
+            return Err(format!(
+                "{}: unsupported file type in a content mod",
+                dir.display()
+            ));
+        }
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("{}: {e}", dir.display())),
+    }
+    let read = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    for entry in read {
+        let path = entry.map_err(|e| e.to_string())?.path();
         let meta = std::fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
         if meta.is_dir() {
             walk(root, &path, out)?;
@@ -1116,6 +1142,11 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, u64)>) -> Result<(), Str
             let parts: Option<Vec<&str>> = rel.iter().map(|p| p.to_str()).collect();
             let name = parts.ok_or_else(|| format!("{} is not UTF-8", rel.display()))?;
             out.push((name.join("/"), meta.len()));
+        } else {
+            return Err(format!(
+                "{}: unsupported file type in a content mod",
+                path.display()
+            ));
         }
         if out.len() > MAX_FILES {
             return Err(format!("more than {MAX_FILES} content files"));
@@ -1320,6 +1351,7 @@ capabilities = ["registries"]
                 thickness: None,
                 wood_type: None,
                 wall_block: None,
+                base_block: None,
             }]
         );
         assert_eq!(content.items[0].id, "ruby:ruby");
@@ -1714,6 +1746,26 @@ capabilities = ["registries"]
                 format!(r#"{{"template": "minecraft:chorus_plant", "connects_to": "{tag}"}}"#);
             let e = block(&json).unwrap_err();
             assert!(e.contains("block tag"), "{tag}: {e}");
+        }
+    }
+
+    #[test]
+    fn farmland_base_requires_farmland_and_a_block_id() {
+        let block = |json: &str| {
+            hmod(
+                "farmland",
+                MANIFEST_TEXT,
+                &[("data/ruby/horizon/block/farm.json", json.as_bytes())],
+            )
+        };
+        let parsed =
+            block(r#"{"template":"minecraft:farmland","base_block":"ruby:soil"}"#).unwrap();
+        assert_eq!(parsed.blocks[0].base_block.as_deref(), Some("ruby:soil"));
+        for bad in [
+            r#"{"template":"minecraft:stone","base_block":"ruby:soil"}"#,
+            r#"{"template":"minecraft:farmland","base_block":"soil"}"#,
+        ] {
+            assert!(block(bad).unwrap_err().contains("base_block"));
         }
     }
 

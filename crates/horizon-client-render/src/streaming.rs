@@ -152,8 +152,7 @@ pub trait ChunkGenerator: Send + Sync + 'static {
     /// contents.
     fn final_block_entities(
         &self,
-        _proto: &Proto,
-        _writes: &[([i32; 3], u32)],
+        _entries: &[(&Proto, &[([i32; 3], u32)])],
     ) -> Vec<((i32, i32, i32), crate::chunk::block_entity::BlockEntity)> {
         Vec::new()
     }
@@ -1003,12 +1002,19 @@ impl<G: ChunkGenerator> Jobs<G> {
                 }
                 generator.decorate(&mut *worker, &mut region);
                 let mut writes = FinalWrites::default();
-                for (i, snapshot) in &finals {
-                    let blocks = generator.final_writes(snapshot, &region[*i]);
-                    writes
-                        .block_entities
-                        .extend(generator.final_block_entities(&region[*i], &blocks));
-                    writes.blocks.extend(blocks);
+                let blocks: [Vec<_>; 9] = std::array::from_fn(|n| {
+                    finals.get(n).map_or_else(Vec::new, |(i, snapshot)| {
+                        generator.final_writes(snapshot, &region[*i])
+                    })
+                });
+                let entries: Vec<_> = finals
+                    .iter()
+                    .zip(&blocks)
+                    .map(|((i, _), blocks)| (&region[*i], blocks.as_slice()))
+                    .collect();
+                writes.block_entities = generator.final_block_entities(&entries);
+                writes.blocks.extend(blocks.into_iter().flatten());
+                for (i, _) in &finals {
                     region[*i] = Box::new(());
                 }
                 let finals = finals.into_iter().map(|(i, _)| i).collect();
@@ -1294,18 +1300,20 @@ impl Streaming {
             self.submit(None, 0, Job::Free(meshes));
         }
     }
-    /// The columns the server unloaded (ClientboundForgetLevelChunkPacket),
-    /// often thousands at once (a teleport or a moved view): their pending
-    /// sections go through [`forget_pending_sections`]. Returns the chunks
-    /// they held.
-    pub fn forget_columns(
-        &mut self,
-        world: &mut World,
-        gone: &FxHashSet<(i32, i32)>,
-    ) -> Vec<Arc<Chunk>> {
+    /// Remove resident columns before clearing their streaming and level state.
+    pub fn take_remote_columns(world: &mut World, gone: &FxHashSet<(i32, i32)>) -> Vec<Arc<Chunk>> {
+        let mut chunks = Vec::with_capacity(gone.len());
+        for key in gone {
+            chunks.extend(world.chunks.remove(key));
+        }
+        chunks
+    }
+
+    /// Clear streaming state after resident remote columns have been removed.
+    pub fn forget_columns(&mut self, world: &mut World, gone: &FxHashSet<(i32, i32)>) {
         // Every column held (a far teleport): no pending section is left to keep, and a
         // pass over them all (80,000 at render distance 32) took 1.7 ms of the frame.
-        if world.chunks.keys().all(|column| gone.contains(column)) {
+        if world.chunks.is_empty() {
             self.meshing.clear();
             self.compile_started.clear();
             self.waiting.clear();
@@ -1318,15 +1326,12 @@ impl Streaming {
                 world.layout().sections() as i32,
             );
         }
-        let mut chunks = Vec::with_capacity(gone.len());
         for &(x, z) in gone {
             self.lit.remove(&(x, z));
             self.meshed.remove(&(x, z));
             self.lighting.remove(&(x, z));
             world.dirty_sections.take_column(x, z);
-            chunks.extend(world.chunks.remove(&(x, z)));
         }
-        chunks
     }
     /// Queue a job for the column `at`, nearest first: its distance (`distance`)
     /// times four plus `bias`, which orders a column's jobs. A job without a
@@ -2470,7 +2475,10 @@ impl Streaming {
             let written: Vec<(i32, i32)> = self.written.drain().collect();
             return SaveStep::Protos(self.checkout_protos(written));
         }
-        let aborted = self.shared.aborted.load(std::sync::atomic::Ordering::Relaxed);
+        let aborted = self
+            .shared
+            .aborted
+            .load(std::sync::atomic::Ordering::Relaxed);
         while (self.saving > 0)
             || (!aborted
                 && (self.decorating > 0 || !self.finishing.is_empty() || !self.viewing.is_empty()))
@@ -3316,6 +3324,24 @@ fn checkout_protos(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn taking_remote_columns_keeps_their_data_until_cleanup() {
+        let mut world = World::new(horizon_world::registry::BlockStateId(0), 0);
+        world.chunks.insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        world.chunks.insert((1, 0), Arc::new(Chunk::empty(1, 0)));
+        world
+            .block_entities
+            .insert((0, 64, 0), crate::containers::BlockEntity::Chest(vec![]));
+        let gone = [(0, 0), (2, 0)].into_iter().collect();
+        let chunks = Streaming::take_remote_columns(&mut world, &gone);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!((chunks[0].x, chunks[0].z), (0, 0));
+        assert!(!world.chunks.contains_key(&(0, 0)));
+        assert!(world.chunks.contains_key(&(1, 0)));
+        assert!(world.block_entities.contains_key(&(0, 64, 0)));
+        assert!(Streaming::take_remote_columns(&mut world, &gone).is_empty());
+    }
 
     #[test]
     #[ignore = "requires HORIZON_TEST_RESOURCES"]

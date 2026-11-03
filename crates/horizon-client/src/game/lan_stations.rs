@@ -629,8 +629,8 @@ impl Game<'_> {
                     pos: [pos.0, pos.1, pos.2],
                     id,
                 };
-                // As that player: `native_acting_player`, `native_acting_id`
-                // and `native_give_stack` answer for the one who pressed.
+                // As that player: `native_acting_player` and `native_acting_id`
+                // answer for the one who pressed.
                 self.as_guest(host, conn, |game| {
                     game.mod_menu_button(context, &mut carried)
                 });

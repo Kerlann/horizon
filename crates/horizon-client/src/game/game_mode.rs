@@ -34,7 +34,15 @@ impl Game<'_> {
     }
     /// `Abilities.mayBuild`.
     pub(super) fn may_build(&self) -> bool {
-        matches!(self.mode, GameMode::Survival | GameMode::Creative)
+        self.acting_abilities.map_or(
+            matches!(self.mode, GameMode::Survival | GameMode::Creative),
+            |a| a.may_build,
+        )
+    }
+    /// `Abilities.instabuild`. A client and the in-frame world derive it from the mode.
+    pub(super) fn instabuild(&self) -> bool {
+        self.acting_abilities
+            .map_or(self.creative, |a| a.instabuild)
     }
     pub(super) fn mode_id(&self) -> i32 {
         mode_id_of(self.mode)
@@ -53,6 +61,9 @@ impl Game<'_> {
         self.mode = mode;
         self.creative = mode == GameMode::Creative;
         // GameType.updatePlayerAbilities applies at once.
+        if let Some(a) = self.acting_abilities.as_mut() {
+            a.update_for_mode(mode_id_of(mode));
+        }
         if let Some(p) = self.player.as_mut() {
             p.invulnerable = mode == GameMode::Creative || mode == GameMode::Spectator;
             p.may_fly = p.invulnerable;
@@ -97,6 +108,9 @@ impl Game<'_> {
                 && let Some(p) = self.player.as_mut()
             {
                 p.flying = false;
+                if let Some(a) = self.acting_abilities.as_mut() {
+                    a.flying = false;
+                }
             }
         }
         if mode == GameMode::Spectator && self.screen == Screen::Inventory {

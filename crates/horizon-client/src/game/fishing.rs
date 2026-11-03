@@ -304,10 +304,7 @@ impl Game<'_> {
             damage = if hooked_item { 3 } else { 5 };
         } else if hook.nibble > 0 {
             let biome = self.biome_name_at(hook.position);
-            let Some(loot) = horizon_client::structure_blocks::loot_data(
-                &self.options.resources,
-                &self.pack_files(),
-            ) else {
+            let Some(loot) = self.server_loot.get() else {
                 return damage;
             };
             // `withLuck(this.luck + owner.getLuck())`: the rod's Luck of the Sea

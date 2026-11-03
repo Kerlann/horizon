@@ -1,32 +1,13 @@
-//! Fluids of a block for native server mods (docs/native-mods.md, API 54):
-//! the tanks a mod block declared through `native_block_entity_fluids`, and a
-//! cauldron, read through a side, filled and drained in millibuckets. They act
-//! where the world is simulated, never on a client's copy, and only on the
-//! level in place, which the readers name by their `dimension`
-//! (`minecraft:overworld`), as `native_set_block` does.
+//! The game's own answer to the fluid capability (`FLUIDS`, docs/native-mods.md): the tanks a
+//! mod block declared through `native_block_entity_fluids`, and a cauldron, read through a
+//! side, filled and drained in millibuckets. They act where the world is simulated, never on a
+//! client's copy, and only on the level in place.
 use super::Game;
 use horizon_client::containers::{BlockEntity, ModFluidTanks};
-use horizon_client::mod_api::{self, BlockSide, Capability, FluidHandler, FluidStack, Host};
+use horizon_client::mod_api::{BlockSide, FluidStack, Transaction};
 use horizon_core::geometry::Direction;
 use horizon_world::nbt::{Compound, JavaString, Tag};
 use std::sync::Arc;
-
-/// A tank as a side reaches it (`native_fluid_tanks`).
-#[allow(dead_code)]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct NativeFluidTank {
-    /// Its number, for the mod's own use.
-    pub(crate) tank: usize,
-    /// `minecraft:water` or `minecraft:lava`; none when the tank is empty.
-    pub(crate) fluid: Option<String>,
-    /// In millibuckets: a bucket is a thousand.
-    pub(crate) amount: i32,
-    pub(crate) capacity: i32,
-    /// Whether a fill may reach it through this side.
-    pub(crate) can_fill: bool,
-    /// Whether a drain may take it through this side.
-    pub(crate) can_drain: bool,
-}
 
 /// A cauldron level's contents: level `level` holds `level * 1000 / 3`
 /// millibuckets (`LayeredCauldronBlock` has no finer unit than a bottle's
@@ -201,11 +182,10 @@ fn write_tanks(nbt: &mut Compound, tanks: &[Tank]) {
 // Native mods use these; nothing in Horizon does.
 #[allow(dead_code)]
 impl Game<'_> {
-    /// What holds fluids at `pos` in the level in place, `dimension`: a mod
-    /// block's tanks (its block entity's, and not the placeholder standing in
-    /// while it ticks), or a cauldron.
-    fn native_fluid_at(&self, dimension: &str, pos: [i32; 3]) -> Option<FluidAt> {
-        if !self.native_simulates() || dimension != self.dim.id() {
+    /// What holds fluids at `pos` in the level in place: a mod block's tanks (its block
+    /// entity's, and not the placeholder standing in while it ticks), or a cauldron.
+    fn native_fluid_at(&self, pos: [i32; 3]) -> Option<FluidAt> {
+        if !self.native_simulates() {
             return None;
         }
         let key = (pos[0], pos[1], pos[2]);
@@ -252,23 +232,6 @@ impl Game<'_> {
             Err(_) => false,
         }
     }
-    /// The fluid handler a mod's provider gives for the mod block entity at `pos` through
-    /// `side`, where it comes before the game's own tanks or the game has none there. With no
-    /// fluid provider registered, one table check.
-    fn fluid_part_at(
-        &mut self,
-        pos: [i32; 3],
-        side: Direction,
-    ) -> Option<Capability<dyn FluidHandler>> {
-        let at = BlockSide {
-            level: self.native_level_here()?,
-            pos,
-            side: Some(side),
-        };
-        let providers = mod_api::block_entity_providers(&mod_api::FLUIDS, self, at)?;
-        let game = self.native_fluid_tank_count(at).is_some();
-        providers.ask(self, game)
-    }
     /// The saved tanks of the mod block entity at `pos`, `n` of them.
     fn tank_state(&self, pos: [i32; 3], n: usize) -> Option<Vec<Tank>> {
         match self.world.block_entities.get(&(pos[0], pos[1], pos[2]))? {
@@ -290,11 +253,11 @@ impl Game<'_> {
         if !self.native_level_in_place(at.level) {
             return None;
         }
-        self.native_fluid_at(self.dim.id(), at.pos)
+        self.native_fluid_at(at.pos)
     }
     /// How many tanks of the block at `at` in the level in place its side reaches
     /// (none: every tank), for the game's own fluid capability: a mod block's by its table, a
-    /// cauldron's one. None where no tanks are, as `native_fluid_tanks`.
+    /// cauldron's one. None where no tanks are.
     pub(in crate::game) fn native_fluid_tank_count(&self, at: BlockSide) -> Option<usize> {
         match self.capability_tanks(at)? {
             FluidAt::Mod(tanks) => Some(side_tanks(&tanks, at.side).len()),
@@ -347,15 +310,16 @@ impl Game<'_> {
     /// Puts as much of `fluid` as tank `tank` of those `at`'s side reaches takes: a mod
     /// block's fillable tank, empty or holding that fluid, up to its capacity; a cauldron by
     /// whole thirds, lava only whole into an empty one, discarding the fluid's components as
-    /// NeoForge's `CauldronFluidContent` does. What didn't fit. `simulate` changes
-    /// nothing and answers as the real call.
+    /// NeoForge's `CauldronFluidContent` does. What didn't fit. The write is kept by
+    /// transaction `tx`.
     pub(in crate::game) fn native_fluid_tank_insert(
         &mut self,
         at: BlockSide,
         tank: usize,
         fluid: FluidStack,
-        simulate: bool,
+        tx: &Transaction,
     ) -> Option<FluidStack> {
+        let _ = tx;
         if fluid.amount == 0 {
             return None;
         }
@@ -376,7 +340,7 @@ impl Game<'_> {
                     return Some(fluid);
                 }
                 let add = (tanks.tanks[real] - entry.1).clamp(0, amount);
-                if add > 0 && !simulate {
+                if add > 0 {
                     entry.0 = Some(fluid.fluid.to_string());
                     entry.1 += add;
                     self.set_tank_state(at.pos, &state);
@@ -384,7 +348,7 @@ impl Game<'_> {
                 add
             }
             Some(FluidAt::Cauldron(kind)) if tank == 0 => match kind.fill(&fluid.fluid, amount) {
-                Some((took, to)) if simulate || self.cauldron_set(at.pos, to) => took,
+                Some((took, to)) if self.cauldron_set(at.pos, to) => took,
                 _ => 0,
             },
             _ => 0,
@@ -393,15 +357,16 @@ impl Game<'_> {
         (rest > 0).then(|| fluid.with_amount(rest))
     }
     /// Takes up to `max` out of tank `tank` of those `at`'s side reaches: a mod block's
-    /// drainable tank, a cauldron by whole thirds and lava only whole. What came out.
-    /// `simulate` changes nothing and answers as the real call.
+    /// drainable tank, a cauldron by whole thirds and lava only whole. What came out. The
+    /// write is kept by transaction `tx`.
     pub(in crate::game) fn native_fluid_tank_extract(
         &mut self,
         at: BlockSide,
         tank: usize,
         max: u32,
-        simulate: bool,
+        tx: &Transaction,
     ) -> Option<FluidStack> {
+        let _ = tx;
         let max = mb(max);
         match self.capability_tanks(at)? {
             FluidAt::Mod(tanks) => {
@@ -413,489 +378,26 @@ impl Game<'_> {
                 let entry = &mut state[real];
                 let take = entry.1.clamp(0, max);
                 let fluid = entry.0.clone().filter(|_| take > 0)?;
-                if !simulate {
-                    entry.1 -= take;
-                    if entry.1 == 0 {
-                        entry.0 = None;
-                    }
-                    self.set_tank_state(at.pos, &state);
+                entry.1 -= take;
+                if entry.1 == 0 {
+                    entry.0 = None;
                 }
+                self.set_tank_state(at.pos, &state);
                 Some(FluidStack::new(&fluid, take.unsigned_abs()))
             }
             FluidAt::Cauldron(kind) if tank == 0 => {
                 let (fluid, took, to) = kind.drain(max)?;
-                (simulate || self.cauldron_set(at.pos, to))
+                self.cauldron_set(at.pos, to)
                     .then(|| FluidStack::new(fluid, took.unsigned_abs()))
             }
             FluidAt::Cauldron(_) => None,
         }
-    }
-    /// `native_fluid_insert`: up to `amount` millibuckets of `fluid`
-    /// (`minecraft:water`, `minecraft:lava`) into the block at `pos`, through
-    /// its side `face`, in the level in place: a mod block's tanks first
-    /// those with the same fluid, then empty ones, by the sides and tanks its
-    /// table gave; a cauldron by thirds of a bucket, a lava one only whole.
-    /// What did not fit. API 54.
-    pub(in crate::game) fn native_fluid_insert(
-        &mut self,
-        pos: [i32; 3],
-        face: Direction,
-        fluid: &str,
-        amount: i32,
-    ) -> i32 {
-        if fluid != "minecraft:water" && fluid != "minecraft:lava" {
-            return amount;
-        }
-        if !self.native_simulates() {
-            return amount;
-        }
-        if let Some(part) = self.fluid_part_at(pos, face) {
-            if amount <= 0 {
-                return amount;
-            }
-            let host: &mut dyn Host = self;
-            let mut left = FluidStack::new(fluid, amount.unsigned_abs());
-            for tank in 0..part.tanks(host, pos, Some(face)) {
-                if left.amount == 0 {
-                    break;
-                }
-                let given = left.amount;
-                let rest = part.insert(host, pos, Some(face), tank, left.clone(), false);
-                left.amount = rest.map_or(0, |rest| rest.amount.min(given));
-            }
-            return mb(left.amount);
-        }
-        match self.native_fluid_at(self.dim.id(), pos) {
-            Some(FluidAt::Mod(tanks)) => {
-                let key = (pos[0], pos[1], pos[2]);
-                let n = tanks.tanks.len();
-                let reached = tanks.faces[face as usize].clone();
-                let mut state = {
-                    let Some(horizon_client::containers::BlockEntity::Mod(m)) =
-                        self.world.block_entities.get(&key)
-                    else {
-                        return amount;
-                    };
-                    read_tanks(&m.nbt, n)
-                };
-                let mut left = amount.max(0);
-                // First into tanks holding the same fluid, then into empty
-                // ones, as `HopperBlockEntity.addItem` tries its slots.
-                for pass in 0..2 {
-                    for &tank in &reached {
-                        if left == 0 || !tanks.inputs.contains(&tank) || tank >= n {
-                            continue;
-                        }
-                        let entry = &mut state[tank];
-                        let fits = match pass {
-                            0 => entry.0.as_deref() == Some(fluid),
-                            _ => entry.0.is_none(),
-                        };
-                        if !fits {
-                            continue;
-                        }
-                        let room = tanks.tanks[tank] - entry.1;
-                        if room <= 0 {
-                            continue;
-                        }
-                        let add = room.min(left);
-                        entry.1 += add;
-                        left -= add;
-                        entry.0 = Some(fluid.to_owned());
-                    }
-                }
-                if left < amount {
-                    let Some(horizon_client::containers::BlockEntity::Mod(m)) =
-                        self.world.block_entities.get_mut(&key)
-                    else {
-                        return amount;
-                    };
-                    write_tanks(&mut m.nbt, &state);
-                    self.world.modified.insert((key.0 >> 4, key.2 >> 4));
-                }
-                left
-            }
-            Some(FluidAt::Cauldron(kind)) => match kind.fill(fluid, amount) {
-                Some((took, to)) if self.cauldron_set(pos, to) => amount - took,
-                _ => amount,
-            },
-            None => amount,
-        }
-    }
-    /// The tanks of the block at `pos` in the level in place, `dimension`,
-    /// that its side `face` reaches, with their fluids and amounts. None
-    /// where no tanks are: another dimension, a chunk that isn't loaded, a
-    /// block without tanks, or the mod block entity ticking now (it's out of
-    /// the world). A cauldron reads as one tank of a bucket's capacity. API 54.
-    pub(in crate::game) fn native_fluid_tanks(
-        &mut self,
-        dimension: &str,
-        pos: [i32; 3],
-        face: Direction,
-    ) -> Option<Vec<NativeFluidTank>> {
-        // Before any provider is asked: a request for another level isn't about this one's
-        // block at `pos`.
-        if !self.native_simulates() || dimension != self.dim.id() {
-            return None;
-        }
-        if let Some(part) = self.fluid_part_at(pos, face) {
-            let host: &mut dyn Host = self;
-            let side = Some(face);
-            let tanks = (0..part.tanks(host, pos, side)).map(|tank| {
-                let fluid = part.fluid(host, pos, side, tank);
-                let probe = fluid
-                    .clone()
-                    .unwrap_or_else(|| FluidStack::new("minecraft:water", 0));
-                let capacity = mb(part.capacity(host, pos, side, tank, &probe));
-                let amount = fluid.as_ref().map_or(0, |fluid| mb(fluid.amount));
-                NativeFluidTank {
-                    tank,
-                    fluid: fluid.map(|fluid| fluid.fluid.to_string()),
-                    amount,
-                    capacity,
-                    can_fill: capacity > amount,
-                    can_drain: amount > 0,
-                }
-            });
-            return Some(tanks.collect());
-        }
-        match self.native_fluid_at(dimension, pos)? {
-            FluidAt::Mod(tanks) => {
-                let key = (pos[0], pos[1], pos[2]);
-                let state = {
-                    let Some(horizon_client::containers::BlockEntity::Mod(m)) =
-                        self.world.block_entities.get(&key)
-                    else {
-                        return None;
-                    };
-                    read_tanks(&m.nbt, tanks.tanks.len())
-                };
-                Some(
-                    tanks.faces[face as usize]
-                        .iter()
-                        .map(|&tank| {
-                            let (ref fluid, amount) = state[tank];
-                            NativeFluidTank {
-                                tank,
-                                fluid: fluid.clone(),
-                                amount,
-                                capacity: tanks.tanks[tank],
-                                can_fill: tanks.inputs.contains(&tank),
-                                can_drain: tanks.outputs.contains(&tank),
-                            }
-                        })
-                        .collect(),
-                )
-            }
-            FluidAt::Cauldron(kind) => {
-                let (fluid, amount, can_fill) = match kind {
-                    CauldronFluids::Empty => (None, 0, true),
-                    CauldronFluids::Water(level) => {
-                        (Some("minecraft:water"), third(level), level < 3)
-                    }
-                    CauldronFluids::Lava => (Some("minecraft:lava"), 1000, false),
-                };
-                Some(vec![NativeFluidTank {
-                    tank: 0,
-                    fluid: fluid.map(str::to_owned),
-                    amount,
-                    capacity: 1000,
-                    can_fill,
-                    can_drain: amount > 0,
-                }])
-            }
-        }
-    }
-    /// Takes up to `amount` millibuckets out of the block at `pos` in the
-    /// level in place, `dimension`, through its side `face`: a mod block's
-    /// drainable tanks, one fluid only (the first that's there), or a
-    /// cauldron, which drains in thirds of a bucket and a lava one only
-    /// whole. The fluid and how much; none when the side reaches nothing.
-    /// API 54.
-    pub(in crate::game) fn native_fluid_extract(
-        &mut self,
-        dimension: &str,
-        pos: [i32; 3],
-        face: Direction,
-        amount: i32,
-    ) -> Option<(String, i32)> {
-        if !self.native_simulates() || dimension != self.dim.id() || amount <= 0 {
-            return None;
-        }
-        if let Some(part) = self.fluid_part_at(pos, face) {
-            let host: &mut dyn Host = self;
-            let out = host.drain_one_named_fluid(&part, pos, Some(face), amount.unsigned_abs());
-            return out.map(|out| (out.fluid.to_string(), mb(out.amount)));
-        }
-        self.fluid_take(dimension, pos, face, amount)
-            .map(|(fluid, taken, _)| (fluid, taken))
-    }
-    /// `native_fluid_extract`'s drain, remembering what left which tank, so a
-    /// move can put it back without the fill sides' leave: an empty list is a
-    /// cauldron, whose own fill takes it back.
-    fn fluid_take(
-        &mut self,
-        dimension: &str,
-        pos: [i32; 3],
-        face: Direction,
-        amount: i32,
-    ) -> Option<(String, i32, Vec<(usize, i32)>)> {
-        if amount <= 0 {
-            return None;
-        }
-        match self.native_fluid_at(dimension, pos)? {
-            FluidAt::Mod(tanks) => {
-                let key = (pos[0], pos[1], pos[2]);
-                let n = tanks.tanks.len();
-                let mut state = {
-                    let Some(horizon_client::containers::BlockEntity::Mod(m)) =
-                        self.world.block_entities.get(&key)
-                    else {
-                        return None;
-                    };
-                    read_tanks(&m.nbt, n)
-                };
-                // The first drainable tank's fluid is all this call takes.
-                let fluid: Option<String> = tanks.faces[face as usize]
-                    .iter()
-                    .filter(|&&tank| tanks.outputs.contains(&tank) && tank < n)
-                    .find(|&&tank| state[tank].1 > 0)
-                    .map(|&tank| state[tank].0.clone())?;
-                let mut want = amount;
-                let mut out = Vec::new();
-                for &tank in &tanks.faces[face as usize] {
-                    if want == 0 || !tanks.outputs.contains(&tank) || tank >= n {
-                        continue;
-                    }
-                    if state[tank].0 != fluid {
-                        continue;
-                    }
-                    let take = want.min(state[tank].1);
-                    state[tank].1 -= take;
-                    if state[tank].1 == 0 {
-                        state[tank].0 = None;
-                    }
-                    want -= take;
-                    out.push((tank, take));
-                }
-                let taken = amount - want;
-                if taken == 0 {
-                    return None;
-                }
-                let Some(horizon_client::containers::BlockEntity::Mod(m)) =
-                    self.world.block_entities.get_mut(&key)
-                else {
-                    return None;
-                };
-                write_tanks(&mut m.nbt, &state);
-                self.world.modified.insert((key.0 >> 4, key.2 >> 4));
-                Some((fluid?, taken, out))
-            }
-            // A cauldron has no finer unit than its bottle's third, and never hands out more
-            // than was asked: less than the topmost whole third gives nothing.
-            FluidAt::Cauldron(kind) => {
-                let (fluid, taken, to) = kind.drain(amount)?;
-                self.cauldron_set(pos, to)
-                    .then(|| (fluid.to_owned(), taken, Vec::new()))
-            }
-        }
-    }
-    /// Moves up to `max` millibuckets from the block at `from`, through its
-    /// side `from_face`, into the one at `to`, through its side `to_face`, as
-    /// `native_move_items` moves items: what the target won't take goes back
-    /// into the source, so none is lost — a cauldron's whole thirds included.
-    /// The fluid and how much moved; none where `native_fluid_tanks` is none
-    /// at `from`, where nothing drainable is, where no block holds fluids at
-    /// `to` or it has no room for that fluid, and within one block. The
-    /// source is asked for no more than the target's room. API 55.
-    pub(in crate::game) fn native_move_fluids(
-        &mut self,
-        dimension: &str,
-        from: [i32; 3],
-        from_face: Direction,
-        to: [i32; 3],
-        to_face: Direction,
-        max: i32,
-    ) -> Option<(String, i32)> {
-        if from == to || !self.native_simulates() || dimension != self.dim.id() || max <= 0 {
-            return None;
-        }
-        if self.fluid_part_at(from, from_face).is_some()
-            || self.fluid_part_at(to, to_face).is_some()
-        {
-            let level = self.native_level_here()?;
-            let end = |pos, face| BlockSide {
-                level,
-                pos,
-                side: Some(face),
-            };
-            let (from, to) = (end(from, from_face), end(to, to_face));
-            let host: &mut dyn Host = self;
-            // These helpers name a fluid by its id, so fluids with components stay put.
-            let plain = |fluid: &FluidStack| !fluid.has_components();
-            let moved = host.transfer_fluids_where(from, to, max.unsigned_abs(), &plain)?;
-            return Some((moved.fluid.to_string(), mb(moved.amount)));
-        }
-        // Ask the source for no more than the target has room for: a
-        // cauldron drains in whole thirds and fills back only by them, so a
-        // part the target refused couldn't always go back.
-        let max = max.min(self.fluid_room(dimension, from, from_face, to, to_face)?);
-        let (fluid, taken, receipt) = self.fluid_take(dimension, from, from_face, max)?;
-        let left = self.native_fluid_insert(to, to_face, &fluid, taken);
-        if left > 0 {
-            // What the target wouldn't take goes back where it came from,
-            // past the fill sides' leave: the tanks just gave it up, so they
-            // have the room, and a cauldron levels back up by the thirds it
-            // gave. What came back isn't moved: the answer is what the
-            // target kept.
-            let all_back = if receipt.is_empty() {
-                self.native_fluid_insert(from, from_face, &fluid, left) == 0
-            } else {
-                self.fluid_return(dimension, from, &fluid, left, &receipt)
-            };
-            if !all_back {
-                log::warn!("Horizon: a fluid move left {left} mB of {fluid} nowhere to go");
-            }
-        }
-        Some((fluid, taken - left))
-    }
-    /// How much of the fluid `from`'s side `from_face` would give first fits
-    /// into `to` through `to_face`: the room of its fillable tanks holding
-    /// that fluid or none. None when `from` gives nothing or `to` holds no
-    /// fluids.
-    fn fluid_room(
-        &mut self,
-        dimension: &str,
-        from: [i32; 3],
-        from_face: Direction,
-        to: [i32; 3],
-        to_face: Direction,
-    ) -> Option<i32> {
-        let fluid = self
-            .native_fluid_tanks(dimension, from, from_face)?
-            .into_iter()
-            .find(|t| t.can_drain && t.amount > 0)?
-            .fluid?;
-        let room = self
-            .native_fluid_tanks(dimension, to, to_face)?
-            .iter()
-            .filter(|t| t.can_fill && t.fluid.as_deref().is_none_or(|f| f == fluid))
-            .fold(0_i32, |room, t| {
-                room.saturating_add((t.capacity - t.amount).max(0))
-            });
-        Some(room)
-    }
-    /// Puts `amount` of `fluid` back into the tanks `receipt` names, drained
-    /// moments ago: their room is exactly what left them. Whether it all went
-    /// back.
-    fn fluid_return(
-        &mut self,
-        dimension: &str,
-        pos: [i32; 3],
-        fluid: &str,
-        mut amount: i32,
-        receipt: &[(usize, i32)],
-    ) -> bool {
-        let Some(FluidAt::Mod(tanks)) = self.native_fluid_at(dimension, pos) else {
-            return false;
-        };
-        let key = (pos[0], pos[1], pos[2]);
-        let Some(horizon_client::containers::BlockEntity::Mod(m)) =
-            self.world.block_entities.get_mut(&key)
-        else {
-            return false;
-        };
-        // The declared count, as `fluid_take` read them: a shorter read
-        // would write the other tanks away.
-        let n = tanks.tanks.len();
-        let mut state = read_tanks(&m.nbt, n);
-        for &(tank, took) in receipt {
-            let give = took.min(amount);
-            if give <= 0 || tank >= n {
-                continue;
-            }
-            state[tank].1 += give;
-            state[tank].0 = Some(fluid.to_owned());
-            amount -= give;
-        }
-        write_tanks(&mut m.nbt, &state);
-        self.world.modified.insert((key.0 >> 4, key.2 >> 4));
-        amount == 0
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
-    fn a_fluid_request_for_another_level_asks_no_provider() {
-        use crate::game::{Audio, Options, Progress, Settings, load_resources};
-        use horizon_client::chunk::Chunk;
-        use horizon_client::containers::{ModBlockEntity, ModBlockEntityFields};
-        use horizon_client::mod_api::part_tests::{FLUIDS_ASKED, game_thread};
-        use std::sync::atomic::Ordering;
-        let _mods = game_thread();
-        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
-        let settings = Settings::default();
-        let loaded = load_resources(
-            root.clone(),
-            None,
-            &root,
-            &settings,
-            std::time::Instant::now(),
-            false,
-            true,
-            &Progress::new(),
-            &mut |_, _| unreachable!(),
-        )
-        .unwrap();
-        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
-        options.resources = root.clone();
-        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-        options.dedicated = Some(Vec::new());
-        let mut game = Game::new(
-            &loaded.resources,
-            loaded.pack,
-            loaded.gui.unwrap(),
-            options,
-            settings,
-            Audio::silent(&root),
-            None,
-        )
-        .unwrap();
-        game.world
-            .chunks
-            .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-        game.native_lifecycle
-            .begin_open(horizon_client::mod_api::NativeAuthority::IntegratedServer);
-        // A mod block entity whose type has a fluid provider, which counts each time it's asked.
-        let counted = ModBlockEntity::new(ModBlockEntityFields {
-            id: "test:counted".into(),
-            ..Default::default()
-        });
-        game.world
-            .block_entities
-            .insert((1, 64, 1), BlockEntity::Mod(Box::new(counted)));
-        let (pos, face) = ([1, 64, 1], Direction::North);
-        let nether = "minecraft:the_nether";
-        let before = FLUIDS_ASKED.load(Ordering::Relaxed);
-        assert!(game.native_fluid_tanks(nether, pos, face).is_none());
-        assert!(game.native_fluid_extract(nether, pos, face, 1000).is_none());
-        let to = [2, 64, 1];
-        assert!(
-            game.native_move_fluids(nether, pos, face, to, face, 1000)
-                .is_none()
-        );
-        assert_eq!(FLUIDS_ASKED.load(Ordering::Relaxed), before);
-        // Asked about the level in place, the provider is reached.
-        assert!(
-            game.native_fluid_tanks("minecraft:overworld", pos, face)
-                .is_none()
-        );
-        assert_eq!(FLUIDS_ASKED.load(Ordering::Relaxed), before + 1);
-    }
 
     #[test]
     fn a_cauldron_level_holds_a_third_of_a_bucket() {
@@ -974,6 +476,43 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_cauldron_move_the_target_takes_part_of_gives_the_whole_levels_that_fit() {
+        use super::super::super::native_entity_refs::tests::with_game;
+        use horizon_client::chunk::Chunk;
+        use horizon_client::mod_api::{FLUIDS, Host, NativeBlockUpdateFlags, move_resources};
+        with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let level = game.native_level("minecraft:overworld").unwrap();
+            let water = |game: &Game<'_>, n: u8| {
+                let state = horizon_world::chunk::BlockState {
+                    name: "minecraft:water_cauldron".to_owned(),
+                    properties: [("level".to_owned(), n.to_string())].into_iter().collect(),
+                };
+                game.pack.assets.registry.resolve(&state).unwrap()
+            };
+            let (full, one) = (water(game, 3), water(game, 1));
+            let (from, to) = ([0, 64, 0], [2, 64, 0]);
+            let flags = NativeBlockUpdateFlags::NEIGHBORS;
+            assert!(game.native_level_set_block(level, from, full, flags));
+            assert!(game.native_level_set_block(level, to, one, flags));
+            // The target has room for two levels: the bucket the source first gives doesn't
+            // fit, so the move is undone and tried again with what fit, two levels' worth.
+            let host: &mut dyn Host = game;
+            let source = level.capability(host, &FLUIDS, from, None).unwrap();
+            let target = level.capability(host, &FLUIDS, to, None).unwrap();
+            let moved = host
+                .transaction(|host, tx| move_resources(host, &source, &target, |_| true, 1000, tx));
+            assert_eq!(moved, Ok(667));
+            assert_eq!(game.world.block(from[0], from[1], from[2]), one);
+            assert_eq!(game.world.block(to[0], to[1], to[2]), full);
+        });
+    }
+
+    #[test]
     fn a_cauldron_takes_water_and_lava_whatever_their_components_and_a_mod_tank_none_with_them() {
         use super::{CauldronFluids, FluidAt, FluidStack, game_holds};
         let potion = |fluid| FluidStack {
@@ -1034,34 +573,6 @@ mod tests {
             read_tanks(&nbt, 1),
             tanks(&[(Some("minecraft:water"), 4000)])
         );
-    }
-
-    #[test]
-    fn a_receipts_room_is_what_left_its_tanks() {
-        // The bookkeeping a move's put-back trusts: a receipt never names
-        // more than its tanks held, so returning it always fits.
-        let receipt = vec![(1usize, 333i32), (2, 100)];
-        let held = tanks(&[
-            (None, 0),
-            (Some("minecraft:water"), 333),
-            (Some("minecraft:water"), 100),
-        ]);
-        assert!(receipt.iter().all(|&(tank, took)| took <= held[tank].1));
-        let mut after = held.clone();
-        for &(tank, took) in &receipt {
-            after[tank].1 -= took;
-            if after[tank].1 == 0 {
-                after[tank].0 = None;
-            }
-        }
-        assert_eq!(after, tanks(&[(None, 0), (None, 0), (None, 0)]));
-        // And putting it back restores exactly what was there.
-        let mut back = after;
-        for &(tank, took) in &receipt {
-            back[tank].1 += took;
-            back[tank].0 = Some("minecraft:water".to_owned());
-        }
-        assert_eq!(back, held);
     }
 
     #[test]

@@ -35,8 +35,8 @@ struct Entry {
 pub(super) struct Stuck {
     pub(super) arrows: i32,
     pub(super) stingers: i32,
-    remove_arrow_time: i32,
-    remove_stinger_time: i32,
+    pub(super) remove_arrow_time: i32,
+    pub(super) remove_stinger_time: i32,
 }
 /// Who `LivingEntity.resolvePlayerResponsibleForDamage` credits: a player by
 /// entity id, or the owner of a tamed animal by UUID.
@@ -95,9 +95,9 @@ impl Stuck {
     fn decay(count: &mut i32, remove_time: &mut i32) {
         if *count > 0 {
             if *remove_time <= 0 {
-                *remove_time = 20 * (30 - *count);
+                *remove_time = 20i32.wrapping_mul(30i32.wrapping_sub(*count));
             }
-            *remove_time -= 1;
+            *remove_time = remove_time.wrapping_sub(1);
             if *remove_time <= 0 {
                 *count -= 1;
             }

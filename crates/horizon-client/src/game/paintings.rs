@@ -152,6 +152,7 @@ impl Game<'_> {
             hit.pos[2] + hit.face[2],
         ];
         let mut candidate = Painting {
+            join: Default::default(),
             id: self.next_entity.wrapping_add(1),
             pos,
             facing,
@@ -195,6 +196,7 @@ impl Game<'_> {
         ];
         self.next_entity += 1;
         let mut candidate = Painting {
+            join: Default::default(),
             id: self.next_entity,
             pos,
             facing,

@@ -21,7 +21,7 @@ impl dyn Host + '_ {
     /// unwinding out of `f` aborts this transaction as it passes, so whoever catches it sees
     /// nothing `f` changed, and the transaction around it stays open.
     ///
-    /// Covered: block entities (item slots, saved compound and attachments), cauldrons,
+    /// Covered: block entities (item slots, saved compound, custom name and attachments), cauldrons,
     /// players' inventories and cursors, entities' inventories
     /// ([`ItemPlace::EntitySlot`](super::ItemPlace::EntitySlot)) and item entities' stacks.
     pub fn transaction<T, E>(
