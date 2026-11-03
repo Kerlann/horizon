@@ -3893,18 +3893,6 @@
       }
     },
     {
-      "name": "player_spawn_point_set",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_player_spawn_point_set",
-      "neoforge": "none (NeoForge has no such event; Bukkit's PlayerSpawnChangeEvent)",
-      "side": "server",
-      "cancellable": true,
-      "mod_api": {
-        "contract": "cancel",
-        "out": "cancel"
-      }
-    },
-    {
       "name": "player_stat_award",
       "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_player_stat_award",

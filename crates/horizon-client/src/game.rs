@@ -14706,14 +14706,8 @@ impl Game<'_> {
             let moved = self
                 .respawn_config
                 .is_none_or(|c| (c.dim, c.pos) != (config.dim, config.pos));
-            // `canSetSpawn` calls the setter every time, the same bed too (it
-            // refreshes the angle); `player_spawn_point_set` hears a move only.
-            let hear = if moved {
-                respawn_anchor::SpawnHear::Both
-            } else {
-                respawn_anchor::SpawnHear::New
-            };
-            let cancel = self.spawn_point_change(self.dim, head, true, false, "bed", hear);
+            // `canSetSpawn` calls the setter every time, the same bed too.
+            let cancel = self.spawn_point_change(self.dim, head, true, false);
             if !cancel {
                 self.respawn_config = Some(config);
                 if moved {

@@ -19,16 +19,6 @@ use horizon_core::{
 };
 use horizon_world::{collision_context::CollisionContext, registry::BlockStateId};
 
-/// Which spawn hooks a place fires. `player_spawn_point_set` is about a
-/// change (a bed only when it moved, and a missing respawn block);
-/// `player_set_spawn` is about every `setRespawnPosition` call.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum SpawnHear {
-    Both,
-    Old,
-    New,
-}
-
 /// `ServerPlayer.RespawnConfig`: a respawn point other than the world spawn
 /// that the game resolves through its block (a respawn anchor).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -178,31 +168,22 @@ impl Game<'_> {
     }
     /// The mods' say on a server player's respawn point about to change
     /// (`ServerPlayer.setRespawnPosition`) to `pos`, or cleared when `set` is
-    /// false (`pos` is then the old point). `player_spawn_point_set` (with
-    /// the `cause`) hears it, then `player_set_spawn`. True when either
-    /// canceled. `hear` says which of the two hooks the place fires.
+    /// false (`pos` is then the old point). Returns true when canceled.
     pub(super) fn spawn_point_change(
         &mut self,
         dim: Dim,
         pos: [i32; 3],
         set: bool,
         forced: bool,
-        cause: &str,
-        hear: SpawnHear,
     ) -> bool {
         let (Some(player), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone())
         else {
             return false;
         };
         let mut cancel = false;
-        if hear != SpawnHear::New {
-            self.native_player_spawn_point_set(player, &name, dim.id(), pos, cause, &mut cancel);
-        }
-        if hear != SpawnHear::Old {
-            let new = set.then_some(pos);
-            let id = self.own_entity_id();
-            self.native_player_set_spawn(player, id, &name, dim.id(), new, forced, &mut cancel);
-        }
+        let new = set.then_some(pos);
+        let id = self.own_entity_id();
+        self.native_player_set_spawn(player, id, &name, dim.id(), new, forced, &mut cancel);
         cancel
     }
     /// `RespawnAnchorBlock.useWithoutItem` on a charged anchor: outside the
@@ -223,14 +204,7 @@ impl Game<'_> {
             .respawn_config
             .is_some_and(|c| c.dim == config.dim && c.pos == config.pos);
         if !same {
-            if self.spawn_point_change(
-                self.dim,
-                pos,
-                true,
-                false,
-                "respawn_anchor",
-                SpawnHear::Both,
-            ) {
+            if self.spawn_point_change(self.dim, pos, true, false) {
                 return Ok(());
             }
             // setRespawnPosition(config, true): the message, the point; the

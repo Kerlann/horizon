@@ -1369,7 +1369,6 @@ API 275 adds A server player about to shear a sheep, mooshroom, snow golem or bo
 
 API 276 adds A server player's shield was disabled by a blocked melee hit: `native_player_shield_disable(player, name, ticks)` fires immediately before the shield cooldown is set. Bundles need "hooks": 276.
 
-API 277 adds A server player's respawn point about to change: `native_player_spawn_point_set(player, name, dimension, pos, cause, cancel)` is heard for `bed`, `respawn_anchor`, `command` and `death_reset`; `pos` is the block position. Set `cancel` to keep the old point. A canceled `death_reset` keeps the old point even if its bed or anchor is gone. The player's state is not swapped in, so helpers that look them up through `self.lan` may find nothing while a guest packet is handled. Bundles need "hooks": 277.
 
 API 278 adds A server player selected stonecutter recipe button `recipe`, after the menu accepted it: `native_player_stonecutter_recipe_select(player, name, recipe)`. Bundles need "hooks": 278.
 
@@ -1977,11 +1976,6 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
   server player through an advancement reward, a knowledge book or `/recipe give`. Set `cancel` to keep it locked;
   the client is sent the matching removal. The player's state is not swapped in, so helpers that look them up through
   `self.lan` may find nothing while a guest packet is being handled.
-- **`native_player_spawn_point_set(player, name, dimension, pos, cause, cancel)`**: a server player's respawn point
-  is about to change. `cause` is `bed`, `respawn_anchor`, `command` or `death_reset`; `pos` is its block position.
-  Set `cancel` to keep the old point. A canceled `death_reset` keeps the old point even if its bed or anchor is gone.
-  The player's state is not swapped in, so helpers that look them up through `self.lan` may find nothing while a guest
-  packet is being handled.
 - **`native_player_portal(player, name, from_dimension, to_dimension, cause, cancel)`**: a server player is about
   to travel through a Nether portal, End portal or End gateway; `cause` is `nether_portal`, `end_portal` or
   `end_gateway`. Set `cancel` to leave the player where they are. The player's state is not swapped in, so helpers that

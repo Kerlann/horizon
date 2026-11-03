@@ -20,7 +20,7 @@ mod test_runs;
 mod text_commands;
 mod world_cmds;
 
-use super::{Dim, Game, Screen, chat::PLAYER_NAME, respawn_anchor::SpawnHear};
+use super::{Dim, Game, Screen, chat::PLAYER_NAME};
 use horizon_client::{
     command::{
         Arg, CommandError, Context, Reader,
@@ -3191,7 +3191,7 @@ impl Game<'_> {
         let level = self.dim;
         for &t in &targets {
             self.for_player(t, |g| {
-                if g.spawn_point_change(level, pos, true, true, "command", SpawnHear::Both) {
+                if g.spawn_point_change(level, pos, true, true) {
                     return;
                 }
                 if level == Dim::Overworld {
