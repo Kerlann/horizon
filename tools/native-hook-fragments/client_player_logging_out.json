@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "client_player_logging_out",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_client_player_logging_out",
+      "neoforge": "ClientPlayerNetworkEvent.LoggingOut",
+      "side": "client",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "listen"
+      }
+    }
+  ],
+  "rust_summary": "a client player logging out (`native_client_player_logging_out`).",
+  "doc_summary": "a client player logging out: `native_client_player_logging_out(player_id, uuid)` is heard before client disconnect teardown. The player ID and UUID can be absent. Bundles that use it need `\"hooks\": @API:client_player_logging_out@`."
+}

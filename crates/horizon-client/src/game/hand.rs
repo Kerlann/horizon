@@ -375,14 +375,25 @@ impl Game<'_> {
     }
     /// `BlockBehaviour.getDestroyProgress` with `Player.getDestroySpeed`.
     pub(super) fn destroy_progress(&mut self, pos: [i32; 3]) -> f32 {
-        let block_break_speed = self.block_break_speed();
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let facts = self.res.facts().get(state);
         if facts.hardness == -1.0 {
             return 0.0;
         }
-        let held = self.held();
-        let mut speed = self.items().mining_speed(held, &facts.name);
+        let mut harvest =
+            !facts.requires_tool || self.items().correct_for_drops(self.held(), &facts.name);
+        let hardness = facts.hardness;
+        if !crate::mod_api::mods().is_empty() {
+            self.native_player_harvest_check(
+                self.own_entity_id() as u32,
+                pos,
+                state.0,
+                &mut harvest,
+            );
+        }
+        let block_break_speed = self.block_break_speed();
+        let facts = self.res.facts().get(state);
+        let mut speed = self.items().mining_speed(self.held(), &facts.name);
         speed = self.modify_destroy_speed(speed);
         speed *= block_break_speed;
         if let Some(eye) = self.eye_position()
@@ -402,8 +413,21 @@ impl Game<'_> {
         if self.player.as_ref().is_some_and(|p| !p.ground.on_ground) {
             speed /= 5.0;
         }
-        let harvest = !facts.requires_tool || self.items().correct_for_drops(held, &facts.name);
-        speed / facts.hardness / if harvest { 30.0 } else { 100.0 }
+        let mut canceled = false;
+        if !crate::mod_api::mods().is_empty() {
+            self.native_player_break_speed(
+                self.own_entity_id() as u32,
+                pos,
+                state.0,
+                speed,
+                &mut speed,
+                &mut canceled,
+            );
+        }
+        if canceled {
+            return 0.0;
+        }
+        speed / hardness / if harvest { 30.0 } else { 100.0 }
     }
     /// A key for the main-hand stack (`destroyingItem`): its item and components.
     pub(super) fn main_hand_key(&self) -> String {
@@ -425,10 +449,12 @@ impl Game<'_> {
             || before(self.mob_hit().map(|h| h.1))
             || before(self.redirectable_hit().map(|h| h.1))
     }
-    /// `LocalPlayer.isHandsBusy`: paddling a boat.
+    /// `LocalPlayer.isHandsBusy`: paddling a boat this player controls
+    /// (`getControlledVehicle`: its first passenger, on a server's client).
     pub(super) fn hands_busy(&self) -> bool {
         self.riding
             .is_some_and(|id| self.boats.iter().any(|b| b.id == id))
+            && self.remote.as_ref().is_none_or(|r| r.first_passenger)
             && [
                 winit::keyboard::KeyCode::KeyW,
                 winit::keyboard::KeyCode::KeyS,

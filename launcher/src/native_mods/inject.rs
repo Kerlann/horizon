@@ -1,4 +1,4 @@
-//! Trait-backed injections, generated in the incoming copy and staged game.
+//! Trait-backed injections, prepared as build-script input alongside the staged game.
 use super::{api, Bundle, MANIFEST};
 use quote::{format_ident, quote};
 use std::{
@@ -8,7 +8,7 @@ use std::{
 };
 use syn::visit_mut::VisitMut;
 
-/// A trait declaration to add to the staged game after horizon-mixins has run.
+/// A trait declaration supplied to the staged game's build script after horizon-mixins has run.
 pub(super) struct Injection {
     name: syn::Ident,
     /// The bindings' struct, as each catalog hook's (`InjectExampleTickEvent`).
@@ -31,7 +31,7 @@ enum Contract {
 /// Turns a binding's type into its event field's: a `&mut` primitive scalar becomes the value,
 /// written back after the call; every elided reference lifetime becomes `'a`, or `'b` inside a
 /// `&mut`, which can't shorten it. A copy of xtask's rule for catalog hooks
-/// (`xtask/src/mod_api.rs`, `EventLifetimes`); both test the same types.
+/// (`horizon-mod-api-gen`, `EventLifetimes`); both test the same types.
 #[derive(Default)]
 struct EventLifetimes {
     a: bool,
@@ -383,52 +383,29 @@ impl Injection {
     }
 }
 
-/// Add declarations to the existing generated trait, not its dispatch implementations.
+pub(super) const INPUT: &str = ".horizon-mod-api-injections.json";
+pub(super) const ENV: &str = "HORIZON_MOD_API_INJECTIONS";
+
+/// Supply declarations to the generator, which checks conflicts against the catalog at build time.
+/// This file travels with cached mixin output; generated Rust lives only in Cargo's OUT_DIR.
 pub(super) fn stage(stage: &Path, injections: &[Injection]) -> Result<(), String> {
-    if injections.is_empty() {
-        return Ok(());
-    }
-    let path = stage.join("crates/horizon-client/src/mod_api/generated.rs");
-    let source = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let file = syn::parse_file(&source).map_err(|e| format!("{}: {e}", path.display()))?;
-    let hooks = file
-        .items
-        .iter()
-        .find_map(|i| match i {
-            syn::Item::Trait(t) if t.ident == "Hooks" => Some(t),
-            _ => None,
-        })
-        .ok_or("generated Hooks trait missing")?;
-    for injection in injections {
-        if hooks
-            .items
-            .iter()
-            .any(|i| matches!(i, syn::TraitItem::Fn(f) if f.sig.ident == injection.name))
-        {
-            return Err(format!("trait method {} already exists", injection.name));
-        }
-        if file
-            .items
-            .iter()
-            .any(|i| matches!(i, syn::Item::Struct(s) if s.ident == injection.event))
-        {
-            return Err(format!("event {} already exists", injection.event));
-        }
-    }
-    let marker = "pub trait Hooks: Send + Sync {\n";
-    if source.matches(marker).count() != 1 {
-        return Err("generated Hooks marker missing or ambiguous".into());
-    }
     let declarations = injections
         .iter()
-        .map(Injection::declaration)
-        .collect::<String>();
-    let events = injections.iter().map(Injection::event).collect::<String>();
+        .map(|injection| {
+            serde_json::json!({
+                "name": injection.name.to_string(),
+                "event": injection.event.to_string(),
+                "declaration": injection.declaration(),
+                "event_declaration": injection.event(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let path = stage.join(INPUT);
     fs::write(
-        path,
-        source.replacen(marker, &format!("{marker}{declarations}"), 1) + &events,
+        &path,
+        serde_json::to_vec(&declarations).map_err(|e| e.to_string())?,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| format!("{}: {e}", path.display()))
 }
 
 #[cfg(test)]
@@ -486,15 +463,15 @@ mod tests {
         let manifest = fs::read_to_string(root.join(MANIFEST)).unwrap();
         assert!(!manifest.contains("trait_method"));
         assert!(!manifest.contains("[api]"));
-        let stage_dir = root.join("stage/crates/horizon-client/src/mod_api");
+        let stage_dir = root.join("stage");
         fs::create_dir_all(&stage_dir).unwrap();
-        fs::write(
-            stage_dir.join("generated.rs"),
+        stage(&stage_dir, &injections).unwrap();
+        assert!(!stage_dir.join("crates").exists());
+        let output = horizon_mod_api_gen::inject(
             "pub trait Hooks: Send + Sync {\n}\n",
+            &fs::read_to_string(stage_dir.join(INPUT)).unwrap(),
         )
         .unwrap();
-        stage(&root.join("stage"), &injections).unwrap();
-        let output = fs::read_to_string(stage_dir.join("generated.rs")).unwrap();
         assert!(syn::parse_file(&output).is_ok());
         let program = format!(
             r#"
@@ -535,15 +512,14 @@ mod tests {
         let (root, bundle) = fixture("value", "[[injection]]\nid = 'hook'\ntarget = 'horizon_client::game::tick'\nkind = 'RETURN'\ntrait_method = 'total'\nbindings = [{ name = 'total', ty = 'i32', value = '$value' }, { name = 'calls', ty = '&mut u32', value = '&mut *calls' }]\n");
         let injections = prepare(&[bundle], &root).unwrap();
         let helper = fs::read_to_string(root.join("horizon-trait-injection-0.rs")).unwrap();
-        let stage_dir = root.join("stage/crates/horizon-client/src/mod_api");
+        let stage_dir = root.join("stage");
         fs::create_dir_all(&stage_dir).unwrap();
-        fs::write(
-            stage_dir.join("generated.rs"),
+        stage(&stage_dir, &injections).unwrap();
+        let output = horizon_mod_api_gen::inject(
             "pub trait Hooks: Send + Sync {\n}\n",
+            &fs::read_to_string(stage_dir.join(INPUT)).unwrap(),
         )
         .unwrap();
-        stage(&root.join("stage"), &injections).unwrap();
-        let output = fs::read_to_string(stage_dir.join("generated.rs")).unwrap();
         let program = format!(
             r#"
             mod mod_api {{
@@ -582,6 +558,30 @@ mod tests {
         "#
         );
         compile_and_run(&root, &program);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn staged_input_checks_conflicts_and_clears_removed_injections() {
+        let (root, bundle) = fixture("conflicts", "[[injection]]\nid = 'hook'\ntarget = 'horizon_client::game::tick'\nkind = 'HEAD'\ntrait_method = 'tick'\n");
+        let injections = prepare(&[bundle], &root).unwrap();
+        stage(&root, &injections).unwrap();
+        let input = fs::read_to_string(root.join(INPUT)).unwrap();
+        for existing in [
+            "pub trait Hooks: Send + Sync { fn inject_example_tick(&self) {} }",
+            "pub trait Hooks: Send + Sync {} pub struct InjectExampleTickEvent;",
+        ] {
+            assert!(horizon_mod_api_gen::inject(existing, &input).is_err());
+        }
+        stage(&root, &[]).unwrap();
+        let input = fs::read_to_string(root.join(INPUT)).unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&input).unwrap(),
+            serde_json::json!([])
+        );
+        let output =
+            horizon_mod_api_gen::inject("pub trait Hooks: Send + Sync {}", &input).unwrap();
+        assert!(!output.contains("inject_example_tick"));
         fs::remove_dir_all(root).unwrap();
     }
 

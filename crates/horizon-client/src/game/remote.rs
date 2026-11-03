@@ -480,6 +480,9 @@ pub(super) struct Remote {
     pub(super) dimension: DimensionType,
     /// The level's key (`minecraft:overworld`): where its far terrain is kept.
     pub(super) level: String,
+    /// `ClientPlayerNetworkEvent.LoggingOut` was fired for this connection: every way out
+    /// of a world reports it once.
+    logged_out: bool,
     /// The level's hashed seed (login, respawn): the folder of its kept chunks
     /// (`server_terrain::level_dir`).
     pub(super) hashed_seed: i64,
@@ -622,7 +625,7 @@ pub(super) struct Remote {
     /// `Player.DATA_SHOULDER_PARROT_LEFT` and `_RIGHT` of the own player.
     pub(super) own_shoulders: [Option<i32>; 2],
     /// The local player's profile UUID (always in the level).
-    profile: u128,
+    pub(super) profile: u128,
     /// The local player's profile name: its score holder and team member.
     pub(super) profile_name: String,
     /// `MultiPlayerGameMode.destroyBlockPos`, `.destroyProgress` and the face last sent: the block
@@ -794,6 +797,7 @@ impl Game<'_> {
             return Ok(());
         }
         self.join_world_rest()?;
+        self.client_logging_out();
         if let Err(error) = self.join_server(address, name, None, cookies, lan) {
             log::warn!("Horizon: could not join server: {error}");
             if self.title.is_none() {
@@ -989,6 +993,7 @@ impl Game<'_> {
             features: vec!["minecraft:vanilla".into()],
             quiet_commands: false,
             mod_net: false,
+            logged_out: false,
             attachments: HashMap::new(),
             far_terrain: None,
             builtin,
@@ -1109,11 +1114,27 @@ impl Game<'_> {
         Ok(())
     }
 
+    /// Minecraft.disconnect's `ClientPlayerNetworkEvent.LoggingOut`: on
+    /// leaving a world, and on quitting the game from one. Once per
+    /// connection, whichever way out runs first.
+    pub(super) fn client_logging_out(&mut self) {
+        let Some(remote) = self.remote.as_mut().filter(|r| !r.logged_out) else {
+            return;
+        };
+        remote.logged_out = true;
+        let player = self
+            .player
+            .as_ref()
+            .map(|_| (remote.entity_id, remote.profile));
+        self.native_client_player_logging_out(player.map(|p| p.0), player.map(|p| p.1));
+    }
+
     /// Disconnect and return to the multiplayer screen (DisconnectedScreen).
     pub(super) fn leave_server(&mut self, reason: Option<String>) -> Result<()> {
         if reason.is_none() && self.integrated.as_ref().is_some_and(|s| !s.stopped()) {
             return self.begin_closing_save(false);
         }
+        self.client_logging_out();
         self.finish_perf();
         if reason.is_none() {
             // Leaving on purpose: nothing for auto-reconnect to retry.
@@ -3036,6 +3057,10 @@ impl Game<'_> {
                 self.debug_charts.ping.log(delay);
             }
             C::Login(p) => {
+                // A client's parts, from the tags it plays with.
+                if let Err(e) = self.resolve_parts() {
+                    log::warn!("Horizon: {e}");
+                }
                 self.test_highlights.clear();
                 self.forget_synced_recipes();
                 self.level.hardcore = p.hardcore;
@@ -3080,8 +3105,12 @@ impl Game<'_> {
                 }
                 self.send(S::ClientInformation(info));
                 self.remote_chat_login();
+                if let Some(remote) = &self.remote {
+                    self.native_client_player_logging_in(p.player_id, remote.profile);
+                }
             }
             C::Respawn(p) => {
+                let old_player = self.remote.as_ref().map(|r| (r.entity_id, r.profile));
                 // A new player, without effects (the server sends them
                 // again) and with no item in use.
                 self.potions.effects.clear();
@@ -3103,7 +3132,12 @@ impl Game<'_> {
                         r.own_invisible = false;
                     }
                 }
-                let dimension_changed = self.dim != Dim::from_id(&p.spawn.dimension);
+                // handleRespawn compares the levels' keys: a mod's level is
+                // its own dimension even where `Dim` has no name for it.
+                let dimension_changed = self
+                    .remote
+                    .as_ref()
+                    .is_some_and(|r| r.level != p.spawn.dimension);
                 let died = self.screen == Screen::Dead
                     || self
                         .player
@@ -3132,6 +3166,15 @@ impl Game<'_> {
                     r.camera = None;
                 }
                 self.capture(true);
+                if let Some((old_id, uuid)) = old_player {
+                    self.native_client_player_clone(
+                        old_id,
+                        self.own_entity_id(),
+                        uuid,
+                        died,
+                        dimension_changed,
+                    );
+                }
             }
             C::PlayerPosition(p) => self.remote_teleport(&p)?,
             C::PlayerRotation(p) => {
@@ -6590,6 +6633,7 @@ impl Game<'_> {
                     false,
                     &mut next_float,
                     border,
+                    &self.res.motion().fluids,
                 );
                 // `tick` set `previous` to the stepped position: keep the
                 // pre-step one, as `xo` is in vanilla.
@@ -6984,15 +7028,6 @@ impl Game<'_> {
             }
             return;
         }
-        let facts = self.res.facts().get(state).clone();
-        // The server's own getDestroyProgress: under water, off the ground,
-        // with haste, fatigue and efficiency, so the client stops digging
-        // when the server is done too (#1254).
-        let progress = if facts.hardness == 0.0 {
-            1.0
-        } else {
-            self.destroy_progress(hit.pos)
-        };
         // sameDestroyTarget: the same block and still the item the break began with.
         let held = self.main_hand_key();
         let same = self.remote.as_ref().is_some_and(|r| {
@@ -7006,6 +7041,10 @@ impl Game<'_> {
         if start && same && running {
             return;
         }
+        // The server's own getDestroyProgress: under water, off the ground,
+        // with haste, fatigue and efficiency, so the client stops digging
+        // when the server is done too (#1254).
+        let progress = self.destroy_progress(hit.pos);
         if !same || start {
             // startDestroyBlock aborts only a break that is running; a target left by a stop that
             // ended one is just replaced by the START below.
@@ -8206,6 +8245,13 @@ impl Game<'_> {
     /// the main hand's item, then the off hand's turn (its block, its item).
     /// The server does each packet's part with that packet's hand only.
     fn remote_use_hands(&mut self) {
+        // Nothing in the crosshair: an empty hand's click is heard, by mods only.
+        let miss = !horizon_client::mod_api::mods().is_empty()
+            && !self.entity_targeted()
+            && self.pick().is_none();
+        if miss && self.held().is_none() {
+            self.native_right_click_empty(Hand::Main);
+        }
         // A successful Item.use always drops the hand (LocalPlayer.itemUsed).
         if self.remote_use_item(Hand::Main) {
             self.heights.item_used(Hand::Main);
@@ -8225,6 +8271,9 @@ impl Game<'_> {
         };
         if off_target {
             return;
+        }
+        if miss && self.offhand.is_none() {
+            self.native_right_click_empty(Hand::Off);
         }
         if self.remote_use_item(Hand::Off) {
             self.heights.item_used(Hand::Off);
@@ -8502,7 +8551,7 @@ impl Game<'_> {
     }
 
     fn remote_start_attack(&mut self) -> bool {
-        if self.clicks.miss_time > 0 {
+        if self.clicks.miss_time > 0 || self.hands_busy() {
             return false;
         }
         if self.spectator() {
@@ -8555,6 +8604,11 @@ impl Game<'_> {
             self.send(S::Attack(play::Attack {
                 id: self.creatures.projectiles[i].id as i32,
             }));
+            // Player.deflectProjectile takes a redirectable one; a shulker bullet
+            // is attacked.
+            if !super::deflect::redirectable(&self.creatures.projectiles[i]) {
+                self.remote_sweep_event("minecraft:shulker_bullet", false);
+            }
             self.reset_attack_strength();
         } else if let Some(hit) = self.remote_object_hit(true)
             && self.mob_hit().is_none_or(|(_, d)| hit.distance < d)
@@ -8563,6 +8617,9 @@ impl Game<'_> {
             // VehicleEntity.hurtServer, ItemFrame and ArmorStand hurtServer,
             // a painting broken or an EndCrystal hurtServer: the server decides.
             self.send(S::Attack(play::Attack { id: hit.id }));
+            if let Some((kind, living)) = self.remote_attacked_object(hit.id) {
+                self.remote_sweep_event(&kind, living);
+            }
             self.reset_attack_strength();
         } else if let Some((i, distance)) = self.mob_hit()
             && self.before_block(distance)
@@ -8572,18 +8629,36 @@ impl Game<'_> {
                 self.send(S::Attack(play::Attack {
                     id: self.mobs[i].id as i32,
                 }));
+                let kind = format!(
+                    "minecraft:{}",
+                    self.mobs[i].kind.id.trim_start_matches("minecraft:")
+                );
+                self.remote_sweep_event(&kind, true);
                 self.remote_player_attack(i);
                 self.reset_attack_strength();
             }
         } else if !self.entity_targeted()
             && let Some(hit) = self.pick()
         {
+            // A block hit on air falls through to MISS. `instant` below reads the
+            // block again after the dig, which may have broken it.
+            if !horizon_client::mod_api::mods().is_empty()
+                && self
+                    .res
+                    .facts()
+                    .is_air(self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]))
+            {
+                self.native_left_click_empty();
+            }
             self.remote_mining(true);
             instant = self
                 .res
                 .facts()
                 .is_air(self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]));
         } else {
+            if !horizon_client::mod_api::mods().is_empty() && !self.entity_targeted() {
+                self.native_left_click_empty();
+            }
             if !self.creative {
                 self.clicks.miss_time = 10;
             }
@@ -8594,6 +8669,52 @@ impl Game<'_> {
         instant
     }
 
+    /// `MultiPlayerGameMode.attack` runs `Player.attack` on this client too: its
+    /// `isSweepAttack` for a damaging hit on `target` (`living`: a
+    /// `LivingEntity`, which may be hit critically), heard by native mods on
+    /// both sides. Only the server sweeps.
+    fn remote_sweep_event(&mut self, target: &str, living: bool) {
+        if horizon_client::mod_api::mods().is_empty() {
+            return;
+        }
+        let speed = self
+            .own_attribute("minecraft:attack_speed")
+            .unwrap_or_else(|| self.main_hand_attack_speed());
+        let scale = self.hand_strength.scale(0.5, speed);
+        let spin = self.player.as_ref().map_or(0.0, |p| p.auto_spin_attack_dmg);
+        let damage = if spin > 0.0 {
+            spin
+        } else {
+            self.own_attribute("minecraft:attack_damage")
+                .map_or(1.0, |v| v as f32)
+        };
+        let magic = scale * (self.enchanted_damage(target, damage) - damage);
+        if damage <= 0.0 && magic <= 0.0 {
+            return;
+        }
+        let crit = living && self.critical_attack(scale);
+        self.sweep_decision(scale, crit, target);
+    }
+    /// The entity type of the boat, minecart, armor stand or End crystal with
+    /// server id `id` that an attack reaches `Player.attack`'s sweep check on,
+    /// and whether it is living. A painting or item frame is not: on this
+    /// client `skipAttackInteraction` hurts it and stops the attack there.
+    fn remote_attacked_object(&self, id: i32) -> Option<(String, bool)> {
+        let id = id as u32;
+        if let Some(b) = self.boats.iter().find(|b| b.id == id) {
+            return Some((b.entity_type(), false));
+        }
+        if let Some(c) = self.carts.iter().find(|c| c.id == id) {
+            return Some((c.kind.id().to_owned(), false));
+        }
+        if self.armor_stands.iter().any(|a| a.id == id) {
+            return Some(("minecraft:armor_stand".to_owned(), true));
+        }
+        self.crystals
+            .iter()
+            .any(|c| c.id == id)
+            .then(|| ("minecraft:end_crystal".to_owned(), false))
+    }
     /// `MultiPlayerGameMode.attack` runs `Player.attack` on this client too.
     /// For a mob `hurtOrSimulate` fails here (`Entity.hurtClient`), so the
     /// hit has no attacker side; but `RemotePlayer.hurtClient` is true, so a
@@ -9588,6 +9709,12 @@ impl Game<'_> {
     pub(super) fn remote_glowing(&self, id: u32) -> Option<bool> {
         let r = self.remote.as_ref()?;
         Some(r.glowing.contains(&(id as i32)))
+    }
+    /// The UUID of another player's entity in the level.
+    pub(super) fn remote_other_player_uuid(&self, id: u32) -> Option<u128> {
+        let r = self.remote.as_ref()?;
+        let uuid = *r.level_players.get(&(id as i32))?;
+        (uuid != r.profile).then_some(uuid)
     }
     /// The profile name of another player the server sent, by entity id.
     pub(super) fn remote_player_name(&self, id: u32) -> Option<&str> {
@@ -10840,6 +10967,9 @@ mod tests {
         let enchantments = Enchantments::default();
         let names = Names::default();
         let env = Env {
+            player: None,
+            player_entity_id: None,
+            side: horizon_client::menu::LogicalSide::Client,
             items: &items,
             recipes: &recipes,
             brewing: &brewing,

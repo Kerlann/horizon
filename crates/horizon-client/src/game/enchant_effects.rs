@@ -10,7 +10,7 @@ use super::Game;
 use horizon_client::{
     enchant::{EffectContext, Enchantments, level_value},
     items::ItemStack,
-    mobs::Who,
+    mobs::{Damage, DamageKind, Who},
 };
 use horizon_core::{position::BlockPos, random::RandomSource};
 use horizon_world::{fluid::FluidKind, level::LevelAccess, registry::BlockStateId};
@@ -460,9 +460,19 @@ impl Game<'_> {
         let Some(index) = self.mobs.iter().position(|m| m.id == attacker && m.alive()) else {
             return;
         };
+        // DamageEntity.apply: the enchanted item's owner causes the retaliation.
+        let source = Damage {
+            kind: DamageKind::Thorns,
+            attacker: Some(Who::Player),
+            from: self
+                .player
+                .as_ref()
+                .map(|p| [p.position.x, p.position.y, p.position.z]),
+        };
+        let _wearer = self.knockback_scope_for(source.attacker);
         for damage in self.thorns_damage() {
             let m = &mut self.mobs[index];
-            m.hurt(damage, None, &mut self.world.random);
+            m.damage(damage, source);
             let center = [m.position.x, m.position.y, m.position.z];
             self.audio
                 .play("minecraft:enchant.thorns.hit", Some(center), 1.0, 1.0);

@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "left_click_empty",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_left_click_empty",
+      "side": "client",
+      "cancellable": false,
+      "neoforge": "PlayerInteractEvent.LeftClickEmpty",
+      "mod_api": {
+        "contract": "listen"
+      }
+    }
+  ],
+  "rust_summary": "the local player's left click on empty space (`native_left_click_empty`).",
+  "doc_summary": "the local player's left click on empty space, NeoForge's `PlayerInteractEvent.LeftClickEmpty`: `native_left_click_empty()` is heard on the client, whatever the main hand holds, where `Minecraft.startAttack` misses (no entity or block in the crosshair). The server never hears of the click; a mod that needs it there sends its own message. It cannot be cancelled. Bundles need \"hooks\": @API:left_click_empty@."
+}

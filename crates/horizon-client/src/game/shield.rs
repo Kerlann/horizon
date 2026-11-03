@@ -141,16 +141,9 @@ impl Game<'_> {
             let pitch = 0.8 + self.world.random.next_float() * 0.4;
             self.audio.play(sound, at, 1.0, pitch);
         }
-        if outcome.blocked <= 0.0 {
-            return;
-        }
-        // ItemDamageFunction.apply, then hurtAndBreak.
-        let (threshold, base, factor) = component.item_damage;
-        let item_damage = if outcome.blocked < threshold {
-            0
-        } else {
-            (base + factor * outcome.blocked).floor() as i32
-        };
+        // ItemDamageFunction.apply (or what a native mod set, kept only for a hit
+        // the event left blocked), then hurtAndBreak.
+        let item_damage = outcome.shield_damage;
         if item_damage > 0 && !self.creative {
             let loss = self.wear(&stack, item_damage as u32);
             let max = self
@@ -178,7 +171,8 @@ impl Game<'_> {
                 }
             }
         }
-        if projectile {
+        // LivingEntity.blockUsingItem: only once something was stopped.
+        if outcome.blocked <= 0.0 || projectile {
             return;
         }
         let Some(id) = attacker else {

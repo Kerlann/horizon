@@ -289,6 +289,9 @@ impl Game<'_> {
                 Kind::Inventory
             });
             let env = Env {
+                player: None,
+                player_entity_id: None,
+                side: horizon_client::menu::LogicalSide::Server,
                 items: self.items(),
                 recipes: self.recipes(),
                 brewing: &self.stations().brewing,

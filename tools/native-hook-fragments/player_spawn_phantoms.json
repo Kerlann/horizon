@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "player_spawn_phantoms",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_player_spawn_phantoms",
+      "side": "server",
+      "neoforge": "PlayerSpawnPhantomsEvent",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "replace",
+        "out": "result"
+      }
+    }
+  ],
+  "rust_summary": "whether the phantom spawner tries a spawn near a player, and the group size (`native_player_spawn_phantoms`).",
+  "doc_summary": "the phantom spawner is about to decide whether to try a spawn near a non-spectator server player: `native_player_spawn_phantoms(player, name, pos, result, phantoms)` runs once per player, before the difficulty and rest rolls. `result` starts empty, meaning `Default` (above sea level with the sky in view); `Allow` skips that check, `Deny` stops the attempt. Allow still passes the later rolls. `phantoms` starts with a randomly drawn default group size; set it to override the count. Without mods the size is drawn at its usual place, preserving the original random order. Bundles need \"hooks\": @API:player_spawn_phantoms@."
+}

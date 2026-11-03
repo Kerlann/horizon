@@ -87,7 +87,7 @@ impl Game<'_> {
                 [0.0; 3]
             };
             let origin = pos.map(f64::from);
-            let box_shape = self.context_outline(pos, state);
+            let box_shape = self.context_outline(pos, state, true, &self.be_anims);
             let cube = horizon_client::blocks::cube_edges();
             let segments = if box_shape.is_some() {
                 cube.as_slice()

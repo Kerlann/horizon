@@ -677,9 +677,11 @@ impl Game<'_> {
             return false;
         }
         let (_, _, crit, magic) = self.melee_damage("minecraft:armor_stand", true);
+        let sweep = self.sweep_before_hit("minecraft:armor_stand", crit);
         let hurt = self.hit_armor_stand(i, |g, area, id| {
             g.attack_effects(
                 area,
+                sweep,
                 Some(id as i32),
                 crit,
                 super::mace::Spared::Stand(id),

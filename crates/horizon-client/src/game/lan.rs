@@ -2472,6 +2472,8 @@ impl Game<'_> {
             };
             g.position = feet;
             g.previous_position = feet;
+            [g.yaw, g.pitch] = self.level.world_spawn_angle;
+            g.head_yaw = g.yaw;
             g.health = 20.0;
             g.food = 20;
             g.dimension = super::Dim::Overworld.id().to_owned();

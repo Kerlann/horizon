@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "client_player_clone",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_client_player_clone",
+      "neoforge": "ClientPlayerNetworkEvent.Clone",
+      "side": "client",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "listen"
+      }
+    }
+  ],
+  "rust_summary": "a client player being replaced (`native_client_player_clone`).",
+  "doc_summary": "a client player being replaced: `native_client_player_clone(old_id, new_id, uuid, died, dimension_changed)` is heard after a respawn packet. The IDs and UUID identify the players; Horizon does not expose old and new LocalPlayer instances. Bundles that use it need `\"hooks\": @API:client_player_clone@`."
+}

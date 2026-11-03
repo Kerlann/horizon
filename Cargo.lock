@@ -1319,10 +1319,12 @@ dependencies = [
  "horizon-client-render",
  "horizon-command",
  "horizon-core",
+ "horizon-cosmetics",
  "horizon-dualsense",
  "horizon-friends",
  "horizon-hdr",
  "horizon-items",
+ "horizon-mod-api-gen",
  "horizon-mods",
  "horizon-narrator",
  "horizon-optifine",
@@ -1451,8 +1453,10 @@ dependencies = [
  "horizon-client-input",
  "horizon-command",
  "horizon-core",
+ "horizon-cosmetics",
  "horizon-hdr",
  "horizon-items",
+ "horizon-mod-api-gen",
  "horizon-narrator",
  "horizon-optifine",
  "horizon-protocol",
@@ -1562,6 +1566,16 @@ name = "horizon-mcp"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+]
+
+[[package]]
+name = "horizon-mod-api-gen"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "serde",
+ "serde_json",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -5142,10 +5156,9 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "horizon-mod-api-gen",
  "horizon-theme",
- "quote",
  "serde_json",
- "syn 2.0.119",
 ]
 
 [[package]]

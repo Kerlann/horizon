@@ -1023,7 +1023,7 @@ impl Game<'_> {
         self.native_as_player(uuid, |game| {
             let rest = if points > 0 { game.mending(points) } else { 0 };
             if rest > 0 {
-                game.give_orb_points(rest);
+                game.give_experience_points(rest as i32);
             }
         })
     }

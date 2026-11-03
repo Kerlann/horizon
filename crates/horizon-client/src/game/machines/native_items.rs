@@ -3,7 +3,7 @@
 //! hoppers follow. They act where the world is simulated, never on a client's
 //! copy, and only on the level in place, which those that read or take name by
 //! its `dimension` (`minecraft:overworld`), as `native_set_block` does.
-use super::{Game, Kind, View};
+use super::{BlockEntity, Game, Kind, View};
 use horizon_client::items::ItemStack;
 use horizon_core::geometry::Direction;
 
@@ -71,7 +71,8 @@ impl Game<'_> {
     }
     /// `native_insert_item`: `tryMoveInItem` puts all it's given in an empty
     /// slot, and a hopper gives it one item, so a bigger stack goes in one by
-    /// one or it would pass the slot's limit. The rest.
+    /// one or it would pass the slot's limit. A capability part there takes it
+    /// slot by slot, as it answers. The rest.
     pub(in crate::game) fn insert_stack_through(
         &mut self,
         pos: [i32; 3],
@@ -80,6 +81,15 @@ impl Game<'_> {
     ) -> Option<ItemStack> {
         if !self.native_simulates() {
             return Some(stack);
+        }
+        if let Some(part) = self.item_part_at((pos[0], pos[1], pos[2])) {
+            let slots = part.slots(self, pos, Some(face));
+            let mut rest = Some(stack);
+            for slot in 0..slots {
+                let Some(stack) = rest.take() else { break };
+                rest = part.insert(self, pos, Some(face), slot, stack, false);
+            }
+            return rest;
         }
         let Some(view) = self.containers().view((pos[0], pos[1], pos[2]), false) else {
             return Some(stack);
@@ -155,7 +165,13 @@ impl Game<'_> {
         if !c.can_take(&view, slot, c.get(&view, slot)?, face) {
             return None;
         }
-        let target = self.slot_mut_at(&view, slot)?;
+        let out = self.take_up_to(&view, slot, count)?;
+        self.view_changed(&view);
+        Some(out)
+    }
+    /// Up to `count` out of slot `slot` of `view`, without `setChanged`.
+    fn take_up_to(&mut self, view: &View, slot: usize, count: u32) -> Option<ItemStack> {
+        let target = self.slot_mut_at(view, slot)?;
         let current = target.as_mut()?;
         let taken = count.min(current.count);
         let out = ItemStack {
@@ -166,7 +182,6 @@ impl Game<'_> {
         if current.count == 0 {
             *target = None;
         }
-        self.view_changed(&view);
         Some(out)
     }
     /// Moves up to `max` items from the container at `from`, through its side
@@ -230,6 +245,114 @@ impl Game<'_> {
             self.view_changed(&target);
         }
         moved
+    }
+}
+
+/// The game's own item capability (`mod_api::ITEMS`, NeoForge's `Capabilities.Item.BLOCK` on a
+/// vanilla container): a block entity's slots as one of its sides reaches them, numbered from 0
+/// for that side, by the rules hoppers follow.
+impl Game<'_> {
+    /// The container at `pos` the item capability reaches: a block entity with slots, where the
+    /// world is simulated. Not a composter, which has no block entity, nor a block entity
+    /// without slots (a sign, a banner, a mod's without a container).
+    fn capability_view(&self, pos: [i32; 3]) -> Option<View> {
+        if !self.native_simulates() {
+            return None;
+        }
+        let view = self.containers().view((pos[0], pos[1], pos[2]), false)?;
+        takes_from(&view).then_some(view)
+    }
+    /// The type id of the mod block entity at `pos` (`mymod:press`), which its capability parts
+    /// are registered by. None for a vanilla block entity, for none, and for the mod block entity
+    /// ticking now.
+    pub(in crate::game) fn native_block_entity_type(&self, pos: [i32; 3]) -> Option<String> {
+        match self.world.block_entities.get(&(pos[0], pos[1], pos[2]))? {
+            BlockEntity::Mod(m) if !m.id.is_empty() => Some(m.id.clone()),
+            _ => None,
+        }
+    }
+    /// How many slots of the block entity at `pos` its side `side` reaches (none: every slot),
+    /// by its `WorldlyContainer` rules: a furnace's top reaches its input only. None where no
+    /// block entity has slots, and on a client's copy of the world.
+    pub(in crate::game) fn native_container_size(
+        &self,
+        pos: [i32; 3],
+        side: Option<Direction>,
+    ) -> Option<usize> {
+        Some(self.capability_view(pos)?.slots_for_face(side).len())
+    }
+    /// The stack in slot `slot` of those `side` reaches at `pos` (`native_container_size`).
+    pub(in crate::game) fn native_container_stack(
+        &self,
+        pos: [i32; 3],
+        side: Option<Direction>,
+        slot: usize,
+    ) -> Option<ItemStack> {
+        let view = self.capability_view(pos)?;
+        let slot = *view.slots_for_face(side).get(slot)?;
+        self.containers().get(&view, slot).cloned()
+    }
+    /// Puts as much of `stack` as slot `slot` of those `side` reaches at `pos` takes, as a
+    /// hopper would (`canPlaceItem`, the slot's limit, the same item and components); what
+    /// didn't fit. `simulate` changes nothing.
+    pub(in crate::game) fn native_container_insert(
+        &mut self,
+        pos: [i32; 3],
+        side: Option<Direction>,
+        slot: usize,
+        stack: ItemStack,
+        simulate: bool,
+    ) -> Option<ItemStack> {
+        let Some(view) = self.capability_view(pos) else {
+            return Some(stack);
+        };
+        let Some(&slot) = view.slots_for_face(side).get(slot) else {
+            return Some(stack);
+        };
+        let fits = self.containers().fits(&view, slot, &stack);
+        if fits > 0 && !simulate {
+            let some = ItemStack {
+                count: fits,
+                ..stack.clone()
+            };
+            self.try_move_in_item(None, &view, some, slot);
+        }
+        (fits < stack.count).then(|| ItemStack {
+            count: stack.count - fits,
+            ..stack
+        })
+    }
+    /// Takes up to `max` out of slot `slot` of those `side` reaches at `pos`; through a side,
+    /// only what that side may take (`canTakeItemThroughFace`). What came out. `simulate`
+    /// changes nothing.
+    pub(in crate::game) fn native_container_extract(
+        &mut self,
+        pos: [i32; 3],
+        side: Option<Direction>,
+        slot: usize,
+        max: u32,
+        simulate: bool,
+    ) -> Option<ItemStack> {
+        let view = self.capability_view(pos)?;
+        let slot = *view.slots_for_face(side).get(slot)?;
+        let c = self.containers();
+        let stack = c.get(&view, slot)?;
+        if max == 0 || side.is_some_and(|face| !c.can_take(&view, slot, stack, face)) {
+            return None;
+        }
+        if simulate {
+            return Some(ItemStack {
+                count: max.min(stack.count),
+                ..stack.clone()
+            });
+        }
+        let out = self.take_up_to(&view, slot, max)?;
+        self.view_changed(&view);
+        // JukeboxBlockEntity.removeItem: a disc taken out stops the song.
+        if view.kind == Kind::Jukebox {
+            self.jukebox_taken(pos);
+        }
+        Some(out)
     }
 }
 

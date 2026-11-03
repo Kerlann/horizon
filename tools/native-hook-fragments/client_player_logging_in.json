@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "client_player_logging_in",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_client_player_logging_in",
+      "neoforge": "ClientPlayerNetworkEvent.LoggingIn",
+      "side": "client",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "listen"
+      }
+    }
+  ],
+  "rust_summary": "a client player logging in (`native_client_player_logging_in`).",
+  "doc_summary": "a client player logging in: `native_client_player_logging_in(player_id, uuid)` is heard after the play login initializes the client level and player identity, including for single player. `player_id` is the server's entity ID. Bundles that use it need `\"hooks\": @API:client_player_logging_in@`."
+}

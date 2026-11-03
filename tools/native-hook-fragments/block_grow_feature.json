@@ -13,5 +13,5 @@
     }
   ],
   "rust_summary": "A block is about to grow into a feature (`native_block_grow_feature`).",
-  "doc_summary": "A block is about to grow into a feature: `native_block_grow_feature(dimension, pos, feature, cancel)` can cancel or replace the nullable feature key; `level.random()` exposes the growth RNG. Bundles need \"hooks\": @API:block_grow_feature@."
+  "doc_summary": "A block is about to grow into a feature: `native_block_grow_feature(dimension, pos, feature, cancel)` can cancel or replace the nullable feature key, which starts `None` when vanilla has no feature to place (a lone dark oak sapling, or a key that isn't installed), so a mod may supply one; `level.random()` exposes the growth RNG. Bundles need \"hooks\": @API:block_grow_feature@."
 }

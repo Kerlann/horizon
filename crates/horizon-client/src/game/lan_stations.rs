@@ -432,7 +432,7 @@ impl Game<'_> {
         let need = button as i32 + 1;
         // Player.onEnchantmentPerformed, and EnchantmentMenu's awardStat(ENCHANT_ITEM).
         self.as_guest(host, conn, |game| {
-            game.give_levels(-need);
+            game.enchantment_performed(need);
             game.award_custom_stat("enchant_item", 1);
             // CriteriaTriggers.ENCHANTED_ITEM, with the levels it cost.
             game.trigger_enchanted_item(&enchanted, need);

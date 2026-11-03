@@ -138,7 +138,7 @@ impl Game<'_> {
         let p = self.player.as_ref()?;
         let from = [p.position.x, p.position.y, p.position.z];
         let (amount, scale, crit, magic) = self.melee_damage("minecraft:player", true);
-        let sweep = self.sweep_attack_position(scale, crit);
+        let sweep = self.sweep_attack_position(scale, crit, "minecraft:player");
         let (strength, knockback_attack) = self.extra_knockback("minecraft:player", scale);
         let (xd, zd) = self.extra_knockback_direction();
         self.attack_ticks = 0;
@@ -376,7 +376,8 @@ impl Game<'_> {
             (true, false, true) => "minecraft:entity.player.attack.strong",
             (true, false, false) => "minecraft:entity.player.attack.weak",
         };
-        if let Some(at) = s.sweep.filter(|_| hurt) {
+        let swept = s.sweep.filter(|_| hurt);
+        if let Some(at) = swept {
             // The sweep around the player that was hit, as its attacker.
             let (area, id) = match victim {
                 Victim::Guest(conn) => {
@@ -400,7 +401,9 @@ impl Game<'_> {
                     });
                 }
             }
-        } else {
+        }
+        // A critical hit a mod let sweep has both sounds (attackVisualEffects).
+        if swept.is_none() || s.crit {
             self.audio.play(sound, Some(s.from), 1.0, 1.0);
         }
         hurt

@@ -86,14 +86,36 @@ fn unknown_vanilla_names_still_fail() {
 }
 
 #[test]
-fn condition_property_is_false() {
-    let n = node(
-        r#"{"type":"minecraft:condition","property":"mod:flag",
+fn condition_property_defaults_to_false_at_draw_time() {
+    let definition = ClientItem::from_json(
+        r#"{"model":{"type":"minecraft:condition","property":"mod:flag",
             "on_true":{"type":"minecraft:model","model":"a:yes"},
-            "on_false":{"type":"minecraft:model","model":"a:no"}}"#,
+            "on_false":{"type":"minecraft:model","model":"a:no"}}}"#,
     )
     .unwrap();
-    assert_eq!(model_id(&n), "a:no");
+    let mut models = ItemModels::default();
+    models.definitions.insert("mod:tool".into(), definition);
+    models.prototypes.insert(
+        "mod:tool".into(),
+        BTreeMap::from([(
+            "minecraft:item_model".into(),
+            Value::String("mod:tool".into()),
+        )]),
+    );
+    let context = Context {
+        display: DisplayContext::Gui,
+        owner: None,
+        level: None,
+        seed: 0,
+    };
+    let resolved = models.resolve(&StackView::new("mod:tool", 1), &context, &NoEnv);
+    assert_eq!(resolved.layers.len(), 1);
+    assert_eq!(
+        resolved.layers[0].content,
+        LayerContent::Model {
+            model: "a:no".into()
+        }
+    );
 }
 
 #[test]

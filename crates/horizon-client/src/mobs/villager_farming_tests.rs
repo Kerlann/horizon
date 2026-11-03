@@ -31,7 +31,11 @@ fn resources() -> &'static std::path::Path {
         }
         files.push((
             "data/minecraft/tags/item/villager_plantable_seeds.json".into(),
-            r#"{"replace":true,"values":["fieldtest:grain","fieldtest:roots","minecraft:stick"]}"#.into(),
+            r#"{"replace":true,"values":["fieldtest:grain","fieldtest:roots","fieldtest:seeds","minecraft:stick"]}"#.into(),
+        ));
+        files.push((
+            "data/fieldtest/horizon/item/seeds.json".into(),
+            r#"{"template":"minecraft:wheat_seeds","block":"fieldtest:grain"}"#.into(),
         ));
         for (name, text) in files {
             let path = dir.join(name);
@@ -176,6 +180,45 @@ fn mod_crops_are_harvested_only_at_their_vanilla_templates_max_age() {
                 );
                 assert_eq!(events.iter().any(|e| matches!(e, MobEvent::BreakBlock { pos, drop: true } if *pos == [x, 1, 0])), ripe, "x={x}");
             }
+        }
+    ));
+}
+
+#[test]
+#[ignore = "full content root: tools/test_villager_farming_parity.py runs it"]
+fn farmer_plants_a_declared_items_block() {
+    assert!(super::super::world::with_resource_test_world(
+        resources(),
+        &[],
+        true,
+        |world, reg| put(world, 0, 0, reg.default_state("fieldtest:soil").unwrap()),
+        |w, types| {
+            let mut m = farmer(types);
+            super::super::villager::ext_mut(&mut m).inventory =
+                vec![ItemStack::new("fieldtest:seeds", 2)];
+            let mut lr = LegacyRandom::new(13);
+            let mut events = Vec::new();
+            harvest_tick(
+                &mut m,
+                &mut Bx {
+                    w,
+                    lr: &mut lr,
+                    events: &mut events,
+                    now: 1000,
+                    refresh: false,
+                },
+                &mut 0,
+                &mut Some([0, 1, 0]),
+                &mut Vec::new(),
+            );
+            let expected = w.registry.default_state("fieldtest:grain").unwrap();
+            assert!(events.iter().any(
+                |e| matches!(e, MobEvent::SetBlock { pos: [0, 1, 0], state } if *state == expected)
+            ));
+            assert_eq!(
+                super::super::villager::ext(&m).unwrap().inventory[0].count,
+                1
+            );
         }
     ));
 }

@@ -917,14 +917,16 @@ impl Game<'_> {
         self.combat.exploded.clear();
         // EntityTickEvent.Pre for the mobs about to tick, before the loop holds them.
         let mut round = self.native_tick_round();
-        if round.listening() {
+        if round.listening() || !horizon_client::mod_api::mods().is_empty() {
             let ticking = self.entity_ticking_area();
             let mut i = 0;
             while let Some(m) = self.mobs.get(i) {
                 let (x, z) = (m.position.x.floor() as i32, m.position.z.floor() as i32);
                 if self.world.loaded(x, z) && ticking(x, z) {
                     let (id, kind) = (m.id, super::native_ticks::TickKind::Mob(m.kind.clone()));
-                    self.native_tick_pre_batch(&mut round, id, kind);
+                    if self.native_tick_pre_batch(&mut round, id, kind) {
+                        self.sync_sleeping_mob(i);
+                    }
                 }
                 i += 1;
             }
@@ -1207,7 +1209,8 @@ impl Game<'_> {
         let mut dying = m.clone();
         // LivingEntity.die: the death is heard, and a sculk catalyst nearby
         // takes the experience (before the loot is dropped). It takes what
-        // would drop, whoever killed the mob.
+        // would drop, whoever killed the mob. Experience the catalyst takes is
+        // never dropped, so living_experience_drop does not hear of it.
         self.sculk_mob_died(m);
         let mut catalyst_xp = 0;
         let consumed =
@@ -1409,6 +1412,26 @@ impl Game<'_> {
             None => None,
         }
     }
+    /// `LivingEntity.dropExperience`: the experience a dying mob or player is worth once
+    /// the mods have had their say; 0 when they cancel it.
+    pub(super) fn living_experience_drop(
+        &mut self,
+        entity: u32,
+        kind: &str,
+        attacker: Option<u128>,
+        original: i32,
+    ) -> i32 {
+        let (mut amount, mut cancel) = (original, false);
+        self.native_living_experience_drop(
+            entity,
+            kind,
+            attacker,
+            original,
+            &mut amount,
+            &mut cancel,
+        );
+        if cancel { 0 } else { amount.max(0) }
+    }
     fn drop_death_loot(
         &mut self,
         m: &mut Mob,
@@ -1489,7 +1512,7 @@ impl Game<'_> {
         // LootContextParams.ORIGIN of a death: the mob's position.
         let place = self.loot_place_at([m.position.x, m.position.y, m.position.z], None);
         let (items, skulls) = horizon_world::loot::with_native_loot_place(place, || {
-            drops::die(m, &death, &mut self.rand_sequences)
+            drops::die(m, &death, &mut self.rand_sequences, &mut self.world.random)
         });
         if skulls && let Some(Who::Mob(id)) = m.last_damage.and_then(|(d, _)| d.attacker) {
             // Creeper.droppedSkulls: one head per charged explosion.
@@ -1556,8 +1579,11 @@ impl Game<'_> {
                         self.spawn_item(item, pos, dispenser::new_item_motion(), 10);
                     }
                 }
-                drops::Drop::Orb(value) if !consumed => self.spawn_orbs(pos, value as u32),
-                drops::Drop::Item(_) | drops::Drop::Stack(_) | drops::Drop::Orb(_) => {}
+                drops::Drop::Experience(reward) if !consumed => {
+                    let amount = self.living_experience_drop(m.id, &kind, player_uuid, reward);
+                    self.spawn_orbs(pos, amount as u32);
+                }
+                drops::Drop::Item(_) | drops::Drop::Stack(_) | drops::Drop::Experience(_) => {}
             }
         }
     }
@@ -6670,6 +6696,25 @@ impl Game<'_> {
                 self.shoulder_parrots_geometry(mob, camera, alpha as f32, packed, out);
                 self.spin_attack_geometry(mob, camera, alpha as f32, packed, out);
                 self.stuck_in_body_geometry(mob, mob.id as i32, camera, alpha as f32, packed, out);
+            }
+            // Cosmetics (game/cosmetics.rs), posed on the GPU with the mob's own jobs: culled
+            // with it.
+            if !layers_only
+                && horizon_cosmetics::enabled()
+                && (is_player || &*mob.kind.id == "minecraft:mannequin")
+            {
+                let mark = self.skin_frame.borrow().mark();
+                let base = horizon_client::mobs::render::base_transform(mob, alpha as f32, camera);
+                let gpu = skinning;
+                if let Some((lo, hi)) =
+                    self.cosmetics_geometry(mob, false, base, alpha as f32, packed, gpu, out)
+                {
+                    skinned = Some(match skinned {
+                        Some((first, Some((l, h)))) => (first, Some((l.min(lo), h.max(hi)))),
+                        Some((first, None)) => (first, Some((lo, hi))),
+                        None => (mark, Some((lo, hi))),
+                    });
+                }
             }
             // CustomHeadLayer (a pumpkin, skull or head item) included.
             if layers {

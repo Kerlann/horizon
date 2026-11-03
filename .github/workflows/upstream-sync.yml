@@ -16,6 +16,7 @@ jobs:
     permissions:
       contents: write
       issues: write
+      pull-requests: write
       # GITHUB_TOKEN pushes do not start checks; dispatch and monitor them explicitly.
       actions: write
     steps:
@@ -23,7 +24,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      - name: Verify upstream merge before advancing main
+      - name: Merge upstream, verify it, and open or update the sync pull request
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/ci/upstream_sync.py

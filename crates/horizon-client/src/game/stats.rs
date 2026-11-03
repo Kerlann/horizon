@@ -2,6 +2,7 @@
 //! mined, items used/crafted/broken/picked up/dropped and mobs killed or
 //! killed by, saved to `players/stats/<uuid>.json`, plus the phantom
 //! spawner that reads the time since rest (`PhantomSpawner`).
+use super::native_hooks::PhantomSpawnResult;
 use super::{Dim, Game};
 use horizon_core::geometry::Vec3;
 use horizon_core::random::RandomSource;
@@ -9,6 +10,14 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
 };
+
+/// One player `PhantomSpawner.tick` visits. `identity` is the server player's uuid and
+/// name, absent for a game's own player, which no server player stands for.
+struct PhantomTarget {
+    position: Vec3,
+    since_rest: i32,
+    identity: Option<(u128, String)>,
+}
 
 /// `stats[type][key]`, with `type` and `key` namespaced ids.
 #[derive(Default)]
@@ -372,13 +381,16 @@ impl Game<'_> {
             return;
         }
         let rest = |s: &Stats| s.get("custom", "minecraft:time_since_rest");
-        // `level.players()`: (block position, time since rest) of each player
-        // who isn't a spectator.
+        // `level.players()`: each player who isn't a spectator.
         let mut players = Vec::new();
         if let Some(p) = self.player.as_ref()
             && !self.spectator()
         {
-            players.push((p.position, rest(&self.stats)));
+            players.push(PhantomTarget {
+                position: p.position,
+                since_rest: rest(&self.stats),
+                identity: None,
+            });
         }
         if let Some(host) = self.lan.as_ref() {
             let level = self.dim.id();
@@ -388,24 +400,42 @@ impl Game<'_> {
                     && g.game_mode != horizon_client::lan::guest::SPECTATOR
             }) {
                 let since = host.play.get(&g.conn).map_or(0, |p| rest(&p.stats));
-                players.push((
-                    Vec3::new(g.position[0], g.position[1], g.position[2]),
-                    since,
-                ));
+                players.push(PhantomTarget {
+                    position: Vec3::new(g.position[0], g.position[1], g.position[2]),
+                    since_rest: since,
+                    identity: (!horizon_client::mod_api::mods().is_empty())
+                        .then(|| (g.uuid, g.name.clone())),
+                });
             }
         }
-        for (position, since) in players {
-            self.spawn_phantoms_near(position, since);
+        for target in players {
+            self.spawn_phantoms_near(target);
         }
     }
     /// One player's turn of `PhantomSpawner.tick`.
-    fn spawn_phantoms_near(&mut self, position: Vec3, since_rest: i32) {
+    fn spawn_phantoms_near(&mut self, target: PhantomTarget) {
+        let PhantomTarget {
+            position,
+            since_rest,
+            identity,
+        } = target;
         let pos = [
             position.x.floor() as i32,
             position.y.floor() as i32,
             position.z.floor() as i32,
         ];
-        if pos[1] < 63 || !self.can_see_sky(pos) {
+        let mut result = None;
+        let mut phantoms = None;
+        if let Some((player, name)) = identity {
+            phantoms = Some(1 + self.world.random.next_int_bound(3).unwrap_or(0));
+            self.native_player_spawn_phantoms(player, &name, pos, &mut result, &mut phantoms);
+        }
+        let attempt = match result.unwrap_or(PhantomSpawnResult::Default) {
+            PhantomSpawnResult::Allow => true,
+            PhantomSpawnResult::Default => pos[1] >= 63 && self.can_see_sky(pos),
+            PhantomSpawnResult::Deny => false,
+        };
+        if !attempt {
             return;
         }
         // `getCurrentDifficultyAt(playerPos).isHarderThan(random * 3)`.
@@ -430,7 +460,9 @@ impl Game<'_> {
         {
             return;
         }
-        let group = 1 + self.world.random.next_int_bound(3).unwrap_or(0);
+        // Without mods, draw at the original point in the random sequence.
+        let group =
+            phantoms.unwrap_or_else(|| 1 + self.world.random.next_int_bound(3).unwrap_or(0));
         for _ in 0..group {
             let _ = self.spawn_mob(
                 "minecraft:phantom",

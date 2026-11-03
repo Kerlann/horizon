@@ -5,10 +5,27 @@
 //! down (`try_sleep`) and freed in the level's tick once nobody sleeps in it
 //! any more, whichever way they got up: waking, the Leave Bed button, death,
 //! a broken bed, or leaving the game.
+use super::native_hooks::SleepProblem;
 use super::{Dim, Game};
 use horizon_client::Result;
 
 impl Game<'_> {
+    /// `BedRule.canSleep` of the Overworld's bed rule: at night or in a thunderstorm.
+    pub(super) fn bed_can_sleep_now(&self) -> bool {
+        self.dim == Dim::Overworld && self.sky_darken() >= 4
+    }
+    /// What `CanContinueSleepingEvent.getProblem` holds for a sleeper: its bed gone
+    /// (`checkBedExists`), or for a player (`Player.tick`) a bed rule that no longer lets
+    /// them sleep.
+    pub(super) fn sleep_problem(&self, bed_exists: bool, player: bool) -> Option<SleepProblem> {
+        if !bed_exists {
+            Some(SleepProblem::NotPossibleHere)
+        } else if player && !self.bed_can_sleep_now() {
+            Some(SleepProblem::NotPossibleNow)
+        } else {
+            None
+        }
+    }
     /// `setBlockAndUpdate(head, state.setValue(OCCUPIED, occupied))`, when
     /// the block at `head` is still a bed and not already so.
     pub(super) fn set_bed_occupied(&mut self, head: [i32; 3], occupied: bool) {

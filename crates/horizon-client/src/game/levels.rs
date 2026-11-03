@@ -131,6 +131,10 @@ impl Levels {
         self.parked.get(&dim).map(|level| &level.world)
     }
 
+    pub(super) fn parked_anims(&self, dim: Dim) -> Option<&BlockEntityAnims> {
+        self.parked.get(&dim).map(|level| &level.anims)
+    }
+
     /// The worlds of the levels not in place.
     pub(super) fn parked_worlds(&self) -> impl Iterator<Item = &World> {
         self.parked.values().map(|level| &level.world)

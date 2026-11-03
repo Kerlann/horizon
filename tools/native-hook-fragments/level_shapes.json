@@ -1,0 +1,13 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "level_block_shape",
+      "target": "horizon_client::game::native_entity_refs::Game<'_>::native_level_block_shape",
+      "receiver": "level"
+    }
+  ],
+  "rust_summary": "level block outline and collision shapes.",
+  "doc_summary": "Read a level's block-local outline or collision boxes with `level.block_shape(host, pos, kind)`. These reads resolve the level in place and parked levels. Bundles need \"hooks\": @API:level_shapes@.",
+  "comments": ["crates/horizon-client/src/game/native_entity_refs.rs"]
+}

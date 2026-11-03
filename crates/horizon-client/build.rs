@@ -3,6 +3,10 @@
 //! The optional Segment Heap manifest is embedded in the same resource compilation.
 fn main() {
     let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
+    let root = std::path::Path::new(&dir).join("../..");
+    let out_dir = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+    horizon_mod_api_gen::generate(&root, &out_dir, horizon_mod_api_gen::Target::Client)
+        .expect("generating native mod API");
     let ico = format!("{dir}/../../packaging/icons/horizon.ico");
     println!("cargo:rerun-if-changed={ico}");
     // The game's main thread gets 8 MB of stack on Windows as on macOS and Linux (Windows gives 1

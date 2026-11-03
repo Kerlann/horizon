@@ -1,0 +1,12 @@
+{
+  "hooks": [],
+  "helpers": [
+    {"name": "block_entity_type", "target": "horizon_client::game::machines::native_items::Game<'_>::native_block_entity_type", "mod_api": {}},
+    {"name": "container_size", "target": "horizon_client::game::machines::native_items::Game<'_>::native_container_size", "mod_api": {}},
+    {"name": "container_stack", "target": "horizon_client::game::machines::native_items::Game<'_>::native_container_stack", "mod_api": {}},
+    {"name": "container_insert", "target": "horizon_client::game::machines::native_items::Game<'_>::native_container_insert", "mod_api": {}},
+    {"name": "container_extract", "target": "horizon_client::game::machines::native_items::Game<'_>::native_container_extract", "mod_api": {}}
+  ],
+  "rust_summary": "the item capability (`mod_api::ITEMS`, `ItemHandler`, `Registrar::block_entity_capability`, `host.capability`) and the game's own answer, a block entity's slots by side: `native_block_entity_type`, `native_container_size`, `native_container_stack`, `native_container_insert`, `native_container_extract`.",
+  "doc_summary": "the item capability (`Capabilities.Item.BLOCK`): `r.block_entity_capability(&ITEMS, \"mymod:press\", Arc::new(PressItems))` answers it for a mod block entity type with an `ItemHandler`, in place of the game's answer; `host.capability(&ITEMS, pos)` finds the handler at `pos`, the mod's or the game's. Hoppers and `native_insert_item` use a mod's handler where one is registered. The game's own answer is a block entity's slots as a side reaches them (`native_container_size`, `native_container_stack`, `native_container_insert`, `native_container_extract`, numbered from 0 for that side, by the hopper's rules; `simulate` changes nothing), and `native_block_entity_type(pos)` names a mod block entity's type. Bundles need \"hooks\": @API:item_capability@."
+}

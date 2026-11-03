@@ -1,0 +1,13 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "level_entities_in",
+      "target": "horizon_client::game::native_entity_refs::Game<'_>::native_level_entities_in",
+      "receiver": "level"
+    }
+  ],
+  "rust_summary": "entities intersecting a box in the level in place (`LevelRef::entities_in`).",
+  "doc_summary": "`LevelRef::entities_in` lists resolvable entities intersecting a box in the level in place. Bundles need \"hooks\": @API:level_entities_in@.",
+  "comments": ["crates/horizon-client/src/game/native_entity_refs.rs"]
+}

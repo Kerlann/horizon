@@ -188,6 +188,17 @@ impl Game<'_> {
                     Some(Target::Mob(i)) => Some(Some(i)),
                     _ => Some(None),
                 };
+                // resolvePlayerResponsibleForDamage: the causing player, by entity id,
+                // for a native mod's experience drop.
+                let by_player = match cause.or(by) {
+                    _ if horizon_client::mod_api::mods().is_empty() => None,
+                    Some(Target::Player) => self.lan_acting,
+                    Some(Target::Guest(conn)) => Some(conn),
+                    _ => None,
+                }
+                .and_then(|conn| self.command_guest(conn))
+                .map(|g| crate::game::combat::PlayerCredit::Entity(g.entity_id as u32));
+                let now = self.world.game_time;
                 self.for_player(target, |g| {
                     if g.spectator() {
                         return false;
@@ -195,13 +206,17 @@ impl Game<'_> {
                     if let Some(name) = named {
                         g.note_direct_entity(&ty, name);
                     }
-                    g.hurt_player_from(amount, from, &ty, attacker)
+                    let hurt = g.hurt_player_from(amount, from, &ty, attacker);
+                    if hurt && let Some(credit) = by_player {
+                        g.combat.note_hurt_by_player(credit, now);
+                    }
+                    hurt
                 })
                 .unwrap_or(false)
             }
             Target::Mob(id) => {
                 let attacker = cause.or(by).and_then(|t| match t {
-                    Target::Player => Some(Who::Player),
+                    Target::Player | Target::Guest(_) => Some(Who::Player),
                     Target::Mob(i) => Some(Who::Mob(i)),
                     _ => None,
                 });
@@ -216,7 +231,19 @@ impl Game<'_> {
                     .find(|m| m.id == id)
                     .is_some_and(|m| m.damage(amount, damage));
                 if hurt {
-                    self.resolve_player_responsible(id, damage);
+                    match cause.or(by) {
+                        Some(player @ (Target::Player | Target::Guest(_))) => {
+                            let player = match player {
+                                Target::Guest(conn) => Some(conn),
+                                _ => self.lan_acting,
+                            };
+                            if let Some(mob) = self.mobs.iter_mut().find(|m| m.id == id) {
+                                mob.ai.last_hurt_by_player = 100;
+                            }
+                            self.last_hurt_by_player.insert(id, player);
+                        }
+                        _ => self.resolve_player_responsible(id, damage),
+                    }
                 }
                 hurt
             }

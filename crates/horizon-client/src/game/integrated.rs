@@ -349,6 +349,7 @@ impl Game<'_> {
         creative: bool,
         create: Option<&WorldOptions>,
     ) -> Result<()> {
+        self.client_logging_out();
         let auth = horizon_client::auth::current();
         let player = auth
             .as_ref()

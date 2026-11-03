@@ -308,12 +308,15 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             .is_some_and(|f| f.configured(name).is_some())
     }
     /// `BlockGrowFeatureEvent`: the feature `pos` grows into once mods may
-    /// cancel or replace `feature`, if it is installed.
+    /// cancel or replace `feature`, if it is installed. `feature` is vanilla's,
+    /// `None` when it has none (no key drawn, or the key isn't installed): a mod
+    /// may still supply one (the event's feature is nullable).
     pub(crate) fn grow_feature_event<'a>(
         &mut self,
         pos: BlockPos,
-        feature: &'a str,
+        feature: Option<&'a str>,
     ) -> Option<std::borrow::Cow<'a, str>> {
+        let feature = feature.filter(|name| self.feature_exists(name));
         self.level
             .block_grow_feature(pos, feature)
             .filter(|name| self.feature_exists(name))
@@ -373,7 +376,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             && self.feature_exists(mega)
             && let Some((dx, dz, around)) = self.two_by_two(state, pos)
         {
-            let Some(feature) = self.grow_feature_event(pos, mega) else {
+            let Some(feature) = self.grow_feature_event(pos, Some(mega)) else {
                 return false;
             };
             for &(_, p) in &around {
@@ -393,12 +396,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         } else {
             grower.trees
         };
-        let Some(feature) = weighted(list, self.random()) else {
-            return false;
-        };
-        if !self.feature_exists(feature) {
-            return false;
-        }
+        let feature = weighted(list, self.random());
         let Some(feature) = self.grow_feature_event(pos, feature) else {
             return false;
         };
@@ -463,13 +461,8 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `MushroomBlock.growMushroom`.
     pub(crate) fn grow_mushroom(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
-        let Some(feature) = self.b.data(state).feature.clone() else {
-            return false;
-        };
-        if !self.feature_exists(&feature) {
-            return false;
-        }
-        let Some(feature) = self.grow_feature_event(pos, &feature) else {
+        let feature = self.b.data(state).feature.clone();
+        let Some(feature) = self.grow_feature_event(pos, feature.as_deref()) else {
             return false;
         };
         self.remove_block(pos, false);

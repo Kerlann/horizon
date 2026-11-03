@@ -97,6 +97,8 @@ winreg = "0.56"
 winresource = "0.1"
 
 [dev-dependencies]
+# Exercise the same build-script input parser as the staged game.
+horizon-mod-api-gen = { path = "../crates/horizon-mod-api-gen" }
 # Tokenize source strings for the translation completeness test, including multiline calls.
 proc-macro2 = "1"
 syn = "2"

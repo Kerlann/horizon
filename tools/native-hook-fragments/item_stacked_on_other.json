@@ -1,0 +1,18 @@
+{
+  "hooks": [
+    {
+      "name": "item_stacked_on_other",
+      "target": "horizon_client_lib::menu::native_item_stacked_on_other",
+      "neoforge": "ItemStackedOnOtherEvent",
+      "side": "both",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "canceled"
+      }
+    }
+  ],
+  "comments": ["crates/horizon-client/src/menu.rs"],
+  "rust_summary": "a pickup click before item stack overrides (`native_item_stacked_on_other`).",
+  "doc_summary": "a pickup click before the item overrides, on both sides: `native_item_stacked_on_other(event, canceled)` gets the logical side, player entity id and UUID, menu slot, backing container and slot indices, the button, a carried-stack access and a clicked-slot view. The view checks slot rules and moves items through safe insertion and removal, including result-slot take behavior. Canceling skips the overrides (a bundle's); `cancellation_result` then says whether the rest of the click is skipped too. Bundles that use it need `\"hooks\": @API:item_stacked_on_other@`."
+}

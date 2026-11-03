@@ -78,14 +78,16 @@ pub struct LevelHeight {
     pub height: i32,
     pub logical_height: i32,
     pub has_skylight: bool,
+    pub has_ceiling: bool,
 }
 impl LevelHeight {
     /// The vanilla dimension types'.
     pub fn vanilla(dimension_type: &str) -> Option<Self> {
-        let (min_y, height, logical_height, has_skylight) = match dimension_type {
-            "minecraft:overworld" | "minecraft:overworld_caves" => (-64, 384, 384, true),
-            "minecraft:the_nether" => (0, 256, 128, false),
-            "minecraft:the_end" => (0, 256, 256, true),
+        let (min_y, height, logical_height, has_skylight, has_ceiling) = match dimension_type {
+            "minecraft:overworld" => (-64, 384, 384, true, false),
+            "minecraft:overworld_caves" => (-64, 384, 384, true, true),
+            "minecraft:the_nether" => (0, 256, 128, false, true),
+            "minecraft:the_end" => (0, 256, 256, true, false),
             _ => return None,
         };
         Some(Self {
@@ -93,6 +95,7 @@ impl LevelHeight {
             height,
             logical_height,
             has_skylight,
+            has_ceiling,
         })
     }
     /// A dimension type's JSON, if its codec accepts the range: multiples
@@ -113,6 +116,7 @@ impl LevelHeight {
             height,
             logical_height,
             has_skylight: v["has_skylight"].as_bool().unwrap_or(true),
+            has_ceiling: v["has_ceiling"].as_bool().unwrap_or(false),
         })
     }
     /// A level stem's `type` (a dimension type id, or one inline), with the
@@ -416,18 +420,24 @@ mod tests {
         let mut o = WorldgenOverrides::default();
         let overworld = o.level_height("minecraft:overworld");
         assert_eq!(overworld, LevelHeight::vanilla("minecraft:overworld"));
+        assert!(
+            LevelHeight::vanilla("minecraft:overworld_caves")
+                .unwrap()
+                .has_ceiling
+        );
         let nether = o.level_height("minecraft:the_nether").unwrap();
         assert_eq!((nether.logical_height, nether.has_skylight), (128, false));
         o.set(
             DIMENSION_TYPES,
             "minecraft:overworld",
-            r#"{"min_y":-64,"height":2096,"logical_height":384,"has_skylight":true}"#.into(),
+            r#"{"min_y":-64,"height":2096,"logical_height":384,"has_skylight":true,"has_ceiling":true}"#.into(),
         );
         let tall = LevelHeight {
             min_y: -64,
             height: 2096,
             logical_height: 384,
             has_skylight: true,
+            has_ceiling: true,
         };
         assert_eq!(o.level_height("minecraft:overworld"), Some(tall));
         let end = o.level_height("minecraft:the_end");

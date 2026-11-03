@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "create_spawn_position",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_create_spawn_position",
+      "neoforge": "LevelEvent.CreateSpawnPosition",
+      "side": "server",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "cancel"
+      }
+    }
+  ],
+  "rust_summary": "a new server level's initial spawn (`native_create_spawn_position`).",
+  "doc_summary": "a new world's spawn: `native_create_spawn_position(position, rotation, cancel)` is asked on the server before a new world's spawn is chosen (`MinecraftServer.setInitialSpawn`; NeoForge's `LevelEvent.CreateSpawnPosition`). Set `position` and `rotation` and cancel to make them the world spawn instead: vanilla's search and the bonus chest are skipped. Bundles need \"hooks\": @API:create_spawn_position@."
+}

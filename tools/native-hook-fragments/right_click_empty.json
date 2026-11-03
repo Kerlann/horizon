@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "right_click_empty",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_right_click_empty",
+      "side": "client",
+      "cancellable": false,
+      "neoforge": "PlayerInteractEvent.RightClickEmpty",
+      "mod_api": {
+        "contract": "listen"
+      }
+    }
+  ],
+  "rust_summary": "the local player's right click on empty space with an empty hand (`native_right_click_empty`).",
+  "doc_summary": "the local player's right click on empty space with an empty hand, NeoForge's `PlayerInteractEvent.RightClickEmpty`: `native_right_click_empty(hand)` is heard on the client for each empty hand `Minecraft.startUseItem` tries, main hand first, when no entity or block is in the crosshair. The server never hears of the click; a mod that needs it there sends its own message. It cannot be cancelled. Bundles need \"hooks\": @API:right_click_empty@."
+}

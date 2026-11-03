@@ -103,6 +103,19 @@ impl Game<'_> {
     /// valid respawn column gives the world spawn, else the origin chunk's
     /// centre at the spawn height. None while a chunk to test is loading.
     pub(super) fn find_world_spawn(&mut self) -> Result<Option<[i32; 3]>> {
+        if !self.spawn_hook_fired {
+            self.spawn_hook_fired = true;
+            let mut position = self.level.world_spawn.unwrap_or([0, 0, 0]);
+            let mut rotation = self.level.world_spawn_angle;
+            let mut cancel = false;
+            self.native_create_spawn_position(&mut position, &mut rotation, &mut cancel);
+            if cancel {
+                self.spawn_hook_cancelled = true;
+                self.level.world_spawn = Some(position);
+                self.level.world_spawn_angle = rotation;
+                return Ok(Some(position));
+            }
+        }
         let ((ox, oz), height) = match self.spawn_origin {
             Some(origin) => origin,
             None => *self.spawn_origin.insert(self.spawn_origin()?),

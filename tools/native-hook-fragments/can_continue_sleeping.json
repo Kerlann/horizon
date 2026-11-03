@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "can_continue_sleeping",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_can_continue_sleeping",
+      "side": "server",
+      "neoforge": "CanContinueSleepingEvent",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "replace",
+        "out": "may_continue"
+      }
+    }
+  ],
+  "rust_summary": "a sleeping entity's check that it may continue sleeping, whose answer a mod can replace (`native_can_continue_sleeping`).",
+  "doc_summary": "a sleeping living entity's checks that it may continue sleeping: `native_can_continue_sleeping(entity, name, kind, pos, problem, may_continue)` runs for a sleeping server player and for a sleeping villager or wandering trader, for each applicable bed-rule and bed-existence check, with `pos` the bed head, `entity` its UUID and `name` a player's name (empty for a mob). `problem` is what vanilla found: `SleepProblem::NotPossibleHere` when the bed is gone, `NotPossibleNow` when a player's bed rule no longer lets them sleep (daytime), none otherwise. `may_continue` starts empty, meaning `problem.is_none()`; set it `Some(true)` to keep the entity asleep, or `Some(false)` to wake it. It replaces only these checks, not a player's dead or health wake-up. Mob answers are collected after their tick Pre, before any mob in the batch ticks. A player's state is not swapped in. Bundles need \"hooks\": @API:can_continue_sleeping@."
+}

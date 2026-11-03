@@ -15,6 +15,34 @@ switch. The first install shows a trust notice, and every build waits behind a r
 after a review (its later releases are checked by machine); and they play in a game of their own, built for the
 instance they are installed in.
 
+## Conditional item model properties
+
+A client mod supplies its own namespaced `minecraft:condition` property by implementing
+`Hooks::item_model_property`. This hook is the registration: match your property name, answer
+through `value`, and leave other names untouched. The resolver calls it when choosing a branch,
+not when loading resources. It defaults to false without a provider and skips dispatch entirely
+when no trait mods are loaded. Vanilla properties do not enter the hook.
+
+```rust,ignore
+fn item_model_property(
+    &self,
+    _host: &dyn Host,
+    event: &mut ItemModelPropertyEvent<'_>,
+) {
+    if event.property == "example:charged" {
+        event.value = event.stack.patch.get("example:charged").and_then(Option::as_ref)
+            .and_then(serde_json::Value::as_bool) == Some(true);
+    }
+}
+```
+
+`Host`, `ItemModelPropertyEvent`, and `StackView` are exported by `horizon_client::mod_api`. The stack is borrowed,
+including for nested bundle items: `item`, `count`, explicit component `patch` (not merged
+defaults), and the runtime bundle selection. Listeners run in mod order; later answers win.
+Use `"property": "example:charged"` with both `on_true` and `on_false` in the item's
+`minecraft:condition` node. Custom special model renderers are not supplied by this hook.
+Bundles need `"hooks": @API:item_model_property@` once this pending hook is stamped.
+
 ## Item frame rendering
 
 `native_render_item_in_frame(entity_id, pos, stack, canceled)` runs before a visible item frame draws its item or map, including glow and invisible frames. Set `canceled` to hide the item without hiding the frame. Bundles need "hooks": @API:render_item_in_frame@.
@@ -352,6 +380,18 @@ contract is never changed, its `mod_api` entry (the trait method's contract) inc
 a version. Helpers (`native_text`, `native_player`…) have no hook entry; the catalog's `helpers` list names the ones
 the generated `Host` offers, and they are kept stable as the hook points are. A test (`catalog_matches_hook_points`) keeps the
 catalog and the hook points' sources (`native_hooks.rs`, `gfx/native_render.rs`, `horizon-world`'s `loot.rs`) in step.
+
+### Damage with the attacker, weapon and geometry
+
+`living_incoming_damage` (API 50) is one hook for every hit: it gets the attacker's network id,
+the weapon (a player's selected stack, a mob's main hand; `weapon.enchantments()` exposes the
+enchantment ids and levels), the hit's source position, and a mob victim's position and look
+vector, so an enchantment can tell a blow from behind and change `amount`. The weapon and the
+attacker come from the attack scope the game opens around an attack and are recorded only while
+a native mod is loaded; the positions are none for a player or the dragon as victim. It has no
+`Host`: the game is in the middle of the hit, so read the world from a tick hook. These arguments
+were added after the hook first shipped, so a mixin injection that names
+`native_living_incoming_damage` as a raw target must take them too.
 
 ### The build's warnings
 
@@ -884,6 +924,57 @@ player killed while leashed drops on its next tick, naming the killer. Bundles t
 `"hooks": 102`.
 
 API 103 adds native mod particle types to `native_send_particles`: `ParticleOptions::named("mymod:spark")` sends a particle of the mod's own type, drawn by Horizon clients from the sprite set in the mod's `assets/<namespace>/particles/<path>.json` (`"textures": ["mymod:spark/1", ...]`, resolved as `particle/<texture>` in the atlas). The name must be namespaced; a client without that file draws nothing for it, vanilla clients (whose brand isn't Horizon's) aren't sent it, and the call still returns true. The type behaves as vanilla's `SimpleParticleType` with a sprite set: a plain billboard, no tint, 20 to 40 ticks, its motion the game's default spread (the speed sets its direction, not how fast it goes). Bundles that use it need `"hooks": 103`.
+
+A mod particle may opt into declarative behaviour in that same particle JSON (no new hook API):
+
+```json
+{
+  "textures": ["mymod:spark"],
+  "horizon:behaviour": {
+    "velocity": [0.0, 0.15, 0.0],
+    "velocity_jitter": [0.02, 0.0, 0.02],
+    "animation": "loop",
+    "frame_ticks": 3,
+    "gravity": 0.5,
+    "friction": 0.96,
+    "lifetime": 40,
+    "size": [0.1, 0.0],
+    "alpha": [1.0, 0.0]
+  }
+}
+```
+
+`animation` chooses how the particle walks through its sprites: `age` (first to last over its
+lifetime), `loop` (cycles every `frame_ticks` ticks, 1..200, only valid with `loop`), `random` (one random
+sprite, kept) or `first` (the first sprite, kept). Without `animation` the particle keeps the sprite it was
+spawned with, as before.
+
+Every field is optional. Omit `horizon:behaviour` (or use `{}`) to keep the existing behaviour,
+including its random draws, unchanged. `velocity` replaces the initial randomized velocity with
+an exact vector in blocks/tick, plus the velocity the spawn call passed; omit it to retain the spawn's default spread. `velocity_jitter` adds a random
+offset per axis, uniform in `-j..=j` (0..16 each, drawn from the particle's seeded generator, so the same
+seed gives the same particle); declaring it alone starts from zero plus the spawn velocity. Each component must
+be finite and within -16..16. `gravity` is the vanilla multiplier: each tick subtracts
+`0.04 * gravity` from vertical velocity before moving (negative rises; range -100..100).
+After movement, `friction` multiplies all velocity components (0..1); normal block collisions
+and the vanilla on-ground horizontal multiplier of 0.7 still apply. Omitted gravity remains 0,
+omitted friction remains the engine default (0.98), and omitted lifetime remains 20..39 ticks.
+`lifetime` is an integer from 1 to 12000; removal uses the existing base tick: it moves that many
+times and is removed on the following tick.
+
+`size` and `alpha` are `[start, end]` linear curves over `age / lifetime`, clamped to their
+endpoints. Size is billboard half-width/half-height in blocks (0..16), not a multiplier;
+alpha is opacity (0..1). The start value applies immediately at spawn, then the curves update
+once per tick, reaching the end after `lifetime` motion ticks. Omitted size keeps the random
+spawn size; omitted alpha stays 1. Fading particles use the blended particle layer.
+Malformed declarations, unknown behaviour fields, non-finite or out-of-range numbers reject the
+whole behaviour object with a log warning, falling back to the existing particle behaviour;
+the sprite set still loads. Vanilla particle JSONs are unaffected. Resource reloads apply new
+declarations to newly spawned particles; live particles keep their spawn-time values.
+The engine copies fixed-size numeric data at spawn and performs no new allocations per particle
+tick. This first slice supports only linear size/opacity curves and constant gravity/friction;
+there is no per-particle code hook.
+
 
 API 104 adds the open screen hears of a key press (`native_screen_key_pressed_pre`) and of each character it types (`native_screen_char_typed_pre`), as vanilla's `ScreenEvent.KeyPressed.Pre` and `.CharacterTyped.Pre`: the screen, vanilla's key name (`key.keyboard.e`, as `native_key` hands it over; a key with no name fires nothing), whether the press is an auto-repeat, the character, GLFW's modifier bits (shift 1, control 2, alt 4, super 8), and `screen.mouse` for the pointer. A cancelled press goes no further — no focus move, no Escape-close, no inventory or hotbar key, no typing by the key itself, no `native_key` — while its release still arrives, so a `native_key` listener sees that release without its press, and the characters no mod cancelled still reach the text box, as vanilla's separate `charTyped` comes for a cancelled `keyPressed` too. A cancelled character drops only that character and never reaches a text box; control characters (Enter, Backspace, Tab, Delete, Escape, a Control letter) are keys and fire nothing. A key's characters fire after the key has acted, as GLFW's char callback comes after its key callback, so a key that closes the screen (the inventory key) reports no character (the closed screen hears none) and one that moves the focus types into the box it moved to. The input method's committed text fires the character hook too. They fire for the window and the control socket's `key` and `type` (not its `\b` backspace), after the fullscreen, screenshot, debug and narrator keys, never on the title screen itself (Options and the pack list opened from it do fire), the connect and loading screens, the prompts, books and sign editors drawn over gameplay, or while a world loads or saves. Bundles need "hooks": 104.
 
@@ -2370,10 +2461,26 @@ a dimension.
 
 - `entity.position(host)`, `block_position`, `rotation` (yaw and pitch), `kind` (`minecraft:zombie`), `uuid` (`&mut`:
   an entity with no UUID yet gets its own) and `level` read the entity.
+- `level.block_state(host, pos)` (`minecraft:oak_stairs[facing=east,…]`, as `/setblock` takes it), `block` (the name
+  alone), `block_property(host, pos, key)`, `is_loaded`, `height` (lowest `y` and height), `game_time` and `day_time`
+  read any level the server has loaded, not only the one in place. A block in a chunk that isn't loaded reads as `None`.
+- `level.seed(host)`, `difficulty` (`"normal"`, as `/difficulty` names it), `game_rule(host, "keep_inventory")` (a
+  `GameRuleValue`, `Bool` or `Int`; None for an unknown rule), `weather` (rain and thunder levels, 0.0 to 1.0; both 0
+  where the level has no weather), `is_raining` and `is_thundering` read its world settings.
+- `host.living(entity)` gives a `LivingRef` for a mob, a player, an armor stand or the dragon (vanilla's
+  `LivingEntity`); `living.entity()` goes back. `living.equipment(host, EquipmentSlot::Head)` and `hand_item(host,
+  Hand::Main)` read its equipment (an empty slot reads as `None`); `set_equipment(host, slot, stack)` puts a stack in a
+  slot as `/item replace entity` does (None or air empties it). Mob equipment writes return false until Horizon can
+  preserve complete stacks for all mob slots.
 - An `EntityRef` holds the world's open (`NativeWorldEpoch`) and the entity's id, which no other entity of that open
   gets. A handle of an earlier open, of an entity that is gone or moved to another level (it gets a new id there, as in
   vanilla), or used on a client reads as `None`.
 - The entities are those of the level in place (the one a hook runs in) and the server's players, whatever their level.
+- `level.block_shape(host, pos, kind)` reads block-local outline or collision boxes with an empty context. It returns
+  `None` for a client, a stale handle, or a closed level; parked levels can be read.
+- `level.entities_in(host, min, max)` lists resolvable entities whose boxes intersect the given box in the level in place; see its method documentation for the kinds and tick-time visibility not yet covered. Bundles need "hooks": @API:level_entities_in@.
+
+`level.set_block(host, pos, state, flags)` and `level.destroy_block(host, pos, drop)` change the level in place. Both return false for a stale handle, client, parked level, unloaded chunk or out-of-height position; parked writes wait for a safe level swap. `NativeBlockUpdateFlags` combines supported vanilla update flags with `|`. Skipping block-entity side effects suppresses container-content drops when replacing a chest; without it, the contents spill. Horizon sends all block changes to clients regardless of client-update flags. Bundles need `"hooks": ["level_block_writes"]`.
 
 Each read is a `Host` method too (`host.entity_position(entity)`): a helper whose catalog entry names a `receiver`
 (`entity`, `level`) also becomes a method of that handle.
@@ -2935,6 +3042,44 @@ The hooks about the entity (`block_entity_tick`, `block_entity_update_tag`, `men
 find it by the type id its `block_entity` hook gave the entity; the others (`block_entity`, `screen`, the
 block hooks) by block.
 
+`r.block_part_tag("minecraft:logs", Rotates)` and `r.item_part_tag("minecraft:axes", Sharp)` attach a part to
+every member of a tag (its name without `#`). Each game resolves them against its own tags when its world
+opens, again on `/reload`, and when a client joins a server, so the window's game and its server thread each
+answer from the tags they play with; a block that leaves the tag is no longer asked. A mod's parts on one
+thing run in the order it registered them, by key or by tag. A part a tag gives a thing
+that already has that kind of part warns, naming both mods, and the earlier mod's part stays. A tag that
+doesn't exist warns. Opening a world fails, naming the mod, when a part is attached to a block or item the game
+doesn't have. Scoped hooks run on a game's thread; one dispatched from any other thread (which no game hook
+does) can't see tag parts, and warns once.
+
+A capability is answered by block entity type: `r.block_entity_capability(&ITEMS, "mymod:pipe",
+Arc::new(PipeItems))` gives the type an `ItemHandler` in place of the game's answer, and
+`host.capability(&ITEMS, pos)` finds the handler at `pos`, the mod's or the game's own (a block entity's slots
+by side, by the rules hoppers follow). A handler holds no borrow: each call is given the host, so it may call a
+neighbour's capability, and it keeps its state in the block entity's slots, compound or attachments. Hoppers and
+`insert_item` use a mod's handler where one is registered; `simulate` answers without changing anything. A
+mod's own capability is a `CapabilityKey::new("mymod:chemicals")`, answered only by parts.
+
+Fluids are the capability `FLUIDS` (NeoForge's `Capabilities.Fluid.BLOCK`), answered by a `FluidHandler` in
+millibuckets. A `FluidStack` is a fluid id, an amount and data components, kept as an item stack's are (a potion
+fluid's contents; water and lava have none), and a tank fills only from empty or with the same fluid and the same
+components. The game's own answer is a mod block's tanks by side (`block_entity_fluids`) and a cauldron, one tank
+of 1000 mB that holds water in thirds and lava only whole; a cauldron has no block entity and is answered by
+position, and a powder snow cauldron holds no fluid. A cauldron takes water and lava whatever their components and
+discards them, as NeoForge's `CauldronFluidContent` does, so what comes out of it is plain: the one place a fluid's
+components are dropped. A mod block's saved tanks take no fluid with components. `host.transfer_fluids(from, from_side, to, to_side, max)` moves
+one fluid between two handlers in rounds shaped as NeoForge's `FluidUtil.tryFluidTransfer`, until a round moves
+nothing: the source's give and the target's take are simulated until they agree on an amount the target takes
+whole, then the source really gives with that request and the target is filled with exactly what came out. A
+handler whose real calls answer as its simulations never loses fluid and is never warned.
+`native_fluid_insert`, `native_fluid_extract`, `native_fluid_tanks` and `native_move_fluids` use a mod's handler
+where one is registered; they name a fluid by its id, so they leave fluids with components alone.
+
+A handler's `simulate` must answer as its real call does. One that doesn't is a mod bug, warned once naming the
+mod: what it leaves over in a move goes back into the source tank, else into the target. Fluid has no item form
+to drop at the block, so what neither end takes is lost, with a warning naming the mod. It is the one thing a
+broken handler can void.
+
 ### Testing a trait mod
 
 Every `Host` method defaults to a panic naming it (`not implemented: Host::tell`), so a test double implements
@@ -2963,8 +3108,11 @@ assert!(claimed);
 A new hook needs its fragment in `tools/native-hook-fragments/` with its `mod_api` entry (for example
 `{"contract": "cancel", "out": "cancel"}`), its `native_*` function with the placeholder body
 `let _ = (every, parameter);` (all its parameters, in order), and a run of `cargo run -p xtask -- mod-api`.
-The generator adds the hook's trait method and replaces the placeholder with the `dispatch_<hook>` call.
-Every hook needs a `mod_api` entry: the check fails naming any hook without one. A hook that stands in for a
+That command only replaces the placeholder in `native_hooks.rs` with the `dispatch_<hook>` call; commit
+that source change and the fragment. The `horizon-mod-api-gen` build dependency generates the hook traits,
+`Host` methods and dispatch code into Cargo's `OUT_DIR` when the game and renderer build, including release
+builds. These generated Rust files are not kept in the source tree or committed, and no manual regeneration
+is needed after a merge. Every hook needs a `mod_api` entry: the build fails naming any hook without one. A hook that stands in for a
 method a vanilla block, block entity, item or menu overrides also gets a `scope` and a `key`
 (`{"contract": "collect", "out": "output", "scope": "block", "key": "state"}`): the key is a
 `BlockStateId` (with a level host to name its block), an `&ItemStack`, a `ModBlockEntity` or an id `&str`, and
@@ -2972,9 +3120,9 @@ the generator also puts the method on that scope's part trait ([Parts](#parts)).
 placeholder nor already calls the dispatch is an error, and the generator never changes it. Hooks that are
 free functions outside `Game` are wired by hand: those crates can't see the mod list, so each calls a callback
 the executable installs once, such as `NativeLoadHooks` in `horizon-world` and `NativeClientHooks` in the
-client library (`menu_slot_rules`, `living_breathe`, `ingredient`). `cargo run -p xtask -- mod-api --check`
-and the `generated_output_is_current` test report a placeholder still to fill instead of filling it. Mixin
-injections go at the head of the body, before the dispatch, so they still run first.
+client library (`menu_slot_rules`, `living_breathe`, `ingredient`). A build reports a placeholder still to
+fill instead of changing hand-written source; run `cargo run -p xtask -- mod-api` to fill it. Mixin injections
+go at the head of the body, before the dispatch, so they still run first.
 
 ### Server attachments
 

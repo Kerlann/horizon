@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "living_shield_block",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_living_shield_block",
+      "neoforge": "LivingShieldBlockEvent",
+      "side": "server",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "canceled"
+      }
+    }
+  ],
+  "rust_summary": "An entity's hit about to be checked for blocking (`native_living_shield_block`).",
+  "doc_summary": "Any hit with damage on a player, mob or the ender dragon, raised item or not, as `LivingEntity.applyItemBlocking` is about to resolve the block: `native_living_shield_block(entity, kind, source, damage, original_blocked, block, canceled)` may change `block` (`blocked`, `blocked_damage`, `shield_damage`) or set `canceled` so nothing is blocked. A `shield_damage` below 0 applies the item's own `itemDamage` to what is stopped. Only a player raises a blocking item, so `original_blocked` is false for the others. Bundles need \"hooks\": @API:living_shield_block@."
+}

@@ -977,16 +977,44 @@ impl Game<'_> {
             self.throw_from_eyes(rest, eye, false);
         }
     }
-    /// `Player.giveExperienceLevels`.
+    /// `Player.giveExperienceLevels`, and the level change reported to the mods.
     pub(super) fn give_levels(&mut self, levels: i32) {
         let old_level = self.experience.level;
-        let xp = &mut self.experience;
-        xp.level = xp.level.saturating_add(levels);
-        if xp.level < 0 {
-            xp.level = 0;
-            xp.progress = 0.0;
-            xp.total = 0;
+        self.add_experience_levels(levels);
+        self.native_player_level_changed(old_level);
+    }
+    /// `ServerPlayer.giveExperienceLevels`: the mods of a server player may change
+    /// or cancel the levels, and every fifth level gained plays the level-up sound
+    /// (at most every 100 ticks).
+    pub(super) fn add_experience_levels(&mut self, mut levels: i32) {
+        // ServerPlayer.giveExperienceLevels
+        if levels == 0 {
+            return;
         }
+        if !horizon_client::mod_api::mods().is_empty()
+            && let (Some(player), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone())
+        {
+            let mut cancel = false;
+            self.native_player_xp_level_change(player, &name, &mut levels, &mut cancel);
+            if cancel {
+                return;
+            }
+        }
+        self.experience.add_levels(levels);
+        let level = self.experience.level;
+        if levels > 0 && level % 5 == 0 && self.ticks > self.last_level_up + 100 {
+            self.last_level_up = self.ticks;
+            let volume = if level > 30 { 1.0 } else { level as f32 / 30.0 };
+            let at = self.eye_position();
+            self.audio
+                .play("minecraft:entity.player.levelup", at, volume * 0.75, 1.0);
+        }
+    }
+    /// `Player.onEnchantmentPerformed`: the cost leaves the level directly, not
+    /// through `giveExperienceLevels`, and the mods hear of the level change.
+    pub(super) fn enchantment_performed(&mut self, cost: i32) {
+        let old_level = self.experience.level;
+        self.experience.add_levels(-cost);
         self.native_player_level_changed(old_level);
     }
     /// Whether the result slot may be taken (`mayPickup`).
@@ -1038,8 +1066,7 @@ impl Game<'_> {
         };
         let pos = s.pos;
         let enchanted_item = enchanted.clone();
-        // Player.onEnchantmentPerformed
-        self.give_levels(-(lapis_needed as i32));
+        self.enchantment_performed(lapis_needed as i32);
         self.level.xp_seed = self.world.random.next_int();
         if let Some(s) = self.station.as_mut() {
             s.inputs[0] = Some(enchanted);

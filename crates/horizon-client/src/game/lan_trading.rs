@@ -240,6 +240,9 @@ impl Game<'_> {
             maps: Some(&maps),
         };
         let env = Env {
+            player: Some(host.hub.guests[gi].uuid),
+            player_entity_id: Some(host.hub.guests[gi].entity_id),
+            side: horizon_client::menu::LogicalSide::Server,
             items: self.items(),
             recipes: self.recipes(),
             brewing: &self.stations().brewing,

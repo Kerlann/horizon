@@ -20,6 +20,8 @@ pub const SECTIONS: usize = (HEIGHT / 16) as usize;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LevelShape {
     pub sky_light: bool,
+    /// Server-side only: the synced dimension type doesn't carry it (horizon-protocol `DimensionType`).
+    pub has_ceiling: bool,
     pub min_y: i32,
     pub height: i32,
     /// `DimensionType.logicalHeight`: how high portals and chorus fruit reach.
@@ -28,18 +30,21 @@ pub struct LevelShape {
 impl LevelShape {
     pub const OVERWORLD: Self = Self {
         sky_light: true,
+        has_ceiling: false,
         min_y: MIN_Y,
         height: HEIGHT,
         logical_height: HEIGHT,
     };
     pub const NETHER: Self = Self {
         sky_light: false,
+        has_ceiling: true,
         min_y: 0,
         height: 256,
         logical_height: 128,
     };
     pub const END: Self = Self {
         sky_light: true,
+        has_ceiling: false,
         min_y: 0,
         height: 256,
         logical_height: 256,
@@ -59,10 +64,15 @@ impl LevelShape {
         }
         Ok(Self {
             sky_light,
+            has_ceiling: false,
             min_y,
             height,
             logical_height,
         })
+    }
+    pub fn with_ceiling(mut self, has_ceiling: bool) -> Self {
+        self.has_ceiling = has_ceiling;
+        self
     }
     /// One above the highest block (`getMaxY() + 1`).
     pub fn max_y(self) -> i32 {
@@ -1022,7 +1032,10 @@ mod tests {
             LevelShape::new(-64, 384, 384, true),
             Ok(LevelShape::OVERWORLD)
         );
-        assert_eq!(LevelShape::new(0, 256, 128, false), Ok(LevelShape::NETHER));
+        assert_eq!(
+            LevelShape::new(0, 256, 128, false).map(|s| s.with_ceiling(true)),
+            Ok(LevelShape::NETHER)
+        );
         assert!(LevelShape::new(0, 256, 257, true).is_err());
         assert!(LevelShape::new(-60, 384, 384, true).is_err());
     }

@@ -687,6 +687,10 @@ impl Game<'_> {
                 packed,
                 out,
             );
+            if horizon_cosmetics::enabled() {
+                let base = horizon_client::mobs::render::base_transform(m, alpha as f32, camera);
+                self.cosmetics_geometry(m, true, base, alpha as f32, packed, false, out);
+            }
             self.player_elytra_geometry(m, chest, camera, alpha as f32, packed, out);
             self.spin_attack_geometry(m, camera, alpha as f32, packed, out);
             self.shoulder_parrots_geometry(m, camera, alpha as f32, packed, out);
@@ -795,6 +799,10 @@ impl Game<'_> {
             240 | 240 << 8,
             &mut verts,
         );
+        if horizon_cosmetics::enabled() {
+            let base = horizon_client::mobs::render::base_transform(&m, 1.0, camera);
+            self.cosmetics_geometry(&m, true, base, 1.0, 240 | 240 << 8, false, &mut verts);
+        }
         // `WingsLayer` draws through `RenderTypes.armorCutoutNoCull`: the
         // wings' faces show from both sides (the elytra texture is empty on
         // the face that looks at the body).
@@ -1051,9 +1059,13 @@ impl Game<'_> {
             out,
         );
     }
-    /// The entity id the local player has on its server.
-    fn own_entity_id(&self) -> i32 {
-        self.remote.as_ref().map_or(0, |r| r.entity_id)
+    /// The entity id the local player has on its server: the one it was
+    /// given at login on a client, else the acting player's own.
+    pub(super) fn own_entity_id(&self) -> i32 {
+        self.remote.as_ref().map_or_else(
+            || self.player.as_ref().map_or(0, |p| p.entity_id),
+            |r| r.entity_id,
+        )
     }
     /// `ArrowLayer` and `BeeStingerLayer` (`StuckInBodyLayer`) for a player:
     /// the arrows and bee stingers stuck in the body, placed from the entity

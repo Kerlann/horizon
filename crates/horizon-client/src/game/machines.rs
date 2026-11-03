@@ -12,6 +12,7 @@ use horizon_client::{
     Result,
     containers::{BlockEntity, HOPPER_SLOTS, ModContainer},
     items::{ItemStack, Items},
+    mod_api::{self, ItemHandler},
     world::World,
 };
 use horizon_core::{geometry::Direction, position::BlockPos, random::RandomSource};
@@ -99,6 +100,14 @@ impl View {
                 .as_ref()
                 .map_or_else(Vec::new, |c| c.faces[face as usize].clone()),
             _ => (0..self.len()).collect(),
+        }
+    }
+    /// `Container.getMaxStackSize`: what one slot holds of any item, 1 for a chiseled
+    /// bookshelf's books and a jukebox's disc, else vanilla's default.
+    fn slot_limit(&self) -> u32 {
+        match self.kind {
+            Kind::Bookshelf | Kind::Jukebox => 1,
+            _ => 99,
         }
     }
     /// The slots `HopperBlockEntity.addItem` tries through `face`.
@@ -365,6 +374,15 @@ impl Containers<'_> {
             _ => true,
         }
     }
+    /// How many of `stack` slot `slot` takes: `canPlaceItem`, then up to the slot's limit
+    /// (`Container.getMaxStackSize(stack)`: the container's and the item's, the lower).
+    fn fits(&self, view: &View, slot: usize, stack: &ItemStack) -> u32 {
+        if !self.can_place(view, slot, stack) {
+            return 0;
+        }
+        let limit = view.slot_limit().min(self.max_stack(stack));
+        room(limit, self.get(view, slot), stack)
+    }
     /// `canTakeItemThroughFace` (furnaces and brewing stands restrict it).
     fn can_take(&self, view: &View, slot: usize, stack: &ItemStack, face: Direction) -> bool {
         if let Kind::Composter(level) = view.kind {
@@ -408,6 +426,18 @@ impl Containers<'_> {
         // Mth.lerpDiscrete(total, 0, 15). A mod can write a stack over its own
         // limit, so the ratio itself is clamped, as vanilla's invariant does.
         (total.min(1.0) * 14.0).floor() as i32 + i32::from(total > 0.0)
+    }
+}
+
+/// How many of `stack` go into a slot holding `current`, up to `limit`: into an empty slot, or
+/// onto the same item and components (`HopperBlockEntity.canMergeItems`).
+fn room(limit: u32, current: Option<&ItemStack>, stack: &ItemStack) -> u32 {
+    match current {
+        None => stack.count.min(limit),
+        Some(current) if current.same_item_same_components(stack) => {
+            stack.count.min(limit.saturating_sub(current.count))
+        }
+        Some(_) => 0,
     }
 }
 
@@ -856,8 +886,87 @@ impl Game<'_> {
         }
         taken
     }
+    /// The item capability part a mod registered for the type of the mod block entity at `pos`.
+    /// With no capability part registered, one empty-table check.
+    fn item_part_at(&self, pos: Pos) -> Option<Arc<dyn ItemHandler>> {
+        mod_api::block_entity_capability(&mod_api::ITEMS, || {
+            match self.world.block_entities.get(&pos) {
+                Some(BlockEntity::Mod(m)) => Some(m.id.as_str()),
+                _ => None,
+            }
+        })
+    }
+    /// `InventoryMoveItemEvent` for `item` going from `source` to `destination`, where one end
+    /// is a capability part: whether a mod canceled the move.
+    fn part_move_canceled(&self, source: [i32; 3], destination: [i32; 3], item: &str) -> bool {
+        let mut cancel = false;
+        self.native_inventory_move_item(source, destination, item, &mut cancel);
+        cancel
+    }
+    /// `ejectItems` into a capability part through its side `face`: the first hopper item
+    /// one of its slots takes, one item, as a hopper moves.
+    fn eject_into_part(
+        &mut self,
+        hopper: &View,
+        part: &dyn ItemHandler,
+        at: [i32; 3],
+        face: Direction,
+    ) -> bool {
+        let from = self.container_world_pos(hopper);
+        let slots = part.slots(self, at, Some(face));
+        for slot in 0..hopper.len() {
+            let Some(stack) = self.containers().get(hopper, slot).cloned() else {
+                continue;
+            };
+            if self.part_move_canceled(from, at, &stack.item) {
+                continue;
+            }
+            let one = ItemStack { count: 1, ..stack };
+            let Some(into) = (0..slots).find(|&s| {
+                part.insert(self, at, Some(face), s, one.clone(), true)
+                    .is_none()
+            }) else {
+                continue;
+            };
+            let Some(one) = self.take_one(hopper, slot) else {
+                continue;
+            };
+            match part.insert(self, at, Some(face), into, one, false) {
+                None => return true,
+                Some(rest) => self.put_back(hopper, slot, rest),
+            }
+        }
+        false
+    }
+    /// `suckInItems` from a capability part through its bottom: one item from the first of its
+    /// slots that gives one the hopper has room for.
+    fn suck_from_part(&mut self, part: &dyn ItemHandler, at: [i32; 3], hopper: &View) -> bool {
+        let into = self.container_world_pos(hopper);
+        for slot in 0..part.slots(self, at, Some(Direction::Down)) {
+            let Some(one) = part.extract(self, at, Some(Direction::Down), slot, 1, true) else {
+                continue;
+            };
+            let c = self.containers();
+            if !(0..hopper.len()).any(|s| c.fits(hopper, s, &one) > 0)
+                || self.part_move_canceled(at, into, &one.item)
+            {
+                continue;
+            }
+            let Some(one) = part.extract(self, at, Some(Direction::Down), slot, 1, false) else {
+                continue;
+            };
+            match self.add_item(None, hopper, one, None) {
+                None => return true,
+                Some(rest) => {
+                    part.insert(self, at, Some(Direction::Down), slot, rest, false);
+                }
+            }
+        }
+        false
+    }
     /// `HopperBlockEntity.ejectItems`: into the block container in front, else
-    /// a container entity there (`getContainerAt`).
+    /// a container entity there (`getContainerAt`). A capability part in front takes the
+    /// container's place.
     fn hopper_eject(&mut self, pos: Pos, hopper: &View) -> bool {
         let state = self.world.block(pos.0, pos.1, pos.2);
         let c = self.containers();
@@ -866,6 +975,11 @@ impl Game<'_> {
         };
         let front = offset(pos, facing);
         let face = facing.opposite();
+        if let Some(part) = self.item_part_at(front) {
+            let at = [front.0, front.1, front.2];
+            self.native_hopper_inventory_search([pos.0, pos.1, pos.2], Some(at), None);
+            return self.eject_into_part(hopper, &*part, at, face);
+        }
         if let Some(target) = c.view(front, false) {
             self.native_hopper_inventory_search(
                 [pos.0, pos.1, pos.2],
@@ -994,8 +1108,15 @@ impl Game<'_> {
     /// The container half of `HopperBlockEntity.suckInItems`: one item from the
     /// container at `above`, through its bottom face; with no block container
     /// there, from a container entity whose box meets the one around `at`
-    /// (`getSourceContainerOrHandler`). `None` when there is no container.
+    /// (`getSourceContainerOrHandler`). `None` when there is no container. A capability part
+    /// above takes the container's place.
     fn suck_from_container(&mut self, above: Pos, at: [f64; 3], hopper: &View) -> Option<bool> {
+        if let Some(part) = self.item_part_at(above) {
+            let (x, y, z) = hopper.parts[0].0;
+            let above = [above.0, above.1, above.2];
+            self.native_hopper_inventory_search([x, y, z], Some(above), None);
+            return Some(self.suck_from_part(&*part, above, hopper));
+        }
         let c = self.containers();
         let Some(source) = c.view(above, false) else {
             let id = self.entity_container_at(at)?;
@@ -1631,7 +1752,8 @@ mod item_column_tests {
 
 #[cfg(test)]
 mod mod_container_tests {
-    use super::{Kind, ModContainer, View};
+    use super::{Kind, ModContainer, View, room};
+    use horizon_client::items::ItemStack;
     use horizon_core::geometry::Direction;
     use std::sync::Arc;
 
@@ -1659,5 +1781,29 @@ mod mod_container_tests {
         assert_eq!(view.slots_for_face(Some(Direction::North)), [1]);
         assert!(view.slots_for_face(Some(Direction::East)).is_empty());
         assert_eq!(view.slots_for_face(None), [0, 1, 2]);
+    }
+
+    /// A slot takes no more than its container's limit and the item's: one book into a chiseled
+    /// bookshelf slot of 64 offered, a chest slot 64 and then the rest of 64.
+    #[test]
+    fn a_slot_takes_up_to_its_containers_limit() {
+        let books = |count| ItemStack {
+            item: "minecraft:book".into(),
+            count,
+            damage: 0,
+            extra: None,
+        };
+        let limit = |kind| {
+            let view = View {
+                parts: vec![((0, 0, 0), 6)],
+                kind,
+                container: None,
+            };
+            view.slot_limit().min(64)
+        };
+        assert_eq!(room(limit(Kind::Bookshelf), None, &books(64)), 1);
+        assert_eq!(room(limit(Kind::Jukebox), None, &books(64)), 1);
+        assert_eq!(room(limit(Kind::Generic), None, &books(64)), 64);
+        assert_eq!(room(limit(Kind::Generic), Some(&books(60)), &books(64)), 4);
     }
 }

@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "sweep_attack",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_sweep_attack",
+      "neoforge": "SweepAttackEvent",
+      "side": "both",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "canceled"
+      }
+    }
+  ],
+  "rust_summary": "A player's damaging melee hit decides whether it sweeps (`native_sweep_attack`).",
+  "doc_summary": "A player's damaging melee hit is about to sweep or not, on the server and, from `Player.attack`'s client run, on the attacking client (which only asks; the server sweeps), after `native_critical_hit`: `native_sweep_attack(target, vanilla_sweep, sweeping, canceled)` may force the sweep (any held item, even a critical hit) or stop it; `canceled` skips the later mods and keeps `sweeping` as it is, so a mod doing its own sweep cancels with `sweeping` false. A critical hit that sweeps plays both sounds. Bundles need \"hooks\": @API:sweep_attack@."
+}

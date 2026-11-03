@@ -660,6 +660,7 @@ struct NewItem {
     rarity: Option<Rarity>,
     components: Vec<(String, J)>,
     crafting_remainder: Option<String>,
+    block: Option<String>,
     /// `StandingAndWallBlockItem.wallBlock`, when its block declares it.
     wall_block: Option<String>,
 }
@@ -1146,18 +1147,26 @@ impl<'a> Plan<'a> {
                     rarity: None,
                     components: component_patch(&b.decl.id, &b.decl.components)?,
                     crafting_remainder: None,
+                    block: None,
                     wall_block: b.decl.wall_block.clone(),
                 });
             }
         }
         for m in &sorted {
             for i in &m.content.items {
+                if let Some(block) = &i.block
+                    && !defaults.contains_key(block)
+                    && !blocks.iter().any(|b| b.decl.id == *block)
+                {
+                    return Err(format!("{}: block {block:?} is not a block", i.id).into());
+                }
                 items.push(NewItem {
                     rename: Rename::new(&i.template, &i.id),
                     max_stack_size: i.max_stack_size,
                     rarity: i.rarity,
                     components: component_patch(&i.id, &i.components)?,
                     crafting_remainder: i.crafting_remainder.clone(),
+                    block: i.block.clone(),
                     wall_block: None,
                 });
             }
@@ -1323,6 +1332,19 @@ impl<'a> Plan<'a> {
             BTreeSet::new()
         };
         for i in &self.items {
+            if !components && let Some(block) = &i.block {
+                map.set(
+                    &i.rename.to,
+                    J::Obj(vec![
+                        ("class".into(), J::Arr(vec![J::Str("BlockItem".into())])),
+                        (
+                            "fields".into(),
+                            J::Obj(vec![("block".into(), J::Str(block.clone()))]),
+                        ),
+                    ]),
+                );
+                continue;
+            }
             let Some(v) = map.get(&i.rename.from) else {
                 continue;
             };
@@ -2545,6 +2567,17 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
         overlay.write(
             horizon_items::items::MOD_CRAFT_REMAINDERS,
             &serde_json::to_vec(&remainders)?,
+        )?;
+    }
+    let placed_blocks: BTreeMap<&str, &str> = plan
+        .items
+        .iter()
+        .filter_map(|i| Some((i.rename.to.as_str(), i.block.as_deref()?)))
+        .collect();
+    if !placed_blocks.is_empty() {
+        overlay.write(
+            horizon_items::items::MOD_ITEM_BLOCKS,
+            &serde_json::to_vec(&placed_blocks)?,
         )?;
     }
     // clients must agree on the block states and the items', mob effects',

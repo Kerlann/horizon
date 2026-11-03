@@ -1,0 +1,17 @@
+{
+  "hooks": [
+    {
+      "name": "player_harvest_check",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_player_harvest_check",
+      "neoforge": "PlayerEvent.HarvestCheck",
+      "side": "both",
+      "cancellable": false,
+      "mod_api": {
+        "contract": "collect",
+        "out": "can_harvest"
+      }
+    }
+  ],
+  "rust_summary": "A player's ability to harvest a block is checked (`native_player_harvest_check`).",
+  "doc_summary": "`native_player_harvest_check(player, pos, state, can_harvest)` may replace the harvest result. Bundles need \"hooks\": @API:player_harvest_check@."
+}

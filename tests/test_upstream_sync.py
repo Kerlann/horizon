@@ -31,6 +31,10 @@ class SyncTests(unittest.TestCase):
         git(seed, "config", "user.name", "Test")
         git(seed, "config", "user.email", "test@example.invalid")
         (seed / "shared.txt").write_text("base\n")
+        for name in sync.GENERATED_API:
+            path = seed / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("base generated\n")
         git(seed, "add", ".")
         git(seed, "commit", "-m", "base")
         git(seed, "push", str(self.origin), "main")
@@ -43,7 +47,7 @@ class SyncTests(unittest.TestCase):
         git(seed, "commit", "-am", "upstream")
         git(seed, "push", str(self.upstream), "main")
         self.upstream_sha = git(seed, "rev-parse", "HEAD")
-        self.calls, self.open_issues = [], []
+        self.calls, self.open_issues, self.open_pulls = [], [], []
         self.issue_thread = {"body": "", "comments": []}
         original = sync.command
 
@@ -54,6 +58,8 @@ class SyncTests(unittest.TestCase):
                     return json.dumps(self.open_issues)
                 if args[1:3] == ("issue", "view"):
                     return json.dumps(self.issue_thread)
+                if args[1:3] == ("pr", "list"):
+                    return json.dumps(self.open_pulls)
                 return ""
             if args[:2] == ("git", "fetch"):
                 args = tuple(str(self.upstream) if arg == "https://github.com/horizon-rust/horizon.git" else arg
@@ -74,12 +80,19 @@ class SyncTests(unittest.TestCase):
         git(self.work, "push", "origin", "main")
         self.before = git(self.work, "rev-parse", "HEAD")
 
-    def test_clean_merge_verified_before_main_push_and_then_noop(self):
+    def add_upstream_commit(self, filename):
+        seed = self.work.parent / "seed"
+        (seed / filename).write_text("upstream again\n")
+        git(seed, "add", ".")
+        git(seed, "commit", "-m", "upstream again")
+        git(seed, "push", str(self.upstream), "main")
+        self.upstream_sha = git(seed, "rev-parse", "HEAD")
+
+    def test_clean_merge_verified_then_pull_request_opened_and_then_noop(self):
         self.commit_fork("fork.txt")
         self.open_issues = [{"number": 9, "title": sync.TITLE}]
 
         def verify(repo, head, request):
-            self.assertEqual(git(self.origin, "rev-parse", "main"), self.before)
             self.assertEqual(git(self.origin, "rev-parse", "sync/upstream"), head)
             return "https://github.com/checks/1"
 
@@ -87,17 +100,108 @@ class SyncTests(unittest.TestCase):
             self.assertEqual(sync.sync(), 0)
             check.assert_called_once()
             head = git(self.work, "rev-parse", "HEAD")
-            self.assertEqual(git(self.origin, "rev-parse", "main"), head)
+            self.assertEqual(git(self.origin, "rev-parse", "main"), self.before)
+            self.assertEqual(git(self.origin, "rev-parse", "sync/upstream"), head)
+            create = next(call for call in self.calls if call[1:3] == ("pr", "create"))
+            self.assertIn("Sync upstream main " + self.upstream_sha[:10], create)
+            self.assertTrue(create[-1].startswith("> 🤖 Opened by Aria's agent swarm, Dyna, not by Aria."))
+            self.assertTrue(create[-1].endswith("🤖 Generated with Dyna."))
             self.assertEqual(git(self.work, "show", "-s", "--format=%P"), f"{self.before} {self.upstream_sha}")
             identity = "arismoko <19542195+arismoko@users.noreply.github.com>"
             self.assertEqual(git(self.work, "show", "-s", "--format=%an <%ae>%n%cn <%ce>"), f"{identity}\n{identity}")
             self.assertEqual(git(self.work, "show", "-s", "--format=%B"),
                              f"Merge upstream main {git(self.work, 'rev-parse', '--short', 'upstream/main')}")
             self.assertTrue(any(call[1:3] == ("issue", "close") for call in self.calls))
-            self.open_issues = []
+            self.open_pulls = [{"number": 5}]
+            git(self.work, "checkout", "-q", "main")
+            git(self.work, "reset", "-q", "--hard", self.before)
+            self.open_issues = [{"number": 9, "title": sync.TITLE}]
+            self.calls.clear()
             self.assertEqual(sync.sync(), 0)
             check.assert_called_once()
-        print("CLEAN: two-parent merge; exact identity/message; verified staging SHA promoted; issue closed; NOOP skips checks")
+            self.assertTrue(any(call[1:3] == ("issue", "close") for call in self.calls))
+        print("CLEAN: two-parent merge; exact identity/message; verified SHA opened as a pull request; main untouched; issue closed; NOOP skips checks")
+
+    def test_open_pull_request_branch_only_grows(self):
+        with patch.object(sync, "verify", return_value="https://github.com/checks/1"):
+            self.assertEqual(sync.sync(), 0)
+            first = git(self.origin, "rev-parse", "sync/upstream")
+            self.open_pulls = [{"number": 5}]
+            self.add_upstream_commit("later.txt")
+            git(self.work, "checkout", "-q", "main")
+            git(self.work, "reset", "-q", "--hard", self.before)
+            self.calls.clear()
+            self.assertEqual(sync.sync(), 0)
+        second = git(self.origin, "rev-parse", "sync/upstream")
+        self.assertNotEqual(first, second)
+        subprocess.run(["git", "-C", str(self.origin), "merge-base", "--is-ancestor", first, second], check=True)
+        subprocess.run(["git", "-C", str(self.origin), "merge-base", "--is-ancestor", self.upstream_sha, second],
+                       check=True)
+        self.assertEqual(git(self.origin, "rev-parse", "main"), self.before)
+        self.assertFalse(any(call[1:3] == ("pr", "create") for call in self.calls))
+        self.assertTrue(any(call[1:4] == ("api", "-X", "PATCH") and "repos/arismoko/horizon/pulls/5" in call
+                            for call in self.calls))
+        print("OPEN PR: new upstream merged on top of the open branch, no force push; title and body updated")
+
+    def generated_conflicts(self):
+        seed = self.work.parent / "seed"
+        for name in sync.GENERATED_API:
+            (seed / name).write_text("upstream generated\n")
+        git(seed, "commit", "-am", "update generated API")
+        git(seed, "push", str(self.upstream), "main")
+        self.upstream_sha = git(seed, "rev-parse", "HEAD")
+        git(self.work, "rm", "--", *sync.GENERATED_API)
+        git(self.work, "commit", "-m", "build API into OUT_DIR")
+        git(self.work, "push", "origin", "main")
+        self.before = git(self.work, "rev-parse", "HEAD")
+
+    def test_generated_deletions_survive_upstream_modifications(self):
+        self.generated_conflicts()
+        with patch.object(sync, "verify", return_value="https://github.com/checks/1") as check:
+            self.assertEqual(sync.sync(), 0)
+        head = git(self.work, "rev-parse", "HEAD")
+        check.assert_called_once_with("arismoko/horizon", head, "123-1")
+        self.assertEqual(git(self.origin, "rev-parse", "main"), self.before)
+        self.assertEqual(git(self.origin, "rev-parse", "sync/upstream"), head)
+        self.assertTrue(any(call[1:3] == ("pr", "create") for call in self.calls))
+        self.assertEqual(git(self.work, "show", "-s", "--format=%P"), f"{self.before} {self.upstream_sha}")
+        self.assertEqual(git(self.work, "ls-files", "--", *sync.GENERATED_API), "")
+        for name in sync.GENERATED_API:
+            self.assertFalse((self.work / name).exists())
+        self.assertEqual((self.work / "shared.txt").read_text(), "upstream\n")
+        identity = "arismoko <19542195+arismoko@users.noreply.github.com>"
+        self.assertEqual(git(self.work, "show", "-s", "--format=%an <%ae>%n%cn <%ce>"), f"{identity}\n{identity}")
+        self.assertEqual(git(self.work, "show", "-s", "--format=%B"),
+                         f"Merge upstream main {git(self.work, 'rev-parse', '--short', 'upstream/main')}")
+
+    def test_generated_deletions_do_not_hide_other_conflicts(self):
+        self.generated_conflicts()
+        self.commit_fork("shared.txt")
+        with patch.object(sync, "verify") as check:
+            self.assertEqual(sync.sync(), 1)
+            check.assert_not_called()
+        self.assertEqual(git(self.origin, "rev-parse", "main"), self.before)
+        self.assertEqual(git(self.origin, "for-each-ref", sync.STAGING), "")
+        self.assertEqual(git(self.work, "status", "--porcelain"), "")
+        issue = next(call[-1] for call in self.calls if call[1:3] == ("issue", "create"))
+        self.assertIn("shared.txt", issue)
+        for name in sync.GENERATED_API:
+            self.assertNotIn(name, issue)
+
+    def test_upstream_deletion_of_fork_modified_generated_file_is_not_resolved(self):
+        name = sync.GENERATED_API[0]
+        self.commit_fork(name)
+        seed = self.work.parent / "seed"
+        git(seed, "rm", "--", name)
+        git(seed, "commit", "-m", "delete upstream API")
+        git(seed, "push", str(self.upstream), "main")
+        with patch.object(sync, "verify") as check:
+            self.assertEqual(sync.sync(), 1)
+            check.assert_not_called()
+        self.assertEqual(git(self.origin, "rev-parse", "main"), self.before)
+        self.assertEqual((self.work / name).read_text(), "fork\n")
+        issue = next(call[-1] for call in self.calls if call[1:3] == ("issue", "create"))
+        self.assertIn(name, issue)
 
     def test_conflict_pushes_nothing_and_updates_one_issue(self):
         self.commit_fork("shared.txt")
@@ -133,7 +237,7 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(git(self.origin, "for-each-ref", sync.STAGING), "")
         issue = next(call[-1] for call in self.calls if call[1:3] == ("issue", "create"))
         self.assertIn("Upstream changed workflow files; an agent must push this one", issue)
-        self.assertIn("upstream-sync prepares the merge branch, and root pushes main from hermeslab", issue)
+        self.assertIn("upstream-sync pushes the merge to its own branch and opens the sync pull request", issue)
         self.assertIn(".github/workflows/checks.yml", issue)
         self.assertIn(self.upstream_sha, issue)
         print("WORKFLOWS: token limit detected before any push; paths/SHA reported for agent intervention")
@@ -161,25 +265,28 @@ class SyncTests(unittest.TestCase):
                 self.assertEqual(git(self.origin, "for-each-ref", sync.STAGING), "")
         print("DEDUP: same SHA in body/comment stays quiet; new SHA comments once; no pushes in either case")
 
-    def test_concurrent_main_advance_is_not_overwritten(self):
-        competitor = self.work.parent / "competitor"
-        subprocess.run(["git", "clone", "--branch", "main", str(self.origin), str(competitor)],
-                       check=True, capture_output=True)
-        git(competitor, "config", "user.name", "Test")
-        git(competitor, "config", "user.email", "test@example.invalid")
-        (competitor / "other.txt").write_text("other work\n")
-        git(competitor, "add", ".")
-        git(competitor, "commit", "-m", "concurrent work")
-        other = git(competitor, "rev-parse", "HEAD")
-
-        def verify(*args):
-            git(competitor, "push", "origin", "main")
-            return "https://github.com/checks/1"
-
-        with patch.object(sync, "verify", side_effect=verify):
+    def test_open_pull_request_refuses_workflow_change_from_main(self):
+        with patch.object(sync, "verify", return_value="https://github.com/checks/1"):
+            self.assertEqual(sync.sync(), 0)
+        self.open_pulls = [{"number": 5}]
+        git(self.work, "checkout", "-q", "main")
+        git(self.work, "reset", "-q", "--hard", self.before)
+        workflow = self.work / ".github/workflows/checks.yml"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text("name: checks\n")
+        git(self.work, "add", ".")
+        git(self.work, "commit", "-m", "fork workflow change")
+        git(self.work, "push", "origin", "main")
+        self.add_upstream_commit("later.txt")
+        staged = git(self.origin, "rev-parse", "sync/upstream")
+        self.calls.clear()
+        with patch.object(sync, "verify") as check:
             self.assertEqual(sync.sync(), 1)
-        self.assertEqual(git(self.origin, "rev-parse", "main"), other)
-        print("RACE: non-fast-forward main push refused; concurrent work preserved; issue opened")
+            check.assert_not_called()
+        self.assertEqual(git(self.origin, "rev-parse", "sync/upstream"), staged)
+        issue = next(call[-1] for call in self.calls if call[1:3] == ("issue", "create"))
+        self.assertIn(".github/workflows/checks.yml", issue)
+        print("OPEN PR + MAIN WORKFLOWS: a workflow change main brings into the branch is handed to an agent, not pushed")
 
     def test_red_checks_leave_main_unchanged_and_open_new_issue(self):
         with patch.object(sync, "verify", side_effect=RuntimeError("verify failed")):
@@ -190,6 +297,7 @@ class SyncTests(unittest.TestCase):
         self.assertIn("verify failed", issue)
         self.assertIn(self.upstream_sha, issue)
         self.assertFalse(any(call[1:3] == ("issue", "reopen") for call in self.calls))
+        self.assertFalse(any(call[1:3] == ("pr", "create") for call in self.calls))
         print("RED: candidate staged, main unchanged; new labelled issue instead of reopening a closed one")
 
 

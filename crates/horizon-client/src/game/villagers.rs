@@ -503,6 +503,28 @@ impl Game<'_> {
         self.wake_villager(id);
         true
     }
+    /// Ask after this mob's tick Pre; its living tick applies the answer.
+    pub(super) fn sync_sleeping_mob(&mut self, index: usize) {
+        if self.remote.is_some() || horizon_client::mod_api::mods().is_empty() {
+            return;
+        }
+        let m = &self.mobs[index];
+        if !m.alive() || m.removed {
+            return;
+        }
+        let Some(pos) = villager::ext(m).and_then(|e| e.sleeping_pos) else {
+            return;
+        };
+        let (id, kind) = (m.id, m.kind.id.clone());
+        let uuid = horizon_client::lan::playerdata::ints_uuid(self.uuid_for(id));
+        let bed = self.world.block(pos[0], pos[1], pos[2]);
+        let bed_exists = self.res.facts().get(bed).name.ends_with("_bed");
+        let problem = self.sleep_problem(bed_exists, false);
+        let mut may_continue = None;
+        self.native_can_continue_sleeping(uuid, "", &kind, pos, problem, &mut may_continue);
+        villager::ext_mut(&mut self.mobs[index]).may_continue_sleeping =
+            Some(may_continue.unwrap_or(problem.is_none()));
+    }
     /// `LivingEntity.stopSleeping` for the villager `id`, outside its own
     /// tick: it stands up and its bed is no longer occupied.
     pub(super) fn wake_villager(&mut self, id: u32) {
