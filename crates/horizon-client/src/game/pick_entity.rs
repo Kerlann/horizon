@@ -2,62 +2,105 @@
 //! `ServerGamePacketListenerImpl.handlePickItemFromEntity`): the client aims,
 //! the server answers with `Entity.getPickResult`.
 use super::Game;
+use horizon_client::mod_api::{BlockPos, NativeCrosshairTarget};
 use horizon_client::{items::ItemStack, save::uuid_text};
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct CrosshairEntityHit {
+    id: i32,
+    distance: f64,
+    pickable: bool,
+    suggest_uuid: bool,
+}
+
+fn nearest_entity(
+    hits: [Option<CrosshairEntityHit>; 4],
+    block_distance: Option<f64>,
+) -> Option<CrosshairEntityHit> {
+    hits.into_iter().flatten().fold(None, |best, hit| {
+        if block_distance.is_none_or(|distance| hit.distance < distance)
+            && best.is_none_or(|best| hit.distance < best.distance)
+        {
+            Some(hit)
+        } else {
+            best
+        }
+    })
+}
+
 impl Game<'_> {
+    fn crosshair_entity_hit(&self) -> Option<CrosshairEntityHit> {
+        let hit = |id: u32, distance, pickable| CrosshairEntityHit {
+            id: id as i32,
+            distance,
+            pickable,
+            suggest_uuid: true,
+        };
+        let hits = [
+            self.remote_object_hit(true).map(|object| {
+                hit(
+                    object.id as u32,
+                    object.distance,
+                    !self.interactions.contains_key(&object.id),
+                )
+            }),
+            self.mob_hit()
+                .map(|(index, distance)| hit(self.mobs[index].id, distance, true)),
+            self.redirectable_hit().map(|(index, distance)| {
+                hit(self.creatures.projectiles[index].id, distance, false)
+            }),
+            self.dragon_hit().map(|(id, distance)| CrosshairEntityHit {
+                id: id as i32,
+                distance,
+                pickable: false,
+                suggest_uuid: false,
+            }),
+        ];
+        if hits.iter().all(Option::is_none) {
+            return None;
+        }
+        nearest_entity(hits, self.block_distance())
+    }
+
+    /// The ordinary block-or-entity pick (Minecraft.hitResult), using the
+    /// game's targeting ray, reach and occlusion. None without a client world
+    /// or on a miss. Unlike native_view_hit, this never traces distant terrain.
+    pub(super) fn native_crosshair_target(&self) -> Option<NativeCrosshairTarget> {
+        if !self.native_window() || self.title.is_some() {
+            return None;
+        }
+        self.player.as_ref()?;
+        if let Some(hit) = self.crosshair_entity_hit() {
+            let (eye, direction) = self.aim()?;
+            return Some(NativeCrosshairTarget::Entity {
+                id: hit.id,
+                point: std::array::from_fn(|axis| eye[axis] + direction[axis] * hit.distance),
+            });
+        }
+        let hit = self.pick()?;
+        Some(NativeCrosshairTarget::Block {
+            pos: BlockPos::new(hit.pos[0], hit.pos[1], hit.pos[2]),
+            state: self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]),
+            hit: hit.native(),
+        })
+    }
+
     /// The entity the crosshair hits before any block, as `Entity.getId`; an
     /// entity with nothing to pick (a projectile, a player, the dragon) is
     /// `Some(None)`. `None` when the view hits a block or nothing.
     pub(super) fn pick_entity_hit(&self) -> Option<Option<i32>> {
-        let mut best: Option<(f64, Option<i32>)> = None;
-        let mut offer = |distance: f64, id: Option<i32>| {
-            if self.before_block(distance) && best.is_none_or(|b| distance < b.0) {
-                best = Some((distance, id));
-            }
-        };
-        if let Some(hit) = self.remote_object_hit(true) {
-            // Interaction.getPickResult is Entity's: nothing to pick.
-            let id = (!self.interactions.contains_key(&hit.id)).then_some(hit.id);
-            offer(hit.distance, id);
-        }
-        if let Some((i, d)) = self.mob_hit() {
-            offer(d, Some(self.mobs[i].id as i32));
-        }
-        if let Some((_, d)) = self.redirectable_hit() {
-            offer(d, None);
-        }
-        if let Some((_, d)) = self.dragon_hit() {
-            offer(d, None);
-        }
-        best.map(|b| b.1)
+        self.crosshair_entity_hit()
+            .map(|hit| hit.pickable.then_some(hit.id))
     }
 
     /// `ClientSuggestionProvider.getSelectedEntities`: the UUID
     /// (`Entity.getStringUUID`) of the entity the crosshair hits before any
     /// block (`Minecraft.hitResult` an `EntityHitResult`).
     pub(super) fn crosshair_entity_uuid(&self) -> Option<String> {
-        // The nearest entity wins, as in `pick_entity_hit`; one whose UUID
-        // the client doesn't know (the dragon's parts) suggests nothing.
-        let mut best: Option<(f64, Option<[i32; 4]>)> = None;
-        let mut offer = |distance: f64, uuid: Option<[i32; 4]>| {
-            if self.before_block(distance) && best.is_none_or(|b| distance < b.0) {
-                best = Some((distance, uuid));
-            }
-        };
-        let uuid_of = |id: u32| self.persist.uuids.get(&id).copied();
-        if let Some(hit) = self.remote_object_hit(true) {
-            offer(hit.distance, uuid_of(hit.id as u32));
-        }
-        if let Some((i, d)) = self.mob_hit() {
-            offer(d, uuid_of(self.mobs[i].id));
-        }
-        if let Some((i, d)) = self.redirectable_hit() {
-            offer(d, uuid_of(self.creatures.projectiles[i].id));
-        }
-        if let Some((_, d)) = self.dragon_hit() {
-            offer(d, None);
-        }
-        best.and_then(|b| b.1).map(uuid_text)
+        self.crosshair_entity_hit()
+            .filter(|hit| hit.suggest_uuid)
+            .and_then(|hit| self.persist.uuids.get(&(hit.id as u32)).copied())
+            .map(uuid_text)
     }
 
     /// `Entity.getPickResult` of the entity `id`: a mob's spawn egg, the item
@@ -121,5 +164,66 @@ impl Game<'_> {
             .sum();
         let range = self.entity_reach + 3.0;
         d2 < range * range
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CrosshairEntityHit, nearest_entity};
+
+    #[test]
+    fn nearest_crosshair_entity_preserves_occlusion_ties_and_pick_metadata() {
+        let object = CrosshairEntityHit {
+            id: 17,
+            distance: 2.0,
+            pickable: true,
+            suggest_uuid: true,
+        };
+        let projectile = CrosshairEntityHit {
+            id: 23,
+            distance: 1.0,
+            pickable: false,
+            suggest_uuid: true,
+        };
+        let dragon = CrosshairEntityHit {
+            id: 29,
+            distance: 0.5,
+            pickable: false,
+            suggest_uuid: false,
+        };
+        assert_eq!(nearest_entity([None; 4], None), None);
+        assert_eq!(
+            nearest_entity([Some(object), None, None, None], None),
+            Some(object)
+        );
+        for block_distance in [1.0, 2.0] {
+            assert_eq!(
+                nearest_entity([Some(object), None, None, None], Some(block_distance)),
+                None
+            );
+        }
+        assert_eq!(
+            nearest_entity([Some(object), None, Some(projectile), None], Some(3.0)),
+            Some(projectile)
+        );
+        assert_eq!(
+            nearest_entity([Some(object), None, Some(projectile), Some(dragon)], None),
+            Some(dragon)
+        );
+        assert_eq!(
+            nearest_entity(
+                [
+                    Some(object),
+                    Some(CrosshairEntityHit {
+                        distance: 2.0,
+                        ..projectile
+                    }),
+                    None,
+                    None
+                ],
+                None
+            ),
+            Some(object)
+        );
     }
 }

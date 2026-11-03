@@ -1,7 +1,6 @@
 //! The movement prediction's replay on the server (`lan::prediction`): each guest's client ticks
 //! played again with the client's own movement code, in the guest's level.
 use super::Game;
-use super::lan::LanHost;
 use horizon_client::lan::entity::EntityState;
 use horizon_client::lan::guest::Guest;
 use horizon_client::lan::prediction::{Replay, near, slack};
@@ -11,7 +10,10 @@ use horizon_client::world::World;
 impl Game<'_> {
     /// Guest `conn`'s client ticks since the server's last tick, played again, before the server
     /// moves the guest's own body.
-    pub(super) fn guest_replay(&mut self, host: &mut LanHost, conn: u32) {
+    pub(super) fn guest_replay(&mut self, conn: u32) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         if !host.hub.recording() {
             return;
         }
@@ -135,7 +137,8 @@ impl Game<'_> {
             return;
         }
         let agreed = g.replay.as_deref().expect("played above").agreed();
-        for event in host.hub.anticheat_prediction(conn, &over, agreed) {
+        let events = host.hub.anticheat_prediction(conn, &over, agreed);
+        for event in events {
             self.lan_log_event(event);
         }
     }

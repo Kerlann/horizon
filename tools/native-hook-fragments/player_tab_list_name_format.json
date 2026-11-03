@@ -11,8 +11,5 @@
         "out": "display_name"
       }
     }
-  ],
-  "comments": ["crates/horizon-client/src/lan/hub.rs"],
-  "rust_summary": "Server player tab-list name formatting (`native_player_tab_list_name_format`).",
-  "doc_summary": "A server player's tab-list name is formatted: `native_player_tab_list_name_format(player, name, display_name)` can replace the nullable display name, initially the server nickname if present; `None` lets the client choose. Bundles need \"hooks\": @API:player_tab_list_name_format@."
+  ]
 }

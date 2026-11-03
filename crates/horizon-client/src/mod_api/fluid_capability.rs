@@ -1,13 +1,12 @@
 //! The fluid capability (arismoko/horizon#41 §7): [`FLUIDS`], as NeoForge 26.3's
-//! `Capabilities.Fluid.BLOCK`, in the shape of [`ITEMS`](super::ITEMS). Amounts are millibuckets:
-//! a bucket is 1000.
-use super::{BlockSide, Capability, CapabilityKey, Direction, Host, LevelRef};
-use crate::item_data::StackData;
-use std::{
-    collections::HashSet,
-    marker::PhantomData,
-    sync::{Arc, Mutex},
+//! `Capabilities.Fluid.BLOCK`, a [`ResourceHandler`] of [`FluidResource`]s as
+//! [`ITEMS`](super::ITEMS) is of items. Amounts are millibuckets: a bucket is 1000.
+use super::{
+    BlockSide, CapabilityKey, Host, ItemCapabilityKey, ItemPlace, ItemResource, ItemStack,
+    ResourceHandler, Transaction,
 };
+use crate::item_data::StackData;
+use std::{fmt, marker::PhantomData, sync::Arc};
 
 /// An amount of one fluid, as NeoForge's `FluidStack`: its id (`minecraft:water`), how many
 /// millibuckets, and its data components, kept as an item stack's are (a potion fluid's
@@ -51,336 +50,221 @@ impl FluidStack {
     }
 }
 
-/// Fluid tanks, as NeoForge 26.3's `Capabilities.Fluid.BLOCK` (a `ResourceHandler<FluidResource>`).
-/// The game answers it for a mod block's tanks (`block_entity_fluids`) and for a cauldron, one
-/// tank of 1000 mB that holds water in thirds and lava only whole; a cauldron has no block
-/// entity, so it is answered by position. Powder snow is no fluid: its cauldron has no answer.
-pub const FLUIDS: CapabilityKey<dyn FluidHandler> = CapabilityKey {
+/// A fluid and its components, without an amount, as NeoForge's `FluidResource`: what a tank
+/// holds. An empty tank holds none.
+#[derive(Clone)]
+pub struct FluidResource(FluidStack);
+
+impl FluidResource {
+    /// What `stack` is, whatever its amount.
+    pub fn of(stack: &FluidStack) -> Self {
+        Self(stack.with_amount(1))
+    }
+    /// The fluid's id (`minecraft:water`).
+    pub fn fluid(&self) -> &str {
+        &self.0.fluid
+    }
+    /// `amount` millibuckets of it as a stack.
+    pub fn to_stack(&self, amount: u32) -> FluidStack {
+        self.0.with_amount(amount)
+    }
+    /// Whether `stack` is this fluid with these components.
+    pub fn matches(&self, stack: &FluidStack) -> bool {
+        self.0.same_fluid_same_components(stack)
+    }
+}
+
+impl PartialEq for FluidResource {
+    fn eq(&self, other: &Self) -> bool {
+        self.matches(&other.0)
+    }
+}
+impl Eq for FluidResource {}
+
+impl fmt::Debug for FluidResource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("FluidResource").field(&self.0.fluid).finish()
+    }
+}
+
+/// Fluid tanks, as NeoForge 26.3's `Capabilities.Fluid.BLOCK`: a block's tanks as one side
+/// reaches them, numbered from 0 for that side, as [`ITEMS`](super::ITEMS)' slots. The game
+/// answers it for a mod block's tanks (`block_entity_fluids`) and for a cauldron, one tank of
+/// 1000 mB that holds water in thirds and lava only whole; a cauldron has no block entity, so it
+/// is answered by position. Powder snow is no fluid: its cauldron has no answer.
+pub const FLUIDS: CapabilityKey<dyn ResourceHandler<FluidResource>> = CapabilityKey {
     name: "horizon:fluids",
     default: Some(|host, at| {
-        host.fluid_tank_count(at)
-            .map(|_| Box::new(GameFluids(at.level)) as Box<dyn FluidHandler>)
+        crate::mod_api::backend_of(host)
+            .and_then(|backend| backend.fluid_tank_count(at))
+            .map(|_| Box::new(GameFluids(at)) as Box<dyn ResourceHandler<FluidResource>>)
     }),
     handler: PhantomData,
 };
 
-/// The tanks of the block at `at` as its side `side` reaches them (none: every tank), numbered
-/// from 0 for that side, as [`ITEMS`](super::ITEMS)' slots. `simulate` changes
-/// nothing and must answer exactly as the real call would, as NeoForge's handlers must: a move
-/// plans with it at both ends, then commits.
-pub trait FluidHandler: Send + Sync + 'static {
-    /// How many tanks `side` reaches.
-    fn tanks(&self, host: &dyn Host, at: [i32; 3], side: Option<Direction>) -> usize;
-    /// What tank `tank` holds, if anything.
-    fn fluid(
-        &self,
-        host: &dyn Host,
-        at: [i32; 3],
-        side: Option<Direction>,
-        tank: usize,
-    ) -> Option<FluidStack>;
-    /// How much of `fluid` tank `tank` holds when empty, whatever it holds now: none where
-    /// `fluid` may not go in, such as a drain-only tank. NeoForge's `isValid` and
-    /// `getCapacityAsLong` in one.
-    fn capacity(
-        &self,
-        host: &dyn Host,
-        at: [i32; 3],
-        side: Option<Direction>,
-        tank: usize,
-        fluid: &FluidStack,
-    ) -> u32;
-    /// Puts as much of `fluid` as tank `tank` takes, into an empty tank or onto the same fluid
-    /// with the same components; what didn't fit.
+/// The game's own [`FLUIDS`]: a mod block's tanks `.side` reaches by its table, and cauldrons.
+struct GameFluids(BlockSide);
+impl ResourceHandler<FluidResource> for GameFluids {
+    fn size(&self, host: &mut dyn Host) -> usize {
+        crate::mod_api::backend_of(host)
+            .and_then(|backend| backend.fluid_tank_count(self.0))
+            .unwrap_or(0)
+    }
+    fn resource(&self, host: &mut dyn Host, index: usize) -> Option<FluidResource> {
+        let held = crate::mod_api::backend_of(host)
+            .and_then(|backend| backend.fluid_tank(self.0, index))?;
+        Some(FluidResource::of(&held))
+    }
+    fn amount(&self, host: &mut dyn Host, index: usize) -> u32 {
+        crate::mod_api::backend_of(host)
+            .and_then(|backend| backend.fluid_tank(self.0, index))
+            .map_or(0, |held| held.amount)
+    }
+    fn capacity(&self, host: &mut dyn Host, index: usize, resource: &FluidResource) -> u32 {
+        crate::mod_api::backend_of(host).map_or(0, |backend| {
+            backend.fluid_tank_capacity(self.0, index, &resource.to_stack(1))
+        })
+    }
     fn insert(
         &self,
         host: &mut dyn Host,
-        at: [i32; 3],
-        side: Option<Direction>,
-        tank: usize,
-        fluid: FluidStack,
-        simulate: bool,
-    ) -> Option<FluidStack>;
-    /// Takes up to `max` out of tank `tank`; what came out.
-    fn extract(
-        &self,
-        host: &mut dyn Host,
-        at: [i32; 3],
-        side: Option<Direction>,
-        tank: usize,
-        max: u32,
-        simulate: bool,
-    ) -> Option<FluidStack>;
-}
-
-/// The game's own [`FLUIDS`]: a mod block's tanks by its table's sides, and cauldrons.
-struct GameFluids(LevelRef);
-impl GameFluids {
-    fn at(&self, pos: [i32; 3], side: Option<Direction>) -> BlockSide {
-        BlockSide {
-            level: self.0,
-            pos,
-            side,
-        }
-    }
-}
-impl FluidHandler for GameFluids {
-    fn tanks(&self, host: &dyn Host, at: [i32; 3], side: Option<Direction>) -> usize {
-        host.fluid_tank_count(self.at(at, side)).unwrap_or(0)
-    }
-    fn fluid(
-        &self,
-        host: &dyn Host,
-        at: [i32; 3],
-        side: Option<Direction>,
-        tank: usize,
-    ) -> Option<FluidStack> {
-        host.fluid_tank(self.at(at, side), tank)
-    }
-    fn capacity(
-        &self,
-        host: &dyn Host,
-        at: [i32; 3],
-        side: Option<Direction>,
-        tank: usize,
-        fluid: &FluidStack,
+        tx: &Transaction,
+        index: usize,
+        resource: &FluidResource,
+        amount: u32,
     ) -> u32 {
-        host.fluid_tank_capacity(self.at(at, side), tank, fluid)
-    }
-    fn insert(
-        &self,
-        host: &mut dyn Host,
-        at: [i32; 3],
-        side: Option<Direction>,
-        tank: usize,
-        fluid: FluidStack,
-        simulate: bool,
-    ) -> Option<FluidStack> {
-        host.fluid_tank_insert(self.at(at, side), tank, fluid, simulate)
+        let Some(backend) = crate::mod_api::backend_mut_of(host) else {
+            return 0;
+        };
+        let rest = backend.fluid_tank_insert(self.0, index, resource.to_stack(amount), tx);
+        amount - rest.map_or(0, |rest| rest.amount.min(amount))
     }
     fn extract(
         &self,
         host: &mut dyn Host,
-        at: [i32; 3],
-        side: Option<Direction>,
-        tank: usize,
-        max: u32,
-        simulate: bool,
-    ) -> Option<FluidStack> {
-        host.fluid_tank_extract(self.at(at, side), tank, max, simulate)
-    }
-}
-
-/// The owners of fluid handlers whose real calls disagreed with their simulation, warned once.
-static BROKEN: Mutex<Option<HashSet<String>>> = Mutex::new(None);
-
-/// A handler's real call disagreed with its simulation: a mod bug, warned once per owner.
-fn broken(handler: &Capability<dyn FluidHandler>, at: [i32; 3], what: &str) {
-    let owner = handler.owner();
-    let mut warned = BROKEN.lock().unwrap_or_else(|e| e.into_inner());
-    if warned.get_or_insert_default().insert(owner.clone()) {
-        log::warn!(
-            "Horizon: {owner}'s fluid handler at {at:?} {what} other than its simulation said. \
-             Its simulate must answer as its real call does."
-        );
-    }
-}
-
-#[cfg(test)]
-pub(super) fn warned_about(owner: &str) -> bool {
-    let broken = BROKEN.lock().unwrap_or_else(|e| e.into_inner());
-    broken.as_ref().is_some_and(|owners| owners.contains(owner))
-}
-
-/// One end of a move: a block's handler as one side reaches it.
-struct End<'h> {
-    handler: &'h Capability<dyn FluidHandler>,
-    at: [i32; 3],
-    side: Option<Direction>,
-}
-
-impl End<'_> {
-    /// One pass of `fluid` over the tanks, each offered what is left: how much went in. With
-    /// `simulate`, how much such a pass would take.
-    fn pass(&self, host: &mut dyn Host, fluid: &FluidStack, simulate: bool) -> u32 {
-        let mut left = fluid.amount;
-        for tank in 0..self.handler.tanks(host, self.at, self.side) {
-            if left == 0 {
-                break;
-            }
-            let some = fluid.with_amount(left);
-            let rest = self
-                .handler
-                .insert(host, self.at, self.side, tank, some, simulate);
-            left = rest.map_or(0, |rest| rest.amount.min(left));
+        tx: &Transaction,
+        index: usize,
+        resource: &FluidResource,
+        amount: u32,
+    ) -> u32 {
+        let held =
+            crate::mod_api::backend_of(host).and_then(|backend| backend.fluid_tank(self.0, index));
+        if !held.is_some_and(|held| resource.matches(&held)) {
+            return 0;
         }
-        fluid.amount - left
-    }
-    /// Fills the tanks with `fluid` in passes until one takes nothing; how much went in.
-    fn fill(&self, host: &mut dyn Host, fluid: &FluidStack) -> u32 {
-        let mut went = 0;
-        while went < fluid.amount {
-            let more = self.pass(host, &fluid.with_amount(fluid.amount - went), false);
-            if more == 0 {
-                break;
-            }
-            went += more;
-        }
-        went
-    }
-    /// `fill` into tank `tank` alone; what is left.
-    fn fill_tank(&self, host: &mut dyn Host, tank: usize, fluid: FluidStack) -> Option<FluidStack> {
-        let mut left = fluid;
-        loop {
-            let amount = left.amount;
-            let rest = self
-                .handler
-                .insert(host, self.at, self.side, tank, left.clone(), false);
-            match rest.filter(|rest| rest.amount > 0) {
-                Some(rest) if rest.amount < amount => left = left.with_amount(rest.amount),
-                Some(_) => return Some(left),
-                None => return None,
-            }
-        }
+        crate::mod_api::backend_mut_of(host)
+            .and_then(|backend| backend.fluid_tank_extract(self.0, index, amount, tx))
+            .map_or(0, |out| out.amount.min(amount))
     }
 }
 
-impl End<'_> {
-    /// `rest` back into tank `tank`, else the handler's others; what neither takes.
-    fn back(&self, host: &mut dyn Host, tank: usize, rest: FluidStack) -> Option<FluidStack> {
-        let rest = self.fill_tank(host, tank, rest)?;
-        let back = self.fill(host, &rest);
-        (back < rest.amount).then(|| rest.with_amount(rest.amount - back))
-    }
-}
+/// Fluid held by an item, as NeoForge 26.3's `Capabilities.Fluid.ITEM`: a handler for the item at
+/// one place, whose changes rewrite the item there with an [`exchange`](ItemPlace::exchange) of
+/// one, so from a stack of more than one the changed item splits off. The game answers it for
+/// vanilla's buckets (NeoForge's `BucketResourceHandler`): one tank of a bucket, filled and drained
+/// whole, an empty bucket taking plain water or lava.
+pub const ITEM_FLUIDS: ItemCapabilityKey<dyn ResourceHandler<FluidResource>> = ItemCapabilityKey {
+    name: "horizon:item_fluids",
+    default: Some(|_, place, stack| {
+        BUCKETS
+            .iter()
+            .any(|&(bucket, _)| *stack.item == *bucket)
+            .then(|| Box::new(GameBucket(place.clone())) as Box<dyn ResourceHandler<FluidResource>>)
+    }),
+    handler: PhantomData,
+};
 
-impl dyn Host + '_ {
-    /// Moves up to `max` millibuckets of one fluid from the block at `from`, through its side
-    /// `from_side`, into the one at `to`, through `to_side`, by their [`FLUIDS`] handlers, in
-    /// rounds shaped as NeoForge's `FluidUtil.tryFluidTransfer`, each source tank in turn
-    /// until a round moves nothing. A round simulates what the source gives and what the
-    /// target takes of it in one pass over its tanks (each offered what is left); the request
-    /// shrinks until the target takes all the source would give of it (a cauldron gives only
-    /// whole thirds); then the source really gives with that request and the target is filled
-    /// with exactly what it gave. So a handler whose real calls answer as its simulations loses
-    /// nothing and is never warned. What moved; none when nothing did.
-    ///
-    /// A handler whose real call disagrees with its simulation is a mod bug, warned once naming
-    /// its mod. What it leaves over goes back into the source tank, else the source, else the
-    /// target. Fluid has no item form to drop at the block, so what none of them takes is lost,
-    /// with a warning naming that mod: the one thing a broken handler can void.
-    pub fn transfer_fluids(
-        &mut self,
-        level: LevelRef,
-        from: [i32; 3],
-        from_side: Option<Direction>,
-        to: [i32; 3],
-        to_side: Option<Direction>,
-        max: u32,
-    ) -> Option<FluidStack> {
-        if from == to {
+/// The buckets and the fluid each holds: the empty one none.
+const BUCKETS: [(&str, Option<&str>); 3] = [
+    ("minecraft:bucket", None),
+    ("minecraft:water_bucket", Some("minecraft:water")),
+    ("minecraft:lava_bucket", Some("minecraft:lava")),
+];
+
+/// A bucket holds this much, all or nothing.
+const BUCKET: u32 = 1000;
+
+/// The game's own [`ITEM_FLUIDS`] for the bucket at `.0`.
+struct GameBucket(ItemPlace);
+impl GameBucket {
+    /// What the bucket here holds: none for an empty one, or where no bucket is now.
+    fn held(&self, host: &mut dyn Host) -> Option<&'static str> {
+        let stack = self.0.stack(host)?;
+        BUCKETS
+            .iter()
+            .find(|&&(bucket, _)| *stack.item == *bucket)?
+            .1
+    }
+    /// The bucket holding `fluid`, plain water or lava; none for another fluid.
+    fn bucket_of(fluid: &FluidResource) -> Option<&'static str> {
+        if fluid.0.has_components() {
             return None;
         }
-        let source_handler = level.capability(self, &FLUIDS, from, from_side)?;
-        let target_handler = level.capability(self, &FLUIDS, to, to_side)?;
-        let source = End {
-            handler: &source_handler,
-            at: from,
-            side: from_side,
-        };
-        let target = End {
-            handler: &target_handler,
-            at: to,
-            side: to_side,
-        };
-        let mut moved: Option<FluidStack> = None;
-        for tank in 0..source.handler.tanks(self, from, from_side) {
-            // A simulation answering more than was asked is taken at the request; a real
-            // extract's excess is handled below, since it has left the source.
-            let extract = |host: &mut dyn Host, max: u32, simulate| {
-                source
-                    .handler
-                    .extract(host, from, from_side, tank, max, simulate)
-                    .filter(|out| out.amount > 0)
-                    .map(|out| match simulate {
-                        true => out.with_amount(out.amount.min(max)),
-                        false => out,
-                    })
-            };
-            loop {
-                let left = max - moved.as_ref().map_or(0, |moved| moved.amount);
-                if left == 0 {
-                    break;
-                }
-                // Plan: what the source has, what the target takes of it, and a request both
-                // ends agree on, smaller each try, so it ends.
-                let Some(available) = extract(self, left, true) else {
-                    break;
-                };
-                if moved
-                    .as_ref()
-                    .is_some_and(|moved| !moved.same_fluid_same_components(&available))
-                {
-                    break;
-                }
-                let mut ask = target.pass(self, &available, true);
-                let give = loop {
-                    let Some(give) = (ask > 0).then(|| extract(self, ask, true)).flatten() else {
-                        break None;
-                    };
-                    let takes = target.pass(self, &give, true);
-                    if takes == give.amount {
-                        break Some(give);
-                    }
-                    ask = takes.min(ask - 1);
-                };
-                let Some(give) = give else {
-                    break;
-                };
-                // Commit, with the requests that were simulated.
-                let Some(out) = extract(self, ask, false) else {
-                    broken(source.handler, from, "gave");
-                    break;
-                };
-                let mut liar = None;
-                if out != give {
-                    broken(source.handler, from, "gave");
-                    liar = Some(source.handler);
-                }
-                // Only the fluid and amount both ends agreed on goes into the target; what came
-                // out beyond it is the source's to take back.
-                let agreed = match out.same_fluid_same_components(&give) {
-                    true => out.amount.min(give.amount),
-                    false => 0,
-                };
-                let went = target.pass(self, &out.with_amount(agreed), false);
-                if went < agreed && liar.is_none() {
-                    broken(target.handler, to, "took");
-                    liar = Some(target.handler);
-                }
-                if let Some(liar) = liar.filter(|_| went < out.amount) {
-                    let rest = out.with_amount(out.amount - went);
-                    let lost = source.back(self, tank, rest).and_then(|rest| {
-                        let into = target.fill(self, &rest);
-                        (into < rest.amount).then(|| rest.with_amount(rest.amount - into))
-                    });
-                    if let Some(lost) = lost {
-                        log::warn!(
-                            "Horizon: a fluid move from {from:?} to {to:?} lost {} mB of {}: \
-                             {}'s fluid handler moved other than its simulation said",
-                            lost.amount,
-                            lost.fluid,
-                            liar.owner()
-                        );
-                    }
-                }
-                if went == 0 {
-                    break;
-                }
-                let total = moved.as_ref().map_or(0, |moved| moved.amount) + went;
-                moved = Some(out.with_amount(total));
-            }
+        let &(bucket, _) = BUCKETS[1..]
+            .iter()
+            .find(|&&(_, held)| held == Some(fluid.fluid()))?;
+        Some(bucket)
+    }
+    /// One bucket here exchanged for `bucket`: `BUCKET` when that goes through, else 0.
+    fn exchange(&self, host: &mut dyn Host, tx: &Transaction, bucket: &str) -> u32 {
+        let bucket = ItemResource::of(&ItemStack::new(bucket, 1));
+        match self.0.exchange(host, tx, &bucket, 1) {
+            1 => BUCKET,
+            _ => 0,
         }
-        moved
+    }
+}
+impl ResourceHandler<FluidResource> for GameBucket {
+    fn size(&self, _: &mut dyn Host) -> usize {
+        1
+    }
+    fn resource(&self, host: &mut dyn Host, index: usize) -> Option<FluidResource> {
+        let fluid = self.held(host).filter(|_| index == 0)?;
+        Some(FluidResource::of(&FluidStack::new(fluid, 1)))
+    }
+    fn amount(&self, host: &mut dyn Host, index: usize) -> u32 {
+        match self.resource(host, index) {
+            Some(_) => BUCKET,
+            None => 0,
+        }
+    }
+    fn capacity(&self, _: &mut dyn Host, index: usize, resource: &FluidResource) -> u32 {
+        match Self::bucket_of(resource) {
+            Some(_) if index == 0 => BUCKET,
+            _ => 0,
+        }
+    }
+    fn insert(
+        &self,
+        host: &mut dyn Host,
+        tx: &Transaction,
+        index: usize,
+        resource: &FluidResource,
+        amount: u32,
+    ) -> u32 {
+        let empty = self
+            .0
+            .stack(host)
+            .is_some_and(|stack| *stack.item == *BUCKETS[0].0);
+        match Self::bucket_of(resource) {
+            Some(full) if index == 0 && empty && amount >= BUCKET => self.exchange(host, tx, full),
+            _ => 0,
+        }
+    }
+    fn extract(
+        &self,
+        host: &mut dyn Host,
+        tx: &Transaction,
+        index: usize,
+        resource: &FluidResource,
+        amount: u32,
+    ) -> u32 {
+        let held = self.resource(host, index);
+        match held {
+            Some(held) if held == *resource && amount >= BUCKET => {
+                self.exchange(host, tx, BUCKETS[0].0)
+            }
+            _ => 0,
+        }
     }
 }

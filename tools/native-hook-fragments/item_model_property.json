@@ -8,7 +8,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "per-stack conditional item model properties (`native_item_model_property`).",
-  "doc_summary": "per-stack conditional item model properties (`native_item_model_property`). Bundles need \"hooks\": @API:item_model_property@."
+  ]
 }

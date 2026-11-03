@@ -10,8 +10,5 @@
     { "name": "block_entity_set_changed", "side": "server", "target": "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_set_changed", "receiver": "block_entity" },
     { "name": "block_entity_name", "side": "server", "target": "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_name", "receiver": "block_entity" },
     { "name": "block_entity_set_name", "side": "server", "target": "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_set_name", "receiver": "block_entity" }
-  ],
-  "rust_summary": "block entity handles (`BlockEntityRef`): reads, data, name and change writes.",
-  "doc_summary": "`BlockEntityRef` reads a loaded block entity's kind, position, level, data and custom name, and merges data, renames it and marks it changed. Bundles need \"hooks\": @API:block_entity_refs@.",
-  "comments": ["crates/horizon-client/src/game/native_block_entity_refs.rs"]
+  ]
 }

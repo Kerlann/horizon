@@ -1,5 +1,0 @@
-{
-  "hooks": [],
-  "rust_summary": "the hand, the hit and the acting player's UUID and entity id to `native_use_item_on`\n(`hand`, `hit`, `player`, `player_entity_id`).",
-  "doc_summary": "the hand, the hit and the acting player to `native_use_item_on(stack, pos, face, hand, hit, player, player_entity_id, claimed)`, so trait mods read `event.hand`, `event.hit`, `event.player` and `event.player_entity_id`. `hit` is a `BlockHit` (`BlockHitResult`): the point clicked in world coordinates, the face and whether the ray started inside the block. `player` is the acting player's UUID, the key `native_server_players` and `native_tell` use; `player_entity_id` is the server-assigned entity id. The old parameters keep their names and order, with the new ones after `face`; existing mixin helper names must not collide with the new parameter names. Bundles need \"hooks\": @API:block_use_context@."
-}

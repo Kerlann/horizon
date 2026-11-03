@@ -46,7 +46,8 @@ impl Game<'_> {
         let dim = Text::literal(self.dim.id());
         match id {
             "forceload.query" if ctx.get("pos").is_none() => {
-                let mut forced: Vec<(i32, i32)> = self.streaming.forced.iter().copied().collect();
+                let mut forced: Vec<(i32, i32)> =
+                    self.streaming.commanded().iter().copied().collect();
                 // ForceLoadCommand sorts its LongStream before formatting chunks.
                 forced.sort_unstable_by_key(|&(x, z)| ChunkPos::new(x, z).pack());
                 if forced.is_empty() {
@@ -75,7 +76,7 @@ impl Game<'_> {
             "forceload.query" => {
                 let [x, z] = self.column_arg(ctx, "pos")?;
                 let key = (x >> 4, z >> 4);
-                if self.streaming.forced.contains(&key) {
+                if self.streaming.commanded().contains(&key) {
                     self.feedback(Text::translate(
                         "commands.forceload.query.success",
                         &[chunk_text(key.0, key.1), dim],
@@ -89,7 +90,7 @@ impl Game<'_> {
                 }
             }
             "forceload.remove.all" => {
-                self.streaming.forced.clear();
+                self.streaming.clear_forced();
                 self.feedback(Text::translate("commands.forceload.removed.all", &[dim]));
                 Ok(0)
             }
@@ -116,19 +117,10 @@ impl Game<'_> {
                     return Err(err("commands.forceload.toobig", &[&256, &count]));
                 }
                 let mut tracker = Tracker::default();
-                for x in cx0..=cx1 {
-                    for z in cz0..=cz1 {
-                        let changed = if add {
-                            self.streaming.forced.insert((x, z))
-                        } else {
-                            self.streaming.forced.remove(&(x, z))
-                        };
+                self.streaming
+                    .set_forced_area((cx0, cz0), (cx1, cz1), add, |x, z, changed| {
                         tracker.track(&holder(chunk_text(x, z)), i32::from(changed));
-                    }
-                }
-                if add {
-                    self.streaming.rank_forced(cx0, cz0, cx1, cz1);
-                }
+                    });
                 let (lo, hi) = (chunk_text(cx0, cz0), chunk_text(cx1, cz1));
                 let verb = if add { "added" } else { "removed" };
                 let (message, total) = tracker.message(
@@ -274,7 +266,10 @@ impl Game<'_> {
     /// damage outside the border.
     /// `BorderChangeListener.DelegateBorderChangeListener`'s packets: what
     /// changed on the border since the guests were last told of it.
-    pub(in crate::game) fn lan_sync_border(&mut self, host: &mut crate::game::lan::LanHost) {
+    pub(in crate::game) fn lan_sync_border(&mut self) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let now = horizon_client::lan::border::Sent::of(&self.border);
         if let Some(sent) = host.border_sent.replace(now) {
             for packet in sent.changes(&self.border) {

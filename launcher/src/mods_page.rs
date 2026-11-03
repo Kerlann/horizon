@@ -1490,13 +1490,7 @@ impl Launcher {
                 &[("instance", other.map_or("", |i| i.name.as_str()))],
             )));
         }
-        let mismatch = self
-            .native_step
-            .is_none()
-            .then_some(self.native_mismatch.as_ref())
-            .flatten();
-        let idle =
-            self.native_step.is_none() && self.native_confirm.is_none() && mismatch.is_none();
+        let idle = self.native_step.is_none() && self.native_confirm.is_none();
         let can_build =
             idle && (error.is_some() || matches!(state, State::NotBuilt | State::Outdated));
         let mut right = div()
@@ -1546,7 +1540,6 @@ impl Launcher {
                 move |choice, _, cx| {
                     let _ = this.update(cx, |this, cx| {
                         this.settings.native_profile = Some(choice);
-                        this.settings.native_release = false;
                         this.native_done = None;
                         this.save_settings();
                         cx.notify();
@@ -1571,9 +1564,6 @@ impl Launcher {
                 .child(picker)
                 .child(said),
         );
-        if let Some(list) = mismatch {
-            detail = detail.child(self.native_mismatch_panel(list, cx));
-        }
         if let Some(mods) = &self.native_confirm {
             detail = detail.child(self.native_warning(mods, cx));
         }

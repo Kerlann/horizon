@@ -1,6 +1,6 @@
 //! The locator bar of the players on a served world (lan/waypoints.rs): what
 //! each player looks like to their level's waypoint manager this tick.
-use super::{Game, lan::LanHost};
+use super::Game;
 use horizon_client::{
     items::ItemStack,
     lan::waypoints::{self, HIDING_HEADS, Icon, PLAYER_RANGE},
@@ -17,18 +17,14 @@ fn transmit_range(crouching: bool, invisible: bool, head: Option<&ItemStack>) ->
 }
 
 impl Game<'_> {
-    /// The player's team and its colour, as the locator bar shows it.
-    fn waypoint_team(&self, name: &str) -> Option<(String, Option<i32>)> {
-        let team = self.score.board.players_team(name)?;
-        let color = team.color.as_deref().and_then(waypoints::team_rgb);
-        Some((team.name.clone(), color))
-    }
-
     /// Each level's `ServerWaypointManager` ticked with the players in that
     /// level: a player who changes level leaves the old one's manager
     /// (`ServerLevel.removePlayerImmediately`: untracked for everyone there)
     /// and joins the new one's (`addDuringTeleport`).
-    pub(super) fn lan_update_waypoints(&mut self, host: &mut LanHost) {
+    pub(super) fn lan_update_waypoints(&mut self) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let mut players: Vec<(&str, waypoints::Player)> = Vec::new();
         let mut respawned = Vec::new();
         for g in host.hub.guests.iter().filter(|g| g.placed) {
@@ -39,7 +35,7 @@ impl Game<'_> {
                 respawned.push(g.uuid);
             }
             // Player.updatePlayerPose: the shift key crouches unless flying.
-            let crouching = g.sneaking && !g.flying && !g.fall_flying && !g.sleeping;
+            let crouching = g.sneaking && !g.abilities.flying && !g.fall_flying && !g.sleeping;
             players.push((
                 &g.dimension,
                 waypoints::Player {
@@ -55,7 +51,12 @@ impl Game<'_> {
                     receive_range: PLAYER_RANGE,
                     first_tick: g.ticks == 0,
                     view_distance: g.view_distance,
-                    team: self.waypoint_team(&g.name),
+                    team: self.score.board.players_team(&g.name).map(|team| {
+                        (
+                            team.name.clone(),
+                            team.color.as_deref().and_then(waypoints::team_rgb),
+                        )
+                    }),
                     icon: Icon::default(),
                 },
             ));

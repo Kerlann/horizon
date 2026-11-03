@@ -99,7 +99,7 @@ impl Game<'_> {
         Some(super::mount_menu::mount_columns(m) * 3)
     }
     /// `EntityType.is(TagKey)`: whether `entity_type` (`minecraft:player`) is in the entity
-    /// type tag `tag` (`minecraft:cannot_be_pushed_onto_boats`). API @API:item_places@.
+    /// type tag `tag` (`minecraft:cannot_be_pushed_onto_boats`).
     pub(super) fn native_entity_type_in_tag(&self, entity_type: &str, tag: &str) -> bool {
         let tag = horizon_client::command::args::normalize(tag);
         self.res.mob_data().entity_has(&tag, entity_type)
@@ -393,6 +393,87 @@ mod tests {
         );
         guest.placed = true;
         guest
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn a_bucket_fills_and_empties_whole_through_its_place_and_splits_off_its_stack() {
+        use horizon_client::chunk::Chunk;
+        use horizon_client::mod_api::{
+            FLUIDS, ITEM_FLUIDS, NativeBlockUpdateFlags, move_resources,
+        };
+        with_game(|game| {
+            open_to_lan(game);
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let level = game.native_level("minecraft:overworld").unwrap();
+            let cauldron = |game: &super::Game<'_>, n: u8| {
+                let registry = &game.pack.assets.registry;
+                if n == 0 {
+                    return registry.default_state("minecraft:cauldron").unwrap();
+                }
+                let state = horizon_world::chunk::BlockState {
+                    name: "minecraft:water_cauldron".to_owned(),
+                    properties: [("level".to_owned(), n.to_string())].into_iter().collect(),
+                };
+                registry.resolve(&state).unwrap()
+            };
+            let set = |game: &mut super::Game<'_>, pos, n| {
+                let state = cauldron(game, n);
+                let flags = NativeBlockUpdateFlags::NEIGHBORS;
+                assert!(game.native_level_set_block(level, pos, state, flags));
+            };
+            let (a, b) = ([0, 64, 0], [2, 64, 0]);
+            set(game, a, 3);
+            set(game, b, 2);
+            let mut player = guest(1);
+            player.inventory[0] = Some(ItemStack::new("minecraft:bucket", 3));
+            player.inventory[5] = Some(ItemStack::new("minecraft:lava_bucket", 1));
+            game.lan.as_mut().unwrap().hub.guests.push(player);
+            let slot = |slot| ItemPlace::PlayerSlot { player: 123, slot };
+            // Up to a bucket from the cauldron at `at` into the bucket in `slot`, or back.
+            let moved = |game: &mut super::Game<'_>, at, slot: &ItemPlace, into_bucket| {
+                let host: &mut dyn Host = game;
+                let block = level.capability(host, &FLUIDS, at, None).unwrap();
+                let bucket = slot.capability(host, &ITEM_FLUIDS).unwrap();
+                let (from, to) = match into_bucket {
+                    true => (&block, &bucket),
+                    false => (&bucket, &block),
+                };
+                host.transaction(|host, tx| move_resources(host, from, to, |_| true, 1000, tx))
+            };
+            let inventory =
+                |game: &super::Game<'_>| game.lan.as_ref().unwrap().hub.guests[0].inventory.clone();
+            let block =
+                |game: &super::Game<'_>, pos: [i32; 3]| game.world.block(pos[0], pos[1], pos[2]);
+            // A full cauldron fills one of the three buckets, which splits off.
+            assert_eq!(moved(game, a, &slot(0), true), Ok(1000));
+            assert_eq!(block(game, a), cauldron(game, 0));
+            let held = inventory(game);
+            assert_eq!(held[0], Some(ItemStack::new("minecraft:bucket", 2)));
+            let water = ItemStack::new("minecraft:water_bucket", 1);
+            let filled = held
+                .iter()
+                .position(|s| s.as_ref() == Some(&water))
+                .unwrap();
+            // Two thirds of a bucket fill none: a bucket takes a whole one or nothing.
+            assert_eq!(moved(game, b, &slot(0), true), Ok(0));
+            assert_eq!(block(game, b), cauldron(game, 2));
+            assert_eq!(inventory(game), held);
+            // The water bucket empties into the empty cauldron and is a bucket again.
+            let filled = slot(i32::try_from(filled).unwrap());
+            assert_eq!(moved(game, a, &filled, false), Ok(1000));
+            assert_eq!(block(game, a), cauldron(game, 3));
+            assert_eq!(
+                filled.stack(game),
+                Some(ItemStack::new("minecraft:bucket", 1))
+            );
+            // Lava doesn't go into a water cauldron, and the lava bucket stays full.
+            assert_eq!(moved(game, a, &slot(5), false), Ok(0));
+            let lava = Some(ItemStack::new("minecraft:lava_bucket", 1));
+            assert_eq!(inventory(game)[5], lava);
+        });
     }
 
     #[test]

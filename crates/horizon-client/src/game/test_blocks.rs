@@ -1,6 +1,6 @@
 //! Test blocks on the server: `handleSetTestBlock` and the mode a placed
 //! test block starts with.
-use super::{Game, lan::LanHost};
+use super::Game;
 use horizon_client::{
     containers::BlockEntity,
     test_block::{Effects, TestBlock, TestBlockMode},
@@ -119,17 +119,12 @@ impl Game<'_> {
 
     /// `handleSetTestBlock` for a guest: only a creative player with game
     /// master commands edits the block.
-    pub(super) fn lan_set_test_block(
-        &mut self,
-        host: &mut LanHost,
-        conn: u32,
-        p: play::SetTestBlock,
-    ) {
-        let Some(g) = host.hub.guest(conn) else {
+    pub(super) fn lan_set_test_block(&mut self, conn: u32, p: play::SetTestBlock) {
+        let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
         let allowed = g.creative() && g.permission >= 2;
-        self.as_guest(host, conn, |game| {
+        self.as_guest(conn, |game| {
             if allowed {
                 game.apply_set_test_block(&p);
             }

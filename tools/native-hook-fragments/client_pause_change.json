@@ -21,7 +21,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "The client pause state changes (`native_client_pause_change_pre` and `native_client_pause_change_post`).",
-  "doc_summary": "Before a client pause-state change, `native_client_pause_change_pre(paused, cancel)` may cancel it. After an accepted change, `native_client_pause_change_post(paused)` observes the updated state. Bundles need \"hooks\": @API:client_pause_change@."
+  ]
 }

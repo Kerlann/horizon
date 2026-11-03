@@ -1,0 +1,9 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "click_menu_button", "side": "client",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_click_menu_button"
+    }
+  ]
+}

@@ -4017,6 +4017,10 @@ impl Game<'_> {
                 if p.event == 15 {
                     self.witch_magic_particles(p.id as u32);
                 }
+                // MinecartTNT.handleEntityEvent 70: primeFuse on the client.
+                if p.event == 70 {
+                    self.remote_cart_primed(p.id as u32);
+                }
                 // Fox.handleEntityEvent 45: the crumbs of the food in its mouth.
                 if p.event == 45 {
                     self.fox_eat_particles(p.id as u32);
@@ -4711,7 +4715,7 @@ impl Game<'_> {
                     }
                 }
                 for e in p.entries {
-                    if !horizon_client::mod_api::mods().is_empty()
+                    if crate::mod_api::listened(crate::mod_api::HookId::ClientPlayerChangeGameType)
                         && self.player.is_some()
                         && let Some(mode) = e.game_mode
                         && let Some(r) = self.remote.as_ref()
@@ -8346,7 +8350,7 @@ impl Game<'_> {
     /// The server does each packet's part with that packet's hand only.
     fn remote_use_hands(&mut self) {
         // Nothing in the crosshair: an empty hand's click is heard, by mods only.
-        let miss = !horizon_client::mod_api::mods().is_empty()
+        let miss = crate::mod_api::listened(crate::mod_api::HookId::RightClickEmpty)
             && !self.entity_targeted()
             && self.pick().is_none();
         if miss && self.held().is_none() {
@@ -8742,7 +8746,7 @@ impl Game<'_> {
         {
             // A block hit on air falls through to MISS. `instant` below reads the
             // block again after the dig, which may have broken it.
-            if !horizon_client::mod_api::mods().is_empty()
+            if crate::mod_api::listened(crate::mod_api::HookId::LeftClickEmpty)
                 && self
                     .res
                     .facts()
@@ -8756,7 +8760,9 @@ impl Game<'_> {
                 .facts()
                 .is_air(self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]));
         } else {
-            if !horizon_client::mod_api::mods().is_empty() && !self.entity_targeted() {
+            if crate::mod_api::listened(crate::mod_api::HookId::LeftClickEmpty)
+                && !self.entity_targeted()
+            {
                 self.native_left_click_empty();
             }
             if !self.creative {
@@ -9060,7 +9066,8 @@ impl Game<'_> {
     }
     /// ChatScreen.handleChatInput fires the client event for chat, not commands.
     pub(super) fn send_chat_from_screen(&mut self, message: &str) {
-        if message.starts_with('/') || horizon_client::mod_api::mods().is_empty() {
+        if message.starts_with('/') || !crate::mod_api::listened(crate::mod_api::HookId::ClientChat)
+        {
             self.send_chat(message);
         } else if let Some(uuid) = self.remote.as_ref().map(|r| r.profile) {
             let id = self.own_entity_id();

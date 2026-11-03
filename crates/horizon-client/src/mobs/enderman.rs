@@ -73,7 +73,6 @@ pub fn stared_at(m: &Mob, w: &MobWorld) -> bool {
 }
 /// An enderman or a shulker is about to teleport on its own
 /// (`EntityTeleportEvent.EnderEntity`). A mod may move `target` or cancel.
-/// @API:ender_entity_teleport@.
 #[inline(never)]
 pub fn native_ender_entity_teleport(
     entity: u32,

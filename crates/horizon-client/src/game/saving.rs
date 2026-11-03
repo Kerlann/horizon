@@ -29,6 +29,12 @@ const SNAPSHOTS_PER_FRAME: usize = 16;
 const SNAPSHOT_BUDGET: Duration = Duration::from_millis(2);
 
 impl Game<'_> {
+    /// Save the level's chunk tickets: `/forceload`'s in vanilla's `chunk_tickets.dat`, the
+    /// mods' in Horizon's own `mod_chunk_tickets.dat`.
+    pub(super) fn save_chunk_tickets(&self) -> Result<()> {
+        self.save.save_forced_chunks(self.streaming.commanded())?;
+        self.save.save_mod_tickets(self.streaming.mod_tickets())
+    }
     pub(super) fn begin_closing_save(&mut self, quit: bool) -> Result<()> {
         if let Some(save) = &mut self.pending_save {
             save.quit |= quit;
@@ -210,7 +216,7 @@ impl Game<'_> {
                         self.prune_entity_memory();
                         self.save_raids();
                         self.save.save_attachments(&self.world.attachments)?;
-                        self.save.save_forced_chunks(&self.streaming.forced)?;
+                        self.save_chunk_tickets()?;
                         self.save_game_metadata()?;
                         save.stage = Stage::Writes;
                     }

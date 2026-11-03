@@ -44,7 +44,7 @@ impl Game<'_> {
     /// done, on a client's copy of the world, for another dimension, a chunk
     /// that isn't loaded, or a radius that isn't in `0 < radius <= 32`. Call
     /// it from a server hook; a blast inside `native_explosion_detonate`
-    /// starts that hook again. API 66.
+    /// starts that hook again.
     pub(super) fn native_explode(
         &mut self,
         dimension: &str,

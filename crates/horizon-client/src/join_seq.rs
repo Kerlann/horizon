@@ -23,9 +23,13 @@ pub struct JoinSeq(u64);
 impl JoinSeq {
     /// Not joined yet.
     pub const UNJOINED: Self = Self(0);
-    /// The next number: one relaxed add, and only when something joins.
-    fn next() -> Self {
+    /// Assign the next number when an entity joins, with one relaxed add.
+    pub fn next() -> Self {
         Self(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
+    /// The latest sequence assigned anywhere in this process.
+    pub fn latest() -> Self {
+        Self(NEXT.load(Ordering::Relaxed) - 1)
     }
     pub fn is_joined(self) -> bool {
         self.0 != 0

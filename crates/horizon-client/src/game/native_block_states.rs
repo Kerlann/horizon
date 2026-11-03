@@ -1,4 +1,4 @@
-//! Block state ids and names, and item tags, for native mods (API @API:block_state_ids@):
+//! Block state ids and names, and item tags, for native mods:
 //! registry queries with no level, so they answer anywhere a host is given.
 use super::Game;
 use horizon_client::command::{Reader, args::Registries, block};
@@ -14,7 +14,7 @@ impl Game<'_> {
     /// default. Its id is vanilla's `Block.getId`. None for an unknown block,
     /// a property it doesn't have or a value it can't take, or block NBT
     /// (`{...}`); and, as `/setblock`'s argument, for anything after the
-    /// block. API @API:block_state_ids@.
+    /// block.
     pub(super) fn native_block_state_id(&self, name: &str) -> Option<BlockStateId> {
         let registry = self.pack.assets.registry;
         parse(&block_registries(registry), registry, name)
@@ -23,13 +23,13 @@ impl Game<'_> {
     /// (`BlockStateParser.serialize`): its block, then each property in
     /// name order, `minecraft:oak_stairs[facing=east,half=bottom,...]`, or
     /// the block alone for one with no properties. None for an id no state
-    /// has (`Block.stateById` gives air for one). API @API:block_state_ids@.
+    /// has (`Block.stateById` gives air for one).
     pub(super) fn native_block_state_string(&self, state: BlockStateId) -> Option<String> {
         self.pack.assets.registry.state(state).map(serialize)
     }
     /// The default state of `block` (`minecraft:oak_stairs`, or `oak_stairs`):
     /// `Block.defaultBlockState`, the one a block takes when nothing else
-    /// says. None for an unknown block. API @API:block_state_ids@.
+    /// says. None for an unknown block.
     pub(super) fn native_block_state_default(&self, block: &str) -> Option<BlockStateId> {
         default_state(self.pack.assets.registry, block)
     }
@@ -38,7 +38,7 @@ impl Game<'_> {
     /// `ItemStack.is(TagKey)`, over the world's merged tags, its data packs
     /// and content mods included. An empty stack tests `minecraft:air`, an
     /// unknown tag is false. None on a server's client or before the world
-    /// has loaded its tags. API @API:block_state_ids@.
+    /// has loaded its tags.
     pub(super) fn native_item_stack_in_tag(&self, stack: &ItemStack, tag: &str) -> Option<bool> {
         let tag = horizon_client::command::args::normalize(tag);
         self.native_server_item_in_tag(stack, &tag).ok()

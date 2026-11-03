@@ -190,7 +190,7 @@ impl Game<'_> {
     pub(super) fn native_player_level_changed(&mut self, from: i32) {
         let to = self.experience.level;
         if from != to
-            && !horizon_client::mod_api::mods().is_empty()
+            && crate::mod_api::listened(crate::mod_api::HookId::PlayerLevelChange)
             && let (Some(player), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone())
         {
             self.native_player_level_change(player, &name, from, to);
@@ -200,7 +200,7 @@ impl Game<'_> {
     /// `PlayerXpEvent.XpChange` for a `Player.giveExperiencePoints` of `amount`
     /// points: the amount to give, or `None` when a mod cancelled it.
     pub(super) fn xp_change(&mut self, amount: i32) -> Option<i32> {
-        if horizon_client::mod_api::mods().is_empty() {
+        if !crate::mod_api::listened(crate::mod_api::HookId::PlayerXpChange) {
             return Some(amount);
         }
         let (Some(player), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone())
@@ -379,7 +379,6 @@ impl Game<'_> {
     pub(super) fn broadcast_to_admins(&mut self, message: Text) {
         let informs = match self.console_broadcast {
             Some(broadcast) => broadcast,
-            // While a guest acts the host's LanHost is out of `self.lan`.
             None => self.lan_acting.is_some() || self.lan.is_some(),
         };
         if !informs
@@ -2524,6 +2523,7 @@ impl Game<'_> {
                     // counter, and the crystal is shown with its base.
                     self.next_entity += 1;
                     self.crystals.push(super::dragon::Crystal {
+                        join: Default::default(),
                         id: self.next_entity,
                         position: Vec3::new(pos[0], pos[1], pos[2]),
                         show_bottom: true,

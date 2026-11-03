@@ -157,32 +157,30 @@ with advice if needed.
 
 Content mods (`.hmod`, API 0.2) carry data: blocks, items, and everything in the 26.3 data-pack and resource-pack
 formats ([mods.md](mods.md#content-mods-api-02)). Behaviour that needs code is not a content-mod feature: it is
-written as a native mod ([native-mods.md](native-mods.md)), one per ported mod. The "Planned in" column keeps the
-order of the original plan; for the rows planned for 0.3 and later, a native mod hooks the game's code instead of
-using the "Shape" column. What a content pack needs:
+written as a native mod ([native-mods.md](native-mods.md)), one per ported mod. What a content pack needs:
 
-| Feature | Content mod today | Needed by (ATM10 content+integration, by tier) | Planned in | Shape |
-|---|---|---|---|---|
-| Block registry: ids, states, properties, shapes, sounds, light | — | data and up (all 331) | **0.2** | declared in `data/<mod>/horizon/block/*.json`, each from a vanilla *template* block (below) |
-| Item registry, block items | — | data and up | **0.2** | `data/<mod>/horizon/item/*.json`, from a vanilla template item |
-| Mob effect registry: category, colour, icon, name | — | data and up | **0.2** | `data/<mod>/horizon/mob_effect/*.json` ([mods.md](mods.md#content-mods-api-02)); no tick behaviour yet: that needs native hook points |
-| Recipes, loot tables, tags, advancements, lang, blockstates, models, textures, sounds in the mod's namespace | vanilla namespace only | data and up | **0.2** | the 26.3 data-pack and resource-pack formats, as they are |
-| Worldgen JSON: features, structures, template pools, processors, structure NBT, biome additions | vanilla bundle only | about 30 data-tier structure and biome mods | 0.2.x | carried into the `worldgen/` bundle |
-| Block and item behaviour callbacks: use, place, break, attack, random tick, scheduled tick, neighbour change, entity inside | — | logic and up (253) | **0.3** | `server` interface; hooks per registered id, budgeted |
-| Server events, typed commands, game rules | — | logic and up, server-only (11) | **0.3** | `server` interface |
-| Config: typed schema in the manifest, per world and per server, a settings page | — | most mods with code | **0.3** | `config` + the Options > Mods page |
-| Block entities: per-block NBT state, ticking, client sync | — | machines and up (191) | **0.4** | `block-entity` interface, ticks batched per mod |
-| Menus and screens: slots, progress bars, buttons, fluid and energy gauges | — | machines and up | **0.4** | a declared screen layout the game draws (`ui`), with server-side menu logic in the mod |
-| Capabilities: energy (FE), item, fluid handlers on blocks and items | — | machines and up | **0.4** | `capabilities` interface; FE as the common unit, others as mod-defined resources |
-| Data attachments on entities, chunks, levels | — | machines and up | **0.4** | `storage` per entity/chunk/level |
-| Accessory slots (what Curios does) | — | Curios users (6 require it, more use it optionally) | **0.4** | built-in slots API |
-| Mod networking between its client and server halves | — | machines and up | **0.4** | `net` interface |
-| Custom recipe types: machine recipes with their own JSON | — | machines and up | **0.4** | recipe-type registry: the mod declares its JSON schema and a display layout for the recipe viewer |
-| Entities: types, attributes, AI goals and brains, spawning | — | deep (87) | 0.5 | `entity` interface, AI in the mod with vanilla goals reusable; thrown item projectiles are already data in 0.2 ([mods.md](mods.md)) |
-| Custom renderers and animated models (block-entity, entity, item; GeckoLib's format) | — | deep | 0.5 | data models (Bedrock geometry + animations), plus a budgeted draw-list interface for the rest |
-| Dimensions: dimension types, levels, chunk generators | — | about 10 (Twilight Forest, Aether, Ad Astra, Undergarden, ...) | 0.5 | JSON part with worldgen; custom generators as mod code |
-| New hooks into vanilla behaviour (what Mixins do) | — | deep | as asked | each becomes a named hook, added for everyone |
-| Client interfaces: `keys`, `target`, `inventory-read`, `ui`, `render`, `world-read` | — | client tier (38) | native mods | hook points in the game, as the official native mods use ([extras.md](extras.md)) |
+| Feature | Content mod today | Needed by (ATM10 content+integration, by tier) |
+|---|---|---|
+| Block registry: ids, states, properties, shapes, sounds, light | — | data and up (all 331) |
+| Item registry, block items | — | data and up |
+| Mob effect registry: category, colour, icon, name | — | data and up |
+| Recipes, loot tables, tags, advancements, lang, blockstates, models, textures, sounds in the mod's namespace | vanilla namespace only | data and up |
+| Worldgen JSON: features, structures, template pools, processors, structure NBT, biome additions | vanilla bundle only | about 30 data-tier structure and biome mods |
+| Block and item behaviour callbacks: use, place, break, attack, random tick, scheduled tick, neighbour change, entity inside | — | logic and up (253) |
+| Server events, typed commands, game rules | — | logic and up, server-only (11) |
+| Config: typed schema in the manifest, per world and per server, a settings page | — | most mods with code |
+| Block entities: per-block NBT state, ticking, client sync | — | machines and up (191) |
+| Menus and screens: slots, progress bars, buttons, fluid and energy gauges | — | machines and up |
+| Capabilities: energy (FE), item, fluid handlers on blocks and items | — | machines and up |
+| Data attachments on entities, chunks, levels | — | machines and up |
+| Accessory slots (what Curios does) | — | Curios users (6 require it, more use it optionally) |
+| Mod networking between its client and server halves | — | machines and up |
+| Custom recipe types: machine recipes with their own JSON | — | machines and up |
+| Entities: types, attributes, AI goals and brains, spawning | — | deep (87) |
+| Custom renderers and animated models (block-entity, entity, item; GeckoLib's format) | — | deep |
+| Dimensions: dimension types, levels, chunk generators | — | about 10 (Twilight Forest, Aether, Ad Astra, Undergarden, ...) |
+| New hooks into vanilla behaviour (what Mixins do) | — | deep |
+| Client interfaces: `keys`, `target`, `inventory-read`, `ui`, `render`, `world-read` | — | client tier (38) |
 
 One rule stays: **free when unused** (no mods means vanilla code paths and the vanilla resource root, so the parity
 harnesses test the same game).
@@ -896,7 +894,7 @@ files; `inventory`; `carry` and the harness on the eight mods we downloaded; `re
 | **all** | **1** | **7** | **367** | **121** | **496** |
 
 By tier, the 367 not yet: data 57 (carry-over and the harness, no agent: their jars were not
-downloaded), logic 66 (API 0.3), machines 97 (0.4), deep 92 (0.5), client 35, unclassified 20.
+downloaded), logic 66, machines 97, deep 92, client 35, unclassified 20.
 Ported: Macaw's Trapdoors. Partial: Macaw's Doors, Fences and Walls, Paths and Pavings,
 Glassential, Factory Blocks, Cloud Glass, Chipped (see the harness table) and MVS, whose
 structures now generate (see step 4). Of the 9, 7 are MIT, one LGPL and Chipped is under the

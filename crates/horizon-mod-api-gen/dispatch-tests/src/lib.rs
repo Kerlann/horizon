@@ -112,7 +112,16 @@ mod tests {
         pub(super) struct NativePlayerFood;
         #[derive(Clone, Copy)]
         pub(super) struct LivingRef;
+        #[derive(Clone, Copy)]
+        pub(super) struct MinecartRef;
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub(super) enum NativeMinecartKind {
+            Rideable,
+        }
         pub(super) struct EffectTickChange;
+        pub(super) struct NativeItemDrop;
+        #[derive(Clone, Copy)]
+        pub(super) struct EquipmentSlot;
         #[derive(Clone, Copy)]
         pub(super) struct ServerTickPhase;
         #[derive(Clone, Copy)]
@@ -185,26 +194,66 @@ mod tests {
         include!(concat!(env!("OUT_DIR"), "/mod_api_generated.rs"));
     }
     use generated::*;
+    struct Installed {
+        mods: Arc<[ModEntry]>,
+        subscribers: horizon_client_core::subscribers::Subscribers,
+        types: Box<[std::any::TypeId]>,
+    }
     thread_local! {
         /// The hooks each dispatch entered, a mod at a time.
         static ENTERED: std::cell::RefCell<Vec<(usize, &'static str)>> = const { std::cell::RefCell::new(Vec::new()) };
-        static MODS: std::cell::Cell<Option<&'static Arc<[Box<dyn Hooks>]>>> = const { std::cell::Cell::new(None) };
+        static MODS: std::cell::Cell<Option<&'static Installed>> = const { std::cell::Cell::new(None) };
     }
-    fn install(mods: Arc<[Box<dyn Hooks>]>) {
+    fn install(mods: Arc<[ModEntry]>) {
+        let types = mods
+            .iter()
+            .map(|entry| (&*entry.hooks as &dyn std::any::Any).type_id())
+            .collect();
+        let subscribers = horizon_client_core::subscribers::Subscribers::new(
+            horizon_client_core::subscribers::Domain::Gameplay,
+            HOOK_COUNT,
+            mods.len(),
+        );
         // Test dispatch needs the same static lifetime as the real installation.
-        MODS.set(Some(Box::leak(Box::new(mods))));
+        MODS.set(Some(Box::leak(Box::new(Installed {
+            mods,
+            subscribers,
+            types,
+        }))));
     }
-    fn mods() -> &'static [Box<dyn Hooks>] {
-        MODS.get().map_or(&[], |mods| mods)
+    fn listened(hook: HookId) -> bool {
+        MODS.get()
+            .is_some_and(|installed| installed.subscribers.contains_any(hook as usize))
     }
-    fn entered<'a>(
-        mods: &'a [Box<dyn Hooks>],
-        hook: &'static str,
-    ) -> impl Iterator<Item = &'a Box<dyn Hooks>> {
-        mods.iter().enumerate().map(move |(index, hooks)| {
-            ENTERED.with(|entered| entered.borrow_mut().push((index, hook)));
-            hooks
+    fn entered(hook_id: HookId, hook: &'static str) -> impl Iterator<Item = &'static dyn Hooks> {
+        MODS.get().into_iter().flat_map(move |installed| {
+            let mut guard = None;
+            installed
+                .subscribers
+                .indices(hook_id as usize)
+                .map(move |index| {
+                    drop(guard.take());
+                    let hooks = &*installed.mods[index].hooks;
+                    guard = Some(horizon_client_core::subscribers::enter(
+                        &installed.subscribers,
+                        hook_id as usize,
+                        index,
+                        (hooks as *const dyn Hooks).cast(),
+                        installed.types[index],
+                    ));
+                    ENTERED.with(|entered| entered.borrow_mut().push((index, hook)));
+                    hooks
+                })
         })
+    }
+    struct ModEntry {
+        _id: &'static str,
+        hooks: Box<dyn Hooks>,
+    }
+    impl ModEntry {
+        fn new(id: &'static str, hooks: Box<dyn Hooks>) -> Self {
+            Self { _id: id, hooks }
+        }
     }
     struct Registrar;
     /// No parts: the scoped dispatch calls the mods only.
@@ -251,6 +300,79 @@ mod tests {
         parts.iter().copied()
     }
     #[test]
+    fn only_overrides_remain_after_first_dispatch_across_words() {
+        struct Quiet;
+        impl Hooks for Quiet {}
+        struct Listener(Arc<std::sync::atomic::AtomicUsize>);
+        impl Hooks for Listener {
+            fn loot_table_load(&self, _: &mut LootTableLoadEvent<'_>) {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mods: Vec<ModEntry> = (0..70)
+            .map(|i| {
+                if i == 66 {
+                    ModEntry::new("listener", Box::new(Listener(calls.clone())))
+                } else {
+                    ModEntry::new("quiet", Box::new(Quiet))
+                }
+            })
+            .collect();
+        install(mods.into());
+        ENTERED.with(|entered| entered.borrow_mut().clear());
+        let mut table = serde_json::json!([]);
+        dispatch_loot_table_load("test", &mut table);
+        dispatch_loot_table_load("test", &mut table);
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 2);
+        ENTERED.with(|entered| {
+            let entered = entered.borrow();
+            assert_eq!(entered.len(), 71);
+            assert_eq!(entered[70], (66, "loot_table_load"));
+        });
+    }
+
+    #[test]
+    fn nested_default_on_another_zero_sized_type_does_not_prune_override() {
+        struct Other;
+        impl Hooks for Other {}
+        struct Active;
+        impl Hooks for Active {
+            fn loot_table_load(&self, event: &mut LootTableLoadEvent<'_>) {
+                dispatch_modify_default_components("test", &mut Map::new());
+                Other.loot_table_load(event);
+            }
+        }
+        install(vec![ModEntry::new("active", Box::new(Active))].into());
+        ENTERED.with(|entered| entered.borrow_mut().clear());
+        let mut table = serde_json::json!([]);
+        dispatch_loot_table_load("test", &mut table);
+        dispatch_loot_table_load("test", &mut table);
+        ENTERED.with(|entered| {
+            assert_eq!(
+                entered
+                    .borrow()
+                    .iter()
+                    .filter(|(_, hook)| *hook == "loot_table_load")
+                    .count(),
+                2
+            );
+        });
+    }
+
+    #[test]
+    fn empty_dispatch_checks_before_event_construction() {
+        let generated = include_str!(concat!(env!("OUT_DIR"), "/mod_api_generated.rs"));
+        let function = generated
+            .split("pub fn dispatch_loot_table_load(")
+            .nth(1)
+            .unwrap();
+        let guard = function.find("super::listened").unwrap();
+        let event = function.find("let mut event").unwrap();
+        assert!(guard < event);
+    }
+
+    #[test]
     fn advancement_progress_reports_grant_and_revoke_identity() {
         struct Observer(Arc<Mutex<Vec<NativeProgressType>>>);
         impl Hooks for Observer {
@@ -268,8 +390,11 @@ mod tests {
             }
         }
         let observed = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Observer(observed.clone()))];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods = [ModEntry::new(
+            "observer",
+            Box::new(Observer(observed.clone())),
+        )];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         for progress_type in [NativeProgressType::Grant, NativeProgressType::Revoke] {
             dispatch_player_advancement_progress(
@@ -374,7 +499,7 @@ mod tests {
                 Flow::Continue
             }
         }
-        fn use_item_on(&self, _: &mut dyn Host, _: &mut UseItemOnEvent<'_>) -> Flow {
+        fn use_on(&self, _: &mut dyn Host, _: &mut UseOnEvent<'_>) -> Flow {
             self.calls.lock().unwrap().push(self.id);
             if self.id == 1 {
                 Flow::Cancel
@@ -385,11 +510,14 @@ mod tests {
     }
     #[test]
     fn menu_button_mutates_entity_and_cursor_once() {
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Mod {
-            id: 1,
-            calls: Arc::new(Mutex::new(Vec::new())),
-        })];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods = [ModEntry::new(
+            "menu-button",
+            Box::new(Mod {
+                id: 1,
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }),
+        )];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let context = generated::horizon_client::menu::MenuButtonContext {
             player: 123,
@@ -409,14 +537,17 @@ mod tests {
     #[test]
     fn block_entity_submit_dispatches_in_order_with_shared_draw() {
         let calls = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![
-            Box::new(Mod {
-                id: 1,
-                calls: calls.clone(),
-            }),
-            Box::new(Mod { id: 2, calls }),
+        let mods: Vec<ModEntry> = vec![
+            ModEntry::new(
+                "mod-0",
+                Box::new(Mod {
+                    id: 1,
+                    calls: calls.clone(),
+                }),
+            ),
+            ModEntry::new("mod-1", Box::new(Mod { id: 2, calls })),
         ];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let mut draw = BlockEntityDraw(Vec::new());
         dispatch_block_entity_submit(
@@ -432,11 +563,14 @@ mod tests {
 
     #[test]
     fn slot_rules_mutate_and_item_tick_can_cancel() {
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Mod {
-            id: 1,
-            calls: Arc::new(Mutex::new(Vec::new())),
-        })];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Vec<ModEntry> = vec![ModEntry::new(
+            "mod-2",
+            Box::new(Mod {
+                id: 1,
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }),
+        )];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let (mut may_place, mut max_stack) = (true, 64);
         dispatch_menu_slot_rules(
@@ -461,11 +595,14 @@ mod tests {
 
     #[test]
     fn item_finish_can_clear_vanilla_result() {
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Mod {
-            id: 1,
-            calls: Arc::new(Mutex::new(Vec::new())),
-        })];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Vec<ModEntry> = vec![ModEntry::new(
+            "mod-3",
+            Box::new(Mod {
+                id: 1,
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }),
+        )];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let mut result = Some(ItemStack::default());
         dispatch_living_entity_use_item_finish(
@@ -482,17 +619,23 @@ mod tests {
     #[test]
     fn fragment_cancel_stops_later_mods() {
         let calls = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![
-            Box::new(Mod {
-                id: 1,
-                calls: calls.clone(),
-            }),
-            Box::new(Mod {
-                id: 2,
-                calls: calls.clone(),
-            }),
+        let mods: Vec<ModEntry> = vec![
+            ModEntry::new(
+                "mod-4",
+                Box::new(Mod {
+                    id: 1,
+                    calls: calls.clone(),
+                }),
+            ),
+            ModEntry::new(
+                "mod-5",
+                Box::new(Mod {
+                    id: 2,
+                    calls: calls.clone(),
+                }),
+            ),
         ];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let mut canceled = false;
         dispatch_mouse_button_pre(&mut TestHost, 0, true, 0, &mut canceled);
@@ -519,11 +662,11 @@ mod tests {
             }
         }
         let calls = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![
-            Box::new(Refuse(calls.clone(), 1)),
-            Box::new(Refuse(calls.clone(), 2)),
+        let mods: Vec<ModEntry> = vec![
+            ModEntry::new("refuse-6", Box::new(Refuse(calls.clone(), 1))),
+            ModEntry::new("refuse-7", Box::new(Refuse(calls.clone(), 2))),
         ];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let mut answer = None;
         dispatch_state_for_placement(
@@ -557,8 +700,8 @@ mod tests {
                 }
             }
         }
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Property)];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Vec<ModEntry> = vec![ModEntry::new("property-8", Box::new(Property))];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let host = TestHost;
         let mut value = false;
@@ -612,8 +755,8 @@ mod tests {
                 Flow::Continue
             }
         }
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Backstab)];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Vec<ModEntry> = vec![ModEntry::new("backstab-9", Box::new(Backstab))];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let held = ItemStack::default();
         for (source_z, weapon, expected) in [
@@ -655,8 +798,8 @@ mod tests {
                 Flow::Cancel
             }
         }
-        let weapon_mods: Vec<Box<dyn Hooks>> = vec![Box::new(Weapon)];
-        let weapon_mods: Arc<[Box<dyn Hooks>]> = weapon_mods.into();
+        let weapon_mods: Vec<ModEntry> = vec![ModEntry::new("weapon-10", Box::new(Weapon))];
+        let weapon_mods: Arc<[ModEntry]> = weapon_mods.into();
         install(weapon_mods.clone());
         let (mut strength, mut x, mut z, mut canceled) = (0.4, 1.0, 0.0, false);
         dispatch_living_knockback_v2(
@@ -673,15 +816,18 @@ mod tests {
         assert_eq!((strength, x, z), (0.8, -1.0, 0.0));
         assert!(canceled);
         let calls = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = (1..=2)
+        let mods: Vec<ModEntry> = (1..=2)
             .map(|id| {
-                Box::new(Mod {
-                    id,
-                    calls: calls.clone(),
-                }) as Box<dyn Hooks>
+                ModEntry::new(
+                    "mod-11",
+                    Box::new(Mod {
+                        id,
+                        calls: calls.clone(),
+                    }),
+                )
             })
             .collect();
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let mut table = serde_json::json!([]);
         dispatch_loot_table_load("table", &mut table);
@@ -714,15 +860,18 @@ mod tests {
         // Each mod sees the one before: (1 × 2 + 1) × 2 + 2, kept though mod 2 cancels.
         assert_eq!(amount, 8.0);
         assert!(canceled);
-        let chained: Vec<Box<dyn Hooks>> = [1, 3]
+        let chained: Vec<ModEntry> = [1, 3]
             .map(|id| {
-                Box::new(Mod {
-                    id,
-                    calls: calls.clone(),
-                }) as Box<dyn Hooks>
+                ModEntry::new(
+                    "mod-12",
+                    Box::new(Mod {
+                        id,
+                        calls: calls.clone(),
+                    }),
+                )
             })
             .into();
-        let chained: Arc<[Box<dyn Hooks>]> = chained.into();
+        let chained: Arc<[ModEntry]> = chained.into();
         install(chained.clone());
         let mut amount = 1.0;
         let mut canceled = false;
@@ -732,7 +881,7 @@ mod tests {
         install(mods.clone());
         calls.lock().unwrap().clear();
         let mut claimed = false;
-        dispatch_use_item_on(
+        dispatch_use_on(
             &mut host,
             &ItemStack::default(),
             [0; 3],
@@ -746,7 +895,7 @@ mod tests {
         assert!(claimed);
         assert_eq!(*calls.lock().unwrap(), [1]);
         calls.lock().unwrap().clear();
-        dispatch_use_item_on(
+        dispatch_use_on(
             &mut host,
             &ItemStack::default(),
             [0; 3],

@@ -2,7 +2,7 @@
 //! (`handleSpectatorAction`) or `/spectate`, followed every tick, dropped
 //! when the entity dies, the player sneaks, is teleported or leaves
 //! spectator mode.
-use super::{Game, commands::Target, lan::LanHost};
+use super::{Game, commands::Target};
 use horizon_core::geometry::{Aabb, Vec3};
 use horizon_protocol::packets::play::{self, Clientbound as C};
 
@@ -34,7 +34,8 @@ impl Game<'_> {
     /// `ServerPlayer.isAlive` of the camera, with where it is and how it
     /// looks (`absSnapTo`'s arguments): a player, the host or any other
     /// entity of the level, by network id.
-    fn camera_state(&self, host: &LanHost, id: i32) -> Option<([f64; 3], [f32; 2])> {
+    fn camera_state(&self, id: i32) -> Option<([f64; 3], [f32; 2])> {
+        let host = self.lan.as_ref()?;
         if let Some(g) = host
             .hub
             .guests
@@ -90,7 +91,10 @@ impl Game<'_> {
     }
 
     /// `Entity.isPickable` of the entity with that id.
-    fn camera_pickable(&self, host: &LanHost, id: i32) -> bool {
+    fn camera_pickable(&self, id: i32) -> bool {
+        let Some(host) = self.lan.as_ref() else {
+            return false;
+        };
         // Player.isPickable: not a spectator.
         if let Some(g) = host.hub.guests.iter().find(|g| g.entity_id == id) {
             return !g.spectator() && !g.dead;
@@ -109,7 +113,7 @@ impl Game<'_> {
                     | "minecraft:shulker_bullet"
             ),
             // LivingEntity: not removed. ArmorStand: not a marker.
-            Some(Target::Mob(_)) => self.camera_state(host, id).is_some(),
+            Some(Target::Mob(_)) => self.camera_state(id).is_some(),
             Some(Target::Stand(s)) => self.armor_stands.iter().any(|a| a.id == s && !a.marker),
             // BlockAttachedEntity, minecarts, boats, end crystals.
             Some(Target::Frame(_) | Target::Painting(_) | Target::Boat(_) | Target::Cart(_))
@@ -121,12 +125,10 @@ impl Game<'_> {
     }
 
     /// `ServerGamePacketListenerImpl.handleSpectatorAction`.
-    pub(super) fn guest_spectator_action(
-        &mut self,
-        host: &mut LanHost,
-        gi: usize,
-        target: Option<i32>,
-    ) {
+    pub(super) fn guest_spectator_action(&mut self, gi: usize, target: Option<i32>) {
+        let Some(host) = self.lan.as_ref() else {
+            return;
+        };
         let g = &host.hub.guests[gi];
         if !g.loaded || !g.spectator() {
             return;
@@ -136,12 +138,12 @@ impl Game<'_> {
             return;
         };
         let Some(bounds) = self
-            .guest_target_box(host, gi, id)
+            .guest_target_box(gi, id)
             .or_else(|| self.camera_extra(id).map(|e| e.bounds))
         else {
             return;
         };
-        let Some((at, _)) = self.camera_state(host, id) else {
+        let Some((at, _)) = self.camera_state(id) else {
             return;
         };
         let block = at.map(|v| v.floor() as i32);
@@ -151,20 +153,21 @@ impl Game<'_> {
         {
             return;
         }
-        if self.as_guest(host, conn, |g| {
-            g.within_entity_interaction_range(&bounds, 3.0)
-        }) != Some(true)
-        {
+        let in_range = self.as_guest(conn, |g| g.within_entity_interaction_range(&bounds, 3.0));
+        if in_range != Some(true) {
             return;
         }
-        if self.camera_pickable(host, id) {
-            self.guest_set_camera(host, gi, Some(id));
+        if self.camera_pickable(id) {
+            self.guest_set_camera(gi, Some(id));
         }
     }
 
     /// `ServerPlayer.setCamera`: the view moves to the new camera, which
     /// the client is told, or back to the player (`None`).
-    pub(super) fn guest_set_camera(&mut self, host: &mut LanHost, gi: usize, camera: Option<i32>) {
+    pub(super) fn guest_set_camera(&mut self, gi: usize, camera: Option<i32>) {
+        let Some(host) = self.lan.as_ref() else {
+            return;
+        };
         let guest = &host.hub.guests[gi];
         let (conn, own, uuid, name) = (guest.conn, guest.entity_id, guest.uuid, guest.name.clone());
         let previous = self.cmds.guest_cameras.get(&conn).map(|c| c.id);
@@ -173,7 +176,7 @@ impl Game<'_> {
             return;
         }
         let at = match camera {
-            Some(id) => self.camera_state(host, id).map(|s| s.0),
+            Some(id) => self.camera_state(id).map(|s| s.0),
             None => Some(host.hub.guests[gi].position),
         };
         match camera {
@@ -187,6 +190,9 @@ impl Game<'_> {
             }
         }
         // ServerPlayer.broadcastToPlayer: a spectator with a camera is shown to nobody.
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         host.hub.guests[gi].watching = camera.is_some();
         // teleportTo(level, camera.x, y, z): same look.
         host.hub.teleport(gi, at);
@@ -209,10 +215,14 @@ impl Game<'_> {
 
     /// The camera part of `ServerPlayer.tick` for every guest, after the
     /// `/spectate` requests commands queued.
-    pub(super) fn tick_guest_cameras(&mut self, host: &mut LanHost) {
+    pub(super) fn tick_guest_cameras(&mut self) {
         for (conn, id) in std::mem::take(&mut self.cmds.camera_requests) {
-            if let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) {
-                self.guest_set_camera(host, gi, id);
+            if let Some(gi) = self
+                .lan
+                .as_ref()
+                .and_then(|host| host.hub.guests.iter().position(|g| g.conn == conn))
+            {
+                self.guest_set_camera(gi, id);
             }
         }
         let cameras: Vec<(u32, GuestCamera)> = self
@@ -222,21 +232,27 @@ impl Game<'_> {
             .map(|(c, v)| (*c, *v))
             .collect();
         for (conn, camera) in cameras {
+            let Some(host) = self.lan.as_ref() else {
+                return;
+            };
             let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
                 self.cmds.guest_cameras.remove(&conn);
                 continue;
             };
             let g = &host.hub.guests[gi];
-            let state = self.camera_state(host, camera.id);
+            let state = self.camera_state(camera.id);
             if camera_ends(
                 state.is_some(),
                 g.sneaking,
                 g.spectator(),
                 g.teleport_counter != camera.teleports,
             ) {
-                self.guest_set_camera(host, gi, None);
+                self.guest_set_camera(gi, None);
             } else if let Some((at, [yaw, pitch])) = state {
                 // absSnapTo; the level's chunk source follows the player.
+                let Some(host) = self.lan.as_mut() else {
+                    return;
+                };
                 let g = &mut host.hub.guests[gi];
                 g.position = at;
                 (g.yaw, g.pitch) = (yaw, pitch);

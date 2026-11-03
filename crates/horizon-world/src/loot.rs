@@ -65,7 +65,6 @@ impl PackOverlay<'_> {
 /// A loot function of a mod's own kind: the entry named a `type` in a
 /// namespace outside `minecraft:`, and the roll kept it for this call.
 /// The kind, the JSON, the context and the stack to change are here.
-/// API 133.
 #[inline(never)]
 pub fn native_loot_function(
     kind: &str,
@@ -79,7 +78,7 @@ pub fn native_loot_function(
 /// A loot condition of a mod's own kind: the entry named a `type` in a
 /// namespace outside `minecraft:`. The kind, the JSON, the context and
 /// whether it holds are here (`holds` starts `false`; a mod that claims
-/// the kind sets it). API 133.
+/// the kind sets it).
 #[inline(never)]
 pub fn native_loot_condition(
     kind: &str,
@@ -127,7 +126,6 @@ pub struct NativeLootContext<'a> {
     /// Where the roll happens: the origin, the block entity and the level,
     /// when the game rolled the table at a place (a broken block's drops,
     /// a mob's death loot); None for the other rolls. Either engine fills it.
-    /// API 156.
     pub place: Option<Rc<NativeLootPlace>>,
 }
 
@@ -135,7 +133,7 @@ pub struct NativeLootContext<'a> {
 /// `LootContextParams.ORIGIN`, `LootContextParams.BLOCK_ENTITY`, and what
 /// vanilla's own conditions read of `LootContext.getLevel` (`TimeCheck`:
 /// the time; `WeatherCheck`: the rain and the thunder). The game sets it
-/// around a roll with [`with_native_loot_place`]. API 156.
+/// around a roll with [`with_native_loot_place`].
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NativeLootPlace {
     /// `ORIGIN`: a broken block's centre, a dead mob's position.
@@ -171,7 +169,6 @@ thread_local! {
 /// Runs `roll` with `place` as where its loot rolls happen: every
 /// [`NativeLootContext`] made inside it, by either engine, carries it. The
 /// place before is back when `roll` returns, so these nest.
-/// API 156.
 pub fn with_native_loot_place<T>(place: NativeLootPlace, roll: impl FnOnce() -> T) -> T {
     struct Restore(Option<Rc<NativeLootPlace>>);
     impl Drop for Restore {
@@ -571,7 +568,7 @@ pub fn shared_tables(root: &Path, overlay: &PackOverlay) -> io::Result<Arc<LootT
 /// rolls it (NeoForge's `LootTableLoadEvent`, Fabric's `LootTableEvents.MODIFY`). Add pools to
 /// `table["pools"]` or entries to a pool's `entries`, change or replace it (no pools: it drops
 /// nothing; keep its `random_sequence` when replacing it, as a mob's table without one drops
-/// nothing). Called once per table in id order when the server loads or reloads its data. API 75.
+/// nothing). Called once per table in id order when the server loads or reloads its data.
 #[inline(never)]
 pub fn native_loot_table_load(id: &str, table: &mut Value) {
     crate::native_load_hooks::loot_table_load(id, table);

@@ -60,7 +60,6 @@ pub enum ConsumeEffect {
     PlaySound(String),
     /// A mod's own kind, kept as the file wrote it (the loader used to drop
     /// it silently): the game hands it to `native_consume_effect`.
-    /// API 74
     Native {
         kind: String,
         data: serde_json::Value,
@@ -1437,7 +1436,7 @@ impl LootContext<'_> {
     /// The context a mod's own loot kind sees in this engine: the block and
     /// the tool it has, and a seed from the roll's random. The entity, the
     /// damage, the player and the biome belong to the main loot engine's
-    /// rolls; they are None here (docs/native-mods.md, API 133).
+    /// rolls; they are None here (docs/native-mods.md).
     fn native_loot_context<R: RandomSource>(
         &self,
         random: &mut R,

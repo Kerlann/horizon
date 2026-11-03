@@ -1,0 +1,10 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "player_set_abilities", "side": "server",
+      "target": "horizon_client::game::native_server::Game<'_>::native_player_set_abilities",
+      "receiver": "player"
+    }
+  ]
+}

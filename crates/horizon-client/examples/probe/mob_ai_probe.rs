@@ -1026,7 +1026,7 @@ pub fn main() -> horizon_client::Result<()> {
                         m.persistent = true;
                     }
                     "ridden" => {
-                        m.extra.body = Some("minecraft:red_harness".into());
+                        m.extra.set_body(Some("minecraft:red_harness".into()));
                         m.rider = Some(horizon_client::mobs::equine::Rider::default());
                     }
                     "noai" => m.no_ai = true,
@@ -1202,7 +1202,9 @@ pub fn main() -> horizon_client::Result<()> {
                     items: Some(&items),
                     lid_openers: &lid_openers,
                     mod_effects: None,
-                    ask_mods: false,
+                    asks_animal_tame: false,
+                    asks_living_destroy_block: false,
+                    asks_baby_spawn: false,
                     border: None,
                 }
             };

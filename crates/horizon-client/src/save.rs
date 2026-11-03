@@ -13,6 +13,7 @@
 //! game rules) is kept from the loaded files and written back unchanged.
 //! Worlds saved by older Horizon builds (`region/`, `DIM-1/`, `Player` in
 //! `level.dat`) are migrated on open.
+use crate::mod_chunk_tickets::{ModTicket, ModTickets, TicketOwner};
 use crate::{
     Result,
     beehive::BeehiveExt,
@@ -270,6 +271,43 @@ pub fn downgraded_from(world: &Path) -> Option<String> {
 }
 /// `LevelStorageAccess.checkForLowDiskSpace`: under 64 MiB usable.
 pub const LOW_DISK_SPACE: u64 = 67_108_864;
+
+/// The `PlayerData::inventory` slots of `EquipmentSlot.BODY` and `SADDLE`.
+/// Vanilla saves them in the `equipment` compound with the armor and off hand.
+pub const BODY_SLOT: u8 = 151;
+pub const SADDLE_SLOT: u8 = 152;
+
+/// The `EquipmentSlot` ordinals a player saves in `equipment`, with the
+/// `PlayerData::inventory` slot each is held in: armor 100 (feet) to 103
+/// (head), the off hand 150, body 151, saddle 152. The main hand is the
+/// selected inventory slot and never in `equipment`.
+const PLAYER_EQUIPMENT_SLOTS: [(usize, u8); 7] = [
+    (horizon_items::equipment::FEET, 100),
+    (horizon_items::equipment::LEGS, 101),
+    (horizon_items::equipment::CHEST, 102),
+    (horizon_items::equipment::HEAD, 103),
+    (horizon_items::equipment::OFFHAND, 150),
+    (horizon_items::equipment::BODY, BODY_SLOT),
+    (horizon_items::equipment::SADDLE, SADDLE_SLOT),
+];
+
+/// The `EquipmentSlot` ordinal a saved slot number stands for, for the
+/// slots a player holder keeps in its `Equipment`.
+pub fn equipment_slot(slot: u8) -> Option<usize> {
+    match slot {
+        BODY_SLOT => Some(horizon_items::equipment::BODY),
+        SADDLE_SLOT => Some(horizon_items::equipment::SADDLE),
+        _ => None,
+    }
+}
+/// The saved slot number of a held `EquipmentSlot` ordinal (the inverse).
+pub fn saved_slot(equipment_slot: usize) -> Option<u8> {
+    match equipment_slot {
+        horizon_items::equipment::BODY => Some(BODY_SLOT),
+        horizon_items::equipment::SADDLE => Some(SADDLE_SLOT),
+        _ => None,
+    }
+}
 /// `LevelStorageAccess.estimateDiskSpace`: the usable bytes of the disk holding `dir`
 /// (`FileStore.getUsableSpace`), `u64::MAX` when it cannot be asked.
 pub fn estimate_disk_space(dir: &Path) -> u64 {
@@ -2392,6 +2430,46 @@ pub struct SaveDir {
     /// What older chunks are upgraded with, found on the first one read.
     datafix_context: OnceLock<Option<DatafixContext>>,
 }
+fn mod_ticket_to_nbt(ticket: &ModTicket) -> Tag {
+    let owner = match ticket.owner {
+        TicketOwner::Block(pos) => ("block", Tag::IntArray(pos.to_vec())),
+        TicketOwner::Entity(uuid) => (
+            "entity",
+            Tag::IntArray((0..4).map(|i| (uuid >> (96 - 32 * i)) as i32).collect()),
+        ),
+    };
+    Tag::compound([
+        ("mod", Tag::String(ticket.mod_id.as_str().into())),
+        ("owner", Tag::compound([owner])),
+        (
+            "chunk_pos",
+            Tag::IntArray(vec![ticket.chunk.0, ticket.chunk.1]),
+        ),
+    ])
+}
+fn mod_ticket_from_nbt(tag: &Tag) -> Option<ModTicket> {
+    let Some(Tag::String(mod_id)) = tag.get("mod") else {
+        return None;
+    };
+    let owner = tag.get("owner")?;
+    let owner = match (owner.get("block"), owner.get("entity")) {
+        (Some(Tag::IntArray(p)), _) if p.len() == 3 => TicketOwner::Block([p[0], p[1], p[2]]),
+        (_, Some(Tag::IntArray(u))) if u.len() == 4 => TicketOwner::Entity(
+            u.iter()
+                .fold(0u128, |acc, &n| acc << 32 | u128::from(n as u32)),
+        ),
+        _ => return None,
+    };
+    let Some(Tag::IntArray(pos)) = tag.get("chunk_pos") else {
+        return None;
+    };
+    let mod_id = mod_id.to_string().ok()?;
+    (pos.len() == 2).then(|| ModTicket {
+        mod_id,
+        owner,
+        chunk: (pos[0], pos[1]),
+    })
+}
 fn is_forced_ticket(ticket: &Tag) -> bool {
     matches!(ticket.get("type"), Some(Tag::String(t)) if *t == JavaString::from("minecraft:forced"))
 }
@@ -2534,6 +2612,39 @@ impl SaveDir {
         }));
         put(&mut data, "tickets", Tag::List(tickets));
         write_saved_data(&self.root, "chunk_tickets", data)
+    }
+    /// The chunk tickets of mods (`data/horizon/mod_chunk_tickets.dat`), kept
+    /// out of vanilla's `chunk_tickets.dat` because vanilla decodes its ticket
+    /// types through a registry. A ticket that doesn't read is skipped.
+    pub fn load_mod_tickets(&self) -> Vec<ModTicket> {
+        let Some(root) = read_dat(&self.mod_tickets_path()) else {
+            return Vec::new();
+        };
+        let Some(Tag::List(tickets)) = root.get("data").and_then(|data| data.get("tickets")) else {
+            return Vec::new();
+        };
+        tickets.iter().filter_map(mod_ticket_from_nbt).collect()
+    }
+    /// Save the tickets of mods; nothing while there are none and never were.
+    pub fn save_mod_tickets(&self, tickets: &ModTickets) -> Result<()> {
+        let path = self.mod_tickets_path();
+        let list: Vec<Tag> = tickets.to_save().map(mod_ticket_to_nbt).collect();
+        if list.is_empty() && !path.exists() {
+            return Ok(());
+        }
+        write_dat(
+            &path,
+            Tag::compound([
+                ("data", Tag::compound([("tickets", Tag::List(list))])),
+                ("DataVersion", Tag::Int(DATA_VERSION)),
+            ]),
+        )
+    }
+    fn mod_tickets_path(&self) -> PathBuf {
+        self.root
+            .join("data")
+            .join("horizon")
+            .join("mod_chunk_tickets.dat")
     }
     /// Whether chunk `x z` is in its region file, from a chunk list kept
     /// `LOD_REGION_TTL`. Far terrain asks for every column of the view: it
@@ -3643,7 +3754,8 @@ pub struct Level {
     pub absorption: f32,
     pub food: i32,
     pub saturation: f32,
-    /// (slot, item, count, damage): 0..36 inventory, 100..103 armor (feet..head), 150 offhand.
+    /// (slot, item, count, damage): 0..36 inventory, 100..103 armor (feet..head), 150 offhand,
+    /// 151 body and 152 saddle (`BODY_SLOT`).
     pub inventory: Vec<(u8, String, u32, u32)>,
     /// Extra item components of `inventory` entries, by slot.
     pub inventory_components: HashMap<u8, Box<crate::item_data::StackData>>,
@@ -3698,6 +3810,10 @@ pub struct Level {
     pub flying: bool,
     /// Abilities.flyingSpeed, when the file has one (vanilla's is 0.05).
     pub fly_speed: Option<f32>,
+    /// The `abilities` compound of the player file (`Abilities.Packed`), as
+    /// read and as a server player's stored abilities write it. When none,
+    /// `player_tag` derives it from the game mode.
+    pub abilities: Option<crate::lan::abilities::PlayerAbilities>,
     /// The vehicle the player rides, by UUID (`ServerPlayer.saveParentVehicle`'s
     /// "RootVehicle"), so the ride comes back on the next login.
     pub root_vehicle: Option<[i32; 4]>,
@@ -3959,6 +4075,24 @@ impl Level {
             .get("abilities")
             .and_then(|a| float(a.get("flySpeed")))
             .map(|v| v as f32);
+        self.abilities = p.get("abilities").map(|a| {
+            let flag = |key: &str, default: bool| number(a.get(key)).map_or(default, |v| v != 0);
+            let speed = |key: &str, default: f32| {
+                float(a.get(key))
+                    .map(|v| v as f32)
+                    .filter(|v| v.is_finite())
+                    .unwrap_or(default)
+            };
+            crate::lan::abilities::PlayerAbilities {
+                invulnerable: flag("invulnerable", false),
+                flying: flag("flying", false),
+                may_fly: flag("mayfly", false),
+                instabuild: flag("instabuild", false),
+                may_build: flag("mayBuild", true),
+                flying_speed: speed("flySpeed", 0.05),
+                walking_speed: speed("walkSpeed", 0.1),
+            }
+        });
         if let Some(d) = text(p.get("Dimension")) {
             self.dimension = d;
         }
@@ -3999,14 +4133,9 @@ impl Level {
             }
         }
         if let Some(eq) = p.get("equipment") {
-            for (name, slot) in [
-                ("feet", 100u8),
-                ("legs", 101),
-                ("chest", 102),
-                ("head", 103),
-                ("offhand", 150),
-            ] {
-                if let Some(stack) = eq.get(name).and_then(item_from_nbt) {
+            let eq = horizon_items::equipment::Equipment::read(eq);
+            for (ordinal, slot) in PLAYER_EQUIPMENT_SLOTS {
+                if let Some(stack) = eq.get(ordinal) {
                     inventory.retain(|(s, ..)| *s != slot);
                     if let Some(extra) = &stack.extra {
                         inventory_components.insert(slot, extra.clone());
@@ -4064,7 +4193,7 @@ impl Level {
             }
         }
         let mut inventory = Vec::new();
-        let mut equipment = Vec::new();
+        let mut equipment = horizon_items::equipment::Equipment::default();
         for (slot, id, count, damage) in &self.inventory {
             let extra = self.inventory_components.get(slot).cloned();
             let stack = crate::items::ItemStack {
@@ -4073,38 +4202,62 @@ impl Level {
                 damage: *damage,
                 extra,
             };
-            match slot {
+            match *slot {
                 0..=35 => {
                     let mut entries = vec![("Slot", Tag::Byte(*slot as i8))];
                     entries.extend(encode_item(&stack));
                     inventory.push(Tag::compound(entries));
                 }
-                100 => equipment.push(("feet", item_to_nbt(&stack))),
-                101 => equipment.push(("legs", item_to_nbt(&stack))),
-                102 => equipment.push(("chest", item_to_nbt(&stack))),
-                103 => equipment.push(("head", item_to_nbt(&stack))),
-                150 => equipment.push(("offhand", item_to_nbt(&stack))),
-                _ => {}
+                _ => {
+                    if let Some((ordinal, _)) = PLAYER_EQUIPMENT_SLOTS
+                        .iter()
+                        .find(|(_, saved)| saved == slot)
+                    {
+                        equipment.set(*ordinal, Some(stack));
+                    }
+                }
             }
         }
-        // GameType.updatePlayerAbilities.
+        // The stored abilities, else GameType.updatePlayerAbilities.
         let mode = self.mode();
         let (creative, spectator) = (mode == 1, mode == 3);
         let mut abilities = compound_or_empty(p.get("abilities").cloned());
-        for (k, v) in [
-            ("invulnerable", creative || spectator),
-            ("mayfly", creative || spectator),
-            ("instabuild", creative),
-            ("mayBuild", mode < 2),
-        ] {
-            put(&mut abilities, k, Tag::Byte(i8::from(v)));
-        }
-        if spectator {
-            put(&mut abilities, "flying", Tag::Byte(1));
-        } else if creative {
-            put(&mut abilities, "flying", Tag::Byte(i8::from(self.flying)));
+        if let Some(a) = self.abilities {
+            for (k, v) in [
+                ("invulnerable", a.invulnerable),
+                ("flying", a.flying),
+                ("mayfly", a.may_fly),
+                ("instabuild", a.instabuild),
+                ("mayBuild", a.may_build),
+            ] {
+                put(&mut abilities, k, Tag::Byte(i8::from(v)));
+            }
+            put(
+                &mut abilities,
+                "flySpeed",
+                Tag::Float(a.flying_speed.to_bits()),
+            );
+            put(
+                &mut abilities,
+                "walkSpeed",
+                Tag::Float(a.walking_speed.to_bits()),
+            );
         } else {
-            put(&mut abilities, "flying", Tag::Byte(0));
+            for (k, v) in [
+                ("invulnerable", creative || spectator),
+                ("mayfly", creative || spectator),
+                ("instabuild", creative),
+                ("mayBuild", mode < 2),
+            ] {
+                put(&mut abilities, k, Tag::Byte(i8::from(v)));
+            }
+            if spectator {
+                put(&mut abilities, "flying", Tag::Byte(1));
+            } else if creative {
+                put(&mut abilities, "flying", Tag::Byte(i8::from(self.flying)));
+            } else {
+                put(&mut abilities, "flying", Tag::Byte(0));
+            }
         }
         if let Tag::Compound(map) = &mut abilities {
             map.entry("mayBuild".into()).or_insert(Tag::Byte(1));
@@ -4178,8 +4331,10 @@ impl Level {
             .inventory
             .iter()
             .any(|(slot, _, count, _)| i32::from(*slot) == self.selected_slot && *count > 0);
-        if holding || !equipment.is_empty() {
-            entries.push(("equipment", Tag::compound(equipment)));
+        match equipment.write() {
+            Some(tag) => entries.push(("equipment", tag)),
+            None if holding => entries.push(("equipment", Tag::Compound(Default::default()))),
+            None => {}
         }
         if self.active_effects.is_empty() {
             entries.retain(|(key, _)| *key != "active_effects");

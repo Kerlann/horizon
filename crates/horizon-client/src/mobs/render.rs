@@ -637,8 +637,8 @@ pub fn layers(m: &Mob, age: f32) -> Vec<Layer> {
                 ("wolf#main", "entity/wolf/wolf_collar")
             };
             // The armor, then the cracks of its damage (`Crackiness.WOLF_ARMOR`).
-            if !m.is_baby() && m.extra.body.as_deref() == Some("minecraft:wolf_armor") {
-                let left = (super::WOLF_ARMOR_DURABILITY - m.extra.body_damage) as f32
+            if !m.is_baby() && m.extra.body_id() == Some("minecraft:wolf_armor") {
+                let left = (super::WOLF_ARMOR_DURABILITY - m.extra.body_damage()) as f32
                     / super::WOLF_ARMOR_DURABILITY as f32;
                 push(
                     &mut v,
@@ -672,8 +672,7 @@ pub fn layers(m: &Mob, age: f32) -> Vec<Layer> {
         S::HappyGhast => {
             let harness = m
                 .extra
-                .body
-                .as_deref()
+                .body_id()
                 .and_then(super::happy_ghast::harness_texture);
             if !m.is_baby()
                 && let Some(texture) = &harness
@@ -739,7 +738,7 @@ pub fn layers(m: &Mob, age: f32) -> Vec<Layer> {
             if let Some(tex) = super::equine::markings(m) {
                 push(&mut v, body, tex, white, false);
             }
-            if m.extra.saddled && !m.is_baby() {
+            if m.extra.saddled() && !m.is_baby() {
                 push(
                     &mut v,
                     interned(format_args!("{name}#saddle")),
@@ -748,7 +747,7 @@ pub fn layers(m: &Mob, age: f32) -> Vec<Layer> {
                     false,
                 );
             }
-            if let Some(armor) = m.extra.body.as_deref()
+            if let Some(armor) = m.extra.body_id()
                 && let Some(material) = armor
                     .strip_prefix("minecraft:")
                     .and_then(|a| a.strip_suffix("_horse_armor"))
@@ -769,14 +768,14 @@ pub fn layers(m: &Mob, age: f32) -> Vec<Layer> {
             }
         }
         // SimpleEquipmentLayer: pig and strider saddles.
-        S::Pig if m.extra.saddled && !m.is_baby() => push(
+        S::Pig if m.extra.saddled() && !m.is_baby() => push(
             &mut v,
             "pig#saddle",
             "entity/equipment/pig_saddle/saddle",
             white,
             false,
         ),
-        S::Strider if m.extra.saddled && !m.is_baby() => push(
+        S::Strider if m.extra.saddled() && !m.is_baby() => push(
             &mut v,
             "strider#saddle",
             "entity/equipment/strider_saddle/saddle",
@@ -806,15 +805,10 @@ pub fn layers(m: &Mob, age: f32) -> Vec<Layer> {
         }
         // NautilusRenderer: the armour and saddle SimpleEquipmentLayers.
         S::Nautilus | S::ZombieNautilus if !m.is_baby() => {
-            if let Some(texture) = m
-                .extra
-                .body
-                .as_deref()
-                .and_then(super::nautilus::armor_texture)
-            {
+            if let Some(texture) = m.extra.body_id().and_then(super::nautilus::armor_texture) {
                 push(&mut v, "nautilus_armor#main", texture, white, false);
             }
-            if m.extra.saddled {
+            if m.extra.saddled() {
                 push(
                     &mut v,
                     "nautilus#saddle",
@@ -2975,7 +2969,7 @@ mod tests {
                 );
                 assert!(vertices[24..].iter().all(|v| v.uv[0] >= 0.5));
             }
-            mob.extra.body = Some("minecraft:stone".into());
+            mob.extra.set_body(Some("minecraft:stone".into()));
             let mut vertices = Vec::new();
             render(
                 &mob,

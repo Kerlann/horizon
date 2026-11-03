@@ -30,10 +30,5 @@
       "target": "horizon_client::game::native_player_cooldowns::Game<'_>::native_player_remove_item_cooldown",
       "receiver": "player"
     }
-  ],
-  "rust_summary": "a player's item cooldowns through a `PlayerRef` (`native_player_set_item_cooldown`...).",
-  "doc_summary": "a player's item cooldowns through a `PlayerRef`, as vanilla's `ItemCooldowns`: `item_cooldowns(host)` (a `NativeItemCooldown` with the `group` and its `ticks_left` for each), `has_item_cooldown(host, group)`, `item_cooldown_percent(host, group)` (what is left, 1 to 0), `set_item_cooldown(host, group, ticks)` (`addCooldown`, which the player's client draws) and `remove_item_cooldown(host, group)`. A group is an item id unless the item's `use_cooldown` component names another; `host.item_cooldown_group(&stack)` gives a stack's (`ItemCooldowns.getCooldownGroup`). Writes return false for a stale handle, a dead player, or another player than the one whose turn it is. Bundles need \"hooks\": @API:player_cooldowns@.",
-  "comments": [
-    "crates/horizon-client/src/game/native_player_cooldowns.rs"
   ]
 }

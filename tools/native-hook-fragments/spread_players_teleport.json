@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a cancellable `/spreadplayers` placement (`native_spread_players_teleport`).",
-  "doc_summary": "`native_spread_players_teleport(dimension, entity, player, from, target, cancel)`, once per entity (`player` is the UUID of a player, None for any other) `/spreadplayers` is about to place, after the spread worked out its spot. A mod may move `target` (a value that is not a number is ignored). Set `cancel` to leave that entity where it is; the other entities, the random draws and the feedback are unchanged. Server-side. Bundles need \"hooks\": @API:spread_players_teleport@."
+  ]
 }

@@ -10,7 +10,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "A brewing stand brewed (`native_potion_brew_post`).",
-  "doc_summary": "A brewing stand brewed, at the end of `BrewingStandBlockEntity.doBrew`, or `potion_brew_pre` was cancelled: `native_potion_brew_post(pos, stacks)`. `stacks` holds the stand's five slots after the brew (or as the cancelling mods left them); what the mods leave there is the stand's. Fires last, as `doBrew` ends: after `brewing_complete`, the brew sound and the ingredient's remainder dropping. Server-side, not cancellable. Bundles need \"hooks\": @API:potion_brew_post@."
+  ]
 }

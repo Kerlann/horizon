@@ -1,5 +1,5 @@
-name: native hook stamp
-# Opens a PR that numbers pending fragments after they merge. Only pushes to
+name: native hook catalog
+# Opens a PR that collects pending catalog fragments after they merge. Only pushes to
 # main run main's own tool; fragments are read as data, not PR code.
 
 on:
@@ -28,28 +28,28 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      - name: Open a stamp pull request
+      - name: Open a catalog pull request
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
           branch=automation/native-hook-stamp
           if [ -n "$(gh pr list --state open --head "$branch" --json number --jq '.[0].number // empty')" ]; then
-            echo "A stamp pull request is already open."
+            echo "A catalog pull request is already open."
             exit 0
           fi
           python3 tools/stamp_native_hooks.py
           if git diff --quiet; then
-            echo "No fragments to stamp."
+            echo "No catalog fragments to collect."
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git checkout -b "$branch"
           git add -u
-          git commit -m 'Stamp native hook API fragments'
+          git commit -m 'Collect native hook catalog fragments'
           if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
             git fetch origin "+refs/heads/$branch:refs/remotes/origin/$branch"
           fi
           git push --force-with-lease origin "$branch"
-          gh pr create --base main --head "$branch" --title 'Stamp native hook API fragments' --body 'Assign API numbers to the pending native hook fragments. Close and reopen this PR to run CI.'
+          gh pr create --base main --head "$branch" --title 'Collect native hook catalog fragments' --body 'Collect pending hook and helper catalog facts. Close and reopen this PR to run CI.'

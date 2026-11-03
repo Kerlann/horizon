@@ -1227,9 +1227,9 @@ mod tests {
             0.0,
         );
         mob.extra.tame = true;
-        mob.extra.body = Some("minecraft:wolf_armor".into());
+        mob.extra.set_body(Some("minecraft:wolf_armor".into()));
         // Worn through: the high cracks.
-        mob.extra.body_damage = WOLF_ARMOR_DURABILITY;
+        mob.extra.set_body_damage(WOLF_ARMOR_DURABILITY);
         let sprites = [
             "entity/wolf/custom_armor",
             "entity/equipment/wolf_body/armadillo_scute",

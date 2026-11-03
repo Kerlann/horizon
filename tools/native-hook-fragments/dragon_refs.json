@@ -1,0 +1,10 @@
+{
+  "hooks": [],
+  "helpers": [
+    {"name": "dragon", "side": "server", "target": "horizon_client::game::native_dragon_refs::Game<'_>::native_dragon_ref"},
+    {"name": "dragon_phase", "side": "server", "target": "horizon_client::game::native_dragon_refs::Game<'_>::native_dragon_phase", "receiver": "dragon"},
+    {"name": "dragon_set_phase", "side": "server", "target": "horizon_client::game::native_dragon_refs::Game<'_>::native_dragon_set_phase", "receiver": "dragon"},
+    {"name": "dragon_alive_crystals", "side": "server", "target": "horizon_client::game::native_dragon_refs::Game<'_>::native_dragon_alive_crystals", "receiver": "dragon"},
+    {"name": "dragon_previously_killed", "side": "server", "target": "horizon_client::game::native_dragon_refs::Game<'_>::native_dragon_previously_killed", "receiver": "dragon"}
+  ]
+}

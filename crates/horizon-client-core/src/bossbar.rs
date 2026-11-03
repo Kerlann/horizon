@@ -85,9 +85,15 @@ impl BossBar {
         // brackets take the colour too.
         bracketed(comp_text(&self.name)).with_style(&style)
     }
-    /// The filled fraction of the bar (`BossEvent.getProgress`).
+    /// The filled fraction of the bar: `Mth.clamp(value / max, 0, 1)` as
+    /// `CustomBossEvent.setValue` computes it (a 0 of 0 bar reads 0).
     pub fn progress(&self) -> f32 {
-        (self.value as f32 / self.max.max(1) as f32).clamp(0.0, 1.0)
+        let fraction = self.value as f32 / self.max as f32;
+        if fraction.is_nan() {
+            0.0
+        } else {
+            fraction.clamp(0.0, 1.0)
+        }
     }
 }
 

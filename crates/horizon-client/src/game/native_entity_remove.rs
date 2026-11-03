@@ -13,7 +13,7 @@ impl Game<'_> {
     /// Removes the entity with no death and no loot (`Entity.discard`): a
     /// chest boat or a minecart with a chest still drops what it holds, and
     /// a boat its lead, as vanilla's `remove` does. False for a player, or a
-    /// stale handle. API @API:entity_remove@.
+    /// stale handle.
     pub(super) fn native_entity_discard(&mut self, entity: EntityRef) -> bool {
         self.native_entity_remove(entity, NativeRemovalReason::Discarded)
     }
@@ -21,7 +21,7 @@ impl Game<'_> {
     /// `discard`, or `Killed`, which also runs a mob's effects that act on
     /// removal (Oozing's slimes, Weaving's cobwebs, Wind Charged's burst),
     /// still with no death and no loot. False for a player, or a stale
-    /// handle. API @API:entity_remove@.
+    /// handle.
     pub(super) fn native_entity_remove(
         &mut self,
         entity: EntityRef,

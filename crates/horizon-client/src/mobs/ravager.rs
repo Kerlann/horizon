@@ -131,7 +131,7 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         if m.on_ground {
             if !destroyed {
                 m.ai.jumping = true;
-            } else if w.ask_mods {
+            } else if w.asks_living_destroy_block {
                 // The jump follows only when the game kept every leaf.
                 events.push(MobEvent::IfBroke {
                     mob: m.id,
@@ -358,7 +358,7 @@ mod tests {
     fn modded_collision_without_leaves_jumps_without_if_broke() {
         assert!(super::super::world::with_test_world(&[], |world, types| {
             let mut world = world.clone();
-            world.ask_mods = true;
+            world.asks_living_destroy_block = true;
             let mut mob = Mob::new(
                 1,
                 Arc::new(types.types.get("minecraft:ravager").unwrap().clone()),
@@ -396,7 +396,7 @@ mod tests {
             build,
             |world, types| {
                 let mut world = world.clone();
-                world.ask_mods = true;
+                world.asks_living_destroy_block = true;
                 let mut mob = Mob::new(
                     1,
                     Arc::new(types.types.get("minecraft:ravager").unwrap().clone()),
@@ -414,6 +414,23 @@ mod tests {
                         .any(|e| matches!(e, MobEvent::BreakBlock { .. }))
                 );
                 assert!(events.iter().any(|e| matches!(e, MobEvent::IfBroke { otherwise, .. } if matches!(otherwise.as_slice(), [MobEvent::Jump { mob: 1 }]))));
+                world.asks_living_destroy_block = false;
+                let mut mob = Mob::new(
+                    2,
+                    Arc::new(types.types.get("minecraft:ravager").unwrap().clone()),
+                    Vec3::new(0.5, 64.0, 0.5),
+                    0.0,
+                );
+                mob.horizontal_collision = true;
+                mob.on_ground = true;
+                let mut events = Vec::new();
+                ai_step(&mut mob, &world, &mut events);
+                assert!(
+                    !events
+                        .iter()
+                        .any(|event| matches!(event, MobEvent::IfBroke { .. }))
+                );
+                assert!(!mob.ai.jumping);
             }
         ));
     }

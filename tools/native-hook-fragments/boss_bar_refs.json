@@ -1,0 +1,158 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "boss_bar",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar"
+    },
+    {
+      "name": "boss_bars",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bars"
+    },
+    {
+      "name": "create_boss_bar",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_create_boss_bar"
+    },
+    {
+      "name": "boss_bar_id",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_id",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_name",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_name",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_set_name",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_set_name",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_color",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_color",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_set_color",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_set_color",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_overlay",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_overlay",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_set_overlay",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_set_overlay",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_darken_screen",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_darken_screen",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_set_darken_screen",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_set_darken_screen",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_play_boss_music",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_play_boss_music",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_set_play_boss_music",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_set_play_boss_music",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_create_world_fog",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_create_world_fog",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_set_create_world_fog",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_set_create_world_fog",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_value",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_value",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_set_value",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_set_value",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_max",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_max",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_set_max",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_set_max",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_visible",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_visible",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_set_visible",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_set_visible",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_players",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_players",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_add_player",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_add_player",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_remove_player",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_remove_player",
+      "receiver": "boss_bar"
+    },
+    {
+      "name": "boss_bar_remove",
+      "side": "server",
+      "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_remove",
+      "receiver": "boss_bar"
+    }
+  ]
+}

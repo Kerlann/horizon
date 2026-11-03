@@ -47,6 +47,8 @@ pub(super) struct ThrownTrident {
     pub(super) owner: u32,
     /// The guest that threw it (`Projectile.getOwner`); `None` for the host.
     pub(super) guest: Option<u32>,
+    /// `Entity.random`: what a mod's `Projectile.deflect` draws from.
+    pub(super) random: horizon_core::random::LegacyRandom,
 }
 /// A player a trident can return to (its owner) or that can pick it up: this
 /// game's own, or a server's guest in this level, which is all a server has.
@@ -122,6 +124,7 @@ impl ThrownTrident {
             age: 0,
             owner: 0,
             guest: None,
+            random: horizon_client::projectiles::unique_random(position),
         }
     }
     /// `ThrownTrident.tick`'s Loyalty return: pulled up and towards the
@@ -442,6 +445,7 @@ impl Game<'_> {
             age: 0,
             owner: 0,
             guest: self.lan_acting,
+            random: horizon_client::projectiles::unique_random(start),
         });
         self.player_projectile_shot();
         self.audio
@@ -460,13 +464,9 @@ impl Game<'_> {
             self.player_hit(victim, "minecraft:trident", Some(direct), damage);
             return;
         };
-        let Some(mut host) = self.lan.take() else {
-            return;
-        };
-        self.as_guest(&mut host, conn, |g| {
+        self.as_guest(conn, |g| {
             g.player_hit(victim, "minecraft:trident", Some(direct), damage)
         });
-        self.lan = Some(host);
     }
     /// The players tridents fly back to or land at: this game's player and the
     /// guests in this level. A server has no player of its own, so its
@@ -506,11 +506,7 @@ impl Game<'_> {
             let rest = match by.guest {
                 None => self.give(t.stack.clone()),
                 Some(conn) => {
-                    let Some(mut host) = self.lan.take() else {
-                        return false;
-                    };
-                    let rest = self.as_guest(&mut host, conn, |g| g.give(t.stack.clone()));
-                    self.lan = Some(host);
+                    let rest = self.as_guest(conn, |g| g.give(t.stack.clone()));
                     let Some(rest) = rest else {
                         return false;
                     };

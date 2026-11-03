@@ -273,6 +273,7 @@ impl Game<'_> {
             position.z.floor() as i32,
         ];
         self.cushions.push(Cushion {
+            join: Default::default(),
             id,
             position,
             pos: attached,

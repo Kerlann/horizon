@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "two animals breeding and a baby about to spawn, cancellable (`native_baby_entity_spawn`).",
-  "doc_summary": "two animals breeding, as NeoForge's `BabyEntitySpawnEvent`: `native_baby_entity_spawn(parent, partner, player, player_entity_id, kind, cancel)` runs on the server before the baby is made. `player` and `player_entity_id` are the feeder's UUID and entity id (None for none). Set `cancel` for no baby; the parents still rest and lose their love, but there is no baby, experience, statistic or advancement. Not fired for turtles, frogs, sniffers or villagers. NeoForge's `setChild` waits for a handle to a mob not yet in the world. Bundles need \"hooks\": @API:baby_entity_spawn@."
+  ]
 }

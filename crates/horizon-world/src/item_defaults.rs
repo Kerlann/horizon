@@ -33,7 +33,6 @@ fn stack_size(value: &Value, max: i64) -> Option<i64> {
 /// thread, several times as resources load and again when a world's data packs
 /// load: answer the same each time. Client and server each ask their own mods,
 /// as NeoForge does, so both sides need the mod.
-/// 79.
 #[inline(never)]
 pub fn native_modify_default_components(item: &str, components: &mut Map<String, Value>) {
     crate::native_load_hooks::modify_default_components(item, components);

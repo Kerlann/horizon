@@ -262,12 +262,12 @@ pub fn controlled(m: &Mob) -> bool {
     };
     match m.species() {
         // Pig/Strider.getControllingPassenger: saddled, the rider holding the stick.
-        Species::Pig | Species::Strider => m.extra.saddled && r.steer,
+        Species::Pig | Species::Strider => m.extra.saddled() && r.steer,
         Species::HappyGhast => super::happy_ghast::controlled(m),
         Species::Nautilus | Species::ZombieNautilus => super::nautilus::controlled(m),
         // AbstractHorse.getControllingPassenger: saddled with a player on it. A
         // tamed skeleton horse (SkeletonTrapGoal only tames it) needs the saddle too.
-        _ => m.extra.saddled,
+        _ => m.extra.saddled(),
     }
 }
 /// `AbstractHorse`s (camels too, not llamas, which no player steers): the
@@ -368,7 +368,7 @@ impl Goal for RunAroundLikeCrazy {
         {
             // tameWithName. When the game asks AnimalTameEvent it sets
             // `tame` itself, so nothing sees a horse tame that a mod refuses.
-            if !cx.w.ask_mods {
+            if !cx.w.asks_animal_tame {
                 m.extra.tame = true;
             }
             cx.events.push(MobEvent::Tamed { mob: m.id });
@@ -1067,6 +1067,36 @@ mod tests {
         k.species = species;
         k.max_health = 53.0;
         Mob::new(1, kind, Vec3::ZERO, 0.0)
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn tame_listener_defers_the_successful_tame() {
+        use horizon_core::random::{LegacyRandom, RandomSource};
+        assert!(crate::mobs::world::with_test_world(&[], |world, _| {
+            let seed = (0..1000)
+                .find(|seed| LegacyRandom::new(*seed).next_int_bound(50) == Ok(0))
+                .unwrap();
+            for asks_animal_tame in [false, true] {
+                let world = crate::mobs::MobWorld {
+                    asks_animal_tame,
+                    ..world.clone()
+                };
+                let mut m = horse(Species::Horse);
+                m.extra.variant3 = 100;
+                m.random = LegacyRandom::new(seed);
+                let mut level_random = LegacyRandom::new(0);
+                let mut events = Vec::new();
+                let mut cx = Cx {
+                    w: &world,
+                    lr: &mut level_random,
+                    events: &mut events,
+                };
+                RunAroundLikeCrazy.tick(&mut m, &mut cx);
+                assert_eq!(m.extra.tame, !asks_animal_tame);
+                assert!(matches!(events.as_slice(), [MobEvent::Tamed { mob: 1 }]));
+            }
+        }));
     }
 
     /// A failed taming adds 5 to the temper, up to the species' most, and

@@ -38,8 +38,7 @@ impl Game<'_> {
     /// `Entity.isPermanentlyInvulnerable`: the `Invulnerable` flag, which
     /// only damage that bypasses invulnerability (the void, `/kill`) or a
     /// creative player gets past. Mobs keep it; Horizon keeps no such flag
-    /// for players or other kinds yet, so they read None. API
-    /// @API:entity_invulnerable@.
+    /// for players or other kinds yet, so they read None.
     pub(super) fn native_entity_permanently_invulnerable(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_target(entity)? {
             Target::Mob(id) => Some(self.mobs.iter().find(|m| m.id == id)?.invulnerable_flag),
@@ -47,8 +46,7 @@ impl Game<'_> {
         }
     }
     /// `Entity.setInvulnerable`: sets a mob's `Invulnerable` flag, saved
-    /// with it. False for the other kinds. API
-    /// @API:entity_invulnerable@.
+    /// with it. False for the other kinds.
     pub(super) fn native_entity_set_invulnerable(
         &mut self,
         entity: EntityRef,
@@ -65,7 +63,7 @@ impl Game<'_> {
     }
     /// `LivingEntity.damageCooldownTime`: 20 after a hit, counting down;
     /// while it is above 10 a hit does only what it deals beyond the last
-    /// one. Mobs and players. API @API:entity_invulnerable@.
+    /// one. Mobs and players.
     pub(super) fn native_entity_damage_cooldown_time(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_target(entity)? {
             Target::Mob(id) => Some(self.mobs.iter().find(|m| m.id == id)?.invulnerable),
@@ -73,7 +71,7 @@ impl Game<'_> {
         }
     }
     /// Sets `LivingEntity.damageCooldownTime`, as mods do to let rapid hits
-    /// through (0). Mobs and players. API @API:entity_invulnerable@.
+    /// through (0). Mobs and players.
     pub(super) fn native_entity_set_damage_cooldown_time(
         &mut self,
         entity: EntityRef,

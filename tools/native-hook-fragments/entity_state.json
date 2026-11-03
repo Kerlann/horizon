@@ -66,10 +66,5 @@
       "target": "horizon_client::game::native_entity_state::Game<'_>::native_entity_pose",
       "receiver": "entity"
     }
-  ],
-  "rust_summary": "an entity's state flags through an `EntityRef`: sneaking, sprinting, water and lava, fire, air, silence, invisibility and pose.",
-  "doc_summary": "`entity.is_shift_key_down(host)`, `is_crouching`, `is_sprinting`, `is_in_water`, `is_in_lava`, `fire_immune`, `fire_ticks`, `air_supply`, `max_air_supply`, `is_silent`, `set_silent(host, silent)`, `is_invisible` and `pose` (`standing`, `crouching`...). Players and mobs have them all; other kinds return `None` for what Horizon doesn't keep for them. Bundles need \"hooks\": @API:entity_state@.",
-  "comments": [
-    "crates/horizon-client/src/game/native_entity_state.rs"
   ]
 }

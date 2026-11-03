@@ -6,7 +6,7 @@
 //! (`Kind::Mount`) with the mount's saddle, body item and chest copied in and
 //! written back, and the slots go to the client after each change, as
 //! `broadcastChanges` does.
-use super::{Game, lan::LanHost, lan_crafting::input};
+use super::{Game, lan_crafting::input};
 use horizon_client::{
     items::ItemStack,
     menu::{Kind, Menu},
@@ -26,16 +26,19 @@ pub(super) struct GuestMount {
 impl Game<'_> {
     /// `ServerPlayer.openHorseInventory` for mount `mob`: the open menu
     /// closes, the client gets the mount screen and the menu's slots.
-    pub(super) fn lan_open_mount(&mut self, host: &mut LanHost, conn: u32, mob: u32) {
+    pub(super) fn lan_open_mount(&mut self, conn: u32, mob: u32) {
         let Some(index) = self.mobs.iter().position(|m| m.id == mob) else {
             return;
         };
         let columns = super::mount_menu::mount_columns(&self.mobs[index]);
-        if !self.guest_may_open(host, conn, "minecraft:horse_inventory", None) {
+        if !self.guest_may_open(conn, "minecraft:horse_inventory", None) {
             return;
         }
         // ServerPlayer.openMenu closes the menu that was open.
-        self.guest_close_all(host, conn);
+        self.guest_close_all(conn);
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let Some(window) = host.hub.open_mount_window(conn, columns as i32, mob as i32) else {
             return;
         };
@@ -46,7 +49,7 @@ impl Game<'_> {
             state: 0,
             sent: None,
         });
-        self.lan_send_mount(host, conn);
+        self.lan_send_mount(conn);
     }
 
     /// `HorseInventoryMenu` over mount `index`, with the player's inventory
@@ -66,7 +69,10 @@ impl Game<'_> {
 
     /// The menu's slots (the mount's, then the inventory and the hotbar)
     /// and the carried stack, sent when they changed since the last time.
-    fn lan_send_mount(&mut self, host: &mut LanHost, conn: u32) {
+    fn lan_send_mount(&mut self, conn: u32) {
+        let Some(host) = self.lan.as_ref() else {
+            return;
+        };
         let Some(gm) = host.play.get(&conn).and_then(|p| p.mount_window.as_ref()) else {
             return;
         };
@@ -83,6 +89,9 @@ impl Game<'_> {
         slots.extend((9..36).chain(0..9).map(|i| g.inventory[i].clone()));
         let carried = g.carried.clone();
         let now = Some((slots, carried));
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let Some(gm) = host
             .play
             .get_mut(&conn)
@@ -107,12 +116,10 @@ impl Game<'_> {
     }
 
     /// A click on the guest's mount window; false for other windows.
-    pub(super) fn lan_mount_click(
-        &mut self,
-        host: &mut LanHost,
-        conn: u32,
-        p: &play::ContainerClick,
-    ) -> bool {
+    pub(super) fn lan_mount_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool {
+        let Some(host) = self.lan.as_ref() else {
+            return false;
+        };
         let Some((mob, columns)) = host
             .play
             .get(&conn)
@@ -127,12 +134,15 @@ impl Game<'_> {
             && let Some(index) = self.mobs.iter().position(|m| m.id == mob)
         {
             let mut menu = self.mount_engine_menu(index, columns);
-            self.guest_menu_op(host, gi, &mut menu, |menu, env| {
+            self.guest_menu_op(gi, &mut menu, |menu, env| {
                 let _ = menu.click(env, i32::from(p.slot), i32::from(p.button), input(p.input));
             });
             self.lan_mount_store(index, columns, &menu);
         }
         // The client is told what the server has, whatever it predicted.
+        let Some(host) = self.lan.as_mut() else {
+            return true;
+        };
         if let Some(gm) = host
             .play
             .get_mut(&conn)
@@ -140,7 +150,7 @@ impl Game<'_> {
         {
             gm.sent = None;
         }
-        self.lan_send_mount(host, conn);
+        self.lan_send_mount(conn);
         true
     }
 
@@ -160,12 +170,10 @@ impl Game<'_> {
     /// `AbstractContainerMenu.removed` of the guest's mount menu (`window`;
     /// None closes it whichever it is): the carried stack goes back to the
     /// inventory. False when no such window is open.
-    pub(super) fn lan_mount_closed(
-        &mut self,
-        host: &mut LanHost,
-        conn: u32,
-        window: Option<i32>,
-    ) -> bool {
+    pub(super) fn lan_mount_closed(&mut self, conn: u32, window: Option<i32>) -> bool {
+        let Some(host) = self.lan.as_mut() else {
+            return false;
+        };
         let closed = host
             .play
             .get_mut(&conn)
@@ -178,7 +186,7 @@ impl Game<'_> {
             && let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn)
             && let Some(carried) = host.hub.guests[gi].carried.take()
         {
-            self.lan_place_back(host, gi, vec![carried]);
+            self.lan_place_back(gi, vec![carried]);
         }
         closed
     }
@@ -205,13 +213,19 @@ impl Game<'_> {
     /// mount's and the inventory's slots. Only the level the player is in
     /// checks its menu (`ServerPlayer.tick`): another level ticking has
     /// none of its mobs (#5331).
-    pub(super) fn tick_lan_mount_menus(&mut self, host: &mut LanHost) {
+    pub(super) fn tick_lan_mount_menus(&mut self) {
+        let Some(host) = self.lan.as_ref() else {
+            return;
+        };
         let open: Vec<(u32, u32, i32)> = host
             .play
             .iter()
             .filter_map(|(c, p)| p.mount_window.as_ref().map(|m| (*c, m.mob, m.window)))
             .collect();
         for (conn, mob, window) in open {
+            let Some(host) = self.lan.as_ref() else {
+                return;
+            };
             let Some(g) = host.hub.guests.iter().find(|g| g.conn == conn) else {
                 continue;
             };
@@ -219,13 +233,15 @@ impl Game<'_> {
                 continue;
             }
             if self.lan_mount_valid(g, mob) {
-                self.lan_send_mount(host, conn);
+                self.lan_send_mount(conn);
             } else {
-                self.lan_mount_closed(host, conn, Some(window));
-                host.hub.send_to(
-                    conn,
-                    &C::ContainerClose(play::ContainerClose { container: window }),
-                );
+                self.lan_mount_closed(conn, Some(window));
+                if let Some(host) = self.lan.as_mut() {
+                    host.hub.send_to(
+                        conn,
+                        &C::ContainerClose(play::ContainerClose { container: window }),
+                    );
+                }
             }
         }
     }

@@ -3311,13 +3311,9 @@ pub struct Settings {
     /// Native mods are always on: an older file's `native_mods` switch is ignored.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub native_mods_noticed: bool,
-    /// The profile native builds compile with (`native_mods::Profile::chosen`); none is the
-    /// default, or the release's own while `native_release` is on.
+    /// The profile native builds compile with (`native_mods::Profile::chosen`); none is the default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_profile: Option<crate::native_mods::Profile>,
-    /// An older file's switch for the release profile, read when `native_profile` is unset.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub native_release: bool,
     /// Developer options (hidden: seven clicks on the sidebar's launcher version reveal them):
     /// offline names play without an account that owns the game, in the window only
     /// (`account::Accounts::play_as_with`, `account::launch_for_game`). Never a download: the game still

@@ -510,7 +510,7 @@ mod tests {
         let options = zip::write::SimpleFileOptions::default();
         zip.start_file("horizon-native.json", options).unwrap();
         zip.write_all(manifest.to_string().as_bytes()).unwrap();
-        zip.start_file(format!("mixins/{id}/horizon-mixin.toml"), options)
+        zip.start_file("native/horizon-mixin.toml", options)
             .unwrap();
         zip.write_all(mixin.as_bytes()).unwrap();
         zip.finish().unwrap();

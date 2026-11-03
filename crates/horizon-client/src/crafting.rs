@@ -26,7 +26,6 @@ use std::{
 /// removed keeping first-seen order. The hook may be called more than
 /// once per recipe; the answer must be the same. An unclaimed kind
 /// leaves the list empty and the recipe fails, as an unknown kind does.
-/// API 166.
 #[inline(never)]
 pub fn native_ingredient(
     kind: &str,
@@ -41,7 +40,7 @@ pub fn native_ingredient(
 /// stack being matched, `accept` already true (the load-time list named
 /// the item). Set `accept` to false to refuse the stack — its components
 /// are the usual reason. The hook may be called many times a craft; the
-/// answer must be the same for the same stack. API @API:ingredient_test@.
+/// answer must be the same for the same stack.
 #[inline(never)]
 pub fn native_ingredient_test(
     kind: &str,
@@ -1293,15 +1292,6 @@ pub fn recipe_result(v: &Value) -> Option<ItemStack> {
     template.item.is_some().then(|| template.create())
 }
 /// The type of a recipe the game doesn't craft itself: one outside `minecraft`.
-/// A recipe's whole id from its name in the tables: vanilla's are kept bare
-/// (`oak_planks`), everyone else's whole (`mymod:crusher/iron`).
-pub fn recipe_id(name: &str) -> String {
-    if name.contains(':') {
-        name.to_owned()
-    } else {
-        format!("minecraft:{name}")
-    }
-}
 fn custom_type(v: &Value) -> Option<&str> {
     v["type"]
         .as_str()
@@ -1390,99 +1380,14 @@ fn matches_all(ingredients: &[Ingredient], stacks: &[&ItemStack]) -> bool {
         augment(i, ingredients, stacks, &mut owner, &mut seen)
     })
 }
-/// A resource id with its default namespace filled in — the whole id the
-/// book, the network copy and the advancements' JSON know a recipe by,
-/// whatever the caller passes. `sources` names a `minecraft:` recipe bare
-/// on purpose (vanilla's own ids); this puts the namespace back.
-pub fn qualified(id: &str) -> String {
-    if id.contains(':') {
-        id.to_owned()
-    } else {
-        format!("minecraft:{id}")
-    }
-}
+pub use horizon_items::recipe_sources::qualified;
 
 impl Recipes {
     pub fn load(root: &Path, items: &Items, overlay: &PackOverlay) -> Result<Self> {
-        let sources = Self::sources(root, overlay)?;
+        let sources = horizon_items::recipe_sources::sources(root, overlay)?;
         Self::from_sources(root, items, overlay, sources)
     }
-    /// The recipe files the tables are built from, each id once: vanilla's by
-    /// bare name, then the content mods' as `<ns>:<name>`, the world's packs'
-    /// over them (`overlay`), parsed, and only those whose load conditions
-    /// hold. A server sends some of them to its clients (`recipe_content`).
-    pub fn sources(root: &Path, overlay: &PackOverlay) -> Result<Vec<(String, Value)>> {
-        // Vanilla's recipes by bare name, then content mods' as `<ns>:<name>`.
-        let mut sources: Vec<(String, Vec<u8>)> = Vec::new();
-        // NeoForge's load conditions: `mod_loaded` asks which mods' data is
-        // in this root (`minecraft`, always, and the content mods').
-        // `mod_loaded` asks which mods are loaded, not which namespaces
-        // they own: a mod that also owns a namespace doesn't make that
-        // namespace another mod.
-        let mods: Vec<String> = {
-            let mut mods = horizon_items::content_namespaces::mod_ids(root);
-            if !mods.iter().any(|m| m == "minecraft") {
-                mods.push("minecraft".to_owned());
-            }
-            mods
-        };
-        for file in &crate::json_folder::read(&root.join("data/minecraft/recipe"))?.files {
-            sources.push((file.name.clone(), file.bytes()?.to_vec()));
-        }
-        for namespace in crate::mod_content::namespaces(root) {
-            let dir = root.join(format!("data/{namespace}/recipe"));
-            if dir.is_dir() {
-                for file in &crate::json_folder::read(&dir)?.files {
-                    sources.push((format!("{namespace}:{}", file.name), file.bytes()?.to_vec()));
-                }
-            }
-        }
-        // The world's packs' recipes over the game's own: the top pack's
-        // file for each id replaces it (`SimpleJsonResourceReloadListener`
-        // sees one resource per id, the resource stack's top).
-        for (id, files) in overlay.kind("recipe") {
-            let Some((ns, path)) = id.split_once(':') else {
-                continue;
-            };
-            let name = if ns == "minecraft" {
-                path.to_owned()
-            } else {
-                id.to_owned()
-            };
-            let bytes = PackOverlay::top(files).to_vec();
-            match sources.iter_mut().find(|(n, _)| *n == name) {
-                Some(slot) => slot.1 = bytes,
-                None => sources.push((name, bytes)),
-            }
-        }
-        let filters = horizon_items::recipe_filters::RecipeFilters::load(root, overlay);
-        let mut parsed = Vec::with_capacity(sources.len());
-        for (name, bytes) in sources {
-            // Vanilla's RecipeManager logs a file that does not parse and
-            // goes on ("Couldn't parse data file").
-            let mut v: Value = match serde_json::from_slice(&bytes) {
-                Ok(v) => v,
-                Err(e) => {
-                    log::warn!("Horizon: recipe {name} not loaded: {e}");
-                    continue;
-                }
-            };
-            // A file whose load conditions don't hold is silently absent,
-            // as NeoForge's ICondition leaves it out of the manager.
-            if !horizon_world::conditions::conditions_hold(&v, &|id: &str| {
-                mods.iter().any(|m| m == id)
-            }) {
-                continue;
-            }
-            // The data's recipe filters, over the final set.
-            if !filters.apply(&recipe_id(&name), &mut v) {
-                continue;
-            }
-            parsed.push((name, v));
-        }
-        Ok(parsed)
-    }
-    /// The tables from `sources` (`Recipes::sources`' shape); `root` and
+    /// The tables from `sources` (`recipe_sources::sources`' shape); `root` and
     /// `overlay` give the enchantment tags the tables keep.
     pub fn from_sources(
         root: &Path,

@@ -88,7 +88,7 @@ impl Game<'_> {
             return false;
         }
         let at = m.center();
-        if item == "minecraft:saddle" && !m.extra.saddled {
+        if item == "minecraft:saddle" && !m.extra.saddled() {
             m.set_saddle(held.map(|s| ItemStack { count: 1, ..s }));
             let sound = if m.species() == Species::Strider {
                 "minecraft:entity.strider.saddle"
@@ -104,7 +104,7 @@ impl Game<'_> {
         }
         // Pig.mobInteract: held food goes to Animal.mobInteract, not a ride.
         let food = m.kind.food.iter().any(|f| f.as_str() == item);
-        if !m.extra.saddled || food || self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft) {
+        if !m.extra.saddled() || food || self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft) {
             return false;
         }
         let id = m.id;
@@ -232,7 +232,7 @@ impl Game<'_> {
         }
         let at = m.center();
         let tamed = m.extra.tame;
-        let sound = if item == "minecraft:saddle" && tamed && !m.extra.saddled {
+        let sound = if item == "minecraft:saddle" && tamed && !m.extra.saddled() {
             m.set_saddle(held.map(|s| ItemStack { count: 1, ..s }));
             // Camel.getSaddleSound (the equip sound of a camel's saddle).
             Some(match species {
@@ -243,7 +243,7 @@ impl Game<'_> {
         } else if item.ends_with("_horse_armor")
             && species == Species::Horse
             && tamed
-            && m.extra.body.is_none()
+            && m.extra.body_id().is_none()
         {
             m.extra
                 .set_body_stack(held.map(|s| ItemStack { count: 1, ..s }));
@@ -362,7 +362,7 @@ impl Game<'_> {
     /// `LocalPlayer.aiStep`'s riding jump: the bar charges while jump is
     /// held; on release, the jump's strength (0 when there is none).
     pub(super) fn charge_mount_jump(&mut self, i: usize, keys: Keys) -> f32 {
-        let saddled = self.mobs[i].extra.saddled && Self::jumps(self.mobs[i].species());
+        let saddled = self.mobs[i].extra.saddled() && Self::jumps(self.mobs[i].species());
         let mut jump = 0.0;
         if saddled {
             let st = &mut self.mount;
@@ -651,11 +651,8 @@ impl Game<'_> {
                             .find(|g| g.vehicle == Some(mob))
                             .map(|g| g.conn)
                     });
-                    if let Some(conn) = rider
-                        && let Some(mut host) = self.lan.take()
-                    {
-                        self.as_guest(&mut host, conn, |g| g.dismount_mount());
-                        self.lan = Some(host);
+                    if let Some(conn) = rider {
+                        self.as_guest(conn, |g| g.dismount_mount());
                     }
                 }
                 // RunAroundLikeCrazyGoal.tick: entity event 6, smoke.
@@ -698,13 +695,8 @@ impl Game<'_> {
                 .map(|g| g.conn)
                 .collect()
         });
-        if !guests.is_empty()
-            && let Some(mut host) = self.lan.take()
-        {
-            for conn in guests {
-                self.guest_hit_by(&mut host, conn, |g| g.rider_fall_damage(distance, modifier));
-            }
-            self.lan = Some(host);
+        for conn in guests {
+            self.guest_hit_by(conn, |g| g.rider_fall_damage(distance, modifier));
         }
         let rider = self
             .mobs
@@ -746,7 +738,7 @@ impl Game<'_> {
     /// strider, which a saddle only steers).
     pub(super) fn jumpable_mount(&self) -> bool {
         self.mount_index()
-            .is_some_and(|i| self.mobs[i].extra.saddled && Self::jumps(self.mobs[i].species()))
+            .is_some_and(|i| self.mobs[i].extra.saddled() && Self::jumps(self.mobs[i].species()))
     }
     /// `willPrioritizeJumpInfo`: charging a jump or recharging.
     pub(super) fn mount_jumping(&self) -> bool {
@@ -968,7 +960,7 @@ pub(super) fn start_riding_jump(
 ) -> Option<(&'static str, f32)> {
     // PlayerRideableJumping.canJump: AbstractHorse.isSaddled, and a camel that
     // is not refusing to move keeps its own gate.
-    if data <= 0 || !m.extra.saddled {
+    if data <= 0 || !m.extra.saddled() {
         return None;
     }
     if crate::mobs::camel::is_camel(m.species()) {

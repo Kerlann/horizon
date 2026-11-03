@@ -30,7 +30,7 @@ impl Game<'_> {
     /// `/tp` does: a player is placed there and told, a rider gets off. With
     /// `rotation` (yaw, pitch in degrees) it also turns. False for a position
     /// outside the world's bounds, for wall-mounted entities, or when the
-    /// requested rotation cannot be stored. API @API:entity_moves@.
+    /// requested rotation cannot be stored.
     pub(super) fn native_entity_teleport_to(
         &mut self,
         entity: EntityRef,
@@ -49,7 +49,6 @@ impl Game<'_> {
                         Target::Player | Target::Guest(_) | Target::Mob(_) | Target::Other(_)
                     )
             })
-            || matches!(t, Target::Guest(_)) && self.lan_acting_uuid.is_some()
         {
             return false;
         }
@@ -60,7 +59,6 @@ impl Game<'_> {
     /// `setXRot`): the pitch wraps and is clamped to -90..90. False for kinds
     /// whose rotation Horizon does not fully store, or an unavailable player.
     /// Does not teleport or dismount.
-    /// API @API:entity_moves@.
     pub(super) fn native_entity_set_rotation(
         &mut self,
         entity: EntityRef,
@@ -76,9 +74,6 @@ impl Game<'_> {
         let pitch = entity_pitch(pitch);
         match t {
             Target::Player | Target::Guest(_) => {
-                if matches!(t, Target::Guest(_)) && self.lan_acting_uuid.is_some() {
-                    return false;
-                }
                 if self.for_player(t, |g| g.player.is_some()) != Some(true) {
                     return false;
                 }
@@ -109,8 +104,7 @@ impl Game<'_> {
         }
     }
     /// The yaw of the entity's head (`Entity.getYHeadRot`): a mob's or a
-    /// player's own, zero for the kinds without a head. API
-    /// @API:entity_moves@.
+    /// player's own, zero for the kinds without a head.
     pub(super) fn native_entity_head_yaw(&self, entity: EntityRef) -> Option<f32> {
         let t = self.native_entity_target(entity)?;
         if let Some(g) = self.native_target_guest(t) {
@@ -123,7 +117,7 @@ impl Game<'_> {
     }
     /// Turns a mob's head to `yaw` (`Entity.setYHeadRot`); its body follows
     /// as its AI turns it. Players' heads can turn too; false for other kinds
-    /// or an unavailable player. API @API:entity_moves@.
+    /// or an unavailable player.
     pub(super) fn native_entity_set_head_yaw(&mut self, entity: EntityRef, yaw: f32) -> bool {
         if !yaw.is_finite() {
             return false;
@@ -140,7 +134,7 @@ impl Game<'_> {
             Some(t @ (Target::Player | Target::Guest(_))) => {
                 let conn = match t {
                     Target::Player => self.lan_acting,
-                    Target::Guest(conn) if self.lan_acting_uuid.is_none() => Some(conn),
+                    Target::Guest(conn) => Some(conn),
                     _ => None,
                 };
                 let Some(g) = conn.and_then(|conn| self.lan.as_mut()?.hub.guest_mut(conn)) else {
@@ -153,22 +147,20 @@ impl Game<'_> {
         }
     }
     /// The horizontal direction the entity faces (`Entity.getDirection`):
-    /// `north`, `south`, `east` or `west`. API @API:entity_moves@.
+    /// `north`, `south`, `east` or `west`.
     pub(super) fn native_entity_direction(&self, entity: EntityRef) -> Option<&'static str> {
         let t = self.native_entity_target(entity)?;
         Some(facing(self.target_rotation(t)[0]))
     }
     /// The entity's width and height (`Entity.getBbWidth`, `getBbHeight`):
-    /// its box's, so a baby's or a scaled entity's own. API
-    /// @API:entity_moves@.
+    /// its box's, so a baby's or a scaled entity's own.
     pub(super) fn native_entity_dimensions(&self, entity: EntityRef) -> Option<[f64; 2]> {
         let [min, max] = self.native_entity_bounding_box(entity)?;
         Some([max[0] - min[0], max[1] - min[1]])
     }
     /// Adds `delta` to the entity's velocity (`Entity.push`,
     /// `addDeltaMovement`). False for an unavailable player, an entity
-    /// Horizon doesn't simulate, or a value that isn't finite. API
-    /// @API:entity_moves@.
+    /// Horizon doesn't simulate, or a value that isn't finite.
     pub(super) fn native_entity_push(&mut self, entity: EntityRef, delta: [f64; 3]) -> bool {
         if !delta.iter().all(|v| v.is_finite()) {
             return false;
@@ -179,7 +171,7 @@ impl Game<'_> {
         if matches!(target, Target::Player | Target::Guest(_)) {
             let conn = match target {
                 Target::Player => self.lan_acting,
-                Target::Guest(conn) if self.lan_acting_uuid.is_none() => Some(conn),
+                Target::Guest(conn) => Some(conn),
                 _ => None,
             };
             let Some(g) = conn.and_then(|conn| self.lan.as_mut()?.hub.guest_mut(conn)) else {
@@ -295,6 +287,7 @@ mod tests {
             assert_eq!(marker.head_yaw(game), Some(0.0));
             assert!(!marker.set_head_yaw(game, 10.0));
             game.paintings.push(horizon_client::entities::Painting {
+                join: Default::default(),
                 id: 15,
                 pos: [0, 64, 0],
                 facing: 0,

@@ -16,7 +16,7 @@ use horizon_mods::index::native as format;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// What a player is told before a mod from GitHub is installed.
@@ -433,30 +433,6 @@ pub fn find_mods(root: &Path) -> Result<Vec<Bundle>, String> {
     Ok(found)
 }
 
-fn walk_files(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
-    let mut entries: Vec<_> = fs::read_dir(dir)
-        .map_err(|e| format!("{}: {e}", dir.display()))?
-        .flatten()
-        .collect();
-    entries.sort_by_key(|e| e.file_name());
-    for entry in entries {
-        let path = entry.path();
-        let kind = entry.file_type().map_err(|e| e.to_string())?;
-        if kind.is_symlink() {
-            return Err(format!(
-                "{} is a link: not allowed in a mod.",
-                path.display()
-            ));
-        } else if kind.is_dir() {
-            walk_files(root, &path, out)?;
-        } else {
-            let relative = path.strip_prefix(root).unwrap_or(&path);
-            out.push((relative.to_string_lossy().replace('\\', "/"), path));
-        }
-    }
-    Ok(())
-}
-
 /// The `.hmod` of a mod folder, as bytes: its source (Rust, TOML and `data/`) with a manifest made
 /// from its `horizon-mixin.toml`, which must pin the Horizon commit it was made for
 /// (`[compatibility] horizon_revision`). An unpacked `.hmod` (`horizon-native.json`) keeps the
@@ -478,52 +454,12 @@ pub fn pack(bundle: &Bundle) -> Result<Vec<u8>, String> {
             .mixins
             .clone()
             .unwrap_or_else(|| native_mods::MIXINS_REV.into()),
-        hooks: bundle.hooks,
     };
-    manifest.check()?;
-    let mut put = vec![(
-        format::MANIFEST.to_owned(),
-        serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?,
-    )];
-    let mut files = Vec::new();
-    walk_files(&bundle.dir, &bundle.dir, &mut files)?;
-    for (name, path) in files {
-        // What the registry allows in a bundle: sources, data and crates' text files.
-        if format::allowed(&name) {
-            let bytes = fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-            put.push((format!("mixins/{}/{name}", bundle.id), bytes));
-        }
-    }
-    // An unpacked package may also contain content at its root. Preserve it when repacking.
-    if let Some(root) = bundle.dir.parent().and_then(Path::parent).filter(|root| {
-        root.join(format::MANIFEST).is_file()
-            && root.join(horizon_mods::manifest::MANIFEST).is_file()
-    }) {
-        let manifest = horizon_mods::manifest::MANIFEST;
-        put.push((
-            manifest.to_owned(),
-            fs::read(root.join(manifest)).map_err(|e| e.to_string())?,
-        ));
-        for dir in ["assets", "data"] {
-            if root.join(dir).is_dir() {
-                let mut content = Vec::new();
-                walk_files(root, &root.join(dir), &mut content)?;
-                for (name, path) in content {
-                    let bytes = fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-                    put.push((name, bytes));
-                }
-            }
-        }
-    }
-    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
-    let options = zip::write::SimpleFileOptions::default()
-        .last_modified_time(zip::DateTime::default())
-        .unix_permissions(0o644);
-    for (name, bytes) in put {
-        zip.start_file(name, options).map_err(|e| e.to_string())?;
-        zip.write_all(&bytes).map_err(|e| e.to_string())?;
-    }
-    Ok(zip.finish().map_err(|e| e.to_string())?.into_inner())
+    let root = bundle
+        .dir
+        .parent()
+        .ok_or("native source has no project root")?;
+    format::Bundle::pack_directory(root, &manifest)
 }
 
 fn download(url: &str) -> Result<Vec<u8>, String> {

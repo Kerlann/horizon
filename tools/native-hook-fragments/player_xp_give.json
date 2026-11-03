@@ -1,0 +1,17 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "player_give_experience_points",
+      "side": "server",
+      "target": "horizon_client::game::native_player_food::Game<'_>::native_player_give_experience_points",
+      "receiver": "player"
+    },
+    {
+      "name": "player_give_levels",
+      "side": "server",
+      "target": "horizon_client::game::native_player_food::Game<'_>::native_player_give_levels",
+      "receiver": "player"
+    }
+  ]
+}

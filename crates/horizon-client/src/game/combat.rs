@@ -35,8 +35,8 @@ struct Entry {
 pub(super) struct Stuck {
     pub(super) arrows: i32,
     pub(super) stingers: i32,
-    remove_arrow_time: i32,
-    remove_stinger_time: i32,
+    pub(super) remove_arrow_time: i32,
+    pub(super) remove_stinger_time: i32,
 }
 /// Who `LivingEntity.resolvePlayerResponsibleForDamage` credits: a player by
 /// entity id, or the owner of a tamed animal by UUID.
@@ -69,6 +69,12 @@ impl CombatTracker {
         let (credit, at) = self.last_hurt_by_player.take()?;
         (now - at <= 100).then_some(credit)
     }
+    /// Whether a player hurt this body within the last 100 ticks
+    /// (`lastHurtByPlayerMemoryTime > 0`), without forgetting them.
+    pub(super) fn recently_hit_by_player(&self, now: i64) -> bool {
+        self.last_hurt_by_player
+            .is_some_and(|(_, at)| now - at <= 100)
+    }
     /// `LivingEntity.setLastHurtByPlayer(player, 100)`.
     pub(super) fn note_hurt_by_player(&mut self, credit: PlayerCredit, now: i64) {
         self.last_hurt_by_player = Some((credit, now));
@@ -95,9 +101,9 @@ impl Stuck {
     fn decay(count: &mut i32, remove_time: &mut i32) {
         if *count > 0 {
             if *remove_time <= 0 {
-                *remove_time = 20 * (30 - *count);
+                *remove_time = 20i32.wrapping_mul(30i32.wrapping_sub(*count));
             }
-            *remove_time -= 1;
+            *remove_time = remove_time.wrapping_sub(1);
             if *remove_time <= 0 {
                 *count -= 1;
             }

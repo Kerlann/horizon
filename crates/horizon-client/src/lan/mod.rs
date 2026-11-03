@@ -4,6 +4,7 @@
 //! (`data`). The play state is driven by the game thread (`hub`), which only
 //! ever exchanges decoded packets with these threads through channels, so a
 //! world that is not open to the network pays nothing.
+pub mod abilities;
 mod advancements;
 pub mod anticheat;
 pub mod attributes;

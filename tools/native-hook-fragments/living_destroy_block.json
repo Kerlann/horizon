@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a mob about to destroy a block (`native_living_destroy_block`).",
-  "doc_summary": "`native_living_destroy_block(entity, kind, pos, state, cancel)`, before a mob destroys a block: a wither breaking blocks around it, a ravager breaking leaves, the ender dragon's wall check, an enderman picking a block up, a silverfish waking its friends (the infested blocks break), a zombie breaking a door or a turtle egg. `entity` is its entity id, `kind` its type, `pos` the block and `state` its state (`BlockStateId`). Set `cancel` and the block stays (an enderman then holds nothing). Server-side."
+  ]
 }

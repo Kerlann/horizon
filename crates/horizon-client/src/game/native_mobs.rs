@@ -1,4 +1,4 @@
-//! Mobs for native server mods (docs/native-mods.md, "Mobs", API 37): spawn one,
+//! Mobs for native server mods (docs/native-mods.md, "Mobs"): spawn one,
 //! read the mobs of the level in place, and move, hurt or remove one by its id.
 //! They act where the world is simulated, never on a client's copy, and only on
 //! the level in place, which each names by its `dimension` (`minecraft:overworld`)
@@ -59,12 +59,15 @@ impl Game<'_> {
     /// too): each slot whose stack differs from what the mods last heard is told, the previous
     /// stack with it, so a hotbar selection that moves the main hand counts. A player new to the
     /// level counts from empty, as for mobs, and only while a mod listens.
-    pub(super) fn native_players_equipment(&mut self, host: &mut super::lan::LanHost) {
+    pub(super) fn native_players_equipment(&mut self) {
         let mut listened = false;
         self.native_living_equipment_listened(&mut listened);
         if !listened {
             return;
         }
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let mut changes = Vec::new();
         for g in host.hub.guests.iter().filter(|g| host.hub.here(g)) {
             let now: [Option<crate::items::ItemStack>; 6] = [
@@ -161,7 +164,7 @@ impl Game<'_> {
     /// chunk unloads: its id. None for a kind the game doesn't know, another
     /// dimension, a position outside `/summon`'s bounds or in a chunk that isn't
     /// loaded (it would never tick or be saved), or a monster on peaceful (it
-    /// would despawn at once). API 37.
+    /// would despawn at once).
     pub(super) fn native_spawn_mob(
         &mut self,
         dimension: &str,
@@ -209,7 +212,7 @@ impl Game<'_> {
         self.world.chunks.contains_key(&(x >> 4, z >> 4))
     }
     /// The living mob `id` in the level in place, `dimension`; none on a
-    /// client's copy. API 37.
+    /// client's copy.
     pub(super) fn native_mob(&self, dimension: &str, id: u32) -> Option<NativeMob> {
         if !self.native_mob_level(dimension) {
             return None;
@@ -218,7 +221,7 @@ impl Game<'_> {
         mob.alive().then(|| self.native_mob_of(mob))
     }
     /// The living mobs in the level in place, `dimension`; none on a client's
-    /// copy. API 37.
+    /// copy.
     pub(super) fn native_mobs(&self, dimension: &str) -> Vec<NativeMob> {
         if !self.native_mob_level(dimension) {
             return Vec::new();
@@ -231,7 +234,7 @@ impl Game<'_> {
     }
     /// Sets the living mob `id`'s health, cut to its maximum: false for no such
     /// mob, another dimension or a health that isn't above 0 (`native_kill_mob`
-    /// kills). API 37.
+    /// kills).
     pub(super) fn native_set_mob_health(&mut self, dimension: &str, id: u32, health: f32) -> bool {
         if !self.native_mob_level(dimension) || !health.is_finite() || health <= 0.0 {
             return false;
@@ -248,7 +251,7 @@ impl Game<'_> {
         true
     }
     /// Kills mob `id` as `/kill` does: it falls and drops its loot. False for
-    /// no such living mob or another dimension. API 37.
+    /// no such living mob or another dimension.
     pub(super) fn native_kill_mob(&mut self, dimension: &str, id: u32) -> bool {
         if self.native_mob(dimension, id).is_none() {
             return false;

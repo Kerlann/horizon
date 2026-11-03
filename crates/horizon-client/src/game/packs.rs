@@ -61,11 +61,14 @@ pub fn startup_root(
     vanilla: &Path,
     selected: &[String],
     server: &[Pack],
+    mods_enabled: &BTreeSet<String>,
+    dev_mods: &[PathBuf],
 ) -> std::io::Result<PathBuf> {
     let all = packs::discover(vanilla, &packs_dir());
     let mut enabled = packs::enabled(&all, selected);
     enabled.extend_from_slice(server);
-    packs::resource_root(vanilla, &enabled, &cache_dir())
+    let base = super::mods::content_root(vanilla, mods_enabled, dev_mods);
+    packs::resource_root(&base, &enabled, &cache_dir())
 }
 fn info(p: &Pack) -> PackInfo {
     let built_in = !p.id.starts_with("file/");
@@ -493,8 +496,7 @@ pub(super) fn stage_pack(
     japanese: bool,
     progress: &super::Progress,
 ) -> horizon_client::Result<StagedPack> {
-    let root = startup_root(vanilla_root, selected, server)?;
-    let root = super::mods::content_root(&root, mods_enabled, dev_mods);
+    let root = startup_root(vanilla_root, selected, server, mods_enabled, dev_mods)?;
     progress.set(1);
     // The world's models and sprites and the GUI atlas read the same root and nothing of
     // each other: about a second each, side by side.
@@ -653,6 +655,46 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         panic!("the reload worker never finished");
+    }
+
+    #[test]
+    fn resource_pack_overrides_mod_and_vanilla() {
+        use std::fs;
+        let vanilla =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.local/horizon-client/26.3");
+        if !vanilla.join("facts.json").is_file() {
+            return;
+        }
+        let dir =
+            std::env::temp_dir().join(format!("horizon-pack-mod-order-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let mod_dir = dir.join("mod");
+        let pack_dir = dir.join("packs/override");
+        let asset = "assets/order_test/textures/block/example.png";
+        for root in [&mod_dir, &pack_dir] {
+            fs::create_dir_all(root.join(asset).parent().unwrap()).unwrap();
+        }
+        fs::write(
+            mod_dir.join("horizon-mod.toml"),
+            "id = \"order_test\"\nname = \"Order test\"\nversion = \"1\"\napi = \"0.2\"\ncapabilities = [\"registries\"]\n",
+        )
+        .unwrap();
+        fs::write(mod_dir.join(asset), b"mod").unwrap();
+        fs::write(pack_dir.join(asset), b"pack").unwrap();
+        fs::write(
+            pack_dir.join("pack.mcmeta"),
+            br#"{"pack":{"description":"test","pack_format":97}}"#,
+        )
+        .unwrap();
+        let dev = [mod_dir];
+        let enabled = BTreeSet::new();
+        let without_pack = startup_root(&vanilla, &[], &[], &enabled, &dev).unwrap();
+        assert_eq!(fs::read(without_pack.join(asset)).unwrap(), b"mod");
+        let pack = packs::folder(&dir.join("packs"), packs::RESOURCE_FORMAT);
+        assert_eq!(pack.len(), 1);
+        let with_pack = startup_root(&vanilla, &[], &pack, &enabled, &dev).unwrap();
+        assert_eq!(fs::read(with_pack.join(asset)).unwrap(), b"pack");
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

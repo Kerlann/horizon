@@ -280,8 +280,7 @@ pub fn texture(m: &Mob) -> String {
 /// The carpet colour on the llama, if it wears one.
 pub(super) fn carpet(m: &Mob) -> Option<&str> {
     m.extra
-        .body
-        .as_deref()
+        .body_id()
         .and_then(|i| i.strip_prefix("minecraft:"))
         .and_then(|i| i.strip_suffix("_carpet"))
 }
@@ -367,7 +366,7 @@ mod tests {
                 [(false, true), (true, true), (false, false), (true, false)]
             {
                 let w = MobWorld {
-                    ask_mods,
+                    asks_baby_spawn: ask_mods,
                     mob_drops,
                     ..w.clone()
                 };

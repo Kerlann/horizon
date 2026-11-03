@@ -4,8 +4,5 @@
     {"name":"mob_move_to", "side":"server", "target":"horizon_client::game::native_mob_navigation::Game<'_>::native_mob_move_to", "receiver":"mob"},
     {"name":"mob_stop", "side":"server", "target":"horizon_client::game::native_mob_navigation::Game<'_>::native_mob_stop", "receiver":"mob"},
     {"name":"mob_is_done", "side":"server", "target":"horizon_client::game::native_mob_navigation::Game<'_>::native_mob_is_done", "receiver":"mob"}
-  ],
-  "rust_summary":"start, stop and inspect mob navigation.",
-  "doc_summary":"`MobRef` can start, stop and inspect paths. Bundles need \"hooks\": @API:mob_navigation@.",
-  "comments":["crates/horizon-client/src/game/native_mob_navigation.rs"]
+  ]
 }

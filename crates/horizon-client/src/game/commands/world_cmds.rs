@@ -86,13 +86,10 @@ impl Game<'_> {
     /// many recipe book displays changed (a transmute recipe has one per
     /// material count).
     pub(in crate::game) fn change_recipes(&mut self, give: bool, recipes: &[String]) -> i32 {
-        let index = &world_stations!(self).recipe_index;
         if give {
-            let (count, unlocked) = self.level.recipe_book.add_recipes(index, recipes);
-            // Displays a mod's `player_recipe_discovered` refused were not added.
-            let refused = self.recipe_unlocked(&unlocked);
-            return count.saturating_sub(refused) as i32;
+            return self.award_recipes(recipes) as i32;
         }
+        let index = &world_stations!(self).recipe_index;
         let removed = self.level.recipe_book.remove_recipes(index, recipes);
         let count = removed.len() as i32;
         // A network player's client drops them from its book.
@@ -235,20 +232,13 @@ impl Game<'_> {
                     _ => None,
                 };
                 if let Some(conn) = guest {
-                    if let Some(mut host) = self.lan.take() {
-                        let hurt = self
-                            .as_guest(&mut host, conn, |g| {
-                                g.command_damage_mob(id, amount, damage)
-                            })
-                            .unwrap_or(false);
-                        if hurt {
-                            host.mob_players.insert(id, conn);
-                        }
-                        self.lan = Some(host);
-                        hurt
-                    } else {
-                        false
+                    let hurt = self
+                        .as_guest(conn, |g| g.command_damage_mob(id, amount, damage))
+                        .unwrap_or(false);
+                    if hurt && let Some(host) = self.lan.as_mut() {
+                        host.mob_players.insert(id, conn);
                     }
+                    hurt
                 } else {
                     self.command_damage_mob(id, amount, damage)
                 }
@@ -445,25 +435,7 @@ impl Game<'_> {
             let Some((at, v)) = playsound_placement(pos, p, range, volume, min_volume) else {
                 continue;
             };
-            // The connection is sent the sound; the window's own player
-            // plays it.
-            let guest = match t {
-                Target::Guest(conn) => Some(conn),
-                _ => self.lan_acting,
-            };
-            match guest.and_then(|conn| Some((conn, self.lan.as_ref()?))) {
-                Some((conn, host)) => {
-                    let packet = host
-                        .hub
-                        .sound_packet(&sound, at, v, pitch, source as i32, seed);
-                    if t == Target::Player {
-                        self.guest_packets.push(packet);
-                    } else {
-                        host.hub.send_to(conn, &packet);
-                    }
-                }
-                None => self.audio.play_on(source, &sound, Some(at), v, pitch),
-            }
+            self.play_sound_to(t, &sound, at, v, pitch, source, seed);
             tracker.mark(&holder(self.target_name(t)));
         }
         let name = Text::literal(sound.clone());
@@ -486,6 +458,65 @@ impl Game<'_> {
         self.feedback(message);
         Ok(total)
     }
+    /// `ClientboundSoundPacket` to one player: a guest's connection is sent
+    /// it; the window's own player plays it. `/playsound` and a native mod's
+    /// `PlayerRef::play_sound` both send through here.
+    pub(in crate::game) fn play_sound_to(
+        &mut self,
+        t: Target,
+        sound: &str,
+        at: [f64; 3],
+        volume: f32,
+        pitch: f32,
+        source: usize,
+        seed: i64,
+    ) {
+        let guest = match t {
+            Target::Guest(conn) => Some(conn),
+            _ => self.lan_acting,
+        };
+        match guest.and_then(|conn| Some((conn, self.lan.as_ref()?))) {
+            Some((conn, host)) => {
+                let packet = host
+                    .hub
+                    .sound_packet(sound, at, volume, pitch, source as i32, seed);
+                if t == Target::Player {
+                    self.guest_packets.push(packet);
+                } else {
+                    host.hub.send_to(conn, &packet);
+                }
+            }
+            None => self.audio.play_on(source, sound, Some(at), volume, pitch),
+        }
+    }
+    /// `StopSoundCommand`: each target's connection gets the packet; the
+    /// window's own player stops its sounds. `/stopsound` and a native mod's
+    /// `PlayerRef::stop_sound` both send through here.
+    pub(in crate::game) fn stop_sound_for(
+        &mut self,
+        targets: &[Target],
+        sound: Option<&str>,
+        source: Option<usize>,
+    ) {
+        let packet = C::StopSound(play::StopSound {
+            source: source.map(|s| s as i32),
+            sound: sound.map(str::to_owned),
+        });
+        for &t in targets {
+            match t {
+                Target::Player if self.lan_acting.is_some() => {
+                    self.guest_packets.push(packet.clone());
+                }
+                Target::Player => self.audio.stop_sounds(sound, source),
+                Target::Guest(conn) => {
+                    if let Some(host) = self.lan.as_ref() {
+                        host.hub.send_to(conn, &packet);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
     pub(super) fn cmd_stopsound(&mut self, ctx: &Context) -> R<i32> {
         let targets = self.entities(ctx, "targets", true)?;
         let source = ctx
@@ -496,26 +527,7 @@ impl Game<'_> {
             Some(Arg::Resource(s)) => Some(s.clone()),
             _ => None,
         };
-        // StopSoundCommand: each target's connection gets the packet; the
-        // window's own player stops its sounds.
-        let packet = C::StopSound(play::StopSound {
-            source: source.map(|s| s as i32),
-            sound: sound.clone(),
-        });
-        for &t in &targets {
-            match t {
-                Target::Player if self.lan_acting.is_some() => {
-                    self.guest_packets.push(packet.clone());
-                }
-                Target::Player => self.audio.stop_sounds(sound.as_deref(), source),
-                Target::Guest(conn) => {
-                    if let Some(host) = self.lan.as_ref() {
-                        host.hub.send_to(conn, &packet);
-                    }
-                }
-                _ => {}
-            }
-        }
+        self.stop_sound_for(&targets, sound.as_deref(), source);
         let key = match (source, &sound) {
             (Some(_), Some(_)) => "commands.stopsound.success.source.sound",
             (Some(_), None) => "commands.stopsound.success.source.any",
@@ -1615,7 +1627,7 @@ impl Game<'_> {
             let y = self.spread_spawn_y(p, max_y);
             let mut to = [p[0].floor() + 0.5, f64::from(y), p[1].floor() + 0.5];
             let mut skip = false;
-            if !horizon_client::mod_api::mods().is_empty()
+            if crate::mod_api::listened(crate::mod_api::HookId::SpreadPlayersTeleport)
                 && let (Some(entity), Some(from)) =
                     (self.network_entity_id(t), self.target_position(t))
             {

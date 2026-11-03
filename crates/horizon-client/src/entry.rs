@@ -6,7 +6,7 @@ pub fn main() {
     main_with(Default::default());
 }
 
-/// Start the game with trait mods in dispatch order.
+/// Start the game with named trait mods in dispatch order.
 pub fn main_with(mods: crate::mod_api::Mods) {
     // First: a trait injection into anything below (logging, the crash handler) calls its mod.
     crate::mod_api::install(mods);
@@ -55,7 +55,7 @@ pub fn main_with(mods: crate::mod_api::Mods) {
     }
     let renderers = crate::mod_api::mods()
         .iter()
-        .filter_map(|m| m.render())
+        .filter_map(|m| m.hooks.render())
         .collect();
     if crate::gfx::native_render::install(renderers).is_err() {
         log::warn!("Trait renderers already installed; keeping the first list");

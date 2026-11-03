@@ -21,10 +21,5 @@
       "target": "horizon_client::game::native_level_events::Game<'_>::native_level_strike_lightning",
       "receiver": "level"
     }
-  ],
-  "rust_summary": "level events, game events, explosions and lightning through a `LevelRef` (`native_level_level_event`, `native_level_game_event`, `native_level_explode`, `native_level_strike_lightning`).",
-  "doc_summary": "events, explosions and lightning in a level through a `LevelRef`, as vanilla's `Level`: `level.level_event(host, id, pos, data)` (`Level.levelEvent` with no excluded player), `game_event(host, event, at)` (`Level.gameEvent`, heard by sculk sensors, wardens and allays), `explode(host, center, radius, fire, interaction)` (`Level.explode` with no source; `NativeExplosionInteraction::None`, `Block` or `Tnt`) and `strike_lightning(host, at, visual_only)` (asked of `lightning_strike` with the cause `mod`). All four return false for a stale handle, a client and a parked level (they act on the level in place). Besides: `level_event` refuses a state-carrying event (2001, 2014, 3008) whose `data` isn't a state; `game_event` an unknown event or a position outside the world; `explode` an unloaded chunk or a radius outside 0 < r <= 32; `strike_lightning` an unloaded chunk, a position outside the world or a canceled strike. Bundles need \"hooks\": @API:level_events@.",
-  "comments": [
-    "crates/horizon-client/src/game/native_level_events.rs"
   ]
 }

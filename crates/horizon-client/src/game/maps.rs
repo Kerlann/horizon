@@ -4,7 +4,7 @@
 //! shading, the dithered edge), the player marker, `data/minecraft/maps/<id>.dat` and
 //! `maps/last_id.dat`, the 128x128 texture in an atlas slot, the two-handed
 //! first-person view and maps in item frames.
-use super::{Game, lan::LanHost};
+use super::Game;
 use horizon_client::{
     blocks::{Fluid, MAP_COLORS},
     hud::{MAP_SLOTS, Rect, map_slot_sprite},
@@ -1405,7 +1405,10 @@ impl Game<'_> {
     /// carries, and every 10 ticks (`ServerEntity.sendChanges`) for each map
     /// framed in the level: a `ClientboundMapItemDataPacket` when something
     /// changed since the guest's last one.
-    pub(super) fn lan_map_updates(&mut self, host: &LanHost, conn: u32) {
+    pub(super) fn lan_map_updates(&mut self, conn: u32) {
+        let Some(host) = self.lan.as_ref() else {
+            return;
+        };
         let Some(g) = host.hub.guest(conn) else {
             return;
         };
@@ -1418,7 +1421,7 @@ impl Game<'_> {
             .collect();
         let now = self.world.game_time;
         if now % 10 == 0 && host.hub.here(g) {
-            let framed: Vec<(i32, std::sync::Arc<str>, Framed)> = self
+            let framed: Vec<(i32, Framed, bool)> = self
                 .item_frames
                 .iter()
                 // ServerEntity.sendChanges: only a framed MapItem (a filled
@@ -1433,18 +1436,18 @@ impl Game<'_> {
                         facing: f.facing,
                         id: f.id as i32,
                     };
-                    Some((map_id(item)?, item.item.clone(), frame))
+                    let id = map_id(item)?;
+                    let carries = g
+                        .inventory
+                        .iter()
+                        .chain(std::iter::once(&g.offhand))
+                        .flatten()
+                        .any(|s| s.item == item.item && map_id(s) == Some(id));
+                    Some((id, frame, carries))
                 })
                 .collect();
             let invisible = self.map_invisibility_worn(&g.armor);
-            for (id, item, frame) in framed {
-                // tickCarriedBy's mapMatcher: the same item with the same map id.
-                let carries = g
-                    .inventory
-                    .iter()
-                    .chain(std::iter::once(&g.offhand))
-                    .flatten()
-                    .any(|s| s.item == item && map_id(s) == Some(id));
+            for (id, frame, carries) in framed {
                 if let Some(m) = self.map(id) {
                     m.tick_framed(conn, now, carries, invisible, frame);
                     ids.push(id);
@@ -1453,6 +1456,12 @@ impl Game<'_> {
         }
         ids.sort_unstable();
         ids.dedup();
+        let Some(host) = self.lan.as_ref() else {
+            return;
+        };
+        let Some(g) = host.hub.guest(conn) else {
+            return;
+        };
         let kind = |name: &str| {
             host.hub.registry_id(
                 "minecraft:map_decoration_type",

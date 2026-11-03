@@ -7,6 +7,10 @@ pub(super) struct HookSources {
     pub render_dispatch: String,
     pub part_traits: BTreeMap<&'static str, String>,
     pub fills: Vec<Fill>,
+    pub hook_ids: String,
+    pub hook_count: usize,
+    pub render_hook_ids: String,
+    pub render_hook_count: usize,
 }
 
 pub(super) fn emit(
@@ -14,6 +18,10 @@ pub(super) fn emit(
     hooks: &[CatalogHook],
     methods: &[syn::ItemFn],
 ) -> Result<HookSources, String> {
+    let mut hook_ids = String::new();
+    let mut hook_count = 0;
+    let mut render_hook_ids = String::new();
+    let mut render_hook_count = 0;
     let mut traits = String::new();
     let mut dispatch = String::new();
     let mut render_traits = String::new();
@@ -100,7 +108,6 @@ pub(super) fn emit(
             args.retain(|(name, _)| name != "ticks");
         }
         let mut used: HashSet<_> = args.iter().map(|(name, _)| name.clone()).collect();
-        let mod_list = fresh_name("mods", &mut used);
         let mod_item = fresh_name("mod_hook", &mut used);
         let part_list = fresh_name("parts", &mut used);
         let part_item = fresh_name("part", &mut used);
@@ -195,6 +202,14 @@ pub(super) fn emit(
                 .map(|word| word[..1].to_uppercase() + &word[1..])
                 .collect::<String>()
         );
+        let hook_id = event_type.strip_suffix("Event").unwrap();
+        if is_render {
+            render_hook_ids.push_str(&format!("{hook_id},\n"));
+            render_hook_count += 1;
+        } else {
+            hook_ids.push_str(&format!("{hook_id},\n"));
+            hook_count += 1;
+        }
         let mut trait_params = vec!["&self".to_owned()];
         let mut dispatch_params = Vec::new();
         let mut call_args = Vec::new();
@@ -203,9 +218,7 @@ pub(super) fn emit(
             dispatch_params.push(format!("{name}: {}", param.ty));
             call_args.push(name.clone());
         }
-        if is_render {
-            dispatch_params.push(format!("{mod_list}: &[&dyn RenderHooks]"));
-        }
+
         let mut lifetimes = EventLifetimes::default();
         let mut fields = String::new();
         let mut inits = Vec::new();
@@ -296,25 +309,35 @@ pub(super) fn emit(
             )),
             _ => {}
         }
-        method_source.push_str(&format!(
-            "fn {name}({trait_params}){result} {{ {unused} {default} }}\n"
-        ));
-        traits.push_str(&method_source);
         if let Some((part_trait, _)) = &scoped {
             part_traits
                 .entry(*part_trait)
                 .or_default()
-                .push_str(&method_source);
+                .push_str(&format!(
+                    "{method_source}fn {name}({trait_params}){result} {{ {unused} {default} }}\n"
+                ));
         }
+        let (domain, id_enum) = if is_render {
+            ("Render", "RenderHookId")
+        } else {
+            ("Gameplay", "HookId")
+        };
+        let report = format!(
+            "horizon_client_core::subscribers::default_called(horizon_client_core::subscribers::Domain::{domain}, {id_enum}::{hook_id} as usize, self);"
+        );
+        method_source.push_str(&format!(
+            "fn {name}({trait_params}){result} {{ {report} {unused} {default} }}\n"
+        ));
+        traits.push_str(&method_source);
         dispatch.push_str(&format!(
             "/// What [`{trait_name}::{name}`] is told. Fields may be added: the struct is `#[non_exhaustive]`.\n#[non_exhaustive]\npub struct {event_type}{generics} {{\n{fields}}}\n"
         ));
         let build = format!("let mut {event} = {event_type} {{ {} }};", inits.join(", "));
         // A trait mod's call is marked with the mod for a panic to name; render hooks are called bare.
         let each = if is_render {
-            mod_list.clone()
+            format!("super::entered_render(RenderHookId::{hook_id})")
         } else {
-            format!("super::entered(super::mods(), \"{name}\")")
+            format!("super::entered(HookId::{hook_id}, \"{name}\")")
         };
         // One callee's call: a mod's, then a scoped hook's parts' after the mods.
         let call = |callee: &str, exit: &str| match contract {
@@ -366,8 +389,15 @@ pub(super) fn emit(
             ),
             _ => format!("{lookup} {build} {calls} {write_back}"),
         };
+        let early_return = if scoped.is_some() {
+            String::new()
+        } else if is_render {
+            format!("if !super::render_listened(RenderHookId::{hook_id}) {{ return; }}")
+        } else {
+            format!("if !super::listened(HookId::{hook_id}) {{ return; }}")
+        };
         dispatch.push_str(&format!(
-            "pub fn dispatch_{name}({dispatch_params}) {{ {body} }}\n"
+            "pub fn dispatch_{name}({dispatch_params}) {{ {early_return}\n{body} }}\n"
         ));
     }
     Ok(HookSources {
@@ -377,5 +407,9 @@ pub(super) fn emit(
         render_dispatch,
         part_traits,
         fills,
+        hook_ids,
+        hook_count,
+        render_hook_ids,
+        render_hook_count,
     })
 }

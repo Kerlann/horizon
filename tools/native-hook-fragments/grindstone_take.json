@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a cancellable grindstone take (`native_grindstone_take`).",
-  "doc_summary": "`native_grindstone_take(player, player_entity_id, pos, take, cancel)`, when a grindstone's result is taken. `take` (`GrindstoneTake`) holds the inputs, the experience (-1 for vanilla's) and the inputs' items afterwards (empty): set `xp`, `new_top` and `new_bottom`, or `cancel` to keep the inputs and give no experience or sound (the result is still taken). Server-side. Bundles need \"hooks\": @API:grindstone_take@."
+  ]
 }

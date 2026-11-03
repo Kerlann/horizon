@@ -64,17 +64,16 @@ pub(super) fn network_recipes(
     resources: &Path,
     overlay: &horizon_world::loot::PackOverlay,
 ) -> (BTreeMap<String, Box<str>>, HashMap<String, i32>) {
-    let mut all: BTreeMap<_, _> =
-        match horizon_client::crafting::Recipes::sources(resources, overlay) {
-            Ok(sources) => sources
-                .into_iter()
-                .map(|(id, value)| (horizon_client::crafting::qualified(&id), value))
-                .collect(),
-            Err(e) => {
-                log::warn!("recipes: could not load recipe sources: {e}");
-                BTreeMap::new()
-            }
-        };
+    let mut all: BTreeMap<_, _> = match horizon_items::recipe_sources::sources(resources, overlay) {
+        Ok(sources) => sources
+            .into_iter()
+            .map(|(id, value)| (horizon_client::crafting::qualified(&id), value))
+            .collect(),
+        Err(e) => {
+            log::warn!("recipes: could not load recipe sources: {e}");
+            BTreeMap::new()
+        }
+    };
     match horizon_client::items::Items::catalog(resources, overlay) {
         Ok(items) => all.retain(|_, r| normalize_ingredients(r, &items)),
         Err(e) => log::warn!("recipes: NeoForge's ingredient shapes stay unresolved: {e}"),
@@ -279,7 +278,7 @@ pub struct ContentPart {
     pub last: Option<Vec<String>>,
 }
 
-/// The payloads for `types`' recipes among `sources` (`Recipes::sources`,
+/// The payloads for `types`' recipes among `sources` (`recipe_sources::sources`,
 /// vanilla's ids bare), ids made whole (`minecraft:<name>`). With no type
 /// asked for: nothing, or with `reset` (this server sent recipes before) one
 /// last part with no types, which puts its clients back on their own. A

@@ -10,7 +10,7 @@
 //! answering more than it was asked is a mod bug, named once, and the write aborts.
 use super::{
     Capability, Direction, ENTITY_ITEMS, Hand, Host, ITEMS, ItemResource, ItemStack, LevelRef,
-    MenuRef, MenuSlotBacking, ResourceHandler, Transaction,
+    MenuRef, MenuSlotBacking, ResourceHandler, Transaction, backend_mut_of, backend_of,
 };
 use std::{collections::HashSet, fmt::Debug, marker::PhantomData, sync::Mutex};
 
@@ -88,8 +88,8 @@ pub trait PlaceProvider: Send + Sync + 'static {
 /// provider, if the game has one.
 pub struct ItemCapabilityKey<T: ?Sized + 'static> {
     pub name: &'static str,
-    default: Option<fn(&mut dyn Host, &ItemPlace, &ItemStack) -> Option<Box<T>>>,
-    handler: PhantomData<fn() -> Box<T>>,
+    pub(super) default: Option<fn(&mut dyn Host, &ItemPlace, &ItemStack) -> Option<Box<T>>>,
+    pub(super) handler: PhantomData<fn() -> Box<T>>,
 }
 
 impl<T: ?Sized + 'static> ItemCapabilityKey<T> {
@@ -110,7 +110,7 @@ impl<T: ?Sized + 'static> ItemCapabilityKey<T> {
 pub const ITEM_ITEMS: ItemCapabilityKey<dyn ResourceHandler<ItemResource>> = ItemCapabilityKey {
     name: "horizon:item_items",
     default: Some(|host, place, stack| {
-        host.item_container_slots(stack).map(|_| {
+        backend_of(host)?.item_container_slots(stack).map(|_| {
             Box::new(GameItemItems(place.clone())) as Box<dyn ResourceHandler<ItemResource>>
         })
     }),
@@ -122,7 +122,10 @@ struct GameItemItems(ItemPlace);
 impl GameItemItems {
     fn slot(&self, host: &mut dyn Host, index: usize) -> Option<ItemStack> {
         let held = self.0.stack(host)?;
-        host.item_container_slots(&held)?.get(index)?.clone()
+        backend_of(&*host)?
+            .item_container_slots(&held)?
+            .get(index)?
+            .clone()
     }
     /// Rewrites one item at `.0` as `changed`: `moved` when that goes through, else 0.
     fn rewrite(
@@ -142,7 +145,9 @@ impl ResourceHandler<ItemResource> for GameItemItems {
     fn size(&self, host: &mut dyn Host) -> usize {
         self.0
             .stack(host)
-            .and_then(|held| host.item_container_slots(&held))
+            .and_then(|held| {
+                backend_of(&*host).and_then(|backend| backend.item_container_slots(&held))
+            })
             .map_or(0, |slots| slots.len())
     }
     fn resource(&self, host: &mut dyn Host, index: usize) -> Option<ItemResource> {
@@ -153,7 +158,9 @@ impl ResourceHandler<ItemResource> for GameItemItems {
     }
     fn capacity(&self, host: &mut dyn Host, index: usize, resource: &ItemResource) -> u32 {
         self.0.stack(host).map_or(0, |held| {
-            host.item_container_capacity(&held, index, &resource.to_stack(1))
+            backend_of(&*host).map_or(0, |backend| {
+                backend.item_container_capacity(&held, index, &resource.to_stack(1))
+            })
         })
     }
     fn insert(
@@ -165,11 +172,10 @@ impl ResourceHandler<ItemResource> for GameItemItems {
         amount: u32,
     ) -> u32 {
         let offer = resource.to_stack(amount);
-        let Some((went, changed)) = self
-            .0
-            .stack(host)
-            .and_then(|held| host.item_container_insert_slot(&held, index, &offer))
-        else {
+        let Some((went, changed)) = self.0.stack(host).and_then(|held| {
+            backend_of(&*host)
+                .and_then(|backend| backend.item_container_insert_slot(&held, index, &offer))
+        }) else {
             return 0;
         };
         match went {
@@ -191,11 +197,10 @@ impl ResourceHandler<ItemResource> for GameItemItems {
         {
             return 0;
         }
-        let Some((Some(out), changed)) = self
-            .0
-            .stack(host)
-            .and_then(|held| host.item_container_extract(&held, index, amount))
-        else {
+        let Some((Some(out), changed)) = self.0.stack(host).and_then(|held| {
+            backend_of(&*host)
+                .and_then(|backend| backend.item_container_extract(&held, index, amount))
+        }) else {
             return 0;
         };
         self.rewrite(host, tx, &changed, out.count.min(amount))
@@ -206,8 +211,8 @@ impl ResourceHandler<ItemResource> for GameItemItems {
 static BROKEN: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 
 /// `owner`'s handler at `at` answered more than it was asked: a mod bug, warned once per mod.
-pub(crate) fn warn_broken(owner: Option<usize>, at: &dyn Debug) {
-    let owner = owner.map_or_else(|| "the game".to_owned(), super::mod_name);
+pub(crate) fn warn_broken(owner: Option<&'static str>, at: &dyn Debug) {
+    let owner = owner.unwrap_or("the game").to_owned();
     let mut warned = BROKEN.lock().unwrap_or_else(|e| e.into_inner());
     if warned.get_or_insert_default().insert(owner.clone()) {
         log::warn!(
@@ -246,7 +251,7 @@ impl ItemPlace {
                 super::place_provider(provider)?.1.stack(host, *key)
             }
             ItemPlace::MenuSlot { menu, slot } => menu.slot(host, *slot)?,
-            _ => host.game_stack(self),
+            _ => backend_mut_of(host).and_then(|backend| backend.game_stack(self)),
         }
         .filter(|stack| stack.count > 0)
     }
@@ -401,8 +406,12 @@ impl ItemPlace {
                     MenuSlotBacking::CraftResult => return Ok(0),
                     _ => {
                         return Ok(match insert {
-                            true => host.game_insert(self, resource.to_stack(amount), tx),
-                            false => host.game_extract(self, resource.to_stack(amount), tx),
+                            true => backend_mut_of(host).map_or(0, |backend| {
+                                backend.game_insert(self, resource.to_stack(amount), tx)
+                            }),
+                            false => backend_mut_of(host).map_or(0, |backend| {
+                                backend.game_extract(self, resource.to_stack(amount), tx)
+                            }),
                         });
                     }
                 };
@@ -421,8 +430,12 @@ impl ItemPlace {
                 Ok(moved)
             }
             _ => Ok(match insert {
-                true => host.game_insert(self, resource.to_stack(amount), tx),
-                false => host.game_extract(self, resource.to_stack(amount), tx),
+                true => backend_mut_of(host).map_or(0, |backend| {
+                    backend.game_insert(self, resource.to_stack(amount), tx)
+                }),
+                false => backend_mut_of(host).map_or(0, |backend| {
+                    backend.game_extract(self, resource.to_stack(amount), tx)
+                }),
             }),
         });
         moved.unwrap_or(0)

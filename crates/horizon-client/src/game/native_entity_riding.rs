@@ -31,17 +31,16 @@ impl Game<'_> {
         )
     }
     /// What the entity rides (`Entity.getVehicle`): `None` when it rides
-    /// nothing, or for a stale handle. API @API:entity_riding@.
+    /// nothing, or for a stale handle.
     pub(super) fn native_entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
         self.native_vehicle(entity).flatten()
     }
-    /// Whether the entity rides another (`Entity.isPassenger`). API
-    /// @API:entity_riding@.
+    /// Whether the entity rides another (`Entity.isPassenger`).
     pub(super) fn native_entity_is_passenger(&self, entity: EntityRef) -> Option<bool> {
         Some(self.native_vehicle(entity)?.is_some())
     }
     /// The lowest vehicle under the entity (`Entity.getRootVehicle`): the
-    /// entity itself when it rides nothing. API @API:entity_riding@.
+    /// entity itself when it rides nothing.
     pub(super) fn native_entity_root_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
         let mut root = entity;
         // A chain of riders is short; the bound only guards against a loop.
@@ -54,7 +53,7 @@ impl Game<'_> {
         Some(root)
     }
     /// The entities riding this one (`Entity.getPassengers`): its players
-    /// in the order they got in, then its mobs. API @API:entity_riding@.
+    /// in the order they got in, then its mobs.
     pub(super) fn native_entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
         self.native_entity_target(entity)?;
         let id = entity.id();
@@ -77,9 +76,8 @@ impl Game<'_> {
             .map(|g| (g.vehicle_order, g.entity_id as u32))
             .collect();
         players.sort_unstable();
-        // A guest action can take the hub out of the game: the acting
-        // player, whose vehicle is in `riding` then, goes first, as
-        // `addPassenger` puts a player first.
+        // An acting player absent from the placed list still rides through
+        // `riding`; `addPassenger` puts that player first.
         if let Some(me) = self.lan_acting_entity
             && self.lan_acting_uuid.is_some()
             && !acting_listed
@@ -96,15 +94,13 @@ impl Game<'_> {
         let ids = players.into_iter().map(|(_, id)| id).chain(mobs);
         Some(ids.filter_map(|id| self.native_entity(id)).collect())
     }
-    /// Whether anything rides the entity (`Entity.isVehicle`). API
-    /// @API:entity_riding@.
+    /// Whether anything rides the entity (`Entity.isVehicle`).
     pub(super) fn native_entity_is_vehicle(&self, entity: EntityRef) -> Option<bool> {
         Some(!self.native_entity_passengers(entity)?.is_empty())
     }
     /// Gets the entity off its vehicle (`Entity.stopRiding`), where the
     /// vehicle lets it out, as `/ride ... dismount` does. False when it rode
     /// nothing, a mod's `mob_ride` hook kept it on, or for a stale handle.
-    /// API @API:entity_riding@.
     pub(super) fn native_entity_stop_riding(&mut self, entity: EntityRef) -> bool {
         let Some(t) = self.native_entity_target(entity) else {
             return false;
@@ -123,8 +119,7 @@ impl Game<'_> {
     }
     /// Gets every passenger off the entity (`Entity.ejectPassengers`), last
     /// first as vanilla walks the list, so `mob_ride` hears them in its
-    /// order. False when nothing rode it, or for a stale handle. API
-    /// @API:entity_riding@.
+    /// order. False when nothing rode it, or for a stale handle.
     pub(super) fn native_entity_eject_passengers(&mut self, entity: EntityRef) -> bool {
         let Some(passengers) = self.native_entity_passengers(entity) else {
             return false;

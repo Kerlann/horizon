@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "A brewing stand is about to brew (`native_potion_brew_pre`).",
-  "doc_summary": "A brewing stand is about to brew, where `BrewingStandBlockEntity.doBrew` starts: `native_potion_brew_pre(pos, stacks, cancel)`. `stacks` is a copy of the stand's five slots (three bottles, the ingredient, the fuel). Set `cancel` to replace vanilla's brew: the stand takes `stacks` as the mods left them, the ingredient is not used, no brew sound plays, and `potion_brew_post` fires with those slots; `brewing_complete` does not, as nothing was brewed. Uncancelled, changes to `stacks` are dropped. Server-side. Bundles need \"hooks\": @API:potion_brew_pre@."
+  ]
 }

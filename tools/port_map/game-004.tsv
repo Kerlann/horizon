@@ -70,7 +70,7 @@ Display.createTransformation	port	crates/horizon-client/src/text_display.rs::Tex
 Display.tick	port	crates/horizon-client/src/game/text_displays.rs::RemoteTextDisplay::tick	start tick, interpolation duration and render state refresh; text displays only
 Display.defineSynchedData	port	crates/horizon-client/src/text_display.rs::TextDisplayData::default	the defaults of entries 8 to 22
 Display.readAdditionalSaveData	port	crates/horizon-client/src/text_display.rs::display_data	the synched data entries (ids 8 to 22) of a saved display, matrix transformation included
-Display.setTransformation	port	crates/horizon-client/src/game/native_entities.rs::Game::native_set_display	a display Horizon keeps as a saved tag (block_display, item_display, text_display) eases from what it showed: the transformation and its interpolation and teleport durations, written for the mod API (native_set_display); nothing writes the brightness, billboard or shadow values back
+Display.setTransformation	port	crates/horizon-client/src/game/native_display_refs.rs::Game::native_display_set_transformation	a display Horizon keeps as a saved tag (block_display, item_display, text_display) takes a transformation from the mod API (DisplayRef::set_transformation), written into the saved compound that the entity data is built from
 Display.addAdditionalSaveData	missing		minor: no local display entity to save
 Display.getInterpolatedBoundingBox	port	crates/horizon-client/src/text_display.rs::culling_box	width-centred XZ box from y to y+height at the interpolated origin; used by Game::display_in_view
 Display.setBrightnessOverride	missing		minor: server side setter; there is no local display entity

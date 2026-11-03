@@ -189,7 +189,7 @@ fn installed_kind_comes_from_the_archive_not_its_folder() {
             let manifest = serde_json::json!({"schema": 1, "id": "coords_hud", "version": "0.1.0", "game": "26.3", "horizon": revision, "mixins": "b".repeat(40)});
             zip.write_all(manifest.to_string().as_bytes()).unwrap();
             zip.start_file(
-                "mixins/coords_hud/horizon-mixin.toml",
+                "native/horizon-mixin.toml",
                 zip::write::SimpleFileOptions::default(),
             )
             .unwrap();

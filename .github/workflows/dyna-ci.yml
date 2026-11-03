@@ -134,26 +134,33 @@ jobs:
         with:
           shared-key: verify
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      # A dyna-medium runner has a hard 8 GiB limit and 4 CPUs; four horizon-client rustc processes at about 2.6 GB
+      # each go past it, so Dyna runs build two crates at a time. A cargo flag, not CARGO_BUILD_JOBS: sccache hashes
+      # CARGO_* variables, and that would split the runners' cache from the boxes'.
       - name: Check formatting and lint
         if: steps.rust.outputs.required != 'false'
+        env:
+          JOBS: ${{ needs.changes.outputs.self_hosted == 'true' && '-j2' || '' }}
         run: |
           cargo +stable fmt --all -- --check
-          cargo +stable clippy --workspace --all-targets -- -D warnings
+          cargo +stable clippy $JOBS --workspace --all-targets -- -D warnings
           # The server build (released as horizon-engine): the game without sound or controllers.
-          cargo +stable clippy -p horizon-client --all-targets --no-default-features -- -D warnings
+          cargo +stable clippy $JOBS -p horizon-client --all-targets --no-default-features -- -D warnings
       # Libraries, binaries and integration tests, then doc tests: not the ~275 examples, which clippy above already
       # type-checks and the parity job builds and runs (they were most of this step's build and link time).
       # cargo test, not nextest: nextest's process per test reloads each binary's shared tables for every test, and on
       # these 4-core runners it was no faster (#4978).
       - name: Test Rust core and voxel kernel correctness
         if: steps.rust.outputs.required != 'false'
+        env:
+          JOBS: ${{ needs.changes.outputs.self_hosted == 'true' && '-j2' || '' }}
         run: |
-          cargo +stable test --workspace --lib --bins --tests
+          cargo +stable test $JOBS --workspace --lib --bins --tests
           # The full content-root tests (#[ignore]d: minutes each on a laptop). The same build as above; they need the
           # prepared vanilla data, so without it they pass at once. Keep the target selection identical to avoid
           # recompiling the workspace with a different dependency graph.
-          cargo +stable test --workspace --lib --bins --tests mod_content::tests:: -- --ignored
-          cargo +stable test --workspace --doc
+          cargo +stable test $JOBS --workspace --lib --bins --tests mod_content::tests:: -- --ignored
+          cargo +stable test $JOBS --workspace --doc
   # The launcher is its own workspace (launcher/Cargo.toml), so verify's cargo runs never build it. A pull request that
   # changes it or a crate it builds is checked here, and so is every push to main: two pull requests can each pass
   # alone and break it together (#2059 and the registry ratings did, 2026-10-26).
@@ -200,10 +207,12 @@ jobs:
       - name: Check the launcher's formatting, lint and tests
         if: steps.launcher.outputs.required != 'false'
         working-directory: launcher
+        env:
+          JOBS: ${{ needs.changes.outputs.self_hosted == 'true' && '-j2' || '' }}
         run: |
           cargo +stable fmt --check
-          cargo +stable clippy --all-targets --locked -- -D warnings
-          cargo +stable test --locked --lib
+          cargo +stable clippy $JOBS --all-targets --locked -- -D warnings
+          cargo +stable test $JOBS --locked --lib --bins
   # The fork's Dyna runners have the owner's prepared vanilla data in a read-only cache.
   vanilla-parity:
     if: github.repository == 'arismoko/horizon' && github.event_name == 'workflow_dispatch'

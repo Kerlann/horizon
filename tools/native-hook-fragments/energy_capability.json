@@ -1,0 +1,9 @@
+{
+  "hooks": [],
+  "helpers": [
+    {"name": "energy_amount", "target": "horizon_client::game::machines::native_energy::Game<'_>::native_energy_amount", "backend": true, "mod_api": {}, "side": "server"},
+    {"name": "energy_capacity", "target": "horizon_client::game::machines::native_energy::Game<'_>::native_energy_capacity", "backend": true, "mod_api": {}, "side": "server"},
+    {"name": "energy_insert", "target": "horizon_client::game::machines::native_energy::Game<'_>::native_energy_insert", "backend": true, "mod_api": {}, "side": "server"},
+    {"name": "energy_extract", "target": "horizon_client::game::machines::native_energy::Game<'_>::native_energy_extract", "backend": true, "mod_api": {}, "side": "server"}
+  ]
+}

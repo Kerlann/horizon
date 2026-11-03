@@ -1,0 +1,88 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "merchant",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_merchant"
+    },
+    {
+      "name": "merchant_offers",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_merchant_offers",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_set_offer",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_merchant_set_offer",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_add_offer",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_merchant_add_offer",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_remove_offer",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_merchant_remove_offer",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_trading_player",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_merchant_trading_player",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_profession",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_villager_profession",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_set_profession",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_villager_set_profession",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_level",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_villager_level",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_set_level",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_villager_set_level",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_villager_type",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_villager_type",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_set_villager_type",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_villager_set_type",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_xp",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_villager_xp",
+      "receiver": "merchant"
+    },
+    {
+      "name": "merchant_set_xp",
+      "side": "server",
+      "target": "horizon_client::game::native_merchant_refs::Game<'_>::native_villager_set_xp",
+      "receiver": "merchant"
+    }
+  ]
+}

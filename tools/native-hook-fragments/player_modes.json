@@ -16,10 +16,5 @@
       "target": "horizon_client::game::native_player_modes::Game<'_>::native_player_can_use_game_master_blocks",
       "receiver": "player"
     }
-  ],
-  "rust_summary": "a player's permission level through a `PlayerRef` (`native_player_permission_level`...).",
-  "doc_summary": "a player's permission level through a `PlayerRef`, as vanilla's `Player`: `permission_level(host)` (0 to 4), `has_infinite_materials(host)` and `can_use_game_master_blocks(host)` (creative and level 2 or more). None for a stale handle or a player who isn't online here. Bundles need \"hooks\": @API:player_modes@.",
-  "comments": [
-    "crates/horizon-client/src/game/native_player_modes.rs"
   ]
 }

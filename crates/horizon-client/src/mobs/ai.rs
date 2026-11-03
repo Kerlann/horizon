@@ -103,6 +103,13 @@ impl Mob {
         self.ai.swing_duration = duration.max(1);
         true
     }
+    /// Whether the current swing is the off hand's (`swing_hand`'s arm
+    /// inverted); a swing that named no hand is the main hand's.
+    pub fn swing_is_off_hand(&self) -> bool {
+        self.extra
+            .swing_right_arm
+            .is_some_and(|right| right == self.main_arm_left())
+    }
     /// LivingEntity.swing
     pub fn swing(&mut self) {
         if self.start_swing(6) {
@@ -120,12 +127,13 @@ impl Mob {
     }
     /// `swing_hand` for a swing of `animation`, lengthened or shortened by
     /// this mob's haste, conduit power or mining fatigue
-    /// (`LivingEntity.getModifiedSwingDuration`).
+    /// (`LivingEntity.getModifiedSwingDuration`). Whether the swing started
+    /// (`SwingState.startIfAble`).
     pub fn swing_hand_modified(
         &mut self,
         off_hand: bool,
         animation: crate::first_person::SwingAnimation,
-    ) {
+    ) -> bool {
         let amplifier = |id: &str| self.extra.effects.iter().find(|e| e.0 == id).map(|e| e.2);
         let dig_speed = amplifier("minecraft:haste").max(amplifier("minecraft:conduit_power"));
         let fatigue = amplifier("minecraft:mining_fatigue");
@@ -133,7 +141,9 @@ impl Mob {
         if self.start_swing(duration) {
             self.extra.swing_right_arm = Some(!off_hand != self.main_arm_left());
             self.extra.swing_stab = animation.kind == 2;
+            return true;
         }
+        false
     }
 }
 /// The module implementing a species' behaviour.
@@ -1164,16 +1174,16 @@ fn can_freeze(m: &Mob, w: &MobWorld) -> bool {
     let immune = w
         .items
         .and_then(|i| i.item_tags.get("minecraft:freeze_immune_wearables"));
-    ![
-        &m.extra.head,
-        &m.extra.chest,
-        &m.extra.legs,
-        &m.extra.feet,
-        &m.extra.body,
+    [
+        m.extra.head.as_deref(),
+        m.extra.chest.as_deref(),
+        m.extra.legs.as_deref(),
+        m.extra.feet.as_deref(),
+        m.extra.body_id(),
     ]
     .into_iter()
     .flatten()
-    .any(|item| immune.is_some_and(|t| t.contains(&**item)))
+    .any(|item| immune.is_some_and(|t| t.contains(item)))
 }
 /// `Mob.playAmbientSound` on demand: a spawn egg or a mob bucket just placed `m`.
 pub fn ambient_sound(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
@@ -3300,7 +3310,9 @@ mod same_vehicle_push_tests {
             assert!(horse.fire_ticks > 0);
             assert!(events.is_empty());
             horse.fire_ticks = 0;
-            horse.extra.body = Some("minecraft:leather_horse_armor".into());
+            horse
+                .extra
+                .set_body(Some("minecraft:leather_horse_armor".into()));
             for _ in 0..1000 {
                 burn_undead(&mut horse, &world, &mut events);
             }
@@ -3324,9 +3336,13 @@ mod same_vehicle_push_tests {
                 0.0,
             );
             assert!(can_freeze(&horse, w));
-            horse.extra.body = Some("minecraft:leather_horse_armor".into());
+            horse
+                .extra
+                .set_body(Some("minecraft:leather_horse_armor".into()));
             assert!(!can_freeze(&horse, w));
-            horse.extra.body = Some("minecraft:iron_horse_armor".into());
+            horse
+                .extra
+                .set_body(Some("minecraft:iron_horse_armor".into()));
             assert!(can_freeze(&horse, w));
         }));
     }
@@ -3362,7 +3378,9 @@ mod same_vehicle_push_tests {
             );
             assert_eq!(worn.iter().flatten().count(), 2);
             let mut horse = mob("minecraft:horse");
-            horse.extra.body = Some(std::sync::Arc::from("minecraft:iron_horse_armor"));
+            horse
+                .extra
+                .set_body(Some(std::sync::Arc::from("minecraft:iron_horse_armor")));
             horse.set_saddle(Some(crate::items::ItemStack::new("minecraft:saddle", 1)));
             let gear = horse.equipment_stacks();
             assert_eq!(

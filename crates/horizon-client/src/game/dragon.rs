@@ -13,6 +13,7 @@ use horizon_client::{
     hud_layout, hud_overlays,
     mesher::Vertex,
     mobs::{Damage, DamageKind, Who},
+    mod_api::NativeDragonPhase,
     particles::{ParticleOptions, ParticleType},
     projectiles::ProjectileKind,
     text::Text,
@@ -72,13 +73,13 @@ const AMBIENT_INTERVAL: i32 = 80;
 
 #[derive(Default)]
 pub(super) struct Fight {
-    loaded: bool,
+    pub(super) loaded: bool,
     needs_scan: bool,
     pub killed: bool,
     pub previously_killed: bool,
     gateways: Vec<i32>,
     exit_portal: Option<[i32; 3]>,
-    alive_crystals: i32,
+    pub(super) alive_crystals: i32,
     crystal_scan: i32,
     /// `ticksSinceLastPlayerScan`, and whether the last scan found a player
     /// for the fight (`dragonEvent.getPlayers()` is not empty).
@@ -129,6 +130,7 @@ impl Respawn {
 }
 #[derive(Clone, Debug)]
 pub(super) struct Crystal {
+    pub join: horizon_client::join_seq::JoinSeq,
     /// The entity id a server tracks it by (0 until it is tracked).
     pub id: u32,
     pub position: Vec3,
@@ -139,6 +141,7 @@ pub(super) struct Crystal {
     /// `setPermanentlyInvulnerable` (respawned spike crystals).
     pub invulnerable: bool,
 }
+horizon_client::impl_joined!(Crystal);
 impl Crystal {
     /// `EntityType.END_CRYSTAL`: 2 x 2.
     pub(super) fn bounds(&self) -> Aabb {
@@ -307,6 +310,7 @@ impl Phase {
     }
 }
 pub(super) struct Dragon {
+    pub join: horizon_client::join_seq::JoinSeq,
     /// `Entity.id` once tracked to guests (0 before); its parts take the
     /// eight ids after it (`EnderDragon`'s constructor reserves them).
     pub id: u32,
@@ -331,6 +335,15 @@ pub(super) struct Dragon {
     pub old_flap: f32,
     in_wall: bool,
     phase: Phase,
+    /// `Mob.isAggressive` (the synced mob flag), `persistenceRequired` and
+    /// the target a mod set (`Mob.target`): kept for native mods, the
+    /// dragon's own flight never reads them.
+    pub(super) aggressive: bool,
+    pub(super) persistent: bool,
+    pub(super) target: Option<u32>,
+    /// The phase left was `Flaming` (`DragonSittingFlamingPhase.end`) and its
+    /// cloud is still to be discarded.
+    pub(super) flame_ended: bool,
     flame_count: i32,
     sitting_damage: f32,
     growl: i32,
@@ -368,7 +381,7 @@ pub(super) struct FightPlayer {
 }
 impl FightPlayer {
     /// `Player.canBeSeenAsEnemy`: alive, neither creative nor spectator.
-    fn enemy(&self) -> bool {
+    pub(super) fn enemy(&self) -> bool {
         self.alive && !self.creative && !self.spectator
     }
 }
@@ -442,6 +455,7 @@ const ADJACENCY: [u32; 24] = [
 impl Dragon {
     pub(super) fn new(position: Vec3, yaw: f32, seed: i64) -> Self {
         Self {
+            join: Default::default(),
             id: 0,
             position,
             previous: position,
@@ -464,6 +478,10 @@ impl Dragon {
                 target: None,
                 clockwise: false,
             },
+            aggressive: false,
+            persistent: false,
+            target: None,
+            flame_ended: false,
             flame_count: 0,
             sitting_damage: 0.0,
             growl: 100,
@@ -700,9 +718,24 @@ impl Dragon {
             self.strafe_request = Some(p.who);
         }
     }
+    /// The phase as a native mod sees it.
+    pub(super) fn native_phase(&self) -> NativeDragonPhase {
+        NativeDragonPhase::from_id(self.phase.id()).expect("the phases are the vanilla ones")
+    }
+    /// `EnderDragonPhaseManager.setPhase`: nothing when it is the phase it
+    /// holds (a strafing dragon too), else the new phase begins fresh.
+    pub(super) fn set_native_phase(&mut self, phase: NativeDragonPhase) {
+        if phase != self.native_phase() {
+            self.set_phase(Phase::from_id(phase.id()));
+        }
+    }
     fn set_phase(&mut self, phase: Phase) {
         if self.phase.id() == phase.id() && phase.id() != 1 {
             return;
+        }
+        // `EnderDragonPhaseManager.setPhase`: the outgoing `end()` first.
+        if matches!(self.phase, Phase::Flaming { .. }) {
+            self.flame_ended = true;
         }
         if let Phase::Flaming { .. } = phase {
             self.flame_count += 1;
@@ -874,8 +907,7 @@ impl Game<'_> {
         (-2..=1).all(|cz| (-2..=1).all(|cx| self.streaming.is_lit(cx, cz)))
     }
     /// A player's entity id: the acting player's body has it, another
-    /// player's comes from the hub (0 when it is out on a guest's turn, and
-    /// for no player).
+    /// player's comes from the hub (0 when no such player is available).
     fn fight_entity(&self, who: FightWho) -> i32 {
         if who == self.acting_player() {
             return self.player.as_ref().map_or(0, |p| p.entity_id);
@@ -932,11 +964,7 @@ impl Game<'_> {
         match who {
             FightWho::Host => f(self),
             FightWho::Guest(conn) => {
-                let Some(mut host) = self.lan.take() else {
-                    return;
-                };
-                self.guest_hit_by(&mut host, conn, f);
-                self.lan = Some(host);
+                self.guest_hit_by(conn, f);
             }
         }
     }
@@ -1002,6 +1030,11 @@ impl Game<'_> {
                 }
             }
         }
+        self.assign_dragon_and_crystal_ids();
+        self.tick_dragon();
+    }
+
+    pub(super) fn assign_dragon_and_crystal_ids(&mut self) {
         // EnderDragon's constructor takes its id and its parts' from the
         // entity counter (a dragon loaded from the save gets them here too).
         if let Some(d) = self.dragon.as_mut()
@@ -1016,7 +1049,6 @@ impl Game<'_> {
             self.next_entity += 1;
             c.id = self.next_entity;
         }
-        self.tick_dragon();
     }
     /// EndSpikeFeature's crystals (with fire under them on the bedrock).
     fn place_spike_crystals(&mut self) {
@@ -1037,6 +1069,7 @@ impl Game<'_> {
             // EndCrystal's constructor takes an id from the entity counter.
             self.next_entity += 1;
             self.crystals.push(Crystal {
+                join: Default::default(),
                 id: self.next_entity,
                 position: at,
                 show_bottom: true,
@@ -1304,14 +1337,8 @@ impl Game<'_> {
             _ => None,
         };
         let credited = guest.is_some_and(|conn| {
-            let Some(mut host) = self.lan.take() else {
-                return false;
-            };
-            let done = self
-                .as_guest(&mut host, conn, |g| g.award_dragon_kill(id, &view, blow))
-                .is_some();
-            self.lan = Some(host);
-            done
+            self.as_guest(conn, |g| g.award_dragon_kill(id, &view, blow))
+                .is_some()
         });
         if !credited {
             self.award_dragon_kill(id, &view, blow);
@@ -2554,7 +2581,18 @@ impl Game<'_> {
     }
     /// The dragon's breath clouds (`AreaEffectCloud` with instant damage at
     /// a quarter duration scale): shrinking, puffing particles, harming the player.
-    fn tick_breath(&mut self) {
+    /// `DragonSittingFlamingPhase.end`: the flame cloud goes once the
+    /// phase is left.
+    pub(super) fn end_dragon_flame(&mut self) {
+        if self
+            .dragon
+            .as_mut()
+            .is_some_and(|d| std::mem::take(&mut d.flame_ended))
+        {
+            self.breath_clouds.retain(|c| !c.from_dragon);
+        }
+    }
+    pub(super) fn tick_breath(&mut self) {
         // What instant damage reaches: neither creative nor spectator players.
         let players: Vec<FightPlayer> = self
             .fight_players()
@@ -2562,7 +2600,7 @@ impl Game<'_> {
             .filter(|p| p.alive && !p.creative && !p.spectator)
             .collect();
         let mut harmed: Vec<(FightWho, f32)> = Vec::new();
-        // DragonSittingFlamingPhase.end discards the flame cloud.
+        self.end_dragon_flame();
         let flame_over = self
             .dragon
             .as_ref()
@@ -3189,6 +3227,9 @@ impl Dragon {
             map.insert("Health".into(), Tag::Float(self.health.to_bits()));
             map.insert("DragonPhase".into(), Tag::Int(self.phase.id()));
             map.insert("DragonDeathTime".into(), Tag::Int(self.death_time));
+            if self.persistent {
+                map.insert("PersistenceRequired".into(), Tag::Byte(1));
+            }
             map.insert(
                 "sitting_damage_received".into(),
                 Tag::Float(self.sitting_damage.to_bits()),
@@ -3209,6 +3250,7 @@ impl Dragon {
         if let Some(Tag::Int(t)) = tag.get("DragonDeathTime") {
             d.death_time = *t;
         }
+        d.persistent = horizon_client::entity_nbt::flag(tag, "PersistenceRequired");
         Some(d)
     }
 }
@@ -3237,6 +3279,7 @@ impl Crystal {
     pub(super) fn from_nbt(tag: &Tag, time: i32) -> Option<Self> {
         let (position, _, _) = horizon_client::entity_nbt::boat_from_nbt(tag)?;
         Some(Self {
+            join: Default::default(),
             id: 0,
             position,
             show_bottom: !matches!(tag.get("ShowBottom"), Some(Tag::Byte(0))),
@@ -3322,6 +3365,10 @@ impl Game<'_> {
         if health != 1.0 {
             meta.push((9, serializer::FLOAT, Value::Float(health)));
         }
+        // Mob.DATA_MOB_FLAGS_ID: aggressive is 4.
+        if d.aggressive {
+            meta.push((15, serializer::BYTE, Value::Byte(4)));
+        }
         let phase = d.phase.id();
         if phase != 10 {
             meta.push((16, serializer::INT, Value::Int(phase)));
@@ -3339,7 +3386,14 @@ impl Game<'_> {
             minecart_steps: None,
             data: 0,
             meta,
-            defaults: Vec::new(),
+            forced_meta: [0; 4],
+            // Back at their defaults the values leave `meta`, and the clients
+            // still hold the old ones.
+            defaults: vec![
+                (9, serializer::FLOAT, Value::Float(1.0)),
+                (15, serializer::BYTE, Value::Byte(0)),
+                (16, serializer::INT, Value::Int(10)),
+            ],
             equipment: Vec::new(),
             attributes: Vec::new(),
             precise: false,
@@ -3429,6 +3483,7 @@ impl Game<'_> {
         // the crystal is an entity a command can name (`@e[type=end_crystal]`).
         self.next_entity += 1;
         self.crystals.push(Crystal {
+            join: Default::default(),
             id: self.next_entity,
             position: Vec3::new(x + 0.5, y, z + 0.5),
             show_bottom: false,
@@ -3713,6 +3768,7 @@ impl Game<'_> {
             .retain(|c| c.position.distance_squared(at) > 0.01);
         let time = self.world.random.next_int_bound(100_000).unwrap_or(0);
         self.crystals.push(Crystal {
+            join: Default::default(),
             id: 0,
             position: at,
             show_bottom: true,
@@ -3761,7 +3817,9 @@ impl Game<'_> {
     fn create_new_dragon(&mut self) {
         let yaw = self.world.random.next_float() * 360.0;
         let seed = self.world.random.next_long();
-        self.dragon = Some(Dragon::new(Vec3::new(0.0, 128.0, 0.0), yaw, seed));
+        let mut dragon = Dragon::new(Vec3::new(0.0, 128.0, 0.0), yaw, seed);
+        dragon.join = horizon_client::join_seq::JoinSeq::next();
+        self.dragon = Some(dragon);
     }
     /// The END stage: the portal crystals blow up (no block damage) and a
     /// new dragon takes over.
@@ -3874,6 +3932,7 @@ impl Game<'_> {
         let mut d = Dragon::new(at, yaw, i64::from(id));
         d.id = id as u32;
         d.phase = Phase::from_id(10);
+        d.join = horizon_client::join_seq::JoinSeq::next();
         self.dragon = Some(d);
         self.place_dragon_parts();
         if let Some(d) = self.dragon.as_mut() {
@@ -4850,5 +4909,25 @@ mod tests {
         let hurt = d.hurt(0, 5.0, HIT, false);
         assert_eq!(hurt, Hurt::Landed { full: true });
         assert_eq!(d.hurt_time, 10);
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn the_tracked_dragon_lists_its_data_defaults() {
+        use horizon_protocol::entity_data::serializer;
+        super::super::native_entity_refs::tests::with_game(|game| {
+            let mut dragon = Dragon::new(Vec3::ZERO, 0.0, 0);
+            dragon.id = 15;
+            game.dragon = Some(dragon);
+            let state = game.lan_dragon_state().unwrap();
+            assert_eq!(
+                state.defaults,
+                vec![
+                    (9, serializer::FLOAT, Value::Float(1.0)),
+                    (15, serializer::BYTE, Value::Byte(0)),
+                    (16, serializer::INT, Value::Int(10)),
+                ]
+            );
+        });
     }
 }

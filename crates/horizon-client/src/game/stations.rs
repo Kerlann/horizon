@@ -687,6 +687,33 @@ impl Game<'_> {
             None => String::new(),
         }
     }
+    /// Apply the client anvil hook once for each input and name combination.
+    fn update_anvil_answer(&mut self, s: &mut Station, name: String) {
+        if !crate::mod_api::listened(crate::mod_api::HookId::AnvilUpdate) {
+            return;
+        }
+        let Some(left) = s.inputs[0].clone() else {
+            return;
+        };
+        match &s.anvil_answer {
+            Some((inputs, asked, answer)) if *inputs == s.inputs && *asked == name => {
+                s.anvil = answer.clone();
+            }
+            _ => {
+                let mut update = horizon_client::menu::AnvilUpdate::new(
+                    left,
+                    s.inputs[1].clone(),
+                    Some(name.clone()),
+                    &s.anvil,
+                );
+                let mut cancel = false;
+                let (player, entity_id) = (self.own_uuid(), self.own_entity_id());
+                self.native_anvil_update(player, entity_id, s.pos, &mut update, &mut cancel);
+                update.answer(cancel, &mut s.anvil);
+                s.anvil_answer = Some((s.inputs.clone(), name, s.anvil.clone()));
+            }
+        }
+    }
     /// `slotsChanged` / `createResult` for the open station.
     pub(super) fn station_changed(&mut self) {
         let Some(mut s) = self.station.take() else {
@@ -737,34 +764,8 @@ impl Game<'_> {
                 // An empty left slot has no result and forgets the answer.
                 if s.inputs[0].is_none() {
                     s.anvil_answer = None;
-                } else if self.remote.is_some()
-                    && !horizon_client::mod_api::mods().is_empty()
-                    && let Some(left) = s.inputs[0].clone()
-                {
-                    match &s.anvil_answer {
-                        Some((inputs, asked, answer)) if *inputs == s.inputs && *asked == name => {
-                            s.anvil = answer.clone();
-                        }
-                        _ => {
-                            let mut update = horizon_client::menu::AnvilUpdate::new(
-                                left,
-                                s.inputs[1].clone(),
-                                Some(name.clone()),
-                                &s.anvil,
-                            );
-                            let mut cancel = false;
-                            let (player, entity_id) = (self.own_uuid(), self.own_entity_id());
-                            self.native_anvil_update(
-                                player,
-                                entity_id,
-                                s.pos,
-                                &mut update,
-                                &mut cancel,
-                            );
-                            update.answer(cancel, &mut s.anvil);
-                            s.anvil_answer = Some((s.inputs.clone(), name, s.anvil.clone()));
-                        }
-                    }
+                } else if self.remote.is_some() {
+                    self.update_anvil_answer(&mut s, name);
                 }
                 s.result = s.anvil.result.clone();
             }
@@ -1035,7 +1036,7 @@ impl Game<'_> {
         if levels == 0 {
             return;
         }
-        if !horizon_client::mod_api::mods().is_empty()
+        if crate::mod_api::listened(crate::mod_api::HookId::PlayerXpLevelChange)
             && let (Some(player), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone())
         {
             let mut cancel = false;
@@ -3079,6 +3080,51 @@ fn anvil_box() -> horizon_client::ui::EditBox {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn anvil_subscriber_probe_and_answer_cache() {
+        use crate::mod_api::{self, AnvilUpdateEvent, Flow, HookId, Hooks, Host, ModEntry};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        struct DefaultMod;
+        impl Hooks for DefaultMod {}
+        struct Listener(Arc<AtomicUsize>);
+        impl Hooks for Listener {
+            fn anvil_update(&self, _: &mut dyn Host, _: &mut AnvilUpdateEvent<'_>) -> Flow {
+                self.0.fetch_add(1, Ordering::Relaxed);
+                Flow::Continue
+            }
+        }
+        let defaults = vec![ModEntry::new("default", Box::new(DefaultMod))].into();
+        mod_api::testing::with_mods(defaults, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                let mut station = super::Station::new(super::Kind::Anvil, [0; 3]);
+                station.inputs[0] = Some(super::ItemStack::new("minecraft:iron_sword", 1));
+                assert!(mod_api::listened(HookId::AnvilUpdate));
+                game.update_anvil_answer(&mut station, "first".into());
+                assert!(!mod_api::listened(HookId::AnvilUpdate));
+                assert_eq!(station.anvil_answer.as_ref().unwrap().1, "first");
+                game.update_anvil_answer(&mut station, "second".into());
+                assert_eq!(station.anvil_answer.as_ref().unwrap().1, "first");
+            });
+        });
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mods = vec![ModEntry::new("listener", Box::new(Listener(calls.clone())))].into();
+        mod_api::testing::with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                let mut station = super::Station::new(super::Kind::Anvil, [0; 3]);
+                station.inputs[0] = Some(super::ItemStack::new("minecraft:iron_sword", 1));
+                game.update_anvil_answer(&mut station, "first".into());
+                game.update_anvil_answer(&mut station, "first".into());
+                game.update_anvil_answer(&mut station, "second".into());
+                assert_eq!(calls.load(Ordering::Relaxed), 2);
+                assert!(mod_api::listened(HookId::AnvilUpdate));
+            });
+        });
+    }
     #[test]
     fn measured_image_tooltips_position_the_whole_box() {
         use super::tooltip_position;

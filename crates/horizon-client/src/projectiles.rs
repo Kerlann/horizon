@@ -22,6 +22,91 @@ pub fn own_random(shooter: &crate::mobs::Mob) -> horizon_core::random::LegacyRan
     )
 }
 
+/// A projectile's `Entity.random`. Two projectiles are equal whatever their
+/// randoms, as with `ArrowState`: the state is not part of what they are.
+#[derive(Clone, Debug)]
+pub struct OwnRandom(pub horizon_core::random::LegacyRandom);
+
+impl PartialEq for OwnRandom {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+/// `RandomSource.create()` for a new entity's random: `seedUniquifier ^
+/// nanoTime`. Every call steps a process-wide uniquifier (as `Random`'s) and
+/// mixes the position in through a splitmix64 finalizer, so two entities made
+/// at one spot get independent streams. Draws nothing from any level random.
+pub fn unique_random(position: Vec3) -> horizon_core::random::LegacyRandom {
+    use std::sync::atomic::{AtomicI64, Ordering};
+    static UNIQUIFIER: AtomicI64 = AtomicI64::new(0x1F3D_5B79_A2C4_E681);
+    const STEP: i64 = 1_181_783_497_276_652_981;
+    let mut current = UNIQUIFIER.load(Ordering::Relaxed);
+    let step = loop {
+        let next = current
+            .wrapping_mul(STEP)
+            .wrapping_add(0x9E37_79B9_7F4A_7C15_u64 as i64);
+        match UNIQUIFIER.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed)
+        {
+            Ok(_) => break next,
+            Err(actual) => current = actual,
+        }
+    };
+    let mut z = (step as u64)
+        ^ position.x.to_bits()
+        ^ position.y.to_bits().rotate_left(21)
+        ^ position.z.to_bits().rotate_left(42);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    horizon_core::random::LegacyRandom::new((z ^ (z >> 31)) as i64)
+}
+
+/// `ProjectileDeflection`: how a projectile's movement turns.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Turn {
+    /// `REVERSE`: one float from the projectile's random, then backwards at `-power / 2`.
+    Reverse,
+    /// `AIM_DEFLECT` along the deflecting entity's look, or `MOMENTUM_DEFLECT`
+    /// along its normalized known speed. None (no deflecting entity) changes
+    /// nothing.
+    Direction(Option<Vec3>),
+}
+
+impl Turn {
+    /// The new movement, and the degrees `REVERSE` adds to the yaw. None when
+    /// the turn changes nothing. Only `REVERSE` draws from `random`.
+    pub fn apply(
+        self,
+        velocity: Vec3,
+        power: [f64; 3],
+        random: &mut impl RandomSource,
+    ) -> Option<(Vec3, f32)> {
+        match self {
+            Turn::Reverse => {
+                let rotation = 170.0 + random.next_float() * 20.0;
+                let v = velocity;
+                Some((
+                    Vec3::new(
+                        v.x * (-power[0] * 0.5),
+                        v.y * (-power[1] * 0.5),
+                        v.z * (-power[2] * 0.5),
+                    ),
+                    rotation,
+                ))
+            }
+            Turn::Direction(dir) => dir.map(|d| {
+                (
+                    Vec3::new(d.x * power[0], d.y * power[1], d.z * power[2]),
+                    0.0,
+                )
+            }),
+        }
+    }
+}
+
+/// A new owner as a projectile stores it: who, UUID and the guest's connection.
+pub type OwnerFields = (Option<Who>, Option<[i32; 4]>, Option<u32>);
+
 /// a content mod's thrown item projectile, a copy of `Snowball` that deals
 /// `damage` and flies as its `item`.
 #[derive(Debug, PartialEq)]
@@ -240,6 +325,12 @@ pub struct Projectile {
     /// `Entity.remainingFireTicks`: a thrown projectile that flew through a
     /// fire block burns for 160 ticks, with the flame drawn over it.
     pub fire_ticks: i32,
+    /// `Entity.random` of a projectile that is not an arrow (an arrow's is in
+    /// `arrow`): what `Projectile.deflect` hands to the deflection.
+    pub random: OwnRandom,
+    /// `WindCharge.noDeflectTicks`: five ticks after it is made, it refuses
+    /// every deflection. Counted down after its tick; zero for other kinds.
+    pub no_deflect_ticks: u8,
 }
 /// `ThrownEnderpearl.isAllowedToTeleportOwner(owner, level)` for an owner in
 /// the pearl's own dimension: vanilla reaches
@@ -376,6 +467,11 @@ impl Projectile {
         } else {
             0.1
         };
+        let no_deflect_ticks = if matches!(kind, ProjectileKind::WindCharge) {
+            5
+        } else {
+            0
+        };
         Self {
             join: Default::default(),
             id: 0,
@@ -401,14 +497,11 @@ impl Projectile {
             touching_water: false,
             no_gravity: false,
             fire_ticks: 0,
-            arrow: kind_is_arrow.then(|| {
-                // Entity.random: seeded unpredictably, the position stands in.
-                Box::new(crate::arrows::ArrowState::new(
-                    horizon_core::random::LegacyRandom::new(
-                        position.x.to_bits() as i64 ^ position.z.to_bits().rotate_left(17) as i64,
-                    ),
-                ))
-            }),
+            // Entity.random: seeded unpredictably, the position stands in.
+            random: OwnRandom(unique_random(position)),
+            no_deflect_ticks,
+            arrow: kind_is_arrow
+                .then(|| Box::new(crate::arrows::ArrowState::new(unique_random(position)))),
         }
     }
     /// Entity box from the feet (`EntityType.sized` cube of `kind.size()`).
@@ -423,6 +516,60 @@ impl Projectile {
                 self.position.z + h,
             ),
         )
+    }
+    /// `Entity.random`: an arrow's own, else the projectile's.
+    pub fn entity_random(&mut self) -> &mut horizon_core::random::LegacyRandom {
+        match self.arrow.as_mut() {
+            Some(a) => &mut a.random,
+            None => &mut self.random.0,
+        }
+    }
+    /// `AbstractHurtingProjectile`: the kinds with an acceleration power.
+    pub fn is_hurting(&self) -> bool {
+        matches!(
+            self.kind,
+            ProjectileKind::LargeFireball { .. }
+                | ProjectileKind::SmallFireball
+                | ProjectileKind::WitherSkull { .. }
+                | ProjectileKind::WindCharge
+                | ProjectileKind::BreezeWindCharge
+        )
+    }
+    /// `Projectile.deflect(deflection, by, newOwner, byAttack, power)` on the
+    /// server, for every caller: gameplay and a mod's handle. A wind charge
+    /// in its first five ticks refuses with no change and no draw
+    /// (`WindCharge.deflect`). Otherwise the turn (its draw from this
+    /// projectile's random), then the new owner, then `onDeflection`: a
+    /// hurting projectile's acceleration power is 0.1 by an attack, else
+    /// halved. A turn also sets `needsSync`, and the rotation `REVERSE` adds
+    /// goes to `yRotO` too. Returns whether it deflected.
+    pub fn deflect(
+        &mut self,
+        turn: Turn,
+        power: [f64; 3],
+        owner: OwnerFields,
+        by_attack: bool,
+    ) -> bool {
+        if self.no_deflect_ticks > 0 {
+            return false;
+        }
+        let velocity = self.velocity;
+        let turned = turn.apply(velocity, power, self.entity_random());
+        if let Some((velocity, rotation)) = turned {
+            self.velocity = velocity;
+            self.yaw += rotation;
+            self.previous_yaw += rotation;
+            self.needs_sync = true;
+        }
+        (self.owner, self.owner_uuid, self.guest) = owner;
+        if self.is_hurting() {
+            self.acceleration = if by_attack {
+                0.1
+            } else {
+                self.acceleration * 0.5
+            };
+        }
+        true
     }
     /// The arrow's own random from now on (`Entity.random`).
     pub fn with_arrow_random(mut self, random: horizon_core::random::LegacyRandom) -> Self {
@@ -999,6 +1146,8 @@ impl Projectile {
         if !base_first {
             self.tick_shoot_event();
         }
+        // `WindCharge.tick`: counted down after the tick.
+        self.no_deflect_ticks = self.no_deflect_ticks.saturating_sub(1);
         result
     }
     /// The first-tick notification branch of vanilla's base projectile tick.
@@ -1771,6 +1920,113 @@ mod trail_tests {
         let mut p = arrow(true);
         p.stuck = true;
         assert!(p.arrow_trail(true).is_empty());
+    }
+}
+#[cfg(test)]
+mod deflect_tests {
+    use super::*;
+    use horizon_core::random::{LegacyRandom, RandomSource};
+
+    struct Empty(Vec<(Who, Aabb)>);
+    impl ProjectileWorld for Empty {
+        fn clip(&self, _: Vec3, _: Vec3) -> Option<(Vec3, [i32; 3], [i32; 3])> {
+            None
+        }
+        fn in_water(&self, _: Aabb) -> bool {
+            false
+        }
+        fn targets(&self) -> &[(Who, Aabb)] {
+            &self.0
+        }
+    }
+
+    fn none() -> OwnerFields {
+        (None, None, None)
+    }
+
+    /// `WindCharge.deflect` refuses while `noDeflectTicks` > 0, which counts
+    /// down after each of its ticks: five ticks old, it deflects.
+    #[test]
+    fn a_wind_charge_refuses_a_deflection_for_its_first_five_ticks() {
+        let w = Empty(vec![]);
+        let mut p = Projectile::new(
+            ProjectileKind::WindCharge,
+            Vec3::new(0.0, 100.0, 0.0),
+            Some(Who::Mob(3)),
+        );
+        p.velocity = Vec3::new(0.0, 1.0, 0.0);
+        assert_eq!(p.no_deflect_ticks, 5);
+        for left in (1..=5).rev() {
+            let (velocity, random) = (p.velocity, p.random.0.clone());
+            assert!(!p.deflect(Turn::Reverse, [1.0; 3], none(), true));
+            assert_eq!((p.velocity, p.owner), (velocity, Some(Who::Mob(3))));
+            assert_eq!(p.random.0.clone().next_float(), random.clone().next_float());
+            assert_eq!(p.no_deflect_ticks, left);
+            p.tick(&w);
+            p.velocity = velocity;
+        }
+        assert_eq!(p.no_deflect_ticks, 0);
+        assert!(p.deflect(Turn::Reverse, [1.0; 3], none(), true));
+        assert_eq!(p.owner, None);
+        assert_eq!(p.acceleration, 0.1);
+        // A breeze's wind charge, and any other kind, has no such window.
+        let breeze = Projectile::new(ProjectileKind::BreezeWindCharge, Vec3::ZERO, None);
+        assert_eq!(breeze.no_deflect_ticks, 0);
+    }
+
+    /// Two projectiles made at one spot do not share a random stream.
+    #[test]
+    fn projectiles_at_one_spot_get_independent_randoms() {
+        let at = Vec3::new(1.0, 64.0, 2.0);
+        let mut a = Projectile::new(ProjectileKind::Snowball, at, None);
+        let mut b = Projectile::new(ProjectileKind::Snowball, at, None);
+        let (fa, fb): (Vec<f32>, Vec<f32>) = (0..6)
+            .map(|_| (a.random.0.next_float(), b.random.0.next_float()))
+            .unzip();
+        assert_ne!(fa, fb);
+        let arrow = ProjectileKind::Arrow {
+            base_damage: 2.0,
+            critical: false,
+            effect: None,
+        };
+        let mut a = Projectile::new(arrow.clone(), at, None);
+        let mut b = Projectile::new(arrow, at, None);
+        assert_ne!(
+            a.entity_random().next_float(),
+            b.entity_random().next_float()
+        );
+        assert_ne!(
+            unique_random(at).next_float(),
+            unique_random(at).next_float()
+        );
+    }
+
+    /// `REVERSE` takes exactly one float from the projectile's own random:
+    /// the arrow's for an arrow, else `Entity.random`.
+    #[test]
+    fn reverse_draws_one_float_from_the_projectiles_own_random() {
+        let mut ball = Projectile::fireball(
+            ProjectileKind::LargeFireball { power: 1 },
+            Vec3::ZERO,
+            None,
+            [1.0, 0.0, 0.0],
+        );
+        ball.random = OwnRandom(LegacyRandom::new(42));
+        let mut expect = LegacyRandom::new(42);
+        let draw = expect.next_float();
+        let yaw = ball.yaw;
+        assert!(ball.deflect(Turn::Reverse, [1.0; 3], none(), false));
+        assert_eq!(ball.yaw, yaw + (170.0 + draw * 20.0));
+        assert_eq!(ball.previous_yaw, yaw + (170.0 + draw * 20.0));
+        assert_eq!(
+            ball.random.0.clone().next_float(),
+            expect.clone().next_float()
+        );
+        let draw = expect.next_float();
+        let yaw = ball.yaw;
+        assert!(ball.deflect(Turn::Reverse, [1.0; 3], none(), false));
+        assert_eq!(ball.yaw, yaw + (170.0 + draw * 20.0));
+        assert_eq!(ball.random.0.clone().next_float(), expect.next_float());
     }
 }
 #[cfg(test)]

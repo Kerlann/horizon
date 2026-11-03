@@ -15,8 +15,5 @@
       "target": "horizon_client::game::native_level_refs::Game<'_>::native_chunk_status",
       "receiver": "chunk"
     }
-  ],
-  "rust_summary": "loaded chunk handles (`ChunkRef`) and their status.",
-  "doc_summary": "`host.chunk(level, [x, z])` finds a loaded server chunk. `chunk.pos()`, `level()`, `loaded(host)` and `status(host)` read the handle; after unload or world close, `loaded` returns `false` and `status` returns `None`. Proto chunks are not exposed. Bundles need \"hooks\": @API:chunk_refs@.",
-  "comments": ["crates/horizon-client/src/game/native_level_refs.rs"]
+  ]
 }

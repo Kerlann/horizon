@@ -140,8 +140,17 @@ pub fn apply(guest: &mut Guest, level: &Level) {
     guest.xp_seed = level.xp_seed;
     guest.effects = crate::effects::PlayerEffects::from_saved(&level.active_effects);
     guest.game_mode = level.mode();
-    guest.flying = level.flying;
-    guest.flying_speed = level.fly_speed.filter(|s| s.is_finite()).unwrap_or(0.05);
+    // `Player.readAdditionalSaveData`, then `ServerPlayerGameMode.setGameModeForPlayer`
+    // (`GameType.updatePlayerAbilities`) as the player is placed: the mode's flags
+    // win, flying (creative) and the speeds stay as saved.
+    guest.abilities = level
+        .abilities
+        .unwrap_or_else(|| crate::lan::abilities::PlayerAbilities {
+            flying: level.flying,
+            flying_speed: level.fly_speed.filter(|s| s.is_finite()).unwrap_or(0.05),
+            ..Default::default()
+        });
+    guest.abilities.update_for_mode(guest.game_mode);
     guest.selected = (level.selected_slot.max(0) as usize).min(8);
     // A point that is the world spawn is none of the player's own: it
     // respawns wherever the world spawn is then (`setworldspawn`).
@@ -200,7 +209,11 @@ pub fn apply(guest: &mut Guest, level: &Level) {
             102 => guest.armor[1] = Some(stack),
             103 => guest.armor[0] = Some(stack),
             150 => guest.offhand = Some(stack),
-            _ => {}
+            _ => {
+                if let Some(slot) = crate::save::equipment_slot(*slot) {
+                    guest.equipment.set(slot, Some(stack));
+                }
+            }
         }
     }
 }
@@ -400,8 +413,9 @@ pub fn store(guest: &Guest, level: &mut Level, vehicle: Option<Tag>) {
     level.active_effects = guest.effects.saved();
     level.game_mode = guest.game_mode;
     level.creative = guest.game_mode == 1;
-    level.flying = guest.flying;
-    level.fly_speed = Some(guest.flying_speed);
+    level.flying = guest.abilities.flying;
+    level.fly_speed = Some(guest.abilities.flying_speed);
+    level.abilities = Some(guest.abilities);
     level.selected_slot = guest.selected as i32;
     level.spawn = guest.spawn.map(|s| [s[0] - 0.5, s[1], s[2] - 0.5]);
     level.respawn_elsewhere = guest.respawn_elsewhere.clone();
@@ -490,6 +504,14 @@ pub fn store(guest: &Guest, level: &mut Level, vehicle: Option<Tag>) {
     put(101, &guest.armor[2]);
     put(100, &guest.armor[3]);
     put(150, &guest.offhand);
+    for slot in [
+        horizon_items::equipment::BODY,
+        horizon_items::equipment::SADDLE,
+    ] {
+        if let Some(saved) = crate::save::saved_slot(slot) {
+            put(saved, &guest.equipment[slot]);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -536,6 +558,52 @@ mod tests {
         apply(&mut g, &level);
         face_world_spawn(&mut g, true, [90.0, -15.0]);
         assert_eq!((g.yaw, g.pitch, g.head_yaw), (-135.0, 30.0, -135.0));
+    }
+
+    #[test]
+    fn body_and_saddle_survive_a_save_in_vanillas_equipment_compound() {
+        let dir = world("body-saddle");
+        let mut g = holding(7, "minecraft:diamond", 1);
+        let mut saddle = ItemStack::new("minecraft:saddle", 1);
+        saddle.damage = 3;
+        g.equipment.set(
+            horizon_items::equipment::BODY,
+            Some(ItemStack::new("minecraft:leather_horse_armor", 1)),
+        );
+        g.equipment
+            .set(horizon_items::equipment::SADDLE, Some(saddle));
+        g.armor[0] = Some(ItemStack::new("minecraft:iron_helmet", 1));
+        save(&g, &dir);
+        let tag = read_dat(&path(&dir, 7)).unwrap();
+        let equipment = tag.get("equipment").unwrap();
+        for key in ["body", "saddle", "head"] {
+            assert!(equipment.get(key).is_some(), "{key} is in equipment");
+        }
+        assert!(tag.get("Inventory").is_some());
+        let mut loaded = guest();
+        loaded.uuid = 7;
+        assert!(load(&mut loaded, &dir));
+        assert_eq!(loaded.equipment, g.equipment);
+        assert_eq!(loaded.armor, g.armor);
+        // A vanilla file with only a saddle keeps it and has no body.
+        let mut level = Level::default();
+        level.read_player(&Tag::compound([(
+            "equipment",
+            Tag::compound([(
+                "saddle",
+                crate::save::item_to_nbt(&ItemStack::new("minecraft:saddle", 1)),
+            )]),
+        )]));
+        let mut vanilla = guest();
+        apply(&mut vanilla, &level);
+        assert_eq!(vanilla.equipment[horizon_items::equipment::BODY], None);
+        assert_eq!(
+            vanilla.equipment[horizon_items::equipment::SADDLE]
+                .as_ref()
+                .map(|s| &*s.item),
+            Some("minecraft:saddle")
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     fn holding(uuid: u128, item: &str, count: u32) -> Guest {
@@ -1013,7 +1081,7 @@ mod tests {
     }
 
     fn abilities(g: &Guest) -> (i8, f32) {
-        match g.abilities() {
+        match g.abilities_packet() {
             horizon_protocol::packets::play::Clientbound::PlayerAbilities(p) => {
                 (p.flags, p.flying_speed)
             }
@@ -1021,26 +1089,41 @@ mod tests {
         }
     }
 
-    /// A flying speed a mod set goes out in every abilities packet (a game
-    /// mode change's, a respawn's), is saved as vanilla's `abilities.flySpeed`
-    /// and comes back when the player does; a file without one is vanilla's 0.05.
+    /// The stored abilities go out in every abilities packet (a game mode
+    /// change's, a respawn's), are saved as vanilla's `abilities` and come back
+    /// when the player does; the mode's flags are set again as they are placed,
+    /// the speeds and creative flight are kept; a file without them is vanilla's.
     #[test]
-    fn a_set_flying_speed_is_sent_kept_and_saved() {
+    fn the_stored_abilities_are_sent_kept_and_saved() {
         let dir = world("fly-speed");
         let mut g = guest();
         assert_eq!(abilities(&g).1, 0.05);
-        g.flying_speed = 2.5;
+        g.abilities.flying_speed = 2.5;
+        g.abilities.walking_speed = 0.3;
         g.game_mode = 1;
-        assert_eq!(abilities(&g), (1 | 4 | 8, 2.5));
+        g.abilities.update_for_mode(1);
+        g.abilities.flying = true;
+        assert_eq!(abilities(&g), (1 | 2 | 4 | 8, 2.5));
         g.game_mode = 0;
+        g.abilities.update_for_mode(0);
         assert_eq!(abilities(&g), (0, 2.5));
+        g.abilities.may_build = false;
+        g.abilities.instabuild = true;
         save(&g, &dir);
         let tag = read_dat(&path(&dir, g.uuid)).unwrap();
-        let saved = tag.get("abilities").and_then(|a| a.get("flySpeed"));
-        assert_eq!(saved, Some(&Tag::Float(2.5f32.to_bits())));
+        let saved = |key: &str| tag.get("abilities").and_then(|a| a.get(key)).cloned();
+        assert_eq!(saved("flySpeed"), Some(Tag::Float(2.5f32.to_bits())));
+        assert_eq!(saved("walkSpeed"), Some(Tag::Float(0.3f32.to_bits())));
+        assert_eq!(saved("mayBuild"), Some(Tag::Byte(0)));
+        assert_eq!(saved("instabuild"), Some(Tag::Byte(1)));
         let mut back = guest();
         assert!(load(&mut back, &dir));
-        assert_eq!(back.flying_speed, 2.5);
+        assert_eq!(
+            (back.abilities.flying_speed, back.abilities.walking_speed),
+            (2.5, 0.3)
+        );
+        // Placed in survival: the mode's flags win over the file's.
+        assert!(back.abilities.may_build && !back.abilities.instabuild);
         // A vanilla file's own speed is read, and one without is 0.05.
         let mut level = Level::default();
         level.read_player(&Tag::compound([(
@@ -1049,13 +1132,14 @@ mod tests {
         )]));
         let mut other = guest();
         apply(&mut other, &level);
-        assert_eq!(other.flying_speed, 0.1);
+        assert_eq!(other.abilities.flying_speed, 0.1);
         level.read_player(&Tag::compound([(
             "abilities",
             Tag::Compound(Default::default()),
         )]));
         apply(&mut other, &level);
-        assert_eq!(other.flying_speed, 0.05);
+        assert_eq!(other.abilities.flying_speed, 0.05);
+        assert_eq!(other.abilities.walking_speed, 0.1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -59,6 +59,9 @@ pub(super) trait Entity: EntityRules {
     fn id(&self) -> u32;
     fn position(&self) -> Vec3;
     fn position_mut(&mut self) -> &mut Vec3;
+    /// Where it stood when the last tick began (`Entity.lastKnownPosition`'s
+    /// reading): `position - previous_position` is `computeSpeed`.
+    fn previous_position(&self) -> Vec3;
     /// `Entity.getDeltaMovement`.
     fn velocity(&self) -> Vec3;
     fn velocity_mut(&mut self) -> &mut Vec3;
@@ -282,6 +285,9 @@ macro_rules! stored_motion {
         }
         fn position_mut(&mut self) -> &mut Vec3 {
             &mut self.position
+        }
+        fn previous_position(&self) -> Vec3 {
+            self.previous
         }
         fn velocity(&self) -> Vec3 {
             self.velocity

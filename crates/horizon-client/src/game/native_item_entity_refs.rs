@@ -16,14 +16,12 @@ impl Game<'_> {
 
     /// Narrows an entity to a dropped item, or None for another kind, a
     /// stale handle, a client, or an item temporarily taken out for ticking.
-    /// API @API:item_entity_refs@.
     pub(super) fn native_item_entity_ref(&self, entity: EntityRef) -> Option<ItemEntityRef> {
         let item = ItemEntityRef::new(entity);
         self.native_item_entity_index(item).map(|_| item)
     }
 
     /// `ItemEntity.getItem`: the complete stack, or None if unavailable.
-    /// API @API:item_entity_refs@.
     pub(super) fn native_item_entity_stack(&self, item: ItemEntityRef) -> Option<ItemStack> {
         Some(
             self.dropped
@@ -36,7 +34,7 @@ impl Game<'_> {
     /// Writes a nonempty complete stack using `ItemEntity.setItem`. Empty
     /// stacks are refused: vanilla discards the item on its next tick. To
     /// remove an item entity, use the removal handle. False also for an
-    /// unavailable item or outside a server. API @API:item_entity_refs@.
+    /// unavailable item or outside a server.
     pub(super) fn native_item_entity_set_stack(
         &mut self,
         item: ItemEntityRef,
@@ -52,7 +50,7 @@ impl Game<'_> {
     }
 
     /// The signed pickup delay; the legacy infinite sentinel reads as vanilla's
-    /// 32767. None also covers a stored value outside i32. API @API:item_entity_refs@.
+    /// 32767. None also covers a stored value outside i32.
     pub(super) fn native_item_entity_pickup_delay(&self, item: ItemEntityRef) -> Option<i32> {
         let delay = self
             .dropped
@@ -65,7 +63,7 @@ impl Game<'_> {
         }
     }
 
-    /// `ItemEntity.setPickUpDelay`. API @API:item_entity_refs@.
+    /// `ItemEntity.setPickUpDelay`.
     pub(super) fn native_item_entity_set_pickup_delay(
         &mut self,
         item: ItemEntityRef,
@@ -78,7 +76,7 @@ impl Game<'_> {
         true
     }
 
-    /// `ItemEntity.setDefaultPickUpDelay`: ten ticks. API @API:item_entity_refs@.
+    /// `ItemEntity.setDefaultPickUpDelay`: ten ticks.
     pub(super) fn native_item_entity_set_default_pickup_delay(
         &mut self,
         item: ItemEntityRef,
@@ -86,26 +84,23 @@ impl Game<'_> {
         self.native_item_entity_set_pickup_delay(item, 10)
     }
 
-    /// `ItemEntity.setNoPickUpDelay`. API @API:item_entity_refs@.
+    /// `ItemEntity.setNoPickUpDelay`.
     pub(super) fn native_item_entity_set_no_pickup_delay(&mut self, item: ItemEntityRef) -> bool {
         self.native_item_entity_set_pickup_delay(item, 0)
     }
 
     /// `ItemEntity.setNeverPickUp`: the infinite-delay sentinel 32767.
-    /// API @API:item_entity_refs@.
     pub(super) fn native_item_entity_set_never_pickup(&mut self, item: ItemEntityRef) -> bool {
         self.native_item_entity_set_pickup_delay(item, i32::from(i16::MAX))
     }
 
     /// `ItemEntity.getAge`, including negative lifetime sentinels.
-    /// API @API:item_entity_refs@.
     pub(super) fn native_item_entity_age(&self, item: ItemEntityRef) -> Option<i32> {
         Some(self.dropped.get(self.native_item_entity_index(item)?)?.age)
     }
 
     /// The UUID set by `ItemEntity.setTarget`, limiting pickup to that player;
     /// None also means an unavailable item. This is not the thrower.
-    /// API @API:item_entity_refs@.
     pub(super) fn native_item_entity_target(&self, item: ItemEntityRef) -> Option<u128> {
         self.dropped
             .get(self.native_item_entity_index(item)?)?
@@ -114,7 +109,6 @@ impl Game<'_> {
     }
 
     /// `ItemEntity.setTarget`; None allows any player to pick it up.
-    /// API @API:item_entity_refs@.
     pub(super) fn native_item_entity_set_target(
         &mut self,
         item: ItemEntityRef,
@@ -130,7 +124,6 @@ impl Game<'_> {
     /// `ItemEntity.getOwner`: the thrower as a resolved entity, not the pickup
     /// target. None for no thrower, an unloaded or different-level thrower,
     /// an unavailable handle, or one Horizon cannot resolve.
-    /// API @API:item_entity_refs@.
     pub(super) fn native_item_entity_owner(&self, item: ItemEntityRef) -> Option<EntityRef> {
         let uuid = self
             .dropped

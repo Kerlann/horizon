@@ -1396,10 +1396,7 @@ impl Game<'_> {
             self.trigger_enter_block(state);
             return;
         };
-        if let Some(mut host) = self.lan.take() {
-            self.as_guest(&mut host, conn, |g| g.trigger_enter_block(state));
-            self.lan = Some(host);
-        }
+        self.as_guest(conn, |g| g.trigger_enter_block(state));
     }
 
     /// `Entity.handlePortal` for the entities in an End gateway: they go

@@ -323,7 +323,6 @@ impl Game<'_> {
             if ok && !s.predicates.is_empty() {
                 // EntityPredicates: the datapack predicate with the entity as
                 // `this` and the entity's position as origin.
-                self.ensure_datapacks();
                 let view = self.entity_view_of(t);
                 let origin = self.target_position(t).unwrap_or_default();
                 for (id, negated) in &s.predicates {
@@ -393,11 +392,18 @@ impl Game<'_> {
     /// `ServerScoreboard`'s packets: each placed player's client is sent
     /// what changed on the board since it was last sent it (all of it on
     /// joining), lan/scoreboard.rs.
-    pub(super) fn lan_sync_scoreboard(&mut self, host: &mut super::lan::LanHost) {
-        if host.hub.guests.iter().all(|g| !g.placed) {
+    pub(super) fn lan_sync_scoreboard(&mut self) {
+        if self
+            .lan
+            .as_ref()
+            .is_none_or(|host| host.hub.guests.iter().all(|g| !g.placed))
+        {
             return;
         }
         self.load_scoreboard();
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         host.hub.teams.clone_from(&self.score.board.teams);
         let view = horizon_client::lan::scoreboard::View::of(&self.score.board);
         for g in host.hub.guests.iter_mut().filter(|g| g.placed) {

@@ -1,8 +1,7 @@
 //! Entities for native server mods (docs/native-mods.md, "Entities"): spawn
 //! any entity from its compound as `/summon` does, and move, show or remove
 //! the entities Horizon keeps without simulating them (displays, markers,
-//! interactions), which is what a mod needs for models that move: an
-//! `item_display` showing an item model from the mod's assets. They act where
+//! interactions); `native_display_refs.rs` poses displays. They act where
 //! the world is simulated, in the level in place, which each names by its
 //! `dimension` (`minecraft:overworld`) as `native_set_block` does.
 use super::{
@@ -11,75 +10,6 @@ use super::{
 };
 use horizon_core::geometry::Vec3;
 use horizon_world::nbt::{Compound, Tag};
-
-/// A display's transformation and interpolation (`Display`'s
-/// `transformation`, `interpolation_duration` and `teleport_duration`):
-/// a translation, a left rotation (a quaternion `[x, y, z, w]`), a scale and a
-/// right rotation, eased over `interpolation` ticks from what it showed;
-/// `teleport` ticks ease a move (0 to 59).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct NativeDisplay {
-    pub translation: [f32; 3],
-    pub left_rotation: [f32; 4],
-    pub scale: [f32; 3],
-    pub right_rotation: [f32; 4],
-    pub interpolation: i32,
-    pub teleport: i32,
-}
-
-impl Default for NativeDisplay {
-    fn default() -> Self {
-        Self {
-            translation: [0.0; 3],
-            left_rotation: [0.0, 0.0, 0.0, 1.0],
-            scale: [1.0; 3],
-            right_rotation: [0.0, 0.0, 0.0, 1.0],
-            interpolation: 0,
-            teleport: 0,
-        }
-    }
-}
-
-impl NativeDisplay {
-    /// Whether every value is finite, the quaternions aren't zero and the
-    /// durations are in range.
-    fn valid(&self) -> bool {
-        let finite = |v: &[f32]| v.iter().all(|x| x.is_finite());
-        let unit = |q: &[f32; 4]| q.iter().map(|x| x * x).sum::<f32>() > 1.0e-12;
-        finite(&self.translation)
-            && finite(&self.left_rotation)
-            && finite(&self.scale)
-            && finite(&self.right_rotation)
-            && unit(&self.left_rotation)
-            && unit(&self.right_rotation)
-            && (0..=1_000_000).contains(&self.interpolation)
-            && (0..=59).contains(&self.teleport)
-    }
-    /// Writes its keys into a display's compound. `start` is the
-    /// interpolation's start delay: entity data reaches clients only when it
-    /// changes (as vanilla's does unless forced), and a display restarts its
-    /// interpolation only when the start comes, so each write flips it
-    /// between 0 and -1.
-    fn write(&self, tag: &mut Compound) {
-        let floats = |v: &[f32]| Tag::List(v.iter().map(|x| Tag::Float(x.to_bits())).collect());
-        let mut t = Compound::new();
-        t.insert("translation".into(), floats(&self.translation));
-        t.insert("left_rotation".into(), floats(&self.left_rotation));
-        t.insert("scale".into(), floats(&self.scale));
-        t.insert("right_rotation".into(), floats(&self.right_rotation));
-        tag.insert("transformation".into(), Tag::Compound(t));
-        tag.insert(
-            "interpolation_duration".into(),
-            Tag::Int(self.interpolation),
-        );
-        tag.insert("teleport_duration".into(), Tag::Int(self.teleport));
-        let start = match tag.get(&"start_interpolation".into()) {
-            Some(Tag::Int(0)) => -1,
-            _ => 0,
-        };
-        tag.insert("start_interpolation".into(), Tag::Int(start));
-    }
-}
 
 /// Whether a position is one `/summon` takes.
 fn position_ok(pos: [f64; 3]) -> bool {
@@ -136,8 +66,7 @@ impl Game<'_> {
     /// <kind> <pos> <nbt>` takes it; passengers included): its id. None on a
     /// client's copy of the world, for another dimension, a position outside
     /// `/summon`'s bounds, a chunk that isn't loaded, a kind Horizon can't
-    /// load, or one a mod kept out (`native_entity_join_level`). API
-    /// 59.
+    /// load, or one a mod kept out (`native_entity_join_level`).
     pub(super) fn native_summon(
         &mut self,
         dimension: &str,
@@ -184,41 +113,6 @@ impl Game<'_> {
             })
         })
     }
-    /// Sets the transformation and interpolation of display `id` (a
-    /// `block_display`, `item_display` or `text_display`): players see it
-    /// ease from what it showed over `interpolation` ticks. False for no such
-    /// display, another dimension, or a value that isn't finite, a zero
-    /// quaternion, or a duration out of range. API 59.
-    pub(super) fn native_set_display(
-        &mut self,
-        dimension: &str,
-        id: u32,
-        display: &NativeDisplay,
-    ) -> bool {
-        if !self.native_simulates_level(dimension) || !display.valid() {
-            return false;
-        }
-        let is_display = self.others.iter().any(|o| {
-            o.id == id
-                && matches!(
-                    o.kind.as_str(),
-                    "minecraft:block_display" | "minecraft:item_display" | "minecraft:text_display"
-                )
-        });
-        if !is_display {
-            return false;
-        }
-        let tag = self
-            .persist
-            .raw
-            .entry(id)
-            .or_insert_with(|| Tag::Compound(Compound::new()));
-        let Tag::Compound(c) = tag else {
-            return false;
-        };
-        display.write(c);
-        true
-    }
 }
 
 /// The entities the walk does not hold: Horizon keeps these in lists of their own.
@@ -242,20 +136,14 @@ enum Slot {
 /// `native_entity_leave_level`), for every kind in the entity walk and the
 /// five kept apart from it. Kept out of `native_hooks.rs`, whose lines may not hold macros.
 impl Game<'_> {
-    /// Whether an entity may be waiting to be told of: one with an id above
-    /// the last announced, or one of the kinds that take their id late and
-    /// have none. Reads a counter and five lists' ids; no walk.
+    /// Whether an entity may have joined since the last announcement. A join
+    /// in another level may cause one harmless walk of this level.
     fn joins_pending(&self) -> bool {
-        self.next_entity > self.persist.joined_mark
-            || self.tnts.iter().any(|t| t.id == 0)
-            || self.falling.iter().any(|f| f.id == 0)
-            || self.creatures.projectiles.iter().any(|p| p.id == 0)
-            || self.tridents.iter().any(|t| t.id == 0)
-            || self.rockets.iter().any(|r| r.id == 0)
+        horizon_client::join_seq::JoinSeq::latest() > self.persist.joined_seq
     }
     /// Tells `native_entity_join_level` once for every entity added since the
-    /// last call, of any kind, in the order they were created (ids count up
-    /// from one counter). A mod that cancels takes the entity back out here,
+    /// last call, of any kind, in insertion order. A mod that cancels takes
+    /// the entity back out here,
     /// before it ticks again, and `/summon` of it fails (`joins_canceled`).
     /// `loaded_from_disk` is for the entities that came with a chunk. Returns
     /// whether `watch` (an id, or 0) is still in the level. Walks the lists
@@ -266,24 +154,11 @@ impl Game<'_> {
         if self.remote.is_some() || crate::mod_api::mods().is_empty() || !self.joins_pending() {
             return true;
         }
-        for t in &mut self.tnts {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut t.id);
-        }
-        for f in &mut self.falling {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut f.id);
-        }
-        for p in &mut self.creatures.projectiles {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut p.id);
-        }
-        for t in &mut self.tridents {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut t.id);
-        }
-        for r in &mut self.rockets {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut r.id);
-        }
+        let observed = horizon_client::join_seq::JoinSeq::latest();
+        self.assign_pending_join_ids();
         let mut kept = true;
-        while let Some((slot, id)) = self.next_unannounced() {
-            self.persist.joined_mark = id;
+        while let Some((slot, id, seq)) = self.next_unannounced() {
+            self.persist.joined_seq = seq;
             let (kind, at) = self.slot_kind_and_position(slot);
             let mut canceled = false;
             let dimension = self.dim.id();
@@ -303,46 +178,71 @@ impl Game<'_> {
                 self.discard_slot(slot);
                 kept &= id != watch;
             } else {
-                self.persist.live.push((id, kind.into_owned(), true));
+                self.remember_join(id, kind.into_owned());
             }
         }
-        // Ids taken and never announced (the dragon's parts, another level's
-        // entities) must not keep the next flush walking.
-        self.persist.joined_mark = self.persist.joined_mark.max(self.next_entity);
+        self.persist.joined_seq = self.persist.joined_seq.max(observed);
         kept
     }
-    /// The entity with the lowest id above the last one announced.
-    fn next_unannounced(&self) -> Option<(Slot, u32)> {
+
+    fn assign_pending_join_ids(&mut self) {
+        self.assign_dragon_and_crystal_ids();
+        for t in &mut self.tnts {
+            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut t.id);
+        }
+        for f in &mut self.falling {
+            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut f.id);
+        }
+        for p in &mut self.creatures.projectiles {
+            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut p.id);
+        }
+        for t in &mut self.tridents {
+            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut t.id);
+        }
+        for r in &mut self.rockets {
+            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut r.id);
+        }
+    }
+    /// The entity inserted earliest after the last one announced.
+    fn next_unannounced(&self) -> Option<(Slot, u32, horizon_client::join_seq::JoinSeq)> {
         use super::entity::Entity;
-        let mark = self.persist.joined_mark;
-        let mut best: Option<(Slot, u32)> = None;
-        let mut offer = |slot: Slot, id: u32| {
-            if id > mark && best.is_none_or(|(_, b)| id < b) {
-                best = Some((slot, id));
+        use horizon_client::join_seq::{JoinSeq, Joined};
+        let mark = self.persist.joined_seq;
+        let mut best: Option<(Slot, u32, JoinSeq)> = None;
+        let mut offer = |slot: Slot, id: u32, seq: JoinSeq| {
+            if seq > mark && best.is_none_or(|(_, _, previous)| seq < previous) {
+                best = Some((slot, id, seq));
             }
         };
         for handle in self.entity_handles() {
-            offer(
-                Slot::Walk(handle),
-                super::entity::with_entity!(self, handle, e => e.id()),
-            );
+            let (id, seq) = super::entity::with_entity!(self, handle, e => (e.id(), e.join_seq()));
+            offer(Slot::Walk(handle), id, seq);
         }
         for (i, c) in self.crystals.iter().enumerate() {
-            offer(Slot::Apart(Apart::Crystal(i)), c.id);
+            offer(Slot::Apart(Apart::Crystal(i)), c.id, c.join);
         }
         for (i, c) in self.cushions.iter().enumerate() {
-            offer(Slot::Apart(Apart::Cushion(i)), c.id);
+            offer(Slot::Apart(Apart::Cushion(i)), c.id, c.join);
         }
         for (i, p) in self.paintings.iter().enumerate() {
-            offer(Slot::Apart(Apart::Painting(i)), p.id);
+            offer(Slot::Apart(Apart::Painting(i)), p.id, p.join);
         }
         for (i, f) in self.item_frames.iter().enumerate() {
-            offer(Slot::Apart(Apart::Frame(i)), f.id);
+            offer(Slot::Apart(Apart::Frame(i)), f.id, f.join);
         }
         if let Some(d) = &self.dragon {
-            offer(Slot::Apart(Apart::Dragon), d.id);
+            offer(Slot::Apart(Apart::Dragon), d.id, d.join);
         }
         best
+    }
+
+    fn remember_join(&mut self, id: u32, kind: String) {
+        let index = self
+            .persist
+            .live
+            .binary_search_by_key(&id, |entry| entry.0)
+            .unwrap_or_else(|i| i);
+        self.persist.live.insert(index, (id, kind, true));
     }
     /// The type id and position a mod is told of.
     fn slot_kind_and_position(&self, slot: Slot) -> (std::borrow::Cow<'static, str>, Vec3) {
@@ -397,14 +297,16 @@ impl Game<'_> {
     /// silent): everything now in the level counts as announced, and will
     /// be told when it leaves.
     pub(super) fn native_joins_skip(&mut self) {
+        let observed = horizon_client::join_seq::JoinSeq::latest();
         if self.remote.is_none() && !crate::mod_api::mods().is_empty() {
-            while let Some((slot, id)) = self.next_unannounced() {
-                self.persist.joined_mark = id;
+            self.assign_pending_join_ids();
+            while let Some((slot, id, seq)) = self.next_unannounced() {
+                self.persist.joined_seq = seq;
                 let kind = self.slot_kind_and_position(slot).0.into_owned();
-                self.persist.live.push((id, kind, true));
+                self.remember_join(id, kind);
             }
         }
-        self.persist.joined_mark = self.persist.joined_mark.max(self.next_entity);
+        self.persist.joined_seq = self.persist.joined_seq.max(observed);
     }
     /// An entity taken out of the level without leaving it (an item through
     /// an End gateway): forgotten, not told of.
@@ -467,60 +369,165 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_display_write_flips_the_start_so_clients_restart_the_ease() {
-        let display = NativeDisplay {
-            translation: [0.0, 1.5, 0.0],
-            scale: [2.0; 3],
-            interpolation: 10,
-            ..NativeDisplay::default()
+    #[ignore = "needs prepared resources and an isolated process for native mods"]
+    fn joins_follow_insertion_order_and_canceled_entities_never_leave() {
+        use crate::mod_api::{
+            self, EntityJoinLevelEvent, EntityLeaveLevelEvent, Flow, Hooks, Host,
         };
-        assert!(display.valid());
-        let mut tag = Compound::new();
-        display.write(&mut tag);
-        assert_eq!(tag.get(&"start_interpolation".into()), Some(&Tag::Int(0)));
-        assert_eq!(
-            tag.get(&"interpolation_duration".into()),
-            Some(&Tag::Int(10))
-        );
-        display.write(&mut tag);
-        assert_eq!(tag.get(&"start_interpolation".into()), Some(&Tag::Int(-1)));
-        display.write(&mut tag);
-        assert_eq!(tag.get(&"start_interpolation".into()), Some(&Tag::Int(0)));
-        let Some(Tag::Compound(t)) = tag.get(&"transformation".into()) else {
-            panic!("no transformation");
-        };
-        assert_eq!(
-            t.get(&"scale".into()),
-            Some(&Tag::List(vec![Tag::Float(2.0f32.to_bits()); 3]))
-        );
-    }
+        use horizon_client::mobs::Mob;
+        use horizon_core::geometry::Vec3;
+        use std::sync::{Arc, Mutex};
 
-    #[test]
-    fn a_display_refuses_values_it_cant_show() {
-        let ok = NativeDisplay::default();
-        assert!(ok.valid());
-        assert!(
-            !NativeDisplay {
-                scale: [f32::NAN, 1.0, 1.0],
-                ..ok
+        type Joins = Arc<Mutex<Vec<(u32, String, bool)>>>;
+        struct Observer {
+            joins: Joins,
+            leaves: Arc<Mutex<Vec<u32>>>,
+        }
+        impl Hooks for Observer {
+            fn entity_join_level(
+                &self,
+                _: &mut dyn Host,
+                event: &mut EntityJoinLevelEvent<'_>,
+            ) -> Flow {
+                self.joins.lock().unwrap().push((
+                    event.entity,
+                    event.kind.into(),
+                    event.loaded_from_disk,
+                ));
+                if event.kind == "minecraft:sheep" {
+                    Flow::Cancel
+                } else {
+                    Flow::Continue
+                }
             }
-            .valid()
-        );
-        assert!(
-            !NativeDisplay {
-                left_rotation: [0.0; 4],
-                ..ok
+            fn entity_leave_level(&self, _: &mut dyn Host, event: &mut EntityLeaveLevelEvent<'_>) {
+                self.leaves.lock().unwrap().push(event.entity);
             }
-            .valid()
-        );
-        assert!(!NativeDisplay { teleport: 60, ..ok }.valid());
-        assert!(
-            !NativeDisplay {
-                interpolation: -1,
-                ..ok
-            }
-            .valid()
-        );
+        }
+        let joins = Joins::default();
+        let leaves = Arc::new(Mutex::new(Vec::new()));
+        let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
+            "join-order-observer",
+            Box::new(Observer {
+                joins: joins.clone(),
+                leaves: leaves.clone(),
+            }),
+        )]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                game.native_joins_skip();
+                let base = game.next_entity;
+                let cow = game.res.mob_types().get("minecraft:cow").unwrap().clone();
+                let sheep = game.res.mob_types().get("minecraft:sheep").unwrap().clone();
+                let child = Mob::new(base + 1, cow.clone(), Vec3::ZERO, 0.0);
+                game.next_entity += 2;
+                game.mobs.push(Mob::new(base + 2, cow, Vec3::ZERO, 0.0));
+                game.native_joins_flush(false, 0);
+                game.mobs.push(child);
+                game.native_joins_flush(false, 0);
+                game.native_joins_flush(false, 0);
+                assert_eq!(
+                    *joins.lock().unwrap(),
+                    vec![
+                        (base + 2, "minecraft:cow".into(), false),
+                        (base + 1, "minecraft:cow".into(), false)
+                    ]
+                );
+                game.next_entity += 1;
+                game.mobs.push(Mob::new(base + 3, sheep, Vec3::ZERO, 0.0));
+                assert!(!game.native_joins_flush(true, base + 3));
+                assert!(!game.mobs.iter().any(|mob| mob.id == base + 3));
+                game.native_entity_left(base + 3);
+                assert!(leaves.lock().unwrap().is_empty());
+                assert_eq!(
+                    joins.lock().unwrap().last(),
+                    Some(&(base + 3, "minecraft:sheep".into(), true))
+                );
+
+                game.crystals.push(super::super::dragon::Crystal {
+                    join: Default::default(),
+                    id: base + 4,
+                    position: Vec3::ZERO,
+                    show_bottom: true,
+                    time: 0,
+                    beam: None,
+                    invulnerable: false,
+                });
+                game.cushions.push(horizon_client::entities::Cushion {
+                    join: Default::default(),
+                    id: base + 5,
+                    position: Vec3::ZERO,
+                    pos: [0; 3],
+                    yaw: 0.0,
+                    color: 0,
+                    check_interval: 0,
+                });
+                game.paintings.push(horizon_client::entities::Painting {
+                    join: Default::default(),
+                    id: base + 6,
+                    pos: [0; 3],
+                    facing: 0,
+                    variant: "minecraft:kebab".into(),
+                    width: 1,
+                    height: 1,
+                    check_interval: 0,
+                });
+                game.item_frames.push(horizon_client::entities::ItemFrame {
+                    join: Default::default(),
+                    id: base + 7,
+                    pos: [0; 3],
+                    facing: 0,
+                    glow: false,
+                    item: None,
+                    rotation: 0,
+                    drop_chance: 1.0,
+                    fixed: false,
+                    invisible: false,
+                    check_interval: 0,
+                });
+                let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
+                dragon.id = base + 8;
+                dragon.join = horizon_client::join_seq::JoinSeq::next();
+                game.dragon = Some(dragon);
+                game.next_entity = base + 8;
+                game.native_joins_flush(true, 0);
+                game.native_joins_flush(true, 0);
+                let seen = joins.lock().unwrap();
+                assert_eq!(
+                    &seen[3..],
+                    &[
+                        (base + 4, "minecraft:end_crystal".into(), true),
+                        (base + 5, "minecraft:cushion".into(), true),
+                        (base + 6, "minecraft:painting".into(), true),
+                        (base + 7, "minecraft:item_frame".into(), true),
+                        (base + 8, "minecraft:ender_dragon".into(), true)
+                    ]
+                );
+                drop(seen);
+                game.tnts.push(super::super::tnt::PrimedTnt {
+                    join: Default::default(),
+                    id: 0,
+                    position: Vec3::ZERO,
+                    previous: Vec3::ZERO,
+                    velocity: Vec3::ZERO,
+                    fuse: 80,
+                    on_ground: false,
+                    owner: None,
+                    guest: None,
+                    no_gravity: false,
+                    power: 4.0,
+                });
+                game.native_joins_flush(false, 0);
+                game.native_joins_flush(false, 0);
+                assert_eq!(game.tnts.last().unwrap().id, base + 9);
+                assert_eq!(
+                    joins.lock().unwrap().last(),
+                    Some(&(base + 9, "minecraft:tnt".into(), false))
+                );
+                assert_eq!(joins.lock().unwrap().len(), 9);
+            });
+        });
     }
 
     #[test]

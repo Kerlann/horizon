@@ -55,7 +55,7 @@ Install a game program you have, such as a horizon-client built on your fork's A
 
 The program must match this computer's executable format and carry the exact `horizon-game-executable;`
 identity signature embedded by ordinary and launcher-generated games. It carries no mod API level or build id,
-and is not a signature of authenticity. Unmarked programs and retired WIT API-level markers are refused.
+and is not a signature of authenticity. Unmarked programs are refused.
 
 MCP: none: the player's switch.
 
@@ -99,7 +99,7 @@ MCP: `server`, `server_command`, `server_log`, `server_stop`.
 
 ## `horizon-launcher native-build`
 
-Native mods (docs/native-mods.md): compile mixin bundles on the Horizon revision they pin, else the one the instance plays, with the launcher's own Rust, as the version the instance then plays. Not sandboxed: the mods' code runs with your rights.
+Native mods (docs/native-mods.md): compile mixin bundles against the instance's exact Horizon source revision with the launcher's own Rust, as the version the instance then plays. Not sandboxed: the mods' code runs with your rights.
 
     horizon-launcher native-build [FOLDER]
 
@@ -108,7 +108,6 @@ Native mods (docs/native-mods.md): compile mixin bundles on the Horizon revision
 - `--instance`: The instance whose installed native mods to build, and which then plays the build (default: the selected one)
 - `--update`: Move to the newest installed release or Nightly instead of the Horizon the instance plays (a full rebuild)
 - `--trust-native-code`: You read the mods' source and trust it with full access to this computer
-- `--allow-version-mismatch`: Build mods made for different Horizon versions together anyway, on the newest of them
 - `--profile` (performance, dev, release): The build profile: performance (the default: incremental, quick to rebuild), dev (quickest to rebuild a mod, slow game) or release (thin LTO: slowest to build, slightly faster game). Default: the native-profile setting
 
 MCP: none: the player's switch.

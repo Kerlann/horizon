@@ -11,10 +11,5 @@
       "target": "horizon_client::game::native_entity_remove::Game<'_>::native_entity_remove",
       "receiver": "entity"
     }
-  ],
-  "rust_summary": "removing an entity through its handle, with no death and no loot (`native_entity_discard`, `native_entity_remove`).",
-  "doc_summary": "removing an entity through its `EntityRef`, as vanilla's `Entity.discard` and `Entity.remove`: `entity.discard(host)` and `entity.remove(host, reason)` (`NativeRemovalReason::Discarded`, or `Killed`, which also runs a mob's effects that act on removal). Nothing dies or drops loot; a chest boat or a chest minecart still drops what it holds. The handle reads as gone at once; a mob leaves at once, the other kinds at the level's next sweep, a few times per tick. Players can't be removed. Bundles need \"hooks\": @API:entity_remove@.",
-  "comments": [
-    "crates/horizon-client/src/game/native_entity_remove.rs"
   ]
 }

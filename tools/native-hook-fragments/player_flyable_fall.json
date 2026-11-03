@@ -9,7 +9,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "a server player who may fly landing (`native_player_flyable_fall`).",
-  "doc_summary": "a server player who may fly (creative or spectator, walking) landing after a fall: `native_player_flyable_fall(player, player_entity_id, name, distance, multiplier)`, where `Player.causeFallDamage` returns early and nothing is hurt. Listen only. The player's state is swapped in."
+  ]
 }

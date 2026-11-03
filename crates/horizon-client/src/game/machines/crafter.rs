@@ -126,8 +126,15 @@ impl Game<'_> {
         for rest in remainders.into_iter().flatten() {
             self.crafter_eject(key, facing, rest, &recipe);
         }
+        // One of each input used, from the slots that held one: a part in front may have handed
+        // the output on into an empty slot of this grid.
         if let Some(BlockEntity::Crafter(c)) = self.world.block_entities.get_mut(&key) {
-            for slot in c.items.iter_mut() {
+            for (slot, _) in c
+                .items
+                .iter_mut()
+                .zip(&grid)
+                .filter(|(_, used)| used.is_some())
+            {
                 if let Some(s) = slot {
                     s.count -= 1;
                     if s.count == 0 {
@@ -144,33 +151,40 @@ impl Game<'_> {
     fn crafter_eject(&mut self, pos: Pos, facing: Direction, stack: ItemStack, recipe: &str) {
         let target = offset(pos, facing);
         let mut rest = stack;
-        if let Some(into) = self.containers().view(target, false) {
-            let one_by_one = self.crafter_at(target).is_some()
-                || rest.count > self.containers().max_stack(&rest);
-            while rest.count > 0 {
-                let before = rest.count;
-                if one_by_one {
-                    let one = ItemStack {
-                        count: 1,
-                        ..rest.clone()
-                    };
-                    if self
-                        .add_item(None, &into, one, Some(facing.opposite()))
-                        .is_some()
-                    {
-                        break;
-                    }
-                    rest.count -= 1;
-                } else {
-                    match self.add_item(None, &into, rest.clone(), Some(facing.opposite())) {
-                        Some(left) => rest = left,
-                        None => rest.count = 0,
-                    }
-                    if rest.count == before {
-                        break;
+        if let Some(part) = self.item_part_at(target, facing.opposite()) {
+            // NeoForge's `insertCrafterOutput`: a part in front takes what it will in the
+            // container's place, and the rest is dispensed.
+            let at = [target.0, target.1, target.2];
+            rest.count -= self.put_into_part(&part, at, &rest, |_, _| Some(()));
+        } else {
+            self.with_container_at(target, |game, into| {
+                let one_by_one = game.crafter_at(target).is_some()
+                    || rest.count > game.containers().max_stack(&rest);
+                while rest.count > 0 {
+                    let before = rest.count;
+                    if one_by_one {
+                        let one = ItemStack {
+                            count: 1,
+                            ..rest.clone()
+                        };
+                        if game
+                            .add_item(None, into, one, Some(facing.opposite()))
+                            .is_some()
+                        {
+                            break;
+                        }
+                        rest.count -= 1;
+                    } else {
+                        match game.add_item(None, into, rest.clone(), Some(facing.opposite())) {
+                            Some(left) => rest = left,
+                            None => rest.count = 0,
+                        }
+                        if rest.count == before {
+                            break;
+                        }
                     }
                 }
-            }
+            });
         }
         if rest.count == 0 {
             return;

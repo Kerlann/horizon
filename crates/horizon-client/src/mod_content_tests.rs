@@ -402,6 +402,10 @@ fn prepared() -> Option<PathBuf> {
 /// A content mod folder: a full block, a door and an item-less glass from
 /// templates, items, a recipe, a vanilla tag addition and a language file.
 fn ruby_mod(dir: &Path) -> ContentMod {
+    ruby_mod_with_pistons(dir, false)
+}
+
+fn ruby_mod_with_pistons(dir: &Path, pistons: bool) -> ContentMod {
     let files: [(&str, &str); 11] = [
         (
             "horizon-mod.toml",
@@ -417,7 +421,7 @@ fn ruby_mod(dir: &Path) -> ContentMod {
         ),
         (
             "data/ruby/horizon/block/ruby_door.json",
-            r#"{"template": "minecraft:oak_door"}"#,
+            r#"{"template": "minecraft:oak_door", "properties": {"push_reaction": "IMMOVEABLE"}}"#,
         ),
         (
             "data/ruby/horizon/block/ruby_glass.json",
@@ -465,6 +469,21 @@ fn ruby_mod(dir: &Path) -> ContentMod {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
+    if pistons {
+        for (name, text) in [
+            ("z_stone", r#"{"template":"minecraft:stone"}"#),
+            (
+                "z_stuck",
+                r#"{"template":"minecraft:stone","properties":{"push_reaction":"IMMOVEABLE"}}"#,
+            ),
+        ] {
+            fs::write(
+                dir.join(format!("data/ruby/horizon/block/{name}.json")),
+                text,
+            )
+            .unwrap();
+        }
+    }
     let package = horizon_mods::Package::read(dir).unwrap();
     ContentMod {
         id: "ruby".into(),
@@ -483,7 +502,7 @@ fn content_root_loads_with_every_table() {
     };
     let scratch = std::env::temp_dir().join(format!("horizon-mod-content-{}", std::process::id()));
     let _ = fs::remove_dir_all(&scratch);
-    let m = ruby_mod(&scratch.join("ruby"));
+    let m = ruby_mod_with_pistons(&scratch.join("ruby"), true);
     // The base as a relative path (cargo runs tests in the crate's folder):
     // the overlay's links still resolve.
     let relative = Path::new("../../.local/horizon-client/26.3");
@@ -501,7 +520,7 @@ fn content_root_loads_with_every_table() {
         .find(|&s| old.state(s).unwrap().name == "minecraft:oak_door")
         .unwrap();
     // Vanilla keeps its ids; blocks come after, sorted: ruby_block, ruby_door, ruby_glass.
-    assert_eq!(new.len(), old.len() + 1 + 64 + 1);
+    assert_eq!(new.len(), old.len() + 1 + 64 + 1 + 2);
     assert_eq!(new.default_state("minecraft:iron_block"), Some(iron));
     let ruby = new.default_state("ruby:ruby_block").unwrap();
     assert_eq!(ruby, BlockStateId(n));
@@ -562,6 +581,16 @@ fn content_root_loads_with_every_table() {
     assert!(independent_behaviours.random_tick_candidate(ruby));
     assert!(!independent_behaviours.is_randomly_ticking(iron));
     assert!(deferred_behaviours.is_randomly_ticking(ruby));
+    for state in (n + 1)..(n + 65) {
+        assert_eq!(
+            independent_behaviours.facts(BlockStateId(state)).push,
+            horizon_world::level::PushReaction::Immoveable
+        );
+    }
+    assert_eq!(
+        independent_behaviours.facts(ruby).push,
+        independent_behaviours.facts(iron).push
+    );
     // `render_shape` leaves the glass's model out of the chunk mesh; the block keeps the template's.
     assert_eq!(
         facts.get(BlockStateId(n + 65)).render_shape,
@@ -651,6 +680,7 @@ fn content_root_loads_with_every_table() {
             air: BlockStateId,
             random: LegacyRandom,
             events: Vec<LevelEvent>,
+            time: i64,
         }
         impl LevelAccess for TestLevel {
             fn block_state(&self, pos: BlockPos) -> BlockStateId {
@@ -666,7 +696,7 @@ fn content_root_loads_with_every_table() {
                 &mut self.random
             }
             fn game_time(&self) -> i64 {
-                0
+                self.time
             }
             fn emit(&mut self, event: LevelEvent) {
                 self.events.push(event);
@@ -679,6 +709,7 @@ fn content_root_loads_with_every_table() {
             air: new.default_state("minecraft:air").unwrap(),
             random: LegacyRandom::new(1),
             events: Vec::new(),
+            time: 0,
         };
         let ctx = PlaceContext {
             clicked_pos: floor,
@@ -700,6 +731,68 @@ fn content_root_loads_with_every_table() {
         let placed = independent_behaviours.place_block(&mut level, &mut Ticks::new(1), &ctx);
         assert!(matches!(placed, PlaceOutcome::Placed { state, .. } if state == wheat));
         assert!(level.events.iter().any(|e| matches!(e, LevelEvent::Sound { sound, .. } if &**sound == "minecraft:item.crop.plant")));
+
+        // Exercise the real piston caller with both stone-based content blocks.
+        let piston = new
+            .resolve(&horizon_world::chunk::BlockState {
+                name: "minecraft:piston".into(),
+                properties: [
+                    ("facing".into(), "east".into()),
+                    ("extended".into(), "false".into()),
+                ]
+                .into_iter()
+                .collect(),
+            })
+            .unwrap();
+        let power = new.default_state("minecraft:redstone_block").unwrap();
+        for (name, moves) in [("ruby:z_stone", true), ("ruby:z_stuck", false)] {
+            let block = new.default_state(name).unwrap();
+            let base = BlockPos::new(0, 1, 0);
+            let front = BlockPos::new(1, 1, 0);
+            let destination = BlockPos::new(2, 1, 0);
+            let mut level = TestLevel {
+                blocks: Default::default(),
+                air: new.default_state("minecraft:air").unwrap(),
+                random: LegacyRandom::new(1),
+                events: Vec::new(),
+                time: 0,
+            };
+            let mut ticks = Ticks::new(0);
+            for x in -4..4 {
+                for z in -4..4 {
+                    ticks
+                        .add_empty_chunk(horizon_core::position::ChunkPos::new(x, z))
+                        .unwrap();
+                }
+            }
+            for (pos, state) in [
+                (base, piston),
+                (front, block),
+                (BlockPos::new(-1, 1, 0), power),
+            ] {
+                independent_behaviours.set_block(
+                    &mut level,
+                    &mut ticks,
+                    pos,
+                    state,
+                    horizon_world::level::flags::UPDATE_ALL,
+                );
+            }
+            for _ in 0..4 {
+                level.time += 1;
+                independent_behaviours.tick_scheduled(&mut level, &mut ticks);
+                independent_behaviours.run_block_events(&mut level, &mut ticks);
+                independent_behaviours.tick_block_entities(&mut level, &mut ticks);
+            }
+            assert_eq!(
+                new.state(level.block_state(base)).unwrap().properties["extended"],
+                if moves { "true" } else { "false" }
+            );
+            assert_eq!(
+                level.block_state(if moves { destination } else { front }),
+                block
+            );
+        }
     }
     let sword = &items.items["ruby:ruby_sword"];
     assert_eq!(sword.block, new.default_state("minecraft:wheat"));

@@ -10,14 +10,14 @@ id = "frame"
 hook = "frame"
 hook_version = 1
 kind = "HEAD"
-helper = "frame.rs"
+helper = "rust/src/frame.rs"
 bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
 
-# engine/ (its own Cargo.toml): a workspace member that horizon-client depends on, compiled and
+# rust/ (its own Cargo.toml): a workspace member that horizon-client depends on, compiled and
 # cached on its own.
 [[crate]]
 id = "engine"
-path = "engine"
+path = "rust"
 
 # Built after the game, then run in the new build's folder.
 [[post_build]]

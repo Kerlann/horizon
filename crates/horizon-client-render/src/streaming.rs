@@ -3,6 +3,7 @@
 //! hands immutable `Arc` snapshots to workers; results carry a sequence number
 //! so stale work is dropped.
 use crate::fast_hash::{FxHashMap, FxHashSet};
+use crate::mod_chunk_tickets::{ModTicket, ModTickets};
 use crate::section_mask::SectionMask;
 use crate::{
     chunk::Chunk,
@@ -593,8 +594,13 @@ pub struct Streaming {
     /// The view distance around `center`; below 0, no area there (a dedicated
     /// server nobody is on).
     pub radius: i32,
-    /// `/forceload`ed chunks: kept loaded whatever the distance.
+    /// Chunks kept loaded whatever the distance: the `/forceload`ed ones and
+    /// those a mod holds a ticket for. Changed only through `set_forced_area`,
+    /// `clear_forced`, `set_mod_forced` and `load_forced`.
     pub forced: HashSet<(i32, i32)>,
+    /// The `/forceload`ed chunks, the ones saved in `chunk_tickets.dat`.
+    commanded: HashSet<(i32, i32)>,
+    mod_tickets: ModTickets,
     /// No work is scheduled while paused (title screen).
     pub paused: bool,
     /// Dimension flags: sky light, Nether face shading.
@@ -1163,6 +1169,8 @@ impl Streaming {
             center: (0, 0),
             radius: 8,
             forced: HashSet::new(),
+            commanded: HashSet::new(),
+            mod_tickets: ModTickets::default(),
             paused: false,
             sky_light: true,
             nether_shading: false,
@@ -2590,10 +2598,90 @@ impl Streaming {
     pub fn band(&self) -> Option<Band> {
         self.band
     }
+    /// `ServerLevel.setChunkForced` for one chunk: true when the forced set
+    /// changed. An add ranks the chunk for decoration as `/forceload add` does.
+    pub fn set_forced(&mut self, x: i32, z: i32, forced: bool) -> bool {
+        let mut changed = false;
+        self.set_forced_area((x, z), (x, z), forced, |_, _, c| changed = c);
+        changed
+    }
+    /// Release every `/forceload`ed chunk (`/forceload remove all`, a game-test
+    /// batch's end). Chunks a mod holds a ticket for stay forced.
+    pub fn clear_forced(&mut self) {
+        self.commanded.clear();
+        self.forced.clear();
+        self.forced.extend(self.mod_tickets.chunks());
+    }
+    /// The level's saved forced state: `/forceload`'s chunks, and the mods'
+    /// tickets of the mods `loaded` accepts (the rest are discarded).
+    pub fn load_forced(
+        &mut self,
+        commanded: HashSet<(i32, i32)>,
+        tickets: Vec<ModTicket>,
+        loaded: impl Fn(&str) -> bool,
+    ) {
+        self.mod_tickets = ModTickets::from_saved(tickets, loaded);
+        self.commanded = commanded;
+        self.forced.clone_from(&self.commanded);
+        self.forced.extend(self.mod_tickets.chunks());
+    }
+    /// The `/forceload`ed chunks.
+    pub fn commanded(&self) -> &HashSet<(i32, i32)> {
+        &self.commanded
+    }
+    /// The chunk tickets of mods.
+    pub fn mod_tickets(&self) -> &ModTickets {
+        &self.mod_tickets
+    }
+    /// Hold or release a mod's ticket: true when the ticket set changed. A
+    /// chunk stays forced while `/forceload` or any ticket holds it; one
+    /// newly forced is ranked for decoration as `/forceload add` does.
+    pub fn set_mod_forced(&mut self, ticket: ModTicket, forced: bool) -> bool {
+        let (x, z) = ticket.chunk;
+        let changed = if forced {
+            self.mod_tickets.insert(ticket)
+        } else {
+            self.mod_tickets.remove(&ticket)
+        };
+        if forced && self.forced.insert((x, z)) {
+            self.rank_forced(x, z, x, z);
+        } else if !forced && !self.commanded.contains(&(x, z)) && !self.mod_tickets.holds((x, z)) {
+            self.forced.remove(&(x, z));
+        }
+        changed
+    }
+    /// `ServerLevel.setChunkForced` over chunks `(x0, z0)..=(x1, z1)`, x then
+    /// z: `each` hears whether each chunk changed in `/forceload`'s set. An
+    /// add then ranks the area once for decoration (`forced_order`).
+    pub fn set_forced_area(
+        &mut self,
+        (x0, z0): (i32, i32),
+        (x1, z1): (i32, i32),
+        forced: bool,
+        mut each: impl FnMut(i32, i32, bool),
+    ) {
+        for x in x0..=x1 {
+            for z in z0..=z1 {
+                let changed = if forced {
+                    self.forced.insert((x, z));
+                    self.commanded.insert((x, z))
+                } else {
+                    if !self.mod_tickets.holds((x, z)) {
+                        self.forced.remove(&(x, z));
+                    }
+                    self.commanded.remove(&(x, z))
+                };
+                each(x, z, changed);
+            }
+        }
+        if forced {
+            self.rank_forced(x0, z0, x1, z1);
+        }
+    }
     /// Rank the chunks `/forceload add` over chunks `(x0, z0)..=(x1, z1)`
     /// decorates in vanilla's order (`forced_order`), after every chunk
     /// ranked before.
-    pub fn rank_forced(&mut self, x0: i32, z0: i32, x1: i32, z1: i32) {
+    fn rank_forced(&mut self, x0: i32, z0: i32, x1: i32, z1: i32) {
         for (x, z) in horizon_world::worldgen::decoration_order::forced_order(x0, z0, x1, z1) {
             self.decoration_order.rank_or_append(x, z);
         }

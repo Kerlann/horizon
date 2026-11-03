@@ -95,6 +95,7 @@ impl Game<'_> {
             }
         };
         self.native_queue_sound(level, sound, at, source, volume, pitch, except)
+            .is_some()
     }
     /// `Entity.gameEvent(event)`: game event `event` (`minecraft:step`...)
     /// at the entity's position with the entity as its source, which sculk

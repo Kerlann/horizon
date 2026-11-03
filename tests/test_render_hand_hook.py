@@ -22,6 +22,10 @@ class RenderHandHookTests(unittest.TestCase):
         self.assertLess(end, source.index("let Some(stack) = item", end))
         self.assertLess(end, source.index("if let Some(id) = maps::map_id", end))
         fixture = r"""
+mod mod_api {
+    pub enum HookId { RenderHand }
+    pub fn listened(_: HookId) -> bool { true }
+}
 mod horizon_client {
     pub mod mod_api {
         pub struct NativeHandRender<'a> {
@@ -30,7 +34,6 @@ mod horizon_client {
             pub swing: f32, pub equip: f32, pub packed_light: u32,
             pub translation: [f32; 3], pub rotation: [f32; 3], pub scale: f32,
         }
-        pub fn mods() -> &'static [()] { &[()] }
     }
 }
 struct Model { previous_head_pitch: f32 }

@@ -20,6 +20,8 @@ pub(in crate::game) enum Slot {
     /// `armor[0..4]` (head, chest, legs, feet).
     Armor(usize),
     Offhand,
+    /// The player's body or saddle (`EquipmentSlot` ordinal, `Game::equipment`).
+    Equipment(usize),
     Ender(usize),
     /// A mob's equipment by name (`mainhand`, `offhand`, `head`, ...).
     Mob(u32, &'static str),
@@ -138,6 +140,14 @@ impl Game<'_> {
                 if matches_name(name, "weapon.offhand") {
                     add(Slot::Offhand);
                 }
+                for (i, n) in [
+                    (horizon_items::equipment::BODY, "armor.body"),
+                    (horizon_items::equipment::SADDLE, "saddle"),
+                ] {
+                    if matches_name(name, n) {
+                        add(Slot::Equipment(i));
+                    }
+                }
                 for i in 0..27 {
                     if matches_name(name, &format!("enderchest.{i}")) {
                         add(Slot::Ender(i));
@@ -210,6 +220,7 @@ impl Game<'_> {
             Slot::MainHand => self.inventory.get(self.selected).cloned().flatten(),
             Slot::Armor(i) => self.armor.get(*i).cloned().flatten(),
             Slot::Offhand => self.offhand.clone(),
+            Slot::Equipment(i) => self.equipment.get(*i).cloned(),
             Slot::Ender(i) => self.ender_items.get(*i).cloned().flatten(),
             Slot::Mob(id, key) => {
                 let m = self.mobs.iter().find(|m| m.id == *id)?;
@@ -268,6 +279,18 @@ impl Game<'_> {
             Slot::Offhand => {
                 let old = std::mem::replace(&mut self.offhand, stack.clone());
                 self.player_on_equip("offhand", old.as_ref(), stack.as_ref());
+                true
+            }
+            // setItemSlot, so onEquipItem: the equip sound, but no game event
+            // for body and saddle.
+            Slot::Equipment(i) => {
+                let old = self.equipment[*i].clone();
+                self.equipment.set(*i, stack.clone());
+                self.player_on_equip(
+                    horizon_items::equipment::SLOT_NAMES[*i],
+                    old.as_ref(),
+                    stack.as_ref(),
+                );
                 true
             }
             Slot::Ender(i) => match self.ender_items.get_mut(*i) {
@@ -678,7 +701,6 @@ impl Game<'_> {
     }
     /// `/item modify (entity|block) <target> <slot> <modifier>`.
     pub(super) fn cmd_item_modify(&mut self, ctx: &Context) -> R<i32> {
-        self.ensure_datapacks();
         let targets = self.owner_of(ctx, "target", true)?;
         let Some(Arg::Str(slot_name)) = ctx.get("slot").cloned() else {
             return Ok(0);

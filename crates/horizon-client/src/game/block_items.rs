@@ -21,6 +21,16 @@ fn components(stack: &ItemStack) -> Compound {
     }
 }
 
+/// `patch`'s components onto `stack`, over its own.
+fn apply_patch(stack: &mut ItemStack, patch: Compound) {
+    if patch.is_empty() {
+        return;
+    }
+    let mut all = components(stack);
+    all.extend(patch);
+    (stack.damage, stack.extra) = item_data::decode_components(Some(&Tag::Compound(all)));
+}
+
 /// `BlockState.getCloneItemStack`'s item: the block's own item, unless the
 /// block overrides it. A block with no item of its own still has one to pick:
 /// a stem's seeds, a crop's seed item, a vine's harvest.
@@ -72,6 +82,25 @@ impl Game<'_> {
     /// `BlockState.getCloneItemStack` of the block at `pos`, then, with
     /// `include_data`, `ServerGamePacketListenerImpl.addBlockDataToItem`.
     pub(super) fn picked_stack(&self, pos: [i32; 3], include_data: bool) -> Option<ItemStack> {
+        let mut stack = self.clone_stack(pos, include_data)?;
+        if include_data {
+            self.add_block_data(pos, &mut stack);
+        }
+        Some(stack)
+    }
+
+    /// `ServerGamePacketListenerImpl.addBlockDataToItem`: the block entity at
+    /// `pos`, if any, onto `stack` (`BlockItem.setBlockEntityData`, then
+    /// `ItemStack.applyComponents(collectComponents())`).
+    pub(super) fn add_block_data(&self, pos: [i32; 3], stack: &mut ItemStack) {
+        if let Some(saved) = self.saved_block_entity((pos[0], pos[1], pos[2])) {
+            apply_patch(stack, block_entity_item::pick(&saved));
+        }
+    }
+
+    /// `BlockState.getCloneItemStack` of the block at `pos`: the item alone,
+    /// with what the block itself puts on it; `include_data` as vanilla passes it.
+    pub(super) fn clone_stack(&self, pos: [i32; 3], include_data: bool) -> Option<ItemStack> {
         let key = (pos[0], pos[1], pos[2]);
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let facts = self.res.facts().get(state);
@@ -154,22 +183,18 @@ impl Game<'_> {
             Some(BlockEntity::Banner(_))
         );
         // DecoratedPotBlock.getCloneItemStack: createDecoratedPotInstance, the
-        // sherds only; the pot's item comes with include_data.
+        // sherds only.
         let pot = &*facts.name == "minecraft:decorated_pot";
-        if (include_data || banner || pot)
+        if (banner || pot)
             && let Some(saved) = self.saved_block_entity(key)
         {
             let mut picked = block_entity_item::pick(&saved);
-            if pot && !include_data {
+            if pot {
                 picked.retain(|k, _| *k == JavaString::from("minecraft:pot_decorations"));
             }
             patch.extend(picked);
         }
-        if !patch.is_empty() {
-            let mut all = components(&stack);
-            all.extend(patch);
-            (stack.damage, stack.extra) = item_data::decode_components(Some(&Tag::Compound(all)));
-        }
+        apply_patch(&mut stack, patch);
         Some(stack)
     }
 

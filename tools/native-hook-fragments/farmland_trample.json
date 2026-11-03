@@ -11,10 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "Farmland trampled by a living entity (`native_farmland_trample`).",
-  "doc_summary": "`native_farmland_trample(entity, pos, state, distance, cancel)` runs before farmland is converted by a landing. Set `cancel` to prevent conversion. Bundles need \"hooks\": @API:farmland_trample@.",
-  "comments": [
-    "crates/horizon-client/src/landing.rs"
   ]
 }

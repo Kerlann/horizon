@@ -136,9 +136,9 @@ impl Game<'_> {
             enchantments: stack.enchantments().len(),
             damage: stack.damage as i32,
             custom_name: stack.custom_name().is_some(),
-            // `EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE` is the Curse of
-            // Binding's, the only enchantment that carries one.
-            prevents_armor_change: stack.enchantment_level("minecraft:binding_curse") > 0,
+            prevents_armor_change: world_stations!(self)
+                .enchantments
+                .prevents_armor_change(stack),
         };
         let (armor, toughness, attack) = self.attributes(m, &current, slot);
         let worn = Facts {
@@ -148,7 +148,9 @@ impl Game<'_> {
             enchantments: worn_stack.enchantments().len(),
             damage: worn_stack.damage as i32,
             custom_name: worn_stack.custom_name().is_some(),
-            prevents_armor_change: worn_stack.enchantment_level("minecraft:binding_curse") > 0,
+            prevents_armor_change: world_stations!(self)
+                .enchantments
+                .prevents_armor_change(&worn_stack),
         };
         let preferred = equip::preferred_weapon_tag(species).map(|tag| {
             (

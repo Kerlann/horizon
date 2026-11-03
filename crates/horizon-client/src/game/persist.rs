@@ -30,6 +30,8 @@ pub struct EntityMemory {
     pub(super) uuids: HashMap<u32, [i32; 4]>,
     /// The compound each mob or item entity was loaded with.
     pub(super) raw: HashMap<u32, Tag>,
+    /// Synched entity-data entries dirtied by forced writes since the last sync.
+    pub(super) forced_meta: HashMap<u32, [u64; 4]>,
     /// Entities of types Horizon does not simulate, kept per chunk and
     /// written back unchanged.
     unknown: HashMap<(i32, i32), Vec<Tag>>,
@@ -44,8 +46,8 @@ pub struct EntityMemory {
     /// Entities a native mod kept out of the level (`native_entity_join_level`),
     /// counted so `/summon` can fail as vanilla's refused add does.
     pub(super) joins_canceled: u32,
-    /// The highest entity id `native_entity_join_level` has been told of.
-    pub(super) joined_mark: u32,
+    /// The latest insertion considered for `native_entity_join_level`.
+    pub(super) joined_seq: horizon_client::join_seq::JoinSeq,
     /// The entities mods were told of and that have not left since: id (in
     /// increasing order), type, and whether the last leave sweep saw it.
     /// Only filled while a mod is loaded.
@@ -53,6 +55,12 @@ pub struct EntityMemory {
     /// Entities a native mod removed (`native_entity_discard`), taken out at
     /// the next sweep of departed entities. Mobs go at once and never wait here.
     pub(super) removals: Vec<super::commands::Target>,
+}
+
+impl EntityMemory {
+    pub(super) fn force_meta(&mut self, id: u32, index: u8) {
+        self.forced_meta.entry(id).or_default()[usize::from(index) / 64] |= 1 << (index % 64);
+    }
 }
 
 /// The key that marks a compound queued with the chunk loads as a fresh add
@@ -716,6 +724,7 @@ impl Game<'_> {
             self.next_entity += 9;
             self.remember_tags(d.id, &tag);
             self.remember_uuid(d.id, uuid, &tag);
+            d.join = horizon_client::join_seq::JoinSeq::next();
             self.dragon = Some(d);
         }
     }
@@ -761,6 +770,7 @@ impl Game<'_> {
             let id = self.next_entity;
             self.remember(id, uuid, tag);
             self.paintings.push(horizon_client::entities::Painting {
+                join: Default::default(),
                 id,
                 pos,
                 facing,
@@ -878,31 +888,32 @@ impl Game<'_> {
         let riders: Vec<Tag> = riders.into_iter().map(|j| self.mob_tree_nbt(j)).collect();
         add_passengers(tag, riders);
     }
-    /// An entity of a type Horizon does not simulate, kept as its compound.
-    fn load_other(&mut self, mut tag: Tag, kind: &str) -> Option<u32> {
-        strip_finalize(&mut tag);
-        let position = entity_nbt::position(&tag)?;
-        let rotation = match tag.get("Rotation") {
-            Some(Tag::List(l)) => {
-                let f = |i: usize| match l.get(i) {
-                    Some(Tag::Float(v)) => f32::from_bits(*v),
-                    _ => 0.0,
-                };
-                [f(0), f(1)]
-            }
-            _ => [0.0, 0.0],
-        };
-        self.next_entity += 1;
-        let id = self.next_entity;
-        let uuid = entity_nbt::uuid(&tag);
-        self.remember(id, uuid, tag);
-        self.others.push(super::commands::OtherEntity {
+    /// Read an unsimulated entity without assigning it a new identity.
+    pub(super) fn other_from_nbt(
+        tag: &Tag,
+        id: u32,
+        kind: &str,
+    ) -> Option<super::commands::OtherEntity> {
+        let position = entity_nbt::position(tag)?;
+        let rotation = entity_nbt::rotation(tag);
+        Some(super::commands::OtherEntity {
             id,
             kind: kind.to_owned(),
             position,
             yaw: rotation[0],
             pitch: rotation[1],
-        });
+        })
+    }
+
+    /// An entity of a type Horizon does not simulate, kept as its compound.
+    fn load_other(&mut self, mut tag: Tag, kind: &str) -> Option<u32> {
+        strip_finalize(&mut tag);
+        let id = self.next_entity + 1;
+        let other = Self::other_from_nbt(&tag, id, kind)?;
+        self.next_entity = id;
+        let uuid = entity_nbt::uuid(&tag);
+        self.remember(id, uuid, tag);
+        self.others.push(other);
         Some(id)
     }
     /// The compound of an entity Horizon does not simulate, with its current
@@ -915,6 +926,13 @@ impl Game<'_> {
             .cloned()
             .unwrap_or_else(|| Tag::Compound(Default::default()));
         if let Tag::Compound(c) = &mut tag {
+            // Display.addAdditionalSaveData omits the transient start delay.
+            if matches!(
+                o.kind.as_str(),
+                "minecraft:block_display" | "minecraft:item_display" | "minecraft:text_display"
+            ) {
+                c.remove(&"start_interpolation".into());
+            }
             c.insert("id".into(), Tag::String(o.kind.as_str().into()));
             c.insert(
                 "Pos".into(),

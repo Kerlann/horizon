@@ -85,14 +85,6 @@
       "target": "horizon_client::game::native_server::Game<'_>::native_world_dir", "side": "server"
     },
     {
-      "name": "give_experience",
-      "target": "horizon_client::game::native_server::Game<'_>::native_give_experience", "side": "server"
-    },
-    {
-      "name": "give_levels",
-      "target": "horizon_client::game::native_server::Game<'_>::native_give_levels", "side": "server"
-    },
-    {
       "name": "lit_block_name",
       "target": "horizon_client::game::native_hooks::Game<'_>::native_lit_block_name", "side": "both"
     },
@@ -311,10 +303,6 @@
     {
       "name": "push_player",
       "target": "horizon_client::game::native_motion::Game<'_>::native_push_player", "side": "client"
-    },
-    {
-      "name": "set_flying_speed",
-      "target": "horizon_client::game::native_motion::Game<'_>::native_set_flying_speed", "side": "server"
     },
     {
       "name": "net_send_to_player",
@@ -730,9 +718,9 @@
       }
     },
     {
-      "name": "use_item_on", "side": "server",
+      "name": "use_on", "side": "server",
       "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_use_item_on",
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_use_on",
       "mod_api": {
         "contract": "cancel",
         "out": "claimed",

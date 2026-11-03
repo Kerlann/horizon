@@ -1,5 +1,4 @@
-//! Server menus for native mods (docs/native-mods.md, "Server menus", API
-//! 10): a vanilla chest menu (`generic_9x1` to `generic_9x6`) a mod opens
+//! Server menus for native mods (docs/native-mods.md, "Server menus"): a vanilla chest menu (`generic_9x1` to `generic_9x6`) a mod opens
 //! for a player and fills with items to look at. No click moves anything:
 //! each reaches the mod (`native_menu_clicked`), as does the menu's closing
 //! (`native_menu_closed`), and the client shows the menu as the server sends
@@ -62,7 +61,7 @@ pub(super) fn fit(
     true
 }
 
-/// Server menus, for server mods (API 10). The players are named by UUID;
+/// Server menus, for server mods. The players are named by UUID;
 /// none of these runs while a player's state is swapped in (inside
 /// `native_perform_command`, the menus can be opened and filled).
 #[allow(dead_code)]
@@ -87,14 +86,14 @@ impl Game<'_> {
         items: Vec<Option<ItemStack>>,
     ) -> Option<i32> {
         let conn = self.native_conn(uuid)?;
-        let mut host = self.lan.take()?;
         // ServerPlayer.openMenu closes the menu that was open.
-        self.guest_close_all(&mut host, conn);
-        let window =
-            host.hub
-                .open_native_menu(conn, rows, component_nbt(&title.component()), items);
-        self.lan = Some(host);
-        window
+        self.guest_close_all(conn);
+        self.lan.as_mut()?.hub.open_native_menu(
+            conn,
+            rows,
+            component_nbt(&title.component()),
+            items,
+        )
     }
     /// Closes the player's native menu (a `native_menu_closed` follows).
     pub(super) fn native_close_menu(&mut self, uuid: u128) {
@@ -173,7 +172,10 @@ impl Game<'_> {
     /// last tick (`PlayerContainerEvent`), in that order for a menu another
     /// replaced: what each player has open is compared with what the mods last
     /// heard. A menu opened and closed again inside one tick is not heard.
-    pub(super) fn tick_player_menus(&mut self, host: &mut LanHost) {
+    pub(super) fn tick_player_menus(&mut self) {
+        let Some(host) = self.lan.as_ref() else {
+            return;
+        };
         let conns: Vec<u32> = host
             .hub
             .guests
@@ -182,14 +184,22 @@ impl Game<'_> {
             .map(|g| g.conn)
             .collect();
         for conn in conns {
+            let Some(host) = self.lan.as_ref() else {
+                return;
+            };
             // `AbstractContainerScreen.tick` closes the container once the player is no longer
             // alive, so a death closes the menu now (the lid falls, the mods hear Close), not at
             // the respawn.
             let dead = host.hub.guest(conn).is_some_and(|g| g.dead);
             if dead && host.hub.guest(conn).is_some_and(|g| g.menu.is_some()) {
-                self.guest_container_closed(host, conn);
-                host.hub.close_container(conn);
+                self.guest_container_closed(conn);
+                if let Some(host) = self.lan.as_mut() {
+                    host.hub.close_container(conn);
+                }
             }
+            let Some(host) = self.lan.as_mut() else {
+                return;
+            };
             // Compared as borrowed: nothing is built each tick while it stays open.
             let now = if dead { None } else { open_menu_of(host, conn) };
             let heard = host.play.get(&conn).and_then(|p| p.menu_heard.as_ref());
@@ -207,10 +217,10 @@ impl Game<'_> {
                 p.menu_heard.clone_from(&now);
             }
             if let Some(old) = heard {
-                self.player_menu_closed(host, conn, old);
+                self.player_menu_closed(conn, old);
             }
             if let Some(new) = now {
-                self.player_menu_opened(host, conn, new);
+                self.player_menu_opened(conn, new);
             }
         }
     }
@@ -218,39 +228,53 @@ impl Game<'_> {
     /// `conn`'s menu closes with the guest in the level in place
     /// (`ServerPlayer.doCloseContainer`): the mods hear it, if they heard it
     /// open.
-    pub(super) fn player_menu_closing(&mut self, host: &mut LanHost, conn: u32) {
-        let heard = host.play.get_mut(&conn).and_then(|p| p.menu_heard.take());
+    pub(super) fn player_menu_closing(&mut self, conn: u32) {
+        let heard = self
+            .lan
+            .as_mut()
+            .and_then(|host| host.play.get_mut(&conn))
+            .and_then(|p| p.menu_heard.take());
         if let Some(old) = heard {
-            self.player_menu_closed(host, conn, old);
+            self.player_menu_closed(conn, old);
         }
     }
 
-    fn player_menu_opened(&mut self, host: &mut LanHost, conn: u32, menu: HeardMenu) {
-        let Some((uuid, name)) = host.hub.guest(conn).map(|g| (g.uuid, g.name.clone())) else {
+    fn player_menu_opened(&mut self, conn: u32, menu: HeardMenu) {
+        let Some((uuid, name)) = self
+            .lan
+            .as_ref()
+            .and_then(|host| host.hub.guest(conn))
+            .map(|g| (g.uuid, g.name.clone()))
+        else {
             return;
         };
         let dimension = self.dim.id();
-        self.player_hook(host, conn, move |g| {
+        self.player_hook(conn, move |g| {
             g.native_player_container_open(uuid, &name, dimension, &menu.menu, menu.pos);
         });
     }
 
-    fn player_menu_closed(&mut self, host: &mut LanHost, conn: u32, menu: HeardMenu) {
-        let Some((uuid, name)) = host.hub.guest(conn).map(|g| (g.uuid, g.name.clone())) else {
+    fn player_menu_closed(&mut self, conn: u32, menu: HeardMenu) {
+        let Some((uuid, name)) = self
+            .lan
+            .as_ref()
+            .and_then(|host| host.hub.guest(conn))
+            .map(|g| (g.uuid, g.name.clone()))
+        else {
             return;
         };
         let dimension = self.dim.id();
-        self.player_hook(host, conn, move |g| {
+        self.player_hook(conn, move |g| {
             g.native_player_container_close(uuid, &name, dimension, &menu.menu, menu.pos);
         });
     }
 
     /// Runs a player hook with the guest's state in place, or as it is when
     /// the guest has no body to swap in.
-    fn player_hook(&mut self, host: &mut LanHost, conn: u32, f: impl FnOnce(&mut Self)) {
+    fn player_hook(&mut self, conn: u32, f: impl FnOnce(&mut Self)) {
         let mut f = Some(f);
         if self.lan_acting != Some(conn) {
-            self.as_guest(host, conn, |g| {
+            self.as_guest(conn, |g| {
                 if let Some(f) = f.take() {
                     f(g);
                 }
@@ -262,7 +286,7 @@ impl Game<'_> {
     }
 
     /// The clicks on and closings of native menus the hub collected, each
-    /// told to the mods with the hub back in `self.lan`, no player's state
+    /// told to the mods with the hub in `self.lan`, no player's state
     /// swapped in.
     pub(super) fn run_native_menu_events(&mut self) {
         loop {

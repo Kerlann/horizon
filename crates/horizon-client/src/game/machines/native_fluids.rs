@@ -4,7 +4,7 @@
 //! client's copy, and only on the level in place.
 use super::Game;
 use horizon_client::containers::{BlockEntity, ModFluidTanks};
-use horizon_client::mod_api::{BlockSide, FluidStack};
+use horizon_client::mod_api::{BlockSide, FluidStack, Transaction};
 use horizon_core::geometry::Direction;
 use horizon_world::nbt::{Compound, JavaString, Tag};
 use std::sync::Arc;
@@ -119,7 +119,7 @@ fn game_holds(fluid: &FluidStack, at: &FluidAt) -> bool {
         && (matches!(at, FluidAt::Cauldron(_)) || !fluid.has_components())
 }
 
-/// A capability amount in the API 54 helpers' millibuckets.
+/// A capability amount in the fluid helpers' millibuckets.
 fn mb(amount: u32) -> i32 {
     i32::try_from(amount).unwrap_or(i32::MAX)
 }
@@ -310,15 +310,16 @@ impl Game<'_> {
     /// Puts as much of `fluid` as tank `tank` of those `at`'s side reaches takes: a mod
     /// block's fillable tank, empty or holding that fluid, up to its capacity; a cauldron by
     /// whole thirds, lava only whole into an empty one, discarding the fluid's components as
-    /// NeoForge's `CauldronFluidContent` does. What didn't fit. `simulate` changes
-    /// nothing and answers as the real call.
+    /// NeoForge's `CauldronFluidContent` does. What didn't fit. The write is kept by
+    /// transaction `tx`.
     pub(in crate::game) fn native_fluid_tank_insert(
         &mut self,
         at: BlockSide,
         tank: usize,
         fluid: FluidStack,
-        simulate: bool,
+        tx: &Transaction,
     ) -> Option<FluidStack> {
+        let _ = tx;
         if fluid.amount == 0 {
             return None;
         }
@@ -339,7 +340,7 @@ impl Game<'_> {
                     return Some(fluid);
                 }
                 let add = (tanks.tanks[real] - entry.1).clamp(0, amount);
-                if add > 0 && !simulate {
+                if add > 0 {
                     entry.0 = Some(fluid.fluid.to_string());
                     entry.1 += add;
                     self.set_tank_state(at.pos, &state);
@@ -347,7 +348,7 @@ impl Game<'_> {
                 add
             }
             Some(FluidAt::Cauldron(kind)) if tank == 0 => match kind.fill(&fluid.fluid, amount) {
-                Some((took, to)) if simulate || self.cauldron_set(at.pos, to) => took,
+                Some((took, to)) if self.cauldron_set(at.pos, to) => took,
                 _ => 0,
             },
             _ => 0,
@@ -356,15 +357,16 @@ impl Game<'_> {
         (rest > 0).then(|| fluid.with_amount(rest))
     }
     /// Takes up to `max` out of tank `tank` of those `at`'s side reaches: a mod block's
-    /// drainable tank, a cauldron by whole thirds and lava only whole. What came out.
-    /// `simulate` changes nothing and answers as the real call.
+    /// drainable tank, a cauldron by whole thirds and lava only whole. What came out. The
+    /// write is kept by transaction `tx`.
     pub(in crate::game) fn native_fluid_tank_extract(
         &mut self,
         at: BlockSide,
         tank: usize,
         max: u32,
-        simulate: bool,
+        tx: &Transaction,
     ) -> Option<FluidStack> {
+        let _ = tx;
         let max = mb(max);
         match self.capability_tanks(at)? {
             FluidAt::Mod(tanks) => {
@@ -376,18 +378,16 @@ impl Game<'_> {
                 let entry = &mut state[real];
                 let take = entry.1.clamp(0, max);
                 let fluid = entry.0.clone().filter(|_| take > 0)?;
-                if !simulate {
-                    entry.1 -= take;
-                    if entry.1 == 0 {
-                        entry.0 = None;
-                    }
-                    self.set_tank_state(at.pos, &state);
+                entry.1 -= take;
+                if entry.1 == 0 {
+                    entry.0 = None;
                 }
+                self.set_tank_state(at.pos, &state);
                 Some(FluidStack::new(&fluid, take.unsigned_abs()))
             }
             FluidAt::Cauldron(kind) if tank == 0 => {
                 let (fluid, took, to) = kind.drain(max)?;
-                (simulate || self.cauldron_set(at.pos, to))
+                self.cauldron_set(at.pos, to)
                     .then(|| FluidStack::new(fluid, took.unsigned_abs()))
             }
             FluidAt::Cauldron(_) => None,
@@ -473,6 +473,43 @@ mod tests {
             drain(Lava, 1000),
             Some(("minecraft:lava", 1000, (0, false)))
         );
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_cauldron_move_the_target_takes_part_of_gives_the_whole_levels_that_fit() {
+        use super::super::super::native_entity_refs::tests::with_game;
+        use horizon_client::chunk::Chunk;
+        use horizon_client::mod_api::{FLUIDS, Host, NativeBlockUpdateFlags, move_resources};
+        with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let level = game.native_level("minecraft:overworld").unwrap();
+            let water = |game: &Game<'_>, n: u8| {
+                let state = horizon_world::chunk::BlockState {
+                    name: "minecraft:water_cauldron".to_owned(),
+                    properties: [("level".to_owned(), n.to_string())].into_iter().collect(),
+                };
+                game.pack.assets.registry.resolve(&state).unwrap()
+            };
+            let (full, one) = (water(game, 3), water(game, 1));
+            let (from, to) = ([0, 64, 0], [2, 64, 0]);
+            let flags = NativeBlockUpdateFlags::NEIGHBORS;
+            assert!(game.native_level_set_block(level, from, full, flags));
+            assert!(game.native_level_set_block(level, to, one, flags));
+            // The target has room for two levels: the bucket the source first gives doesn't
+            // fit, so the move is undone and tried again with what fit, two levels' worth.
+            let host: &mut dyn Host = game;
+            let source = level.capability(host, &FLUIDS, from, None).unwrap();
+            let target = level.capability(host, &FLUIDS, to, None).unwrap();
+            let moved = host
+                .transaction(|host, tx| move_resources(host, &source, &target, |_| true, 1000, tx));
+            assert_eq!(moved, Ok(667));
+            assert_eq!(game.world.block(from[0], from[1], from[2]), one);
+            assert_eq!(game.world.block(to[0], to[1], to[2]), full);
+        });
     }
 
     #[test]

@@ -8,8 +8,5 @@
     {"name": "mob_set_aggressive", "side": "server", "target": "horizon_client::game::native_mob_refs::Game<'_>::native_mob_set_aggressive", "receiver": "mob"},
     {"name": "mob_persistence_required", "side": "server", "target": "horizon_client::game::native_mob_refs::Game<'_>::native_mob_persistence_required", "receiver": "mob"},
     {"name": "mob_set_persistence_required", "side": "server", "target": "horizon_client::game::native_mob_refs::Game<'_>::native_mob_set_persistence_required", "receiver": "mob"}
-  ],
-  "rust_summary": "mob handles, target, aggression and persistence.",
-  "doc_summary": "`MobRef`, made with `host.mob(entity)`, reads and sets the mob's target and aggression and sets persistence. Bundles need \"hooks\": @API:mob_refs@.",
-  "comments": ["crates/horizon-client/src/game/native_mob_refs.rs"]
+  ]
 }

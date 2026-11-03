@@ -78,7 +78,7 @@ pub fn finalize(m: &mut Mob, warm_ocean: bool) {
 }
 /// `getControllingPassenger`: a player on a saddled nautilus.
 pub fn controlled(m: &Mob) -> bool {
-    m.rider.is_some() && m.extra.saddled
+    m.rider.is_some() && m.extra.saddled()
 }
 /// `AbstractNautilus.isFood`: taming items while wild, food otherwise.
 pub fn is_food(m: &Mob, item: &str, taming: &[String]) -> bool {
@@ -231,7 +231,7 @@ fn dash(m: &mut Mob, amount: f32) {
 /// `AbstractNautilus.getNautilusRestrictionRadius`: 32 blocks, or 16 for a
 /// baby or a saddled one.
 fn restriction_radius(m: &Mob) -> i32 {
-    if !m.is_baby() && !m.extra.saddled {
+    if !m.is_baby() && !m.extra.saddled() {
         32
     } else {
         16
@@ -561,7 +561,7 @@ pub fn anim(m: &Mob, s: &State, p: &mut Poses, animations: &HashMap<String, Anim
     if let Some(a) = animations.get("NautilusAnimation.SWIMMING") {
         a.apply_walk(s.pos + s.age / 5.0, s.speed + 0.2, 2.0, 3.0, p);
     }
-    if m.extra.body.is_some() {
+    if m.extra.body_id().is_some() {
         p.visible("corals", false);
     }
 }
@@ -582,19 +582,6 @@ pub fn to_nbt(m: &Mob, map: &mut horizon_world::nbt::Compound) {
             Tag::String(format!("minecraft:{v}").as_str().into()),
         );
     }
-    let mut equipment = match map.get(&"equipment".into()) {
-        Some(Tag::Compound(c)) => c.clone(),
-        _ => horizon_world::nbt::Compound::new(),
-    };
-    match m.saddle_item() {
-        Some(saddle) => {
-            equipment.insert("saddle".into(), crate::save::item_to_nbt(&saddle));
-        }
-        None => {
-            equipment.remove(&"saddle".into());
-        }
-    }
-    map.insert("equipment".into(), Tag::Compound(equipment));
     map.insert(
         "Brain".into(),
         Tag::compound([(
@@ -614,11 +601,6 @@ pub fn from_nbt(m: &mut Mob, tag: &horizon_world::nbt::Tag) {
         let v = v.to_string().unwrap_or_default();
         m.extra.variant = u8::from(v.trim_start_matches("minecraft:") == "warm");
     }
-    let saddle = tag
-        .get("equipment")
-        .and_then(|e| e.get("saddle"))
-        .and_then(crate::save::item_from_nbt);
-    m.set_saddle(saddle);
     if let Some(Tag::Int(v)) = tag
         .get("Brain")
         .and_then(|b| b.get("memories"))

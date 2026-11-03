@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a cancellable custom click action from a server player (`native_custom_click_action`).",
-  "doc_summary": "`native_custom_click_action(player, player_entity_id, name, id, payload, cancel)`, when a server player's client sends `ServerboundCustomClickActionPacket` in play: the `custom` click event of a dialog button or a text component. `id` is the resource location text, `payload` the optional `Tag`. Vanilla only logs the packet; set `cancel` to skip that. Clicks sent during the configuration phase (no player yet) are not reported. Server-side. Bundles need \"hooks\": @API:custom_click_action@."
+  ]
 }

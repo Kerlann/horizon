@@ -1426,11 +1426,10 @@ impl Game<'_> {
         self.console_broadcast = Some(inform);
         self.console_command(state, line);
         self.console_broadcast = None;
-        if let Some(mut host) = self.lan.take() {
+        if let Some(host) = self.lan.as_ref() {
             crash_fixture("hub", || host.hub.guests.iter().any(|g| g.placed));
-            self.run_level_teleports(&mut host);
-            self.send_admin_feedback(&mut host, None);
-            self.lan = Some(host);
+            self.run_level_teleports();
+            self.send_admin_feedback(None);
         }
         self.admin_feedback.clear();
     }
@@ -1584,13 +1583,10 @@ impl Game<'_> {
                 if super::chat_filter::MUTE_COMMANDS.contains(&command)
                     && self.lan.as_ref().is_some_and(|h| h.hub.chat_filter_on()) =>
             {
-                if let Some(mut host) = self.lan.take() {
-                    let words: Vec<&str> = [command].into_iter().chain(rest).collect();
-                    let replies = self.mute_command(&mut host, &words, "Server");
-                    self.lan = Some(host);
-                    for reply in replies {
-                        self.console_reply(lit(&reply));
-                    }
+                let words: Vec<&str> = [command].into_iter().chain(rest).collect();
+                let replies = self.mute_command(&words, "Server");
+                for reply in replies {
+                    self.console_reply(lit(&reply));
                 }
             }
             "ban" if !rest.is_empty() => {
@@ -1983,13 +1979,11 @@ impl Game<'_> {
 
     /// The anticheat bans a player (`HostEvent::Ban`): `banned-players.json` gets it as `/ban` adds it,
     /// with the anticheat as its source, and the player is sent away with the ban's message.
-    pub(super) fn anticheat_ban(
-        &mut self,
-        hub: &mut horizon_client::lan::hub::Hub,
-        uuid: u128,
-        name: &str,
-        reason: &str,
-    ) {
+    pub(super) fn anticheat_ban(&mut self, uuid: u128, name: &str, reason: &str) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
+        let hub = &mut host.hub;
         let Some(lists) = &self.server_lists else {
             // No ban list to add to: the anticheat's kick, so a flagged cheater still doesn't stay.
             log(
@@ -2075,9 +2069,9 @@ impl Game<'_> {
     /// `MinecraftServer.runServer`'s `finally`: a tick that panicked still saves. What the panic
     /// interrupted is not trusted: a guest's turn (`as_guest`) holds the game's player state
     /// swapped in, so its record is older than what the game holds, and writing it would put
-    /// back older data than the last autosave; that guest keeps the file it has. A hub that the
-    /// panic took with it (`self.lan.take()` was in progress) saves no players at all. The
-    /// levels, the scoreboard and the other state are saved as in a normal stop.
+    /// back older data than the last autosave; that guest keeps the file it has. If the hub
+    /// has already closed, no players can be saved. The levels, the scoreboard and the other
+    /// state are saved as in a normal stop.
     fn stop_after_crash(&mut self, message: &str) -> Result<()> {
         log("ERROR", &format!("The server thread panicked: {message}"));
         let acting = self.lan_acting;
@@ -2115,13 +2109,10 @@ impl Game<'_> {
         log("INFO", "Stopping server");
         self.native_players_leaving();
         log("INFO", "Saving players");
-        if let Some(mut host) = self.lan.take() {
-            self.flush_native_net(&mut host);
-            // PlayerList.removeAll: each player's file, with the vehicle it
-            // alone rides, then its records.
-            self.save_leaving_guests(&mut host);
-            self.lan = Some(host);
-        }
+        self.flush_native_net();
+        // PlayerList.removeAll: each player's file, with the vehicle it
+        // alone rides, then its records.
+        self.save_leaving_guests();
         if let Some(h) = self.lan.as_mut() {
             let conns: Vec<u32> = h.hub.guests.iter().map(|g| g.conn).collect();
             for conn in conns {
@@ -2145,8 +2136,8 @@ impl Game<'_> {
 }
 
 /// `tools/test_dedicated_crash_save.py`'s fixture: with `HORIZON_CRASH_FIXTURE` naming `point`
-/// (`guest`: during a placed guest's turn, `hub`: while a console line has the hub out and a
-/// player is in), the tick panics there, to see what `stop_after_crash` keeps.
+/// (`guest`: during a placed guest's turn, `hub`: after a console line while a player is in),
+/// the tick panics there, to see what `stop_after_crash` keeps.
 /// `armed` is asked only when the variable names `point`, so the tick pays one
 /// load of a `OnceLock` without it.
 pub(super) fn crash_fixture(point: &str, armed: impl FnOnce() -> bool) {

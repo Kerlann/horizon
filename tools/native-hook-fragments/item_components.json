@@ -5,11 +5,12 @@
       "name": "item_default_component",
       "side": "both",
       "target": "horizon_client::game::native_components::Game<'_>::native_item_default_component"
+    },
+    {
+      "name": "item_has_enchantment_effect",
+      "side": "both",
+      "backend": true,
+      "target": "horizon_client::game::native_components::Game<'_>::native_item_has_enchantment_effect"
     }
-  ],
-  "rust_summary": "an item's default components on `Host` (`native_item_default_component`), which `ItemResource::with_component` and `without_component` read to keep a stack's patch as vanilla's.",
-  "doc_summary": "`item_default_component(item, component)` is an item's default value of a data component (`Item.components().get`), with data packs' and mods' changes, or none where it hasn't one; `ItemResource::with_component(host, &id, value)` drops a value equal to it from a stack's patch, and `without_component(host, &id)` records a removal (`!id`) of one the item has, as vanilla's `PatchedDataComponentMap.set` and `remove` do. Bundles need \"hooks\": @API:item_components@.",
-  "comments": [
-    "crates/horizon-client/src/game/native_components.rs"
   ]
 }

@@ -1010,6 +1010,7 @@ fn guests_see_each_other_and_the_world_entities() {
         minecart_steps: None,
         data: 0,
         meta: Vec::new(),
+        forced_meta: [0; 4],
         defaults: Vec::new(),
         equipment: Vec::new(),
         attributes: Vec::new(),
@@ -1129,6 +1130,9 @@ fn a_spectators_container_click_is_taken_back() {
     struct NoRules;
     impl horizon_client::lan::menu::Rules for NoRules {
         fn items(&self) -> &horizon_client::items::Items {
+            unreachable!("a spectator's click never reaches the menu")
+        }
+        fn enchantments(&self) -> &horizon_client::enchant::Enchantments {
             unreachable!("a spectator's click never reaches the menu")
         }
         fn max_stack(&self, _: &str) -> u32 {
@@ -1289,6 +1293,9 @@ fn a_click_past_the_menu_is_ignored() {
     struct NoRules;
     impl horizon_client::lan::menu::Rules for NoRules {
         fn items(&self) -> &horizon_client::items::Items {
+            unreachable!("a click past the menu never reaches it")
+        }
+        fn enchantments(&self) -> &horizon_client::enchant::Enchantments {
             unreachable!("a click past the menu never reaches it")
         }
         fn max_stack(&self, _: &str) -> u32 {

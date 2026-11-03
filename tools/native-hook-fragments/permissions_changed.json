@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a player's operator permission level about to change, cancellable (`native_permissions_changed`).",
-  "doc_summary": "the operator list about to change a player's level: `native_permissions_changed(player, player_entity_id, name, old, new, cancel)` with `NativePermissionLevel` for `old` and `new`, for `/op`, `/deop`, the console's `op` and `deop`, and the management API's `operators/add`, `operators/remove` and `operators/set`. `new` is `All` for a deop. Set `cancel` and the list keeps the old level. The player need not be online (`player_entity_id` is then none). `operators/clear` is not a call, as in vanilla. Dedicated servers only."
+  ]
 }

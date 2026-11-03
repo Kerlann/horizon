@@ -392,6 +392,7 @@ impl Game<'_> {
                 // placed crystal spins from its own phase.
                 let time = self.world.random.next_int_bound(100_000).unwrap_or(0);
                 self.crystals.push(super::dragon::Crystal {
+                    join: Default::default(),
                     id,
                     position: at,
                     show_bottom: true,

@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a cancellable fishing catch (`native_item_fished`).",
-  "doc_summary": "`native_item_fished(player, player_entity_id, fished, rod_damage, cancel)`, in `FishingHook.retrieve` once a server player's reel-in rolled the fishing loot. `fished` (`NativeItemFished`) holds the bobber and the items the player receives (to read; loot tables change them); `rod_damage` (1, or 2 on the ground) is the mods' to set, not negative. Set `cancel` and the player receives nothing, and no `fishing_rod_hooked` trigger fires; the rod still takes `rod_damage`. After `player_fish`'s reel-in. Server-side. Bundles need \"hooks\": @API:item_fished@."
+  ]
 }

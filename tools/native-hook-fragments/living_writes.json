@@ -1,0 +1,83 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "living_swing",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_swing",
+      "receiver": "living"
+    },
+    {
+      "name": "living_arrow_count",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_arrow_count",
+      "receiver": "living"
+    },
+    {
+      "name": "living_set_arrow_count",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_set_arrow_count",
+      "receiver": "living"
+    },
+    {
+      "name": "living_stinger_count",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_stinger_count",
+      "receiver": "living"
+    },
+    {
+      "name": "living_set_stinger_count",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_set_stinger_count",
+      "receiver": "living"
+    },
+    {
+      "name": "living_set_arrow_removal_ticks",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_set_arrow_removal_ticks",
+      "receiver": "living"
+    },
+    {
+      "name": "living_set_stinger_removal_ticks",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_set_stinger_removal_ticks",
+      "receiver": "living"
+    },
+    {
+      "name": "living_left_handed",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_left_handed",
+      "receiver": "living"
+    },
+    {
+      "name": "living_set_left_handed",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_set_left_handed",
+      "receiver": "living"
+    },
+    {
+      "name": "living_can_pick_up_loot",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_can_pick_up_loot",
+      "receiver": "living"
+    },
+    {
+      "name": "living_set_can_pick_up_loot",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_set_can_pick_up_loot",
+      "receiver": "living"
+    },
+    {
+      "name": "living_item_use_remaining",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_item_use_remaining",
+      "receiver": "living"
+    },
+    {
+      "name": "living_set_item_use_remaining",
+      "side": "server",
+      "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_set_item_use_remaining",
+      "receiver": "living"
+    }
+  ]
+}

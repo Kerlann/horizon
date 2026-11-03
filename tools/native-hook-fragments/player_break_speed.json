@@ -11,7 +11,5 @@
         "out": "canceled"
       }
     }
-  ],
-  "rust_summary": "A player's block destroy speed is calculated (`native_player_break_speed`).",
-  "doc_summary": "`native_player_break_speed(player, pos, state, original_speed, new_speed, canceled)` may change the destroy speed or prevent breaking. Bundles need \"hooks\": @API:player_break_speed@."
+  ]
 }

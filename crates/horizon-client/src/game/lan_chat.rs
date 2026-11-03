@@ -2,7 +2,7 @@
 //! packets (ServerGamePacketListenerImpl.handleChatCommand and
 //! handleSignedChatCommand), and the message commands whose text they sign
 //! (SayCommand, EmoteCommands, MsgCommand), relayed by the hub as chat.
-use super::{Game, lan::LanHost};
+use super::Game;
 use horizon_client::{
     command::{Arg, ParseResults, vanilla},
     lan::{
@@ -41,7 +41,10 @@ impl Game<'_> {
 
     /// ServerGamePacketListenerImpl.detectRateSpam: a chat message or command adds 20 to the
     /// guest's throttler; over the threshold, a guest who is not an operator is kicked.
-    pub(super) fn detect_rate_spam(&mut self, host: &mut LanHost, conn: u32, command: bool) {
+    pub(super) fn detect_rate_spam(&mut self, conn: u32, command: bool) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let Some(i) = host.hub.guests.iter().position(|g| g.conn == conn) else {
             return;
         };
@@ -70,7 +73,10 @@ impl Game<'_> {
 
     /// handleChatCommand (performUnsignedChatCommand): refused when the
     /// server enforces secure chat and the command has a message to sign.
-    pub(super) fn guest_chat_command(&mut self, host: &mut LanHost, conn: u32, command: &str) {
+    pub(super) fn guest_chat_command(&mut self, conn: u32, command: &str) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let Some(i) = host.hub.guests.iter().position(|g| g.conn == conn) else {
             return;
         };
@@ -78,36 +84,38 @@ impl Game<'_> {
             return;
         }
         let permission = host.hub.guests[i].permission;
-        if host.hub.enforces_secure_chat()
-            && !self.signable_arguments(permission, command).is_empty()
-        {
+        let secure = host.hub.enforces_secure_chat();
+        if secure && !self.signable_arguments(permission, command).is_empty() {
+            let Some(host) = self.lan.as_ref() else {
+                return;
+            };
             let name = host.hub.guests[i].name.clone();
             self.lan_log_event(HostEvent::Error(format!(
                 "Received unsigned command packet from {name}, but the command requires signable arguments: {command}"
             )));
             let failure = Text::translate("chat.disabled.invalid_command_signature", &[])
                 .with_color(text::RED);
-            host.hub.guests[i].send(&C::SystemChat(play::SystemChat {
-                content: component_nbt(&failure.component()),
-                overlay: false,
-            }));
-            self.detect_rate_spam(host, conn, true);
+            if let Some(host) = self.lan.as_ref() {
+                host.hub.guests[i].send(&C::SystemChat(play::SystemChat {
+                    content: component_nbt(&failure.component()),
+                    overlay: false,
+                }));
+            }
+            self.detect_rate_spam(conn, true);
             return;
         }
-        if self.chat_filter_command(host, i, command) {
-            self.guest_command(host, conn, command, None);
+        if self.chat_filter_command(i, command) {
+            self.guest_command(conn, command, None);
         }
-        self.detect_rate_spam(host, conn, true);
+        self.detect_rate_spam(conn, true);
     }
 
     /// handleSignedChatCommand: the acknowledgements, then each message
     /// argument through the sender's chain, then the command with them.
-    pub(super) fn guest_signed_command(
-        &mut self,
-        host: &mut LanHost,
-        conn: u32,
-        p: play::ChatCommandSigned,
-    ) {
+    pub(super) fn guest_signed_command(&mut self, conn: u32, p: play::ChatCommandSigned) {
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
         let Some(i) = host.hub.guests.iter().position(|g| g.conn == conn) else {
             return;
         };
@@ -120,6 +128,9 @@ impl Game<'_> {
             ran = true;
             let permission = host.hub.guests[i].permission;
             let parsed = self.signable_arguments(permission, &p.command);
+            let Some(host) = self.lan.as_mut() else {
+                return;
+            };
             match host
                 .hub
                 .signed_arguments(i, &p, &parsed, &last_seen, &mut events)
@@ -132,13 +143,13 @@ impl Game<'_> {
             self.lan_log_event(event);
         }
         if let Some(signed) = signed
-            && self.chat_filter_command(host, i, &p.command)
+            && self.chat_filter_command(i, &p.command)
         {
-            self.guest_command(host, conn, &p.command, Some(signed));
+            self.guest_command(conn, &p.command, Some(signed));
         }
         // The lambda counts the command even when its arguments failed to decode.
         if ran {
-            self.detect_rate_spam(host, conn, true);
+            self.detect_rate_spam(conn, true);
         }
     }
 
@@ -149,15 +160,18 @@ impl Game<'_> {
     /// game's dispatcher to handle.
     pub(super) fn guest_message_command(
         &mut self,
-        host: &mut LanHost,
         conn: u32,
         command: &str,
         signed: Option<&Signed>,
     ) -> bool {
+        let Some(host) = self.lan.as_ref() else {
+            return false;
+        };
         let Some(i) = host.hub.guests.iter().position(|g| g.conn == conn) else {
             return false;
         };
-        let parse = self.parse_as(host.hub.guests[i].permission, command);
+        let permission = host.hub.guests[i].permission;
+        let parse = self.parse_as(permission, command);
         let Ok((context, id)) = parse.executable() else {
             return false;
         };
@@ -173,6 +187,9 @@ impl Game<'_> {
                 .map(|(_, m)| m.clone())
         });
         let mut events = Vec::new();
+        let Some(host) = self.lan.as_mut() else {
+            return false;
+        };
         if id == "msg" {
             let Some(Arg::Entity(selector)) = context.get("targets") else {
                 return false;

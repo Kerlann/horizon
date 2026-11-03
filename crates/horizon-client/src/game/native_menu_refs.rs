@@ -1,6 +1,7 @@
 //! Read-only handles to supported server menus.
 use super::{
     Game,
+    commands::Target,
     lan_crafting::{load_player, machine_menu},
 };
 use horizon_client::{
@@ -16,16 +17,12 @@ use horizon_client::{
 
 impl Game<'_> {
     fn native_menu_guest(&self, menu: MenuRef) -> Option<&Guest> {
-        if self.lan_acting.is_some() {
-            return None;
-        }
         (self.native_player_ref(menu.player.uuid())? == menu.player).then_some(())?;
+        let Target::Guest(conn) = self.native_entity_target(menu.player.entity())? else {
+            return None;
+        };
         let host = self.lan.as_ref()?;
-        let guest = host
-            .hub
-            .guests
-            .iter()
-            .find(|g| g.placed && g.uuid == menu.player.uuid())?;
+        let guest = host.hub.guest(conn)?;
         (guest.menu_generation == menu.generation).then_some(())?;
         if let Some(open) = &guest.menu {
             (open.window == menu.window && open.hidden.is_empty()).then_some(guest)
@@ -48,7 +45,7 @@ impl Game<'_> {
 
     /// A player's current supported menu. Refuses crafting tables, merchants,
     /// workstations, lecterns, mounts and menus with hidden slots; also refuses
-    /// clients, stale players and calls during a player swap. API @API:menu_refs@.
+    /// clients, stale players and players whose state is swapped out.
     pub(super) fn native_menu_ref(&self, player: PlayerRef) -> Option<MenuRef> {
         let host = self.lan.as_ref()?;
         let guest = host
@@ -65,14 +62,14 @@ impl Game<'_> {
         Some(menu)
     }
 
-    /// Container id (0 for the player's inventory menu). API @API:menu_refs@.
+    /// Container id (0 for the player's inventory menu).
     pub(super) fn native_menu_container_id(&self, menu: MenuRef) -> Option<i32> {
         self.native_menu_guest(menu)?;
         Some(menu.window)
     }
 
     /// Registry menu type; the inventory menu has no MenuType in vanilla.
-    /// The outer None means an unavailable menu. API @API:menu_refs@.
+    /// The outer None means an unavailable menu.
     pub(super) fn native_menu_kind(&self, menu: MenuRef) -> Option<Option<String>> {
         let guest = self.native_menu_guest(menu)?;
         match &guest.menu {
@@ -87,7 +84,7 @@ impl Game<'_> {
         }
     }
 
-    /// Number of slots in AbstractContainerMenu.slots. API @API:menu_refs@.
+    /// Number of slots in AbstractContainerMenu.slots.
     pub(super) fn native_menu_slot_count(&self, menu: MenuRef) -> Option<usize> {
         let guest = self.native_menu_guest(menu)?;
         Some(guest.menu.as_ref().map_or(46, |m| m.size + 36))
@@ -96,7 +93,7 @@ impl Game<'_> {
     /// The storage menu slot `slot` shows (`Slot.container` and `getContainerSlot`): the
     /// player's inventory by `ENTITY_ITEMS` index (`InventoryMenu`'s armour slots 5..9 go head
     /// to feet), a block entity's or an entity's slot, the ender chest's, the crafting grid's
-    /// or a mod's chest menu's. API @API:menu_slots@.
+    /// or a mod's chest menu's.
     pub(super) fn native_menu_slot_backing(
         &self,
         menu: MenuRef,
@@ -149,7 +146,7 @@ impl Game<'_> {
     }
 
     /// Full stack at a menu index. Outer None means unavailable or out of
-    /// range; Some(None) means an empty slot. API @API:menu_refs@.
+    /// range; Some(None) means an empty slot.
     pub(super) fn native_menu_slot(&self, menu: MenuRef, slot: usize) -> Option<Option<ItemStack>> {
         let backing = self.native_menu_slot_backing(menu, slot)?;
         let guest = self.native_menu_guest(menu)?;
@@ -170,7 +167,7 @@ impl Game<'_> {
 
     /// How many of `stack` menu slot `slot` holds (`Slot.mayPlace`, then `Slot.getMaxStackSize`):
     /// a furnace's fuel slot one bucket, an armour slot one piece that fits it, a crafting result
-    /// none. API @API:menu_slots@.
+    /// none.
     pub(super) fn native_menu_slot_holds(
         &self,
         menu: MenuRef,
@@ -182,7 +179,7 @@ impl Game<'_> {
     }
 
     /// Whether menu slot `slot` gives up what it holds (`Slot.mayPickup`): bound armour stays
-    /// on outside creative. API @API:menu_slots@.
+    /// on outside creative.
     pub(super) fn native_menu_slot_gives(&self, menu: MenuRef, slot: usize) -> Option<bool> {
         let rules = self.native_menu_rules(menu, slot)?;
         Some(rules.slot_gives(&self.menu_env(), slot))
@@ -253,7 +250,7 @@ impl Game<'_> {
         }
     }
 
-    /// Carried (cursor) stack; outer None means unavailable. API @API:menu_refs@.
+    /// Carried (cursor) stack; outer None means unavailable.
     pub(super) fn native_menu_carried(&self, menu: MenuRef) -> Option<Option<ItemStack>> {
         Some(self.native_menu_guest(menu)?.carried.clone())
     }

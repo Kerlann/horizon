@@ -359,12 +359,17 @@ pub(super) fn spawn_loader(
         .name("resource-loader".into())
         .spawn(move || {
             let mut pack_error = None;
-            let root = packs::startup_root(&vanilla_root, &settings.resource_packs, &[])
-                .unwrap_or_else(|error| {
-                    pack_error = Some(error.to_string());
-                    vanilla_root.clone()
-                });
-            let root = mods::content_root(&root, &settings.mods.enabled, &dev_mods);
+            let root = packs::startup_root(
+                &vanilla_root,
+                &settings.resource_packs,
+                &[],
+                &settings.mods.enabled,
+                &dev_mods,
+            )
+            .unwrap_or_else(|error| {
+                pack_error = Some(error.to_string());
+                mods::content_root(&vanilla_root, &settings.mods.enabled, &dev_mods)
+            });
             let result = load_resources(
                 root,
                 world.as_deref(),

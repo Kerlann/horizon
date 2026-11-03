@@ -4,6 +4,66 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io::Read, path::Path};
 
 pub const MANIFEST: &str = "horizon-native.json";
+pub const SOURCE: &str = "native/";
+pub const SOURCE_MANIFEST: &str = "horizon-mixin.toml";
+pub const RUST: &str = "rust";
+pub const MIXINS_REV: &str = "e8cd0aa38cffef49cb2e088ef716baa107148c02";
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum SourceLayoutError {
+    Root(String),
+    Path,
+    ApiFields,
+    BothRoutes,
+    MultipleCrates,
+}
+
+impl std::fmt::Display for SourceLayoutError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Root(path) => write!(f, "native source root must be rust, got {path:?}"),
+            Self::Path => f.write_str("native manifest needs a string source path"),
+            Self::ApiFields => f.write_str("[api] accepts only path"),
+            Self::BothRoutes => {
+                f.write_str("native manifest cannot declare both [api] and [[crate]] for rust")
+            }
+            Self::MultipleCrates => f.write_str("native manifest may declare only one rust crate"),
+        }
+    }
+}
+
+impl std::error::Error for SourceLayoutError {}
+
+/// The launcher and archive reader share the source-root boundary.
+pub fn check_source_layout(source: &toml::Table) -> Result<(), SourceLayoutError> {
+    let api = source.get("api");
+    if api.is_some_and(|v| {
+        !v.as_table()
+            .is_some_and(|t| t.len() == 1 && t.contains_key("path"))
+    }) {
+        return Err(SourceLayoutError::ApiFields);
+    }
+    let crates = source
+        .get("crate")
+        .map(|v| v.as_array().ok_or(SourceLayoutError::Path))
+        .transpose()?;
+    if api.is_some() && crates.is_some_and(|v| !v.is_empty()) {
+        return Err(SourceLayoutError::BothRoutes);
+    }
+    if crates.is_some_and(|v| v.len() > 1) {
+        return Err(SourceLayoutError::MultipleCrates);
+    }
+    for declaration in api.into_iter().chain(crates.into_iter().flatten()) {
+        let path = declaration
+            .get("path")
+            .and_then(toml::Value::as_str)
+            .ok_or(SourceLayoutError::Path)?;
+        if path != RUST {
+            return Err(SourceLayoutError::Root(path.into()));
+        }
+    }
+    Ok(())
+}
 
 /// Why a native mod may not carry `mod.wasm`: WebAssembly mods don't run any more.
 pub const WASM_GONE: &str = "mod.wasm: WebAssembly mods don't run any more, port the code to a native mod (docs/native-mods.md)";
@@ -37,8 +97,6 @@ pub struct Manifest {
     /// Exact source revisions tested together, never mutable tags.
     pub horizon: String,
     pub mixins: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub hooks: Option<u32>,
 }
 
 pub fn revision(value: &str) -> bool {
@@ -56,7 +114,6 @@ impl Manifest {
             || self.game.is_empty()
             || !revision(&self.horizon)
             || !revision(&self.mixins)
-            || self.hooks == Some(0)
         {
             return Err(
                 "invalid native manifest: schema 1, id, version, game and exact revisions required"
@@ -84,17 +141,9 @@ impl Manifest {
 
 pub struct Bundle {
     pub manifest: Manifest,
-    /// Validated relative paths: Rust and TOML, plus files under `mixins/<id>/data/` or a
+    /// Validated relative paths: Rust and TOML, plus files under `native/data/` or a
     /// `data/` folder deeper in (a crate's). A `.hmod`'s content files are not among them.
     pub files: BTreeMap<String, Vec<u8>>,
-}
-
-/// Whether `rest` (a path inside `mixins/<id>/`) is a data file: under the bundle's `data/`, or
-/// under the top-level `data/` of a folder of it (a crate's, `engine/data/`), not any folder
-/// named `data` deeper in.
-fn in_data(rest: &str) -> bool {
-    let parts: Vec<&str> = rest.split('/').collect();
-    parts.len() >= 2 && (parts[0] == "data" || (parts.len() >= 3 && parts[1] == "data"))
 }
 
 /// Whether `rest` is one of the text files a crate folder usually carries, which a crate may need
@@ -110,16 +159,127 @@ fn text(rest: &str) -> bool {
             || name == ".gitignore")
 }
 
-/// Whether a bundle may carry the file `rest` (its path under `mixins/<id>/`): sources and
+/// Whether a bundle may carry the file `rest` (its path under `native/`): sources and
 /// manifests, data, and the text files of a crate folder.
 pub fn allowed(rest: &str) -> bool {
-    rest.ends_with(".rs") || rest.ends_with(".toml") || in_data(rest) || text(rest)
+    rest == SOURCE_MANIFEST
+        || rest.starts_with("data/")
+        || rest.strip_prefix("rust/").is_some_and(|path| {
+            path.ends_with(".rs")
+                || path.ends_with(".toml")
+                || path.starts_with("data/")
+                || (!path.contains('/') && text(path))
+        })
+        || (!rest.contains('/') && text(rest))
 }
 
 impl Bundle {
     pub fn read(path: &Path) -> Result<Self, String> {
         let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-        let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+        Self::read_zip(zip::ZipArchive::new(file).map_err(|e| e.to_string())?)
+    }
+
+    /// Pack a canonical project, shared by cargo-horizon-mod and the launcher.
+    pub fn pack_directory(root: &Path, manifest: &Manifest) -> Result<Vec<u8>, String> {
+        fn walk(dir: &Path, root: &Path, files: &mut Vec<(String, Vec<u8>)>) -> Result<(), String> {
+            for entry in std::fs::read_dir(dir).map_err(|e| e.to_string())? {
+                let entry = entry.map_err(|e| e.to_string())?;
+                let path = entry.path();
+                let kind = entry.file_type().map_err(|e| e.to_string())?;
+                if kind.is_symlink() {
+                    return Err(format!(
+                        "{} is a link: not allowed in a mod",
+                        path.display()
+                    ));
+                }
+                if kind.is_dir() {
+                    if entry.file_name() != "target" && entry.file_name() != ".git" {
+                        walk(&path, root, files)?;
+                    }
+                } else {
+                    let rest = path
+                        .strip_prefix(root)
+                        .map_err(|e| e.to_string())?
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    if allowed(&rest) {
+                        let size = entry.metadata().map_err(|e| e.to_string())?.len();
+                        if files.len() >= 511
+                            || size
+                                + files
+                                    .iter()
+                                    .map(|(_, bytes)| bytes.len() as u64)
+                                    .sum::<u64>()
+                                > super::MAX_FILE
+                        {
+                            return Err("native bundle exceeds its entry or size limit".into());
+                        }
+                        files.push((
+                            format!("{SOURCE}{rest}"),
+                            std::fs::read(&path).map_err(|e| e.to_string())?,
+                        ));
+                    } else if rest.ends_with(".rs") || rest.ends_with(".toml") {
+                        return Err(format!("unexpected native source: {rest}"));
+                    }
+                }
+            }
+            Ok(())
+        }
+        for old in ["mixins", "api", "content", SOURCE_MANIFEST] {
+            if root.join(old).exists() {
+                return Err(format!(
+                    "unexpected project path: {old}; native sources belong in native/"
+                ));
+            }
+        }
+        let mut files = Vec::new();
+        walk(&root.join(SOURCE), &root.join(SOURCE), &mut files)?;
+        let content_manifest = root.join(crate::manifest::MANIFEST);
+        if content_manifest.is_file() {
+            let text = std::fs::read_to_string(content_manifest).map_err(|e| e.to_string())?;
+            let content = crate::Content::read(root, &crate::Manifest::parse(&text)?)?;
+            files.push((crate::manifest::MANIFEST.into(), text.into_bytes()));
+            let mut reader = content.reader()?;
+            for name in &content.files {
+                files.push((name.clone(), reader.read(name)?));
+            }
+        }
+        files.sort_by(|a, b| a.0.cmp(&b.0));
+        Self::write_files(manifest, &files)
+    }
+
+    /// Deterministic package writer; producers pass archive-relative paths, including content.
+    /// Reuse the reader's path, identity and expansion limits before returning any bytes.
+    pub fn write_files(
+        manifest: &Manifest,
+        files: &[(String, Vec<u8>)],
+    ) -> Result<Vec<u8>, String> {
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default().unix_permissions(0o644);
+        use std::io::Write;
+        zip.start_file(MANIFEST, options)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&serde_json::to_vec_pretty(manifest).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        let has_content = files
+            .iter()
+            .any(|(name, _)| name == crate::manifest::MANIFEST);
+        for (name, bytes) in files {
+            if has_content {
+                crate::manifest::check_file(name, 0, || Ok(bytes.as_slice()))
+                    .map_err(|e| e.to_string())?;
+            }
+            zip.start_file(name, options).map_err(|e| e.to_string())?;
+            zip.write_all(bytes).map_err(|e| e.to_string())?;
+        }
+        let bytes = zip.finish().map_err(|e| e.to_string())?.into_inner();
+        Self::read_zip(
+            zip::ZipArchive::new(std::io::Cursor::new(&bytes)).map_err(|e| e.to_string())?,
+        )?;
+        Ok(bytes)
+    }
+
+    fn read_zip<R: Read + std::io::Seek>(mut zip: zip::ZipArchive<R>) -> Result<Self, String> {
         let mut files = BTreeMap::new();
         let mut content_id = None;
         let mut total = 0u64;
@@ -182,9 +342,9 @@ impl Bundle {
                 manifest.id
             ));
         }
-        let prefix = format!("mixins/{}/", manifest.id);
+        let prefix = SOURCE;
         for name in files.keys().filter(|n| n.as_str() != MANIFEST) {
-            let Some(rest) = name.strip_prefix(&prefix) else {
+            let Some(rest) = name.strip_prefix(prefix) else {
                 return Err(format!("unexpected native source: {name}"));
             };
             if !allowed(rest) {
@@ -194,9 +354,10 @@ impl Bundle {
         let source = files
             .get(&format!("{prefix}horizon-mixin.toml"))
             .ok_or("missing horizon-mixin.toml")?;
-        let source: toml::Value =
+        let source: toml::Table =
             toml::from_str(std::str::from_utf8(source).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
+        check_source_layout(&source).map_err(|e| e.to_string())?;
         if source
             .get("mod")
             .and_then(|v| v.get("id"))
@@ -232,7 +393,6 @@ mod tests {
             game: "26.3".into(),
             horizon: "a".repeat(40),
             mixins: "b".repeat(40),
-            hooks: None,
         }
     }
     fn read(name: &str, extras: &[(&str, &[u8])], mixin: &str) -> Result<Bundle, String> {
@@ -243,7 +403,7 @@ mod tests {
         zip.start_file(MANIFEST, options).unwrap();
         zip.write_all(&serde_json::to_vec(&manifest()).unwrap())
             .unwrap();
-        zip.start_file("mixins/veinminer/horizon-mixin.toml", options)
+        zip.start_file("native/horizon-mixin.toml", options)
             .unwrap();
         zip.write_all(mixin.as_bytes()).unwrap();
         for (name, bytes) in extras {
@@ -260,6 +420,81 @@ mod tests {
             "[mod]\nid = \"veinminer\"\nversion = \"0.3.0\"\n[compatibility]\nhorizon_revision = \"{}\"\n",
             "a".repeat(40)
         )
+    }
+    #[test]
+    fn source_routes_are_exclusive_and_canonical_through_the_archive_reader() {
+        for declaration in [
+            "[api]\npath = 'rust'\n",
+            "[[crate]]\nid = 'code'\npath = 'rust'\n",
+        ] {
+            read("route-valid", &[], &(mixin() + declaration)).unwrap();
+        }
+        let both = "[api]\npath = 'rust'\n[[crate]]\nid = 'code'\npath = 'rust'\n";
+        assert_eq!(
+            check_source_layout(&both.parse().unwrap()),
+            Err(SourceLayoutError::BothRoutes)
+        );
+        for (i, declaration) in [
+            both,
+            "[api]\npath = 'api'\n",
+            "[[crate]]\nid = 'a'\npath = '.'\n",
+            "[[crate]]\nid = 'a'\npath = '../rust'\n",
+            "[api]\npath = 1\n",
+            "[[crate]]\nid = 'a'\npath = 'rust'\n[[crate]]\nid = 'b'\npath = 'rust'\n",
+        ]
+        .iter()
+        .enumerate()
+        {
+            assert!(read(&format!("route-{i}"), &[], &(mixin() + declaration)).is_err());
+        }
+        for (i, path) in [
+            "mixins/veinminer/hook.rs",
+            "native/veinminer/hook.rs",
+            "native/api/lib.rs",
+            "api/lib.rs",
+            "native/hook.rs",
+        ]
+        .iter()
+        .enumerate()
+        {
+            assert!(read(&format!("old-root-{i}"), &[(path, b"source")], &mixin()).is_err());
+        }
+    }
+
+    #[test]
+    fn shared_writer_roundtrips_and_enforces_reader_limits() {
+        let mut files = vec![
+            ("native/horizon-mixin.toml".into(), mixin().into_bytes()),
+            ("native/rust/src/lib.rs".into(), b"fn hook() {}".to_vec()),
+        ];
+        let bytes = Bundle::write_files(&manifest(), &files).unwrap();
+        let bundle =
+            Bundle::read_zip(zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap()).unwrap();
+        assert_eq!(bundle.files["native/rust/src/lib.rs"], b"fn hook() {}");
+        files.extend((0..512).map(|i| (format!("native/data/{i}.bin"), vec![0])));
+        assert!(
+            Bundle::write_files(&manifest(), &files)
+                .unwrap_err()
+                .contains("too many entries")
+        );
+    }
+
+    #[test]
+    fn archive_with_an_unknown_manifest_field_is_refused() {
+        let path = std::env::temp_dir().join(format!("native-unknown-{}.hmod", std::process::id()));
+        for name in ["hooks", "banana"] {
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+            zip.start_file(MANIFEST, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            let mut json = serde_json::to_value(manifest()).unwrap();
+            json[name] = serde_json::json!(1);
+            zip.write_all(&serde_json::to_vec(&json).unwrap()).unwrap();
+            zip.finish().unwrap();
+            let error = Bundle::read(&path).err().unwrap();
+            assert!(error.contains("unknown field"), "{error}");
+            assert!(error.contains(name), "{error}");
+        }
+        std::fs::remove_file(path).unwrap();
     }
     #[test]
     fn package_kind_does_not_depend_on_install_folder() {
@@ -302,7 +537,7 @@ mod tests {
     fn source_bundle_carries_exact_compatibility_into_index_facts() {
         let bundle = read(
             "valid",
-            &[("mixins/veinminer/hook.rs", b"fn hook() {}")],
+            &[("native/rust/src/lib.rs", b"fn hook() {}")],
             &mixin(),
         )
         .unwrap();
@@ -321,19 +556,16 @@ mod tests {
         let bundle = read(
             "data",
             &[
-                ("mixins/veinminer/data/nested/table.bin", &bytes),
-                ("mixins/veinminer/engine/data/model.bin", &bytes),
-                ("mixins/veinminer/engine/README.md", b"# engine"),
-                ("mixins/veinminer/engine/LICENSE-MIT", b"MIT"),
-                ("mixins/veinminer/.gitignore", b"target/"),
+                ("native/data/nested/table.bin", &bytes),
+                ("native/rust/data/model.bin", &bytes),
+                ("native/rust/README.md", b"# engine"),
+                ("native/rust/LICENSE-MIT", b"MIT"),
+                ("native/.gitignore", b"target/"),
             ],
             &mixin(),
         )
         .unwrap();
-        assert_eq!(
-            bundle.files["mixins/veinminer/data/nested/table.bin"],
-            bytes
-        );
+        assert_eq!(bundle.files["native/data/nested/table.bin"], bytes);
     }
     #[test]
     fn rejects_path_traversal_and_non_source_payloads() {
@@ -341,14 +573,14 @@ mod tests {
             "../escape.rs",
             "/absolute.rs",
             "mixins/other/hook.rs",
-            "mixins/veinminer/code.dll",
-            "mixins/veinminer/data/../code.dll",
-            "mixins/veinminer/database/file.bin",
-            "mixins/veinminer/engine/data.bin",
-            "mixins/veinminer/engine/src/data/blob.bin",
-            "mixins/veinminer/engine/src/README.md",
-            "mixins/veinminer/engine/README.dll/x.bin",
-            "mixins/veinminer/engine/Cargo.lock",
+            "native/code.dll",
+            "native/data/../code.dll",
+            "native/database/file.bin",
+            "native/rust/data.bin",
+            "native/rust/src/data/blob.bin",
+            "native/rust/src/README.md",
+            "native/rust/README.dll/x.bin",
+            "native/rust/Cargo.lock",
             "mixins/other/data/file.bin",
             "mixins\\veinminer\\hook.rs",
         ]
@@ -372,7 +604,7 @@ capabilities = ["registries"]
                 ("horizon-mod.toml", toml.as_bytes()),
                 ("assets/veinminer/lang/en_us.json", b"{}"),
                 ("data/veinminer/tags/item/ores.json", b"{}"),
-                ("mixins/veinminer/hook.rs", b"fn hook() {}"),
+                ("native/rust/src/lib.rs", b"fn hook() {}"),
             ],
             &mixin(),
         )
@@ -382,8 +614,8 @@ capabilities = ["registries"]
             names,
             [
                 MANIFEST,
-                "mixins/veinminer/hook.rs",
-                "mixins/veinminer/horizon-mixin.toml"
+                "native/horizon-mixin.toml",
+                "native/rust/src/lib.rs"
             ]
         );
         let other = toml.replace(r#""veinminer""#, r#""other""#);
@@ -420,23 +652,5 @@ capabilities = ["registries"]
             .check()
             .is_err()
         );
-    }
-    #[test]
-    fn hooks_is_optional_and_kept() {
-        let hooked = Manifest {
-            hooks: Some(1),
-            ..manifest()
-        };
-        assert!(hooked.check().is_ok());
-        let text = serde_json::to_string(&hooked).unwrap();
-        assert!(text.contains("\"hooks\":1"), "{text}");
-        assert_eq!(serde_json::from_str::<Manifest>(&text).unwrap(), hooked);
-        let plain = serde_json::to_string(&manifest()).unwrap();
-        assert!(!plain.contains("hooks"), "{plain}");
-        let zero = Manifest {
-            hooks: Some(0),
-            ..manifest()
-        };
-        assert!(zero.check().is_err());
     }
 }

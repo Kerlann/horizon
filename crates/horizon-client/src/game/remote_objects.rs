@@ -80,6 +80,7 @@ impl Game<'_> {
             self.armor_stands.push(ArmorStand::new(id, at, yaw));
         } else if kind == "minecraft:item_frame" || kind == "minecraft:glow_item_frame" {
             self.item_frames.push(ItemFrame {
+                join: Default::default(),
                 id,
                 pos: block,
                 facing: data.clamp(0, 5) as u8,
@@ -94,6 +95,7 @@ impl Game<'_> {
         } else if kind == "minecraft:cushion" {
             // BlockAttachedEntity.pos: `BlockPos.containing` of the spawn.
             self.cushions.push(Cushion {
+                join: Default::default(),
                 id,
                 position: at,
                 pos: block,
@@ -119,6 +121,7 @@ impl Game<'_> {
                 _ => 0,
             };
             self.paintings.push(Painting {
+                join: Default::default(),
                 id,
                 pos: block,
                 facing,
@@ -313,6 +316,17 @@ impl Game<'_> {
         }
     }
 
+    /// `MinecartTNT.handleEntityEvent(70)`: the client's fuse starts at 80.
+    pub(super) fn remote_cart_primed(&mut self, id: u32) {
+        if let Some(c) = self
+            .carts
+            .iter_mut()
+            .find(|c| c.id == id && c.kind == super::minecarts::CartKind::Tnt)
+        {
+            c.fuse = 80;
+        }
+    }
+
     /// One tick of interpolation: `step` moves a position a step toward
     /// the entity's last sent one, if it has a move in progress. A minecart
     /// on `NewMinecartBehavior` is moved by `lerp_cart` (true when it did)
@@ -330,6 +344,15 @@ impl Game<'_> {
                 c.position = step(c.id, c.position);
             }
             c.accumulate_rotation();
+            // MinecartTNT.tick on the client: the fuse counts down in smoke.
+            if c.kind == super::minecarts::CartKind::Tnt && c.fuse > 0 {
+                c.fuse -= 1;
+                self.particles.add(
+                    &ParticleOptions::simple(ParticleType::Smoke),
+                    [c.position.x, c.position.y + 0.5, c.position.z],
+                    [0.0; 3],
+                );
+            }
             if c.kind == super::minecarts::CartKind::Furnace
                 && c.fuel > 0
                 && self.world.random.next_int_bound(4).unwrap_or(1) == 0

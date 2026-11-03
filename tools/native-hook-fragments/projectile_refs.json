@@ -1,0 +1,64 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "projectile",
+      "side": "server",
+      "target": "horizon_client::game::native_projectile_refs::Game<'_>::native_projectile_ref"
+    },
+    {
+      "name": "projectile_owner",
+      "side": "server",
+      "target": "horizon_client::game::native_projectile_refs::Game<'_>::native_projectile_owner",
+      "receiver": "projectile"
+    },
+    {
+      "name": "projectile_set_owner",
+      "side": "server",
+      "target": "horizon_client::game::native_projectile_refs::Game<'_>::native_projectile_set_owner",
+      "receiver": "projectile"
+    },
+    {
+      "name": "projectile_deflect",
+      "side": "server",
+      "target": "horizon_client::game::native_projectile_refs::Game<'_>::native_projectile_deflect",
+      "receiver": "projectile"
+    },
+    {
+      "name": "projectile_pickup",
+      "side": "server",
+      "target": "horizon_client::game::native_projectile_refs::Game<'_>::native_projectile_pickup",
+      "receiver": "projectile"
+    },
+    {
+      "name": "projectile_set_pickup",
+      "side": "server",
+      "target": "horizon_client::game::native_projectile_refs::Game<'_>::native_projectile_set_pickup",
+      "receiver": "projectile"
+    },
+    {
+      "name": "projectile_base_damage",
+      "side": "server",
+      "target": "horizon_client::game::native_projectile_refs::Game<'_>::native_projectile_base_damage",
+      "receiver": "projectile"
+    },
+    {
+      "name": "projectile_set_base_damage",
+      "side": "server",
+      "target": "horizon_client::game::native_projectile_refs::Game<'_>::native_projectile_set_base_damage",
+      "receiver": "projectile"
+    },
+    {
+      "name": "projectile_critical",
+      "side": "server",
+      "target": "horizon_client::game::native_projectile_refs::Game<'_>::native_projectile_critical",
+      "receiver": "projectile"
+    },
+    {
+      "name": "projectile_set_critical",
+      "side": "server",
+      "target": "horizon_client::game::native_projectile_refs::Game<'_>::native_projectile_set_critical",
+      "receiver": "projectile"
+    }
+  ]
+}

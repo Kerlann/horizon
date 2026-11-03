@@ -919,7 +919,7 @@ fn hmod(version: &str) -> Vec<u8> {
     zip.start_file("horizon-native.json", options).unwrap();
     let manifest = json!({"schema": 1, "id": "coords_hud", "version": version, "game": "26.3", "horizon": revision, "mixins": "b".repeat(40)});
     zip.write_all(manifest.to_string().as_bytes()).unwrap();
-    zip.start_file("mixins/coords_hud/horizon-mixin.toml", options)
+    zip.start_file("native/horizon-mixin.toml", options)
         .unwrap();
     write!(
         zip,

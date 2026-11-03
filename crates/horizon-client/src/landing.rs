@@ -26,7 +26,6 @@ use horizon_world::{
 use std::{collections::BTreeMap, fs, path::Path};
 
 /// Called on the server before a landing converts farmland to its base block.
-/// @API:farmland_trample@.
 #[inline(never)]
 pub fn native_farmland_trample(
     entity: u32,
@@ -40,7 +39,6 @@ pub fn native_farmland_trample(
 
 /// A living entity is about to handle a fall (`LivingFallEvent`). Mods may
 /// change the distance and damage multiplier, or cancel fall handling.
-/// 357.
 #[inline(never)]
 pub fn native_living_fall(
     entity: u32,

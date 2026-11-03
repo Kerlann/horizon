@@ -12,7 +12,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a cancellable taming (`native_animal_tame`).",
-  "doc_summary": "`native_animal_tame(tamer, tamer_entity_id, entity, kind, cancel)`, when a player's taming roll succeeds: a wolf's bone, a cat's fish, a parrot's seeds, a nautilus's food, or a horse, donkey, mule or llama the player rides. `tamer` and `tamer_entity_id` are the player's UUID and entity id, `entity` and `kind` the mob's. Set `cancel` for the attempt to fail as a failed roll does (smoke; a horse bucks its rider off). Before `entity_tame`. Server-side. Bundles need \"hooks\": @API:animal_tame@."
+  ]
 }

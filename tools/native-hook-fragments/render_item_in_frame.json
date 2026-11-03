@@ -8,7 +8,5 @@
       "cancellable": true,
       "mod_api": {"contract": "cancel", "out": "canceled"}
     }
-  ],
-  "rust_summary": "a cancellable item frame item render hook (`native_render_item_in_frame`).",
-  "doc_summary": "a cancellable item frame item render hook (`native_render_item_in_frame`). Bundles need \"hooks\": @API:render_item_in_frame@."
+  ]
 }

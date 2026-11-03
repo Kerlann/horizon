@@ -623,7 +623,7 @@ impl Game<'_> {
             blast_source.as_ref(),
         );
         let mut pushed: Vec<_> = self.lan_acting.zip(own).into_iter().collect();
-        if let Some(mut host) = self.lan.take() {
+        if let Some(host) = self.lan.as_ref() {
             let guests: Vec<u32> = host
                 .hub
                 .guests
@@ -632,7 +632,7 @@ impl Game<'_> {
                 .map(|g| g.conn)
                 .collect();
             for conn in guests {
-                let push = self.as_guest(&mut host, conn, |g| {
+                let push = self.as_guest(conn, |g| {
                     g.explosion_hurt_player(
                         &context,
                         radius,
@@ -646,7 +646,6 @@ impl Game<'_> {
                     pushed.push((conn, push));
                 }
             }
-            self.lan = Some(host);
         }
         // Mobs. `WitherBoss.hurtServer`: a wither shrugs off an undead cause.
         let cause = self
@@ -826,6 +825,13 @@ impl Game<'_> {
         if spares_stands {
             return;
         }
+        // `DamageSources.explosion`: a caused blast is `player_explosion`.
+        let cause = self.blast_attacker().map(|(id, _)| id);
+        let damage_type = super::creatures::damage_type(
+            horizon_client::mobs::DamageKind::Explosion,
+            cause.is_some(),
+        );
+        let causing = cause.unwrap_or(0);
         let mut i = 0;
         while i < self.armor_stands.len() {
             let a = &self.armor_stands[i];
@@ -833,7 +839,7 @@ impl Game<'_> {
             if !super::armor_stands::spared_by_blast(a)
                 && blast_reaches(center, diameter, [p.x, p.y, p.z])
             {
-                self.break_armor_stand_by_anything(i);
+                self.break_armor_stand_by_anything(i, damage_type, causing);
             } else {
                 i += 1;
             }
@@ -842,7 +848,7 @@ impl Game<'_> {
     /// `ExplosionEvent.Start` for the explosion `start`: true when a mod
     /// cancels it, and nothing of it happens.
     pub(super) fn explosion_start_cancelled(&mut self, start: &NativeExplosionStart<'_>) -> bool {
-        if horizon_client::mod_api::mods().is_empty() {
+        if !crate::mod_api::listened(crate::mod_api::HookId::ExplosionStart) {
             return false;
         }
         let mut cancel = false;

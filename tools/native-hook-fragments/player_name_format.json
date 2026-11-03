@@ -11,8 +11,5 @@
         "out": "displayname"
       }
     }
-  ],
-  "comments": ["crates/horizon-client/src/lan/hub.rs"],
-  "rust_summary": "Player display name formatting (`native_player_name_format`).",
-  "doc_summary": "A player's display name is formatted: `native_player_name_format(username, displayname)` can replace the team-formatted component, including its click, hover and insertion styles. It runs for command and chat names, hub messages and client name tags. Bundles need \"hooks\": @API:player_name_format@."
+  ]
 }

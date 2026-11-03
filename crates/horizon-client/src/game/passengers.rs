@@ -492,7 +492,7 @@ impl Game<'_> {
                     p.extra.age = if baby { i32::MIN / 2 } else { 0 };
                 }
                 if let Some(s) = self.mobs.iter_mut().find(|m| m.id == id) {
-                    s.extra.saddled = true;
+                    s.extra.set_saddled(true);
                 }
                 self.mount_mob(piglin, id);
             }

@@ -162,8 +162,7 @@ impl Package {
                 if entry.is_dir() && matches!(mode & 0o170000, 0 | 0o040000) {
                     continue;
                 }
-                check_entry(&name, mode)?;
-                check_header(&name, &mut entry)?;
+                check_file(&name, mode, || Ok(&mut entry)).map_err(|e| e.to_string())?;
             }
             let mut toml = String::new();
             zip.by_name(MANIFEST)
@@ -205,18 +204,56 @@ impl Package {
         put(MANIFEST, manifest_text.as_bytes())?;
         for (name, bytes) in files {
             crate::content::check_path(name)?;
-            check_entry(name, 0)?;
-            check_header(name, *bytes)?;
+            check_file(name, 0, || Ok(*bytes)).map_err(|e| e.to_string())?;
             put(name, bytes)?;
         }
         Ok(zip.finish().map_err(err)?.into_inner())
     }
 }
 
-/// Check entry types before opening anything: links and special files are not content.
-fn check_entry(name: &str, mode: u32) -> Result<(), String> {
+/// A content entry that cannot be safely loaded as data.
+#[derive(Debug)]
+pub enum ContentFileError {
+    UnsupportedType(String),
+    Executable(String),
+    Read {
+        name: String,
+        source: std::io::Error,
+    },
+}
+
+impl std::fmt::Display for ContentFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedType(name) => {
+                write!(f, "{name}: unsupported file type in a content mod")
+            }
+            Self::Executable(name) => {
+                write!(f, "{name}: unsupported executable file in a content mod")
+            }
+            Self::Read { name, source } => write!(f, "{name}: {source}"),
+        }
+    }
+}
+
+impl std::error::Error for ContentFileError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Read { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+/// The shared content-file boundary. Refuse type/mode before opening a file,
+/// then inspect its header even when its name has no executable extension.
+pub(crate) fn check_file<R: Read>(
+    name: &str,
+    mode: u32,
+    open: impl FnOnce() -> std::io::Result<R>,
+) -> Result<(), ContentFileError> {
     if !matches!(mode & 0o170000, 0 | 0o100000) {
-        return Err(format!("{name}: unsupported file type in a content mod"));
+        return Err(ContentFileError::UnsupportedType(name.into()));
     }
     let extension = name
         .rsplit(['/', '\\'])
@@ -230,21 +267,17 @@ fn check_entry(name: &str, mode: u32) -> Result<(), String> {
         .any(|kind| ext.eq_ignore_ascii_case(kind))
     });
     if executable || mode & 0o111 != 0 {
-        return Err(format!(
-            "{name}: unsupported executable file in a content mod"
-        ));
+        return Err(ContentFileError::Executable(name.into()));
     }
-    Ok(())
-}
-
-/// File names and permissions are not enough: executable bytes may have any name.
-fn check_header(name: &str, mut file: impl Read) -> Result<(), String> {
+    let error = |source| ContentFileError::Read {
+        name: name.into(),
+        source,
+    };
+    let mut file = open().map_err(error)?;
     let mut header = [0; 4];
     let mut read = 0;
     while read < header.len() {
-        let size = file
-            .read(&mut header[read..])
-            .map_err(|e| format!("{name}: {e}"))?;
+        let size = file.read(&mut header[read..]).map_err(error)?;
         if size == 0 {
             break;
         }
@@ -263,9 +296,7 @@ fn check_header(name: &str, mut file: impl Read) -> Result<(), String> {
     ) || header.starts_with(b"MZ")
         || (header.starts_with(b"#!") && header[2] != b'[');
     if executable {
-        return Err(format!(
-            "{name}: unsupported executable file in a content mod"
-        ));
+        return Err(ContentFileError::Executable(name.into()));
     }
     Ok(())
 }
@@ -286,9 +317,7 @@ fn check_folder_file(root: &Path, name: &str) -> Result<(), String> {
     } else {
         0o120000
     };
-    check_entry(name, mode)?;
-    let file = std::fs::File::open(&path).map_err(|e| format!("{name}: {e}"))?;
-    check_header(name, file)
+    check_file(name, mode, || std::fs::File::open(&path)).map_err(|e| e.to_string())
 }
 
 /// The `.hmod` files and mod folders in `dir`, by name.

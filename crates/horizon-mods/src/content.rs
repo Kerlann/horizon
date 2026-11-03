@@ -90,6 +90,40 @@ pub struct BlockProperties {
     pub random_ticks: Option<RandomTicks>,
     /// How the block is drawn, whatever the template does (`BlockBehaviour.getRenderShape`).
     pub render_shape: Option<RenderShape>,
+    /// Vanilla's piston push reaction, or the template's when unset.
+    #[serde(default, deserialize_with = "deserialize_push_reaction")]
+    pub push_reaction: Option<PushReaction>,
+}
+
+/// Vanilla's `PushReaction`, by its constant's name.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PushReaction {
+    PushPull,
+    Push,
+    Popped,
+    Immoveable,
+    IgnoreEntity,
+}
+
+impl PushReaction {
+    /// The constant's name, as the block tables write it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::PushPull => "PUSH_PULL",
+            Self::Push => "PUSH",
+            Self::Popped => "POPPED",
+            Self::Immoveable => "IMMOVEABLE",
+            Self::IgnoreEntity => "IGNORE_ENTITY",
+        }
+    }
+}
+
+fn deserialize_push_reaction<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<PushReaction>, D::Error> {
+    Option::<PushReaction>::deserialize(deserializer)
+        .map_err(|e| serde::de::Error::custom(format!("push_reaction: {e}")))
 }
 
 /// Vanilla's `RenderShape`, by its constant's name: `MODEL` puts the block model in the chunk
@@ -1651,6 +1685,21 @@ capabilities = ["registries"]
     }
 
     #[test]
+    fn blocks_choose_vanilla_push_reactions() {
+        for name in ["PUSH_PULL", "PUSH", "POPPED", "IMMOVEABLE", "IGNORE_ENTITY"] {
+            let text = format!(
+                r#"{{"template":"minecraft:stone","properties":{{"push_reaction":"{name}"}}}}"#
+            );
+            let files: &[(&str, &[u8])] = &[("data/ruby/horizon/block/gear.json", text.as_bytes())];
+            let content = hmod("push-reaction", MANIFEST_TEXT, files).unwrap();
+            assert_eq!(
+                content.blocks[0].properties.push_reaction.unwrap().name(),
+                name
+            );
+        }
+    }
+
+    #[test]
     fn blocks_pick_the_states_that_tick_randomly() {
         let own = r#""state_properties": {"grown": {"type": "boolean"}}"#;
         let block = |ticks: &str| {
@@ -1952,6 +2001,14 @@ capabilities = ["registries"]
                 br#"{"template": "minecraft:stone", "glow": true}"#,
             )],
         );
+        let e = refused(
+            "push-reaction",
+            &[(
+                "data/ruby/horizon/block/a.json",
+                br#"{"template":"minecraft:stone","properties":{"push_reaction":"NORMAL"}}"#,
+            )],
+        );
+        assert!(e.contains("push_reaction"), "{e}");
         refused("shape-reversed", &[("data/ruby/horizon/block/a.json", br#"{"template":"minecraft:stone","shapes":{"properties":["axis"],"values":{"x":[[1,0,0,0,1,1]]}}}"#)]);
         refused("shape-malformed", &[("data/ruby/horizon/block/a.json", br#"{"template":"minecraft:stone","shapes":{"properties":["axis"],"values":{"x":[[0,0,0,1,1]]}}}"#)]);
         refused(

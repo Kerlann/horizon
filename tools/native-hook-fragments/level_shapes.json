@@ -16,8 +16,5 @@
       "target": "horizon_client::game::native_entity_refs::Game<'_>::native_level_block_face_sturdy",
       "receiver": "level"
     }
-  ],
-  "rust_summary": "level block outline and collision shapes.",
-  "doc_summary": "Read a level's block-local outline or collision boxes with `level.block_shape(host, pos, kind)`. Shape reads resolve the level in place and parked levels. `level.block_face_sturdy(host, pos, face, support)` reads current or parked levels; false means not sturdy. It returns None for clients, stale or closed levels, unloaded or out-of-height positions, dynamic-shape states (including moving pistons and shulker boxes), or an exporter error. Dynamic support is a follow-up on #29. `level.clip(host, from, to, blocks, fluids)` traverses the selected level with an empty entity context, COLLIDER or OUTLINE and fluid None only; dynamic block shapes, unavailable chunks, invalid rays and traversal failures return None. Fluid modes and dynamic shapes are follow-ups on #29. Bundles need \"hooks\": @API:level_shapes@.",
-  "comments": ["crates/horizon-client/src/game/native_entity_refs.rs"]
+  ]
 }

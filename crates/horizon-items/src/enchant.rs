@@ -540,6 +540,11 @@ impl Enchantments {
                 .is_some_and(|e| e.effects.get(component).is_some())
         })
     }
+    /// `EnchantmentHelper.has(stack, PREVENT_ARMOR_CHANGE)`: whether an enchantment on `stack`
+    /// keeps it on as worn armour (Curse of Binding, or a data pack's own).
+    pub fn prevents_armor_change(&self, stack: &ItemStack) -> bool {
+        self.has_component(stack, "minecraft:prevent_armor_change")
+    }
     /// `minecraft:attributes` contributions of `stack`: (attribute, id, amount, operation).
     pub fn attributes(&self, stack: &ItemStack) -> Vec<(String, String, f64, String)> {
         let mut out = Vec::new();
@@ -844,6 +849,15 @@ pub mod tests {
             (
                 "minecraft:feather_falling",
                 json!({"anvil_cost":2,"max_cost":{"base":11,"per_level_above_first":6},"max_level":4,"min_cost":{"base":5,"per_level_above_first":6},"supported_items":"#minecraft:enchantable/foot_armor","weight":5,"effects":{"minecraft:damage_protection":[{"effect":{"type":"minecraft:add","value":{"type":"minecraft:linear","base":3.0,"per_level_above_first":3.0}},"requirements":{"type":"minecraft:damage_source_properties","predicate":{"tags":[{"expected":true,"id":"#minecraft:is_fall"},{"expected":false,"id":"#minecraft:bypasses_invulnerability"}]}}}]}}),
+            ),
+            (
+                "minecraft:binding_curse",
+                json!({"anvil_cost":8,"description":{"translate":"enchantment.minecraft.binding_curse"},"effects":{"minecraft:prevent_armor_change":{}},"max_cost":{"base":50,"per_level_above_first":0},"max_level":1,"min_cost":{"base":25,"per_level_above_first":0},"slots":["armor"],"supported_items":"#minecraft:enchantable/equippable","weight":1}),
+            ),
+            // A data pack's own enchantment with Curse of Binding's effect under another id.
+            (
+                "test:clinging",
+                json!({"anvil_cost":8,"description":"Clinging","effects":{"minecraft:prevent_armor_change":{}},"max_cost":{"base":50,"per_level_above_first":0},"max_level":1,"min_cost":{"base":25,"per_level_above_first":0},"slots":["armor"],"supported_items":"#minecraft:enchantable/equippable","weight":1}),
             ),
         ];
         let list: Vec<Enchantment> = defs

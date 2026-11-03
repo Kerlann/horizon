@@ -61,10 +61,5 @@
       "target": "horizon_client::game::native_player_food::Game<'_>::native_player_set_experience_levels",
       "receiver": "player"
     }
-  ],
-  "rust_summary": "a player's food and experience through a `PlayerRef` (`native_player_feed`, `native_player_set_experience_points`...).",
-  "doc_summary": "a player's food and experience through a `PlayerRef`, as vanilla's `FoodData` and `Player`: reads `needs_food`, `has_enough_food`, `can_eat(always)`, `experience()` (level, progress, total) and `xp_needed_for_next_level`; writes `feed(nutrition, saturation_modifier)` (`FoodData.eat`), `add_exhaustion` (`Player.causeFoodExhaustion`), `set_food_level`, `set_saturation`, `set_exhaustion`, `set_experience_points` and `set_experience_levels` (`ServerPlayer`'s). Writes return false for a stale handle, a dead player, or another player than the one whose turn it is. Bundles need \"hooks\": @API:player_food@.",
-  "comments": [
-    "crates/horizon-client/src/game/native_player_food.rs"
   ]
 }

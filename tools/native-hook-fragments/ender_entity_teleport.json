@@ -11,8 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a cancellable enderman or shulker teleport (`native_ender_entity_teleport`).",
-  "doc_summary": "`native_ender_entity_teleport(entity, kind, from, target, cancel)`, when an enderman is about to teleport (`Enderman.teleport(x, y, z)`: its random jump, its dodge, its flight from daylight or water, its step toward a stared-at player) or a shulker has picked a spot (`Shulker.teleportSomewhere`). A mod may move `target` (a value that is not a number is ignored; a shulker lands on the block it falls in, on the face it already chose). Set `cancel` and the mob stays: an enderman's try counts as failed, a shulker's ends its tries. The random draws are vanilla's whatever a mod answers. Bundles need \"hooks\": @API:ender_entity_teleport@.",
-  "comments": ["crates/horizon-client/src/mobs/enderman.rs"]
+  ]
 }

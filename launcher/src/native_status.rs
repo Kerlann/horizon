@@ -243,8 +243,8 @@ mod tests {
             let manifest = serde_json::json!({"schema":1,"id":id,"version":"1.2","game":"26.3","horizon":pin,"mixins":pin});
             let source = format!("[mod]\nid = \"{id}\"\nversion = \"1.2\"\n[compatibility]\nhorizon_revision = \"{pin}\"\n");
             for (name, bytes) in [
-                ("horizon-native.json".into(), manifest.to_string()),
-                (format!("mixins/{id}/horizon-mixin.toml"), source),
+                ("horizon-native.json", manifest.to_string()),
+                ("native/horizon-mixin.toml", source),
             ] {
                 zip.start_file(name, zip::write::SimpleFileOptions::default())
                     .unwrap();

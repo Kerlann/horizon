@@ -325,7 +325,6 @@ pub struct StackedOnOther<'a> {
 }
 
 /// NeoForge's `ItemStackedOnOtherEvent`, before either item override.
-/// @API:item_stacked_on_other@.
 #[inline(never)]
 pub fn native_item_stacked_on_other(event: &mut StackedOnOther<'_>, canceled: &mut bool) {
     crate::native_client_hooks::item_stacked_on_other(event, canceled);
@@ -639,8 +638,7 @@ fn tidy(slot: &mut Option<ItemStack>) {
 /// `max_stack` is kept to 1 to 99,
 /// and the item's own stack size still caps it. Asked on the server, for each
 /// click, drag and shift-click that puts an item in a slot, several times for
-/// one shift-click: answer from `stack` alone, and fast. API
-/// 130.
+/// one shift-click: answer from `stack` alone, and fast.
 #[inline(always)]
 pub fn native_menu_slot_rules(
     menu: &str,
@@ -1732,9 +1730,7 @@ impl Menu {
                     o.satisfied_by(env.items, a, b) || o.satisfied_by(env.items, b, a)
                 }),
             Role::Armor(_) | Role::MountEquip(_) => match self.slot(s) {
-                Some(stack) => {
-                    self.creative || stack.enchantment_level("minecraft:binding_curse") == 0
-                }
+                Some(stack) => self.creative || !env.enchantments.prevents_armor_change(stack),
                 None => true,
             },
             _ => true,
