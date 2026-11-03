@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "right_click_item",
+      "side": "both",
+      "version": 1,
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_right_click_item",
+      "neoforge": "PlayerInteractEvent.RightClickItem",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "canceled"
+      }
+    }
+  ]
+}

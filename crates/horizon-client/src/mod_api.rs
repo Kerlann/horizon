@@ -2307,6 +2307,32 @@ pub struct NativeBlockClick<'a> {
     pub player_entity_id: i32,
 }
 
+/// The behaviour about to run in `UseItemOnBlockEvent`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum UsePhase {
+    /// `onItemUseFirst`; reserved until that behaviour has a firing point.
+    ItemBeforeBlock,
+    /// `BlockBehaviour.useItemOn`, before the block's Part and template.
+    Block,
+    /// `Item.useOn`, after the block passed and before the item's Part.
+    ItemAfterBlock,
+}
+
+/// A player's item use without a block or entity target (`RightClickItem`).
+#[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
+pub struct NativeItemClick<'a> {
+    pub side: LogicalSide,
+    pub dimension: LevelDimension,
+    /// The block containing the clicking player's feet (`getPos`).
+    pub pos: [i32; 3],
+    pub hand: Hand,
+    pub stack: &'a ItemStack,
+    pub player: u128,
+    pub player_entity_id: i32,
+}
+
 /// Vanilla's `InteractionResult`, as a hook answers it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]

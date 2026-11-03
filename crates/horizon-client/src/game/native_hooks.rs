@@ -5753,6 +5753,40 @@ impl Game<'_> {
             canceled,
         );
     }
+    /// `UseItemOnBlockEvent`: after a phase was chosen, before its Part or
+    /// vanilla behaviour. Cancel skips that behaviour and returns
+    /// `cancellation_result` (initially `TryWithEmptyHand`).
+    pub(super) fn native_use_item_on_block(
+        &mut self,
+        click: &NativeBlockClick<'_>,
+        phase: mod_api::UsePhase,
+        cancellation_result: &mut NativeInteractionResult,
+        canceled: &mut bool,
+    ) {
+        mod_api::dispatch_use_item_on_block(
+            mod_api::HostSide::of(self),
+            click,
+            phase,
+            cancellation_result,
+            canceled,
+        );
+    }
+    /// `PlayerInteractEvent.RightClickItem`, immediately before `Item.use`.
+    /// Cancel skips its Part and vanilla behaviour; its result defaults to
+    /// `Pass`. On the client only `Success` ends the hand loop.
+    pub(super) fn native_right_click_item(
+        &mut self,
+        click: &mod_api::NativeItemClick<'_>,
+        cancellation_result: &mut NativeInteractionResult,
+        canceled: &mut bool,
+    ) {
+        mod_api::dispatch_right_click_item(
+            mod_api::HostSide::of(self),
+            click,
+            cancellation_result,
+            canceled,
+        );
+    }
     /// An explosion at `center` in `dimension` (`minecraft:overworld`) is
     /// about to break `blocks`: `ServerExplosion.explode` with its `toBlow`,
     /// before any block is hit. Take out the positions to spare; they keep
@@ -8418,6 +8452,56 @@ impl Game<'_> {
                 use_item,
             }
         }
+    }
+    /// The chosen phase's broadcast event, before its scoped behaviour.
+    pub(super) fn use_item_on_block(
+        &mut self,
+        hit: &super::Hit,
+        hand: Hand,
+        stack: Option<&ItemStack>,
+        phase: mod_api::UsePhase,
+    ) -> Option<NativeInteractionResult> {
+        if !mod_api::listened(mod_api::HookId::UseItemOnBlock) {
+            return None;
+        }
+        let click = self.block_click(hit, hand, stack);
+        let (mut result, mut canceled) = (NativeInteractionResult::TryWithEmptyHand, false);
+        self.native_use_item_on_block(&click, phase, &mut result, &mut canceled);
+        canceled.then_some(result)
+    }
+    /// Air use only: a passing block or entity keeps its target, rather than
+    /// becoming a `RightClickItem` interaction.
+    pub(super) fn right_click_item(
+        &mut self,
+        hand: Hand,
+        stack: &ItemStack,
+    ) -> Option<NativeInteractionResult> {
+        if !mod_api::listened(mod_api::HookId::RightClickItem)
+            || self.entity_targeted()
+            || self.pick().is_some()
+        {
+            return None;
+        }
+        let pos = self
+            .target_position(super::Target::Player)?
+            .map(|v| v.floor() as i32);
+        let (player, player_entity_id) = self.native_clicker();
+        let click = mod_api::NativeItemClick {
+            side: if self.remote.is_some() {
+                LogicalSide::Client
+            } else {
+                LogicalSide::Server
+            },
+            dimension: self.dim.level(),
+            pos,
+            hand,
+            stack,
+            player,
+            player_entity_id,
+        };
+        let (mut result, mut canceled) = (NativeInteractionResult::Pass, false);
+        self.native_right_click_item(&click, &mut result, &mut canceled);
+        canceled.then_some(result)
     }
     /// The shared context for a block's behaviour and the click event.
     pub(super) fn block_click<'a>(

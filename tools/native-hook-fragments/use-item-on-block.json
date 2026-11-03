@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "name": "use_item_on_block",
+      "side": "both",
+      "version": 1,
+      "target": "horizon_client::game::native_hooks::Game<'_>::native_use_item_on_block",
+      "neoforge": "UseItemOnBlockEvent",
+      "cancellable": true,
+      "mod_api": {
+        "contract": "cancel",
+        "out": "canceled"
+      }
+    }
+  ]
+}
