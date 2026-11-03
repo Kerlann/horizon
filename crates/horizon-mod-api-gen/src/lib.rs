@@ -1,4 +1,5 @@
 //! Generate the typed mod interface from native hook signatures and catalog contracts.
+mod host;
 use heck::ToSnakeCase;
 use quote::ToTokens;
 use std::{
@@ -416,6 +417,8 @@ fn handle_method<'a>(
     sig.ident =
         syn::parse_str(short).map_err(|_| format!("{name}: {short} is not a method name"))?;
     let mut inputs = sig.inputs.iter();
+    let mutable = matches!(inputs.next(), Some(FnArg::Receiver(r)) if r.mutability.is_some());
+    let mut inputs = sig.inputs.iter();
     let host: FnArg = match inputs.next() {
         Some(FnArg::Receiver(r)) if r.reference.is_some() && r.mutability.is_some() => {
             syn::parse_quote!(host: &mut dyn Host)
@@ -448,10 +451,11 @@ fn handle_method<'a>(
     }
     sig.inputs = rest.into_iter().collect();
     let docs = doc_comments(&method.attrs, name, true)?;
+    let backend = if mutable { "backend_mut" } else { "backend" };
     Ok((
         handle,
         format!(
-            "{docs}pub {} {{ host.{name}(self{args}) }}\n",
+            "{docs}pub {} {{ host.{backend}(BackendToken(())).{name}(self{args}) }}\n",
             sig.to_token_stream()
         ),
     ))
@@ -1196,118 +1200,7 @@ fn sources(root: &Path, fill: FillMode) -> Result<Sources, String> {
         part("ItemPart"),
         part("MenuPart"),
     );
-    let api_source = fs::read_to_string(root.join("crates/horizon-client/src/mod_api.rs"))
-        .map_err(|e| e.to_string())?;
-    let types = api_types(&api_source, &code)?;
-    let mut game = Vec::new();
-    game_methods(
-        &root.join("crates/horizon-client/src/game"),
-        "horizon_client::game",
-        &mut game,
-    )?;
-    let mut host_traits = String::new();
-    let mut host_impl = String::new();
-    let mut names = HashSet::new();
-    let mut handles = std::collections::BTreeMap::<&str, String>::new();
-    let mut helpers = catalog["helpers"]
-        .as_array()
-        .ok_or("catalog helpers must be an array")?
-        .clone();
-    let mut fragments = fs::read_dir(root.join("tools/native-hook-fragments"))
-        .map_err(|e| e.to_string())?
-        .map(|entry| entry.map(|entry| entry.path()).map_err(|e| e.to_string()))
-        .collect::<Result<Vec<_>, _>>()?;
-    fragments.sort();
-    for path in fragments
-        .into_iter()
-        .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
-    {
-        let fragment: serde_json::Value =
-            serde_json::from_str(&fs::read_to_string(&path).map_err(|e| e.to_string())?)
-                .map_err(|e| format!("{}: {e}", path.display()))?;
-        if let Some(pending) = fragment.get("helpers") {
-            helpers.extend(
-                pending
-                    .as_array()
-                    .ok_or("fragment helpers must be an array")?
-                    .iter()
-                    .cloned(),
-            );
-        }
-    }
-    for helper in &helpers {
-        let name = helper["name"].as_str().ok_or("helper name missing")?;
-        let side =
-            HelperSide::parse(helper)?.ok_or_else(|| format!("helper {name}: side missing"))?;
-        if !names.insert(name) {
-            return Err(format!("duplicate helper {name}"));
-        }
-        let target = helper["target"].as_str().ok_or("helper target missing")?;
-        let method = helper_target(&game, name, target)?;
-        let (declaration, implementation) = host_method(method, name, &types.exports)?;
-        if let Some(client_target) = helper.get("client_target") {
-            let client_target = client_target
-                .as_str()
-                .ok_or("client_target must be a string")?;
-            let client = helper_target(&game, name, client_target)?;
-            let (_, client_implementation) = host_method(client, name, &types.exports)?;
-            matching_helper_signatures(&implementation, &client_implementation, name)?;
-        }
-        let side_doc = match side {
-            HelperSide::Server => "/// Side: server.\n",
-            HelperSide::Client => "/// Side: client.\n",
-            HelperSide::Both => "/// Side: both.\n",
-        };
-        host_traits.push_str(side_doc);
-        host_traits.push_str(&declaration);
-        host_impl.push_str(&implementation);
-        if let Some(receiver) = helper.get("receiver") {
-            let receiver = receiver
-                .as_str()
-                .ok_or("helper receiver must be a string")?;
-            let (handle, code) = handle_method(method, name, receiver, &types.handles)?;
-            let methods = handles.entry(handle).or_default();
-            methods.push_str(side_doc);
-            methods.push_str(&code);
-        }
-    }
-    let handles = handles
-        .iter()
-        .map(|(handle, methods)| format!("impl {handle} {{\n{methods}}}\n"))
-        .collect::<String>();
-    struct StdTypes {
-        path_buf: bool,
-        arc: bool,
-    }
-    impl<'ast> Visit<'ast> for StdTypes {
-        fn visit_type_path(&mut self, ty: &'ast syn::TypePath) {
-            if ty.path.segments.len() == 1 {
-                self.path_buf |= ty.path.segments[0].ident == "PathBuf";
-                self.arc |= ty.path.segments[0].ident == "Arc";
-            }
-            syn::visit::visit_type_path(self, ty);
-        }
-    }
-    let host_trait: syn::ItemTrait = syn::parse_str(&format!("trait Host {{ {host_traits} }}"))
-        .map_err(|e| format!("generated Host: {e}"))?;
-    let mut std_types = StdTypes {
-        path_buf: false,
-        arc: false,
-    };
-    std_types.visit_item_trait(&host_trait);
-    let mut imports = String::new();
-    if std_types.path_buf {
-        imports.push_str("use std::path::PathBuf;\n");
-    }
-    if std_types.arc {
-        imports.push_str("use std::sync::Arc;\n");
-    }
-    let host = format!(
-        "// @generated by cargo run -p xtask -- mod-api; do not edit.\nuse super::*;\n{imports}/// Services supplied by the game to trait mods.\n/// Each method's default panics with its name, so a test double implements only what its test calls; the game implements every one.\npub trait Host {{\n{host_traits}}}\n{handles}"
-    );
-    let implementation = format!(
-        "// @generated by cargo run -p xtask -- mod-api; do not edit.\nuse horizon_client::mod_api::*;\n{imports}impl Host for super::Game<'_> {{\n{host_impl}}}\n"
-    );
+    let (host, implementation) = host::generate(root, &catalog, &code)?;
     let render_code = format!(
         "// @generated by cargo run -p xtask -- mod-api; do not edit.\nuse super::*;\npub trait RenderHooks: Send + Sync {{\n{render_traits}}}\n{render_dispatch}"
     );
@@ -1534,7 +1427,7 @@ mod tests {
             let (handle, code) =
                 super::handle_method(&method, &name, receiver, &types.handles).unwrap();
             assert_eq!(handle, ty);
-            assert!(code.contains(&format!("host.{name}(self)")));
+            assert!(code.contains(&format!("host.backend(BackendToken(())).{name}(self)")));
         }
         let method = syn::parse_quote! { fn native_hidden_kind(&self, value: HiddenRef) {} };
         for receiver in [
@@ -1572,7 +1465,7 @@ mod tests {
         assert_eq!(handle, "EntityRef");
         assert!(code.starts_with("/// Where it is.\n"));
         assert!(code.contains("pub fn position (self , host : & dyn Host , scale : f64)"));
-        assert!(code.contains("host.entity_position(self, scale)"));
+        assert!(code.contains("host.backend(BackendToken(())).entity_position(self, scale)"));
         let write: syn::ItemFn = syn::parse_quote! {
             fn native_level_set(&mut self, level: LevelRef) {}
         };
@@ -1580,6 +1473,7 @@ mod tests {
             super::handle_method(&write, "level_set", "level", &types.handles).unwrap();
         assert_eq!(handle, "LevelRef");
         assert!(code.contains("host : & mut dyn Host"));
+        assert!(code.contains("host.backend_mut(BackendToken(())).level_set(self)"));
         for (method, name, receiver, error) in [
             (
                 syn::parse_quote! { fn native_entity_x(&self, entity: EntityRef) {} },
