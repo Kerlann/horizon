@@ -122,12 +122,15 @@ impl VanillaTerrain {
         self.loot = loot;
     }
 
-    /// A mod's sign takes its template's block entity, whatever its name: a
-    /// feature that places one leaves it with text to edit.
+    /// Generated native entities use their declared type; undeclared signs
+    /// keep their template's vanilla type and start with editable text.
     pub fn add_mod_signs(&mut self, facts: &crate::blocks::BlockFacts) {
         for (state, kind) in self.block_entity_types.iter_mut().enumerate() {
             let state = horizon_world::registry::BlockStateId(state as u32);
-            if let Some(form) = facts.get(state).sign_form() {
+            let block = facts.get(state);
+            if let Some(declared) = crate::containers::block_entity_types::type_for(&block.name) {
+                *kind = Some(declared);
+            } else if let Some(form) = block.sign_form() {
                 *kind = Some(form.block_entity_type());
             }
         }

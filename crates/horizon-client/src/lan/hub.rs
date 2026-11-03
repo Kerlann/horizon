@@ -2520,6 +2520,13 @@ impl Hub {
             }
             // Block entities with data the client shows.
             for &(x, y, z) in &positions {
+                let state = world.block(x, y, z).0;
+                if !self
+                    .encoder
+                    .entity_matches(state, world.block_entities.get(&(x, y, z)))
+                {
+                    continue;
+                }
                 // A decorated pot is no block entity: its tag is the chunk's saved one.
                 let tag = match world.block_entities.get(&(x, y, z)) {
                     Some(entity) => self.encoder.update_tag((x, y, z), entity),
@@ -2531,7 +2538,6 @@ impl Hub {
                 let Some(tag) = tag else {
                     continue;
                 };
-                let state = world.block(x, y, z).0;
                 let Some(kind) = self.encoder.entity_type(state) else {
                     continue;
                 };

@@ -747,6 +747,7 @@ pub fn accept_declared(
     mods: &mut Vec<ContentMod>,
     blocks: &[horizon_mods::content::Block],
     items: &[horizon_mods::content::Item],
+    types: &[BlockEntityType],
     known: &BTreeSet<String>,
 ) -> Vec<String> {
     let namespace = |id: &str| id.split_once(':').map_or("", |(ns, _)| ns).to_owned();
@@ -765,8 +766,12 @@ pub fn accept_declared(
             .1
             .push(item.clone());
     }
+    for kind in types {
+        by_namespace.entry(namespace(&kind.id)).or_default();
+    }
     let mut errors = Vec::new();
     for (ns, (blocks, items)) in by_namespace {
+        let types = types.iter().filter(|t| namespace(&t.id) == ns).cloned();
         let result = match mods.iter().position(|m| m.id == ns) {
             Some(i) => {
                 let mut content = horizon_mods::Content::declared(&ns);
@@ -783,11 +788,13 @@ pub fn accept_declared(
                     .map(|()| {
                         mods[i].content.blocks.extend(blocks);
                         mods[i].content.items.extend(items);
+                        mods[i].content.block_entity_types.extend(types);
                     })
             }
             None => {
                 let mut content = horizon_mods::Content::declared(&ns);
                 content.declare(&blocks, &items).and_then(|()| {
+                    content.block_entity_types.extend(types);
                     let candidate = ContentMod {
                         id: ns.clone(),
                         content,
@@ -2797,7 +2804,7 @@ pub fn build(base: &Path, mods: &[ContentMod], out: &Path) -> Result<Vec<String>
 }
 
 /// The root to load: `base` itself with no content, else the mods' overlay
-/// over it, built in `cache/mod-content`.
+/// over it, built in an immutable, stamp-keyed directory under `cache`.
 ///
 /// The root is built once and kept: later starts with the same build, base
 /// and mod files reuse it. With ATM10's carried mods a build takes about
@@ -2811,8 +2818,8 @@ pub fn resource_root(base: &Path, mods: &[ContentMod], cache: &Path) -> Result<P
     }) {
         return Ok(base.to_owned());
     }
-    let out = cache.join("mod-content");
     let stamp = stamp(base, mods)?;
+    let out = cache.join(format!("mod-content-{stamp}"));
     if fs::read(out.join(STAMP)).is_ok_and(|s| s == stamp.as_bytes()) {
         // A reused root warns as the build did.
         let warnings = fs::read_to_string(out.join(WARNINGS)).unwrap_or_default();

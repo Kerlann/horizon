@@ -4161,6 +4161,7 @@ fn blocks_and_items_declared_in_code_get_ids() {
         &mut mods,
         &[block("ruby:ruby_log"), block("gears:shaft")],
         &[wrench],
+        &[],
         &known,
     );
     assert!(errors.is_empty(), "{errors:?}");
@@ -4177,6 +4178,7 @@ fn blocks_and_items_declared_in_code_get_ids() {
     let refused = accept_declared(
         &mut mods,
         &[block("ruby:ruby_block"), block("ruby:ruby_post")],
+        &[],
         &[],
         &known,
     );

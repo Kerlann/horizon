@@ -56,6 +56,46 @@ fn declared_mod() -> ContentMod {
 }
 
 #[test]
+fn code_types_join_package_and_code_blocks_before_planning() {
+    let base = base("merge");
+    let mut mods = vec![declared_mod()];
+    let blocks = [Block {
+        id: "test:c".into(),
+        template: "minecraft:stone".into(),
+        ..Block::default()
+    }];
+    let types = [kind("test:machine", &["test:b", "test:c"])];
+    let errors = accept_declared(&mut mods, &blocks, &[], &types, &BTreeSet::new());
+    assert!(errors.is_empty(), "{errors:?}");
+    let plan = Plan::new(&base, &mods).unwrap();
+    assert_eq!(plan.block_entity_types.len(), 1);
+    assert_eq!(
+        plan.block_entity_membership.get("test:b"),
+        Some(&"test:machine")
+    );
+    assert_eq!(
+        plan.block_entity_membership.get("test:c"),
+        Some(&"test:machine")
+    );
+    assert!(!plan.block_entity_membership.contains_key("test:a"));
+    drop(plan);
+    // A type-only code namespace is not skipped by the content merge.
+    assert!(
+        accept_declared(
+            &mut mods,
+            &[],
+            &[],
+            &[kind("other:empty", &[])],
+            &BTreeSet::new()
+        )
+        .is_empty()
+    );
+    assert_eq!(mods[1].content.block_entity_types[0].id, "other:empty");
+    assert_eq!(Plan::new(&base, &mods).unwrap().block_entity_types.len(), 2);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn validates_declared_type_ids_and_exclusive_known_mod_block_membership() {
     let base = base("validation");
     let mut mods = [declared_mod()];
@@ -132,22 +172,29 @@ fn code_declared_types_build_a_root_and_membership_changes_invalidate_its_cache(
     );
     mods[0].content.blocks = declared_mod().content.blocks;
     mods[0].content.block_entity_types[0].blocks = vec!["test:a".into()];
-    resource_root(&base, &mods, &cache).unwrap();
-    let stamp = fs::read(root.join(STAMP)).unwrap();
+    let with_a = resource_root(&base, &mods, &cache).unwrap();
+    assert_ne!(with_a, root);
     assert_eq!(
         fs::read_to_string(root.join(BLOCK_ENTITY_TYPES)).unwrap(),
+        "{}"
+    );
+    let stamp = fs::read(with_a.join(STAMP)).unwrap();
+    assert_eq!(
+        fs::read_to_string(with_a.join(BLOCK_ENTITY_TYPES)).unwrap(),
         r#"{"test:a":"test:machine"}"#
     );
     // Same type and wire ID, different valid blocks: the overlay must not be reused.
     mods[0].content.block_entity_types[0].blocks = vec!["test:b".into()];
-    resource_root(&base, &mods, &cache).unwrap();
-    assert_ne!(fs::read(root.join(STAMP)).unwrap(), stamp);
+    let with_b = resource_root(&base, &mods, &cache).unwrap();
+    assert_ne!(with_a, with_b);
+    assert_eq!(resource_root(&base, &mods, &cache).unwrap(), with_b);
+    assert_eq!(fs::read(with_a.join(STAMP)).unwrap(), stamp);
     assert_eq!(
-        fs::read_to_string(root.join(BLOCK_ENTITY_TYPES)).unwrap(),
+        fs::read_to_string(with_b.join(BLOCK_ENTITY_TYPES)).unwrap(),
         r#"{"test:b":"test:machine"}"#
     );
     let registry =
-        horizon_protocol::registry::Builtin::load(&root.join("registries.json")).unwrap();
+        horizon_protocol::registry::Builtin::load(&with_b.join("registries.json")).unwrap();
     assert_eq!(
         registry
             .get("minecraft:block_entity_type")

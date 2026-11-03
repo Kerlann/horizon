@@ -531,7 +531,9 @@ impl Game<'_> {
         key: (i32, i32, i32),
         tag: &Tag,
     ) -> bool {
-        let Some((_, mut new)) = save::decode_block_entity(tag) else {
+        let state = self.world.block(key.0, key.1, key.2);
+        let name = &self.res.facts().get(state).name;
+        let Some((_, mut new)) = save::decode_block_entity_for_block(tag, name) else {
             return false;
         };
         self.take_loot_table(key, tag, &mut new);

@@ -1945,7 +1945,13 @@ impl LevelAccess for GameLevel<'_> {
         for (k, v) in [("x", pos.x), ("y", pos.y), ("z", pos.z)] {
             nbt.insert(k.into(), Tag::Int(v));
         }
-        if let Some((key, entity)) = horizon_client::save::decode_block_entity(&Tag::Compound(nbt))
+        let block = self.world.block(pos.x, pos.y, pos.z);
+        let Some(block) = self.registry.state(block) else {
+            return;
+        };
+        let name = &block.name;
+        if let Some((key, entity)) =
+            horizon_client::save::decode_block_entity_for_block(&Tag::Compound(nbt), name)
         {
             self.world.block_entities.insert(key, entity);
         }
@@ -21919,7 +21925,7 @@ pub fn run_with() -> Result<()> {
         &options.resources,
         &early_settings.mods.enabled,
         &options.dev_mods,
-    );
+    )?;
     let loaded = load_resources(
         options.resources.clone(),
         launch_world(&options),

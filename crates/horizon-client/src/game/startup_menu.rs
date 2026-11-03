@@ -364,25 +364,27 @@ pub(super) fn spawn_loader(
                     pack_error = Some(error.to_string());
                     vanilla_root.clone()
                 });
-            let root = mods::content_root(&root, &settings.mods.enabled, &dev_mods);
-            let result = load_resources(
-                root,
-                world.as_deref(),
-                &vanilla_root,
-                &settings,
-                started,
-                true,
-                false,
-                &progress,
-                &mut |gui, root| {
-                    let _ = sender.send(LoaderMsg::Ui(gui, root.to_path_buf()));
-                },
-            )
-            .map(|mut loaded| {
-                loaded.pack_error = loaded.pack_error.or(pack_error);
-                loaded
-            })
-            .map_err(|error| error.to_string());
+            let result = mods::content_root(&root, &settings.mods.enabled, &dev_mods)
+                .and_then(|root| {
+                    load_resources(
+                        root,
+                        world.as_deref(),
+                        &vanilla_root,
+                        &settings,
+                        started,
+                        true,
+                        false,
+                        &progress,
+                        &mut |gui, root| {
+                            let _ = sender.send(LoaderMsg::Ui(gui, root.to_path_buf()));
+                        },
+                    )
+                })
+                .map(|mut loaded| {
+                    loaded.pack_error = loaded.pack_error.or(pack_error);
+                    loaded
+                })
+                .map_err(|error| error.to_string());
             let _ = sender.send(LoaderMsg::Done(result));
         })?;
     Ok((receiver, handle))

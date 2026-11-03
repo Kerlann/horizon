@@ -252,7 +252,9 @@ impl Game<'_> {
         if placed == saved {
             return;
         }
-        let Some((_, mut entity)) = save::decode_block_entity(&placed) else {
+        let block = self.world.block(pos[0], pos[1], pos[2]);
+        let name = &self.res.facts().get(block).name;
+        let Some((_, mut entity)) = save::decode_block_entity_for_block(&placed, name) else {
             return;
         };
         // The new crafter's state flag (CrafterBlock.newBlockEntity), which

@@ -938,6 +938,20 @@ fn decode_mod_block_entity(id: String, tag: &Tag) -> Option<crate::containers::M
         },
     ))
 }
+/// Decode an entity at a known block, refusing undeclared IDs and invalid native membership.
+/// Vanilla decoding remains unchanged; only declared native types override templates.
+pub fn decode_block_entity_for_block(
+    tag: &Tag,
+    block: &str,
+) -> Option<((i32, i32, i32), crate::containers::BlockEntity)> {
+    let decoded = decode_block_entity(tag)?;
+    let actual = match &decoded.1 {
+        crate::containers::BlockEntity::Mod(m) => Some(m.id()),
+        _ => None,
+    };
+    (actual == crate::containers::block_entity_types::type_for(block)).then_some(decoded)
+}
+
 pub fn decode_block_entity(tag: &Tag) -> Option<((i32, i32, i32), crate::containers::BlockEntity)> {
     use crate::containers::BlockEntity;
     let int = |k: &str| number(tag.get(k)).map(|v| v as i32);
@@ -1785,10 +1799,16 @@ fn decode_column(
     if let Some(Tag::List(entities)) = tag.get("block_entities") {
         for e in entities {
             let int = |k: &str| number(e.get(k)).map(|v| v as i32);
-            if let (Some(x), Some(y), Some(z)) = (int("x"), int("y"), int("z")) {
+            let decoded = if let (Some(x), Some(y), Some(z)) = (int("x"), int("y"), int("z")) {
                 extras.block_entity_order.push((x, y, z));
-            }
-            match decode_block_entity(e) {
+                let state = chunk.block(x & 15, y, z & 15);
+                registry
+                    .state(state)
+                    .and_then(|block| decode_block_entity_for_block(e, &block.name))
+            } else {
+                None
+            };
+            match decoded {
                 Some(mut be) => {
                     if let Ok(Some(data)) = attachment_compound(e.get(ATTACHMENTS_KEY)) {
                         extras.block_entity_attachments.push((
@@ -6316,6 +6336,75 @@ mod tests {
         };
         assert_eq!(again.update_tag(), spawner.update_tag());
     }
+    #[test]
+    fn native_saved_ids_must_match_the_declared_block_membership() {
+        // The production registry is immutable. Exercise its real readers in a fresh process.
+        const CHILD: &str = "HORIZON_TEST_NATIVE_SAVED_MEMBERSHIP";
+        if std::env::var_os(CHILD).is_none() {
+            assert!(
+                std::process::Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "save::tests::native_saved_ids_must_match_the_declared_block_membership",
+                        "--nocapture"
+                    ])
+                    .env(CHILD, "1")
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+            return;
+        }
+        use crate::containers::block_entity_types::{self, BlockEntityTypes};
+        block_entity_types::install(BlockEntityTypes::new(
+            [
+                ("test:press".into(), "test:machine".into()),
+                ("test:mill".into(), "test:machine".into()),
+                ("test:board".into(), "test:other".into()),
+            ]
+            .into(),
+            vec!["test:machine".into(), "test:other".into()],
+        ))
+        .unwrap();
+        let tag = |id: &str| {
+            horizon_world::nbt::parse_snbt(&format!(r#"{{id:"{id}",x:1,y:64,z:2,energy:900L}}"#,))
+                .unwrap()
+                .0
+        };
+        for block in ["test:press", "test:mill"] {
+            let (_, entity) = decode_block_entity_for_block(&tag("test:machine"), block).unwrap();
+            assert!(entity.fits(block));
+            assert_eq!(entity.id(), "test:machine");
+            let crate::containers::BlockEntity::Mod(m) = entity else {
+                panic!("not native");
+            };
+            assert_eq!(m.nbt.get(&"energy".into()), Some(&Tag::Long(900)));
+            for id in [
+                "test:press",
+                "test:other",
+                "test:unknown",
+                "minecraft:banner",
+            ] {
+                assert!(
+                    decode_block_entity_for_block(&tag(id), block).is_none(),
+                    "{id}"
+                );
+            }
+        }
+        for block in [
+            "test:casing",
+            "test:board",
+            "other:press",
+            "minecraft:stone",
+        ] {
+            assert!(decode_block_entity_for_block(&tag("test:machine"), block).is_none());
+        }
+        assert!(
+            decode_block_entity_for_block(&tag("minecraft:banner"), "minecraft:white_banner")
+                .is_some()
+        );
+    }
+
     #[test]
     fn mod_block_entity_round_trips() {
         let saved = horizon_world::nbt::parse_snbt(

@@ -2329,12 +2329,15 @@ impl Game<'_> {
         let Tag::Compound(fields) = tag else {
             return;
         };
-        // A mod block entity's type is named after its block (`mod_content`):
-        // its update tag merges into what the client keeps of it (`handleUpdateTag`).
+        // Only the declared type on one of its valid blocks accepts an update tag.
         // Nothing is drawn from it yet, so its section stays as it is.
         let block = self.world.block(pos[0], pos[1], pos[2]);
         if let Some(BlockEntity::Mod(m)) = self.world.block_entities.get_mut(&key) {
-            if *self.res.facts().get(block).name == *name {
+            if m.id() == name
+                && horizon_client::containers::block_entity_types::type_for(
+                    &self.res.facts().get(block).name,
+                ) == Some(name)
+            {
                 m.merge_update_tag(fields);
             }
             return;
