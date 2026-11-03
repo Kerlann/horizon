@@ -68,7 +68,7 @@ impl ItemResource {
     /// transaction.
     pub fn with_component(&self, host: &dyn Host, id: &ComponentId, value: Tag) -> Self {
         let default = host.item_default_component(self.item(), id.as_str());
-        let own = !default.is_some_and(|default| same_value(&default, &value));
+        let own = !default.is_some_and(|default| same_value(id, &default, &value));
         self.patched(id, own.then(|| (JavaString::from(id.as_str()), value)))
     }
     /// This item without component `id` (`ItemResource.without`, as vanilla's
@@ -108,20 +108,59 @@ impl ItemResource {
     }
 }
 
-/// Whether `a` and `b` are one component value as its codec reads them, the item report's
-/// JSON form beside a mod's NBT: numbers by value (a `Float` at `f32` precision, a boolean's
-/// `Byte` as 0 or 1), an array as the list of its numbers, and lists and compounds entry by
-/// entry.
-fn same_value(a: &Tag, b: &Tag) -> bool {
+/// Components the game keeps as the NBT given (`CustomData`, `TypedEntityData`), equal only
+/// type for type (`CompoundTag.equals`).
+const RAW_NBT: [&str; 4] = [
+    "minecraft:custom_data",
+    "minecraft:bucket_entity_data",
+    "minecraft:entity_data",
+    "minecraft:block_entity_data",
+];
+
+/// Whether `a` and `b` are one value of component `id` (`Objects.equals` on the decoded
+/// values, `PatchedDataComponentMap.set`). A vanilla component other than [`RAW_NBT`] is
+/// compared as its codec reads the item report's JSON beside a mod's NBT ([`same_coded`]);
+/// a raw NBT one, or a mod's, whose codec the game doesn't know, type for type.
+fn same_value(id: &ComponentId, a: &Tag, b: &Tag) -> bool {
+    let coded = id.as_str().starts_with("minecraft:") && !RAW_NBT.contains(&id.as_str());
+    if coded { same_coded(a, b) } else { a == b }
+}
+
+/// Whether `a` and `b` read as one value through a codec (`NbtOps`): integers of any width
+/// by exact value, a `Float` beside any number at `f32` precision and a `Double` at `f64`,
+/// an array as the list of its numbers, and lists and compounds entry by entry.
+fn same_coded(a: &Tag, b: &Tag) -> bool {
+    enum Number {
+        Integer(i64),
+        Float(f32),
+        Double(f64),
+    }
     let number = |tag: &Tag| match *tag {
-        Tag::Byte(v) => Some((f64::from(v), false)),
-        Tag::Short(v) => Some((f64::from(v), false)),
-        Tag::Int(v) => Some((f64::from(v), false)),
-        Tag::Long(v) => Some((v as f64, false)),
-        Tag::Float(bits) => Some((f64::from(f32::from_bits(bits)), true)),
-        Tag::Double(bits) => Some((f64::from_bits(bits), false)),
+        Tag::Byte(v) => Some(Number::Integer(v.into())),
+        Tag::Short(v) => Some(Number::Integer(v.into())),
+        Tag::Int(v) => Some(Number::Integer(v.into())),
+        Tag::Long(v) => Some(Number::Integer(v)),
+        Tag::Float(bits) => Some(Number::Float(f32::from_bits(bits))),
+        Tag::Double(bits) => Some(Number::Double(f64::from_bits(bits))),
         _ => None,
     };
+    if let (Some(a), Some(b)) = (number(a), number(b)) {
+        let float = |n: &Number| match *n {
+            Number::Integer(v) => v as f32,
+            Number::Float(v) => v,
+            Number::Double(v) => v as f32,
+        };
+        let double = |n: &Number| match *n {
+            Number::Integer(v) => v as f64,
+            Number::Float(v) => v.into(),
+            Number::Double(v) => v,
+        };
+        return match (&a, &b) {
+            (Number::Integer(a), Number::Integer(b)) => a == b,
+            (Number::Float(_), _) | (_, Number::Float(_)) => float(&a) == float(&b),
+            _ => double(&a) == double(&b),
+        };
+    }
     let list = |tag: &Tag| -> Option<Vec<Tag>> {
         Some(match tag {
             Tag::List(items) => items.clone(),
@@ -131,21 +170,14 @@ fn same_value(a: &Tag, b: &Tag) -> bool {
             _ => return None,
         })
     };
-    if let (Some((a, a_float)), Some((b, b_float))) = (number(a), number(b)) {
-        return if a_float || b_float {
-            a as f32 == b as f32
-        } else {
-            a == b
-        };
-    }
     if let (Some(a), Some(b)) = (list(a), list(b)) {
-        return a.len() == b.len() && a.iter().zip(&b).all(|(a, b)| same_value(a, b));
+        return a.len() == b.len() && a.iter().zip(&b).all(|(a, b)| same_coded(a, b));
     }
     match (a, b) {
         (Tag::Compound(a), Tag::Compound(b)) => {
             a.len() == b.len()
                 && a.iter()
-                    .all(|(key, a)| b.get(key).is_some_and(|b| same_value(a, b)))
+                    .all(|(key, a)| b.get(key).is_some_and(|b| same_coded(a, b)))
         }
         _ => a == b,
     }

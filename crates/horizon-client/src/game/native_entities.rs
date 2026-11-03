@@ -184,34 +184,6 @@ impl Game<'_> {
             })
         })
     }
-    /// Moves entity `id`, one Horizon keeps without simulating (a display, a
-    /// marker, an interaction), to `pos` facing `yaw` and `pitch` in degrees;
-    /// a display eases there over its `teleport` ticks. False for no such
-    /// entity, another dimension or a position outside `/summon`'s bounds.
-    /// Mobs move with `native_teleport_mob`. API 59.
-    pub(super) fn native_move_entity(
-        &mut self,
-        dimension: &str,
-        id: u32,
-        pos: [f64; 3],
-        yaw: f32,
-        pitch: f32,
-    ) -> bool {
-        if !self.native_simulates_level(dimension)
-            || !position_ok(pos)
-            || !yaw.is_finite()
-            || !pitch.is_finite()
-        {
-            return false;
-        }
-        let Some(o) = self.others.iter_mut().find(|o| o.id == id) else {
-            return false;
-        };
-        o.position = Vec3::new(pos[0], pos[1], pos[2]);
-        o.yaw = yaw.rem_euclid(360.0);
-        o.pitch = pitch.clamp(-90.0, 90.0);
-        true
-    }
     /// Sets the transformation and interpolation of display `id` (a
     /// `block_display`, `item_display` or `text_display`): players see it
     /// ease from what it showed over `interpolation` ticks. False for no such

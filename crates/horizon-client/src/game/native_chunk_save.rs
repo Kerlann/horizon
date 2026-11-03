@@ -15,6 +15,12 @@ impl Game<'_> {
         }
     }
 
+    pub(super) fn native_late_full_chunk_snapshot(&mut self, chunk: &Chunk) {
+        if self.remote.is_none() && !horizon_client::mod_api::mods().is_empty() {
+            self.native_full_chunk_snapshot(chunk);
+        }
+    }
+
     fn native_full_chunk_snapshot(&mut self, _chunk: &Chunk) {}
 
     /// The proto stays checked out until all callbacks return and the save is submitted.

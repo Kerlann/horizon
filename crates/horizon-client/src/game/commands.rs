@@ -83,6 +83,19 @@ pub(super) fn entity_pitch(pitch: f32) -> f32 {
     (pitch % 360.0).clamp(-90.0, 90.0)
 }
 
+/// `PositionMoveRotation.calculateAbsolute` and `TeleportCommand.performTeleport`.
+fn teleport_velocity(velocity: Vec3, relative: [bool; 3], fall_flying: bool) -> Vec3 {
+    Vec3::new(
+        if relative[0] { velocity.x } else { 0.0 },
+        if relative[1] && fall_flying {
+            velocity.y
+        } else {
+            0.0
+        },
+        if relative[2] { velocity.z } else { 0.0 },
+    )
+}
+
 /// An entity of a type Horizon does not simulate: its compound lives in the
 /// entity memory (`persist.raw`), its position and rotation here.
 #[derive(Clone, Debug)]
@@ -1506,15 +1519,32 @@ impl Game<'_> {
         pos: [f64; 3],
         rotation: Option<[f32; 2]>,
     ) {
-        // An entity in another level is teleported in the level that holds it.
-        let _ = self.in_target_level(t, |g| g.teleport_to_in_level(t, pos, rotation));
+        self.teleport_to_relative(t, pos, rotation, [false; 3]);
     }
-    fn teleport_to_in_level(&mut self, t: Target, pos: [f64; 3], rotation: Option<[f32; 2]>) {
+    fn teleport_to_relative(
+        &mut self,
+        t: Target,
+        pos: [f64; 3],
+        rotation: Option<[f32; 2]>,
+        relative: [bool; 3],
+    ) {
+        // An entity in another level is teleported in the level that holds it.
+        let _ = self.in_target_level(t, |g| g.teleport_to_in_level(t, pos, rotation, relative));
+    }
+    fn teleport_to_in_level(
+        &mut self,
+        t: Target,
+        pos: [f64; 3],
+        rotation: Option<[f32; 2]>,
+        relative: [bool; 3],
+    ) {
         let from = self.target_position(t);
         let v = Vec3::new(pos[0], pos[1], pos[2]);
         match t {
             Target::Guest(_) => {
-                self.for_player(t, |g| g.teleport_to(Target::Player, pos, rotation));
+                self.for_player(t, |g| {
+                    g.teleport_to_relative(Target::Player, pos, rotation, relative)
+                });
             }
             Target::Player => {
                 // ServerPlayer.teleport: removeVehicle before placing the player.
@@ -1560,9 +1590,16 @@ impl Game<'_> {
                 }
             }
             Target::Mob(id) => {
+                self.dismount_mob(id);
                 if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
+                    m.ai.nav.stop();
+                    m.velocity = teleport_velocity(m.velocity, relative, m.extra.fall_flying);
+                    if !m.extra.fall_flying {
+                        m.on_ground = true;
+                    }
                     m.position = v;
                     m.previous = v;
+                    m.needs_sync = true;
                     // Entity.teleportSetPosition: setYRot, setYHeadRot, setXRot
                     // (clamped to -90..90), then setOldRot.
                     if let Some([yaw, pitch]) = rotation {
@@ -1813,6 +1850,11 @@ impl Game<'_> {
         {
             return Err(err("commands.teleport.invalidPosition", &[]));
         }
+        let relative = match ctx.get("location") {
+            Some(Arg::Coords(Coordinates::World(coords))) => coords.each_ref().map(|c| c.relative),
+            Some(Arg::Coords(Coordinates::Local(_))) => [true; 3],
+            _ => [false; 3],
+        };
         let rotation = match ctx.get("rotation") {
             Some(Arg::Coords(c)) => Some(c.rotation(self.source_rotation())),
             _ => None,
@@ -1863,7 +1905,7 @@ impl Game<'_> {
             if self.teleport_across(t, source_level, pos, rotation) {
                 continue;
             }
-            self.teleport_to(t, pos, rotation);
+            self.teleport_to_relative(t, pos, rotation, relative);
             // LookAt.perform after a successful teleportTo.
             if let Some(f) = facing {
                 self.send_player_look_at(t, anchored_eyes, f, facing_entity);
@@ -2273,6 +2315,7 @@ impl Game<'_> {
                     let at = self.unstuck_orb(pos);
                     self.next_entity += 1;
                     self.orbs.push(horizon_client::entities::ExperienceOrb {
+                        join: Default::default(),
                         no_gravity: false,
                         id: self.next_entity,
                         position: Vec3::new(at[0], at[1], at[2]),
@@ -3988,5 +4031,84 @@ mod percent_f_tests {
         assert_eq!(percent_f(0.1234565, 6), "0.123457");
         assert_eq!(percent_f(-1.005, 2), "-1.01");
         assert_eq!(percent_f(3.0, 2), "3.00");
+    }
+}
+
+#[cfg(test)]
+mod teleport_mob_tests {
+    use crate::game::native_entity_refs::tests::with_game;
+    use horizon_client::mobs::{Mob, path::Path};
+    use horizon_core::geometry::Vec3;
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn command_stops_navigation_and_dismounts() {
+        with_game(|game| {
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:zombie")
+                .unwrap()
+                .clone();
+            let mut mob = Mob::new(12, kind, Vec3::new(0.0, 64.0, 0.0), 0.0);
+            mob.ai.nav.path = Some(Path {
+                nodes: Vec::new(),
+                next: 0,
+                target: [1, 64, 1],
+                dist_to_target: 0.0,
+                reached: true,
+            });
+            mob.extra.mount = Some(42);
+            mob.extra.passenger = true;
+            mob.velocity = Vec3::new(1.0, -2.0, 3.0);
+            mob.fall_distance = 7.0;
+            game.mobs.push(mob);
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:skeleton")
+                .unwrap()
+                .clone();
+            let mut vehicle = Mob::new(42, kind, Vec3::new(0.0, 64.0, 0.0), 0.0);
+            vehicle.extra.rider = Some(12);
+            game.mobs.push(vehicle);
+            game.ui.registries.permission = 4;
+            assert!(game.run_command("tp @e[type=minecraft:zombie] 10 70 10"));
+            let mob = &game.mobs[0];
+            assert_eq!(mob.position, Vec3::new(10.5, 70.0, 10.5));
+            assert!(mob.ai.nav.path.is_none());
+            assert!(mob.extra.mount.is_none());
+            assert!(!mob.extra.passenger);
+            assert_eq!(mob.fall_distance, 7.0);
+            assert_eq!(mob.velocity, Vec3::ZERO);
+            assert!(mob.on_ground);
+            assert!(game.mobs[1].extra.rider.is_none());
+            let mob = &mut game.mobs[0];
+            mob.extra.fall_flying = true;
+            mob.velocity = Vec3::new(1.0, -3.0, 2.0);
+            mob.on_ground = false;
+            assert!(game.run_command("tp @e[type=minecraft:zombie] ~ 70 ~"));
+            let mob = &game.mobs[0];
+            assert_eq!(mob.velocity, Vec3::new(1.0, 0.0, 2.0));
+            assert!(!mob.on_ground);
+            game.mobs[0].velocity = Vec3::new(1.0, -3.0, 2.0);
+            assert!(game.run_command("tp @e[type=minecraft:zombie] 12 ~ 12"));
+            assert_eq!(game.mobs[0].velocity, Vec3::new(0.0, -3.0, 0.0));
+            game.mobs[0].extra.fall_flying = false;
+            assert!(game.run_command("tp @e[type=minecraft:zombie] ~ ~ ~"));
+            assert_eq!(game.mobs[0].velocity.y, 0.0);
+            assert!(game.mobs[0].on_ground);
+            assert!(
+                game.run_command(
+                    "tp @e[type=minecraft:zombie] -30000000.0 -20000000.0 -30000000.0"
+                )
+            );
+            assert_eq!(
+                game.mobs[0].position,
+                Vec3::new(-30_000_000.0, -20_000_000.0, -30_000_000.0)
+            );
+            game.run_command("tp @e[type=minecraft:zombie] 30000000.0 70 0");
+            assert_eq!(game.mobs[0].position.x, -30_000_000.0);
+        });
     }
 }

@@ -79,6 +79,7 @@ impl Game<'_> {
             self.award_custom_stat("leave_game", 1);
             self.lan_close(false);
             self.free_player_beds()?;
+            self.streaming.abort_generation();
             self.pending_save = Some(ClosingSave {
                 quit,
                 close: true,
@@ -150,11 +151,23 @@ impl Game<'_> {
                     if save.started.elapsed() > Duration::from_secs(30) {
                         return Err("chunk generation did not finish before saving".into());
                     }
-                    if let Some(protos) = self.streaming.prepare_poll_save(&mut self.world) {
-                        self.native_proto_snapshots(&protos);
-                        if self.streaming.submit_protos(protos) {
-                            save.stage =
-                                Stage::Chunks(self.world.modified.iter().copied().collect());
+                    let deadline = Instant::now() + Duration::from_millis(2);
+                    loop {
+                        match self.streaming.prepare_poll_save(&mut self.world, deadline) {
+                            horizon_client::streaming::SaveStep::Pending => break,
+                            horizon_client::streaming::SaveStep::Full(chunk) => {
+                                self.native_late_full_chunk_snapshot(&chunk);
+                                self.streaming.save_finished(chunk);
+                            }
+                            horizon_client::streaming::SaveStep::Protos(protos) => {
+                                self.native_proto_snapshots(&protos);
+                                if self.streaming.submit_protos(protos) {
+                                    save.stage = Stage::Chunks(
+                                        self.world.modified.iter().copied().collect(),
+                                    );
+                                }
+                                break;
+                            }
                         }
                     }
                     Ok(false)

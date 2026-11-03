@@ -4,7 +4,6 @@ use super::{Game, Hit};
 use horizon_client::{Result, animate_tick::make_campfire_smoke, items::ItemStack};
 use horizon_core::position::BlockPos;
 use horizon_world::chunk::BlockState;
-use winit::keyboard::KeyCode;
 
 impl Game<'_> {
     /// The lit campfire at `pos` that `held` puts out, when the item is in
@@ -38,10 +37,6 @@ impl Game<'_> {
         seq: i32,
     ) -> bool {
         let pos = hit.pos;
-        // Player.isSecondaryUseActive: a held item means both hands count.
-        if self.keys.contains(&KeyCode::ShiftLeft) {
-            return false;
-        }
         let (Some(held), Some(mut state)) = (held, self.campfire_to_douse(pos, held)) else {
             return false;
         };

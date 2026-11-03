@@ -12,7 +12,7 @@ pub(super) fn valid_id(id: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
-fn read(path: &Path) -> Result<toml::Table, String> {
+pub(super) fn read(path: &Path) -> Result<toml::Table, String> {
     let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     text.parse().map_err(|e| format!("{}: {e}", path.display()))
 }

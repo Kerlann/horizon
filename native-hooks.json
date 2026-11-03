@@ -21,14 +21,6 @@
       "target": "horizon_client::game::native_hooks::Game<'_>::native_attachments", "side": "both"
     },
     {
-      "name": "teleport_mob",
-      "target": "horizon_client::game::native_mobs::Game<'_>::native_teleport_mob", "side": "server"
-    },
-    {
-      "name": "push_mob",
-      "target": "horizon_client::game::native_mobs::Game<'_>::native_push_mob", "side": "server"
-    },
-    {
       "name": "set_mob_health",
       "target": "horizon_client::game::native_mobs::Game<'_>::native_set_mob_health", "side": "server"
     },
@@ -43,10 +35,6 @@
     {
       "name": "summon",
       "target": "horizon_client::game::native_entities::Game<'_>::native_summon", "side": "server"
-    },
-    {
-      "name": "move_entity",
-      "target": "horizon_client::game::native_entities::Game<'_>::native_move_entity", "side": "server"
     },
     {
       "name": "remove_entity",
@@ -848,6 +836,9 @@
       "name": "right_click_block", "side": "server",
       "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_right_click_block",
+      "neoforge": "PlayerInteractEvent.RightClickBlock",
+      "side": "both",
+      "cancellable": true,
       "mod_api": {
         "contract": "cancel",
         "out": "canceled"

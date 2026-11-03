@@ -450,6 +450,40 @@ mod tests {
         assert_eq!(d.shown.blend(&d.from, d.progress(0.0)).translation[0], 2.0);
     }
 
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn handle_teleport_keeps_display_easing() {
+        use crate::game::{commands::OtherEntity, native_entity_refs::tests::with_game};
+        use horizon_core::geometry::Vec3;
+        use horizon_world::nbt::{Compound, Tag};
+
+        with_game(|game| {
+            game.others.push(OtherEntity {
+                id: 12,
+                kind: "minecraft:text_display".into(),
+                position: Vec3::ZERO,
+                yaw: 0.0,
+                pitch: 0.0,
+            });
+            let mut tag = Compound::new();
+            tag.insert("teleport_duration".into(), Tag::Int(4));
+            game.persist.raw.insert(12, Tag::Compound(tag));
+            let entity = game.native_entity(12).unwrap();
+            assert!(entity.teleport_to(game, [8.0, 0.0, 0.0], None));
+            let metadata =
+                horizon_client::text_display::display_data(&game.persist.raw[&12], false);
+            let mut client = RemoteTextDisplay::new(Shows::Text, [0.0; 3], 0.0);
+            client.metadata(&metadata);
+            client.move_to(entity.position(game).unwrap(), None);
+            client.tick();
+            assert_eq!(client.position.x, 2.0);
+            for _ in 0..3 {
+                client.tick();
+            }
+            assert_eq!(client.position.x, 8.0);
+        });
+    }
+
     /// A display riding a vehicle sits where the vehicle seats it each tick,
     /// moving from the last tick's seat, and a teleport sent meanwhile does
     /// not drag it off the seat.

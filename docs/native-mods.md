@@ -153,12 +153,12 @@ API 20 adds buttons, tooltips and item icons on mod screens: `native_screen_clic
 removed with the Parts core work (#41): a mod inserts through the block's item capability, `level.capability(host, &ITEMS, pos, side)`.
 
 API 21 adds what a server mod needs to guard land and move players. `native_right_click_block` hears a player's right
-click on a block before the block's own use (a chest, a door, a lever) and the item's, and may cancel it: nothing
-happens and the player sees the block as it is. `native_acting_player` says who acts inside a player's hook (UUID,
-name, level, position, game mode, health); `native_run_command` runs a command as the server's console (level 4, no
-output), so `execute in <dimension> run tp <player> <x> <y> <z>` moves a player across levels; `native_action_bar`
-tells a player why, even inside their own hook; and the players
-`native_server_players` lists carry their health. Bundles that use them need `"hooks": 21`.
+click on a block before the block's own use (a chest, a door, a lever) and the item's, and may cancel it (since API
+@API:right_click_block_answer@ with NeoForge's answer: `Fail` stops the click, and the player sees the block as it
+is). `native_acting_player` says who acts inside a player's hook (UUID, name, level, position, game mode, health);
+`native_run_command` runs a command as the server's console (level 4, no output), so `execute in <dimension> run tp
+<player> <x> <y> <z>` moves a player across levels; `native_action_bar` tells a player why, even inside their own
+hook; and the players `native_server_players` lists carry their health. Bundles that use them need `"hooks": 21`.
 
 API 22 adds what a server mod needs to keep the world itself out of guarded land. `native_block_spread` hears a
 fluid flow or fire spread into a block, `native_piston_move` a piston's push or pull, `native_explosion_detonate` the
@@ -747,8 +747,8 @@ API 58 adds [the renderer's hook points](#render-hook-points): `native_world_dra
 `native_render_needs`, where a mod asks for the entity runs and the world's depth without a shader pack. Bundles that use them need `"hooks": 58`.
 
 API 59 adds [entities](#entities) for server mods: `native_summon(dimension, kind, pos, nbt)` spawns any entity from its compound
-as `/summon` does, and `native_move_entity`, `native_set_display` (a display's transformation, eased over ticks) and
-`native_remove_entity` move, pose and remove displays, markers and interactions: models that move, from a mod's own
+as `/summon` does, and `native_set_display` (a display's transformation, eased over ticks) and
+`native_remove_entity` pose and remove displays, markers and interactions: models that move, from a mod's own
 item models. Bundles that use them need `"hooks": 59`.
 
 API 60 adds `native_item_bar(stack, bar)`: the small bar `GuiGraphicsExtractor.itemDecorations` draws under an item,
@@ -2302,10 +2302,15 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
   (0 to 20) or set `cancel` to leave it at `from`, saturation included. It is heard once for what one turn of the
   player changed, not for the full bar a respawn gives, the food a player joins with, or the host of a LAN world. The
   player's state is swapped in, so `native_acting_player`, `native_tell` and the item helpers reach them.
-- **`native_right_click_block(pos, face, hand, hit, player, player_entity_id, canceled)`** (API 21; `hand`, `hit`, `player` and `player_entity_id` since
-  API @API:block_use_context@): a player's right click on a block, before the block's own use and the item's
-  (`ServerPlayerGameMode.useItemOn`), once per hand. A mod that sets `canceled` stops both, without a swing; the
-  player's client is sent the block back. With `native_destroy_block` it keeps players out of claimed land.
+- **`native_right_click_block(click, use_block, use_item, cancellation_result, canceled)`** (API 21; this form since
+  API @API:right_click_block_answer@): NeoForge's `PlayerInteractEvent.RightClickBlock`, a player's right click on a
+  block, once per hand where `useItemOn` starts, on the clicking client and on the server (`click.side`). `click`
+  (`NativeBlockClick`) names the level, block, hit, hand, held stack and the player's UUID and entity id. `use_block`
+  and `use_item` (`NativeTriState`) force the block's use or the item's `useOn` off, or on (the block even while
+  sneaking with something in hand, the item even while it cools down). Cancelling skips both and answers
+  `cancellation_result` (`NativeInteractionResult`, default `Pass`, which goes on to the item's own use and the other
+  hand); with `native_destroy_block`, a cancel with `Fail` keeps players out of claimed land, and the player's client is
+  sent the block back.
 - **`native_block_spread(dimension, kind, from, to, canceled)`** and **`native_piston_move(dimension, piston,
   direction, push, destroy, canceled)`** (API 22, on `GameLevel`, like the block observers): a fluid flowing or fire
   spreading (`kind` `fluid` or `fire`) from `from` into `to`, and a piston moving blocks once its structure resolved.
@@ -2379,9 +2384,7 @@ place; `native_server_tick` does not define one, so name the dimension and expec
   `no_ai`, `invisible`, `silent`, `invulnerable` and `no_gravity` flags; its default is a plain mob. The mob is finalized as a natural spawn
   is, and kept when its chunk unloads. Nothing is spawned outside `/summon`'s bounds, in a chunk that isn't loaded, or a monster on peaceful.
 - `native_mob(dimension, id)` and `native_mobs(dimension)` read the living mobs: id, dimension, kind, position, yaw, health and maximum health.
-- `native_teleport_mob(dimension, id, pos)` (as `/tp`: it dismounts and drops its path), `native_push_mob(dimension, id, velocity)` and
-  `native_set_mob_health(dimension, id, health)` change one, and answer false for no such mob or a value that isn't finite. Health must be
-  above 0.
+- `native_set_mob_health(dimension, id, health)` changes a mob's health, and answers false for no such mob or a value that isn't finite or above 0.
 - `native_kill_mob(dimension, id)` kills as `/kill` does, with its loot; `native_remove_mob(dimension, id)` takes the mob away with no death
   and no loot (it is not saved either).
 - While the game ticks its mobs they are out of the level: from a hook inside that tick, a spawned mob joins after the tick, and the others
@@ -2426,8 +2429,6 @@ names the level it means by its `dimension` (`minecraft:overworld`), as `native_
 - `native_summon(dimension, kind, pos, nbt)` spawns an entity of `kind` from its compound, as `/summon <kind> <pos> <nbt>`
   does (passengers included), and returns its id. None on a client, for another dimension, a position outside `/summon`'s
   bounds, a chunk that isn't loaded, a kind Horizon can't load, or one a mod kept out with `native_entity_join_level`.
-- `native_move_entity(dimension, id, pos, yaw, pitch)` moves an entity Horizon keeps without simulating it (a display, a
-  marker, an interaction); a display eases there over its teleport duration. Mobs move with `native_teleport_mob`.
 - `native_set_display(dimension, id, &NativeDisplay)` sets a `block_display`, `item_display` or `text_display`'s
   transformation (translation, left rotation, scale, right rotation; quaternions `[x, y, z, w]`), the ticks players see it
   ease over (`interpolation`) and its teleport duration (`teleport`, 0 to 59). Each call restarts the ease on clients.
@@ -2915,6 +2916,13 @@ Trait injections can target only functions in `horizon-client`;
 ordinary mixin helpers in other crates continue to work as before. The generated helper has the same priority and ordering as an
 ordinary helper of that mod: priority descending, mod id then injection id. It is not automatically
 ordered after other mixins. Catalog hooks retain the mixin-before-trait order below.
+
+The launcher and catalog build scripts share `horizon-mod-api-gen` for trait, event and helper generation.
+For game sources with that build dependency, the launcher stages declarations in
+`.horizon-mod-api-injections.json`; Cargo consumes them through `HORIZON_MOD_API_INJECTIONS` without
+editing generated Rust in the source tree. The declarations stay with cached mixin output. Older released
+sources without that build dependency still receive the same declarations in their committed generated
+trait. Neither path requires rustfmt during a player build.
 
 A linked trait mod implements `horizon_client::mod_api::Hooks`. Mixin injections run first.
 An injection that returns early skips trait mods. A claimed cancellation also skips trait mods.

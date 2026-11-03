@@ -60,7 +60,7 @@ pub(super) struct NativeSound {
 /// Mob-system state owned by the game.
 #[derive(Default)]
 pub(super) struct Creatures {
-    pub projectiles: Vec<Projectile>,
+    pub projectiles: horizon_client::join_seq::JoinList<Projectile>,
     /// The entities a family tells the mods ticked, kept between ticks
     /// (game/native_ticks.rs).
     pub tick_buffer: Vec<(u32, super::native_ticks::TickKind)>,
@@ -755,6 +755,7 @@ impl Game<'_> {
                     "temper": m.extra.variant3,
                     "chested": m.extra.chested,
                     "head": m.extra.head.as_deref(),
+                    "body": m.extra.body.as_deref(),
                     "warden": horizon_client::mobs::warden::describe(m),
                     "villager": horizon_client::mobs::villager::ext(m).map(|e| serde_json::json!({
                         "food_level": e.food_level,

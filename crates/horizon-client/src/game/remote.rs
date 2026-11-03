@@ -2540,6 +2540,7 @@ impl Game<'_> {
             // Its value (ExperienceOrb.DATA_VALUE) follows in SetEntityData.
             self.orbs.retain(|o| o.id != id as u32);
             self.orbs.push(ExperienceOrb {
+                join: Default::default(),
                 no_gravity: false,
                 id: id as u32,
                 position: at,
@@ -5421,6 +5422,7 @@ impl Game<'_> {
         let at = Vec3::new(p[0], p[1], p[2]);
         let bob_offset = self.world.random.next_float() * std::f32::consts::PI * 2.0;
         self.dropped.push(ItemEntity {
+            join: Default::default(),
             no_gravity: false,
             health: 5,
             fire_ticks: 0,
@@ -7387,24 +7389,44 @@ impl Game<'_> {
             .as_ref()
             .is_some_and(|stack| &*stack.item == "minecraft:debug_stick");
         if let Some(hit) = self.pick() {
+            use horizon_client::mod_api::{NativeInteractionResult as Answer, NativeTriState};
+            let spectator = self.spectator();
+            // RightClickBlock on this client, where performUseItemOn starts
+            // (a spectator's use only opens menus on the server): it may force
+            // the block's use or the item's useOn, or answer for both.
+            let (mut canceled, mut use_block, mut use_item) =
+                (None, NativeTriState::Default, NativeTriState::Default);
+            if !spectator {
+                match self.right_click_block(&hit, hand, held.as_ref()) {
+                    super::native_hooks::BlockClickAnswer::Go {
+                        use_block: block,
+                        use_item: item,
+                    } => (use_block, use_item) = (block, item),
+                    super::native_hooks::BlockClickAnswer::Canceled(answer) => {
+                        canceled = Some(answer);
+                    }
+                }
+            }
+            // Player.isSecondaryUseActive with something in either hand
+            // keeps the block from reacting.
+            let sneaking = self.keys.contains(&KeyCode::ShiftLeft);
+            let hands_full = self.stack_in(self.selected).is_some() || self.offhand.is_some();
+            let block_used = canceled.is_none() && use_block.or(!(sneaking && hands_full));
+            let item_used = canceled.is_none() && use_item.or(true);
+            let cooldown_forced = use_item == NativeTriState::True;
             // ShelfBlock.useItemOn consumes a nonempty main-hand click client-side
             // without predicting the inventory swap or swinging.
             let shelf_reacts = hand == Hand::Main
                 && held.is_some()
-                && !(self.keys.contains(&KeyCode::ShiftLeft)
-                    && (self.stack_in(self.selected).is_some() || self.offhand.is_some()))
+                && block_used
                 && self.shelf_hit(&hit).is_some();
-            let spectator = self.spectator();
-            let (result, changes) = if hand == Hand::Main && !spectator {
+            let (result, changes) = if hand == Hand::Main && !spectator && block_used {
                 self.remote_block_reacts(&hit, held.as_ref())
             } else {
                 // useItemOn runs for the off hand too (useWithoutItem doesn't):
                 // RespawnAnchorBlock.useItemOn charges an anchor with its
                 // glowstone, SUCCESS.
-                let sneaking = self.keys.contains(&KeyCode::ShiftLeft);
-                let hands_full = self.stack_in(self.selected).is_some() || self.offhand.is_some();
-                let charges =
-                    !(sneaking && hands_full) && self.anchor_takes(hit.pos, held.as_ref());
+                let charges = block_used && self.anchor_takes(hit.pos, held.as_ref());
                 let result = if charges {
                     InteractionResult::Success
                 } else {
@@ -7414,15 +7436,16 @@ impl Game<'_> {
             };
             // DebugStickItem.useOn once the block passed: SUCCESS on the client
             // too (the hand swings below); only the server changes the block.
-            let (result, changes) = if debug_stick && !spectator && !result.consumes_action() {
-                (InteractionResult::Success, DryUse::default())
-            } else {
-                (result, changes)
-            };
+            let (result, changes) =
+                if debug_stick && item_used && !spectator && !result.consumes_action() {
+                    (InteractionResult::Success, DryUse::default())
+                } else {
+                    (result, changes)
+                };
             // AbstractCauldronBlock.useItemOn, either hand: CauldronInteractions
             // answers on the client as on the server and only the server acts,
             // so a bucket the cauldron takes is not used again (UseItem).
-            let result = if result.consumes_action() || spectator {
+            let result = if result.consumes_action() || spectator || !block_used {
                 result
             } else {
                 match self.cauldron_outcome(hit.pos, held.as_ref()) {
@@ -7436,31 +7459,29 @@ impl Game<'_> {
             // skips it: RedStoneOreBlock's dust, and the wick smoke of a lit
             // candle an empty hand snuffs (CandleBlock.useItemOn) or a lit
             // candle cake (CandleCakeBlock.useItemOn).
-            if hand == Hand::Main && !spectator {
-                let sneaking = self.keys.contains(&KeyCode::ShiftLeft);
-                let hands_full = self.stack_in(self.selected).is_some() || self.offhand.is_some();
-                if !(sneaking && hands_full) {
-                    self.redstone_ore_particles(hit.pos);
-                    let state = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
-                    let name = self.block_name(hit.pos);
-                    let lit = self.pack.assets.registry.state(state).is_some_and(|s| {
+            if hand == Hand::Main && !spectator && block_used {
+                self.redstone_ore_particles(hit.pos);
+                let state = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
+                let name = self.block_name(hit.pos);
+                let lit =
+                    self.pack.assets.registry.state(state).is_some_and(|s| {
                         s.properties.get("lit").map(String::as_str) == Some("true")
                     });
-                    let snuffs = if name.ends_with("candle_cake") {
-                        hit.point[1] - f64::from(hit.pos[1]) > 0.5
-                    } else {
-                        name.ends_with("candle") && self.may_build()
-                    };
-                    if held.is_none() && lit && snuffs {
-                        self.candle_smoke(hit.pos, state);
-                    }
+                let snuffs = if name.ends_with("candle_cake") {
+                    hit.point[1] - f64::from(hit.pos[1]) > 0.5
+                } else {
+                    name.ends_with("candle") && self.may_build()
+                };
+                if held.is_none() && lit && snuffs {
+                    self.candle_smoke(hit.pos, state);
                 }
             }
             // ArmorStandItem.useOn runs in startPrediction before the packet
             // goes out (the server may spawn the stand at once).
-            let stand_fits = held
-                .as_ref()
-                .is_some_and(|s| &*s.item == "minecraft:armor_stand")
+            let stand_fits = item_used
+                && held
+                    .as_ref()
+                    .is_some_and(|s| &*s.item == "minecraft:armor_stand")
                 && held
                     .as_ref()
                     .is_some_and(|s| self.armor_stand_spawn(&hit, s).is_some());
@@ -7485,6 +7506,15 @@ impl Game<'_> {
             if spectator {
                 return true;
             }
+            // A cancelled RightClickBlock's answer, once the packet went out
+            // (startPrediction sends it whatever the use): SUCCESS swings
+            // here, and PASS goes on to useItem and the other hand.
+            if let Some(answer) = canceled {
+                if answer == Answer::Success {
+                    self.with_hand(hand, Game::swing_arm);
+                }
+                return answer.consumes_action() || answer == Answer::Fail;
+            }
             // Only a predicted placement (predict_place) marks a cell whose
             // resend plays a place sound: an empty hand or a non-block item
             // places nothing (BlockItem.place is where the sound comes from).
@@ -7507,19 +7537,22 @@ impl Game<'_> {
                 if result.should_swing() {
                     self.with_hand(hand, Game::swing_arm);
                 }
-            } else if self.with_hand(hand, |g| g.predict_campfire_douse(&hit, held.as_ref(), seq)) {
+            } else if block_used
+                && self.with_hand(hand, |g| g.predict_campfire_douse(&hit, held.as_ref(), seq))
+            {
                 // CampfireBlock.useItemOn succeeded: this hand swings and the
                 // click ends, so a shield in the other hand is not raised.
                 self.with_hand(hand, Game::swing_arm);
                 return true;
-            } else if held.as_ref().is_some_and(|s| &*s.item == "minecraft:brush") {
+            } else if item_used && held.as_ref().is_some_and(|s| &*s.item == "minecraft:brush") {
                 // BrushItem.useOn: brushing starts here (CONSUME, no swing); the
                 // server brushes and the dust is this client's own.
                 self.with_hand(hand, Game::start_using_item);
                 return true;
-            } else if held
-                .as_ref()
-                .is_some_and(|s| &*s.item == "minecraft:bone_meal")
+            } else if item_used
+                && held
+                    .as_ref()
+                    .is_some_and(|s| &*s.item == "minecraft:bone_meal")
                 && self.remote_bone_meal_succeeds(&hit)
             {
                 // BoneMealItem.useOn succeeded on this client's level (SUCCESS;
@@ -7535,6 +7568,7 @@ impl Game<'_> {
                 return true;
             } else if let Some(stack) = held
                 .as_ref()
+                .filter(|_| item_used)
                 .filter(|s| s.item.ends_with("_spawn_egg"))
                 .filter(|_| {
                     self.may_build()
@@ -7550,9 +7584,10 @@ impl Game<'_> {
                     self.with_hand(hand, Game::swing_arm);
                 }
                 return true;
-            } else if let Some(stack) = held.as_ref()
-                && (self.with_hand(hand, |g| g.predict_item_on_block(stack, &hit, hand))
-                    || self.predict_map_on_banner(stack, &hit))
+            } else if let Some(stack) = held.as_ref().filter(|_| item_used)
+                && (self.with_hand(hand, |g| {
+                    g.predict_item_on_block(stack, &hit, hand, cooldown_forced)
+                }) || self.predict_map_on_banner(stack, &hit))
             {
                 // Item.useOn succeeded here (InteractionResult.SUCCESS):
                 // this hand swings and the click ends, so the other hand
@@ -7560,7 +7595,7 @@ impl Game<'_> {
                 self.with_hand(hand, Game::swing_arm);
                 return true;
             }
-            if held_block {
+            if item_used && held_block {
                 let consumable = held
                     .as_ref()
                     .and_then(|stack| self.items().get(&stack.item).cloned())
@@ -7620,17 +7655,26 @@ impl Game<'_> {
     /// A cushion succeeds where it may be placed and spawns on the server, a
     /// firework rocket wherever it may be used, and the server launches it.
     /// Whether the item's use succeeded, which ends the click.
-    fn predict_item_on_block(&mut self, stack: &ItemStack, hit: &super::Hit, hand: Hand) -> bool {
+    /// `cooldown_forced`: RightClickBlock's useItem TRUE uses it whatever its
+    /// cooldown.
+    fn predict_item_on_block(
+        &mut self,
+        stack: &ItemStack,
+        hit: &super::Hit,
+        hand: Hand,
+        cooldown_forced: bool,
+    ) -> bool {
         // FireworkRocketItem.useOn: SUCCESS on the client too, so neither
         // UseItem nor the off hand follows. It passes while gliding (the use
         // boosts instead), cooling down (MultiPlayerGameMode.performUseItemOn
         // skips useOn) and in adventure mode off its can_place_on
         // (ItemStack.useOn).
         if &*stack.item == "minecraft:firework_rocket" {
-            let cooling = self.items().get(&stack.item).is_some_and(|info| {
-                let group = horizon_client::cooldowns::group(stack, info.use_cooldown.as_ref());
-                self.cooldowns.is_on_cooldown(&group)
-            });
+            let cooling = !cooldown_forced
+                && self.items().get(&stack.item).is_some_and(|info| {
+                    let group = horizon_client::cooldowns::group(stack, info.use_cooldown.as_ref());
+                    self.cooldowns.is_on_cooldown(&group)
+                });
             let gliding = self.player.as_ref().is_some_and(|p| p.fall_flying);
             return !cooling
                 && !gliding
@@ -7734,7 +7778,8 @@ impl Game<'_> {
     }
 
     /// Whether the block hit takes a main-hand right click with `held`
-    /// (`BlockState.useItemOn`, then `useWithoutItem`): a door, a button, a
+    /// (`BlockState.useItemOn`, then `useWithoutItem`), once the caller let
+    /// the block react (no sneaking with full hands): a door, a button, a
     /// container, and the blocks it changed. Vanilla's client runs it on its
     /// own level first; this runs it on a copy, and `predict_use` keeps the
     /// changes it predicts.
@@ -7743,11 +7788,6 @@ impl Game<'_> {
         hit: &super::Hit,
         held: Option<&ItemStack>,
     ) -> (InteractionResult, DryUse) {
-        // Player.isSecondaryUseActive with something in either hand.
-        let hands_full = self.stack_in(self.selected).is_some() || self.offhand.is_some();
-        if self.keys.contains(&KeyCode::ShiftLeft) && hands_full {
-            return (InteractionResult::Pass, DryUse::default());
-        }
         // AbstractCauldronBlock.useItemOn (CauldronInteractions): a bucket,
         // bottle or dye the cauldron takes fills or lowers it, and the click
         // ends there instead of falling through to Item.use (which would

@@ -2112,6 +2112,48 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_component_set_keeps_a_change_its_codec_reads_and_raw_nbt_keeps_its_types() {
+        /// A stick's report: `custom_data` `{x: 1}`, a huge `max_damage` and a mod's `test:long`.
+        struct Report;
+        impl Host for Report {
+            fn item_default_component(&self, _: &str, id: &str) -> Option<Tag> {
+                let x = || Tag::Compound([("x".into(), Tag::Int(1))].into_iter().collect());
+                match id {
+                    "minecraft:custom_data" => Some(x()),
+                    "minecraft:max_damage" | "test:long" => Some(Tag::Long(1 << 53)),
+                    _ => None,
+                }
+            }
+        }
+        let stick = ItemResource::of(&stick());
+        let set = |id, value: Tag| {
+            let id = ComponentId::new(id).unwrap();
+            stick.with_component(&Report, &id, value).component(&id)
+        };
+        // `custom_data` is kept as the NBT given (`CustomData.equals`): a byte where the report
+        // has an int is a change, while the same int is the default.
+        let x = |v| Tag::Compound([("x".into(), v)].into_iter().collect());
+        assert_eq!(
+            set("minecraft:custom_data", x(Tag::Byte(1))),
+            Some(x(Tag::Byte(1)))
+        );
+        assert_eq!(set("minecraft:custom_data", x(Tag::Int(1))), None);
+        // Integers compare exactly, past where an `f64` keeps them apart.
+        let past = Tag::Long((1 << 53) + 1);
+        assert_eq!(
+            set("minecraft:max_damage", past.clone()),
+            Some(past.clone())
+        );
+        assert_eq!(set("test:long", past.clone()), Some(past));
+        assert_eq!(set("minecraft:max_damage", Tag::Int(0)), Some(Tag::Int(0)));
+        // A vanilla component's codec reads any integer width: the default's value is it.
+        assert_eq!(set("minecraft:max_damage", Tag::Long(1 << 53)), None);
+        // A mod's component, whose codec the game doesn't know, is equal type for type.
+        let double = Tag::Double(((1u64 << 53) as f64).to_bits());
+        assert_eq!(set("test:long", double.clone()), Some(double));
+    }
+
+    #[test]
     fn a_component_id_is_a_namespaced_identifier() {
         for id in ["minecraft:damage", "mymod:charge/level"] {
             assert_eq!(

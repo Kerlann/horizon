@@ -6,7 +6,6 @@
 //! mobs they are out of the level: a mob a hook spawns then joins it after the
 //! tick, and the others read as gone.
 use super::{Game, commands::Target};
-use horizon_core::geometry::Vec3;
 
 /// The `EquipmentSlot` names of `Mob::equipment_stacks`, in its order.
 const MOB_SLOTS: [&str; 8] = [
@@ -229,46 +228,6 @@ impl Game<'_> {
             .filter(|m| !m.removed && m.alive())
             .map(|m| self.native_mob_of(m))
             .collect()
-    }
-    /// Moves mob `id` to `pos` at once, as `/tp` does: it dismounts, drops its
-    /// path and resets its fall. False for no such mob, another dimension or a
-    /// position outside `/summon`'s bounds. API 37.
-    pub(super) fn native_teleport_mob(&mut self, dimension: &str, id: u32, pos: [f64; 3]) -> bool {
-        if !self.native_mob_level(dimension) || !spawnable(pos) {
-            return false;
-        }
-        let Some(m) = self.mobs.iter_mut().find(|m| m.id == id && !m.removed) else {
-            return false;
-        };
-        let to = Vec3::new(pos[0], pos[1], pos[2]);
-        // `TeleportCommand`: stop the navigation, no vertical motion, and a
-        // rider is put back on its vehicle unless it gets off first.
-        m.ai.nav.stop();
-        m.velocity.y = 0.0;
-        m.extra.mount = None;
-        m.extra.passenger = false;
-        m.position = to;
-        m.previous = to;
-        m.fall_distance = 0.0;
-        m.needs_sync = true;
-        true
-    }
-    /// Adds `velocity` to mob `id`'s: false for no such mob, another dimension
-    /// or a velocity that isn't finite. API 37.
-    pub(super) fn native_push_mob(&mut self, dimension: &str, id: u32, velocity: [f64; 3]) -> bool {
-        if !self.native_mob_level(dimension) || !finite(velocity) {
-            return false;
-        }
-        let Some(m) = self.mobs.iter_mut().find(|m| m.id == id && !m.removed) else {
-            return false;
-        };
-        m.velocity = Vec3::new(
-            m.velocity.x + velocity[0],
-            m.velocity.y + velocity[1],
-            m.velocity.z + velocity[2],
-        );
-        m.needs_sync = true;
-        true
     }
     /// Sets the living mob `id`'s health, cut to its maximum: false for no such
     /// mob, another dimension or a health that isn't above 0 (`native_kill_mob`

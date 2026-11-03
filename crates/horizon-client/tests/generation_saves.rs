@@ -167,8 +167,26 @@ impl Session {
     }
     fn save(&mut self) {
         let deadline = Instant::now() + Duration::from_secs(120);
-        while !self.streaming.poll_save(&mut self.world) {
+        'save: loop {
             assert!(Instant::now() < deadline, "incremental save never finished");
+            let tick_deadline = Instant::now() + Duration::from_millis(2);
+            loop {
+                match self
+                    .streaming
+                    .prepare_poll_save(&mut self.world, tick_deadline)
+                {
+                    horizon_client::streaming::SaveStep::Pending => break,
+                    horizon_client::streaming::SaveStep::Full(chunk) => {
+                        self.streaming.save_finished(chunk)
+                    }
+                    horizon_client::streaming::SaveStep::Protos(protos) => {
+                        if self.streaming.submit_protos(protos) {
+                            break 'save;
+                        }
+                        break;
+                    }
+                }
+            }
             thread::sleep(Duration::from_millis(1));
         }
         for key in std::mem::take(&mut self.world.modified) {
