@@ -546,25 +546,18 @@ impl Game<'_> {
                         1.0,
                     );
                 }
+                // PlayerList.respawn: the block was found, so the new player
+                // copies the respawn point (`copyRespawnPosition`). A cancel
+                // leaves it with none.
+                if self.spawn_point_change(config.dim, config.pos, config.forced) {
+                    self.respawn_config = None;
+                }
                 Some((at, yaw))
             }
             Ok(None) | Err(_) => {
-                let mut cancel = false;
-                if let (Some(player), Some(name)) =
-                    (self.lan_acting_uuid, self.lan_acting_name.clone())
-                {
-                    self.native_player_spawn_point_set(
-                        player,
-                        &name,
-                        config.dim.id(),
-                        config.pos,
-                        "death_reset",
-                        &mut cancel,
-                    );
-                }
-                if cancel {
-                    return None;
-                }
+                // The block is gone: `PlayerList.respawn` skips
+                // `copyRespawnPosition`, so the new player has no point and
+                // no `setRespawnPosition` call is made.
                 self.respawn_config = None;
                 None
             }

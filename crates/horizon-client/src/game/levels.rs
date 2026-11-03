@@ -132,6 +132,15 @@ impl Levels {
         self.parked.get(&dim).map(|level| &level.world)
     }
 
+    /// The world of the level not in place whose dimension is `dimension`
+    /// (`minecraft:the_nether`), found without collecting the parked levels.
+    pub(super) fn parked_world_of(&self, dimension: &str) -> Option<&World> {
+        self.parked
+            .iter()
+            .find(|(dim, _)| dim.id() == dimension)
+            .map(|(_, level)| &level.world)
+    }
+
     pub(super) fn parked_anims(&self, dim: Dim) -> Option<&BlockEntityAnims> {
         self.parked.get(&dim).map(|level| &level.anims)
     }

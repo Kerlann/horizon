@@ -3661,9 +3661,32 @@ impl Game<'_> {
                     .set_game_mode(conn, SPECTATOR, &self.world, Some(self.collision));
             }
         }
+        // PlayerList.respawn: `copyRespawnPosition` hands the new player the
+        // old point through `setRespawnPosition`: none, or an Overworld forced
+        // point (`spawn`). A point with a block is copied once the block is
+        // found. A cancel leaves the new player with none; it still comes
+        // back here this time, as vanilla placed it before the copy.
+        let forced_spawn = host.hub.guests[i].spawn;
+        if let Some(point) = copied_respawn_point(own.is_some(), forced_spawn) {
+            let g = &host.hub.guests[i];
+            let (uuid, id, name) = (g.uuid, g.entity_id, g.name.clone());
+            let mut cancel = false;
+            self.native_player_set_spawn(
+                uuid,
+                id,
+                &name,
+                level.id(),
+                point,
+                point.is_some(),
+                &mut cancel,
+            );
+            if cancel {
+                host.hub.guests[i].spawn = None;
+            }
+        }
         if let Some(config) = elsewhere {
             self.respawn_trip(conn, config);
-        } else if in_frame_bed.is_none() && host.hub.guests[i].spawn.is_none() {
+        } else if in_frame_bed.is_none() && forced_spawn.is_none() {
             // TeleportTransition.createDefault: no point of its own, so the
             // world spawn's free column once its chunks have loaded.
             self.world_spawn_trip(conn);
@@ -5345,10 +5368,30 @@ fn stop_dig(play: &GuestPlay, pos: [i32; 3], air: bool, ticks: u64, per_tick: f3
     }
 }
 
+/// What `copyRespawnPosition` sets at respawn time, when it is decided here:
+/// nothing to decide for a point with a block (`has_config`, copied once the
+/// block is found); otherwise the Overworld forced point's block (`spawn`,
+/// stored at its bottom centre), or none.
+fn copied_respawn_point(has_config: bool, spawn: Option<[f64; 3]>) -> Option<Option<[i32; 3]>> {
+    (!has_config).then(|| spawn.map(|s| s.map(|c| c.floor() as i32)))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::eye_columns;
+    use super::{copied_respawn_point, eye_columns};
     use horizon_client::pose::Pose;
+
+    /// `copyRespawnPosition` copies an Overworld forced point, not none; a
+    /// point with a block is left to its block check.
+    #[test]
+    fn respawn_copies_the_forced_point() {
+        assert_eq!(
+            copied_respawn_point(false, Some([12.5, 64.0, -3.5])),
+            Some(Some([12, 64, -4]))
+        );
+        assert_eq!(copied_respawn_point(false, None), Some(None));
+        assert_eq!(copied_respawn_point(true, Some([0.5, 64.0, 0.5])), None);
+    }
 
     /// #4124: a STOP is measured from the START that named its block (`destroyPos`) — an abort, or
     /// a STOP from out of reach, ends the dig the guest's button held but leaves that clock — and

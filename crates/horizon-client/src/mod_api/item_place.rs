@@ -9,7 +9,8 @@
 //! it is, journaled: an abort puts it back, at every level of an item inside an item. A handler
 //! answering more than it was asked is a mod bug, named once, and the write aborts.
 use super::{
-    Capability, Direction, Hand, Host, ITEMS, ItemResource, ItemStack, ResourceHandler, Transaction,
+    Capability, Direction, Hand, Host, ITEMS, ItemResource, ItemStack, LevelRef, ResourceHandler,
+    Transaction,
 };
 use std::{collections::HashSet, fmt::Debug, marker::PhantomData, sync::Mutex};
 
@@ -28,6 +29,7 @@ pub enum ItemPlace {
     /// Slot `slot` of the block entity at `pos` as `side` reaches it, through its [`ITEMS`]
     /// handler (`forHandlerIndex`).
     BlockEntity {
+        level: LevelRef,
         pos: [i32; 3],
         side: Option<Direction>,
         slot: usize,
@@ -218,13 +220,18 @@ impl ItemPlace {
     /// The stack here, if any (`getResource` and `getAmount`).
     pub fn stack(&self, host: &mut dyn Host) -> Option<ItemStack> {
         match self {
-            ItemPlace::BlockEntity { pos, side, slot } => {
-                let handler = host.capability(&ITEMS, *pos, *side)?;
+            ItemPlace::BlockEntity {
+                level,
+                pos,
+                side,
+                slot,
+            } => {
+                let handler = level.capability(host, &ITEMS, *pos, *side)?;
                 let resource = handler.resource(host, *slot)?;
                 Some(resource.to_stack(handler.amount(host, *slot)))
             }
             ItemPlace::Nested { parent, slot } => {
-                let handler = host.item_capability(&ITEM_ITEMS, parent)?;
+                let handler = parent.capability(host, &ITEM_ITEMS)?;
                 let resource = handler.resource(host, *slot)?;
                 Some(resource.to_stack(handler.amount(host, *slot)))
             }
@@ -297,10 +304,8 @@ impl ItemPlace {
                 false => Err(()),
             }
         };
-        let done = host.transaction(|host, tx| match self {
-            ItemPlace::Nested { parent, .. } => one_of(parent, host, tx, swap),
-            _ => swap(host, tx),
-        });
+        let done =
+            host.transaction(|host, tx| alone(self, host, tx, &mut |host, tx| swap(host, tx)));
         done.unwrap_or(0)
     }
 
@@ -344,12 +349,17 @@ impl ItemPlace {
             Ok(amount - left)
         };
         let moved = host.transaction(|host, tx| match self {
-            ItemPlace::BlockEntity { pos, side, slot } => {
-                let handler = host.capability(&ITEMS, *pos, *side).ok_or(())?;
+            ItemPlace::BlockEntity {
+                level,
+                pos,
+                side,
+                slot,
+            } => {
+                let handler = level.capability(host, &ITEMS, *pos, *side).ok_or(())?;
                 through(handler, host, tx, *slot)
             }
             ItemPlace::Nested { parent, slot } => {
-                let handler = host.item_capability(&ITEM_ITEMS, parent).ok_or(())?;
+                let handler = parent.capability(host, &ITEM_ITEMS).ok_or(())?;
                 through(handler, host, tx, *slot)
             }
             ItemPlace::Mod { provider, key } => {
@@ -370,6 +380,23 @@ impl ItemPlace {
             }),
         });
         moved.unwrap_or(0)
+    }
+}
+
+/// Runs `f` with each item `place` is inside alone in its place, the outermost first
+/// ([`one_of`] at every level): the writes `f` makes through them, however many, all reach the
+/// same one, which alone changes.
+fn alone(
+    place: &ItemPlace,
+    host: &mut dyn Host,
+    tx: &Transaction,
+    f: &mut dyn FnMut(&mut dyn Host, &Transaction) -> Result<u32, ()>,
+) -> Result<u32, ()> {
+    match place {
+        ItemPlace::Nested { parent, .. } => alone(parent, host, tx, &mut |host, tx| {
+            one_of(parent, host, tx, &mut *f)
+        }),
+        _ => f(host, tx),
     }
 }
 
@@ -402,34 +429,29 @@ fn one_of(
     Ok(moved)
 }
 
-impl dyn Host + '_ {
-    /// `key`'s handler for the item at `place`: the first provider to answer, of those mods
-    /// registered for its item `before_game`, the game's own, and the mods' others, each in
-    /// registration order.
-    pub fn item_capability<T: ?Sized + 'static>(
-        &mut self,
+impl ItemPlace {
+    /// `key`'s handler for the item here (`ItemAccess.getCapability`): the first provider to
+    /// answer, of those mods registered for its item `before_game`, the game's own, and the
+    /// mods' others, each in registration order.
+    pub fn capability<T: ?Sized + 'static>(
+        &self,
+        host: &mut dyn Host,
         key: &ItemCapabilityKey<T>,
-        place: &ItemPlace,
     ) -> Option<Capability<T>> {
-        let stack = place.stack(self)?;
+        let stack = self.stack(host)?;
         let mut game = None;
-        let parts = super::providers(true, key.name, self, |_| Some(stack.item.to_string()));
-        let answer = super::ask_providers::<super::ItemProvider<T>, T>(
-            parts,
-            self,
-            |provider, host| provider(host, place),
-            |host| {
-                game = key.default.and_then(|default| default(host, place, &stack));
-                game.is_some()
-            },
-        );
-        match answer {
-            super::Answer::Mod(found) => Some(found),
-            super::Answer::Game => game.map(|handler| Capability {
-                handler,
-                owner: None,
-            }),
-            super::Answer::Nobody => None,
-        }
+        let parts = super::providers(true, key.name, host, |_| Some(&*stack.item));
+        super::answered(
+            super::ask_providers::<super::ItemProvider<T>, T>(
+                parts,
+                host,
+                |provider, host| provider(host, self),
+                |host| {
+                    game = key.default.and_then(|default| default(host, self, &stack));
+                    game.is_some()
+                },
+            ),
+            game,
+        )
     }
 }

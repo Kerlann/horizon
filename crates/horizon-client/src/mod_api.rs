@@ -17,10 +17,10 @@ pub use crate::first_person::Hand;
 pub use crate::fog::{FogData, FogType};
 pub use crate::game::native_block_entity_draw::{BlockEntityDraw, CubeFace};
 pub use crate::game::{
-    ItemEnergyBuffer, NativeBlockEdit, NativeBlockRun, NativeClock, NativeColumnBlocks,
-    NativeDataMapType, NativeExperienceOrb, NativeFalling, NativeHeightmap, NativeHeldItem,
-    NativeHit, NativeMapDecoration, NativeMapInfo, NativeMobRender, NativeModEvent,
-    NativePlayerRender, NativeShake, PhantomSpawnResult, SleepProblem,
+    NativeBlockEdit, NativeBlockRun, NativeClock, NativeColumnBlocks, NativeDataMapType,
+    NativeExperienceOrb, NativeFalling, NativeHeightmap, NativeHeldItem, NativeHit,
+    NativeMapDecoration, NativeMapInfo, NativeMobRender, NativeModEvent, NativePlayerRender,
+    NativeShake, PhantomSpawnResult, SleepProblem,
 };
 pub use crate::gamerules::Value as GameRuleValue;
 pub use crate::gfx::native_render::{
@@ -1419,15 +1419,16 @@ mod item_place;
 mod transaction;
 pub use item_place::{ITEM_ITEMS, ItemCapabilityKey, ItemPlace, PlaceProvider};
 mod resource;
-pub use resource::{ItemResource, ResourceHandler};
+pub use resource::{ComponentId, ItemResource, ResourceHandler, move_resources};
 pub use transaction::{Transaction, TransactionSeal, run_transaction};
 mod part_table;
-pub(crate) use part_table::{
-    Answer, KnownIds, ask_providers, install_parts, mark_game_thread, parts, place_provider,
-    providers, resolve_parts,
-};
 pub use part_table::{
-    Attached, BlockProvider, ItemProvider, Parts, Registrar, block_entity_capability,
+    Attached, BlockEntityProviders, BlockProvider, ItemProvider, Parts, Registrar,
+    block_entity_providers,
+};
+pub(crate) use part_table::{
+    KnownIds, answered, ask_providers, install_parts, mark_game_thread, parts, place_provider,
+    providers, resolve_parts,
 };
 
 mod generated {

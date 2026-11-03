@@ -18,13 +18,6 @@ fn in_bounds(at: [f64; 3]) -> bool {
 }
 
 impl Game<'_> {
-    /// Whether `level` is this open's level in place, on the server.
-    fn native_level_in_place(&self, level: LevelRef) -> bool {
-        self.remote.is_none()
-            && (self.serving.is_some() || self.options.dedicated.is_some())
-            && self.native_lifecycle.epoch() == Some(level.epoch())
-            && self.dim.id() == level.dimension()
-    }
     /// Plays level event `id` at `pos` with `data` for the players near it
     /// (`Level.levelEvent(null, id, pos, data)`): `1000`s are sounds, `2000`s
     /// particles, as vanilla's `LevelEvent` numbers them (`2001` breaks a

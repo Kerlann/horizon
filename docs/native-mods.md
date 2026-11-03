@@ -149,7 +149,8 @@ own GUI textures (`assets/<namespace>/textures/gui`, drawn with `native_sprite`)
 
 API 20 adds buttons, tooltips and item icons on mod screens: `native_screen_click` and `native_screen_tooltip` (the client), `native_menu_button`
 (a button press on the server, on the mod block entity) and the helpers `native_item`, `native_screen_title`, `native_data`, `native_block`,
-`native_block_property`, `native_insert_item` and `native_cursor`. Bundles that use them need `"hooks": 20`.
+`native_block_property`, `native_insert_item` and `native_cursor`. Bundles that use them need `"hooks": 20`. `native_insert_item` was
+removed with the Parts core work (#41): a mod inserts through the block's item capability, `level.capability(host, &ITEMS, pos, side)`.
 
 API 21 adds what a server mod needs to guard land and move players. `native_right_click_block` hears a player's right
 click on a block before the block's own use (a chest, a door, a lever) and the item's, and may cancel it: nothing
@@ -638,6 +639,8 @@ once; other gameplay spawns when the next tick starts, and a cancelled one is re
 API 48 adds [a block's items](#a-blocks-items) for server mods, what a pipe or a machine needs to pull from other blocks: `native_container_slots`, `native_extract_item`
 and `native_move_items`, and `native_dimension` for a machine's tick to name its level. `native_insert_item` now goes one item at a time, so it no longer overfills a slot,
 leaves a client's copy of the world alone, and can't reach a machine's own slots during its tick, where what went in was lost. Bundles that use the new helpers need `"hooks": 48`.
+`native_container_slots`, `native_extract_item`, `native_move_items` and `native_insert_item` were removed with the Parts core work (#41):
+the item capability and `move_resources` replace them ([a block's items](#a-blocks-items)).
 
 API 49 adds what a server mod needs for a public server's screens: `native_sidebar(uuid, sidebar)` shows one
 player a sidebar of up to 15 lines (a text, and one where the score would be) that only their client holds (the
@@ -1096,7 +1099,7 @@ API 145 adds blocks and items a native mod declares in code, as NeoForge's `Defe
 
 API 146 adds entities ticking, through `native_entity_tick_pre` (NeoForge's `EntityTickEvent.Pre`) and `native_entity_tick_post` (`EntityTickEvent.Post`), with the entity's id and type (`minecraft:zombie`, `minecraft:item`) and the level. Set `canceled` in the Pre and the entity doesn't tick this tick (and its Post isn't told). Told for the mobs, item entities, minecarts and boats that tick in an entity-ticking chunk, on the single player server thread and on a dedicated server; not for a player's own boat or minecart, projectiles, orbs, primed TNT, falling blocks or armor stands yet (check `kind`: later APIs add kinds). Mobs and items hear every Pre before the family's first tick and every Post after its last; minecarts and boats hear theirs around each one's tick. A mod that hooks them also hooks `native_entity_tick_listened(listened)` and sets `*listened = true`: otherwise no entity's tick is told. It runs each tick for every ticking entity, so keep it cheap. Bundles that use them need "hooks": 146.
 
-API 147 adds a fluid handler on items (`Capabilities.FluidHandler.ITEM`). `native_item_fluid_tank(item, capacity)` makes a mod item a container with a capacity in millibuckets; what it holds lives in the stack's `minecraft:custom_data` under `horizon_fluid` (`Fluid`, `Amount`), so it is saved, sent to Horizon clients and stacks only with equal contents. `native_item_fluid(stack)` reads one item of a stack (vanilla's buckets are built in: empty, water and lava, a whole bucket or nothing); `native_item_fluid_fill(stack, fluid, amount)` and `native_item_fluid_drain(stack, max)` answer how much one item takes or gives and the single item it becomes, as `IFluidHandler.fill`/`drain` through an `ItemAccess`; the stack given is not changed, so the caller shrinks it by one and hands out the result. They work on any side. Bundles need "hooks": 147.
+API 147 added a fluid container item (`native_item_fluid_tank`) with helpers that read, filled and drained one item. Nothing in the game asked it, so it is removed; Parts' item fluid capability (`Capabilities.Fluid.ITEM`) takes its place.
 
 API 148 adds a mob's or an armor stand's equipment changing, on the single player server thread and on a dedicated server: `native_living_equipment_change(entity, kind, slot, from, to)` once for each slot (`mainhand`, `offhand`, `feet`, `legs`, `chest`, `head`, `body`, `saddle`) that holds another stack than the mods last heard (NeoForge's `LivingEquipmentChangeEvent`, vanilla's `LivingEntity.collectEquipmentChanges`). A mob new to the level counts from empty on its first tick. A mod that hooks it also hooks `native_living_equipment_listened(listened)` and sets `*listened = true`: otherwise the game does not read every mob's equipment each tick, and only armor stands are told. Players keep `native_on_equip`. It only hears. Bundles that use it need "hooks": 148.
 
@@ -1362,7 +1365,7 @@ API 275 adds A server player about to shear a sheep, mooshroom, snow golem or bo
 
 API 276 adds A server player's shield was disabled by a blocked melee hit: `native_player_shield_disable(player, name, ticks)` fires immediately before the shield cooldown is set. Bundles need "hooks": 276.
 
-API 277 adds A server player's respawn point about to change: `native_player_spawn_point_set(player, name, dimension, pos, cause, cancel)` is heard for `bed`, `respawn_anchor`, `command` and `death_reset`; `pos` is the block position. Set `cancel` to keep the old point. A canceled `death_reset` keeps the old point even if its bed or anchor is gone. The player's state is not swapped in, so helpers that look them up through `self.lan` may find nothing while a guest packet is handled. Bundles need "hooks": 277.
+API 277 added a server player's respawn point about to change; `player_set_spawn` (NeoForge's `PlayerSetSpawnEvent`) replaced it.
 
 API 278 adds A server player selected stonecutter recipe button `recipe`, after the menu accepted it: `native_player_stonecutter_recipe_select(player, name, recipe)`. Bundles need "hooks": 278.
 
@@ -1418,7 +1421,7 @@ API 305 adds The dedicated server's whitelist changed state: `native_whitelist_s
 
 API 306 adds The server completed a world save cycle: `native_world_saved(wait)` reports whether chunk writes were flushed before returning. Bundles need "hooks": 306.
 
-API 307 adds energy held by items (`Capabilities.Energy.ITEM`). `native_item_energy_buffer(item, buffer)` gives a mod item a buffer as `SimpleEnergyHandler` is built: its capacity and the most one insert and one extract move (a capacity under 1 leaves it out; the limits are clamped to 0..=capacity). The amount lives in the stack's `minecraft:custom_data` as the int `horizon_energy`, so it is saved and sent with the stack; an empty item carries nothing, so it stacks with a new one. `native_item_energy(stack)` reads one item of a stack (amount, capacity, limits); `native_item_energy_insert(stack, amount)` and `native_item_energy_extract(stack, amount)` answer the amount one item takes or gives and the single item it becomes, as `EnergyHandler.insert`/`extract` through an `ItemAccess`; the stack given is not changed, so the caller shrinks it by one and hands out the result, or leaves the result unused to simulate. They work on any side. Bundles need "hooks": 307.
+API 307 added an energy item (`native_item_energy_buffer`) with helpers that read, charged and drained one item. Nothing in the game asked it, so it is removed; Parts' item energy capability (`Capabilities.Energy.ITEM`) takes its place.
 
 API 308 adds the time players wake at after sleeping, as NeoForge's `SleepFinishedTimeEvent`: `native_sleep_finished_time(dimension, current, new_time)` runs on the server once enough players have slept and the `advance_time` rule is on, before the clock moves. `new_time` comes in as the next morning and a mod may change it; a time before `current` is refused. `native_time_skip` then hears the jump to the chosen time. Bundles need "hooks": 308.
 
@@ -1960,11 +1963,10 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
   server player through an advancement reward, a knowledge book or `/recipe give`. Set `cancel` to keep it locked;
   the client is sent the matching removal. The player's state is not swapped in, so helpers that look them up through
   `self.lan` may find nothing while a guest packet is being handled.
-- **`native_player_spawn_point_set(player, name, dimension, pos, cause, cancel)`**: a server player's respawn point
-  is about to change. `cause` is `bed`, `respawn_anchor`, `command` or `death_reset`; `pos` is its block position.
-  Set `cancel` to keep the old point. A canceled `death_reset` keeps the old point even if its bed or anchor is gone.
-  The player's state is not swapped in, so helpers that look them up through `self.lan` may find nothing while a guest
-  packet is being handled.
+- **`native_player_set_spawn(player, player_entity_id, name, dimension, pos, forced, cancel)`**: a server player's
+  respawn point is about to be set, at each `ServerPlayer.setRespawnPosition` call: every sleep in a bed, a new respawn
+  anchor point, `/spawnpoint`, and the copy to a respawned player (`pos` none for a player with no point). Set
+  `cancel` to keep the old point.
 - **`native_player_portal(player, name, from_dimension, to_dimension, cause, cancel)`**: a server player is about
   to travel through a Nether portal, End portal or End gateway; `cause` is `nether_portal`, `end_portal` or
   `end_gateway`. Set `cancel` to leave the player where they are. The player's state is not swapped in, so helpers that
@@ -2412,15 +2414,9 @@ Changing loot a mod didn't make, as NeoForge's `LootTableLoadEvent` and global l
 
 ### A block's items
 
-Helpers for a server mod, by the rules hoppers follow: a furnace's sides, a double chest's two halves, a mod's `ModContainer` with its `faces`, `inputs` and `outputs`. `face` is the side of the block being reached, so a pipe above a chest uses `Direction::Up`. Those that read or take name the level in place by its `dimension`, and another one is refused. A client's copy of the world is refused.
+A server mod reaches a block's items through its `ITEMS` capability ([parts](#parts)): `level.capability(host, &ITEMS, pos, side)` gives the block entity's slots as that side reaches them, by the rules hoppers follow (a furnace's sides, a double chest's two halves, a mod's `ModContainer` with its `faces`, `inputs` and `outputs`), and `move_resources(host, &from, &to, filter, max, tx)` moves items between two of them in a transaction. `side` is the side of the block being reached, so a pipe above a chest uses `Some(Direction::Up)`. A level not in place, a stale `LevelRef` and a client's copy of the world give none. `native_dimension()` names the level in place (`minecraft:overworld`) for a hook that isn't told it, such as `native_block_entity_tick`.
 
-- **`native_container_slots(dimension, pos, face)`:** the slots that side reaches, with each one's number, stack and `can_take`. None where no container is: another dimension, a chunk that isn't loaded, a block without slots, a composter, or the mod block entity ticking now, which has its items in hand.
-- **`native_extract_item(dimension, pos, face, slot, count)`:** takes up to `count` from a slot through that side. The items are the mod's to place then, so to hand them on use `native_move_items`.
-- **`native_move_items(dimension, from, from_face, to, to_face, item, max)`:** moves up to `max` items, one by one, and returns how many. An item the target refuses stays in its slot, so none is lost. `item` (`minecraft:coal`) takes only that item. It answers 0 within one container.
-- **`native_insert_item(pos, face, stack)`** (API 20): puts a stack in the level in place, and returns what didn't fit.
-- **`native_dimension()`:** the level in place (`minecraft:overworld`), for a hook that isn't told it, such as `native_block_entity_tick`.
-
-During a machine's own tick its block entity is out of the world, so these answer as if no container were there: it has its slots in hand, in the `items` it's given. A composter takes one item a call, and these don't empty it: a hopper does. Container entities (minecarts, chest boats) aren't reached yet.
+During a machine's own tick its block entity is out of the world, so it has no capability then: it has its slots in hand, in the `items` it's given. A composter has no block entity, so it has no `ITEMS`: hoppers fill and empty it. Container entities (minecarts, chest boats) aren't reached this way yet.
 
 ### Entities
 
@@ -2782,7 +2778,7 @@ asked on the server before the game's own routing, for the mod block entity at `
 with the left or right button, on a vanilla menu type (`minecraft:generic_9x1`...) or on the mod's own menu type. `slot`
 is the menu's index: below `container_slots` the block's own slot (`entity.items[slot]`), from there the player's
 inventory, its 27 main slots, then the hotbar. `stack` is a copy of what that slot holds. Take what you move out of
-`stack` (into `entity.items`, or into another block with `native_insert_item`) and set `handled`: the slot holds what
+`stack` (into `entity.items`, or into another block through its `ITEMS` capability) and set `handled`: the slot holds what
 is left of `stack` (whatever you wrote to that slot of `entity.items`), the game's routing is skipped, and the player's
 client gets the whole menu again. Unhandled, `entity.items` goes back to what it held and the game moves the stack as
 for any container; a later mod sees what an earlier one did to `stack`. If the mod removes its own block, the menu
@@ -3085,7 +3081,8 @@ does) can't see tag parts, and warns once.
 A capability is answered by providers, registered by block entity type as NeoForge's
 `RegisterCapabilitiesEvent` registers them: `r.block_entity_capability(&ITEMS, "mymod:pipe", |host, at|
 Some(Box::new(PipeItems)))` gives a handler for the block entity and side `at` (a `BlockSide`), or none to
-leave it to the next provider. Providers add up: `host.capability(&ITEMS, pos, side)` asks those registered
+leave it to the next provider. A provider may answer for a vanilla block entity type too (`minecraft:chest`).
+Providers add up: `level.capability(host, &ITEMS, pos, side)` (`Level.getCapability`, on a `LevelRef`) asks those registered
 with `r.block_entity_capability_before_game` first, then the game's own (a block entity's slots by side, by the
 rules hoppers follow, and a mod block entity's `block_entity_container`), then the others, each in registration
 order, and the first to answer wins. That order is the fork's choice, the game first and `_before_game` to go ahead
@@ -3097,7 +3094,9 @@ NeoForge 26.3's `ResourceHandler<ItemResource>`: indices from 0 (`size`), what e
 `ItemResource`: an item and its components, without a count) and how much (`amount`), how much of a resource an
 index holds when it holds that (`capacity`, none where it may not go), and `insert` and `extract`, which take a
 `&Transaction` and answer how much moved. There is no `simulate`: a write happens in a transaction
-(`host.transaction(|host, tx| …)`, below), and to try one, abort it. Hoppers and `insert_item` use a mod's handler
+(`host.transaction(|host, tx| …)`, below), and to try one, abort it. `move_resources(host, &from, &to, filter, max,
+tx)` (NeoForge's `ResourceHandlerUtil.move`) moves what `filter` accepts, up to `max`, index by index out of `from`
+into wherever `to` takes it, each move all or nothing: what `to` won't take stays put. Hoppers use a mod's handler
 where one is registered, each move in a transaction of its own. A mod's own capability is a
 `CapabilityKey::new("mymod:chemicals")`, answered only by parts.
 
@@ -3107,7 +3106,7 @@ block entity's slot, an item entity, a stack inside another item (`ItemPlace::Ne
 `r.item_capability(&ITEM_ITEMS, "mymod:backpack", |host, place| Some(Box::new(Backpack)))` answers
 `ITEM_ITEMS` for an item with a `ResourceHandler<ItemResource>` made for that place, and
 `r.item_capability_before_game` ahead of the game's own over `item_container`;
-`host.item_capability(&ITEM_ITEMS, &place)` asks them in the same order. A handler keeps its contents in the
+`place.capability(host, &ITEM_ITEMS)` (`ItemAccess.getCapability`) asks them in the same order. A handler keeps its contents in the
 stack, and reads and writes it through the place, as NeoForge 26.3's `ItemAccess`: `place.stack(host)`,
 `place.resource(host)` and `place.amount(host)`, and `place.insert`, `place.extract` and `place.exchange(host, tx,
 &resource, amount)`, which answer how much moved. Each runs in a transaction of its own, nested in `tx`, and changes
@@ -3121,6 +3120,17 @@ an entity's or an item's slot into that container's other slots (`forHandlerInde
 with an `exchange` of one. An exchange inside one of two backpacks is done in one of them: that one is rewritten
 holding the change and splits off, and the other stays as it was.
 
+A stack's components change the same way, where it lives (NeoForge's `ItemResource.with` and `without`). A component
+is named by a `ComponentId`, checked once as a namespaced id (`ComponentId::new("minecraft:damage")`, None for
+`Damage` or `!minecraft:food`). `resource.component(&id)` reads the stack's own value in its patch as saved;
+`resource.with_component(host, &id, value)` sets it as vanilla's `PatchedDataComponentMap.set` does, keeping no value
+of the stack's own where `value` is the item's default (`host.item_default_component(item, id)`, numbers compared by
+value), and `resource.without_component(host, &id)` removes the component as `remove` does: the stack's own value
+goes, and where the item has the component by default a removal (`"!minecraft:max_damage": {}`) is recorded in the
+patch.
+An exchange of one puts the changed item in place: `place.exchange(host, tx, &place.resource(host)?.with_component(host, &damage,
+Tag::Int(5)), 1)` damages one sword of a stack, splitting it off.
+
 Fluids are the capability `FLUIDS` (NeoForge's `Capabilities.Fluid.BLOCK`), answered by a `FluidHandler` in
 millibuckets. A `FluidStack` is a fluid id, an amount and data components, kept as an item stack's are (a potion
 fluid's contents; water and lava have none), and a tank fills only from empty or with the same fluid and the same
@@ -3128,7 +3138,8 @@ components. The game's own answer is a mod block's tanks by side (`block_entity_
 of 1000 mB that holds water in thirds and lava only whole; a cauldron has no block entity and is answered by
 position, and a powder snow cauldron holds no fluid. A cauldron takes water and lava whatever their components and
 discards them, as NeoForge's `CauldronFluidContent` does, so what comes out of it is plain: the one place a fluid's
-components are dropped. A mod block's saved tanks take no fluid with components. `host.transfer_fluids(from, from_side, to, to_side, max)` moves
+components are dropped. A mod block's saved tanks take no fluid with components. `level.capability(host, &FLUIDS, pos, side)` finds a
+handler in a `LevelRef`'s level, as `ITEMS`' are found. `host.transfer_fluids(level, from, from_side, to, to_side, max)` moves
 one fluid between two handlers in rounds shaped as NeoForge's `FluidUtil.tryFluidTransfer`, until a round moves
 nothing: the source's give and the target's take are simulated until they agree on an amount the target takes
 whole, then the source really gives with that request and the target is filled with exactly what came out. A

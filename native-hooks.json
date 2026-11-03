@@ -293,10 +293,6 @@
       "target": "horizon_client::game::native_hooks::Game<'_>::native_block_property", "side": "both"
     },
     {
-      "name": "insert_item",
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_insert_item", "side": "server"
-    },
-    {
       "name": "cursor",
       "target": "horizon_client::game::native_hooks::Game<'_>::native_cursor", "side": "client"
     },
@@ -419,14 +415,6 @@
     {
       "name": "dimension",
       "target": "horizon_client::game::machines::native_items::Game<'_>::native_dimension", "side": "both"
-    },
-    {
-      "name": "extract_item",
-      "target": "horizon_client::game::machines::native_items::Game<'_>::native_extract_item", "side": "server"
-    },
-    {
-      "name": "move_items",
-      "target": "horizon_client::game::machines::native_items::Game<'_>::native_move_items", "side": "server"
     },
     {
       "name": "hide_player",
@@ -2123,16 +2111,6 @@
       }
     },
     {
-      "name": "item_fluid_tank", "side": "server",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_item_fluid_tank",
-      "neoforge": "Capabilities.FluidHandler.ITEM",
-      "mod_api": {
-        "contract": "replace",
-        "out": "capacity"
-      }
-    },
-    {
       "name": "living_equipment_change",
       "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_living_equipment_change",
@@ -2979,16 +2957,6 @@
       "side": "server",
       "mod_api": {
         "contract": "listen"
-      }
-    },
-    {
-      "name": "item_energy_buffer", "side": "server",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_item_energy_buffer",
-      "neoforge": "Capabilities.Energy.ITEM",
-      "mod_api": {
-        "contract": "replace",
-        "out": "buffer"
       }
     },
     {
@@ -3839,18 +3807,6 @@
       "side": "server",
       "mod_api": {
         "contract": "listen"
-      }
-    },
-    {
-      "name": "player_spawn_point_set",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_player_spawn_point_set",
-      "neoforge": "none (NeoForge has no such event; Bukkit's PlayerSpawnChangeEvent)",
-      "side": "server",
-      "cancellable": true,
-      "mod_api": {
-        "contract": "cancel",
-        "out": "cancel"
       }
     },
     {

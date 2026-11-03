@@ -607,16 +607,16 @@ pub fn block_entity_placeholder(entity: &crate::containers::BlockEntity) -> bool
 
 /// The block entity type ID for the block it sits in (a chest-like container
 /// is a chest, trapped chest or barrel).
-pub fn block_entity_id(e: &crate::containers::BlockEntity, block: &str) -> String {
+pub fn block_entity_id<'a>(e: &'a crate::containers::BlockEntity, block: &'a str) -> &'a str {
     match (e, block) {
         (
             crate::containers::BlockEntity::Chest(_),
             "minecraft:trapped_chest" | "minecraft:barrel" | "minecraft:dropper",
-        ) => block.to_owned(),
+        ) => block,
         (crate::containers::BlockEntity::Chest(_), b) if b.ends_with("shulker_box") => {
-            "minecraft:shulker_box".to_owned()
+            "minecraft:shulker_box"
         }
-        _ => e.id().to_owned(),
+        _ => e.id(),
     }
 }
 pub fn encode_block_entity(
@@ -641,7 +641,7 @@ pub fn encode_block_entity(
         _ => Compound::new(),
     };
     let mut entries = vec![
-        ("id", string(&block_entity_id(e, block))),
+        ("id", string(block_entity_id(e, block))),
         ("x", Tag::Int(p.0)),
         ("y", Tag::Int(p.1)),
         ("z", Tag::Int(p.2)),

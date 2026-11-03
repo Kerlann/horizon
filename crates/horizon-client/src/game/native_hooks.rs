@@ -108,8 +108,8 @@
 //!
 //! API 308 adds the time players wake at after sleeping through the night, changeable (`native_sleep_finished_time`).
 //!
-//! API 307 adds a mod item holding energy (`native_item_energy_buffer`), and the item energy helpers in
-//! `native_item_energy.rs`: `native_item_energy`, `native_item_energy_insert`, `native_item_energy_extract`.
+//! API 307 added a mod item holding energy (`native_item_energy_buffer`) and its helpers; Parts' item
+//! energy capability replaces them, and they are removed.
 //!
 //! API 306 adds A world save cycle completed (`native_world_saved`).
 //!
@@ -164,8 +164,6 @@
 //! API 279 adds A spectator stopped watching an entity (`native_player_stop_spectating_entity`).
 //!
 //! API 278 adds A server player selected a stonecutter recipe (`native_player_stonecutter_recipe_select`).
-//!
-//! API 277 adds A server player's respawn point about to change, cancellable (`native_player_spawn_point_set`).
 //!
 //! API 276 adds A player's shield was disabled by a blocked hit (`native_player_shield_disable`).
 //!
@@ -422,7 +420,8 @@
 //!
 //! API 148 adds a mob's or an armor stand's equipment slot taking another stack (`native_living_equipment_change`), and whether a mod listens to the mobs' (`native_living_equipment_listened`).
 //!
-//! API 147 adds a mod item as a fluid container (`native_item_fluid_tank`), and the item fluid helpers in `native_item_fluids.rs`: `native_item_fluid`, `native_item_fluid_fill`, `native_item_fluid_drain`.
+//! API 147 added a mod item as a fluid container (`native_item_fluid_tank`) and its helpers; Parts' item fluid
+//! capability (`Capabilities.Fluid.ITEM`) replaces them, and they are removed.
 //!
 //! API 146 adds entities ticking, which a mod can stop (`native_entity_tick_pre`, `native_entity_tick_post`, told while a mod sets `native_entity_tick_listened`).
 //!
@@ -852,7 +851,6 @@
 //! Bodies have no `cfg` and no macros: horizon-mixins refuses a target with
 //! either (`tests::hook_points_stay_hookable`).
 use super::native_data_maps::NativeDataMapType;
-use super::native_item_energy::ItemEnergyBuffer;
 use super::{
     Game, GameLevel, LevelDimension, Screen,
     execution_role::ExecutionRole,
@@ -2999,33 +2997,6 @@ impl Game<'_> {
     ) {
         mod_api::dispatch_block_entity_energy(self, mod_api::mods(), block, energy);
     }
-    /// Item `item` (`mod_id:name`) is a fluid container
-    /// (`Capabilities.FluidHandler.ITEM`): set `capacity`, in millibuckets,
-    /// when the item is yours (clamped to 1..=1 000 000; vanilla's buckets
-    /// are built in and cannot be changed). Asked at each call of the item
-    /// fluid helpers (`native_item_fluid`, `native_item_fluid_fill`,
-    /// `native_item_fluid_drain`, in `native_item_fluids.rs`). What the
-    /// container holds is kept in the stack's `minecraft:custom_data`, under
-    /// `horizon_fluid`. API 147.
-    pub(super) fn native_item_fluid_tank(&self, item: &str, capacity: &mut Option<i32>) {
-        mod_api::dispatch_item_fluid_tank(self, mod_api::mods(), item, capacity);
-    }
-    /// Item `item` (`mod_id:name`) holds energy (`Capabilities.Energy.ITEM`):
-    /// set `buffer` when the item is yours, as `SimpleEnergyHandler` is built:
-    /// its capacity and the most one insert and one extract move. A capacity
-    /// under 1 leaves the buffer out, and the limits are clamped to
-    /// 0..=capacity; vanilla's items have none. Asked at each call of the item
-    /// energy helpers (`native_item_energy`, `native_item_energy_insert`,
-    /// `native_item_energy_extract`, in `native_item_energy.rs`). The amount
-    /// is kept in the stack's `minecraft:custom_data`, as the int
-    /// `horizon_energy`. API 307.
-    pub(super) fn native_item_energy_buffer(
-        &self,
-        item: &str,
-        buffer: &mut Option<ItemEnergyBuffer>,
-    ) {
-        mod_api::dispatch_item_energy_buffer(self, mod_api::mods(), item, buffer);
-    }
     /// Item `item` (`mod_id:name`) holds items (`Capabilities.Item.ITEM`): set
     /// `slots` when the item is yours, for a backpack, a storage cell or a
     /// toolbox. Clamped to 1..=256, `ItemContainerContents`' limit; 0 leaves
@@ -3737,8 +3708,8 @@ impl Game<'_> {
     /// below `container_slots` it is the block's own slot (`entity.items`),
     /// from there on the player's inventory (27 main slots, then the hotbar).
     /// `stack` is a copy of what the slot holds; take what you move out of
-    /// it (put it in `entity.items`, or in another block with
-    /// `native_insert_item`) and set `handled`: the slot then holds what is
+    /// it (put it in `entity.items`, or in another block through its
+    /// `ITEMS` capability) and set `handled`: the slot then holds what is
     /// left of `stack` (whatever you wrote to that slot of `entity.items`),
     /// the game's routing is skipped, and the player's client gets the menu
     /// again. Left unhandled, `entity.items` goes back to what it held and
@@ -4724,29 +4695,34 @@ impl Game<'_> {
             cancel,
         );
     }
-    /// A server player's respawn point is about to change. `cause` is `bed`,
-    /// `respawn_anchor`, `command` or `death_reset`; `pos` is its block
-    /// position. The player's state is not swapped in, so helpers that look
-    /// them up through `self.lan` may find nothing while a guest packet is
-    /// handled. Set `cancel` to keep the old point. Server-side.
-    /// 277.
-    pub(super) fn native_player_spawn_point_set(
+    /// NeoForge's `PlayerSetSpawnEvent`: a server player's respawn point is about to be
+    /// set (`ServerPlayer.setRespawnPosition`), once for each call vanilla makes: every sleep
+    /// in a bed (the same bed too, which refreshes its angle), an anchor that is a new
+    /// point, `/spawnpoint`, and the copy to the new player when a player respawns and their
+    /// respawn block was found (`pos` is none for a player with no point). A respawn block
+    /// that is gone makes no call. `pos` is the block position and `dimension` its level;
+    /// `forced` is `/spawnpoint`'s flag. Set `cancel` and the point stays as it was (the
+    /// respawned player is left with none). `player_entity_id` is the server's entity id for
+    /// the player. Server-side.
+    pub(super) fn native_player_set_spawn(
         &mut self,
         player: u128,
+        player_entity_id: i32,
         name: &str,
         dimension: &str,
-        pos: [i32; 3],
-        cause: &str,
+        pos: Option<[i32; 3]>,
+        forced: bool,
         cancel: &mut bool,
     ) {
-        mod_api::dispatch_player_spawn_point_set(
+        mod_api::dispatch_player_set_spawn(
             self,
             mod_api::mods(),
             player,
+            player_entity_id,
             name,
             dimension,
             pos,
-            cause,
+            forced,
             cancel,
         );
     }
@@ -8186,6 +8162,32 @@ impl Game<'_> {
             canceled,
         );
     }
+    /// NeoForge's `LivingUseTotemEvent`: a killing blow on entity `entity` of type `kind`
+    /// from `source` (named as `native_living_incoming_damage` names it) would be taken by the
+    /// `death_protection` item `item` in its `hand` (main or off;
+    /// `LivingEntity.checkTotemDeathProtection`). Set `cancel` and the entity gets no
+    /// protection: it dies and the item is kept. A player or a mob holding a totem fires it; a
+    /// source that bypasses invulnerability never reaches it. `native_player_totem` still
+    /// hears a server player's totem that did save them, after this. No `self`, as
+    /// `native_living_shield_block`: the game is in the middle of the hit.
+    pub(super) fn native_living_use_totem(
+        entity: i32,
+        kind: &str,
+        source: &HurtSource<'_>,
+        hand: Hand,
+        item: &str,
+        cancel: &mut bool,
+    ) {
+        mod_api::dispatch_living_use_totem(
+            mod_api::mods(),
+            entity,
+            kind,
+            source,
+            hand,
+            item,
+            cancel,
+        );
+    }
     /// `LivingEntity.knockback` is about to push entity `entity` of type `kind`
     /// (`minecraft:zombie`, `minecraft:player`) `strength` away from the direction (`x`, `z`),
     /// on the raw strength, before the entity's knockback resistance takes its share and its motion
@@ -8374,6 +8376,26 @@ impl Game<'_> {
             damage,
         );
     }
+}
+
+/// `native_living_use_totem` for the damage code (`health::USE_TOTEM`): whether it
+/// canceled the totem. The entity and the source are named as the damage hook names them.
+pub(super) fn use_totem(hurting: Hurting<'_>, off_hand: bool) -> bool {
+    if mod_api::mods().is_empty() {
+        return false;
+    }
+    let (entity, kind, source) = hurt_server_args(hurting);
+    let hand = if off_hand { Hand::Off } else { Hand::Main };
+    let mut cancel = false;
+    Game::native_living_use_totem(
+        entity,
+        kind,
+        &source,
+        hand,
+        "minecraft:totem_of_undying",
+        &mut cancel,
+    );
+    cancel
 }
 
 /// `native_living_shield_block` for the damage code (`health::SHIELD_BLOCK`): whether it
@@ -9545,18 +9567,6 @@ impl Game<'_> {
             .properties
             .get(key)
             .cloned()
-    }
-    /// Puts `stack` into the container at `pos` (a chest, a furnace, a mod
-    /// container) through its side `face`, as a hopper would, one by one, and
-    /// returns what did not fit: a machine's auto-output. A composter takes
-    /// one a call, and a client's copy of the world none. API 20.
-    pub(super) fn native_insert_item(
-        &mut self,
-        pos: [i32; 3],
-        face: Direction,
-        stack: ItemStack,
-    ) -> Option<ItemStack> {
-        self.insert_stack_through(pos, face, stack)
     }
     /// The window's width and height in physical pixels, independent of GUI
     /// scale; none on a server or when no window exists. API 165.

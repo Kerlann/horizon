@@ -261,13 +261,13 @@ impl Game<'_> {
         side: Direction,
     ) -> Option<Capability<dyn FluidHandler>> {
         let at = BlockSide {
+            level: self.native_level_here()?,
             pos,
             side: Some(side),
         };
-        let host: &mut dyn Host = self;
-        mod_api::block_entity_capability(&mod_api::FLUIDS, host, at, |host| {
-            host.fluid_tank_count(pos, None).is_some()
-        })
+        let providers = mod_api::block_entity_providers(&mod_api::FLUIDS, self, at)?;
+        let game = self.native_fluid_tank_count(at).is_some();
+        providers.ask(self, game)
     }
     /// The saved tanks of the mod block entity at `pos`, `n` of them.
     fn tank_state(&self, pos: [i32; 3], n: usize) -> Option<Vec<Tank>> {
@@ -285,30 +285,34 @@ impl Game<'_> {
             self.world.modified.insert((key.0 >> 4, key.2 >> 4));
         }
     }
-    /// How many tanks of the block at `pos` in the level in place its side `side` reaches
+    /// The tanks the game's own fluid capability reaches at `at`: in the level in place only.
+    fn capability_tanks(&self, at: BlockSide) -> Option<FluidAt> {
+        if !self.native_level_in_place(at.level) {
+            return None;
+        }
+        self.native_fluid_at(self.dim.id(), at.pos)
+    }
+    /// How many tanks of the block at `at` in the level in place its side reaches
     /// (none: every tank), for the game's own fluid capability: a mod block's by its table, a
     /// cauldron's one. None where no tanks are, as `native_fluid_tanks`.
-    pub(in crate::game) fn native_fluid_tank_count(
-        &self,
-        pos: [i32; 3],
-        side: Option<Direction>,
-    ) -> Option<usize> {
-        match self.native_fluid_at(self.dim.id(), pos)? {
-            FluidAt::Mod(tanks) => Some(side_tanks(&tanks, side).len()),
+    pub(in crate::game) fn native_fluid_tank_count(&self, at: BlockSide) -> Option<usize> {
+        match self.capability_tanks(at)? {
+            FluidAt::Mod(tanks) => Some(side_tanks(&tanks, at.side).len()),
             FluidAt::Cauldron(_) => Some(1),
         }
     }
-    /// What tank `tank` of those `side` reaches at `pos` holds (`native_fluid_tank_count`).
+    /// What tank `tank` of those `at`'s side reaches holds (`native_fluid_tank_count`).
     pub(in crate::game) fn native_fluid_tank(
         &self,
-        pos: [i32; 3],
-        side: Option<Direction>,
+        at: BlockSide,
         tank: usize,
     ) -> Option<FluidStack> {
-        match self.native_fluid_at(self.dim.id(), pos)? {
+        match self.capability_tanks(at)? {
             FluidAt::Mod(tanks) => {
-                let real = *side_tanks(&tanks, side).get(tank)?;
-                let (fluid, amount) = self.tank_state(pos, tanks.tanks.len())?.swap_remove(real);
+                let real = *side_tanks(&tanks, at.side).get(tank)?;
+                let (fluid, amount) = self
+                    .tank_state(at.pos, tanks.tanks.len())?
+                    .swap_remove(real);
                 let amount = u32::try_from(amount).ok().filter(|&amount| amount > 0)?;
                 Some(FluidStack::new(&fluid?, amount))
             }
@@ -320,20 +324,19 @@ impl Game<'_> {
             FluidAt::Cauldron(_) => None,
         }
     }
-    /// How much of `fluid` tank `tank` of those `side` reaches at `pos` holds when empty: a mod
+    /// How much of `fluid` tank `tank` of those `at`'s side reaches holds when empty: a mod
     /// block's fillable tank its capacity, a cauldron a bucket; none for another tank, a
     /// drain-only one, or a fluid the tanks there don't take: other than water and lava, or
     /// with components into a mod block's tanks.
     pub(in crate::game) fn native_fluid_tank_capacity(
         &self,
-        pos: [i32; 3],
-        side: Option<Direction>,
+        at: BlockSide,
         tank: usize,
         fluid: &FluidStack,
     ) -> u32 {
-        match self.native_fluid_at(self.dim.id(), pos) {
+        match self.capability_tanks(at) {
             Some(at) if !game_holds(fluid, &at) => 0,
-            Some(FluidAt::Mod(tanks)) => side_tanks(&tanks, side)
+            Some(FluidAt::Mod(tanks)) => side_tanks(&tanks, at.side)
                 .get(tank)
                 .filter(|real| tanks.inputs.contains(real))
                 .map_or(0, |&real| tanks.tanks[real].max(0).unsigned_abs()),
@@ -341,15 +344,14 @@ impl Game<'_> {
             _ => 0,
         }
     }
-    /// Puts as much of `fluid` as tank `tank` of those `side` reaches at `pos` takes: a mod
+    /// Puts as much of `fluid` as tank `tank` of those `at`'s side reaches takes: a mod
     /// block's fillable tank, empty or holding that fluid, up to its capacity; a cauldron by
     /// whole thirds, lava only whole into an empty one, discarding the fluid's components as
     /// NeoForge's `CauldronFluidContent` does. What didn't fit. `simulate` changes
     /// nothing and answers as the real call.
     pub(in crate::game) fn native_fluid_tank_insert(
         &mut self,
-        pos: [i32; 3],
-        side: Option<Direction>,
+        at: BlockSide,
         tank: usize,
         fluid: FluidStack,
         simulate: bool,
@@ -358,14 +360,14 @@ impl Game<'_> {
             return None;
         }
         let amount = mb(fluid.amount);
-        let took = match self.native_fluid_at(self.dim.id(), pos) {
+        let took = match self.capability_tanks(at) {
             Some(at) if !game_holds(&fluid, &at) => 0,
             Some(FluidAt::Mod(tanks)) => {
-                let real = side_tanks(&tanks, side)
+                let real = side_tanks(&tanks, at.side)
                     .get(tank)
                     .copied()
                     .filter(|real| tanks.inputs.contains(real));
-                let state = real.zip(self.tank_state(pos, tanks.tanks.len()));
+                let state = real.zip(self.tank_state(at.pos, tanks.tanks.len()));
                 let Some((real, mut state)) = state else {
                     return Some(fluid);
                 };
@@ -377,12 +379,12 @@ impl Game<'_> {
                 if add > 0 && !simulate {
                     entry.0 = Some(fluid.fluid.to_string());
                     entry.1 += add;
-                    self.set_tank_state(pos, &state);
+                    self.set_tank_state(at.pos, &state);
                 }
                 add
             }
             Some(FluidAt::Cauldron(kind)) if tank == 0 => match kind.fill(&fluid.fluid, amount) {
-                Some((took, to)) if simulate || self.cauldron_set(pos, to) => took,
+                Some((took, to)) if simulate || self.cauldron_set(at.pos, to) => took,
                 _ => 0,
             },
             _ => 0,
@@ -390,25 +392,24 @@ impl Game<'_> {
         let rest = fluid.amount - took.unsigned_abs();
         (rest > 0).then(|| fluid.with_amount(rest))
     }
-    /// Takes up to `max` out of tank `tank` of those `side` reaches at `pos`: a mod block's
+    /// Takes up to `max` out of tank `tank` of those `at`'s side reaches: a mod block's
     /// drainable tank, a cauldron by whole thirds and lava only whole. What came out.
     /// `simulate` changes nothing and answers as the real call.
     pub(in crate::game) fn native_fluid_tank_extract(
         &mut self,
-        pos: [i32; 3],
-        side: Option<Direction>,
+        at: BlockSide,
         tank: usize,
         max: u32,
         simulate: bool,
     ) -> Option<FluidStack> {
         let max = mb(max);
-        match self.native_fluid_at(self.dim.id(), pos)? {
+        match self.capability_tanks(at)? {
             FluidAt::Mod(tanks) => {
-                let real = side_tanks(&tanks, side)
+                let real = side_tanks(&tanks, at.side)
                     .get(tank)
                     .copied()
                     .filter(|real| tanks.outputs.contains(real))?;
-                let mut state = self.tank_state(pos, tanks.tanks.len())?;
+                let mut state = self.tank_state(at.pos, tanks.tanks.len())?;
                 let entry = &mut state[real];
                 let take = entry.1.clamp(0, max);
                 let fluid = entry.0.clone().filter(|_| take > 0)?;
@@ -417,13 +418,13 @@ impl Game<'_> {
                     if entry.1 == 0 {
                         entry.0 = None;
                     }
-                    self.set_tank_state(pos, &state);
+                    self.set_tank_state(at.pos, &state);
                 }
                 Some(FluidStack::new(&fluid, take.unsigned_abs()))
             }
             FluidAt::Cauldron(kind) if tank == 0 => {
                 let (fluid, took, to) = kind.drain(max)?;
-                (simulate || self.cauldron_set(pos, to))
+                (simulate || self.cauldron_set(at.pos, to))
                     .then(|| FluidStack::new(fluid, took.unsigned_abs()))
             }
             FluidAt::Cauldron(_) => None,
@@ -722,11 +723,17 @@ impl Game<'_> {
         if self.fluid_part_at(from, from_face).is_some()
             || self.fluid_part_at(to, to_face).is_some()
         {
+            let level = self.native_level_here()?;
+            let end = |pos, face| BlockSide {
+                level,
+                pos,
+                side: Some(face),
+            };
+            let (from, to) = (end(from, from_face), end(to, to_face));
             let host: &mut dyn Host = self;
             // These helpers name a fluid by its id, so fluids with components stay put.
             let plain = |fluid: &FluidStack| !fluid.has_components();
-            let (from_side, to_side, max) = (Some(from_face), Some(to_face), max.unsigned_abs());
-            let moved = host.transfer_fluids_where(from, from_side, to, to_side, max, &plain)?;
+            let moved = host.transfer_fluids_where(from, to, max.unsigned_abs(), &plain)?;
             return Some((moved.fluid.to_string(), mb(moved.amount)));
         }
         // Ask the source for no more than the target has room for: a
@@ -861,6 +868,8 @@ mod tests {
         game.world
             .chunks
             .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        game.native_lifecycle
+            .begin_open(horizon_client::mod_api::NativeAuthority::IntegratedServer);
         // A mod block entity whose type has a fluid provider, which counts each time it's asked.
         let counted = ModBlockEntity::new(ModBlockEntityFields {
             id: "test:counted".into(),

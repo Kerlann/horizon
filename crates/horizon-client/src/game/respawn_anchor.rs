@@ -166,6 +166,19 @@ impl Game<'_> {
         }
         Ok(AnchorUse::Other)
     }
+    /// The mods' say on a server player's respawn point about to be set to
+    /// `pos` in `dim` (`ServerPlayer.setRespawnPosition`, NeoForge's
+    /// `PlayerSetSpawnEvent`): true when one canceled.
+    pub(super) fn spawn_point_change(&mut self, dim: Dim, pos: [i32; 3], forced: bool) -> bool {
+        let (Some(player), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone())
+        else {
+            return false;
+        };
+        let mut cancel = false;
+        let id = self.own_entity_id();
+        self.native_player_set_spawn(player, id, &name, dim.id(), Some(pos), forced, &mut cancel);
+        cancel
+    }
     /// `RespawnAnchorBlock.useWithoutItem` on a charged anchor: outside the
     /// Nether it explodes; inside, it becomes the respawn point.
     pub(super) fn respawn_anchor_used(&mut self, pos: [i32; 3]) -> Result<()> {
@@ -184,19 +197,7 @@ impl Game<'_> {
             .respawn_config
             .is_some_and(|c| c.dim == config.dim && c.pos == config.pos);
         if !same {
-            let mut cancel = false;
-            if let (Some(player), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone())
-            {
-                self.native_player_spawn_point_set(
-                    player,
-                    &name,
-                    self.dim.id(),
-                    pos,
-                    "respawn_anchor",
-                    &mut cancel,
-                );
-            }
-            if cancel {
+            if self.spawn_point_change(self.dim, pos, false) {
                 return Ok(());
             }
             // setRespawnPosition(config, true): the message, the point; the

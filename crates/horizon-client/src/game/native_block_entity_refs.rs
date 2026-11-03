@@ -10,18 +10,7 @@ use horizon_world::nbt::{Compound, Tag};
 
 impl Game<'_> {
     fn native_block_entity_target(&self, entity: BlockEntityRef) -> Option<(&World, &BlockEntity)> {
-        let level = entity.level;
-        if self.remote.is_some() || self.native_lifecycle.epoch() != Some(level.epoch()) {
-            return None;
-        }
-        let dim = std::iter::once(self.dim)
-            .chain(self.levels.parked_dims())
-            .find(|dim| dim.id() == level.dimension())?;
-        let world = if dim == self.dim {
-            &self.world
-        } else {
-            self.levels.parked_world(dim)?
-        };
+        let world = self.native_level_world(entity.level)?;
         Some((world, loaded_block_entity(world, entity.position)?))
     }
 
@@ -41,7 +30,7 @@ impl Game<'_> {
     }
 
     /// The block entity's type (`BlockEntity.getType`). API @API:block_entity_refs@.
-    pub(super) fn native_block_entity_kind(&self, entity: BlockEntityRef) -> Option<String> {
+    pub(super) fn native_block_entity_kind(&self, entity: BlockEntityRef) -> Option<&str> {
         let (world, block_entity) = self.native_block_entity_target(entity)?;
         let [x, y, z] = entity.position;
         let block = &self.pack.assets.registry.state(world.block(x, y, z))?.name;

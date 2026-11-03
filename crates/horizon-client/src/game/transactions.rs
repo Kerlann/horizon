@@ -349,7 +349,7 @@ mod tests {
     use horizon_client::{
         chunk::Chunk,
         items::ItemStack,
-        mod_api::{Host, ItemResource, NativeAuthority, NativeBlockUpdateFlags},
+        mod_api::{BlockSide, Host, ItemResource, NativeAuthority, NativeBlockUpdateFlags},
     };
     use std::{sync::Arc, time::Instant};
 
@@ -415,24 +415,25 @@ mod tests {
         let sticks = |count| ItemStack::new("minecraft:stick", count);
         let stick = ItemResource::of(&sticks(1));
         let rod = ItemResource::of(&ItemStack::new("minecraft:blaze_rod", 1));
+        let on = |pos, side| BlockSide { level, pos, side };
         let host: &mut dyn Host = &mut game;
 
         // Five in, then a committed child takes two and an aborted one adds three: the
         // outer abort puts all of it back, the cauldron's water too.
         let refused: Result<(), ()> = host.transaction(|host, tx| {
             assert!(
-                host.container_insert([0, 64, 0], None, 0, sticks(5), tx)
+                host.container_insert(on([0, 64, 0], None), 0, sticks(5), tx)
                     .is_none()
             );
             let taken = host.transaction(|host, tx| {
-                Ok::<_, ()>(host.container_extract([0, 64, 0], None, 0, 2, tx))
+                Ok::<_, ()>(host.container_extract(on([0, 64, 0], None), 0, 2, tx))
             });
             assert_eq!(taken, Ok(Some(sticks(2))));
             let _ = host.transaction(|host, tx| {
-                host.container_insert([0, 64, 0], None, 1, sticks(3), tx);
+                host.container_insert(on([0, 64, 0], None), 1, sticks(3), tx);
                 Err::<(), ()>(())
             });
-            let water = host.fluid_tank_extract([2, 64, 0], None, 0, 1000, false);
+            let water = host.fluid_tank_extract(on([2, 64, 0], None), 0, 1000, false);
             assert_eq!(water.map(|w| w.amount), Some(1000));
             Err(())
         });
@@ -444,16 +445,16 @@ mod tests {
         // The same, committed: what the children left stands, the cauldron is set for good.
         let host: &mut dyn Host = &mut game;
         let done: Result<(), ()> = host.transaction(|host, tx| {
-            host.container_insert([0, 64, 0], None, 0, sticks(5), tx);
+            host.container_insert(on([0, 64, 0], None), 0, sticks(5), tx);
             let _ = host.transaction(|host, tx| {
-                host.container_extract([0, 64, 0], None, 0, 2, tx);
+                host.container_extract(on([0, 64, 0], None), 0, 2, tx);
                 Ok::<_, ()>(())
             });
             let _ = host.transaction(|host, tx| {
-                host.container_insert([0, 64, 0], None, 1, sticks(3), tx);
+                host.container_insert(on([0, 64, 0], None), 1, sticks(3), tx);
                 Err::<(), ()>(())
             });
-            host.fluid_tank_extract([2, 64, 0], None, 0, 1000, false);
+            host.fluid_tank_extract(on([2, 64, 0], None), 0, 1000, false);
             Ok(())
         });
         assert_eq!(done, Ok(()));
@@ -465,7 +466,7 @@ mod tests {
         game.transaction_open();
         let host: &mut dyn Host = &mut game;
         let _ = host.transaction(|host, tx| {
-            Ok::<_, ()>(host.container_insert([0, 64, 0], None, 0, sticks(1), tx))
+            Ok::<_, ()>(host.container_insert(on([0, 64, 0], None), 0, sticks(1), tx))
         });
         game.abort_open_transactions();
         assert_eq!(chest_items(&game), [(0, 3)]);
@@ -475,7 +476,7 @@ mod tests {
         let host: &mut dyn Host = &mut game;
         let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             host.transaction(|host, tx| -> Result<(), ()> {
-                host.container_insert([0, 64, 0], None, 0, sticks(1), tx);
+                host.container_insert(on([0, 64, 0], None), 0, sticks(1), tx);
                 panic!("a broken handler")
             })
         }));
@@ -509,7 +510,7 @@ mod tests {
         let before = queues(&game);
         let host: &mut dyn Host = &mut game;
         let _ = host.transaction(|host, _| {
-            host.fluid_tank_extract([2, 64, 0], None, 0, 1000, false);
+            host.fluid_tank_extract(on([2, 64, 0], None), 0, 1000, false);
             Err::<(), ()>(())
         });
         assert_eq!(game.world.block(2, 64, 0), full);
@@ -521,7 +522,7 @@ mod tests {
         let host: &mut dyn Host = &mut game;
         let _ = host.transaction(|host, tx| {
             let cat = disc("minecraft:music_disc_cat");
-            Ok::<_, ()>(host.container_insert([4, 64, 0], None, 0, cat, tx))
+            Ok::<_, ()>(host.container_insert(on([4, 64, 0], None), 0, cat, tx))
         });
         let Some(BlockEntity::Jukebox(j)) = game.world.block_entities.get_mut(&(4, 64, 0)) else {
             panic!("jukebox block entity missing")
@@ -530,10 +531,9 @@ mod tests {
         j.ticks = 500;
         let host: &mut dyn Host = &mut game;
         let swapped = host.transaction(|host, tx| {
-            host.container_extract([4, 64, 0], None, 0, 1, tx);
+            host.container_extract(on([4, 64, 0], None), 0, 1, tx);
             Ok::<_, ()>(host.container_insert(
-                [4, 64, 0],
-                None,
+                on([4, 64, 0], None),
                 0,
                 disc("minecraft:music_disc_13"),
                 tx,
@@ -661,6 +661,26 @@ mod tests {
             assert_eq!(place.insert(host, tx, &stick, 1), 1);
             Err::<(), ()>(())
         });
+        assert_eq!(len(&game), 0);
+        // Grown three transactions deep, the middle one committing: the root's abort still
+        // truncates it.
+        let place = horizon_client::mod_api::ItemPlace::EntitySlot {
+            entity: id,
+            slot: 0,
+        };
+        let host: &mut dyn Host = &mut game;
+        let result = host.transaction(|host, _| {
+            host.transaction(|host, _| {
+                host.transaction(|host, tx| {
+                    assert!(place.stack(host).is_none());
+                    assert_eq!(place.insert(host, tx, &stick, 1), 1);
+                    Ok::<_, ()>(())
+                })?;
+                Ok::<_, ()>(())
+            })?;
+            Err::<(), ()>(())
+        });
+        assert!(result.is_err());
         assert_eq!(len(&game), 0);
 
         for (kind, nbt) in vehicles {

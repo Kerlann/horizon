@@ -52,8 +52,6 @@ mod tests {
             pub(super) _lifetime: std::marker::PhantomData<&'a mut ()>,
         }
         pub(super) struct Corners;
-        #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-        pub(super) struct ItemEnergyBuffer;
         pub(super) struct Suggestion;
         pub(super) struct HudBatch;
         pub(super) struct BiomeColors;

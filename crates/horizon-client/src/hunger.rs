@@ -188,6 +188,7 @@ impl FoodWorld for TickWorld<'_> {
             block_sound: false,
             knocked: false,
             totem: false,
+            totem_off_hand: false,
             totem_fired: false,
             canceled: false,
         };

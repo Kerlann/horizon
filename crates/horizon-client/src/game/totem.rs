@@ -21,8 +21,10 @@ impl Game<'_> {
     pub(super) fn update_totem_ready(&mut self) {
         let ready = self.held().is_some_and(|s| &*s.item == TOTEM)
             || self.offhand.as_ref().is_some_and(|s| &*s.item == TOTEM);
+        let off = !self.held().is_some_and(|s| &*s.item == TOTEM);
         if let Some(p) = self.player.as_mut() {
             p.health.totem_ready = ready;
+            p.health.totem_off_hand = off;
         }
     }
     /// The server's half once a totem fired: use it up (main hand first),

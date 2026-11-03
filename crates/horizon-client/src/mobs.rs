@@ -3532,6 +3532,13 @@ impl Mob {
         if !main && !off {
             return false;
         }
+        // `LivingUseTotemEvent`: a native mod may cancel, and the mob dies.
+        if crate::health::USE_TOTEM
+            .get()
+            .is_some_and(|hook| hook(crate::health::Hurting::Mob(self, source), off))
+        {
+            return false;
+        }
         if main {
             self.extra.set_main_hand(None);
         } else {

@@ -70,6 +70,10 @@ pub struct Knock {
 /// and before the knockback resistance and the motion change. It may change the [`Knock`]; true
 /// cancels it.
 pub static KNOCKBACK: OnceLock<fn(Hurting<'_>, &mut Knock) -> bool> = OnceLock::new();
+/// The game's native totem hook (`native_living_use_totem`), set once by the game: a
+/// `death_protection` item in the hand (true: the off hand) is about to save the entity from
+/// a killing blow (`LivingUseTotemEvent`). True cancels it: the entity dies.
+pub static USE_TOTEM: OnceLock<fn(Hurting<'_>, bool) -> bool> = OnceLock::new();
 /// What a player's raised blocking item does to a hit, as `native_living_shield_block`
 /// may change it (`LivingShieldBlockEvent`).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -326,6 +330,8 @@ pub struct PlayerHealth {
     pub totem_ready: bool,
     /// The totem saved the player this tick; the game applies its effects.
     pub totem_used: bool,
+    /// The totem that would save the player is in the off hand.
+    pub totem_off_hand: bool,
 }
 impl PlayerHealth {
     pub fn new(resources: &HealthResources, attributes: &mut Attributes) -> Result<Self> {
@@ -376,6 +382,7 @@ impl PlayerHealth {
             tick_count: 0,
             totem_ready: false,
             totem_used: false,
+            totem_off_hand: false,
         })
     }
     pub fn health(&self) -> f32 {
@@ -494,6 +501,7 @@ impl PlayerMotion {
         let fire_ticks = self.fire_ticks;
         let source_name = source.definition().name.clone();
         let totem_ready = self.health.totem_ready;
+        let totem_off_hand = self.health.totem_off_hand;
         let invulnerable = self.invulnerable;
         let h = &mut self.health;
         let mut environment = Environment {
@@ -516,6 +524,7 @@ impl PlayerMotion {
             block_sound: false,
             knocked: false,
             totem: totem_ready,
+            totem_off_hand,
             totem_fired: false,
             canceled: false,
         };
@@ -618,6 +627,8 @@ pub(crate) struct Environment<'a> {
     pub(crate) knocked: bool,
     /// LivingEntity.checkTotemDeathProtection: a totem is held / was used.
     pub(crate) totem: bool,
+    /// The totem is in the off hand.
+    pub(crate) totem_off_hand: bool,
     pub(crate) totem_fired: bool,
     /// A native mod canceled the hit (`living_incoming_damage`).
     pub(crate) canceled: bool,
@@ -990,6 +1001,18 @@ impl HurtWorld for Environment<'_> {
             || self
                 .source
                 .immunity_tag(ImmunityTag::BypassesInvulnerability)
+        {
+            return Ok(false);
+        }
+        let source = HurtSource {
+            damage_type: &self.source.definition().name,
+            causing: self.causing,
+            direct: 0,
+        };
+        // A native mod may cancel the totem: the player dies.
+        if USE_TOTEM
+            .get()
+            .is_some_and(|hook| hook(Hurting::Player(self.entity, source), self.totem_off_hand))
         {
             return Ok(false);
         }
