@@ -14,6 +14,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha512};
 use std::{
     collections::HashMap,
     fs,
@@ -229,25 +230,51 @@ pub(crate) fn download(
     store_download(response.into_reader(), sha1, dest, overwrite).map_err(|e| format!("{url}: {e}"))
 }
 
-/// Read and verify the whole bounded response before publishing it; a failed read leaves no file.
+/// A validated SHA-512, suitable for use as a cache key.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Sha512Hash(String);
+
+impl Sha512Hash {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        if value.len() != 128 || !value.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err("SHA-512 must have 128 hexadecimal digits".into());
+        }
+        Ok(Self(value.to_ascii_lowercase()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Download a Modrinth CDN file, accepting only the requested SHA-512.
+pub fn download_sha512(url: &str, hash: &Sha512Hash, dest: &Path) -> Result<(), String> {
+    let response =
+        crate::net::get_from_host(url, "cdn.modrinth.com")?.ok_or("Modrinth file not found")?;
+    store(response.into_reader(), Checksum::Sha512(hash), dest, true)
+}
+
+enum Checksum<'a> {
+    Sha1(Option<&'a str>),
+    Sha512(&'a Sha512Hash),
+}
+
+/// Stream into a private temporary file, publishing only after verification.
 pub(crate) fn store_download(
     reader: impl Read,
     sha1: Option<&str>,
     dest: &Path,
     overwrite: bool,
 ) -> Result<(), String> {
-    let mut bytes = Vec::new();
-    reader
-        .take(MAX_JAR + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| e.to_string())?;
-    if bytes.len() as u64 > MAX_JAR {
-        return Err("download exceeds 512 MiB".into());
-    }
-    let got = sha1_hex(&bytes);
-    if let Some(want) = sha1.filter(|w| !w.eq_ignore_ascii_case(&got)) {
-        return Err(format!("SHA-1 {got}, the pack says {want}"));
-    }
+    store(reader, Checksum::Sha1(sha1), dest, overwrite)
+}
+
+fn store(
+    mut reader: impl Read,
+    checksum: Checksum<'_>,
+    dest: &Path,
+    overwrite: bool,
+) -> Result<(), String> {
     static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let suffix = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let part = dest.with_file_name(format!(
@@ -259,39 +286,66 @@ pub(crate) fn store_download(
         .create_new(true)
         .open(&part)
         .map_err(|e| e.to_string())?;
-    let result = file
-        .write_all(&bytes)
-        .map_err(|e| e.to_string())
-        .and_then(|()| {
-            drop(file);
-            if overwrite {
-                fs::rename(&part, dest).map_err(|e| e.to_string())
-            } else {
-                // Publish without replacing a file that appeared while the request was in flight.
-                match fs::hard_link(&part, dest) {
-                    Ok(()) => fs::remove_file(&part).map_err(|e| e.to_string()),
-                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(e.to_string()),
-                    Err(_) => {
-                        // No hard links here (FAT, some network mounts): copy into a new file.
-                        let mut out = fs::OpenOptions::new()
-                            .write(true)
-                            .create_new(true)
-                            .open(dest)
-                            .map_err(|e| e.to_string())?;
-                        let written = out.write_all(&bytes).map_err(|e| e.to_string());
-                        drop(out);
-                        if written.is_err() {
-                            let _ = fs::remove_file(dest);
-                        }
-                        let _ = fs::remove_file(&part);
-                        written
+    let result = (|| {
+        let mut sha1 = sha1::Sha1::new();
+        let mut sha512 = Sha512::new();
+        let mut size = 0u64;
+        let mut buf = [0u8; 65536];
+        loop {
+            let n = reader.read(&mut buf).map_err(|e| e.to_string())?;
+            if n == 0 {
+                break;
+            }
+            size += n as u64;
+            if size > MAX_JAR {
+                return Err("download exceeds 512 MiB".into());
+            }
+            match checksum {
+                Checksum::Sha1(_) => sha1.update(&buf[..n]),
+                Checksum::Sha512(_) => sha512.update(&buf[..n]),
+            }
+            file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
+        }
+        let (algorithm, got, want) = match checksum {
+            Checksum::Sha1(want) => ("SHA-1", format!("{:x}", sha1.finalize()), want),
+            Checksum::Sha512(want) => (
+                "SHA-512",
+                format!("{:x}", sha512.finalize()),
+                Some(want.as_str()),
+            ),
+        };
+        if let Some(want) = want.filter(|want| !want.eq_ignore_ascii_case(&got)) {
+            return Err(format!("{algorithm} {got}, the pack says {want}"));
+        }
+        file.sync_all().map_err(|e| e.to_string())?;
+        drop(file);
+        if overwrite {
+            fs::rename(&part, dest).map_err(|e| e.to_string())
+        } else {
+            match fs::hard_link(&part, dest) {
+                Ok(()) => fs::remove_file(&part).map_err(|e| e.to_string()),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(e.to_string()),
+                Err(_) => {
+                    let mut out = fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(dest)
+                        .map_err(|e| e.to_string())?;
+                    let copied = std::io::copy(
+                        &mut fs::File::open(&part).map_err(|e| e.to_string())?,
+                        &mut out,
+                    )
+                    .map_err(|e| e.to_string());
+                    drop(out);
+                    if copied.is_err() {
+                        let _ = fs::remove_file(dest);
                     }
+                    copied.map(|_| ())
                 }
             }
-        });
-    if result.is_err() {
-        let _ = fs::remove_file(&part);
-    }
+        }
+    })();
+    let _ = fs::remove_file(&part);
     result
 }
 
@@ -370,6 +424,51 @@ pub fn curseforge_names(instance: &Value) -> HashMap<(u64, u64), String> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn sha512_stream_is_verified_before_atomic_publication() {
+        let root = std::env::current_dir()
+            .unwrap()
+            .join("target")
+            .join(format!("port-pack-sha512-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let dest = root.join("file.jar");
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for name in [
+            "assets/a/test",
+            "data/a/test",
+            "META-INF/neoforge.mods.toml",
+            "Dummy.class",
+        ] {
+            zip.start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(b"test").unwrap();
+        }
+        let bytes = zip.finish().unwrap().into_inner();
+        let hash = Sha512Hash::parse(&format!("{:x}", Sha512::digest(&bytes))).unwrap();
+        fs::write(&dest, b"existing").unwrap();
+        assert!(store(&b"wrong"[..], Checksum::Sha512(&hash), &dest, true).is_err());
+        assert_eq!(fs::read(&dest).unwrap(), b"existing");
+        struct Interrupted;
+        impl Read for Interrupted {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("interrupted"))
+            }
+        }
+        assert!(store(Interrupted, Checksum::Sha512(&hash), &dest, true).is_err());
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        fs::remove_file(&dest).unwrap();
+        store(&bytes[..], Checksum::Sha512(&hash), &dest, true).unwrap();
+        assert_eq!(fs::read(&dest).unwrap(), bytes);
+        let sha1 = sha1_hex(b"legacy");
+        fs::remove_file(&dest).unwrap();
+        store_download(&b"legacy"[..], Some(&sha1), &dest, true).unwrap();
+        assert_eq!(fs::read(&dest).unwrap(), b"legacy");
+        assert!(store_download(&b"bad"[..], Some(&sha1), &dest, true).is_err());
+        assert_eq!(fs::read(&dest).unwrap(), b"legacy");
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn a_pack_index_name_must_stay_inside_jars() {

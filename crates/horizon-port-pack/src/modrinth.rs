@@ -78,6 +78,30 @@ impl Cache {
     }
 }
 
+/// Find the exact Modrinth CDN file for a SHA-512, or None when it is absent.
+pub fn file_by_sha512(hash: &crate::fetch::Sha512Hash) -> Result<Option<String>, String> {
+    let url = format!("{API}/version_file/{}?algorithm=sha512", hash.as_str());
+    let Some(response) = crate::net::get_from_host(&url, "api.modrinth.com")? else {
+        return Ok(None);
+    };
+    file_url(&read(&url, response)?, hash)
+}
+
+fn file_url(version: &Value, hash: &crate::fetch::Sha512Hash) -> Result<Option<String>, String> {
+    let files = version["files"]
+        .as_array()
+        .ok_or("Modrinth response has no files")?;
+    let Some(file) = files.iter().find(|file| {
+        file["hashes"]["sha512"]
+            .as_str()
+            .is_some_and(|s| s.eq_ignore_ascii_case(hash.as_str()))
+    }) else {
+        return Ok(None);
+    };
+    let url = file["url"].as_str().ok_or("Modrinth file has no URL")?;
+    Ok(Some(url.to_owned()))
+}
+
 fn post(url: &str, body: &Value) -> Result<Value, String> {
     let response = crate::net::agent(url)
         .post(url)
@@ -112,4 +136,30 @@ fn encode(s: &str) -> String {
             _ => format!("%{b:02X}"),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod sha512_tests {
+    use super::*;
+    use crate::fetch::Sha512Hash;
+
+    #[test]
+    fn selects_the_file_with_the_exact_hash() {
+        let hash = Sha512Hash::parse(&"ab".repeat(64)).unwrap();
+        let version = serde_json::json!({"files": [
+            {"primary": true, "hashes": {"sha512": "wrong"}, "url": "https://cdn.modrinth.com/wrong"},
+            {"hashes": {"sha512": "AB".repeat(64)}, "url": "https://cdn.modrinth.com/right"}
+        ]});
+        assert_eq!(
+            file_url(&version, &hash).unwrap().as_deref(),
+            Some("https://cdn.modrinth.com/right")
+        );
+        assert!(
+            file_url(&serde_json::json!({"files": []}), &hash)
+                .unwrap()
+                .is_none()
+        );
+        assert!(file_url(&serde_json::json!({}), &hash).is_err());
+        assert!(Sha512Hash::parse("../bad").is_err());
+    }
 }
