@@ -3664,7 +3664,7 @@ impl Game<'_> {
         }
         // PlayerList.respawn: `copyRespawnPosition` of a player with no respawn
         // point sets none. One with a point is told when its block is found.
-        if own.is_none() {
+        if no_respawn_point(own.is_some(), host.hub.guests[i].spawn.is_some()) {
             let g = &host.hub.guests[i];
             let (uuid, id, name) = (g.uuid, g.entity_id, g.name.clone());
             let mut cancel = false;
@@ -5361,9 +5361,21 @@ fn stop_dig(play: &GuestPlay, pos: [i32; 3], air: bool, ticks: u64, per_tick: f3
     }
 }
 
+/// Whether the respawned player has no saved point to copy.
+fn no_respawn_point(has_config: bool, has_spawn: bool) -> bool {
+    !has_config && !has_spawn
+}
+
 #[cfg(test)]
 mod tests {
-    use super::eye_columns;
+    use super::{eye_columns, no_respawn_point};
+
+    #[test]
+    fn forced_overworld_spawn_is_not_a_reset() {
+        assert!(!no_respawn_point(false, true));
+        assert!(!no_respawn_point(true, false));
+        assert!(no_respawn_point(false, false));
+    }
     use horizon_client::pose::Pose;
 
     /// #4124: a STOP is measured from the START that named its block (`destroyPos`) — an abort, or
