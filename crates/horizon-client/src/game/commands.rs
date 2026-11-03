@@ -1529,7 +1529,9 @@ impl Game<'_> {
         relative: [bool; 3],
     ) {
         // An entity in another level is teleported in the level that holds it.
-        let _ = self.in_target_level(t, |g| g.teleport_to_in_level(t, pos, rotation, relative));
+        let _ = self.in_target_level(t, |g| {
+            g.teleport_to_in_level(t, pos, rotation, relative, false)
+        });
     }
     fn teleport_to_in_level(
         &mut self,
@@ -1537,18 +1539,54 @@ impl Game<'_> {
         pos: [f64; 3],
         rotation: Option<[f32; 2]>,
         relative: [bool; 3],
+        as_passenger: bool,
     ) {
+        if matches!(t, Target::Guest(_)) {
+            self.for_player(t, |g| {
+                g.teleport_to_in_level(Target::Player, pos, rotation, relative, as_passenger)
+            });
+            return;
+        }
         let from = self.target_position(t);
+        if let Some(from) = from
+            && let Some(entity) = self
+                .network_entity_id(t)
+                .map(|id| id as u32)
+                .or_else(|| {
+                    matches!(t, Target::Player)
+                        .then_some(self.lan_acting_entity)
+                        .flatten()
+                })
+                .and_then(|id| self.native_entity(id))
+            && let Some(passengers) = self.native_entity_passengers(entity)
+        {
+            let vehicle_rotation = self.target_rotation(t);
+            for passenger in passengers {
+                let Some(rider) = self.native_entity_target(passenger) else {
+                    continue;
+                };
+                let Some(rider_pos) = self.target_position(rider) else {
+                    continue;
+                };
+                let passenger_pos = std::array::from_fn(|i| pos[i] + (rider_pos[i] - from[i]));
+                let passenger_rotation = rotation.map(|r| {
+                    let old = self.target_rotation(rider);
+                    [
+                        r[0] + (old[0] - vehicle_rotation[0]),
+                        r[1] + (old[1] - vehicle_rotation[1]),
+                    ]
+                });
+                self.teleport_to_in_level(rider, passenger_pos, passenger_rotation, relative, true);
+            }
+        }
         let v = Vec3::new(pos[0], pos[1], pos[2]);
         match t {
-            Target::Guest(_) => {
-                self.for_player(t, |g| {
-                    g.teleport_to_relative(Target::Player, pos, rotation, relative)
-                });
-            }
+            Target::Guest(_) => unreachable!(),
             Target::Player => {
                 // ServerPlayer.teleport: removeVehicle before placing the player.
-                self.stop_riding();
+                if !as_passenger {
+                    self.stop_riding();
+                }
                 // A server's player teleported within their level is placed
                 // there at once: the arrival they were waiting for elsewhere
                 // in it (whose chunks lose their tickets) is abandoned.
@@ -1561,9 +1599,13 @@ impl Game<'_> {
                     .map(|p| [p.position.x, p.position.y, p.position.z]);
                 if let Some(p) = self.player.as_mut() {
                     p.position = v;
-                    p.velocity = Vec3::new(0.0, 0.0, 0.0);
-                    p.fall_distance = 0.0;
-                    p.ground.on_ground = false;
+                    if as_passenger {
+                        p.velocity = teleport_velocity(p.velocity, relative, true);
+                    } else {
+                        p.velocity = Vec3::new(0.0, 0.0, 0.0);
+                        p.fall_distance = 0.0;
+                        p.ground.on_ground = false;
+                    }
                 }
                 self.previous_position = v;
                 if let Some([yaw, pitch]) = rotation {
@@ -1572,12 +1614,14 @@ impl Game<'_> {
                 }
                 // A server player's teleport is told to the mods once their
                 // move is in the hub (`leave_guest`).
-                if let (Some(conn), Some(uuid), Some(name), Some(from)) = (
-                    self.lan_acting,
-                    self.lan_acting_uuid,
-                    self.lan_acting_name.clone(),
-                    from,
-                ) {
+                if !as_passenger
+                    && let (Some(conn), Some(uuid), Some(name), Some(from)) = (
+                        self.lan_acting,
+                        self.lan_acting_uuid,
+                        self.lan_acting_name.clone(),
+                        from,
+                    )
+                {
                     self.teleport_notes
                         .push(super::server_travel::TeleportNote {
                             conn,
@@ -1590,11 +1634,19 @@ impl Game<'_> {
                 }
             }
             Target::Mob(id) => {
-                self.dismount_mob(id);
+                if !as_passenger {
+                    self.dismount_mob(id);
+                }
                 if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-                    m.ai.nav.stop();
-                    m.velocity = teleport_velocity(m.velocity, relative, m.extra.fall_flying);
-                    if !m.extra.fall_flying {
+                    if !as_passenger {
+                        m.ai.nav.stop();
+                    }
+                    m.velocity = teleport_velocity(
+                        m.velocity,
+                        relative,
+                        as_passenger || m.extra.fall_flying,
+                    );
+                    if !as_passenger && !m.extra.fall_flying {
                         m.on_ground = true;
                     }
                     m.position = v;
@@ -1722,7 +1774,8 @@ impl Game<'_> {
             // Wall-mounted entities do not move.
             Target::Frame(_) | Target::Painting(_) => {}
         }
-        if self.options.dedicated.is_some()
+        if !as_passenger
+            && self.options.dedicated.is_some()
             && let (Some(entity), Some(from), Some(to)) =
                 (self.network_entity_id(t), from, self.target_position(t))
         {
@@ -4109,5 +4162,142 @@ mod teleport_mob_tests {
             game.run_command("tp @e[type=minecraft:zombie] 30000000.0 70 0");
             assert_eq!(game.mobs[0].position.x, -30_000_000.0);
         });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn guest_command_moves_its_player_passenger() {
+        use super::super::{
+            lan::LanSettings, lan_actions::GuestCommand, native_entity_refs::tests::with_game,
+        };
+        use horizon_client::{
+            lan::{Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig},
+            mobs::Mob,
+        };
+        use horizon_core::geometry::Vec3;
+        use horizon_protocol::packets::configuration::ClientInformation;
+        use std::sync::{Arc, atomic::AtomicI32, mpsc};
+
+        with_game(|game| {
+            let settings = LanSettings {
+                port: 0,
+                guest_commands: true,
+                force_game_mode: false,
+            };
+            let net = NetConfig {
+                announce: false,
+                ..NetConfig::lan(0, "TeleportTest".into(), 2)
+            };
+            let config = HubConfig {
+                default_game_mode: 0,
+                guest_commands: true,
+                force_game_mode: false,
+                hardcore: false,
+                view_distance: 10,
+                simulation_distance: 10,
+                dimension: "minecraft:overworld".into(),
+                allow_flight: false,
+                seed: 0,
+                max_players: 2,
+                integrated: false,
+                levels: Default::default(),
+            };
+            game.lan_host(settings, net, config).unwrap();
+            let mut receivers = Vec::new();
+            for conn in 1..=2 {
+                let (tx, rx) = mpsc::channel();
+                receivers.push(rx);
+                let mut guest = Guest::new(
+                    Joined {
+                        conn,
+                        uuid: 122 + u128::from(conn),
+                        name: format!("guest{conn}"),
+                        properties: Vec::new(),
+                        info: ClientInformation::new(8),
+                        brand: String::new(),
+                        sender: PlayerSender::new(tx, Arc::default()),
+                        latency: Arc::new(AtomicI32::new(0)),
+                        address: "127.0.0.1:1".parse().unwrap(),
+                    },
+                    19 + conn as i32,
+                    [2.0, 65.25, 3.0],
+                    8,
+                );
+                guest.placed = true;
+                guest.vehicle = Some(42);
+                game.lan.as_mut().unwrap().hub.guests.push(guest);
+            }
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:skeleton")
+                .unwrap()
+                .clone();
+            game.mobs
+                .push(Mob::new(42, kind, Vec3::new(2.0, 64.0, 3.0), 0.0));
+            assert_eq!(
+                game.native_entity_passengers(game.native_entity(42).unwrap())
+                    .unwrap()
+                    .len(),
+                2
+            );
+            assert!(game.run_guest_command(GuestCommand {
+                conn: 1,
+                command: "tp @e[type=minecraft:skeleton] 10.0 70.0 10.0".into(),
+                permission: 4,
+                integrated: true,
+                quiet: false
+            }));
+            assert_eq!(game.mobs[0].position, Vec3::new(10.0, 70.0, 10.0));
+            for guest in &game.lan.as_ref().unwrap().hub.guests {
+                assert_eq!(guest.position, [10.0, 71.25, 10.0]);
+                assert_eq!(guest.vehicle, Some(42));
+            }
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn teleport_command_and_handle_move_passenger_stacks_immediately() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::mobs::Mob;
+        use horizon_core::geometry::Vec3;
+
+        for command in [true, false] {
+            with_game(|game| {
+                for (id, kind, y, mount) in [
+                    (42, "minecraft:skeleton", 64.0, None),
+                    (43, "minecraft:zombie", 65.25, Some(42)),
+                    (44, "minecraft:pig", 66.75, Some(43)),
+                ] {
+                    let kind = game.res.mob_types().get(kind).unwrap().clone();
+                    let mut mob = Mob::new(id, kind, Vec3::new(2.0, y, 3.0), 0.0);
+                    mob.extra.mount = mount;
+                    mob.extra.passenger = mount.is_some();
+                    mob.fall_distance = 4.0;
+                    mob.velocity = Vec3::new(1.0, -2.0, 3.0);
+                    mob.on_ground = false;
+                    game.mobs.push(mob);
+                }
+                game.ui.registries.permission = 4;
+                if command {
+                    assert!(game.run_command("tp @e[type=minecraft:skeleton] 10.0 70.0 10.0"));
+                } else {
+                    let root = game.native_entity(42).unwrap();
+                    assert!(root.teleport_to(game, [10.0, 70.0, 10.0], None));
+                }
+                assert_eq!(game.mobs[0].position, Vec3::new(10.0, 70.0, 10.0));
+                assert_eq!(game.mobs[1].position, Vec3::new(10.0, 71.25, 10.0));
+                assert_eq!(game.mobs[2].position, Vec3::new(10.0, 72.75, 10.0));
+                assert_eq!(game.mobs[1].extra.mount, Some(42));
+                assert_eq!(game.mobs[2].extra.mount, Some(43));
+                assert_eq!(game.mobs[1].fall_distance, 4.0);
+                assert_eq!(game.mobs[2].fall_distance, 4.0);
+                assert_eq!(game.mobs[1].velocity, Vec3::ZERO);
+                assert_eq!(game.mobs[2].velocity, Vec3::ZERO);
+                assert!(!game.mobs[1].on_ground);
+                assert!(!game.mobs[2].on_ground);
+            });
+        }
     }
 }

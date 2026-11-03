@@ -1038,7 +1038,14 @@ impl Game<'_> {
                     passengers: Vec::new(),
                 }));
             }
-            if g.vehicle.is_none() && (moved > 0.0001 || turned || teleported) {
+            if g.vehicle.is_some() {
+                // A passenger transition moves the server-side rider with its
+                // vehicle without sending a separate player teleport.
+                if moved > 0.0 {
+                    g.position = at;
+                    g.previous_position = at;
+                }
+            } else if moved > 0.0001 || turned || teleported {
                 host.hub.teleport(i, Some(at));
             }
         }
