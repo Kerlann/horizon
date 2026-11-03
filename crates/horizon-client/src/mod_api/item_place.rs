@@ -72,8 +72,8 @@ pub trait PlaceProvider: Send + Sync + 'static {
 /// answer for a stack where no part is registered for its item, if the game has one.
 pub struct ItemCapabilityKey<T: ?Sized + 'static> {
     pub name: &'static str,
-    default: Option<fn(&mut dyn Host, &ItemStack) -> Option<Arc<T>>>,
-    handler: PhantomData<fn() -> Arc<T>>,
+    pub(super) default: Option<fn(&mut dyn Host, &ItemStack) -> Option<Arc<T>>>,
+    pub(super) handler: PhantomData<fn() -> Arc<T>>,
 }
 
 impl<T: ?Sized + 'static> ItemCapabilityKey<T> {

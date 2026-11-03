@@ -615,6 +615,7 @@ mod tests {
             r.item_capability(&ITEM_ITEMS, "test:pouch", Arc::new(Pouch));
             r.item_capability(&ITEM_ITEMS, "test:bag", Arc::new(Bag));
             r.place_provider("test:charms", Arc::new(Charms));
+            r.item_capability(&ITEM_FLUIDS, "test:canister", Arc::new(Canister));
             r.block_entity_capability(&FLUIDS, "test:tank", Arc::new(Tank));
             r.block_entity_capability(&FLUIDS, "test:fluid_liar", Arc::new(FluidLiar));
             for (id, overstates) in [
@@ -881,6 +882,46 @@ mod tests {
         fn item_container_slots(&self, _: &ItemStack) -> Option<Vec<Option<ItemStack>>> {
             None
         }
+        // Buckets, all or nothing, of water alone.
+        fn item_fluid_tanks(&self, stack: &ItemStack) -> usize {
+            usize::from(stack.item.ends_with("bucket"))
+        }
+        fn item_fluid_held(&self, stack: &ItemStack) -> Option<FluidStack> {
+            (&*stack.item == "minecraft:water_bucket")
+                .then(|| FluidStack::new("minecraft:water", 1000))
+        }
+        fn item_fluid_capacity(&self, _: &ItemStack, _: &FluidStack) -> u32 {
+            1000
+        }
+        fn item_fluid_filled(
+            &self,
+            held: &ItemStack,
+            fluid: &FluidStack,
+        ) -> Option<(u32, ItemStack)> {
+            let takes = &*held.item == "minecraft:bucket"
+                && &*fluid.fluid == "minecraft:water"
+                && fluid.amount >= 1000;
+            Some(match takes {
+                true => (1000, stack("minecraft:water_bucket", 1, 0)),
+                false => (
+                    0,
+                    ItemStack {
+                        count: 1,
+                        ..held.clone()
+                    },
+                ),
+            })
+        }
+        fn item_fluid_drained(
+            &self,
+            held: &ItemStack,
+            max: u32,
+        ) -> Option<(FluidStack, ItemStack)> {
+            (&*held.item == "minecraft:water_bucket" && max >= 1000).then(|| {
+                let water = FluidStack::new("minecraft:water", 1000);
+                (water, stack("minecraft:bucket", 1, 0))
+            })
+        }
         fn game_stack(&mut self, place: &ItemPlace) -> Option<ItemStack> {
             match place {
                 ItemPlace::PlayerHand { player: 1, .. } => self.main_hand.clone(),
@@ -920,6 +961,40 @@ mod tests {
                 _ => return false,
             }
             true
+        }
+    }
+
+    /// A mod's two-tank canister, empty: it answers in place of the game's.
+    struct Canister;
+    impl StackFluidHandler for Canister {
+        fn tanks(&self, _: &mut dyn Host, _: &ItemPlace) -> usize {
+            2
+        }
+        fn fluid(&self, _: &mut dyn Host, _: &ItemPlace, _: usize) -> Option<FluidStack> {
+            None
+        }
+        fn capacity(&self, _: &mut dyn Host, _: &ItemPlace, _: usize, _: &FluidStack) -> u32 {
+            0
+        }
+        fn insert(
+            &self,
+            _: &mut dyn Host,
+            _: &ItemPlace,
+            _: usize,
+            fluid: FluidStack,
+            _: bool,
+        ) -> Option<FluidStack> {
+            Some(fluid)
+        }
+        fn extract(
+            &self,
+            _: &mut dyn Host,
+            _: &ItemPlace,
+            _: usize,
+            _: u32,
+            _: bool,
+        ) -> Option<FluidStack> {
+            None
         }
     }
 
@@ -1755,6 +1830,51 @@ mod tests {
         assert_eq!(player.main_hand, Some(stack("test:bag", 1, 1)));
         assert_eq!(player.given, [stack("test:bag", 1, 4)]);
         assert_eq!(player.items(), before + 3);
+    }
+
+    #[test]
+    fn a_bucket_fills_one_item_off_a_stack_and_takes_a_whole_bucket_or_nothing() {
+        game_thread();
+        let water = |amount| FluidStack::new("minecraft:water", amount);
+        let mut player = Player {
+            main_hand: Some(stack("minecraft:bucket", 3, 0)),
+            ..Player::default()
+        };
+        let host: &mut dyn Host = &mut player;
+        let buckets = host
+            .item_capability(&ITEM_FLUIDS, &HAND)
+            .expect("the game's buckets");
+        assert_eq!(buckets.tanks(host, &HAND), 1);
+        // Less than a bucket goes nothing in; simulated, a bucket changes nothing.
+        assert_eq!(
+            buckets.insert(host, &HAND, 0, water(999), false),
+            Some(water(999))
+        );
+        assert!(buckets.insert(host, &HAND, 0, water(1000), true).is_none());
+        assert_eq!(player.main_hand, Some(stack("minecraft:bucket", 3, 0)));
+        assert!(player.given.is_empty());
+        // A bucket of water fills one bucket, split off the stack as `createFilledResult`.
+        let host: &mut dyn Host = &mut player;
+        assert!(buckets.insert(host, &HAND, 0, water(1500), false) == Some(water(500)));
+        assert_eq!(player.main_hand, Some(stack("minecraft:bucket", 2, 0)));
+        assert_eq!(player.given, [stack("minecraft:water_bucket", 1, 0)]);
+        // A water bucket alone in the hand empties into the hand's bucket.
+        player.main_hand = Some(stack("minecraft:water_bucket", 1, 0));
+        let host: &mut dyn Host = &mut player;
+        assert_eq!(buckets.fluid(host, &HAND, 0), Some(water(1000)));
+        assert_eq!(buckets.extract(host, &HAND, 0, 999, false), None);
+        assert_eq!(
+            buckets.extract(host, &HAND, 0, 1000, false),
+            Some(water(1000))
+        );
+        assert_eq!(player.main_hand, Some(stack("minecraft:bucket", 1, 0)));
+        // A mod's canister answers in place of the game; stone has no answer.
+        for (item, tanks) in [("test:canister", Some(2)), ("minecraft:stone", None)] {
+            player.main_hand = Some(stack(item, 1, 0));
+            let host: &mut dyn Host = &mut player;
+            let handler = host.item_capability(&ITEM_FLUIDS, &HAND);
+            assert_eq!(handler.map(|h| h.tanks(host, &HAND)), tanks, "{item}");
+        }
     }
 
     #[test]

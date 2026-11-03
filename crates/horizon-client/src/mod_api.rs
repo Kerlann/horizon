@@ -784,6 +784,8 @@ mod capability;
 pub use capability::{CapabilityKey, ITEMS, ItemHandler};
 mod fluid_capability;
 pub use fluid_capability::{FLUIDS, FluidHandler, FluidStack};
+mod item_fluid_capability;
+pub use item_fluid_capability::{ITEM_FLUIDS, StackFluidHandler};
 mod item_place;
 pub use item_place::{ITEM_ITEMS, ItemCapabilityKey, ItemPlace, PlaceProvider, StackItemHandler};
 mod part_table;

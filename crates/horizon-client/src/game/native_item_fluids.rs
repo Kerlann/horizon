@@ -7,7 +7,7 @@
 //! changed container they return. They hold no world state, so they work on
 //! any side.
 use super::Game;
-use horizon_client::items::ItemStack;
+use horizon_client::{items::ItemStack, mod_api::FluidStack};
 use horizon_world::nbt::{Compound, JavaString, Tag};
 
 /// What one item of a stack holds (`native_item_fluid`).
@@ -180,8 +180,38 @@ fn drain_one(
     ))
 }
 
-// Native mods use these; nothing in Horizon does.
-#[allow(dead_code)]
+/// `fill_one` of a [`FluidStack`]: none goes in with components, which neither a bucket nor a
+/// mod's container keeps (NeoForge's bucket holds no components either).
+fn filled(
+    stack: &ItemStack,
+    capacity: Option<i32>,
+    fluid: &FluidStack,
+) -> Option<(u32, ItemStack)> {
+    let amount = if fluid.has_components() {
+        0
+    } else {
+        i32::try_from(fluid.amount).unwrap_or(i32::MAX)
+    };
+    let (took, one) = fill_one(stack, capacity, &fluid.fluid, amount)?;
+    Some((took.unsigned_abs(), one))
+}
+
+/// `drain_one` as a [`FluidStack`], plain.
+fn drained(stack: &ItemStack, capacity: Option<i32>, max: u32) -> Option<(FluidStack, ItemStack)> {
+    let max = i32::try_from(max).unwrap_or(i32::MAX);
+    let (fluid, amount, one) = drain_one(stack, capacity, max)?;
+    Some((FluidStack::new(&fluid, amount.unsigned_abs()), one))
+}
+
+/// How much of `fluid` one item of `stack` holds when empty: a bucket's or the container's
+/// capacity, for plain water or lava; 0 for anything else.
+fn capacity_for(stack: &ItemStack, capacity: Option<i32>, fluid: &FluidStack) -> u32 {
+    if fluid.has_components() || !is_fluid(&fluid.fluid) {
+        return 0;
+    }
+    contents(stack, capacity).map_or(0, |held| held.capacity.unsigned_abs())
+}
+
 impl Game<'_> {
     /// The capacity a mod gave item `item`, clamped; none for any other item.
     fn native_item_tank_capacity(&self, item: &str) -> Option<i32> {
@@ -206,6 +236,8 @@ impl Game<'_> {
     /// the single item it becomes (the item itself when it took nothing). The
     /// stack given is not changed: shrink it by one and hand out the result.
     /// None where the stack is no container.
+    // Documented for native mods (API 147); nothing in Horizon calls it.
+    #[allow(dead_code)]
     pub(in crate::game) fn native_item_fluid_fill(
         &self,
         stack: &ItemStack,
@@ -225,12 +257,55 @@ impl Game<'_> {
     /// `max`. The fluid, the amount, and the single item it becomes. The stack
     /// given is not changed. None where it is no container, holds nothing, or
     /// `max` is less than a bucket's for a bucket.
+    // Documented for native mods (API 147); nothing in Horizon calls it.
+    #[allow(dead_code)]
     pub(in crate::game) fn native_item_fluid_drain(
         &self,
         stack: &ItemStack,
         max: i32,
     ) -> Option<(String, i32, ItemStack)> {
         drain_one(stack, self.native_item_tank_capacity(&stack.item), max)
+    }
+    /// `Capabilities.Fluid.ITEM`'s tanks of one item of `stack`: 1 for a bucket or a mod's
+    /// container, else 0.
+    pub(in crate::game) fn native_item_fluid_tanks(&self, stack: &ItemStack) -> usize {
+        usize::from(self.native_item_fluid(stack).is_some())
+    }
+    /// What one item of `stack` holds, plain.
+    pub(in crate::game) fn native_item_fluid_held(&self, stack: &ItemStack) -> Option<FluidStack> {
+        let held = self.native_item_fluid(stack)?;
+        let amount = u32::try_from(held.amount)
+            .ok()
+            .filter(|&amount| amount > 0)?;
+        Some(FluidStack::new(&held.fluid?, amount))
+    }
+    /// `ResourceHandler.isValid` and `getCapacityAsLong`: how much of `fluid` one item of
+    /// `stack` holds when empty; 0 for a fluid with components, which neither a bucket nor a
+    /// mod's container keeps, and for any fluid but water and lava.
+    pub(in crate::game) fn native_item_fluid_capacity(
+        &self,
+        stack: &ItemStack,
+        fluid: &FluidStack,
+    ) -> u32 {
+        capacity_for(stack, self.native_item_tank_capacity(&stack.item), fluid)
+    }
+    /// `native_item_fluid_fill` of `fluid`: how much one item of `stack` takes, and the single
+    /// item it becomes. None goes in with components.
+    pub(in crate::game) fn native_item_fluid_filled(
+        &self,
+        stack: &ItemStack,
+        fluid: &FluidStack,
+    ) -> Option<(u32, ItemStack)> {
+        filled(stack, self.native_item_tank_capacity(&stack.item), fluid)
+    }
+    /// `native_item_fluid_drain`: what one item of `stack` gives of at most `max`, and the single
+    /// item it becomes.
+    pub(in crate::game) fn native_item_fluid_drained(
+        &self,
+        stack: &ItemStack,
+        max: u32,
+    ) -> Option<(FluidStack, ItemStack)> {
+        drained(stack, self.native_item_tank_capacity(&stack.item), max)
     }
 }
 
@@ -277,6 +352,40 @@ mod tests {
         );
         let empty = ItemStack::new("minecraft:bucket", 1);
         assert_eq!(drain_one(&empty, None, 1000), None);
+    }
+
+    #[test]
+    fn a_bucket_and_a_container_take_no_fluid_with_components_and_give_plain_fluid() {
+        let potion = FluidStack {
+            components: Some(Box::new(horizon_client::item_data::StackData {
+                potion: Some(Arc::from("minecraft:healing")),
+                ..Default::default()
+            })),
+            ..FluidStack::new("minecraft:water", 1000)
+        };
+        let water = FluidStack::new("minecraft:water", 1000);
+        let bucket = ItemStack::new("minecraft:bucket", 3);
+        let canister = canister(1);
+        for (stack, capacity) in [(&bucket, None), (&canister, Some(4000))] {
+            let unchanged = ItemStack {
+                count: 1,
+                ..stack.clone()
+            };
+            assert_eq!(filled(stack, capacity, &potion), Some((0, unchanged)));
+            assert_eq!(capacity_for(stack, capacity, &potion), 0);
+            assert_eq!(
+                capacity_for(stack, capacity, &FluidStack::new("test:oil", 1)),
+                0
+            );
+        }
+        assert_eq!(capacity_for(&bucket, None, &water), 1000);
+        assert_eq!(capacity_for(&canister, Some(4000), &water), 4000);
+        let (took, full) = filled(&bucket, None, &water).unwrap();
+        assert_eq!((took, &*full.item), (1000, "minecraft:water_bucket"));
+        assert_eq!(
+            drained(&full, None, 1000),
+            Some((water, ItemStack::new("minecraft:bucket", 1)))
+        );
     }
 
     #[test]

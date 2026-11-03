@@ -1,0 +1,12 @@
+{
+  "hooks": [],
+  "helpers": [
+    {"name": "item_fluid_tanks", "target": "horizon_client::game::native_item_fluids::Game<'_>::native_item_fluid_tanks", "mod_api": {}},
+    {"name": "item_fluid_held", "target": "horizon_client::game::native_item_fluids::Game<'_>::native_item_fluid_held", "mod_api": {}},
+    {"name": "item_fluid_capacity", "target": "horizon_client::game::native_item_fluids::Game<'_>::native_item_fluid_capacity", "mod_api": {}},
+    {"name": "item_fluid_filled", "target": "horizon_client::game::native_item_fluids::Game<'_>::native_item_fluid_filled", "mod_api": {}},
+    {"name": "item_fluid_drained", "target": "horizon_client::game::native_item_fluids::Game<'_>::native_item_fluid_drained", "mod_api": {}}
+  ],
+  "rust_summary": "fluid held by items (`mod_api::ITEM_FLUIDS`, `StackFluidHandler`, `Registrar::item_capability`, `host.item_capability`) and the game's own answer, buckets and a mod's containers, one item of a stack at a time: `native_item_fluid_tanks`, `native_item_fluid_held`, `native_item_fluid_capacity`, `native_item_fluid_filled`, `native_item_fluid_drained`.",
+  "doc_summary": "fluid held by items (`Capabilities.Fluid.ITEM` through an `ItemAccess`): `host.item_capability(&ITEM_FLUIDS, &place)` answers for the item at an `ItemPlace`, the mod's `StackFluidHandler` (`r.item_capability(&ITEM_FLUIDS, \"mymod:canister\", Arc::new(Canister))`) or the game's, one tank for vanilla's empty, water and lava buckets (a whole bucket or nothing) and for a mod's container (`item_fluid_tank`). A handler writes the item back with `set_place_stack(place, changed, true, simulate)`, so from a stack of more than one the changed item splits off, as `ItemUtils.createFilledResult`, and a write with nowhere to put it moves nothing. Buckets and containers take no fluid with components (NeoForge's bucket keeps none either) and give plain fluid. The game's side reads one item of a stack: `native_item_fluid_tanks`, `native_item_fluid_held`, `native_item_fluid_capacity` (0 where a fluid may not go in), and `native_item_fluid_filled` and `native_item_fluid_drained`, which answer what moved and the single item it becomes. Bundles need \"hooks\": @API:item_fluid_capability@."
+}
