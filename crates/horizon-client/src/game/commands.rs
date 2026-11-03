@@ -2656,15 +2656,14 @@ impl Game<'_> {
     /// The loot table and seed a container still holding its roll saves
     /// (`RolledLoot::restore`), in place of its items.
     pub(super) fn restore_loot_table(
-        &self,
+        world: &horizon_client::world::World,
         key: (i32, i32, i32),
         tag: &mut horizon_world::nbt::Tag,
     ) {
         let horizon_world::nbt::Tag::Compound(map) = tag else {
             return;
         };
-        let rolled = self
-            .world
+        let rolled = world
             .chunks
             .get(&(key.0 >> 4, key.2 >> 4))
             .and_then(|c| c.saved.as_ref())

@@ -1,0 +1,13 @@
+{
+  "hooks": [],
+  "helpers": [
+    { "name": "block_entity", "target": "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_ref" },
+    { "name": "block_entity_kind", "target": "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_kind", "receiver": "block_entity" },
+    { "name": "block_entity_position", "target": "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_position", "receiver": "block_entity" },
+    { "name": "block_entity_level", "target": "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_level", "receiver": "block_entity" },
+    { "name": "block_entity_data", "target": "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_data", "receiver": "block_entity" }
+  ],
+  "rust_summary": "read-only block entity handles (`BlockEntityRef`).",
+  "doc_summary": "`BlockEntityRef` reads a loaded block entity's kind, position, level and data. Bundles need \"hooks\": @API:block_entity_refs@.",
+  "comments": ["crates/horizon-client/src/game/native_block_entity_refs.rs"]
+}
