@@ -472,7 +472,7 @@ impl Game<'_> {
                 // BlockEntity.saveWithFullMetadata: no chunk-only keepPacked,
                 // and the lock the model does not hold.
                 let mut tag = save::block_entity_data(key, e, &name, self.world.block_lock(key));
-                self.restore_loot_table(key, &mut tag);
+                Self::restore_loot_table(&self.world, key, &mut tag);
                 Ok(tag)
             }
             DataRef::Storage(id) => Ok(self.score.storage.get(id)),

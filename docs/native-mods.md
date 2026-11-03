@@ -2494,6 +2494,7 @@ a dimension.
   gets. A handle of an earlier open, of an entity that is gone or moved to another level (it gets a new id there, as in
   vanilla), or used on a client reads as `None`.
 - The entities are those of the level in place (the one a hook runs in) and the server's players, whatever their level.
+- `host.block_entity(level, pos)` finds a block entity in a loaded chunk, including parked levels; `kind`, `position`, `level` and `data` read it. A removed or temporarily taken-out entity reads `None`; a replacement at the same position resolves to the new entity, unlike vanilla's object identity.
 
 Each read is a `Host` method too (`host.entity_position(entity)`): a helper whose catalog entry names a `receiver`
 (`entity`, `level`) also becomes a method of that handle.

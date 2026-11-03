@@ -456,6 +456,15 @@ impl LevelRef {
     }
 }
 
+/// A block entity at a position in an open level. A replacement at the same
+/// position resolves to the new entity, unlike vanilla's object identity.
+/// A removed entity or a handle from an earlier world open reads as `None`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct BlockEntityRef {
+    pub(crate) level: LevelRef,
+    pub(crate) position: [i32; 3],
+}
+
 /// Non-paused authoritative server ticks since open (not game or frame time).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NativeTickId(u64);
