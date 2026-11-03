@@ -1550,15 +1550,23 @@ mod tests {
         assert!(!encoder.entity_matches(3, block_entities.get(&(3, MIN_Y + 2, 3))));
         let infos = encoder.encode(&chunk, &block_entities).chunk.block_entities;
         assert_eq!(infos.len(), 2, "only the two matching entities are sent");
-        assert_eq!((infos[0].kind, infos[0].y), (49, (MIN_Y + 2) as i16));
-        let mut expected = Compound::new();
-        expected.insert("active".into(), Tag::Byte(1));
-        expected.insert("x".into(), Tag::Int(1));
-        assert_eq!(infos[0].tag, Tag::Compound(expected));
+        for info in &infos {
+            assert_eq!((info.kind, info.y), (49, (MIN_Y + 2) as i16));
+            let mut expected = Compound::new();
+            expected.insert("active".into(), Tag::Byte(1));
+            expected.insert("x".into(), Tag::Int(i32::from(info.packed_xz as u8 >> 4)));
+            assert_eq!(info.tag, Tag::Compound(expected));
+        }
         // As does an encoder for saved chunks past the view distance (`lan::far`).
         let far = encoder.detached().encode(&chunk, &block_entities);
         assert_eq!(far.chunk.block_entities.len(), 2);
-        assert_eq!(far.chunk.block_entities[0].tag, infos[0].tag);
+        for info in far.chunk.block_entities {
+            let original = infos
+                .iter()
+                .find(|i| i.packed_xz == info.packed_xz)
+                .unwrap();
+            assert_eq!(info.tag, original.tag);
+        }
         // The alternate property state of press uses the same type.
         block_entities.insert(
             (3, MIN_Y + 2, 3),
