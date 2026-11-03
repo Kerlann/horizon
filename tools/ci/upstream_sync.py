@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage an upstream merge, verify its exact SHA, then fast-forward protected main."""
+"""Merge upstream main into sync/upstream, verify its exact SHA, then open or update the sync pull request."""
 import json
 import os
 from pathlib import Path
@@ -8,7 +8,11 @@ import sys
 import time
 
 TITLE = "Upstream sync failed"
-STAGING = "refs/heads/sync/upstream"
+BRANCH = "sync/upstream"
+STAGING = f"refs/heads/{BRANCH}"
+IDENTITY = {"GIT_AUTHOR_NAME": "arismoko", "GIT_COMMITTER_NAME": "arismoko",
+            "GIT_AUTHOR_EMAIL": "19542195+arismoko@users.noreply.github.com",
+            "GIT_COMMITTER_EMAIL": "19542195+arismoko@users.noreply.github.com"}
 
 
 def command(*args):
@@ -22,7 +26,7 @@ def api(path):
 def verify(repo, head, request):
     label = f"{head[:7]} ({request})"
     title = f"Upstream sync {label}"
-    command("gh", "workflow", "run", "ci.yml", "--repo", repo, "--ref", "sync/upstream",
+    command("gh", "workflow", "run", "ci.yml", "--repo", repo, "--ref", BRANCH,
             "--field", f"upstream_sync={label}")
     # The dispatch endpoint returns no run ID. A unique run-name distinguishes this
     # request from manual dispatches and reruns, even when they share the same SHA.
@@ -66,13 +70,26 @@ def sync():
     issues = json.loads(command("gh", "issue", "list", "--repo", repo, "--state", "open",
                                 "--label", "sync", "--limit", "100", "--json", "number,title"))
     issue = next((issue["number"] for issue in issues if issue["title"] == TITLE), None)
+    pulls = json.loads(command("gh", "pr", "list", "--repo", repo, "--state", "open",
+                               "--head", BRANCH, "--json", "number"))
+    pull = pulls[0]["number"] if pulls else None
     upstream = "unavailable (fetch did not complete)"
-    promoted = False
     try:
-        base = command("git", "rev-parse", "HEAD")
+        main = command("git", "rev-parse", "HEAD")
         command("git", "fetch", "--no-tags", "https://github.com/horizon-rust/horizon.git",
                 "+refs/heads/main:refs/remotes/upstream/main")
         upstream = command("git", "rev-parse", "upstream/main")
+        if pull is not None:
+            # An open sync pull request keeps its history: build on its branch, with main merged in.
+            command("git", "fetch", "--no-tags", "origin", f"+{STAGING}:refs/remotes/origin/{BRANCH}")
+            command("git", "checkout", "-q", "-B", BRANCH, f"origin/{BRANCH}")
+            if subprocess.run(["git", "-c", "commit.gpgsign=false", "merge", "--no-edit", main],
+                              env={**os.environ, **IDENTITY}, check=False).returncode:
+                files = command("git", "diff", "--name-only", "--diff-filter=U")
+                command("git", "merge", "--abort")
+                raise RuntimeError(f"Main conflicts with the open sync pull request #{pull} (nothing pushed):"
+                                   f"\n\n```text\n{files}\n```")
+        start = command("git", "rev-parse", "HEAD")
         result = subprocess.run(["bash", str(Path(__file__).with_name("merge_upstream.sh"))], check=False)
         if result.returncode == 2:
             files = command("git", "diff", "--name-only", "--diff-filter=U")
@@ -80,10 +97,17 @@ def sync():
             raise RuntimeError(f"Merge conflicts (nothing pushed):\n\n```text\n{files}\n```")
         if result.returncode not in (0, 3):
             raise RuntimeError(f"Merge failed with exit code {result.returncode}; nothing pushed.")
-        if result.returncode == 3 and issue is None:
-            return 0
         head = command("git", "rev-parse", "HEAD")
-        workflows = command("git", "diff", "--name-only", base, head, "--", ".github/workflows")
+        if head == start and (pull is not None or result.returncode == 3):
+            if issue is not None:
+                command("gh", "issue", "close", str(issue), "--repo", repo, "--comment",
+                        f"🤖 Agent: Upstream `{upstream}` is already in main or the open sync pull request. "
+                        f"[Sync run]({run_url}).")
+            print("Upstream main is already in main or the open sync pull request.")
+            return 0
+        # What this push adds to the branch: from its current tip while a pull request is open, else from main.
+        pushed_from = f"origin/{BRANCH}" if pull is not None else main
+        workflows = command("git", "diff", "--name-only", pushed_from, head, "--", ".github/workflows")
         if workflows:
             if issue is not None:
                 thread = json.loads(command("gh", "issue", "view", str(issue), "--repo", repo,
@@ -94,24 +118,36 @@ def sync():
                           file=sys.stderr)
                     return 1
             raise RuntimeError("Upstream changed workflow files; an agent must push this one. "
-                               "upstream-sync prepares the merge branch, and root pushes main from hermeslab. "
+                               "upstream-sync pushes the merge to its own branch and opens the sync pull request. "
                                "GITHUB_TOKEN cannot update .github/workflows/ without workflows permission."
                                f"\n\n```text\n{workflows}\n```")
-        previous = command("git", "ls-remote", "--heads", "origin", STAGING).split()
-        lease = previous[0] if previous else ""
-        # Only the automation-owned side branch can be replaced. Main is never forced;
-        # if someone advances it while checks run, the final push fails safely.
-        command("git", "push", f"--force-with-lease={STAGING}:{lease}", "origin", f"{head}:{STAGING}")
+        if pull is not None:
+            command("git", "push", "origin", f"{head}:{STAGING}")
+        else:
+            previous = command("git", "ls-remote", "--heads", "origin", STAGING).split()
+            lease = previous[0] if previous else ""
+            # With no open pull request the branch is the automation's own scratch space.
+            command("git", "push", f"--force-with-lease={STAGING}:{lease}", "origin", f"{head}:{STAGING}")
         proof = verify(repo, head, request)
-        command("git", "push", "origin", f"{head}:refs/heads/main")
-        promoted = True
+        short = upstream[:10]
+        title = f"Sync upstream main {short}"
+        body = ("> 🤖 Opened by Aria's agent swarm, Dyna, not by Aria.\n\n"
+                f"Merges horizon-rust/horizon main at `{upstream}` into the fork. "
+                f"`verify` passed on `{head}`: {proof}\n\n"
+                "Merge with a merge commit after review.\n\n🤖 Generated with Dyna.")
+        if pull is None:
+            command("gh", "pr", "create", "--repo", repo, "--base", "main", "--head", BRANCH,
+                    "--title", title, "--body", body)
+        else:
+            command("gh", "api", "-X", "PATCH", f"repos/{repo}/pulls/{pull}",
+                    "-f", f"title={title}", "-f", f"body={body}")
         if issue is not None:
             command("gh", "issue", "close", str(issue), "--repo", repo, "--comment",
-                    f"🤖 Agent: Upstream `{upstream}` synced after [checks passed]({proof}). [Sync run]({run_url}).")
+                    f"🤖 Agent: Upstream `{upstream}` is in the sync pull request after [checks passed]({proof}). "
+                    f"[Sync run]({run_url}).")
         return 0
     except (subprocess.CalledProcessError, RuntimeError) as failure:
-        state = "Main advanced, but closing the sync issue failed." if promoted else "Main was not advanced."
-        body = (f"🤖 Agent: Could not complete sync of upstream `{upstream}`. {state}"
+        body = (f"🤖 Agent: Could not complete sync of upstream `{upstream}`."
                 f"\n\n{failure}\n\n[Sync run]({run_url})")
         if issue is None:
             command("gh", "label", "create", "sync", "--repo", repo, "--color", "B60205",
