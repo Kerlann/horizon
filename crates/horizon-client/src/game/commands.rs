@@ -78,9 +78,9 @@ pub(super) enum Target {
     /// A simulated lingering, creeper or dragon area-effect cloud.
     Cloud(u32),
 }
-/// `Entity.setXRot`: wrap before clamping the pitch.
+/// `Entity.setXRot`: clamp the pitch, no wrap (`PositionMoveRotation.calculateAbsolute`).
 pub(super) fn entity_pitch(pitch: f32) -> f32 {
-    (pitch % 360.0).clamp(-90.0, 90.0)
+    pitch.clamp(-90.0, 90.0)
 }
 
 /// `PositionMoveRotation.calculateAbsolute` and `TeleportCommand.performTeleport`.
@@ -1608,11 +1608,14 @@ impl Game<'_> {
                         if !p.fall_flying {
                             p.ground.on_ground = true;
                         }
-                        // The end of a guest's turn sends the position packet
-                        // with the command's relatives, even without a move.
-                        p.teleported = true;
-                        p.teleported_delta = relative;
                     }
+                    // `ServerPlayer.teleport` tells a passenger too:
+                    // `connection.teleport` is not guarded by `!asPassenger`
+                    // (ServerPlayer.java:1151), only `removeVehicle` is. The
+                    // packet carries the command's relatives, even without a
+                    // move, and the mount stays.
+                    p.teleported = true;
+                    p.teleported_delta = relative;
                 }
                 self.previous_position = v;
                 // A server player's teleport is told to the mods once their
@@ -1768,46 +1771,71 @@ impl Game<'_> {
     /// with no move: what `/rotate` does (`Entity.forceSetRotation`).
     fn rotate_in_place(&mut self, t: Target, rotation: [f32; 2]) {
         let [yaw, pitch] = rotation;
+        // `Entity.setYRot`/`setXRot` (Entity.java:4010): a non-finite angle
+        // is discarded and the old one kept; the pitch is then clamped.
+        let yaw = yaw.is_finite().then_some(yaw);
+        let pitch = pitch.is_finite().then(|| entity_pitch(pitch));
         match t {
             Target::Player => {
-                self.yaw = yaw;
-                self.pitch = entity_pitch(pitch);
+                if let Some(yaw) = yaw {
+                    self.yaw = yaw;
+                }
+                if let Some(pitch) = pitch {
+                    self.pitch = pitch;
+                }
             }
             Target::Mob(id) => {
                 if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-                    m.yaw = yaw;
-                    m.body_yaw = yaw;
-                    m.head_yaw = yaw;
-                    m.head_pitch = entity_pitch(pitch);
-                    m.previous_yaw = m.yaw;
-                    m.previous_head_pitch = m.head_pitch;
-                    m.needs_sync = true;
+                    if let Some(yaw) = yaw {
+                        m.yaw = yaw;
+                        m.body_yaw = yaw;
+                        m.head_yaw = yaw;
+                        m.previous_yaw = m.yaw;
+                        m.needs_sync = true;
+                    }
+                    if let Some(pitch) = pitch {
+                        m.head_pitch = pitch;
+                        m.previous_head_pitch = m.head_pitch;
+                        m.needs_sync = true;
+                    }
                 }
             }
             Target::Stand(id) => {
-                if let Some(a) = self.armor_stands.iter_mut().find(|a| a.id == id) {
+                if let Some(yaw) = yaw
+                    && let Some(a) = self.armor_stands.iter_mut().find(|a| a.id == id)
+                {
                     a.yaw = yaw;
                 }
             }
             Target::Boat(id) => {
-                if let Some(b) = self.boats.iter_mut().find(|b| b.id == id) {
+                if let Some(yaw) = yaw
+                    && let Some(b) = self.boats.iter_mut().find(|b| b.id == id)
+                {
                     b.yaw = yaw;
                 }
             }
             Target::Cart(id) => {
-                if let Some(c) = self.carts.iter_mut().find(|c| c.id == id) {
+                if let Some(yaw) = yaw
+                    && let Some(c) = self.carts.iter_mut().find(|c| c.id == id)
+                {
                     c.yaw = yaw;
                 }
             }
             Target::Fangs(id) => {
-                if let Some(f) = self.fangs.list.iter_mut().find(|f| f.id == id) {
+                if let Some(yaw) = yaw
+                    && let Some(f) = self.fangs.list.iter_mut().find(|f| f.id == id)
+                {
                     f.yaw = yaw;
                 }
             }
             Target::Other(id) => {
                 if let Some(o) = self.others.iter_mut().find(|o| o.id == id) {
-                    o.yaw = yaw;
-                    o.pitch = entity_pitch(pitch);
+                    if let Some(yaw) = yaw {
+                        o.yaw = yaw;
+                    }
+                    if let Some(pitch) = pitch {
+                        o.pitch = pitch;
+                    }
                 }
             }
             // The kinds without a stored rotation stay as they are.
@@ -4459,6 +4487,67 @@ mod teleport_mob_tests {
         });
     }
 
+    /// `/rotate @s 0 360` clamps the pitch to 90 (`forceSetRotation`'s
+    /// `PositionMoveRotation.calculateAbsolute`), not wrapping to 0; the
+    /// packet still carries the raw angle.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn rotate_pitch_clamps_instead_of_wrapping() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::motion::PlayerMotion;
+        use horizon_core::geometry::Vec3;
+
+        with_game(|game| {
+            let player = PlayerMotion::new(game.motion, Vec3::new(0.0, 64.0, 0.0)).unwrap();
+            game.player = Some(player);
+            game.lan_acting = Some(1);
+            game.lan_acting_uuid = Some(123);
+            game.lan_acting_entity = Some(20);
+            game.yaw = 30.0;
+            game.pitch = 10.0;
+            game.ui.registries.permission = 4;
+            assert!(game.run_command("rotate @s 0 360"));
+            assert_eq!(game.pitch, 90.0);
+            let Some(packet) = game
+                .guest_packets
+                .iter()
+                .find(|p| matches!(p, C::PlayerRotation(_)))
+            else {
+                panic!("no rotation packet");
+            };
+            let C::PlayerRotation(p) = packet else {
+                panic!("not a rotation packet");
+            };
+            assert_eq!(p.pitch, 360.0);
+            assert!(game.run_command("rotate @s 0 -360"));
+            assert_eq!(game.pitch, -90.0);
+        });
+    }
+
+    /// An overlong digit string parses to infinity; `Entity.setXRot`
+    /// discards a non-finite angle and keeps the old one (Entity.java:4010).
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn rotate_discards_an_infinite_pitch() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::motion::PlayerMotion;
+        use horizon_core::geometry::Vec3;
+
+        with_game(|game| {
+            let player = PlayerMotion::new(game.motion, Vec3::new(0.0, 64.0, 0.0)).unwrap();
+            game.player = Some(player);
+            game.lan_acting = Some(1);
+            game.lan_acting_uuid = Some(123);
+            game.lan_acting_entity = Some(20);
+            game.yaw = 30.0;
+            game.pitch = 10.0;
+            game.ui.registries.permission = 4;
+            assert!(game.run_command(&format!("rotate @s 0 {}", "1".repeat(400))));
+            assert_eq!(game.pitch, 10.0, "a non-finite pitch keeps the old one");
+            assert_eq!(game.yaw, 0.0);
+        });
+    }
+
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn guest_command_moves_its_player_passenger() {
@@ -4548,6 +4637,111 @@ mod teleport_mob_tests {
                 assert_eq!(guest.position, [10.0, 71.25, 10.0]);
                 assert_eq!(guest.vehicle, Some(42));
             }
+        });
+    }
+
+    /// A passenger player's teleport is told with its own position packet
+    /// (`ServerPlayer.teleport` runs `connection.teleport` for a passenger;
+    /// only `removeVehicle` is guarded, ServerPlayer.java:1151) and the
+    /// mount stays: no `SetPassengers` telling it otherwise.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_teleported_passenger_gets_its_position_packet_and_keeps_its_mount() {
+        use super::super::{
+            lan::LanSettings, lan_actions::GuestCommand, native_entity_refs::tests::with_game,
+        };
+        use horizon_client::{
+            lan::{Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig},
+            mobs::Mob,
+        };
+        use horizon_core::geometry::Vec3;
+        use horizon_protocol::packets::configuration::ClientInformation;
+        use std::sync::{Arc, atomic::AtomicI32, mpsc};
+
+        with_game(|game| {
+            let settings = LanSettings {
+                port: 0,
+                guest_commands: true,
+                force_game_mode: false,
+            };
+            let net = NetConfig {
+                announce: false,
+                ..NetConfig::lan(0, "TeleportTest".into(), 2)
+            };
+            let config = HubConfig {
+                default_game_mode: 0,
+                guest_commands: true,
+                force_game_mode: false,
+                hardcore: false,
+                view_distance: 10,
+                simulation_distance: 10,
+                dimension: "minecraft:overworld".into(),
+                allow_flight: false,
+                seed: 0,
+                max_players: 2,
+                integrated: false,
+                levels: Default::default(),
+            };
+            game.lan_host(settings, net, config).unwrap();
+            let (tx, rx) = mpsc::channel();
+            let mut guest = Guest::new(
+                Joined {
+                    conn: 1,
+                    uuid: 123,
+                    name: "guest1".into(),
+                    properties: Vec::new(),
+                    info: ClientInformation::new(8),
+                    brand: String::new(),
+                    sender: PlayerSender::new(tx, Arc::default()),
+                    latency: Arc::new(AtomicI32::new(0)),
+                    address: "127.0.0.1:1".parse().unwrap(),
+                },
+                20,
+                [2.0, 65.25, 3.0],
+                8,
+            );
+            guest.placed = true;
+            guest.vehicle = Some(42);
+            game.lan.as_mut().unwrap().hub.guests.push(guest);
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:skeleton")
+                .unwrap()
+                .clone();
+            game.mobs
+                .push(Mob::new(42, kind, Vec3::new(2.0, 64.0, 3.0), 0.0));
+            game.ui.registries.permission = 4;
+            assert!(game.run_guest_command(GuestCommand {
+                conn: 1,
+                command: "tp @e[type=minecraft:skeleton] 10.0 70.0 10.0".into(),
+                permission: 4,
+                integrated: true,
+                quiet: false
+            }));
+            let guest = &game.lan.as_ref().unwrap().hub.guests[0];
+            assert_eq!(guest.vehicle, Some(42), "the mount stays");
+            assert_eq!(guest.position, [10.0, 71.25, 10.0]);
+            let mut position = None;
+            let mut unmounted = false;
+            while let Ok(out) = rx.try_recv() {
+                let crate::lan::Out::Packet(body) = out else {
+                    continue;
+                };
+                let mut r = horizon_protocol::buf::Reader::new(&body);
+                let id = r.varint().unwrap();
+                if let Ok(C::PlayerPosition(p)) = C::decode(id, r.rest()) {
+                    position = Some(p);
+                }
+                if let Ok(C::SetPassengers(p)) = C::decode(id, r.rest())
+                    && p.passengers.is_empty()
+                {
+                    unmounted = true;
+                }
+            }
+            let p = position.expect("a passenger gets its own position packet");
+            assert_eq!(p.position, [10.0, 71.25, 10.0]);
+            assert!(!unmounted);
         });
     }
 

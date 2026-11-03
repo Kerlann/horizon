@@ -1030,38 +1030,32 @@ impl Game<'_> {
             m.teleported_delta = [false; 3];
             let moved: f64 = (0..3).map(|k| (at[k] - g.position[k]).powi(2)).sum();
             g.motion = Some(Box::new(m));
-            // Entity.teleportTo takes a rider out of its vehicle.
-            let left_vehicle = match g.vehicle.filter(|_| teleported) {
-                Some(v) => {
-                    (g.vehicle, g.vehicle_good) = (None, None);
-                    Some(v)
-                }
-                None => left_vehicle,
-            };
             // ServerPlayer.dismountTo: the client hears it is out of the
-            // vehicle before the teleport beside it. A rider sits where its
-            // vehicle puts it (lan_vehicles.rs), with no teleport.
+            // vehicle before the teleport beside it. The teleport's
+            // removeVehicle already ran in the turn (`stop_riding`); a
+            // passenger's teleport keeps its mount (`!asPassenger` guards
+            // only that, ServerPlayer.java:1151).
             if let Some(vehicle) = left_vehicle {
                 g.send(&C::SetPassengers(play::SetPassengers {
                     vehicle: vehicle as i32,
                     passengers: Vec::new(),
                 }));
             }
-            if g.vehicle.is_some() {
-                // A passenger transition moves the server-side rider with its
-                // vehicle without sending a separate player teleport.
+            if teleported {
+                // A command's teleport carries its relative axes as the
+                // packet's DELTA flags, a passenger's included
+                // (`connection.teleport` runs for one); any other move is
+                // absolute.
+                host.hub.teleport_command(i, at, teleported_delta);
+            } else if g.vehicle.is_some() {
+                // A passenger transition moves the server-side rider with
+                // its vehicle, with no teleport of its own.
                 if moved > 0.0 {
                     g.position = at;
                     g.previous_position = at;
                 }
-            } else if moved > 0.0001 || teleported {
-                // A command's teleport carries its relative axes as the
-                // packet's DELTA flags; any other move is absolute.
-                if teleported {
-                    host.hub.teleport_command(i, at, teleported_delta);
-                } else {
-                    host.hub.teleport(i, Some(at));
-                }
+            } else if moved > 0.0001 {
+                host.hub.teleport(i, Some(at));
             }
         }
         let g = &mut host.hub.guests[i];
