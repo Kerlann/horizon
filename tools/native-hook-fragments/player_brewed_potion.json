@@ -9,7 +9,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "A player took a potion from a brewing stand (`native_player_brewed_potion`).",
-  "doc_summary": "A player took a potion from a brewing stand bottle slot: `native_player_brewed_potion(player, player_entity_id, stack)`, with the player's UUID and entity id. Server-side, non-cancellable. Bundles need \"hooks\": @API:player_brewed_potion@."
+  ]
 }

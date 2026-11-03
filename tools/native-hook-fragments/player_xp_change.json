@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "experience points a server player is about to gain, changeable or cancelled (`native_player_xp_change`).",
-  "doc_summary": "experience points a player is about to gain, as NeoForge's `PlayerXpEvent.XpChange`: `native_player_xp_change(player, player_entity_id, name, amount, cancel)` runs on the server at `Player.giveExperiencePoints`: orb pickups (after mending), advancement rewards and `/xp add ... points`. A mod may change the signed `amount` or cancel. Bundles need \"hooks\": @API:player_xp_change@."
+  ]
 }

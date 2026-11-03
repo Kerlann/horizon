@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a cancellable vanilla game event (`native_vanilla_game_event`).",
-  "doc_summary": "`native_vanilla_game_event(dimension, event, pos, cause, cancel)`, for each game event on a server, `cause` the network id of the entity that caused it (None for none; the affected block state is not passed) (`minecraft:step`, `minecraft:block_place`...) before its listeners hear it. Set `cancel` and sculk sensors, wardens and allays do not hear it. The affected block state from NeoForge's context is not exposed. Server-side. Bundles need \"hooks\": @API:vanilla_game_event@."
+  ]
 }

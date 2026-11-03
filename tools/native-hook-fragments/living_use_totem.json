@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a death-protection item about to save an entity, cancellable (`native_living_use_totem`).",
-  "doc_summary": "a totem about to save a player or a mob from a killing blow: `native_living_use_totem(entity, kind, source, hand, item, cancel)`, as `LivingEntity.checkTotemDeathProtection` finds a `death_protection` item in `hand` (`Hand::Main` or `Hand::Off`). Set `cancel` and the entity gets no protection: it dies and keeps the item. A source that bypasses invulnerability never asks. `native_player_totem` still hears a server player's totem that saved them, after this."
+  ]
 }

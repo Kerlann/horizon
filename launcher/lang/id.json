@@ -958,5 +958,7 @@
   "Hide other players' cosmetics": "Sembunyikan kosmetik pemain lain",
   "Others look like plain players to you. Also in the game's Horizon settings.": "Pemain lain terlihat seperti pemain biasa bagimu. Juga ada di pengaturan Horizon dalam game.",
   "Show other players' auras and trails": "Tampilkan aura dan jejak pemain lain",
-  "Off by default. Also in the game's Horizon settings.": "Nonaktif secara bawaan. Juga ada di pengaturan Horizon dalam game."
+  "Off by default. Also in the game's Horizon settings.": "Nonaktif secara bawaan. Juga ada di pengaturan Horizon dalam game.",
+  "This game source has no readable native entry template. Update Horizon and rebuild the mods against this game.": "Sumber game ini tidak memiliki templat entri native yang dapat dibaca. Perbarui Horizon dan bangun ulang mod untuk game ini.",
+  "Native build {version} has a missing or invalid native-mods.json record. Rebuild it from an installed Horizon version.": "Build native {version} memiliki catatan native-mods.json yang hilang atau tidak valid. Bangun ulang dari versi Horizon yang terpasang."
 }

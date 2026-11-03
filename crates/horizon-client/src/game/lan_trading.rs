@@ -823,7 +823,11 @@ mod tests {
             }
         }
         let seen = Seen::default();
-        let mods: mod_api::Mods = vec![Box::new(Observer(seen.clone())) as Box<dyn Hooks>].into();
+        let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
+            "merchant-observer",
+            Box::new(Observer(seen.clone())),
+        )]
+        .into();
         mod_api::testing::with_mods(mods, || {
             with_game(|game| {
                 let (villager, _rx, first) = open_trade(game, 1);

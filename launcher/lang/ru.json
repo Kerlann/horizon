@@ -958,5 +958,7 @@
   "Hide other players' cosmetics": "Скрывать косметику других игроков",
   "Others look like plain players to you. Also in the game's Horizon settings.": "Другие будут выглядеть для вас как обычные игроки. Также в настройках Horizon в игре.",
   "Show other players' auras and trails": "Показывать ауры и следы других игроков",
-  "Off by default. Also in the game's Horizon settings.": "По умолчанию выкл. Также в настройках Horizon в игре."
+  "Off by default. Also in the game's Horizon settings.": "По умолчанию выкл. Также в настройках Horizon в игре.",
+  "This game source has no readable native entry template. Update Horizon and rebuild the mods against this game.": "В этом исходном коде игры нет читаемого шаблона нативной точки входа. Обновите Horizon и пересоберите моды для этой игры.",
+  "Native build {version} has a missing or invalid native-mods.json record. Rebuild it from an installed Horizon version.": "У нативной сборки {version} отсутствует или повреждена запись native-mods.json. Пересоберите её на основе установленной версии Horizon."
 }

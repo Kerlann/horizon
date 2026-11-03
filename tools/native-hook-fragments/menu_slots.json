@@ -4,8 +4,5 @@
     {"name": "menu_slot_backing", "side": "server", "target": "horizon_client::game::native_menu_refs::Game<'_>::native_menu_slot_backing", "receiver": "menu"},
     {"name": "menu_slot_holds", "side": "server", "target": "horizon_client::game::native_menu_refs::Game<'_>::native_menu_slot_holds", "receiver": "menu"},
     {"name": "menu_slot_gives", "side": "server", "target": "horizon_client::game::native_menu_refs::Game<'_>::native_menu_slot_gives", "receiver": "menu"}
-  ],
-  "rust_summary": "a player's open menu's slots as item places: `ItemPlace::MenuSlot`, written through the storage `menu.slot_backing(host, slot)` names under the slot's own rules (`menu.slot_holds`, `menu.slot_gives`), and `MenuRef::cursor`.",
-  "doc_summary": "a player's open menu's slots as item places, a fork addition beside NeoForge 26.3's `ItemAccess.forPlayerSlot` and `forPlayerCursor`: `ItemPlace::MenuSlot { menu, slot }` reads, inserts into and extracts from the storage the slot shows, its own slot only, in a transaction, under the slot's own rules first. `menu.slot_backing(host, slot)` names that storage: the player's `ENTITY_ITEMS` index, a block entity's or an entity's slot, the ender chest's, the inventory crafting grid's or result, or a mod's chest menu's slot. `menu.slot_holds(host, slot, &stack)` is how many of a stack the slot holds (`Slot.mayPlace` and `getMaxStackSize`) and `menu.slot_gives(host, slot)` whether it gives up what it holds (`Slot.mayPickup`). A crafting grid a transaction changed has its result made again once, at the root commit; the result itself takes nothing and gives nothing. `menu.cursor()` is the menu's cursor (`forPlayerCursor`), reaching nothing once the menu is gone. A mod's chest menu's slots are written the same way. Bundles need \"hooks\": @API:menu_slots@.",
-  "comments": ["crates/horizon-client/src/game/native_menu_refs.rs"]
+  ]
 }

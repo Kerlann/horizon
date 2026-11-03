@@ -11,7 +11,5 @@
         "out": "canceled"
       }
     }
-  ],
-  "rust_summary": "a cancellable first-person arm draw (`native_render_arm`).",
-  "doc_summary": "`native_render_arm(player, player_entity_id, left, draw, canceled)`, before this window's player's first-person arm is drawn (`renderPlayerArm`, `renderMapHand`): the empty main hand's arm and the arms under a held map, not while invisible. `player` and `player_entity_id` are the local player's UUID and entity id; `draw` starts at the arm model's origin, in blocks. Draw with the `native_draw_*` helpers; set `canceled` to leave out vanilla's arm. Bundles need \"hooks\": @API:render_arm@."
+  ]
 }

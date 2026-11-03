@@ -14,7 +14,7 @@ impl Game<'_> {
     /// terrain with them (`LevelRenderer.allChanged`, as changing Biome Blend
     /// does). Call it when your colours change (a new season, a new day of a
     /// slow fade) and once when the player joins, not every frame: a rebuild
-    /// takes the workers a few seconds. API 107.
+    /// takes the workers a few seconds.
     pub(super) fn native_refresh_biome_colors(&mut self) {
         // A world's own table is asked from the biome files' colours each
         // time, so a mod's colours do not stack; a plain world's is the pack's.

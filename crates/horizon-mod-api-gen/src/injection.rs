@@ -89,7 +89,7 @@ impl TraitInjection {
             .map(|((n, _), _)| quote!(*#n = event.#n;));
         let call = quote! {
             let mut event = crate::mod_api::#event { #(#inits),* };
-            let _flow = owner.#name(&mut event);
+            let _flow = owner.hooks.#name(&mut event);
             #(#write_back)*
         };
         // Before the mods are installed (an injection into code `main_with` runs first), or

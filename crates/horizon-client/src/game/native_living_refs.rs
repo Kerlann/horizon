@@ -66,7 +66,7 @@ impl Game<'_> {
     }
     /// The entity as a living entity (vanilla's `LivingEntity`: a mob, a
     /// player, an armor stand or the dragon), or None for another kind or a
-    /// stale handle. API @API:living_refs@.
+    /// stale handle.
     pub(super) fn native_living(&self, entity: EntityRef) -> Option<LivingRef> {
         let living = LivingRef::new(entity);
         self.native_living_target(living).map(|_| living)
@@ -74,7 +74,7 @@ impl Game<'_> {
     /// The effective value of an attribute on a living entity. None for an
     /// unknown or absent attribute, an unavailable entity, or on a client.
     /// Mobs, armor stands and the dragon return None until they have live
-    /// attribute maps. API @API:living_refs@.
+    /// attribute maps.
     pub(super) fn native_living_attribute_value(
         &mut self,
         living: LivingRef,
@@ -89,7 +89,6 @@ impl Game<'_> {
 
     /// The base value of an attribute, before modifiers. Mobs, armor stands
     /// and the dragon return None until they have live attribute maps.
-    /// API @API:living_refs@.
     pub(super) fn native_living_attribute_base(
         &mut self,
         living: LivingRef,
@@ -123,7 +122,7 @@ impl Game<'_> {
     /// mobs and armor stands store main hand, off hand, head, chest, legs and
     /// feet. All mobs also store body and saddle. Dragon equipment and player
     /// or armor-stand body and saddle storage are not yet modeled. None means
-    /// empty, unsupported or stale. API @API:living_refs@.
+    /// empty, unsupported or stale.
     pub(super) fn native_living_equipment(
         &self,
         living: LivingRef,
@@ -154,8 +153,7 @@ impl Game<'_> {
             _ => None,
         }
     }
-    /// The stack in hand `hand` (`LivingEntity.getItemInHand`). API
-    /// @API:living_refs@.
+    /// The stack in hand `hand` (`LivingEntity.getItemInHand`).
     pub(super) fn native_living_hand_item(
         &self,
         living: LivingRef,
@@ -174,7 +172,7 @@ impl Game<'_> {
     /// saddle storage are not yet modeled. False means unsupported or stale.
     /// This is a direct write: it takes effect and is final immediately, even
     /// inside `host.transaction`. Any equip/unequip event and equip sound also
-    /// happen immediately. API @API:living_refs@.
+    /// happen immediately.
     pub(super) fn native_living_set_equipment(
         &mut self,
         living: LivingRef,

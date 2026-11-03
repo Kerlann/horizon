@@ -55,15 +55,14 @@ impl Game<'_> {
     /// The entity `id` (the id events carry) as a handle for the `entity_*`
     /// methods: None on a client, with no world open, or for no such entity
     /// in the level in place or among the server's players. During a nested
-    /// player swap, an outer player's displaced record is unavailable. API
-    /// @API:entity_handles@.
+    /// player swap, an outer player's displaced record is unavailable.
     pub(super) fn native_entity(&self, id: u32) -> Option<EntityRef> {
         let entity = EntityRef::new(self.native_lifecycle.epoch()?, id);
         self.native_entity_target(entity).map(|_| entity)
     }
     /// The level `dimension` (`minecraft:the_nether`) as a handle: None on a
     /// client, with no world open, or for a dimension the server hasn't
-    /// loaded. API @API:entity_handles@.
+    /// loaded.
     pub(super) fn native_level(&self, dimension: &str) -> Option<LevelRef> {
         if !self.is_logical_server() {
             return None;
@@ -86,7 +85,6 @@ impl Game<'_> {
     /// acting player are not listed: their handles cannot resolve there yet.
     /// During `hears_projectile_impacts`, the projectile list is taken out of
     /// the game and is not visible; it is restored for `projectile_impact`.
-    /// API @API:level_entities_in@.
     pub(super) fn native_level_entities_in(
         &self,
         level: LevelRef,
@@ -146,7 +144,7 @@ impl Game<'_> {
     /// Set a block in the level in place (`Level.setBlock`). Parked levels,
     /// stale handles, clients and unloaded or out-of-height positions return
     /// false. Client-update and client-render flags are not supported; Horizon
-    /// sends every change to clients. API @API:level_block_writes@.
+    /// sends every change to clients.
     pub(super) fn native_level_set_block(
         &mut self,
         level: LevelRef,
@@ -161,7 +159,6 @@ impl Game<'_> {
     }
     /// Destroy a block in the level in place (`Level.destroyBlock`), optionally
     /// dropping its resources. Parked levels and invalid positions return false.
-    /// API @API:level_block_writes@.
     pub(super) fn native_level_destroy_block(
         &mut self,
         level: LevelRef,
@@ -189,7 +186,6 @@ impl Game<'_> {
     /// visual, occlusion and support shapes are not exposed. Returns None on a
     /// client, for a stale handle, or for a closed level. Unloaded blocks read
     /// as air; collision errors return no boxes, like `native_block_collision`.
-    /// API @API:level_shapes@.
     pub(super) fn native_level_block_shape(
         &self,
         level: LevelRef,
@@ -226,7 +222,7 @@ impl Game<'_> {
     /// None for clients, stale or closed levels, unloaded or out-of-height blocks,
     /// dynamic-shape states (including moving pistons and shulker boxes), or an
     /// exporter error. Dynamic support is a follow-up on #29. False means not
-    /// sturdy. API @API:level_shapes@.
+    /// sturdy.
     pub(super) fn native_level_block_face_sturdy(
         &self,
         level: LevelRef,
@@ -257,7 +253,6 @@ impl Game<'_> {
 
     /// Clip an empty-context ray against collider or outline shapes, without fluids.
     /// None on failed reads, dynamic shapes, invalid rays or traversal limits.
-    /// API @API:level_shapes@.
     pub(super) fn native_level_clip(
         &self,
         level: LevelRef,
@@ -323,29 +318,26 @@ impl Game<'_> {
     }
 
     /// The entity's position (`Entity.position`): its feet, the middle of
-    /// its box for a painting or an item frame. API @API:entity_handles@.
+    /// its box for a painting or an item frame.
     pub(super) fn native_entity_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
         self.target_position(self.native_entity_target(entity)?)
     }
-    /// The block the entity's position is in (`Entity.blockPosition`). API
-    /// @API:entity_handles@.
+    /// The block the entity's position is in (`Entity.blockPosition`).
     pub(super) fn native_entity_block_position(&self, entity: EntityRef) -> Option<[i32; 3]> {
         self.native_entity_position(entity)
             .map(|p| p.map(|v| v.floor() as i32))
     }
     /// The entity's yaw and pitch in degrees (`Entity.getYRot`, `getXRot`); 0
-    /// for the kinds that don't turn. API @API:entity_handles@.
+    /// for the kinds that don't turn.
     pub(super) fn native_entity_rotation(&self, entity: EntityRef) -> Option<[f32; 2]> {
         Some(self.target_rotation(self.native_entity_target(entity)?))
     }
-    /// The entity's type (`Entity.getType`): `minecraft:zombie`. API
-    /// @API:entity_handles@.
+    /// The entity's type (`Entity.getType`): `minecraft:zombie`.
     pub(super) fn native_entity_kind(&self, entity: EntityRef) -> Option<String> {
         Some(self.target_type(self.native_entity_target(entity)?))
     }
     /// The entity's UUID (`Entity.getUUID`), the one it is saved with; an
     /// entity that has none yet gets it now, as a new vanilla entity does.
-    /// API @API:entity_handles@.
     pub(super) fn native_entity_uuid(&mut self, entity: EntityRef) -> Option<u128> {
         let words = match self.native_entity_target(entity)? {
             Target::Player => return self.lan_acting_uuid,
@@ -354,7 +346,7 @@ impl Game<'_> {
         };
         Some(uuid_from_words(words))
     }
-    /// The level the entity is in (`Entity.level`). API @API:entity_handles@.
+    /// The level the entity is in (`Entity.level`).
     pub(super) fn native_entity_level(&self, entity: EntityRef) -> Option<LevelRef> {
         let dim: Dim = self.target_level(self.native_entity_target(entity)?);
         Some(LevelRef::new(entity.epoch(), dim.id()))

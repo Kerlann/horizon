@@ -1,8 +1,7 @@
 //! Entities for native server mods (docs/native-mods.md, "Entities"): spawn
 //! any entity from its compound as `/summon` does, and move, show or remove
 //! the entities Horizon keeps without simulating them (displays, markers,
-//! interactions), which is what a mod needs for models that move: an
-//! `item_display` showing an item model from the mod's assets. They act where
+//! interactions); `native_display_refs.rs` poses displays. They act where
 //! the world is simulated, in the level in place, which each names by its
 //! `dimension` (`minecraft:overworld`) as `native_set_block` does.
 use super::{
@@ -11,67 +10,6 @@ use super::{
 };
 use horizon_core::geometry::Vec3;
 use horizon_world::nbt::{Compound, Tag};
-
-/// A display's transformation and interpolation (`Display`'s
-/// `transformation`, `interpolation_duration` and `teleport_duration`):
-/// a translation, a left rotation (a quaternion `[x, y, z, w]`), a scale and a
-/// right rotation, eased over `interpolation` ticks from what it showed;
-/// `teleport` ticks ease a move (0 to 59).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct NativeDisplay {
-    pub translation: [f32; 3],
-    pub left_rotation: [f32; 4],
-    pub scale: [f32; 3],
-    pub right_rotation: [f32; 4],
-    pub interpolation: i32,
-    pub teleport: i32,
-}
-
-impl Default for NativeDisplay {
-    fn default() -> Self {
-        Self {
-            translation: [0.0; 3],
-            left_rotation: [0.0, 0.0, 0.0, 1.0],
-            scale: [1.0; 3],
-            right_rotation: [0.0, 0.0, 0.0, 1.0],
-            interpolation: 0,
-            teleport: 0,
-        }
-    }
-}
-
-impl NativeDisplay {
-    /// Whether every value is finite, the quaternions aren't zero and the
-    /// durations are in range.
-    fn valid(&self) -> bool {
-        let finite = |v: &[f32]| v.iter().all(|x| x.is_finite());
-        let unit = |q: &[f32; 4]| q.iter().map(|x| x * x).sum::<f32>() > 1.0e-12;
-        finite(&self.translation)
-            && finite(&self.left_rotation)
-            && finite(&self.scale)
-            && finite(&self.right_rotation)
-            && unit(&self.left_rotation)
-            && unit(&self.right_rotation)
-            && (0..=1_000_000).contains(&self.interpolation)
-            && (0..=59).contains(&self.teleport)
-    }
-    /// Writes its keys into a display's compound, starting interpolation now.
-    fn write(&self, tag: &mut Compound) {
-        let floats = |v: &[f32]| Tag::List(v.iter().map(|x| Tag::Float(x.to_bits())).collect());
-        let mut t = Compound::new();
-        t.insert("translation".into(), floats(&self.translation));
-        t.insert("left_rotation".into(), floats(&self.left_rotation));
-        t.insert("scale".into(), floats(&self.scale));
-        t.insert("right_rotation".into(), floats(&self.right_rotation));
-        tag.insert("transformation".into(), Tag::Compound(t));
-        tag.insert(
-            "interpolation_duration".into(),
-            Tag::Int(self.interpolation),
-        );
-        tag.insert("teleport_duration".into(), Tag::Int(self.teleport));
-        tag.insert("start_interpolation".into(), Tag::Int(0));
-    }
-}
 
 /// Whether a position is one `/summon` takes.
 fn position_ok(pos: [f64; 3]) -> bool {
@@ -128,8 +66,7 @@ impl Game<'_> {
     /// <kind> <pos> <nbt>` takes it; passengers included): its id. None on a
     /// client's copy of the world, for another dimension, a position outside
     /// `/summon`'s bounds, a chunk that isn't loaded, a kind Horizon can't
-    /// load, or one a mod kept out (`native_entity_join_level`). API
-    /// 59.
+    /// load, or one a mod kept out (`native_entity_join_level`).
     pub(super) fn native_summon(
         &mut self,
         dimension: &str,
@@ -175,42 +112,6 @@ impl Game<'_> {
                     || self.cushions.iter().any(|c| c.id == id)
             })
         })
-    }
-    /// Sets the transformation and interpolation of display `id` (a
-    /// `block_display`, `item_display` or `text_display`): players see it
-    /// ease from what it showed over `interpolation` ticks. False for no such
-    /// display, another dimension, or a value that isn't finite, a zero
-    /// quaternion, or a duration out of range. API 59.
-    pub(super) fn native_set_display(
-        &mut self,
-        dimension: &str,
-        id: u32,
-        display: &NativeDisplay,
-    ) -> bool {
-        if !self.native_simulates_level(dimension) || !display.valid() {
-            return false;
-        }
-        let is_display = self.others.iter().any(|o| {
-            o.id == id
-                && matches!(
-                    o.kind.as_str(),
-                    "minecraft:block_display" | "minecraft:item_display" | "minecraft:text_display"
-                )
-        });
-        if !is_display {
-            return false;
-        }
-        let tag = self
-            .persist
-            .raw
-            .entry(id)
-            .or_insert_with(|| Tag::Compound(Compound::new()));
-        let Tag::Compound(c) = tag else {
-            return false;
-        };
-        display.write(c);
-        self.persist.force_meta(id, 8);
-        true
     }
 }
 
@@ -505,10 +406,13 @@ mod tests {
         }
         let joins = Joins::default();
         let leaves = Arc::new(Mutex::new(Vec::new()));
-        let mods: mod_api::Mods = vec![Box::new(Observer {
-            joins: joins.clone(),
-            leaves: leaves.clone(),
-        }) as Box<dyn Hooks>]
+        let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
+            "join-order-observer",
+            Box::new(Observer {
+                joins: joins.clone(),
+                leaves: leaves.clone(),
+            }),
+        )]
         .into();
         mod_api::testing::with_mods(mods, || {
             super::super::native_entity_refs::tests::with_game(|game| {
@@ -624,63 +528,6 @@ mod tests {
                 assert_eq!(joins.lock().unwrap().len(), 9);
             });
         });
-    }
-
-    #[test]
-    fn a_display_write_starts_interpolation_now() {
-        let display = NativeDisplay {
-            translation: [0.0, 1.5, 0.0],
-            scale: [2.0; 3],
-            interpolation: 10,
-            ..NativeDisplay::default()
-        };
-        assert!(display.valid());
-        let mut tag = Compound::new();
-        display.write(&mut tag);
-        assert_eq!(tag.get(&"start_interpolation".into()), Some(&Tag::Int(0)));
-        assert_eq!(
-            tag.get(&"interpolation_duration".into()),
-            Some(&Tag::Int(10))
-        );
-        display.write(&mut tag);
-        assert_eq!(tag.get(&"start_interpolation".into()), Some(&Tag::Int(0)));
-        display.write(&mut tag);
-        assert_eq!(tag.get(&"start_interpolation".into()), Some(&Tag::Int(0)));
-        let Some(Tag::Compound(t)) = tag.get(&"transformation".into()) else {
-            panic!("no transformation");
-        };
-        assert_eq!(
-            t.get(&"scale".into()),
-            Some(&Tag::List(vec![Tag::Float(2.0f32.to_bits()); 3]))
-        );
-    }
-
-    #[test]
-    fn a_display_refuses_values_it_cant_show() {
-        let ok = NativeDisplay::default();
-        assert!(ok.valid());
-        assert!(
-            !NativeDisplay {
-                scale: [f32::NAN, 1.0, 1.0],
-                ..ok
-            }
-            .valid()
-        );
-        assert!(
-            !NativeDisplay {
-                left_rotation: [0.0; 4],
-                ..ok
-            }
-            .valid()
-        );
-        assert!(!NativeDisplay { teleport: 60, ..ok }.valid());
-        assert!(
-            !NativeDisplay {
-                interpolation: -1,
-                ..ok
-            }
-            .valid()
-        );
     }
 
     #[test]

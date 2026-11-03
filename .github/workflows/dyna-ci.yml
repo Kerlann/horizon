@@ -212,7 +212,7 @@ jobs:
         run: |
           cargo +stable fmt --check
           cargo +stable clippy $JOBS --all-targets --locked -- -D warnings
-          cargo +stable test $JOBS --locked --lib
+          cargo +stable test $JOBS --locked --lib --bins
   # The fork's Dyna runners have the owner's prepared vanilla data in a read-only cache.
   vanilla-parity:
     if: github.repository == 'arismoko/horizon' && github.event_name == 'workflow_dispatch'

@@ -160,10 +160,9 @@ pub struct NativeLootDrops<'a> {
     /// cave vines, a hit taking an item frame or its item, or untying a lead
     /// or cutting it with shears. `player` names them, or is `None` when a
     /// dispenser's shears sheared a mooshroom; `block` or `entity` says what
-    /// dropped them. API 100. A mob that a player killed while
+    /// dropped them. A mob that a player killed while
     /// leashed drops its lead on its next tick as a call of its own (`entity`
-    /// the mob, `player` its killer, `table` empty, `used` false). API
-    /// 102.
+    /// the mob, `player` its killer, `table` empty, `used` false).
     pub used: bool,
 }
 
@@ -388,7 +387,7 @@ pub struct NativeScreenView<'a> {
     /// on it. Every container, station and mod window draws on the inventory
     /// screen and so reports `inventory`: tell them apart by `menu` and
     /// `title` (both None on a window the client opened itself) and by
-    /// `slots`. The title's own screens report theirs (API 326): `title`,
+    /// `slots`. The title's own screens report theirs: `title`,
     /// `world_select`, `world_create`, `world_create_flat`, `world_edit`,
     /// `multiplayer`, `add_server`, `direct_connect`…, with no menu, no title
     /// and no slots.
@@ -553,10 +552,10 @@ pub struct NativeServerPlayer {
     pub position: [f64; 3],
     /// 0 survival, 1 creative, 2 adventure, 3 spectator.
     pub game_mode: i32,
-    /// Health points, 20 at full; 0 once dead. API 21.
+    /// Health points, 20 at full; 0 once dead.
     pub health: f32,
     /// Where they look, in degrees (`yRot`, `xRot`), as their last move told
-    /// the server. API 49.
+    /// the server.
     pub yaw: f32,
     pub pitch: f32,
 }
@@ -813,6 +812,23 @@ impl ItemEntityRef {
     }
 }
 
+/// A display entity of the open world (`block_display`, `item_display` or
+/// `text_display`), narrowed with `host.display`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DisplayRef(EntityRef);
+
+impl DisplayRef {
+    /// Create a handle for the game.
+    #[doc(hidden)]
+    pub fn new(entity: EntityRef) -> Self {
+        Self(entity)
+    }
+    /// The same entity as an [`EntityRef`].
+    pub fn entity(self) -> EntityRef {
+        self.0
+    }
+}
+
 /// A projectile of the open world (vanilla's `Projectile`), narrowed with
 /// `host.projectile`: arrows, tridents (a player's too), firework rockets,
 /// thrown items, fireballs, wind charges, skulls, shulker bullets and mods'
@@ -849,6 +865,147 @@ impl MerchantRef {
     }
 }
 
+/// Which `Display` subclass an entity is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum NativeDisplayKind {
+    Block,
+    Item,
+    Text,
+}
+
+impl NativeDisplayKind {
+    /// The entity type id: `minecraft:block_display`, `minecraft:item_display` or `minecraft:text_display`.
+    pub fn entity_type(self) -> &'static str {
+        match self {
+            Self::Block => "minecraft:block_display",
+            Self::Item => "minecraft:item_display",
+            Self::Text => "minecraft:text_display",
+        }
+    }
+    /// The kind of an entity type id, or None for another entity type.
+    pub fn from_entity_type(id: &str) -> Option<Self> {
+        [Self::Block, Self::Item, Self::Text]
+            .into_iter()
+            .find(|kind| kind.entity_type() == id)
+    }
+}
+
+/// `Display.BillboardConstraints`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum NativeBillboard {
+    Fixed,
+    Vertical,
+    Horizontal,
+    Center,
+}
+
+impl NativeBillboard {
+    /// Every constraint, in ordinal order.
+    pub const ALL: [Self; 4] = [Self::Fixed, Self::Vertical, Self::Horizontal, Self::Center];
+    /// `getSerializedName`: `fixed`, `vertical`, `horizontal` or `center`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Fixed => "fixed",
+            Self::Vertical => "vertical",
+            Self::Horizontal => "horizontal",
+            Self::Center => "center",
+        }
+    }
+    /// The constraint with that name, or None for one vanilla doesn't have.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|b| b.name() == name)
+    }
+}
+
+/// `ItemDisplayContext`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum NativeItemDisplayContext {
+    None,
+    ThirdPersonLeftHand,
+    ThirdPersonRightHand,
+    FirstPersonLeftHand,
+    FirstPersonRightHand,
+    Head,
+    Gui,
+    Ground,
+    Fixed,
+    OnShelf,
+}
+
+impl NativeItemDisplayContext {
+    /// Every context, in ordinal order (vanilla's id is the index).
+    pub const ALL: [Self; 10] = [
+        Self::None,
+        Self::ThirdPersonLeftHand,
+        Self::ThirdPersonRightHand,
+        Self::FirstPersonLeftHand,
+        Self::FirstPersonRightHand,
+        Self::Head,
+        Self::Gui,
+        Self::Ground,
+        Self::Fixed,
+        Self::OnShelf,
+    ];
+    /// `getSerializedName`: `none`, `thirdperson_lefthand`, ... `on_shelf`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::ThirdPersonLeftHand => "thirdperson_lefthand",
+            Self::ThirdPersonRightHand => "thirdperson_righthand",
+            Self::FirstPersonLeftHand => "firstperson_lefthand",
+            Self::FirstPersonRightHand => "firstperson_righthand",
+            Self::Head => "head",
+            Self::Gui => "gui",
+            Self::Ground => "ground",
+            Self::Fixed => "fixed",
+            Self::OnShelf => "on_shelf",
+        }
+    }
+    /// The context with that name, or None for one vanilla doesn't have.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|c| c.name() == name)
+    }
+}
+
+/// `Display.TextDisplay.Align`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum NativeTextAlignment {
+    Center,
+    Left,
+    Right,
+}
+
+impl NativeTextAlignment {
+    /// `getSerializedName`: `center`, `left` or `right`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Center => "center",
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
+}
+
+/// A display's `Transformation`: a translation, a left rotation, a scale and a
+/// right rotation. Quaternions are `[x, y, z, w]`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NativeTransformation {
+    pub translation: [f32; 3],
+    pub left_rotation: [f32; 4],
+    pub scale: [f32; 3],
+    pub right_rotation: [f32; 4],
+}
+
+impl NativeTransformation {
+    /// `Transformation.IDENTITY`.
+    pub const IDENTITY: Self = Self {
+        translation: [0.0; 3],
+        left_rotation: [0.0, 0.0, 0.0, 1.0],
+        scale: [1.0; 3],
+        right_rotation: [0.0, 0.0, 0.0, 1.0],
+    };
+}
+
 /// `ProjectileDeflection`: how `ProjectileRef::deflect` turns a projectile.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeDeflection {
@@ -867,6 +1024,41 @@ pub enum NativeArrowPickup {
     Disallowed,
     Allowed,
     CreativeOnly,
+}
+
+/// A vanilla `AbstractMinecart`, narrowed from an entity with `host.minecart(entity)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct MinecartRef(EntityRef);
+
+impl MinecartRef {
+    /// Create a handle for the game.
+    #[doc(hidden)]
+    pub fn new(entity: EntityRef) -> Self {
+        Self(entity)
+    }
+    /// The same entity as an [`EntityRef`].
+    pub fn entity(self) -> EntityRef {
+        self.0
+    }
+}
+
+/// Which minecart an entity is: one per vanilla `AbstractMinecart` subclass.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum NativeMinecartKind {
+    /// `Minecart`.
+    Rideable,
+    /// `MinecartChest`.
+    Chest,
+    /// `MinecartFurnace`.
+    Furnace,
+    /// `MinecartTNT`.
+    Tnt,
+    /// `MinecartHopper`.
+    Hopper,
+    /// `MinecartCommandBlock`.
+    CommandBlock,
+    /// `MinecartSpawner`.
+    Spawner,
 }
 
 /// A level of the open world, by its dimension (`minecraft:the_nether`).
@@ -893,6 +1085,47 @@ impl LevelRef {
     }
 }
 
+/// A raid of a level (`Raid`), by the id `Raids` keeps it under, which the
+/// raids file saves. `level.raid_at(host, pos)`, `level.raids(host)`,
+/// `level.raid(host, id)` and `mob.raid(host)` make one. A handle resolves
+/// again on each call: it reads as `None` or `false` once the raid is gone,
+/// for a handle of an earlier open, for a level that is not in place, and on a
+/// client.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RaidRef {
+    level: LevelRef,
+    id: i32,
+}
+
+impl RaidRef {
+    /// Create a handle for the game.
+    #[doc(hidden)]
+    pub fn new(level: LevelRef, id: i32) -> Self {
+        Self { level, id }
+    }
+    /// The level the raid belongs to.
+    pub fn level(self) -> LevelRef {
+        self.level
+    }
+    /// The raid's id in its level (the `raid` argument of the raid hooks).
+    pub fn id(self) -> i32 {
+        self.id
+    }
+}
+
+/// Where a raid stands (`Raid.RaidStatus`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum NativeRaidStatus {
+    /// Waiting or fighting (`ONGOING`).
+    Ongoing,
+    /// Every wave was beaten (`VICTORY`).
+    Victory,
+    /// No villager is left or the time ran out (`LOSS`).
+    Loss,
+    /// Ended by `stop`, the `/raid stop` command or the `raids` rule (`STOPPED`).
+    Stopped,
+}
+
 /// A chunk position in an open level. A handle may be kept after unloading;
 /// reads resolve it again, returning `false` or `None` when it is no longer loaded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -902,6 +1135,11 @@ pub struct ChunkRef {
 }
 
 impl ChunkRef {
+    /// Create a handle for the game.
+    #[doc(hidden)]
+    pub fn new(level: LevelRef, pos: [i32; 2]) -> Self {
+        Self { level, pos }
+    }
     /// The chunk coordinates, `[x, z]`.
     pub fn pos(self) -> [i32; 2] {
         self.pos
@@ -1510,8 +1748,22 @@ pub struct ToolUse {
     pub simulated: bool,
 }
 
-/// The ordered list of mods shared by the client and server.
-pub type Mods = Arc<[Box<dyn Hooks>]>;
+/// One native mod, with its bundle's `[mod] id` and hook implementation.
+pub struct ModEntry {
+    id: &'static str,
+    pub(crate) hooks: Box<dyn Hooks>,
+}
+
+impl ModEntry {
+    /// Bind a hook implementation to its nonempty bundle id.
+    pub fn new(id: &'static str, hooks: Box<dyn Hooks>) -> Self {
+        assert!(!id.is_empty(), "native mod id must not be empty");
+        Self { id, hooks }
+    }
+}
+
+/// The ordered list of named mods shared by the client and server.
+pub type Mods = Arc<[ModEntry]>;
 
 pub(crate) struct Installed {
     mods: Mods,
@@ -1523,10 +1775,13 @@ impl Installed {
     fn new(mods: Mods) -> Self {
         let types = mods
             .iter()
-            .map(|m| (&**m as &dyn std::any::Any).type_id())
+            .map(|entry| (&*entry.hooks as &dyn std::any::Any).type_id())
             .collect();
-        let subscribers =
-            horizon_client_core::subscribers::Subscribers::new(generated::HOOK_COUNT, mods.len());
+        let subscribers = horizon_client_core::subscribers::Subscribers::new(
+            horizon_client_core::subscribers::Domain::Gameplay,
+            generated::HOOK_COUNT,
+            mods.len(),
+        );
         Self {
             mods,
             subscribers,
@@ -1590,30 +1845,19 @@ pub(crate) fn install(mods: Mods) -> &'static Installed {
 }
 
 /// The process-wide list in dispatch order, or an empty list before installation.
-pub fn mods() -> &'static [Box<dyn Hooks>] {
+pub fn mods() -> &'static [ModEntry] {
     installed().map_or(&[], |installed| &installed.mods)
 }
 
-fn listened(hook: generated::HookId) -> bool {
+pub(crate) fn listened(hook: generated::HookId) -> bool {
     installed().is_some_and(|installed| installed.subscribers.contains_any(hook as usize))
-}
-
-/// The bundles' `[mod] id`s, one a [`mods`] entry in the same order.
-static MOD_IDS: OnceLock<&'static [&'static str]> = OnceLock::new();
-
-/// Names the entries of [`mods`] by their bundles' `[mod] id`s, so a panic in a hook names its mod.
-/// The launcher's generated executable calls it before `entry::main_with`.
-pub fn name_mods(ids: &'static [&'static str]) {
-    if MOD_IDS.set(ids).is_err() {
-        log::warn!("Trait mods already named; ignoring the second list");
-    }
 }
 
 /// `mods` in order, each marked as running `hook` until the next one is (or the loop ends), so a
 /// panic in it names the mod. The generated dispatch loops over it.
-fn entered_registration<'a>(mods: &'a [Box<dyn Hooks>], hook: &'static str) -> Entered<'a> {
+fn entered_registration<'a>(mods: &'a [ModEntry], hook: &'static str) -> Entered<'a> {
     Entered {
-        mods: mods.iter().enumerate(),
+        mods: mods.iter(),
         hook,
         guard: None,
     }
@@ -1622,7 +1866,7 @@ fn entered_registration<'a>(mods: &'a [Box<dyn Hooks>], hook: &'static str) -> E
 fn entered(
     hook_id: generated::HookId,
     hook: &'static str,
-) -> impl Iterator<Item = &'static Box<dyn Hooks>> {
+) -> impl Iterator<Item = &'static dyn Hooks> {
     installed().into_iter().flat_map(move |installed| {
         let mut crash_guard = None;
         let mut subscriber_guard = None;
@@ -1632,24 +1876,24 @@ fn entered(
             .map(move |index| {
                 drop(subscriber_guard.take());
                 drop(crash_guard.take());
-                let hooks = &installed.mods[index];
+                let entry = &installed.mods[index];
+                let hooks = &*entry.hooks;
                 subscriber_guard = Some(horizon_client_core::subscribers::enter(
                     &installed.subscribers,
                     hook_id as usize,
                     index,
-                    (&**hooks as *const dyn Hooks).cast(),
+                    (hooks as *const dyn Hooks).cast(),
                     installed.types[index],
                 ));
-                crash_guard = Some(mark_mod(index, hook));
+                crash_guard = Some(mark_mod(entry.id, hook));
                 hooks
             })
     })
 }
 
-fn mark_mod(index: usize, hook: &'static str) -> crate::crash::NativeModGuard {
+fn mark_mod(id: &'static str, hook: &'static str) -> crate::crash::NativeModGuard {
     crate::crash::enter_native_mod(crate::crash::NativeModCall {
-        id: MOD_IDS.get().and_then(|ids| ids.get(index)).copied(),
-        index,
+        id,
         hook,
         part: None,
     })
@@ -1667,11 +1911,7 @@ fn entered_parts<'a, P: ?Sized>(
         drop(guard.take());
         guard = Some(crate::crash::enter_native_mod(
             crate::crash::NativeModCall {
-                id: MOD_IDS
-                    .get()
-                    .and_then(|ids| ids.get(attached.mod_index))
-                    .copied(),
-                index: attached.mod_index,
+                id: attached.mod_id,
                 hook,
                 part: Some(attached.type_name),
             },
@@ -1680,29 +1920,21 @@ fn entered_parts<'a, P: ?Sized>(
     })
 }
 
-/// Mod `index` of [`mods`] by its `[mod] id`, or by its place when the build didn't name them.
-fn mod_name(index: usize) -> String {
-    MOD_IDS
-        .get()
-        .and_then(|ids| ids.get(index))
-        .map_or_else(|| format!("native mod #{index}"), |id| (*id).to_owned())
-}
-
 struct Entered<'a> {
-    mods: std::iter::Enumerate<std::slice::Iter<'a, Box<dyn Hooks>>>,
+    mods: std::slice::Iter<'a, ModEntry>,
     hook: &'static str,
     guard: Option<crate::crash::NativeModGuard>,
 }
 
 impl<'a> Iterator for Entered<'a> {
-    type Item = &'a Box<dyn Hooks>;
+    type Item = &'a dyn Hooks;
 
     fn next(&mut self) -> Option<Self::Item> {
         // The last mod's mark goes first, so the next one's puts back what was there before.
         drop(self.guard.take());
-        let (index, hooks) = self.mods.next()?;
-        self.guard = Some(mark_mod(index, self.hook));
-        Some(hooks)
+        let entry = self.mods.next()?;
+        self.guard = Some(mark_mod(entry.id, self.hook));
+        Some(&*entry.hooks)
     }
 }
 
@@ -1735,6 +1967,92 @@ impl BlockHit {
             inside,
         }
     }
+}
+
+/// The game's read-only native backend, as [`Host::backend`] hands it out.
+///
+/// The backend is reached only through [`Host::backend`] and
+/// `Host::backend_mut`, which return opaque `BackendRef`/`BackendMutRef`
+/// values that only `mod_api` can build or open. A foreign [`Host`] gets
+/// `None` by default, and forwarding a real host's value adds nothing beyond
+/// calling with the real host. A handle asked on a host without a backend
+/// answers its typed refusal (`None` or `false`).
+///
+/// Opening one is reserved for this API:
+///
+/// ```compile_fail
+/// use horizon_client::mod_api::{Backend, BackendRef};
+/// fn reach(backend: BackendRef<'_>) { let _: &dyn Backend = backend.open(); }
+/// ```
+///
+/// So is reading the backend it holds:
+///
+/// ```compile_fail
+/// use horizon_client::mod_api::BackendRef;
+/// fn reach(backend: BackendRef<'_>) { let _ = backend.inner; }
+/// ```
+///
+/// And building one:
+///
+/// ```compile_fail
+/// use horizon_client::mod_api::BackendRef;
+/// fn build() { let _ = BackendRef::of; }
+/// ```
+#[doc(hidden)]
+pub struct BackendRef<'a> {
+    inner: &'a dyn Backend,
+}
+
+/// The game's mutable native backend, as `Host::backend_mut` hands it out;
+/// the same opaque rule as [`BackendRef`], and a wrapper exposes no backend
+/// method of its own:
+///
+/// ```compile_fail
+/// use horizon_client::mod_api::BackendMutRef;
+/// fn reach(backend: BackendMutRef<'_>) { backend.set_loaded(false); }
+/// ```
+#[doc(hidden)]
+pub struct BackendMutRef<'a> {
+    inner: &'a mut dyn BackendMut,
+}
+
+impl<'a> BackendRef<'a> {
+    /// Wraps a read backend; only the generated game impl and this module's
+    /// test doubles build a wrapper, always around themselves.
+    pub(crate) fn of(inner: &'a dyn Backend) -> Self {
+        Self { inner }
+    }
+
+    /// The backend inside; visible only inside `mod_api`, which the
+    /// generated handle code and the capability tables are part of.
+    fn open(self) -> &'a dyn Backend {
+        self.inner
+    }
+}
+
+impl<'a> BackendMutRef<'a> {
+    /// Wraps a write backend; only the generated game impl and this module's
+    /// test doubles build a wrapper, always around themselves.
+    pub(crate) fn of(inner: &'a mut dyn BackendMut) -> Self {
+        Self { inner }
+    }
+
+    /// The backend inside; visible only inside `mod_api`.
+    fn open(self) -> &'a mut dyn BackendMut {
+        self.inner
+    }
+}
+
+/// The read backend behind `host`, or `None` where the host has none; the
+/// caller answers its typed refusal instead of running on.
+pub(in crate::mod_api) fn backend_of(host: &dyn Host) -> Option<&dyn Backend> {
+    host.backend().map(|wrapper| wrapper.open())
+}
+
+/// The write backend behind `host`, or `None` where the host has none; the
+/// caller answers its typed refusal instead of running on.
+pub(in crate::mod_api) fn backend_mut_of(host: &mut dyn Host) -> Option<&mut dyn BackendMut> {
+    host.backend_mut().map(|wrapper| wrapper.open())
 }
 
 /// A player's right click on a block, for `right_click_block`
@@ -1809,6 +2127,8 @@ mod generated_host {
     include!(concat!(env!("OUT_DIR"), "/mod_api_generated_host.rs"));
 }
 pub use generated_host::Host;
+#[doc(hidden)]
+pub use generated_host::{Backend, BackendMut};
 
 /// Result of accessing or decoding an attachment.
 pub type AttachmentResult<T> = std::result::Result<T, AttachmentError>;
@@ -1893,6 +2213,8 @@ mod capability;
 pub use capability::{BlockSide, Capability, CapabilityKey, ITEMS};
 mod entity_capability;
 pub use entity_capability::{ENTITY_ITEMS, EntityCapabilityKey};
+mod energy_capability;
+pub use energy_capability::{ENERGY, EnergyHandler, ITEM_ENERGY, move_energy};
 mod fluid_capability;
 pub use fluid_capability::{FLUIDS, FluidResource, FluidStack, ITEM_FLUIDS};
 mod item_place;
@@ -1901,7 +2223,10 @@ pub use menu_slot::MenuSlotBacking;
 mod transaction;
 pub use item_place::{ITEM_ITEMS, ItemCapabilityKey, ItemPlace, PlaceProvider};
 mod resource;
-pub use resource::{ComponentId, ItemResource, Overanswered, ResourceHandler, move_resources};
+pub use resource::{
+    ComponentId, EnchantmentEffect, ItemResource, Overanswered, PREVENT_ARMOR_CHANGE,
+    ResourceHandler, move_resources,
+};
 pub use transaction::{Transaction, TransactionSeal, run_transaction};
 mod part_table;
 pub use part_table::{
@@ -1957,13 +2282,19 @@ mod tests {
         lines: Vec<Text>,
     }
 
+    impl Backend for Reader {
+        fn level_block(&self, _level: LevelRef, _pos: [i32; 3]) -> Option<String> {
+            Some(self.block.to_string())
+        }
+    }
+
     impl Host for Reader {
+        fn backend(&self) -> Option<BackendRef<'_>> {
+            Some(BackendRef::of(self))
+        }
         fn level(&self, dimension: &str) -> Option<LevelRef> {
             (dimension == "minecraft:overworld")
                 .then(|| LevelRef::new(NativeWorldEpoch::new(1), "minecraft:overworld"))
-        }
-        fn level_block(&self, _level: LevelRef, _pos: [i32; 3]) -> Option<String> {
-            Some(self.block.to_string())
         }
         fn acting_player(&self) -> Option<NativeServerPlayer> {
             Some(NativeServerPlayer {
@@ -2001,19 +2332,28 @@ mod tests {
                 }
             }
         }
-        let mods: Vec<Box<dyn Hooks>> = vec![
-            Box::new(HandMod {
-                offset: 1.0,
-                cancel: false,
-            }),
-            Box::new(HandMod {
-                offset: 2.0,
-                cancel: true,
-            }),
-            Box::new(HandMod {
-                offset: 4.0,
-                cancel: false,
-            }),
+        let mods = [
+            ModEntry::new(
+                "hand-first",
+                Box::new(HandMod {
+                    offset: 1.0,
+                    cancel: false,
+                }),
+            ),
+            ModEntry::new(
+                "hand-cancel",
+                Box::new(HandMod {
+                    offset: 2.0,
+                    cancel: true,
+                }),
+            ),
+            ModEntry::new(
+                "hand-last",
+                Box::new(HandMod {
+                    offset: 4.0,
+                    cancel: false,
+                }),
+            ),
         ];
         install(mods.into());
         let host = Reader {
@@ -2075,7 +2415,10 @@ mod tests {
             }
         }
         let observed = Arc::new(Mutex::new(Vec::new()));
-        let mods = [Box::new(Observer(observed.clone())) as Box<dyn Hooks>];
+        let mods = [ModEntry::new(
+            "conversion-observer",
+            Box::new(Observer(observed.clone())),
+        )];
         install(mods.into());
         let mut host = Reader {
             block: "minecraft:air",
@@ -2121,7 +2464,7 @@ mod tests {
             lines: Vec::new(),
         };
         for cancelled in [false, true] {
-            let mods = [Box::new(XpHook(cancelled)) as Box<dyn Hooks>];
+            let mods = [ModEntry::new("xp-hook", Box::new(XpHook(cancelled)))];
             install(mods.into());
             let (mut amount, mut cancel) = (10, false);
             dispatch_player_xp_change(&mut host, 7, 42, "Probe", &mut amount, &mut cancel);
@@ -2144,7 +2487,7 @@ mod tests {
 
     #[test]
     fn phantom_listener_can_increase_the_default_count() {
-        let mods = [Box::new(MorePhantoms) as Box<dyn Hooks>];
+        let mods = [ModEntry::new("phantoms", Box::new(MorePhantoms))];
         install(mods.into());
         let mut host = Reader {
             block: "minecraft:air",
@@ -2177,9 +2520,25 @@ mod tests {
     }
 
     #[test]
+    fn dispatch_before_installation_is_empty() {
+        let mut components = Vec::new();
+        dispatch_component_types(&mut components);
+        assert!(mods().is_empty());
+        assert!(components.is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "native mod id must not be empty")]
+    fn an_entry_requires_a_nonempty_id() {
+        ModEntry::new("", Box::new(Quiet));
+    }
+
+    #[test]
     fn a_panic_in_a_hook_names_the_mod_and_the_hook() {
-        name_mods(&["quiet", "broken"]);
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Quiet), Box::new(Broken)];
+        let mods: Vec<ModEntry> = vec![
+            ModEntry::new("quiet", Box::new(Quiet)),
+            ModEntry::new("broken", Box::new(Broken)),
+        ];
         install(mods.into());
         let caught = Arc::new(Mutex::new(Vec::new()));
         let sink = caught.clone();
@@ -2226,7 +2585,10 @@ mod tests {
             block: "",
             lines: Vec::new(),
         };
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Turn), Box::new(Turn)];
+        let mods: Vec<ModEntry> = vec![
+            ModEntry::new("turn-1", Box::new(Turn)),
+            ModEntry::new("turn-2", Box::new(Turn)),
+        ];
         install(mods.into());
         let mut sensitivity = 0.25;
         let mut cinematic = false;
@@ -2239,7 +2601,7 @@ mod tests {
     fn a_test_host_implements_only_what_its_hook_calls() {
         // Another test installs parts with tags: a dispatch must run on a game thread.
         mark_game_thread();
-        let mods = [Box::new(Probe) as Box<dyn Hooks>];
+        let mods = [ModEntry::new("probe", Box::new(Probe))];
         install(mods.into());
         let stack = stick();
         for (block, expected) in [("minecraft:stone", true), ("minecraft:dirt", false)] {
@@ -2300,7 +2662,7 @@ mod tests {
 
     #[test]
     fn damage_v2_exposes_weapon_geometry_and_host_without_changing_v1() {
-        let mods = [Box::new(Backstab) as Box<dyn Hooks>];
+        let mods = [ModEntry::new("backstab", Box::new(Backstab))];
         install(mods.into());
         let mut weapon = stick();
         weapon.enchant("probe:backstab", 3);
@@ -2368,7 +2730,10 @@ mod tests {
             }
         }
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let mods = [Box::new(MiningProbe(seen.clone())) as Box<dyn Hooks>];
+        let mods = [ModEntry::new(
+            "mining-probe",
+            Box::new(MiningProbe(seen.clone())),
+        )];
         install(mods.into());
         let mut host = Reader {
             block: "minecraft:stone",
@@ -2390,7 +2755,7 @@ mod tests {
     fn an_unexpected_host_call_names_the_method() {
         // Another test installs parts with tags: a dispatch must run on a game thread.
         mark_game_thread();
-        let mods = [Box::new(Chatty) as Box<dyn Hooks>];
+        let mods = [ModEntry::new("chatty", Box::new(Chatty))];
         install(mods.into());
         let mut host = Reader {
             block: "minecraft:stone",
@@ -2452,7 +2817,7 @@ mod tests {
     #[test]
     fn a_block_use_hears_the_hand_the_hit_and_the_player() {
         mark_game_thread();
-        let mods = [Box::new(OffHandTop) as Box<dyn Hooks>];
+        let mods = [ModEntry::new("off-hand-top", Box::new(OffHandTop))];
         install(mods.into());
         let mut host = Reader {
             block: "minecraft:stone",
@@ -2615,7 +2980,10 @@ mod tests {
         };
 
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(BrewSwapper(seen.clone()))];
+        let mods: Vec<ModEntry> = vec![ModEntry::new(
+            "brew-swapper",
+            Box::new(BrewSwapper(seen.clone())),
+        )];
         install(mods.into());
         let mut stand = fresh();
         assert!(!brew(&mut host, &mut stand));
@@ -2624,7 +2992,7 @@ mod tests {
         assert_eq!(&*stand.items[1].as_ref().unwrap().item, "minecraft:emerald");
         assert_eq!(stand.items[3].as_ref().map(|s| s.count), Some(2));
 
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(BrewEditor)];
+        let mods: Vec<ModEntry> = vec![ModEntry::new("brew-editor", Box::new(BrewEditor))];
         install(mods.into());
         let mut stand = fresh();
         assert!(brew(&mut host, &mut stand));
@@ -2664,7 +3032,10 @@ mod tests {
             }
         }
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(ActorRecorder(seen.clone()))];
+        let mods = [ModEntry::new(
+            "actor-recorder",
+            Box::new(ActorRecorder(seen.clone())),
+        )];
         install(mods.into());
         let mut host = Reader {
             block: "minecraft:air",
@@ -2698,9 +3069,9 @@ mod tests {
     #[test]
     fn a_game_rule_change_reaches_every_mod_once_the_rule_is_set() {
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![
-            Box::new(Recorder(seen.clone())),
-            Box::new(Recorder(seen.clone())),
+        let mods: Vec<ModEntry> = vec![
+            ModEntry::new("recorder-10", Box::new(Recorder(seen.clone()))),
+            ModEntry::new("recorder-11", Box::new(Recorder(seen.clone()))),
         ];
         install(mods.into());
         let mut host = Reader {
@@ -2736,9 +3107,9 @@ mod tests {
     #[test]
     fn each_saved_level_reaches_every_mod() {
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![
-            Box::new(Recorder(seen.clone())),
-            Box::new(Recorder(seen.clone())),
+        let mods: Vec<ModEntry> = vec![
+            ModEntry::new("recorder-12", Box::new(Recorder(seen.clone()))),
+            ModEntry::new("recorder-13", Box::new(Recorder(seen.clone()))),
         ];
         install(mods.into());
         let mut host = Reader {
@@ -2792,7 +3163,10 @@ mod tests {
             block: "minecraft:water",
             lines: Vec::new(),
         };
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(CodKeeper), Box::new(Unreached)];
+        let mods: Vec<ModEntry> = vec![
+            ModEntry::new("cod-keeper", Box::new(CodKeeper)),
+            ModEntry::new("unreached", Box::new(Unreached)),
+        ];
         install(mods.into());
         let ask = |host: &mut Reader, item: &str| {
             let drops = [ItemStack::new(item, 1)];
@@ -2806,7 +3180,7 @@ mod tests {
             (rod_damage, cancel)
         };
         assert_eq!(ask(&mut host, "minecraft:cod"), (4, true));
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(CodKeeper)];
+        let mods: Vec<ModEntry> = vec![ModEntry::new("cod-keeper", Box::new(CodKeeper))];
         install(mods.into());
         let drops = [ItemStack::new("minecraft:salmon", 1)];
         let fished = NativeItemFished {
@@ -2864,7 +3238,10 @@ mod tests {
         };
         let potion = ItemStack::new("minecraft:potion", 1);
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(BrewWatcher(seen.clone()))];
+        let mods: Vec<ModEntry> = vec![ModEntry::new(
+            "brew-watcher",
+            Box::new(BrewWatcher(seen.clone())),
+        )];
         install(mods.into());
         let mut host = Reader {
             block: "minecraft:air",

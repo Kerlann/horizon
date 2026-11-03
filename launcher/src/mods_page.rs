@@ -1546,7 +1546,6 @@ impl Launcher {
                 move |choice, _, cx| {
                     let _ = this.update(cx, |this, cx| {
                         this.settings.native_profile = Some(choice);
-                        this.settings.native_release = false;
                         this.native_done = None;
                         this.save_settings();
                         cx.notify();

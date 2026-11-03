@@ -244,6 +244,11 @@ def cases(facts, count, seed, only):
     rng = random.Random(seed)
     states = States(facts)
     kinds = list(ITEMS)
+    if not only:
+        yield {'seed': 42, 'mode': 'dispense', 'pos': [0, 0, 0],
+               'cells': [[0, 0, 0, states.get('dropper', facing='east', triggered='false')]],
+               'items': [[0, 0, 0, 0, plain('stone', 3)]],
+               'entities': [{'type': 'minecraft:chest_minecart', 'pos': [1.5, 0.0, 0.5]}]}
     for n in range(count):
         kind = kinds[n % len(kinds)]
         item = item_choice(rng, kind)

@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "A player's chat message is about to be broadcast, changeable and cancellable (`native_server_chat`).",
-  "doc_summary": "A player's chat message, as NeoForge's `ServerChatEvent`: `native_server_chat(player_id, player, username, raw_text, message, cancel)` runs on the server once the sender's chain and the chat filter let it through, before anyone sees it. `message` starts as the typed text; a new one is what players see and the log shows (a signed message keeps its signature, as `withUnsignedContent`). Set `cancel` and nobody sees it, nor does it count toward the spam limit. Commands such as `/say` are not chat here."
+  ]
 }

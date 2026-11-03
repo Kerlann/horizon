@@ -11,7 +11,5 @@
         "out": "can_harvest"
       }
     }
-  ],
-  "rust_summary": "A player's ability to harvest a block is checked (`native_player_harvest_check`).",
-  "doc_summary": "`native_player_harvest_check(player, pos, state, can_harvest)` may replace the harvest result. Bundles need \"hooks\": @API:player_harvest_check@."
+  ]
 }

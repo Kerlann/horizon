@@ -1,5 +1,5 @@
 //! Reusable, immutable mixin output. API packages are staged after this snapshot.
-use super::{Bundle, Profile, FEATURES, MANIFEST};
+use super::{Bundle, Profile, MANIFEST};
 use sha2::{Digest, Sha256};
 use std::{
     fs,
@@ -39,7 +39,6 @@ pub(super) fn key(
         mixins,
         // The Cargo profile: `Performance` and `Dev` stage the same source.
         profile.cargo().0,
-        FEATURES,
         super::rust_toolchain::VERSION,
     ] {
         field(&mut hash, part.as_bytes());

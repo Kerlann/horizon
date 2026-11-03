@@ -21,7 +21,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "the items a dying mob or player drops, editable and cancellable (`native_living_drops`), and a mob's equipment drop chance (`native_get_equipment_drop_chance`).",
-  "doc_summary": "a dying mob's, server player's or armor stand's drops, as NeoForge's `LivingDropsEvent` (`LivingEntity.dropAllDeathLoot`): `native_living_drops(entity, kind, player, source, recently_hit, drops, cancel)` runs on the server with every item the death collected (loot tables after `native_loot_drops`, equipment, a mob's extras including a copper golem's preserved equipment, a player's inventory), each as a `NativeItemDrop` with its position, motion and pickup delay, before any is added to the level. `source` is the killing blow as a `HurtSource` (`causing` and `direct` entity ids; `direct` is 0 for a projectile, whose id the game does not keep). Edit the list or set `cancel` for no drops. An armor stand fires it from `brokenByAnything` with an empty list. This is not `native_loot_drops`, the loot-modifier step that edits the stacks a table rolled; this hook fires once after it, on the whole collected list, and nothing is spawned until it returns. Experience is separate (`native_living_experience_drop`). Item entity state such as no-gravity, owner and lifetime is not exposed through `NativeItemDrop`. `native_get_equipment_drop_chance(entity, kind, slot, source, recently_hit, stack, original_chance, preserved, chance)` is NeoForge's `GetEquipmentDropChanceEvent` (`Mob.dropCustomDeathLoot`): change `chance` for the item `stack` in `slot` just before vanilla's roll for that slot."
+  ]
 }

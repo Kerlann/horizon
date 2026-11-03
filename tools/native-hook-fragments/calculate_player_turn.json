@@ -10,7 +10,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "Mouse sensitivity and cinematic camera settings before a player turn (`native_calculate_player_turn`).",
-  "doc_summary": "On the client, `native_calculate_player_turn(player_entity_id, player_uuid, mouse_sensitivity, cinematic_camera_enabled)` is asked once each frame a grabbed player's mouse turn is calculated (`MouseHandler.turnPlayer`, NeoForge's `CalculatePlayerTurnEvent`), with the local player's server entity ID and UUID and the raw options it would read. Change either value for this turn only; the options themselves are unchanged. Not cancellable. Bundles need \"hooks\": @API:calculate_player_turn@."
+  ]
 }

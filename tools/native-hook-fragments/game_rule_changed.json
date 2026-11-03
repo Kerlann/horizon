@@ -9,7 +9,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "a server game rule was set (`native_game_rule_changed`).",
-  "doc_summary": "`native_game_rule_changed(rule, value, actor)`, once the server set a game rule (`GameRules.set` with a server): `/gamerule`, the game rules screen, the management protocol, a test environment or `server.properties`. `rule` is the rule's id (`minecraft:keep_inventory`), `value` its new `GameRuleValue`, and `actor` is the player responsible when known. The server and complete game rules are not exposed by this event (tracked on #29). Server-side. Bundles need \"hooks\": @API:game_rule_changed@."
+  ]
 }

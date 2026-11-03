@@ -1,0 +1,20 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "player_stop_sound", "side": "server",
+      "target": "horizon_client::game::native_sound_refs::Game<'_>::native_player_stop_sound",
+      "receiver": "player"
+    },
+    {
+      "name": "player_play_sound", "side": "server",
+      "target": "horizon_client::game::native_sound_refs::Game<'_>::native_player_play_sound",
+      "receiver": "player"
+    },
+    {
+      "name": "entity_play_bound_sound", "side": "server",
+      "target": "horizon_client::game::native_sound_refs::Game<'_>::native_entity_play_bound_sound",
+      "receiver": "entity"
+    }
+  ]
+}

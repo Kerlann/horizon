@@ -112,6 +112,12 @@ mod tests {
         pub(super) struct NativePlayerFood;
         #[derive(Clone, Copy)]
         pub(super) struct LivingRef;
+        #[derive(Clone, Copy)]
+        pub(super) struct MinecartRef;
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub(super) enum NativeMinecartKind {
+            Rideable,
+        }
         pub(super) struct EffectTickChange;
         pub(super) struct NativeItemDrop;
         #[derive(Clone, Copy)]
@@ -189,7 +195,7 @@ mod tests {
     }
     use generated::*;
     struct Installed {
-        mods: Arc<[Box<dyn Hooks>]>,
+        mods: Arc<[ModEntry]>,
         subscribers: horizon_client_core::subscribers::Subscribers,
         types: Box<[std::any::TypeId]>,
     }
@@ -198,13 +204,16 @@ mod tests {
         static ENTERED: std::cell::RefCell<Vec<(usize, &'static str)>> = const { std::cell::RefCell::new(Vec::new()) };
         static MODS: std::cell::Cell<Option<&'static Installed>> = const { std::cell::Cell::new(None) };
     }
-    fn install(mods: Arc<[Box<dyn Hooks>]>) {
+    fn install(mods: Arc<[ModEntry]>) {
         let types = mods
             .iter()
-            .map(|m| (&**m as &dyn std::any::Any).type_id())
+            .map(|entry| (&*entry.hooks as &dyn std::any::Any).type_id())
             .collect();
-        let subscribers =
-            horizon_client_core::subscribers::Subscribers::new(HOOK_COUNT, mods.len());
+        let subscribers = horizon_client_core::subscribers::Subscribers::new(
+            horizon_client_core::subscribers::Domain::Gameplay,
+            HOOK_COUNT,
+            mods.len(),
+        );
         // Test dispatch needs the same static lifetime as the real installation.
         MODS.set(Some(Box::leak(Box::new(Installed {
             mods,
@@ -216,10 +225,7 @@ mod tests {
         MODS.get()
             .is_some_and(|installed| installed.subscribers.contains_any(hook as usize))
     }
-    fn entered(
-        hook_id: HookId,
-        hook: &'static str,
-    ) -> impl Iterator<Item = &'static Box<dyn Hooks>> {
+    fn entered(hook_id: HookId, hook: &'static str) -> impl Iterator<Item = &'static dyn Hooks> {
         MODS.get().into_iter().flat_map(move |installed| {
             let mut guard = None;
             installed
@@ -227,18 +233,27 @@ mod tests {
                 .indices(hook_id as usize)
                 .map(move |index| {
                     drop(guard.take());
-                    let hooks = &installed.mods[index];
+                    let hooks = &*installed.mods[index].hooks;
                     guard = Some(horizon_client_core::subscribers::enter(
                         &installed.subscribers,
                         hook_id as usize,
                         index,
-                        (&**hooks as *const dyn Hooks).cast(),
+                        (hooks as *const dyn Hooks).cast(),
                         installed.types[index],
                     ));
                     ENTERED.with(|entered| entered.borrow_mut().push((index, hook)));
                     hooks
                 })
         })
+    }
+    struct ModEntry {
+        _id: &'static str,
+        hooks: Box<dyn Hooks>,
+    }
+    impl ModEntry {
+        fn new(id: &'static str, hooks: Box<dyn Hooks>) -> Self {
+            Self { _id: id, hooks }
+        }
     }
     struct Registrar;
     /// No parts: the scoped dispatch calls the mods only.
@@ -295,12 +310,12 @@ mod tests {
             }
         }
         let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let mods: Vec<Box<dyn Hooks>> = (0..70)
+        let mods: Vec<ModEntry> = (0..70)
             .map(|i| {
                 if i == 66 {
-                    Box::new(Listener(calls.clone())) as Box<dyn Hooks>
+                    ModEntry::new("listener", Box::new(Listener(calls.clone())))
                 } else {
-                    Box::new(Quiet)
+                    ModEntry::new("quiet", Box::new(Quiet))
                 }
             })
             .collect();
@@ -328,7 +343,7 @@ mod tests {
                 Other.loot_table_load(event);
             }
         }
-        install(vec![Box::new(Active) as Box<dyn Hooks>].into());
+        install(vec![ModEntry::new("active", Box::new(Active))].into());
         ENTERED.with(|entered| entered.borrow_mut().clear());
         let mut table = serde_json::json!([]);
         dispatch_loot_table_load("test", &mut table);
@@ -375,8 +390,11 @@ mod tests {
             }
         }
         let observed = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Observer(observed.clone()))];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods = [ModEntry::new(
+            "observer",
+            Box::new(Observer(observed.clone())),
+        )];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         for progress_type in [NativeProgressType::Grant, NativeProgressType::Revoke] {
             dispatch_player_advancement_progress(
@@ -492,11 +510,14 @@ mod tests {
     }
     #[test]
     fn menu_button_mutates_entity_and_cursor_once() {
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Mod {
-            id: 1,
-            calls: Arc::new(Mutex::new(Vec::new())),
-        })];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods = [ModEntry::new(
+            "menu-button",
+            Box::new(Mod {
+                id: 1,
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }),
+        )];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let context = generated::horizon_client::menu::MenuButtonContext {
             player: 123,
@@ -516,14 +537,17 @@ mod tests {
     #[test]
     fn block_entity_submit_dispatches_in_order_with_shared_draw() {
         let calls = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![
-            Box::new(Mod {
-                id: 1,
-                calls: calls.clone(),
-            }),
-            Box::new(Mod { id: 2, calls }),
+        let mods: Vec<ModEntry> = vec![
+            ModEntry::new(
+                "mod-0",
+                Box::new(Mod {
+                    id: 1,
+                    calls: calls.clone(),
+                }),
+            ),
+            ModEntry::new("mod-1", Box::new(Mod { id: 2, calls })),
         ];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let mut draw = BlockEntityDraw(Vec::new());
         dispatch_block_entity_submit(
@@ -539,11 +563,14 @@ mod tests {
 
     #[test]
     fn slot_rules_mutate_and_item_tick_can_cancel() {
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Mod {
-            id: 1,
-            calls: Arc::new(Mutex::new(Vec::new())),
-        })];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Vec<ModEntry> = vec![ModEntry::new(
+            "mod-2",
+            Box::new(Mod {
+                id: 1,
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }),
+        )];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let (mut may_place, mut max_stack) = (true, 64);
         dispatch_menu_slot_rules(
@@ -568,11 +595,14 @@ mod tests {
 
     #[test]
     fn item_finish_can_clear_vanilla_result() {
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Mod {
-            id: 1,
-            calls: Arc::new(Mutex::new(Vec::new())),
-        })];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Vec<ModEntry> = vec![ModEntry::new(
+            "mod-3",
+            Box::new(Mod {
+                id: 1,
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }),
+        )];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let mut result = Some(ItemStack::default());
         dispatch_living_entity_use_item_finish(
@@ -589,17 +619,23 @@ mod tests {
     #[test]
     fn fragment_cancel_stops_later_mods() {
         let calls = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![
-            Box::new(Mod {
-                id: 1,
-                calls: calls.clone(),
-            }),
-            Box::new(Mod {
-                id: 2,
-                calls: calls.clone(),
-            }),
+        let mods: Vec<ModEntry> = vec![
+            ModEntry::new(
+                "mod-4",
+                Box::new(Mod {
+                    id: 1,
+                    calls: calls.clone(),
+                }),
+            ),
+            ModEntry::new(
+                "mod-5",
+                Box::new(Mod {
+                    id: 2,
+                    calls: calls.clone(),
+                }),
+            ),
         ];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let mut canceled = false;
         dispatch_mouse_button_pre(&mut TestHost, 0, true, 0, &mut canceled);
@@ -626,11 +662,11 @@ mod tests {
             }
         }
         let calls = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = vec![
-            Box::new(Refuse(calls.clone(), 1)),
-            Box::new(Refuse(calls.clone(), 2)),
+        let mods: Vec<ModEntry> = vec![
+            ModEntry::new("refuse-6", Box::new(Refuse(calls.clone(), 1))),
+            ModEntry::new("refuse-7", Box::new(Refuse(calls.clone(), 2))),
         ];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let mut answer = None;
         dispatch_state_for_placement(
@@ -664,8 +700,8 @@ mod tests {
                 }
             }
         }
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Property)];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Vec<ModEntry> = vec![ModEntry::new("property-8", Box::new(Property))];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let host = TestHost;
         let mut value = false;
@@ -719,8 +755,8 @@ mod tests {
                 Flow::Continue
             }
         }
-        let mods: Vec<Box<dyn Hooks>> = vec![Box::new(Backstab)];
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Vec<ModEntry> = vec![ModEntry::new("backstab-9", Box::new(Backstab))];
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let held = ItemStack::default();
         for (source_z, weapon, expected) in [
@@ -762,8 +798,8 @@ mod tests {
                 Flow::Cancel
             }
         }
-        let weapon_mods: Vec<Box<dyn Hooks>> = vec![Box::new(Weapon)];
-        let weapon_mods: Arc<[Box<dyn Hooks>]> = weapon_mods.into();
+        let weapon_mods: Vec<ModEntry> = vec![ModEntry::new("weapon-10", Box::new(Weapon))];
+        let weapon_mods: Arc<[ModEntry]> = weapon_mods.into();
         install(weapon_mods.clone());
         let (mut strength, mut x, mut z, mut canceled) = (0.4, 1.0, 0.0, false);
         dispatch_living_knockback_v2(
@@ -780,15 +816,18 @@ mod tests {
         assert_eq!((strength, x, z), (0.8, -1.0, 0.0));
         assert!(canceled);
         let calls = Arc::new(Mutex::new(Vec::new()));
-        let mods: Vec<Box<dyn Hooks>> = (1..=2)
+        let mods: Vec<ModEntry> = (1..=2)
             .map(|id| {
-                Box::new(Mod {
-                    id,
-                    calls: calls.clone(),
-                }) as Box<dyn Hooks>
+                ModEntry::new(
+                    "mod-11",
+                    Box::new(Mod {
+                        id,
+                        calls: calls.clone(),
+                    }),
+                )
             })
             .collect();
-        let mods: Arc<[Box<dyn Hooks>]> = mods.into();
+        let mods: Arc<[ModEntry]> = mods.into();
         install(mods.clone());
         let mut table = serde_json::json!([]);
         dispatch_loot_table_load("table", &mut table);
@@ -821,15 +860,18 @@ mod tests {
         // Each mod sees the one before: (1 × 2 + 1) × 2 + 2, kept though mod 2 cancels.
         assert_eq!(amount, 8.0);
         assert!(canceled);
-        let chained: Vec<Box<dyn Hooks>> = [1, 3]
+        let chained: Vec<ModEntry> = [1, 3]
             .map(|id| {
-                Box::new(Mod {
-                    id,
-                    calls: calls.clone(),
-                }) as Box<dyn Hooks>
+                ModEntry::new(
+                    "mod-12",
+                    Box::new(Mod {
+                        id,
+                        calls: calls.clone(),
+                    }),
+                )
             })
             .into();
-        let chained: Arc<[Box<dyn Hooks>]> = chained.into();
+        let chained: Arc<[ModEntry]> = chained.into();
         install(chained.clone());
         let mut amount = 1.0;
         let mut canceled = false;

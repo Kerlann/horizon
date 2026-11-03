@@ -1,32 +1,13 @@
-//! Energy in a block's buffer for native server mods (docs/native-mods.md):
-//! the buffer a mod block declared through `native_block_entity_energy`, read
-//! through a side, filled, drained and moved to another block. Vanilla has no
-//! energy; the contract is NeoForge's `EnergyHandler` (`SimpleEnergyHandler`
-//! and `EnergyHandlerUtil.move`). Like the fluid helpers, they act where the
-//! world is simulated, never on a client's copy, and only on the level in
-//! place, which the readers name by their `dimension`
-//! (`minecraft:overworld`), as `native_set_block` does.
+//! Energy in a block's buffer for native server mods (docs/native-mods.md): the buffer a mod
+//! block declared through `native_block_entity_energy`, as the game's own `ENERGY` capability
+//! reaches it through a side. Vanilla has no energy; the contract is NeoForge's
+//! `SimpleEnergyHandler`. They act where the world is simulated, never on a client's copy, and
+//! only on the level in place; their writes are kept by the transaction they are given.
 use super::Game;
-use horizon_client::containers::ModEnergyBuffer;
-use horizon_core::geometry::Direction;
+use horizon_client::containers::{BlockEntity, ModEnergyBuffer};
+use horizon_client::mod_api::{BlockSide, Transaction};
 use horizon_world::nbt::{Compound, JavaString, Tag};
 use std::sync::Arc;
-
-/// A block's energy as a side reaches it (`native_energy`).
-#[allow(dead_code)]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct NativeEnergy {
-    pub(crate) amount: i32,
-    pub(crate) capacity: i32,
-    /// The most one insert moves.
-    pub(crate) max_insert: i32,
-    /// The most one extract moves.
-    pub(crate) max_extract: i32,
-    /// Whether a fill may come through this side (and moves more than 0).
-    pub(crate) can_insert: bool,
-    /// Whether a drain may leave by this side (and moves more than 0).
-    pub(crate) can_extract: bool,
-}
 
 /// The amount in `nbt`: the int `energy`, as `SimpleEnergyHandler` saves it;
 /// anything else, or a negative, reads as empty.
@@ -53,168 +34,99 @@ fn extract_amount(buffer: &ModEnergyBuffer, energy: i32, asked: i32) -> i32 {
     energy.min(asked).min(buffer.max_extract).max(0)
 }
 
-// Native mods use these; nothing in Horizon does.
-#[allow(dead_code)]
 impl Game<'_> {
-    /// The buffer of the mod block at `pos` in the level in place,
-    /// `dimension`, and the energy it holds (its block entity's, and not the
-    /// placeholder standing in while it ticks).
-    fn native_energy_at(
-        &self,
-        dimension: &str,
-        pos: [i32; 3],
-    ) -> Option<(Arc<ModEnergyBuffer>, i32)> {
-        if !self.native_simulates() || dimension != self.dim.id() {
+    /// The buffer of the mod block at `at` in the level in place and the energy it holds (its
+    /// block entity's, and not the placeholder standing in while it ticks), if `at`'s side
+    /// reaches a fill or a drain (none: every side does).
+    fn energy_buffer(&self, at: BlockSide) -> Option<(Arc<ModEnergyBuffer>, i32)> {
+        if !self.native_level_in_place(at.level) {
             return None;
         }
-        let key = (pos[0], pos[1], pos[2]);
-        let state = self.world.block(pos[0], pos[1], pos[2]);
-        let buffer = self.world.block_entities.mod_energy(state.0)?;
+        let [x, y, z] = at.pos;
+        let buffer = self
+            .world
+            .block_entities
+            .mod_energy(self.world.block(x, y, z).0)?;
+        let reached = at.side.is_none_or(|face| {
+            buffer.insert_faces[face as usize] || buffer.extract_faces[face as usize]
+        });
         // The block entity is out of the world while it ticks.
-        match self.world.block_entities.get(&key) {
-            Some(horizon_client::containers::BlockEntity::Mod(m)) if !m.id.is_empty() => {
+        match self.world.block_entities.get(&(x, y, z)) {
+            Some(BlockEntity::Mod(m)) if reached && !m.id.is_empty() => {
                 Some((Arc::clone(buffer), read_energy(&m.nbt)))
             }
             _ => None,
         }
     }
-    /// Writes `energy` into the block entity at `pos`, saved with its chunk.
-    fn native_energy_store(&mut self, pos: [i32; 3], energy: i32) {
-        let key = (pos[0], pos[1], pos[2]);
-        if let Some(horizon_client::containers::BlockEntity::Mod(m)) =
-            self.world.block_entities.get_mut(&key)
-        {
-            m.nbt
-                .insert(JavaString::from("energy"), Tag::Int(energy.max(0)));
-            self.world.modified.insert((key.0 >> 4, key.2 >> 4));
-        }
-    }
-    /// What the buffer at `pos` takes (`insert`) or gives through `face` of
-    /// up to `amount`, written unless `simulate`. Nothing where the side
-    /// doesn't reach the buffer for that.
-    fn native_energy_transfer(
-        &mut self,
-        dimension: &str,
-        pos: [i32; 3],
-        face: Direction,
-        amount: i32,
-        insert: bool,
-        simulate: bool,
-    ) -> i32 {
-        if amount <= 0 {
-            return 0;
-        }
-        let Some((buffer, energy)) = self.native_energy_at(dimension, pos) else {
+    /// What the buffer at `at` takes (`insert`) or gives of up to `amount` through its side,
+    /// written into its block entity, saved with its chunk and kept by the transaction.
+    fn energy_moved(&mut self, at: BlockSide, amount: u32, insert: bool) -> u32 {
+        let Some((buffer, energy)) = self.energy_buffer(at) else {
             return 0;
         };
-        let moved = if insert {
-            if !buffer.insert_faces[face as usize] {
-                return 0;
-            }
-            insert_amount(&buffer, energy, amount)
-        } else {
-            if !buffer.extract_faces[face as usize] {
-                return 0;
-            }
-            extract_amount(&buffer, energy, amount)
+        let faces = match insert {
+            true => &buffer.insert_faces,
+            false => &buffer.extract_faces,
         };
-        if moved > 0 && !simulate {
-            let after = if insert {
-                energy.saturating_add(moved)
-            } else {
-                energy - moved
-            };
-            self.native_energy_store(pos, after);
+        if at.side.is_some_and(|face| !faces[face as usize]) {
+            return 0;
         }
-        moved
+        let amount = i32::try_from(amount).unwrap_or(i32::MAX);
+        let (moved, after) = match insert {
+            true => {
+                let moved = insert_amount(&buffer, energy, amount);
+                (moved, energy.saturating_add(moved))
+            }
+            false => {
+                let moved = extract_amount(&buffer, energy, amount);
+                (moved, energy - moved)
+            }
+        };
+        if moved > 0 {
+            let [x, y, z] = at.pos;
+            self.journal_block_entity((x, y, z));
+            if let Some(BlockEntity::Mod(m)) = self.world.block_entities.get_mut(&(x, y, z)) {
+                m.nbt.insert(JavaString::from("energy"), Tag::Int(after));
+                self.world.modified.insert((x >> 4, z >> 4));
+            }
+        }
+        moved.unsigned_abs()
     }
-    /// The energy buffer of the block at `pos` in the level in place,
-    /// `dimension`, as its side `face` reaches it: what it holds, its
-    /// capacity and its limits per call. None where no buffer is: another
-    /// dimension, a chunk that isn't loaded, a block without one, a side
-    /// that reaches neither a fill nor a drain, or the mod block entity
-    /// ticking now (it's out of the world). `Capabilities.Energy.BLOCK`.
-    pub(in crate::game) fn native_energy(
-        &self,
-        dimension: &str,
-        pos: [i32; 3],
-        face: Direction,
-    ) -> Option<NativeEnergy> {
-        let (buffer, amount) = self.native_energy_at(dimension, pos)?;
-        let (fill, drain) = (
-            buffer.insert_faces[face as usize],
-            buffer.extract_faces[face as usize],
-        );
-        (fill || drain).then(|| NativeEnergy {
-            amount,
-            capacity: buffer.capacity,
-            max_insert: buffer.max_insert,
-            max_extract: buffer.max_extract,
-            can_insert: fill && buffer.max_insert > 0,
-            can_extract: drain && buffer.max_extract > 0,
-        })
+    /// The energy the buffer of the mod block at `at` in the level in place holds, for the
+    /// game's own energy capability: none where no buffer is, in another level, a chunk that
+    /// isn't loaded, or the block entity ticking now, or where `at`'s side reaches neither a
+    /// fill nor a drain.
+    pub(in crate::game) fn native_energy_amount(&self, at: BlockSide) -> Option<u32> {
+        Some(self.energy_buffer(at)?.1.unsigned_abs())
     }
-    /// `EnergyHandler.insert`: up to `amount` into the buffer of the block at
-    /// `pos` through its side `face`, in the level in place: no more than
-    /// its room and its limit per call. With `simulate` nothing changes and
-    /// the answer says what would. The amount that went in.
+    /// The capacity of the buffer at `at` (`native_energy_amount`), 0 where none is.
+    pub(in crate::game) fn native_energy_capacity(&self, at: BlockSide) -> u32 {
+        self.energy_buffer(at)
+            .map_or(0, |(buffer, _)| buffer.capacity.max(0).unsigned_abs())
+    }
+    /// `SimpleEnergyHandler.insert`: puts up to `amount` into the buffer at `at`
+    /// (`native_energy_amount`) through its side, no more than its room and its limit per call,
+    /// kept by transaction `tx`. How much went in.
     pub(in crate::game) fn native_energy_insert(
         &mut self,
-        pos: [i32; 3],
-        face: Direction,
-        amount: i32,
-        simulate: bool,
-    ) -> i32 {
-        let dimension = self.dim.id();
-        self.native_energy_transfer(dimension, pos, face, amount, true, simulate)
+        at: BlockSide,
+        amount: u32,
+        tx: &Transaction,
+    ) -> u32 {
+        let _ = tx;
+        self.energy_moved(at, amount, true)
     }
-    /// `EnergyHandler.extract`: up to `amount` out of the buffer of the block
-    /// at `pos` in the level in place, `dimension`, through its side `face`:
-    /// no more than it holds and its limit per call. With `simulate` nothing
-    /// changes and the answer says what would. The amount that came out.
+    /// `SimpleEnergyHandler.extract`: takes up to `amount` out of the buffer at `at`
+    /// (`native_energy_amount`) by its side, no more than it holds and its limit per call, kept
+    /// by transaction `tx`. How much came out.
     pub(in crate::game) fn native_energy_extract(
         &mut self,
-        dimension: &str,
-        pos: [i32; 3],
-        face: Direction,
-        amount: i32,
-        simulate: bool,
-    ) -> i32 {
-        self.native_energy_transfer(dimension, pos, face, amount, false, simulate)
-    }
-    /// `EnergyHandlerUtil.move`: up to `max` from the block at `from`,
-    /// through its side `from_face`, into the one at `to`, through
-    /// `to_face`, in the level in place, `dimension`. It asks what the
-    /// source can give, offers that to the target, and takes from the source
-    /// exactly what the target accepted, so none is lost. The amount moved;
-    /// 0 where either has no buffer for it, and within one block.
-    pub(in crate::game) fn native_move_energy(
-        &mut self,
-        dimension: &str,
-        from: [i32; 3],
-        from_face: Direction,
-        to: [i32; 3],
-        to_face: Direction,
-        max: i32,
-    ) -> i32 {
-        if from == to || max <= 0 {
-            return 0;
-        }
-        let offered = self.native_energy_transfer(dimension, from, from_face, max, false, true);
-        let accepted = self.native_energy_transfer(dimension, to, to_face, offered, true, true);
-        if accepted == 0 {
-            return 0;
-        }
-        let taken = self.native_energy_transfer(dimension, from, from_face, accepted, false, false);
-        let put = self.native_energy_transfer(dimension, to, to_face, taken, true, false);
-        if put < taken {
-            // Both were just simulated and nothing ran between; a buffer
-            // that answers differently is a bug, and its energy goes back.
-            log::warn!("Horizon: an energy move lost {} energy", taken - put);
-            let _ =
-                self.native_energy_transfer(dimension, from, from_face, taken - put, true, false);
-        }
-        put
+        at: BlockSide,
+        amount: u32,
+        tx: &Transaction,
+    ) -> u32 {
+        let _ = tx;
+        self.energy_moved(at, amount, false)
     }
 }
 
@@ -271,5 +183,80 @@ mod tests {
             Tag::String(JavaString::from("lots")),
         );
         assert_eq!(read_energy(&nbt), 0);
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_buffers_energy_moves_by_its_sides_and_limits_and_an_abort_puts_it_back() {
+        use super::super::super::native_entity_refs::tests::with_game;
+        use horizon_client::chunk::Chunk;
+        use horizon_client::containers::{ModBlockEntity, ModBlockEntityFields};
+        use horizon_client::fast_hash::FxHashMap;
+        use horizon_client::mod_api::{ENERGY, Host, NativeBlockUpdateFlags, move_energy};
+        use horizon_core::geometry::Direction;
+        with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let level = game.native_level("minecraft:overworld").unwrap();
+            let block = game
+                .pack
+                .assets
+                .registry
+                .default_state("minecraft:stone")
+                .unwrap();
+            // A buffer of 1000 taking at most 300 an insert, from every side but its top, and
+            // giving at most 500 an extract, by every side.
+            let mut fills = [true; 6];
+            fills[Direction::Up as usize] = false;
+            let buffer = ModEnergyBuffer {
+                insert_faces: fills,
+                ..buffer(1000, 300, 500)
+            };
+            let tables = FxHashMap::from_iter([(block.0, Arc::new(buffer))]);
+            game.world.block_entities.set_mod_energy(tables);
+            let (from, to) = ([0, 64, 0], [2, 64, 0]);
+            for (pos, energy) in [(from, 800), (to, 0)] {
+                let flags = NativeBlockUpdateFlags::NEIGHBORS;
+                assert!(game.native_level_set_block(level, pos, block, flags));
+                let mut fields = ModBlockEntityFields {
+                    id: "test:battery".into(),
+                    ..Default::default()
+                };
+                fields
+                    .nbt
+                    .insert(JavaString::from("energy"), Tag::Int(energy));
+                let entity = BlockEntity::Mod(Box::new(ModBlockEntity::new(fields)));
+                game.world
+                    .block_entities
+                    .insert((pos[0], pos[1], pos[2]), entity);
+            }
+            let moved = |game: &mut Game<'_>, side, max, commit: bool| {
+                let host: &mut dyn Host = game;
+                let source = level.capability(host, &ENERGY, from, None).unwrap();
+                let target = level.capability(host, &ENERGY, to, side).unwrap();
+                host.transaction(|host, tx| {
+                    let moved = move_energy(host, &source, &target, max, tx).unwrap();
+                    if commit { Ok(moved) } else { Err(moved) }
+                })
+            };
+            let held = |game: &mut Game<'_>| {
+                let host: &mut dyn Host = game;
+                [from, to].map(|pos| {
+                    let buffer = level.capability(host, &ENERGY, pos, None).unwrap();
+                    buffer.amount(host)
+                })
+            };
+            // The target's limit per insert: the move is tried again with the 300 it took.
+            assert_eq!(moved(game, None, 1000, true), Ok(300));
+            assert_eq!(held(game), [500, 300]);
+            // Its top takes no fill, and nothing moves.
+            assert_eq!(moved(game, Some(Direction::Up), 1000, true), Ok(0));
+            assert_eq!(held(game), [500, 300]);
+            // An aborted move leaves both as they were.
+            assert_eq!(moved(game, None, 200, false), Err(200));
+            assert_eq!(held(game), [500, 300]);
+        });
     }
 }

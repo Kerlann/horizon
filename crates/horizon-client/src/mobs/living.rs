@@ -1885,6 +1885,7 @@ mod tests {
                 lid_openers: &lid_openers,
                 mod_effects: None,
                 ask_mods: false,
+                asks_baby_spawn: false,
                 border: None,
             };
             let kind = std::sync::Arc::new(types.types["minecraft:pig"].clone());
@@ -1998,6 +1999,7 @@ mod tests {
             lid_openers: &lid_openers,
             mod_effects: None,
             ask_mods: false,
+            asks_baby_spawn: false,
             border: None,
         };
         let kind = std::sync::Arc::new(types.types["minecraft:horse"].clone());

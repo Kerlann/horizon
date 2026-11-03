@@ -958,5 +958,7 @@
   "Hide other players' cosmetics": "Ocultar los cosméticos de otros jugadores",
   "Others look like plain players to you. Also in the game's Horizon settings.": "Los demás te parecerán jugadores normales. También en los ajustes de Horizon del juego.",
   "Show other players' auras and trails": "Mostrar auras y estelas de otros jugadores",
-  "Off by default. Also in the game's Horizon settings.": "Desactivado por defecto. También en los ajustes de Horizon del juego."
+  "Off by default. Also in the game's Horizon settings.": "Desactivado por defecto. También en los ajustes de Horizon del juego.",
+  "This game source has no readable native entry template. Update Horizon and rebuild the mods against this game.": "Este código fuente del juego no tiene una plantilla de entrada nativa legible. Actualiza Horizon y recompila los mods para este juego.",
+  "Native build {version} has a missing or invalid native-mods.json record. Rebuild it from an installed Horizon version.": "La compilación nativa {version} tiene un registro native-mods.json ausente o no válido. Recompílala desde una versión instalada de Horizon."
 }

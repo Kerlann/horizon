@@ -45,7 +45,7 @@ cargo horizon-mod check target/horizon-mod/my_mod.hmod   # the registry's checks
   one hook, built with `horizon-launcher native-build <path> --trust-native-code`
   ([native-mods.md](native-mods.md#trait-mods-draft)). Any other `--template` is refused.
 - `build` packs `horizon-mod.toml`, `assets/` and `data/` into `target/horizon-mod/<id>.hmod`, with the same checks
-  the game makes when it reads the content. It refuses a folder with a `Cargo.toml` (code is native now) and a
+  the game makes when it reads the content. It refuses a folder with a `Cargo.toml` (code requires a native mod) and a
   manifest without capability `registries`.
 - `run` builds, then starts `horizon-client` (on `PATH`, or `--game PATH`, or `HORIZON_CLIENT`) with
   `--dev-mod target/horizon-mod/<id>.hmod`, always on. Arguments after `--` go to the game. The game reads content once
@@ -471,8 +471,8 @@ Rust files are build output, not files to regenerate or commit. Engine contribut
 
 A native mod's config files go in the game's shared `config/` folder, beside `options.txt` (on a dedicated server,
 beside `server.properties`), as Fabric and NeoForge mods' do: the mod picks its own file names, such as
-`config/<mod id>.json`. It asks for the folder with `Game::native_config_dir()` (hook points API 26), which needs no
-game, so it works from any hook, and makes the folder when missing. Settings kept with `native_set_setting` stay where they were, in `horizon-mods/.horizon-mod-data/<id>/`.
+`config/<mod id>.json`. It asks for the folder with `Game::native_config_dir()`, which needs no
+game, so it works from any hook, and makes the folder when missing. Settings kept with `native_set_setting` are in `horizon-mods/.horizon-mod-data/<id>/`.
 
 ## Publish your mod
 
@@ -505,8 +505,8 @@ who rated.
 
 Your page can live in your repository too: a `horizon-registry.toml` at its root (on the newest release's tag) with
 `name`, `summary`, `description`, `authors` and `license` fills what the registry's entry leaves out; the entry's own
-words win. Its owners, key and icon are the registry's, changed by a pull request; its kind never changes. Projects listed before this
-(`versions` in their entry) keep their hosted versions. The formats: [api/mod-index.md](api/mod-index.md).
+words win. Its owners, key and icon are the registry's, changed by a pull request; its kind never changes. Hosted releases in an entry's
+`versions` remain listed. The formats: [api/mod-index.md](api/mod-index.md).
 
 ### Integrity and signing
 

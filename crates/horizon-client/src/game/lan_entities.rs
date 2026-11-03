@@ -59,19 +59,21 @@ fn state(id: u32, kind: &str, position: [f64; 3], yaw: f32, on_ground: bool) -> 
 }
 
 /// `VehicleEntity`'s DATA_ID_HURT, DATA_ID_HURTDIR and DATA_ID_DAMAGE
-/// (entries 8 to 10) when they differ from their defaults (0, 1, 0).
-fn vehicle_meta(hurt_time: i32, hurt_dir: i32, damage: f32) -> Vec<(u8, i32, Value)> {
-    let mut meta = Vec::new();
+/// (entries 8 to 10): those that differ from their defaults (0, 1, 0) go in
+/// the state, and the defaults go with it, so a value reset to one is sent.
+fn vehicle_meta(e: &mut EntityState, hurt_time: i32, hurt_dir: i32, damage: f32) {
     if hurt_time != 0 {
-        meta.push((8, serializer::INT, Value::Int(hurt_time)));
+        e.meta.push((8, serializer::INT, Value::Int(hurt_time)));
     }
     if hurt_dir != 1 {
-        meta.push((9, serializer::INT, Value::Int(hurt_dir)));
+        e.meta.push((9, serializer::INT, Value::Int(hurt_dir)));
     }
     if damage != 0.0 {
-        meta.push((10, serializer::FLOAT, Value::Float(damage)));
+        e.meta.push((10, serializer::FLOAT, Value::Float(damage)));
     }
-    meta
+    e.defaults.push((8, serializer::INT, Value::Int(0)));
+    e.defaults.push((9, serializer::INT, Value::Int(1)));
+    e.defaults.push((10, serializer::FLOAT, Value::Float(0.0)));
 }
 
 /// An armor stand's pose (`ArmorStandPose`), each part that differs from the
@@ -168,7 +170,7 @@ impl Game<'_> {
             // Leashable.setLeashedTo / dropLeash: who holds the boat's lead.
             e.leash = self.boat_leash_link(b, &guests);
             e.velocity = [b.velocity.x, b.velocity.y, b.velocity.z];
-            e.meta = vehicle_meta(b.hurt_time, b.hurt_dir, b.damage);
+            vehicle_meta(&mut e, b.hurt_time, b.hurt_dir, b.damage);
             // AbstractBoat.DATA_ID_PADDLE_LEFT and DATA_ID_PADDLE_RIGHT.
             // Omitted false values must reset clients that saw a true value,
             // including when the controlling passenger dismounts mid-stroke.
@@ -204,7 +206,7 @@ impl Game<'_> {
                     Vec::new()
                 });
             }
-            e.meta = vehicle_meta(c.hurt_time, c.hurt_dir, c.damage);
+            vehicle_meta(&mut e, c.hurt_time, c.hurt_dir, c.damage);
             match c.kind {
                 // MinecartFurnace.DATA_ID_FUEL.
                 super::minecarts::CartKind::Furnace => {
@@ -853,5 +855,27 @@ mod tests {
         );
         let plain = horizon_client::entities::ArmorStand::new(1, Default::default(), 0.0);
         assert!(stand_poses(&plain).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod vehicle_meta_tests {
+    use super::*;
+
+    #[test]
+    fn vehicle_wobble_state_carries_its_defaults() {
+        let mut e = state(5, "minecraft:minecart", [0.0; 3], 0.0, false);
+        vehicle_meta(&mut e, 0, 1, 0.0);
+        assert!(e.meta.is_empty());
+        assert_eq!(
+            e.defaults,
+            vec![
+                (8, serializer::INT, Value::Int(0)),
+                (9, serializer::INT, Value::Int(1)),
+                (10, serializer::FLOAT, Value::Float(0.0)),
+            ]
+        );
+        vehicle_meta(&mut e, 4, -1, 3.0);
+        assert_eq!(e.meta.len(), 3);
     }
 }

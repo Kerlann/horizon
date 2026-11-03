@@ -153,6 +153,10 @@ def cases(facts, items, recipes, count, seed):
     states = d.States(facts)
     names = [n for n in recipes.recipes if recipes.recipes[n]['type'] in
              ('minecraft:crafting_shaped', 'minecraft:crafting_shapeless', 'minecraft:crafting_transmute')]
+    yield {'seed': 42, 'mode': 'craft', 'pos': [0, 0, 0],
+           'cells': [[0, 0, 0, states.get('crafter', orientation='east_up', triggered='true', crafting='false')]],
+           'items': [[0, 0, 0, 0, item('oak_log', 1)]], 'disabled': [], 'ticks': 0,
+           'entities': [{'type': 'minecraft:hopper_minecart', 'pos': [1.5, 0.0, 0.5]}]}
     for n in range(count):
         orientation = rng.choice(FRONTS)
         front_dir = orientation.split('_')[0]

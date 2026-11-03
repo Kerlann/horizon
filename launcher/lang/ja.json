@@ -958,5 +958,7 @@
   "Hide other players' cosmetics": "他のプレイヤーのコスメを隠す",
   "Others look like plain players to you. Also in the game's Horizon settings.": "他のプレイヤーは通常の姿で表示されます。ゲームの Horizon 設定にもあります。",
   "Show other players' auras and trails": "他のプレイヤーのオーラと軌跡を表示",
-  "Off by default. Also in the game's Horizon settings.": "既定ではオフ。ゲームの Horizon 設定にもあります。"
+  "Off by default. Also in the game's Horizon settings.": "既定ではオフ。ゲームの Horizon 設定にもあります。",
+  "This game source has no readable native entry template. Update Horizon and rebuild the mods against this game.": "このゲームのソースには、読み取り可能なネイティブエントリテンプレートがありません。Horizonを更新し、このゲーム向けにModを再ビルドしてください。",
+  "Native build {version} has a missing or invalid native-mods.json record. Rebuild it from an installed Horizon version.": "ネイティブビルド {version} の native-mods.json レコードが見つからないか無効です。インストール済みのHorizonから再ビルドしてください。"
 }

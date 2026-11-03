@@ -1203,6 +1203,7 @@ pub fn main() -> horizon_client::Result<()> {
                     lid_openers: &lid_openers,
                     mod_effects: None,
                     ask_mods: false,
+                    asks_baby_spawn: false,
                     border: None,
                 }
             };

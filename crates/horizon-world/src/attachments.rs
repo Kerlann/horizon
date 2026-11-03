@@ -102,7 +102,6 @@ impl<T: Clone + Send + Sync + 'static> AttachmentType<T> {
         host.attachments(holder)?.get(self)
     }
     /// Whether a holder carries a value, like NeoForge's `hasData`; never inserts the default.
-    /// API 317.
     pub fn has<H: AttachmentHost + ?Sized>(
         &self,
         host: &mut H,
@@ -110,7 +109,7 @@ impl<T: Clone + Send + Sync + 'static> AttachmentType<T> {
     ) -> Result<bool, AttachmentError> {
         Ok(host.attachments(holder)?.has(self))
     }
-    /// Read a value only if present, like `getExistingData`. API 317.
+    /// Read a value only if present, like `getExistingData`.
     pub fn get_existing<H: AttachmentHost + ?Sized>(
         &self,
         host: &mut H,

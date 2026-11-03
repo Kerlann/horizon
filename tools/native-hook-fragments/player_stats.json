@@ -31,10 +31,5 @@
       "target": "horizon_client::game::native_player_stats::Game<'_>::native_player_reset_recipes",
       "receiver": "player"
     }
-  ],
-  "rust_summary": "a player's statistics and recipe book through a `PlayerRef` (`native_player_award_stat`, `native_player_award_recipes`...).",
-  "doc_summary": "a player's statistics and recipe book through a `PlayerRef`, as vanilla's `ServerStatsCounter` and `ServerRecipeBook`: `stat(host, stat_type, key)` (`minecraft:mined` and `minecraft:stone`...; 0 when never counted), `award_stat(host, stat_type, key, amount)` (`Player.awardStat`, which `player_stat_award` may cancel), `reset_stat`, `has_discovered_recipe(host, recipe)`, and `award_recipes(host, recipes)` / `reset_recipes` (as `/recipe give` and `take`, with toasts and `player_recipe_discovered`; unknown ids skipped; the number of recipe displays changed). An unknown stat type reads as None and writes as false. Writes refuse a stale handle, a dead player, or another player than the one whose turn it is. Bundles need \"hooks\": @API:player_stats@.",
-  "comments": [
-    "crates/horizon-client/src/game/native_player_stats.rs"
   ]
 }

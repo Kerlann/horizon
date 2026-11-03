@@ -48,8 +48,9 @@ pub fn enter(
 }
 
 /// Report a generated default only for the exact receiver in this dispatch.
-pub fn default_called<T: Any + ?Sized>(hook: usize, receiver: &T) {
+pub fn default_called<T: Any + ?Sized>(domain: Domain, hook: usize, receiver: &T) {
     if let Some(active) = ACTIVE.get()
+        && active.subscribers.domain == domain
         && active.hook == hook
         && active.receiver == std::ptr::from_ref(receiver).cast::<()>()
         && active.receiver_type == TypeId::of::<T>()
@@ -58,8 +59,16 @@ pub fn default_called<T: Any + ?Sized>(hook: usize, receiver: &T) {
     }
 }
 
+/// Which generated hook table an id belongs to: gameplay and render ids both start at 0.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Domain {
+    Gameplay,
+    Render,
+}
+
 /// Per-hook sets of subscribers, initially containing every installed mod.
 pub struct Subscribers {
+    domain: Domain,
     words_per_hook: usize,
     words: Box<[AtomicU64]>,
     counts: Box<[AtomicUsize]>,
@@ -67,7 +76,7 @@ pub struct Subscribers {
 
 impl Subscribers {
     /// Allocate the sets once, at installation.
-    pub fn new(hooks: usize, mods: usize) -> Self {
+    pub fn new(domain: Domain, hooks: usize, mods: usize) -> Self {
         let words_per_hook = mods.div_ceil(64);
         let mut words = Vec::with_capacity(hooks * words_per_hook);
         for _ in 0..hooks {
@@ -82,6 +91,7 @@ impl Subscribers {
             }
         }
         Self {
+            domain,
             words_per_hook,
             words: words.into_boxed_slice(),
             counts: (0..hooks).map(|_| AtomicUsize::new(mods)).collect(),
@@ -136,20 +146,20 @@ impl Iterator for Indices<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Subscribers, default_called, enter};
+    use super::{Domain, Subscribers, default_called, enter};
     use std::any::TypeId;
 
     #[test]
     fn guards_restore_nested_calls_and_distinguish_zero_sized_types() {
         struct A;
         struct B;
-        let subscribers = Box::leak(Box::new(Subscribers::new(2, 2)));
+        let subscribers = Box::leak(Box::new(Subscribers::new(Domain::Gameplay, 2, 2)));
         let a = A;
         let b = B;
         let pointer = std::ptr::from_ref(&a).cast();
         let outer = enter(subscribers, 0, 0, pointer, TypeId::of::<A>());
         // Even coincident zero-sized addresses do not identify another type as A.
-        default_called(0, &b);
+        default_called(Domain::Gameplay, 0, &b);
         assert!(subscribers.indices(0).any(|i| i == 0));
         {
             let _inner = enter(
@@ -159,17 +169,37 @@ mod tests {
                 std::ptr::from_ref(&b).cast(),
                 TypeId::of::<B>(),
             );
-            default_called(1, &b);
+            default_called(Domain::Gameplay, 1, &b);
         }
-        default_called(0, &a);
+        default_called(Domain::Gameplay, 0, &a);
         drop(outer);
         assert_eq!(subscribers.indices(0).collect::<Vec<_>>(), [1]);
         assert_eq!(subscribers.indices(1).collect::<Vec<_>>(), [0]);
     }
 
+    /// A default from the other table, with the same id and receiver, prunes nothing.
+    #[test]
+    fn guards_distinguish_domains_with_equal_ids() {
+        struct Both;
+        let subscribers = Box::leak(Box::new(Subscribers::new(Domain::Render, 2, 1)));
+        let both = Both;
+        let guard = enter(
+            subscribers,
+            1,
+            0,
+            std::ptr::from_ref(&both).cast(),
+            TypeId::of::<Both>(),
+        );
+        default_called(Domain::Gameplay, 1, &both);
+        assert!(subscribers.contains_any(1));
+        default_called(Domain::Render, 1, &both);
+        drop(guard);
+        assert!(!subscribers.contains_any(1));
+    }
+
     #[test]
     fn guards_are_thread_local() {
-        let subscribers = Box::leak(Box::new(Subscribers::new(1, 2)));
+        let subscribers = Box::leak(Box::new(Subscribers::new(Domain::Gameplay, 1, 2)));
         let subscribers: &'static Subscribers = subscribers;
         let barrier = std::sync::Barrier::new(2);
         std::thread::scope(|scope| {
@@ -185,7 +215,7 @@ mod tests {
                         TypeId::of::<usize>(),
                     );
                     barrier.wait();
-                    default_called(0, &receiver);
+                    default_called(Domain::Gameplay, 0, &receiver);
                 });
             }
         });
@@ -194,7 +224,7 @@ mod tests {
 
     #[test]
     fn count_tracks_unique_removals_across_words() {
-        let subscribers = Subscribers::new(1, 70);
+        let subscribers = Subscribers::new(Domain::Gameplay, 1, 70);
         std::thread::scope(|scope| {
             for _ in 0..2 {
                 scope.spawn(|| {

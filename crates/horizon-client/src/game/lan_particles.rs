@@ -541,17 +541,28 @@ impl Game<'_> {
             {
                 continue;
             }
-            let packet = host
-                .hub
-                .sound_packet(
-                    &sound.sound,
-                    sound.at,
-                    sound.volume,
-                    sound.pitch,
-                    sound.source,
-                    host.hub.next_sound_seed(),
-                )
-                .encode();
+            let packet = host.hub.sound_packet(
+                &sound.sound,
+                sound.at,
+                sound.volume,
+                sound.pitch,
+                sound.source,
+                host.hub.next_sound_seed(),
+            );
+            // `Level.playSound(except, entity, ...)`: the same sound and
+            // seed, bound to the entity.
+            let packet = match (packet, sound.entity) {
+                (C::Sound(s), Some(id)) => C::SoundEntity(play::SoundEntity {
+                    sound: s.sound,
+                    source: s.source,
+                    id,
+                    volume: s.volume,
+                    pitch: s.pitch,
+                    seed: s.seed,
+                }),
+                (packet, _) => packet,
+            }
+            .encode();
             let range = f64::from(sound.volume.max(1.0)) * 16.0;
             send_native_nearby(
                 host,

@@ -958,5 +958,7 @@
   "Hide other players' cosmetics": "Sakrij kozmetiku drugih igrača",
   "Others look like plain players to you. Also in the game's Horizon settings.": "Drugi ti izgledaju kao obični igrači. Također u Horizon postavkama igre.",
   "Show other players' auras and trails": "Prikaži aure i tragove drugih igrača",
-  "Off by default. Also in the game's Horizon settings.": "Zadano isključeno. Također u Horizon postavkama igre."
+  "Off by default. Also in the game's Horizon settings.": "Zadano isključeno. Također u Horizon postavkama igre.",
+  "This game source has no readable native entry template. Update Horizon and rebuild the mods against this game.": "Ovaj izvorni kod igre nema čitljiv predložak izvorne ulazne točke. Ažurirajte Horizon i ponovno izgradite modove za ovu igru.",
+  "Native build {version} has a missing or invalid native-mods.json record. Rebuild it from an installed Horizon version.": "Izvornoj izgradnji {version} nedostaje valjan zapis native-mods.json. Ponovno je izgradite iz instalirane verzije Horizona."
 }

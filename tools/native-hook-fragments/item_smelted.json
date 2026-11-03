@@ -10,7 +10,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "A furnace's result slot ran `checkTakeAchievements` for a player (`native_item_smelted`).",
-  "doc_summary": "`FurnaceResultSlot.checkTakeAchievements` ran for a server player at a furnace, blast furnace or smoker's output: `native_item_smelted(player, player_entity_id, stack, amount_removed)`, with the player's UUID and entity id and what vanilla passes there (`getSmelting`, `getAmountRemoved`). A click or a throw passes the taken stack and its count; a shift-click passes the slot's stack as it was with the count moved, then what stayed (`None` once empty) with 0; a hotbar swap passes the taken stack with 0. Fires before `furnace_extract`. Server-side, not cancellable. Bundles need \"hooks\": @API:item_smelted@."
+  ]
 }

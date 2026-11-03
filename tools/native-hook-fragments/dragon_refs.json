@@ -6,7 +6,5 @@
     {"name": "dragon_set_phase", "side": "server", "target": "horizon_client::game::native_dragon_refs::Game<'_>::native_dragon_set_phase", "receiver": "dragon"},
     {"name": "dragon_alive_crystals", "side": "server", "target": "horizon_client::game::native_dragon_refs::Game<'_>::native_dragon_alive_crystals", "receiver": "dragon"},
     {"name": "dragon_previously_killed", "side": "server", "target": "horizon_client::game::native_dragon_refs::Game<'_>::native_dragon_previously_killed", "receiver": "dragon"}
-  ],
-  "rust_summary": "ender dragon handles, phase and fight state.",
-  "doc_summary": "`DragonRef`, made with `host.dragon(entity)`, reads and sets the ender dragon's phase and reads its fight."
+  ]
 }

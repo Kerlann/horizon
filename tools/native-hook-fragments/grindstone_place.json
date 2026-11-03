@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a cancellable grindstone result question (`native_grindstone_place`).",
-  "doc_summary": "`native_grindstone_place(player, player_entity_id, pos, place, cancel)`, in `GrindstoneMenu.createResult` after the inputs change. `place` (`GrindstonePlace`) holds the inputs, `vanilla_output` to read, and an initially empty override: set `output` (and `xp`, 0 or more, for what taking it gives) to replace the result, or `cancel` for none. Server-side. Bundles need \"hooks\": @API:grindstone_place@."
+  ]
 }

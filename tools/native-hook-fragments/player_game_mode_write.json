@@ -2,8 +2,5 @@
   "hooks": [],
   "helpers": [
     {"name": "player_set_game_mode", "side": "server", "target": "horizon_client::game::native_server::Game<'_>::native_player_set_game_mode", "receiver": "player"}
-  ],
-  "rust_summary": "a player's game mode write through the command's change path.",
-  "doc_summary": "`player.set_game_mode(host, mode)` (a `GameMode`) changes a server player's mode as `/gamemode` does, including the cancellable change hook and ability updates. Bundles need \"hooks\": @API:player_game_mode_write@.",
-  "comments": ["crates/horizon-client/src/game/native_server.rs"]
+  ]
 }

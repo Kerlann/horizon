@@ -4017,6 +4017,10 @@ impl Game<'_> {
                 if p.event == 15 {
                     self.witch_magic_particles(p.id as u32);
                 }
+                // MinecartTNT.handleEntityEvent 70: primeFuse on the client.
+                if p.event == 70 {
+                    self.remote_cart_primed(p.id as u32);
+                }
                 // Fox.handleEntityEvent 45: the crumbs of the food in its mouth.
                 if p.event == 45 {
                     self.fox_eat_particles(p.id as u32);

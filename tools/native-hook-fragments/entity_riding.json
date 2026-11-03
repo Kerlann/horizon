@@ -36,10 +36,5 @@
       "target": "horizon_client::game::native_entity_riding::Game<'_>::native_entity_eject_passengers",
       "receiver": "entity"
     }
-  ],
-  "rust_summary": "an entity's vehicle and passengers through its handle, and getting off (`native_entity_vehicle`, `native_entity_passengers`, `native_entity_stop_riding`...).",
-  "doc_summary": "vehicles and passengers through an `EntityRef`, as vanilla's `Entity`: `entity.vehicle(host)`, `is_passenger`, `root_vehicle`, `passengers` (players in the order they got in, then mobs), `is_vehicle`, and the writes `stop_riding` and `eject_passengers`, which let riders out where the vehicle does, as `/ride ... dismount`. Bundles need \"hooks\": @API:entity_riding@.",
-  "comments": [
-    "crates/horizon-client/src/game/native_entity_riding.rs"
   ]
 }

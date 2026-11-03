@@ -120,7 +120,7 @@ fn drop_hook(host: &mut LanHost, conn: u32) {
     }
 }
 
-fn take_vehicle<T: Rideable>(
+fn take_vehicle<T: Rideable + horizon_client::join_seq::Joined>(
     list: &mut Vec<T>,
     id: u32,
     at: Vec3,
@@ -130,6 +130,7 @@ fn take_vehicle<T: Rideable>(
     let i = list.iter().position(|v| v.id() == id)?;
     let mut v = list.remove(i);
     v.arrive(at, yaw, motion);
+    v.set_join_seq(horizon_client::join_seq::JoinSeq::UNJOINED);
     Some(v)
 }
 
@@ -934,6 +935,54 @@ impl Game<'_> {
 mod tests {
     use super::*;
     use std::sync::Arc;
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn arriving_vehicle_is_announced_once_after_destination_entities() {
+        use crate::mod_api::{self, EntityJoinLevelEvent, Flow, Hooks, Host};
+        use std::sync::Mutex;
+        struct Observer(Arc<Mutex<Vec<u32>>>);
+        impl Hooks for Observer {
+            fn entity_join_level(
+                &self,
+                _: &mut dyn Host,
+                event: &mut EntityJoinLevelEvent<'_>,
+            ) -> Flow {
+                self.0.lock().unwrap().push(event.entity);
+                Flow::Continue
+            }
+        }
+        let joins = Arc::new(Mutex::new(Vec::new()));
+        let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
+            "arrival-observer",
+            Box::new(Observer(joins.clone())),
+        )]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                game.native_joins_skip();
+                let base = game.next_entity;
+                game.next_entity += 2;
+                game.carts.push(minecarts::Minecart::new(
+                    base + 1,
+                    minecarts::CartKind::Rideable,
+                    Vec3::ZERO,
+                ));
+                let source = game.dim;
+                game.enter_level(None, Dim::Nether).unwrap();
+                game.carts.push(minecarts::Minecart::new(
+                    base + 2,
+                    minecarts::CartKind::Rideable,
+                    Vec3::ZERO,
+                ));
+                game.native_joins_flush(false, 0);
+                game.arrive_vehicle(source, base + 1, Vec3::ZERO, 0.0);
+                game.native_joins_flush(false, 0);
+                game.native_joins_flush(false, 0);
+                assert_eq!(*joins.lock().unwrap(), vec![base + 2, base + 1]);
+            });
+        });
+    }
 
     /// A minecart a player rides through a portal rolls on at the motion it
     /// crossed with, clamped to 0.4 along x and z (`PositionMoveRotation.of`

@@ -958,5 +958,7 @@
   "Hide other players' cosmetics": "दूसरे खिलाड़ियों के कॉस्मेटिक्स छिपाएँ",
   "Others look like plain players to you. Also in the game's Horizon settings.": "दूसरे आपको साधारण खिलाड़ियों जैसे दिखते हैं। गेम की Horizon सेटिंग्स में भी है।",
   "Show other players' auras and trails": "दूसरे खिलाड़ियों की ऑरा और ट्रेल दिखाएँ",
-  "Off by default. Also in the game's Horizon settings.": "डिफ़ॉल्ट रूप से बंद। गेम की Horizon सेटिंग्स में भी है।"
+  "Off by default. Also in the game's Horizon settings.": "डिफ़ॉल्ट रूप से बंद। गेम की Horizon सेटिंग्स में भी है।",
+  "This game source has no readable native entry template. Update Horizon and rebuild the mods against this game.": "इस गेम के स्रोत में पढ़ने योग्य नेटिव एंट्री टेम्प्लेट नहीं है। Horizon अपडेट करें और इस गेम के लिए मॉड फिर से बिल्ड करें।",
+  "Native build {version} has a missing or invalid native-mods.json record. Rebuild it from an installed Horizon version.": "नेटिव बिल्ड {version} का native-mods.json रिकॉर्ड गायब या अमान्य है। इसे इंस्टॉल किए गए Horizon संस्करण से फिर से बिल्ड करें।"
 }

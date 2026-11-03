@@ -713,7 +713,7 @@ enum Cmd {
     /// as its own version on an installed release or Nightly's game files, and select it.
     /// Nothing signed it: it runs with your rights, and updates never replace it
     #[command(
-        after_help = "The program must match this computer's executable format and carry the exact `horizon-game-executable;`\nidentity signature embedded by ordinary and launcher-generated games. It carries no mod API level or build id,\nand is not a signature of authenticity. Unmarked programs and retired WIT API-level markers are refused."
+        after_help = "The program must match this computer's executable format and carry the exact `horizon-game-executable;`\nidentity signature embedded by ordinary and launcher-generated games. It carries no mod API level or build id,\nand is not a signature of authenticity. Unmarked programs are refused."
     )]
     ImportBuild {
         /// The program (horizon-client, horizon-client.exe on Windows), or a zip holding it
@@ -1074,7 +1074,6 @@ fn set_setting(s: &mut backend::Settings, key: &str, value: &str) -> Result<(), 
                         .ok_or_else(|| format!("{value}: say performance, dev or release"))?,
                 ),
             };
-            s.native_release = false;
         }
         "proxy" => {
             if value == "default" || value.is_empty() {

@@ -1,5 +1,4 @@
-//! Server menus for native mods (docs/native-mods.md, "Server menus", API
-//! 10): a vanilla chest menu (`generic_9x1` to `generic_9x6`) a mod opens
+//! Server menus for native mods (docs/native-mods.md, "Server menus"): a vanilla chest menu (`generic_9x1` to `generic_9x6`) a mod opens
 //! for a player and fills with items to look at. No click moves anything:
 //! each reaches the mod (`native_menu_clicked`), as does the menu's closing
 //! (`native_menu_closed`), and the client shows the menu as the server sends
@@ -62,7 +61,7 @@ pub(super) fn fit(
     true
 }
 
-/// Server menus, for server mods (API 10). The players are named by UUID;
+/// Server menus, for server mods. The players are named by UUID;
 /// none of these runs while a player's state is swapped in (inside
 /// `native_perform_command`, the menus can be opened and filled).
 #[allow(dead_code)]

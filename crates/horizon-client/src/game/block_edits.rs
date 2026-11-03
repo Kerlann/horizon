@@ -85,7 +85,7 @@ impl Game<'_> {
             },
         );
         self.world.watched = watched;
-        // The block entities the new blocks bring, as `native_set_block` makes them (a mod block's own, API 15,
+        // The block entities the new blocks bring, as `native_set_block` makes them (a mod block's own,
         // included), in the order `replace_block_entities` takes them: the positions needing a fresh entity.
         let name = |s: u32| self.res.facts().get(BlockStateId(s)).name.clone();
         let wanted: Vec<Arc<str>> = out

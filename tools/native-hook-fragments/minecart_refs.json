@@ -1,0 +1,102 @@
+{
+ "hooks": [],
+ "helpers": [
+  {
+   "name": "minecart",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_ref"
+  },
+  {
+   "name": "minecart_kind",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_kind",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_max_speed",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_max_speed",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_is_on_rails",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_is_on_rails",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_flipped",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_flipped",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_set_flipped",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_set_flipped",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_damage",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_damage",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_set_damage",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_set_damage",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_hurt_time",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_hurt_time",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_set_hurt_time",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_set_hurt_time",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_fuel",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_fuel",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_set_fuel",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_set_fuel",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_fuse",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_fuse",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_prime_fuse",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_prime_fuse",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_hopper_enabled",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_hopper_enabled",
+   "receiver": "minecart"
+  },
+  {
+   "name": "minecart_set_hopper_enabled",
+   "side": "server",
+   "target": "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_set_hopper_enabled",
+   "receiver": "minecart"
+  }
+ ],
+ "rust_summary": "minecart handles (`MinecartRef`): kind, speed, rails, flip, wobble and per-kind fuel, fuse and hopper state.",
+ "doc_summary": "`MinecartRef`, made with `host.minecart(entity)`, reads a cart's `NativeMinecartKind`, max speed and rail state, and reads and sets flipped, wobble, furnace fuel, the TNT fuse and the hopper's enabled flag. A cart taken out for its own tick: a write during that tick (e.g. from a Part callback) is lost when the tick stores its copy."
+}

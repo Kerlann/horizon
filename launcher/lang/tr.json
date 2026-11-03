@@ -958,5 +958,7 @@
   "Hide other players' cosmetics": "Diğer oyuncuların kozmetiklerini gizle",
   "Others look like plain players to you. Also in the game's Horizon settings.": "Diğerleri sana sıradan oyuncular gibi görünür. Oyunun Horizon ayarlarında da var.",
   "Show other players' auras and trails": "Diğer oyuncuların aura ve izlerini göster",
-  "Off by default. Also in the game's Horizon settings.": "Varsayılan olarak kapalı. Oyunun Horizon ayarlarında da var."
+  "Off by default. Also in the game's Horizon settings.": "Varsayılan olarak kapalı. Oyunun Horizon ayarlarında da var.",
+  "This game source has no readable native entry template. Update Horizon and rebuild the mods against this game.": "Bu oyun kaynağında okunabilir bir yerel giriş şablonu yok. Horizon'ı güncelleyin ve modları bu oyun için yeniden derleyin.",
+  "Native build {version} has a missing or invalid native-mods.json record. Rebuild it from an installed Horizon version.": "{version} yerel derlemesinin native-mods.json kaydı eksik veya geçersiz. Yüklü bir Horizon sürümünden yeniden derleyin."
 }

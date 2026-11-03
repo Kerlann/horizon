@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "A liquid placing a block (`native_fluid_place_block`).",
-  "doc_summary": "`native_fluid_place_block(dimension, pos, liquid_pos, state, new_state, cancel)` runs before liquid places a block. Change `new_state` or set `cancel` to prevent placement. Bundles need \"hooks\": @API:fluid_place_block@."
+  ]
 }

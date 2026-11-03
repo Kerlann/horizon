@@ -9,7 +9,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "a server level was saved (`native_level_save`).",
-  "doc_summary": "`native_level_save(dimension)`, once a server level was saved (`ServerLevel.save`): its level data, chunks and entities, by the autosave, `/save-all`, a pause, a closing level or the server stopping; each level of a world save in turn. Server-side. Bundles need \"hooks\": @API:level_save@."
+  ]
 }

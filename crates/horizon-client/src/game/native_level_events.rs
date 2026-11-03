@@ -23,7 +23,7 @@ impl Game<'_> {
     /// particles, as vanilla's `LevelEvent` numbers them (`2001` breaks a
     /// block with state id `data`). No player is left out, the acting one
     /// included. False for an event that carries a block state (2001, 2014,
-    /// 3008) when `data` isn't one. API @API:level_events@.
+    /// 3008) when `data` isn't one.
     pub(super) fn native_level_level_event(
         &mut self,
         level: LevelRef,
@@ -53,7 +53,7 @@ impl Game<'_> {
     /// Sends game event `event` (`minecraft:block_change`...) from `at`, as
     /// `Level.gameEvent(null, event, at)` does: sculk sensors, shriekers,
     /// wardens and allays in range hear it. False for an event vanilla
-    /// doesn't have. API @API:level_events@.
+    /// doesn't have.
     pub(super) fn native_level_game_event(
         &mut self,
         level: LevelRef,
@@ -74,7 +74,7 @@ impl Game<'_> {
     /// lights some of the air around, `interaction` says what happens to
     /// blocks: `None`, `Block` or `Tnt` (vanilla's `Mob` and `Trigger` aren't
     /// offered yet). False for a chunk that isn't loaded or a radius outside
-    /// `0 < radius <= 32`. API @API:level_events@.
+    /// `0 < radius <= 32`.
     pub(super) fn native_level_explode(
         &mut self,
         level: LevelRef,
@@ -99,7 +99,6 @@ impl Game<'_> {
     /// `visual_only` it only flashes and sounds (`setVisualOnly`). The
     /// `lightning_strike` hook hears it first with the cause `mod` and may
     /// cancel it. False for a chunk that isn't loaded or a canceled strike.
-    /// API @API:level_events@.
     pub(super) fn native_level_strike_lightning(
         &mut self,
         level: LevelRef,

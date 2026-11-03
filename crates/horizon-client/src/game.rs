@@ -211,6 +211,7 @@ mod native_claimed_items;
 mod native_components;
 mod native_criteria;
 mod native_data_maps;
+mod native_display_refs;
 mod native_dragon_refs;
 mod native_entities;
 mod native_entity_data;
@@ -240,6 +241,7 @@ mod native_living_writes;
 mod native_menu_refs;
 mod native_menus;
 mod native_merchant_refs;
+mod native_minecart_refs;
 mod native_mob_draw;
 mod native_mob_navigation;
 mod native_mob_refs;
@@ -256,9 +258,11 @@ mod native_player_stats;
 mod native_projectile_refs;
 mod native_projectiles;
 mod native_quick_move;
+mod native_raid_refs;
 mod native_recipes;
 mod native_server;
 mod native_shaders;
+mod native_sound_refs;
 mod native_ticks;
 mod native_visuals;
 mod native_world_columns;
@@ -6229,7 +6233,7 @@ impl Game<'_> {
                 .behaviours()
                 .data(state)
                 .is(horizon_world::level::classes::Class::Door)
-            && !crate::mod_api::mods().is_empty()
+            && crate::mod_api::listened(crate::mod_api::HookId::PlayerHarvestCheck)
         {
             self.native_player_harvest_check(
                 self.own_entity_id() as u32,
@@ -6254,7 +6258,7 @@ impl Game<'_> {
                     .res
                     .items()
                     .correct_for_drops(held.as_ref(), &facts.name);
-            if !crate::mod_api::mods().is_empty() {
+            if crate::mod_api::listened(crate::mod_api::HookId::PlayerHarvestCheck) {
                 self.native_player_harvest_check(
                     self.own_entity_id() as u32,
                     pos,
@@ -12415,12 +12419,17 @@ impl Game<'_> {
         // Warm the loot data with this world's packs before chunks decode
         // (`save::roll_loaded_loot` reads the cached copy).
         self.load_server_loot();
-        // TagsUpdatedEvent (SERVER_DATA_LOAD): the world's data is in, before
-        // its chunks and players are.
         // MinecraftServer's constructor reads CustomBossEvents before any
         // server event.
         self.bosses = Default::default();
         self.load_bossbars();
+        // ServerLevel's constructor reads its Raids saved data before any
+        // server event; their randoms are seeded on the first raid tick.
+        if self.remote.is_none() {
+            self.read_raids();
+        }
+        // TagsUpdatedEvent (SERVER_DATA_LOAD): the world's data is in, before
+        // its chunks and players are.
         self.native_server_data_loaded(false);
         self.sync_recipe_content();
         reset_world_progress(&mut self.adv, &mut self.stats);
@@ -22231,7 +22240,8 @@ mod tests {
                 ));
             }
         }
-        let mods: mod_api::Mods = vec![Box::new(ReloadMod) as Box<dyn Hooks>].into();
+        let mods: mod_api::Mods =
+            vec![mod_api::ModEntry::new("reload", Box::new(ReloadMod))].into();
         mod_api::install_parts(&mods).unwrap();
         mod_api::install(mods);
         super::native_entity_refs::tests::with_game(|game| {
@@ -22280,11 +22290,10 @@ mod tests {
         let allowed = Arc::new(AtomicBool::new(false));
         let cancel = Arc::new(AtomicBool::new(false));
         let calls = Arc::new(AtomicUsize::new(0));
-        let mods: mod_api::Mods =
-            Arc::from(vec![
-                Box::new(Observer(allowed.clone(), cancel.clone(), calls.clone()))
-                    as Box<dyn Hooks>,
-            ]);
+        let mods: mod_api::Mods = Arc::from([mod_api::ModEntry::new(
+            "right-click-observer",
+            Box::new(Observer(allowed.clone(), cancel.clone(), calls.clone())),
+        )]);
         mod_api::install(mods);
         super::native_entity_refs::tests::with_game(|game| {
             game.options.dedicated = Some(Vec::new());

@@ -10,7 +10,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "An enchanting table drew an offer's level (`native_enchantment_level_set`).",
-  "doc_summary": "An enchanting table drew the level of one offer, in `EnchantmentMenu.slotsChanged` after `getEnchantmentCost`: `native_enchantment_level_set(pos, offer, level)`. `offer` (`EnchantmentRow`) holds the server player whose table it is (UUID and entity id), the row (0 to 2), the power (bookshelves counted), the item and the original level drawn; change `level` to change the offer (below `row + 1` offers nothing, as vanilla). The clue shown is the one the new level gives. Asked for each row in order, before `prepare_item_enchant`. Server-side. Bundles need \"hooks\": @API:enchantment_level_set@."
+  ]
 }

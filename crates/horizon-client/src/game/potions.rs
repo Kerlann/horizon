@@ -1967,7 +1967,10 @@ mod tests {
                 }
             }
         }
-        crate::mod_api::install(std::sync::Arc::from([Box::new(TestMod) as Box<dyn Hooks>]));
+        crate::mod_api::install(std::sync::Arc::from([crate::mod_api::ModEntry::new(
+            "test-potions",
+            Box::new(TestMod),
+        )]));
         static ONCE: std::sync::Once = std::sync::Once::new();
         ONCE.call_once(|| {
             brewing::register_mod_effects([("test:effect".into(), 0, brewing::Category::Neutral)]);

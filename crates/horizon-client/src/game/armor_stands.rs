@@ -1394,7 +1394,7 @@ impl Game<'_> {
         let current = self.armor[index].clone();
         // PREVENT_ARMOR_CHANGE (Curse of Binding) outside creative, or the same item.
         if current.as_ref().is_some_and(|c| {
-            (c.enchantment_level("minecraft:binding_curse") > 0 && !self.creative)
+            (world_stations!(self).enchantments.prevents_armor_change(c) && !self.creative)
                 || c.same_item_same_components(stack)
         }) {
             return true;

@@ -129,7 +129,7 @@ impl BlockEntityDraw {
     /// yours, and moves nothing by itself: an idle machine, not a turning
     /// shaft. Kept geometry stands still: an enchanted item's glint, and an
     /// item drawn with `native_draw_item` whose model reads the time (a clock,
-    /// a compass), stop where they were. API 94.
+    /// a compass), stop where they were.
     pub fn keep(&mut self) {
         self.kept = true;
     }
@@ -393,7 +393,7 @@ impl Game<'_> {
     /// from its front), textured with the `uv` rectangle (u0, v0, u1, v1 in
     /// texels of 16 per side) of `sprite` (`mymod:entity/screen`,
     /// `mymod:block/casing`, `block/stone`) times the 0xRRGGBB `tint`
-    /// (0xFFFFFF for none). False for an unknown sprite. API 71.
+    /// (0xFFFFFF for none). False for an unknown sprite.
     pub(super) fn native_draw_quad(
         &self,
         draw: &mut BlockEntityDraw,
@@ -420,7 +420,7 @@ impl Game<'_> {
     /// `Direction` (down, up, north, south, west, east), baked as a model
     /// element's are (`FaceBakery`), times the 0xRRGGBB `tint`. A turned box
     /// is drawn under a turned pose (`BlockEntityDraw::rotate_about`). False
-    /// when a face's sprite is unknown; that face is left out. API 71.
+    /// when a face's sprite is unknown; that face is left out.
     pub(super) fn native_draw_cube(
         &self,
         draw: &mut BlockEntityDraw,
@@ -453,7 +453,7 @@ impl Game<'_> {
     /// under `draw`'s pose, as vanilla's `submitBlockModel` draws a block in
     /// an entity's place: a block's baked model, with its default tints. A
     /// moving part that is no block is a standalone model
-    /// (`native_draw_model`). False for an unknown block or property. API 71.
+    /// (`native_draw_model`). False for an unknown block or property.
     pub(super) fn native_draw_block(
         &self,
         draw: &mut BlockEntityDraw,
@@ -489,7 +489,6 @@ impl Game<'_> {
     /// are multiplied by the 0xRRGGBB `tint` (0xFFFFFF for none), the
     /// others drawn as they are. False when the model isn't baked: not
     /// named, missing from the resources, or on a side that draws nothing.
-    /// API 151.
     pub(super) fn native_draw_model(
         &self,
         draw: &mut BlockEntityDraw,
@@ -519,7 +518,6 @@ impl Game<'_> {
     /// client's copy of a block entity has no item slots (`entity.items` is
     /// empty there): send the stacks you draw in
     /// `native_block_entity_update_tag` and read them from `entity.nbt`.
-    /// API 91.
     pub(super) fn native_draw_item(
         &self,
         draw: &mut BlockEntityDraw,
@@ -542,7 +540,7 @@ impl Game<'_> {
 
     /// Property `key` of block state `state` (a machine's `facing`, from the
     /// `state` `native_block_entity_submit` gets), if it has one: no lookup in
-    /// the world, so cheap each frame. API 91.
+    /// the world, so cheap each frame.
     pub(super) fn native_block_state_property(
         &self,
         state: BlockStateId,

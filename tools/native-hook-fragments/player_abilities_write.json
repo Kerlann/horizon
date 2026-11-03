@@ -6,7 +6,5 @@
       "target": "horizon_client::game::native_server::Game<'_>::native_player_set_abilities",
       "receiver": "player"
     }
-  ],
-  "rust_summary": "a server player's stored abilities written through a `PlayerRef` (`native_player_set_abilities`).",
-  "doc_summary": "`player.set_abilities(host, abilities)` stores a server player's `Abilities` (a `NativePlayerAbilities` read with `player.abilities(host)` and changed): invulnerable, flying, may fly, instabuild, may build, flying speed and walking speed. The player's client is sent `ClientboundPlayerAbilitiesPacket` (`onUpdateAbilities`), they are saved with the player (`abilities`), and they stay as written until the player's game mode changes, which sets them again as vanilla's `GameType.updatePlayerAbilities` does (the speeds are kept). `may_build` and `instabuild` are what the server's block placing and breaking, and item use, read; the walking speed is stored and sent, and is the movement speed attribute's base when the player's data is loaded, as in vanilla (a write later does not change the attribute). Speeds are stored as given, as vanilla's setters do; a speed that is not finite refuses the write. Returns false for a stale handle, a dead player, another player than the one whose turn it is, and a refused write. Replaces the id-based `Host::set_flying_speed`."
+  ]
 }

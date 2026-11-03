@@ -269,10 +269,16 @@ impl GuestPlay {
     }
 }
 
-struct ItemRules<'a>(&'a horizon_client::items::Items);
+struct ItemRules<'a>(
+    &'a horizon_client::items::Items,
+    &'a horizon_client::enchant::Enchantments,
+);
 impl Rules for ItemRules<'_> {
     fn items(&self) -> &horizon_client::items::Items {
         self.0
+    }
+    fn enchantments(&self) -> &horizon_client::enchant::Enchantments {
+        self.1
     }
     fn max_stack(&self, item: &str) -> u32 {
         self.0.get(item).map_or(64, |i| i.max_stack)
@@ -2459,7 +2465,7 @@ impl Game<'_> {
                 }
             }
             S::ContainerClick(p) => {
-                let rules = ItemRules(world_items!(self));
+                let rules = ItemRules(world_items!(self), &world_stations!(self).enchantments);
                 let slots = host.hub.guests[gi]
                     .menu
                     .as_ref()

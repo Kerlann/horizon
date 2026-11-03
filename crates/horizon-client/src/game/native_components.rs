@@ -24,12 +24,25 @@ impl Game<'_> {
     /// (`Item.components().get`): `minecraft:max_damage` on an iron sword is `250`, data
     /// packs' and native mods' changes included. Read from the item report's JSON, so a
     /// number is an `Int`, `Long` or `Double` and a boolean a `Byte`. None where the item
-    /// hasn't the component, and for an unknown item. API @API:item_components@.
+    /// hasn't the component, and for an unknown item.
     pub(super) fn native_item_default_component(&self, item: &str, component: &str) -> Option<Tag> {
         let prototype = self.pack.item_renderer.models.prototypes.get(item)?;
         Some(horizon_client::scoreboard::json_to_tag(
             prototype.get(component)?,
         ))
+    }
+    /// Whether an enchantment on `stack` has effect component `effect`, by the world's
+    /// enchantment definitions (`EnchantmentHelper.has`), behind
+    /// `ItemResource::has_enchantment_effect`, through the opaque backend. API
+    /// @API:item_components@.
+    pub(super) fn native_item_has_enchantment_effect(
+        &self,
+        stack: &ItemStack,
+        effect: &str,
+    ) -> bool {
+        world_stations!(self)
+            .enchantments
+            .has_component(stack, effect)
     }
 }
 

@@ -3,7 +3,5 @@
   "helpers": [
     {"name": "transaction_open", "side": "server", "target": "horizon_client::game::transactions::Game<'_>::native_transaction_open", "mod_api": {}},
     {"name": "transaction_close", "side": "server", "target": "horizon_client::game::transactions::Game<'_>::native_transaction_close", "mod_api": {}}
-  ],
-  "rust_summary": "transactions (`host.transaction`, NeoForge 26.3's `Transaction` and `SnapshotJournal`), kept by the game at the storage level: `native_transaction_open` and `native_transaction_close`.",
-  "doc_summary": "transactions (NeoForge 26.3's `Transaction`): `host.transaction(|host, tx| …)` runs a closure whose `Ok` commits and whose `Err` aborts, nested in the open one if any; `tx` (NeoForge's `TransactionContext`) is what every handler and place write takes. Inside, the capability helpers' writes apply at once, so later steps see them, and the game keeps each storage as it was before the transaction first wrote it: block entities (item slots, saved compound, attachments, a hopper's cooldown), cauldrons, players' inventories (slots, armour, off hand, cursor), entities' (container minecarts, chest boats, chested donkeys, mules and llamas) and item entities' stacks. What a write tells the world (`setChanged` and comparators, a jukebox starting or stopping, a cauldron's block update, an item dropped) runs once, at the outermost commit, as `SnapshotJournal.onRootCommit`; an abort puts each storage back quietly. A panic unwinding out of the closure aborts that transaction as it passes. `host.transaction` is the only way in: `transaction_open` and `transaction_close` take a `TransactionSeal` that only it makes. Bundles need \"hooks\": @API:transactions@."
+  ]
 }

@@ -394,7 +394,7 @@ fn string(s: &str) -> Tag {
 }
 
 /// A player's display name was formatted. Replace `displayname` to change it.
-/// Both sides. @API:player_name_format@.
+/// Both sides.
 #[inline(never)]
 pub fn native_player_name_format(username: &Text, displayname: &mut Text) {
     crate::native_client_hooks::player_name_format(username, displayname);
@@ -450,7 +450,7 @@ pub fn display_name(uuid: u128, name: &str) -> Tag {
 
 /// ServerPlayer.getTabListDisplayName: the name the Tab list shows for
 /// `player`, None to let the client choose it. Replace `display_name` to
-/// change it. @API:player_tab_list_name_format@.
+/// change it.
 #[inline(never)]
 pub fn native_player_tab_list_name_format(
     player: u128,

@@ -183,7 +183,7 @@ impl Game<'_> {
             return false;
         }
         let turn = match (deflection, by) {
-            (NativeDeflection::Reverse, _) => Turn::Reverse { draw: None },
+            (NativeDeflection::Reverse, _) => Turn::Reverse,
             (_, None) => Turn::Direction(None),
             (NativeDeflection::AimDeflect, Some(by)) => {
                 let Some([x, y, z]) = self.native_entity_view_vector(by) else {

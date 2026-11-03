@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a cancellable anvil result question (`native_anvil_update`).",
-  "doc_summary": "`native_anvil_update(player, player_entity_id, pos, update, cancel)`, after `AnvilMenu.createResult` made vanilla's result with a left input in, whenever an input or the name changed (a rename alone too). `update` (`AnvilUpdate`) holds the inputs (`right` is `None` for a rename alone), the rename text and vanilla's result (`vanilla`, an `AnvilVanilla`); its `output`, `xp_cost` and `material_cost` start at vanilla's, and a mod changes them, or sets `cancel` for no result. Negative costs are clamped to zero, unlike the NeoForge event. Both sides: the server's menu, and a server's client menu with the local player, asked once per change of the inputs or name. Bundles need \"hooks\": @API:anvil_update@."
+  ]
 }

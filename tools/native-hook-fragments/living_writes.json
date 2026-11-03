@@ -79,7 +79,5 @@
       "target": "horizon_client::game::native_living_writes::Game<'_>::native_living_set_item_use_remaining",
       "receiver": "living"
     }
-  ],
-  "rust_summary": "a living entity's other writes through a `LivingRef`: `native_living_swing`, the arrows and stingers stuck in a player, a mob's left-handedness and pickup of loot, and the ticks left of a player's item use.",
-  "doc_summary": "a living entity's other writes through a `LivingRef`: `swing(host, hand, send_to_self)` (`LivingEntity.swing`), `arrow_count` / `set_arrow_count`, `stinger_count` / `set_stinger_count`, `set_arrow_removal_ticks` and `set_stinger_removal_ticks` (players), `left_handed` / `set_left_handed` and `can_pick_up_loot` / `set_can_pick_up_loot` (mobs), and `item_use_remaining` / `set_item_use_remaining` (`useItemRemaining` of a player's item use). Each says in its documentation which kinds it works for; the others read None and write false."
+  ]
 }

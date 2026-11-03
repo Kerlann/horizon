@@ -255,9 +255,10 @@ mod tests {
                 impl Hooks for Other {{
                     fn inject_example_tick(&self, _: &mut InjectExampleTickEvent) -> Flow {{ panic!("wrong owner") }}
                 }}
-                pub fn mods() -> &'static [Box<dyn Hooks>] {{
-                    static MODS: OnceLock<Vec<Box<dyn Hooks>>> = OnceLock::new();
-                    MODS.get_or_init(|| vec![Box::new(Owner), Box::new(Other)])
+                pub struct ModEntry {{ pub id: &'static str, pub hooks: Box<dyn Hooks> }}
+                pub fn mods() -> &'static [ModEntry] {{
+                    static MODS: OnceLock<Vec<ModEntry>> = OnceLock::new();
+                    MODS.get_or_init(|| vec![ModEntry {{ id: "owner", hooks: Box::new(Owner) }}, ModEntry {{ id: "other", hooks: Box::new(Other) }}])
                 }}
             }}
             {helper}
@@ -303,12 +304,13 @@ mod tests {
                     fn inject_example_total(&self, _: &mut InjectExampleTotalEvent) {{ panic!("wrong owner") }}
                 }}
                 pub static INSTALLED: AtomicBool = AtomicBool::new(false);
-                pub fn mods() -> &'static [Box<dyn Hooks>] {{
-                    static MODS: OnceLock<Vec<Box<dyn Hooks>>> = OnceLock::new();
+                pub struct ModEntry {{ pub id: &'static str, pub hooks: Box<dyn Hooks> }}
+                pub fn mods() -> &'static [ModEntry] {{
+                    static MODS: OnceLock<Vec<ModEntry>> = OnceLock::new();
                     if !INSTALLED.load(Ordering::SeqCst) {{
                         return &[];
                     }}
-                    MODS.get_or_init(|| vec![Box::new(Owner), Box::new(Other)])
+                    MODS.get_or_init(|| vec![ModEntry {{ id: "owner", hooks: Box::new(Owner) }}, ModEntry {{ id: "other", hooks: Box::new(Other) }}])
                 }}
             }}
             {helper}

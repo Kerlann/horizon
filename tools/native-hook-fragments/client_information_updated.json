@@ -10,7 +10,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "a server player's client sent new client information (`native_client_information_updated`).",
-  "doc_summary": "`native_client_information_updated(player, player_entity_id, name, old, new)`, when a server player's client sends `ServerboundClientInformationPacket` in play: language, view distance, chat visibility and colours, skin parts, main hand, text filtering, server listing and particle status. `old` and `new` are `NativeClientInfo` values (chat visibility, main hand and particle status are enums; raw ids map as vanilla's `ByIdMap` does). It fires once per packet, after the new information is stored, so two packets in one tick give two calls in order; the values can be equal. Listen-only. The join's own information (the configuration phase) is not reported. Server-side. Bundles need \"hooks\": @API:client_information_updated@."
+  ]
 }

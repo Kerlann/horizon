@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a note block about to play, with its instrument and note changeable (`native_note_block_play`).",
-  "doc_summary": "`native_note_block_play(dimension, player, player_entity_id, pos, instrument, note, cancel)`, in `NoteBlock.playNote`, once a block above no longer mutes it. `player` and `player_entity_id` name the player who tuned or punched it, and are `None` for redstone. `instrument` (a `NativeNoteInstrument`) and `note` (0 to 24) can be changed to play another; a note out of range keeps the block's own. Set `cancel` and it doesn't play: no sound, no particle, no `note_block_play` game event. Server-side. Bundles need \"hooks\": @API:note_block_play@."
+  ]
 }

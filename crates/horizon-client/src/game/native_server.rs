@@ -1,9 +1,9 @@
 //! Server commands and players for native mods (docs/native-mods.md,
-//! "Server commands and players", API 8): the commands mods add to the
+//! "Server commands and players"): the commands mods add to the
 //! server's command tree (`native_register_commands`), a player's command
 //! reaching them (`native_perform_command`), and the helpers a server mod
 //! answers with: the players online, a line to one of them or to all, the
-//! command's feedback and the world's folder; and (API 9) the acting
+//! command's feedback and the world's folder; and the acting
 //! player's plain items: count, take, give. They act on the server's own
 //! players (the hub's: a dedicated server's, a LAN host's, single player's
 //! server thread's), never on a client's.
@@ -23,7 +23,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 /// A sidebar a server mod shows one player (`native_sidebar`): its title and
 /// up to 15 lines, top first, each a text on the left and, where the score's
-/// number would be, an optional text on the right. API 49.
+/// number would be, an optional text on the right.
 #[allow(dead_code)]
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct NativeSidebar {
@@ -362,7 +362,7 @@ impl PlayerRead<'_> {
 #[allow(dead_code)]
 impl Game<'_> {
     /// Resolve an online UUID on this server. During a nested player swap,
-    /// outer players whose records are displaced return None. API @API:player_read@.
+    /// outer players whose records are displaced return None.
     pub(super) fn native_player_ref(&self, uuid: u128) -> Option<PlayerRef> {
         let epoch = self.native_lifecycle.epoch()?;
         let (_, id) = self.player_lookup(uuid)?;
@@ -426,8 +426,7 @@ impl Game<'_> {
     /// Changes a player's game mode as `ServerPlayer.setGameMode` and
     /// `/gamemode` do, including the cancellable change hook and ability
     /// updates. Returns false for a stale or unavailable player, another
-    /// player during a swap, no change, or a canceled change. API
-    /// @API:player_game_mode_write@.
+    /// player during a swap, no change, or a canceled change.
     pub(super) fn native_player_set_game_mode(
         &mut self,
         player: PlayerRef,
@@ -490,8 +489,7 @@ impl Game<'_> {
         Some(self.player_handle_read(player)?.creative())
     }
 
-    /// `Inventory.getSelectedSlot`: the hotbar slot the player holds, 0..9. API
-    /// @API:item_places@.
+    /// `Inventory.getSelectedSlot`: the hotbar slot the player holds, 0..9.
     pub(super) fn native_player_selected_slot(&self, player: PlayerRef) -> Option<usize> {
         Some(match self.player_handle_read(player)? {
             PlayerRead::Acting { .. } => self.selected,
@@ -551,7 +549,7 @@ impl Game<'_> {
         self.native_send(uuid, system_chat(&line))
     }
     /// A line over that player's hotbar (the action bar), also inside a
-    /// player's hook for the acting player; false when they aren't on. API 21.
+    /// player's hook for the acting player; false when they aren't on.
     pub(super) fn native_action_bar(&mut self, uuid: u128, line: Text) -> bool {
         let packet = C::SystemChat(play::SystemChat {
             content: component_nbt(&line.component()),
@@ -586,7 +584,7 @@ impl Game<'_> {
     /// see it, and it is gone when they leave (a mod sends it again when
     /// they come back). It takes the sidebar's place from an objective the
     /// world shows there, for this player, until they rejoin. False when
-    /// they aren't on. API 49.
+    /// they aren't on.
     pub(super) fn native_sidebar(&mut self, uuid: u128, sidebar: Option<&NativeSidebar>) -> bool {
         let objective = SIDEBAR_OBJECTIVE.to_owned();
         // Removed first, so the new one's lines replace all the old ones.
@@ -628,7 +626,7 @@ impl Game<'_> {
     }
     /// The lines over and under that player's list of players (Tab):
     /// `ClientboundTabListPacket`, an empty text for none. False when they
-    /// aren't on. API 49.
+    /// aren't on.
     pub(super) fn native_tab_list(&mut self, uuid: u128, header: &Text, footer: &Text) -> bool {
         let packet = C::TabList(play::TabList {
             header: component_nbt(&header.component()),
@@ -639,7 +637,7 @@ impl Game<'_> {
     /// The server's tick rate (20 unless `/tick rate` changed it) and the
     /// milliseconds its ticks took on average lately, as `/tick query`
     /// reports them. The ticks a second it keeps up is the rate, or
-    /// 1000 / milliseconds when that is lower. API 49.
+    /// 1000 / milliseconds when that is lower.
     pub(super) fn native_tick_stats(&self) -> (f32, f64) {
         (
             self.clock.rate(),
@@ -651,7 +649,7 @@ impl Game<'_> {
     /// needs asleep, as a spectator is (an away-from-keyboard mod). Kept
     /// until a mod sets it back or the server stops, also if they leave and
     /// come back. Only where no player's state is swapped in, as
-    /// `native_run_command`; false there and when they aren't on. API 49.
+    /// `native_run_command`; false there and when they aren't on.
     pub(super) fn native_sleep_ignored(&mut self, uuid: u128, ignored: bool) -> bool {
         let Some(host) = &mut self.lan else {
             return false;
@@ -675,7 +673,6 @@ impl Game<'_> {
     /// for a player who is off (who joins hidden), until a mod sets it again
     /// or the server stops. Works anywhere on a server, inside a player's
     /// hook too; false on a client and in a world nobody else can join.
-    /// API 314.
     pub(super) fn native_hide_player(&mut self, uuid: u128, level: Option<u8>) -> bool {
         let Some(host) = &mut self.lan else {
             return false;
@@ -693,8 +690,7 @@ impl Game<'_> {
     /// sets it again or the server stops (also if they leave and come back).
     /// Plain text: the mod checks it (`native_text_allowed`, its length,
     /// other players' names). Only where no player's state is swapped in,
-    /// as `native_run_command`; false there and when they aren't on. API
-    /// 62.
+    /// as `native_run_command`; false there and when they aren't on.
     pub(super) fn native_set_nickname(&mut self, uuid: u128, nickname: Option<&str>) -> bool {
         let Some(host) = &mut self.lan else {
             return false;
@@ -707,7 +703,7 @@ impl Game<'_> {
     }
     /// Whether the server's chat filter (`server.toml` `[chat_filter]`)
     /// lets `text` through: true without a filter, None inside a player's
-    /// hook (where the server is out of reach). API 62.
+    /// hook (where the server is out of reach).
     pub(super) fn native_text_allowed(&self, text: &str) -> Option<bool> {
         let host = self.lan.as_ref()?;
         Some(
@@ -743,7 +739,6 @@ impl Game<'_> {
     /// `[discord] events` lists `announce`: `name` and `uuid` say who it is
     /// about (empty and 0 for no one), `message` is the line (`§` codes colour it).
     /// Only on a dedicated server; false elsewhere and for an empty message.
-    /// API 163.
     pub(super) fn native_server_event(&self, name: &str, uuid: u128, message: &str) -> bool {
         if self.options.dedicated.is_none() || message.trim().is_empty() {
             return false;
@@ -763,7 +758,7 @@ impl Game<'_> {
     /// The player whose action or command a hook hears, as their state is
     /// swapped in (`native_perform_command`, `native_right_click_block`,
     /// `native_use_item_on`, `native_destroy_block`...): None outside such a
-    /// hook. API 21.
+    /// hook.
     pub(super) fn native_acting_player(&self) -> Option<NativeServerPlayer> {
         let p = self.player.as_ref()?;
         Some(NativeServerPlayer {
@@ -784,7 +779,7 @@ impl Game<'_> {
     /// happens at the next tick's start, as the console's. Whether it ran
     /// without failing. Only where no player's state is swapped in
     /// (`native_tick`, `native_menu_clicked`): false inside a player's hook,
-    /// where the other players are out of reach. API 21.
+    /// where the other players are out of reach.
     pub(super) fn native_run_command(&mut self, line: &str) -> bool {
         if self.lan_acting.is_some() || self.lan.is_none() {
             return false;
@@ -830,7 +825,7 @@ fn orb_meets(position: [f64; 3], min: [f64; 3], max: [f64; 3]) -> bool {
         && position[2] + 0.25 > min[2]
 }
 
-/// Experience for server mods. API 101.
+/// Experience for server mods.
 #[allow(dead_code)]
 impl Game<'_> {
     /// The experience orbs of the server level `dimension` whose box meets
@@ -863,7 +858,7 @@ impl Game<'_> {
     }
     /// Writes the experience orb `id`'s `value` (the points a pickup gives), `count`
     /// (orbs merged into it, each worth `value`) and `age` (ticks lived; an orb
-    /// despawns at 6000); a `None` is left as it is. API 128.
+    /// despawns at 6000); a `None` is left as it is.
     /// False, and nothing written, for an orb not in the server level `dimension`, a
     /// `value` or `count` of 0, and on a client of a server.
     pub(super) fn native_set_experience_orb(

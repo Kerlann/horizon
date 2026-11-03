@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a server player's respawn point about to be set or cleared, cancellable (`native_player_set_spawn`).",
-  "doc_summary": "a server player's respawn point about to be set (`ServerPlayer.setRespawnPosition`): `native_player_set_spawn(player, player_entity_id, name, dimension, pos, forced, cancel)`, once for each call vanilla makes: every sleep in a bed (the same bed too), a new respawn anchor point, `/spawnpoint`, and the copy to a respawned player whose respawn block was found (`pos` is none for a player with no point). A respawn block that is gone makes no call. Set `cancel` and the point stays as it was (a respawned player is left with none)."
+  ]
 }

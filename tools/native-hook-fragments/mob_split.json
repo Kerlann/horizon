@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "a slime, magma cube or sulfur cube splitting on death, cancellable (`native_mob_split`).",
-  "doc_summary": "a slime, magma cube or sulfur cube about to split into smaller ones on death, as NeoForge's `MobSplitEvent` (`AbstractCubeMob.remove`): `native_mob_split(parent, kind, size, child_size, count, cancel)` runs on the server for a parent above size 1 that makes children, after vanilla drew the child count. A mod may change `count` (0 to 64) or set `cancel` to spawn no children. NeoForge's list of child mobs is this count: changing a child or adding one of another kind waits for a handle to a mob not yet in the world. Bundles need \"hooks\": @API:mob_split@."
+  ]
 }

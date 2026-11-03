@@ -1132,6 +1132,9 @@ fn a_spectators_container_click_is_taken_back() {
         fn items(&self) -> &horizon_client::items::Items {
             unreachable!("a spectator's click never reaches the menu")
         }
+        fn enchantments(&self) -> &horizon_client::enchant::Enchantments {
+            unreachable!("a spectator's click never reaches the menu")
+        }
         fn max_stack(&self, _: &str) -> u32 {
             64
         }
@@ -1290,6 +1293,9 @@ fn a_click_past_the_menu_is_ignored() {
     struct NoRules;
     impl horizon_client::lan::menu::Rules for NoRules {
         fn items(&self) -> &horizon_client::items::Items {
+            unreachable!("a click past the menu never reaches it")
+        }
+        fn enchantments(&self) -> &horizon_client::enchant::Enchantments {
             unreachable!("a click past the menu never reaches it")
         }
         fn max_stack(&self, _: &str) -> u32 {

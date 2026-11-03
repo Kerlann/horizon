@@ -36,8 +36,7 @@ impl Game<'_> {
 
     /// `ItemCooldowns.getCooldownGroup(stack)`: the group `stack`'s
     /// cooldown is filed under, the group its `use_cooldown` component names
-    /// (its own, else its item's default), else its item id. API
-    /// @API:player_cooldowns@.
+    /// (its own, else its item's default), else its item id.
     pub(super) fn native_item_cooldown_group(&self, stack: &ItemStack) -> String {
         let default = self
             .items()
@@ -46,7 +45,7 @@ impl Game<'_> {
         horizon_client::cooldowns::group(stack, default).to_string()
     }
     /// Every group the player waits on and its ticks left, ordered by
-    /// group. API @API:player_cooldowns@.
+    /// group.
     pub(super) fn native_player_item_cooldowns(
         &self,
         player: PlayerRef,
@@ -64,7 +63,6 @@ impl Game<'_> {
         Some(out)
     }
     /// `ItemCooldowns.isOnCooldown`: whether `group` still has time to run.
-    /// API @API:player_cooldowns@.
     pub(super) fn native_player_has_item_cooldown(
         &self,
         player: PlayerRef,
@@ -73,8 +71,7 @@ impl Game<'_> {
         Some(self.native_cooldowns_of(player)?.is_on_cooldown(group))
     }
     /// `ItemCooldowns.getCooldownPercent(group, 0)`: what is left of the
-    /// group's cooldown, from 1 (just started) to 0 (none). API
-    /// @API:player_cooldowns@.
+    /// group's cooldown, from 1 (just started) to 0 (none).
     pub(super) fn native_player_item_cooldown_percent(
         &self,
         player: PlayerRef,
@@ -84,8 +81,7 @@ impl Game<'_> {
     }
     /// `ItemCooldowns.addCooldown(group, ticks)`: starts (or restarts) the
     /// group's cooldown, and the player's client draws it on every item of the
-    /// group (`ServerItemCooldowns.onCooldownStarted`). API
-    /// @API:player_cooldowns@.
+    /// group (`ServerItemCooldowns.onCooldownStarted`).
     pub(super) fn native_player_set_item_cooldown(
         &mut self,
         player: PlayerRef,
@@ -97,8 +93,7 @@ impl Game<'_> {
             && self.native_as_player(player.uuid(), |game| game.add_cooldown(group, ticks))
     }
     /// `ItemCooldowns.removeCooldown(group)`: ends the group's cooldown now,
-    /// on the client too (`ServerItemCooldowns.onCooldownEnded`). API
-    /// @API:player_cooldowns@.
+    /// on the client too (`ServerItemCooldowns.onCooldownEnded`).
     pub(super) fn native_player_remove_item_cooldown(
         &mut self,
         player: PlayerRef,

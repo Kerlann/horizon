@@ -60,7 +60,5 @@
       "target": "horizon_client::game::native_projectile_refs::Game<'_>::native_projectile_set_critical",
       "receiver": "projectile"
     }
-  ],
-  "rust_summary": "projectile handles (`ProjectileRef`, `native_projectile`): owner, deflection, and an arrow's pickup, damage and critical flag.",
-  "doc_summary": "`ProjectileRef`, made with `host.projectile(entity)`: `owner(host)` and `set_owner(host, owner)`, `deflect(host, deflection, by, new_owner, by_attack, power)` (`NativeDeflection`: `Reverse`, `AimDeflect`, `MomentumDeflect`), and for arrows `pickup(host)` (`NativeArrowPickup`), `base_damage(host)` and `critical(host)` with their setters. Pickup also covers a mob's trident. A trident a player threw and a firework rocket have an owner and a deflection but no pickup, damage or critical flag."
+  ]
 }

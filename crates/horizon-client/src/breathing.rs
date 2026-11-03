@@ -27,7 +27,7 @@ pub struct Breath {
 /// maximum (300); without, it falls by `consume`, and at -20 it is set to 0
 /// and the entity takes 2 drowning damage. Negative amounts count as 0.
 /// Asked on servers for players and for mobs, except those with a
-/// `WaterAnimal`'s or an axolotl's own air logic. API 144.
+/// `WaterAnimal`'s or an axolotl's own air logic.
 #[inline(never)]
 pub fn native_living_breathe(
     entity: u32,
@@ -60,7 +60,7 @@ pub fn breathe(entity: u32, kind: &str, vanilla: Breath) -> Breath {
 /// from `LivingEntity.baseTick`), with vanilla's answers as the defaults: it
 /// drowns at -20 air, for 2 damage and 8 bubbles. Bubble count is read-only;
 /// changes to the event field do not affect the vanilla entity event. Asked on
-/// servers, for the entities `native_living_breathe` is. API 356.
+/// servers, for the entities `native_living_breathe` is.
 #[inline(never)]
 pub fn native_living_drown(
     entity: u32,

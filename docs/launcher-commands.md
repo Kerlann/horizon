@@ -55,7 +55,7 @@ Install a game program you have, such as a horizon-client built on your fork's A
 
 The program must match this computer's executable format and carry the exact `horizon-game-executable;`
 identity signature embedded by ordinary and launcher-generated games. It carries no mod API level or build id,
-and is not a signature of authenticity. Unmarked programs and retired WIT API-level markers are refused.
+and is not a signature of authenticity. Unmarked programs are refused.
 
 MCP: none: the player's switch.
 

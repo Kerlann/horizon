@@ -13,8 +13,5 @@
     {"name":"item_entity_target", "side": "server", "target":"horizon_client::game::native_item_entity_refs::Game<'_>::native_item_entity_target", "receiver":"item_entity"},
     {"name":"item_entity_set_target", "side": "server", "target":"horizon_client::game::native_item_entity_refs::Game<'_>::native_item_entity_set_target", "receiver":"item_entity"},
     {"name":"item_entity_owner", "side": "server", "target":"horizon_client::game::native_item_entity_refs::Game<'_>::native_item_entity_owner", "receiver":"item_entity"}
-  ],
-  "rust_summary":"dropped item handles, stack, delay, age, pickup target and thrower.",
-  "doc_summary":"`ItemEntityRef`, made with `host.item_entity(entity)`, reads and writes dropped-item state. Bundles need \"hooks\": @API:item_entity_refs@.",
-  "comments":["crates/horizon-client/src/game/native_item_entity_refs.rs"]
+  ]
 }

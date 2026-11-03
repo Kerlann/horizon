@@ -11,7 +11,5 @@
         "out": "cancel"
       }
     }
-  ],
-  "rust_summary": "armor about to take durability damage (`native_armor_hurt`).",
-  "doc_summary": "`native_armor_hurt(player, entity, kind, source, entries, cancel)`, once per hit before armor takes durability damage (`doHurtEquipment`), for the pieces that would wear. `entity` is the wearer's entity id, `player` its UUID (None for a mob), `kind` its type, `source` the hit's damage type (`causing` and `direct` are 0 here). Each `NativeArmorHurt` has its `slot` (`EquipmentSlot`), the `stack`, the `damage` vanilla worked out (`max(1, hit / 4)`) and a `new_damage` a mod may change (below 1 for none; cast to a whole number as vanilla does; Unbreaking applies after). Set `cancel` for no armor damage. A piece a mod swaps in the slot during the hook is not worn. A server player's four armor slots, and a mob's `Body` (a horse's armor). Server-side."
+  ]
 }

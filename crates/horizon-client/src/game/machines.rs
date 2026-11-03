@@ -1308,6 +1308,19 @@ impl Game<'_> {
             .unwrap_or(0);
         found.get(pick as usize).copied()
     }
+    /// Runs `f` on the block container at `pos`, or an entity container there.
+    fn with_container_at<R>(
+        &mut self,
+        pos: Pos,
+        f: impl FnOnce(&mut Self, &View) -> R,
+    ) -> Option<R> {
+        if let Some(view) = self.containers().view(pos, false) {
+            return Some(f(self, &view));
+        }
+        let id =
+            self.entity_container_at([pos.0 as f64 + 0.5, pos.1 as f64 + 0.5, pos.2 as f64 + 0.5])?;
+        self.with_entity_container(id, f)
+    }
     /// Runs `f` on a container entity's items as a container, under the
     /// placeholder key its menu uses (the open menu's copy when it is open),
     /// then hands the items back to the entity.
@@ -1516,27 +1529,26 @@ impl Game<'_> {
             return Ok(());
         }
         let remaining = if dropper {
-            match self.containers().view(target, false) {
-                None => self.dispense_default(key, facing, stack),
-                Some(into) => {
-                    let one = ItemStack {
-                        count: 1,
-                        ..stack.clone()
-                    };
-                    if self
-                        .add_item(None, &into, one, Some(facing.opposite()))
-                        .is_none()
-                    {
-                        self.view_changed(&into);
-                        Some(ItemStack {
-                            count: stack.count - 1,
-                            ..stack
-                        })
-                        .filter(|s| s.count > 0)
-                    } else {
-                        Some(stack)
-                    }
+            let inserted = self.with_container_at(target, |game, into| {
+                let one = ItemStack {
+                    count: 1,
+                    ..stack.clone()
+                };
+                let inserted = game
+                    .add_item(None, into, one, Some(facing.opposite()))
+                    .is_none();
+                if inserted {
+                    game.view_changed(into);
                 }
+                inserted
+            });
+            match inserted {
+                Some(inserted) => Some(ItemStack {
+                    count: stack.count - u32::from(inserted),
+                    ..stack
+                })
+                .filter(|s| s.count > 0),
+                None => self.dispense_default(key, facing, stack),
             }
         } else {
             self.dispense_item(key, facing, stack)?

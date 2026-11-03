@@ -9,6 +9,8 @@ pub(super) struct HookSources {
     pub fills: Vec<Fill>,
     pub hook_ids: String,
     pub hook_count: usize,
+    pub render_hook_ids: String,
+    pub render_hook_count: usize,
 }
 
 pub(super) fn emit(
@@ -18,6 +20,8 @@ pub(super) fn emit(
 ) -> Result<HookSources, String> {
     let mut hook_ids = String::new();
     let mut hook_count = 0;
+    let mut render_hook_ids = String::new();
+    let mut render_hook_count = 0;
     let mut traits = String::new();
     let mut dispatch = String::new();
     let mut render_traits = String::new();
@@ -104,7 +108,6 @@ pub(super) fn emit(
             args.retain(|(name, _)| name != "ticks");
         }
         let mut used: HashSet<_> = args.iter().map(|(name, _)| name.clone()).collect();
-        let mod_list = fresh_name("mods", &mut used);
         let mod_item = fresh_name("mod_hook", &mut used);
         let part_list = fresh_name("parts", &mut used);
         let part_item = fresh_name("part", &mut used);
@@ -200,7 +203,10 @@ pub(super) fn emit(
                 .collect::<String>()
         );
         let hook_id = event_type.strip_suffix("Event").unwrap();
-        if !is_render {
+        if is_render {
+            render_hook_ids.push_str(&format!("{hook_id},\n"));
+            render_hook_count += 1;
+        } else {
             hook_ids.push_str(&format!("{hook_id},\n"));
             hook_count += 1;
         }
@@ -212,9 +218,7 @@ pub(super) fn emit(
             dispatch_params.push(format!("{name}: {}", param.ty));
             call_args.push(name.clone());
         }
-        if is_render {
-            dispatch_params.push(format!("{mod_list}: &[&dyn RenderHooks]"));
-        }
+
         let mut lifetimes = EventLifetimes::default();
         let mut fields = String::new();
         let mut inits = Vec::new();
@@ -313,13 +317,14 @@ pub(super) fn emit(
                     "{method_source}fn {name}({trait_params}){result} {{ {unused} {default} }}\n"
                 ));
         }
-        let report = if is_render {
-            String::new()
+        let (domain, id_enum) = if is_render {
+            ("Render", "RenderHookId")
         } else {
-            format!(
-                "horizon_client_core::subscribers::default_called(HookId::{hook_id} as usize, self);"
-            )
+            ("Gameplay", "HookId")
         };
+        let report = format!(
+            "horizon_client_core::subscribers::default_called(horizon_client_core::subscribers::Domain::{domain}, {id_enum}::{hook_id} as usize, self);"
+        );
         method_source.push_str(&format!(
             "fn {name}({trait_params}){result} {{ {report} {unused} {default} }}\n"
         ));
@@ -330,7 +335,7 @@ pub(super) fn emit(
         let build = format!("let mut {event} = {event_type} {{ {} }};", inits.join(", "));
         // A trait mod's call is marked with the mod for a panic to name; render hooks are called bare.
         let each = if is_render {
-            mod_list.clone()
+            format!("super::entered_render(RenderHookId::{hook_id})")
         } else {
             format!("super::entered(HookId::{hook_id}, \"{name}\")")
         };
@@ -384,8 +389,10 @@ pub(super) fn emit(
             ),
             _ => format!("{lookup} {build} {calls} {write_back}"),
         };
-        let early_return = if is_render || scoped.is_some() {
+        let early_return = if scoped.is_some() {
             String::new()
+        } else if is_render {
+            format!("if !super::render_listened(RenderHookId::{hook_id}) {{ return; }}")
         } else {
             format!("if !super::listened(HookId::{hook_id}) {{ return; }}")
         };
@@ -402,5 +409,7 @@ pub(super) fn emit(
         fills,
         hook_ids,
         hook_count,
+        render_hook_ids,
+        render_hook_count,
     })
 }

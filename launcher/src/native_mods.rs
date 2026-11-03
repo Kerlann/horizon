@@ -36,8 +36,6 @@ const PREFIX: &str = "native-";
 /// horizon-mixins, for bundles that don't name the revision they were tested with.
 const MIXINS_GIT: &str = "https://github.com/horizon-rust/horizon-mixins";
 pub const MIXINS_REV: &str = horizon_mods::index::native::MIXINS_REV;
-/// The features of the release's own game (game-build.yml).
-const FEATURES: &str = "horizon-client/mods";
 
 /// What a native build is compiled for. `Performance`, the default, is the workspace's `fast` (16
 /// codegen units, incremental, thin-local LTO only), so changing a mod recompiles only `horizon-client`'s
@@ -68,26 +66,19 @@ impl Profile {
         }
     }
 
-    /// The profile named `text`; `fast`, `Performance`'s name before `Dev`, still names it.
+    /// The profile named `text`.
     pub fn parse(text: &str) -> Option<Self> {
         match text.trim() {
-            "performance" | "fast" => Some(Self::Performance),
+            "performance" => Some(Self::Performance),
             "dev" => Some(Self::Dev),
             "release" => Some(Self::Release),
             _ => None,
         }
     }
 
-    /// The settings' profile (`native_profile`, or the older `native_release` switch for
-    /// `Release`).
+    /// The settings' profile, or the default when unset.
     pub fn chosen(settings: &crate::backend::Settings) -> Self {
-        settings
-            .native_profile
-            .unwrap_or(if settings.native_release {
-                Self::Release
-            } else {
-                Self::Performance
-            })
+        settings.native_profile.unwrap_or_default()
     }
 
     /// The Cargo profile it compiles with (its folder in `native/target/`), and what it sets over
@@ -121,16 +112,6 @@ impl Target {
         match self {
             Self::Client => "client",
             Self::Server => "server",
-        }
-    }
-
-    /// What the build compiles with besides the profile, in its key: the game the release's own
-    /// features, the engine `--no-default-features` (the `mods` feature is added to both when
-    /// the source has it, so it changes neither key).
-    fn features(self) -> &'static str {
-        match self {
-            Self::Client => FEATURES,
-            Self::Server => "--no-default-features",
         }
     }
 
@@ -1032,29 +1013,6 @@ fn repin(bundle: &Bundle, revision: &str) -> Result<(), String> {
     fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Whether Horizon's source at `source` has the `mods` feature (the WebAssembly mods' runtime,
-/// gone from later revisions).
-fn has_mods_feature(source: &Path) -> bool {
-    let path = source.join("crates/horizon-client/Cargo.toml");
-    let text = fs::read_to_string(path).unwrap_or_default();
-    let value: toml::Table = text.parse().unwrap_or_default();
-    value.get("features").and_then(|f| f.get("mods")).is_some()
-}
-
-/// The profile the source at `source` builds with: `chosen`, except that one built on
-/// `[profile.fast]` becomes `Release` (the release's own) for a revision whose Cargo.toml has none.
-fn profile_of(source: &Path, chosen: Profile) -> Profile {
-    if chosen == Profile::Release {
-        return chosen;
-    }
-    let text = fs::read_to_string(source.join("Cargo.toml")).unwrap_or_default();
-    let value: toml::Table = text.parse().unwrap_or_default();
-    match value.get("profile").and_then(|p| p.get("fast")) {
-        Some(_) => chosen,
-        None => Profile::Release,
-    }
-}
-
 /// The Horizon commit `version` (an installed release or Nightly) was built from, from GitHub.
 pub fn revision_of(version: &str) -> Result<String, String> {
     let reference = match version.strip_prefix("nightly-") {
@@ -1081,8 +1039,7 @@ pub struct About {
     pub base: String,
     /// The Horizon commit it compiled.
     pub horizon: String,
-    /// What it compiles: the game the player plays (also the only kind a `native-mods.json`
-    /// from before the target was recorded builds), or the headless engine a server runs.
+    /// What it compiles: the game or the headless engine a server runs.
     pub target: Target,
 }
 
@@ -1094,8 +1051,7 @@ pub fn about(version: &str) -> Option<About> {
     about_in(&backend::version_dir(version))
 }
 
-/// The build record (`native-mods.json`) in version folder `dir`, if it parses. A build from
-/// before targets were recorded is a client one, so it still reads.
+/// The build record (`native-mods.json`) in version folder `dir`, if it parses.
 fn about_in(dir: &Path) -> Option<About> {
     let json: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(dir.join("native-mods.json")).ok()?).ok()?;
@@ -1105,7 +1061,8 @@ fn about_in(dir: &Path) -> Option<About> {
         horizon: field("horizon").filter(|r| is_revision(r))?,
         target: match field("target").as_deref() {
             Some("server") => Target::Server,
-            _ => Target::Client,
+            Some("client") => Target::Client,
+            _ => return None,
         },
     })
 }
@@ -1210,7 +1167,7 @@ pub fn version_for(
     for part in [mixins, cargo_profile]
         .into_iter()
         .chain(configs.iter().copied())
-        .chain([target.features(), rust_toolchain::VERSION, revision])
+        .chain([rust_toolchain::VERSION, revision])
     {
         hash.update(part.as_bytes());
         hash.update([0]);
@@ -1508,9 +1465,6 @@ fn compile(
     if target == Target::Server {
         cmd.arg("--no-default-features");
     }
-    if has_mods_feature(stage) {
-        cmd.args(["--features", FEATURES]);
-    }
     cmd.args(["-p", package, "--bin", "horizon-client"]);
     cmd
 }
@@ -1728,7 +1682,7 @@ struct Built {
     version: String,
     /// Which case the build was, said before anything ran.
     plan: Plan,
-    /// The profile it compiled with: the chosen one, unless the source has no `[profile.fast]`.
+    /// The profile it compiled with.
     profile: Profile,
     /// How long the whole build took.
     secs: u64,
@@ -1753,6 +1707,13 @@ fn pipeline(
     progress: &impl Fn(Step),
 ) -> Result<Built, String> {
     let started = std::time::Instant::now();
+    let built_on = about(base);
+    if is_native(base) && built_on.is_none() {
+        return Err(trf(
+            "Native build {version} has a missing or invalid native-mods.json record. Rebuild it from an installed Horizon version.",
+            &[("version", base)],
+        ));
+    }
     backend::need_prepared(base)?;
     fs::create_dir_all(root()).map_err(|e| e.to_string())?;
     // The mods are copied first: the build and its key use the copy, whatever happens to the
@@ -1766,7 +1727,6 @@ fn pipeline(
         log_warning(&warning);
     }
     // A native build starts from the release or Nightly it was made from, on its own revision.
-    let built_on = about(base);
     let origin = built_on.as_ref().map_or(base, |a| a.base.as_str());
     let mut ids = std::collections::HashSet::new();
     for b in &found {
@@ -1941,9 +1901,7 @@ fn pipeline(
             lock_crates(&rust, &source, &stage, &mods)?;
         }
         let target_dir = real.join("target");
-        // A revision without `[profile.fast]` builds with `release`: the build says so.
-        let compiled = profile_of(&stage, profile);
-        built.profile = compiled;
+        let compiled = profile;
         let (mut crates, mut total, mut name) = (0, None, String::new());
         run(
             compile(
@@ -3348,28 +3306,27 @@ mod tests {
         );
         let client = flags(&d, Target::Client);
         assert!(!client.contains(&"--no-default-features".into()));
-        // A source with the `mods` feature keeps it in both builds.
-        fs::create_dir_all(d.join("crates/horizon-client")).unwrap();
-        fs::write(
-            d.join("crates/horizon-client/Cargo.toml"),
-            "[features]\nmods = []\n",
-        )
-        .unwrap();
-        for target in [Target::Client, Target::Server] {
-            let args = flags(&d, target);
-            assert!(
-                args.windows(2)
-                    .any(|w| w == ["--features", FEATURES].map(String::from)),
-                "{:?}: the mods feature stays on",
-                target
-            );
-        }
     }
 
-    /// A record (`native-mods.json`) says what it compiles; one from before targets were
-    /// recorded is a client build, so it still reads ([`about`]).
     #[test]
-    fn a_builds_record_names_its_target_and_older_ones_still_read() {
+    fn a_native_build_without_a_record_is_refused_before_preparation() {
+        let Err(error) = pipeline(
+            "native-missing-record-test",
+            Path::new("missing-mod-folder"),
+            false,
+            Profile::Dev,
+            Target::Client,
+            &|_| panic!("invalid records must not start a build"),
+        ) else {
+            panic!("invalid build must be refused");
+        };
+        assert!(error.contains("native-mods.json record"), "{error}");
+        assert!(error.contains("Rebuild it"), "{error}");
+    }
+
+    /// A record (`native-mods.json`) must name its target ([`about`]).
+    #[test]
+    fn a_builds_record_requires_a_valid_target() {
         let d = dir("about-target");
         let record = |target: Option<&str>| {
             let json = match target {
@@ -3379,17 +3336,13 @@ mod tests {
                 None => format!(r#"{{"base":"v2026.10.13","horizon":"{A}"}}"#),
             };
             fs::write(d.join("native-mods.json"), json).unwrap();
-            about_in(&d).unwrap()
+            about_in(&d)
         };
-        assert_eq!(
-            record(None).target,
-            Target::Client,
-            "a build from before targets"
-        );
-        assert_eq!(record(Some("client")).target, Target::Client);
-        assert_eq!(record(Some("server")).target, Target::Server);
-        assert_eq!(record(Some("anything-else")).target, Target::Client);
-        assert_eq!(record(None).horizon, A);
+        assert_eq!(record(None), None);
+        assert_eq!(record(Some("client")).unwrap().target, Target::Client);
+        assert_eq!(record(Some("server")).unwrap().target, Target::Server);
+        assert_eq!(record(Some("anything-else")), None);
+        assert_eq!(record(Some("client")).unwrap().horizon, A);
     }
 
     /// The export ([`build_server`]): a standalone runtime folder with the engine, the mods'
@@ -3541,15 +3494,13 @@ mod tests {
     }
 
     #[test]
-    fn the_setting_picks_the_profile_and_the_old_switch_still_picks_release() {
+    fn the_setting_picks_the_profile() {
         let mut settings = crate::backend::Settings::default();
         assert_eq!(Profile::chosen(&settings), Profile::Performance);
-        settings.native_release = true;
-        assert_eq!(Profile::chosen(&settings), Profile::Release);
         settings.native_profile = Some(Profile::Dev);
         assert_eq!(Profile::chosen(&settings), Profile::Dev);
         assert_eq!(Profile::parse("performance"), Some(Profile::Performance));
-        assert_eq!(Profile::parse("fast"), Some(Profile::Performance));
+        assert_eq!(Profile::parse("fast"), None);
         assert_eq!(Profile::parse(" release "), Some(Profile::Release));
         assert_eq!(Profile::parse("debug"), None);
         let text = serde_json::to_string(&settings).unwrap();
@@ -3860,22 +3811,8 @@ mod tests {
     }
 
     #[test]
-    fn builds_fall_back_to_release_where_the_source_has_no_fast_profile() {
+    fn builds_use_the_selected_profile() {
         let d = dir("profile");
-        assert_eq!(profile_of(&d, Profile::Performance), Profile::Release);
-        fs::write(d.join("Cargo.toml"), "[profile.release]\nlto = \"thin\"\n").unwrap();
-        assert_eq!(profile_of(&d, Profile::Performance), Profile::Release);
-        fs::write(
-            d.join("Cargo.toml"),
-            "[profile.release]\nlto = \"thin\"\n[profile.fast]\ninherits = \"release\"\n",
-        )
-        .unwrap();
-        assert_eq!(profile_of(&d, Profile::Performance), Profile::Performance);
-        assert_eq!(
-            profile_of(&d, Profile::Release),
-            Profile::Release,
-            "the player's choice of release stays"
-        );
         let rust = Toolchain {
             dir: PathBuf::from("/rust/1.99.1-x"),
         };

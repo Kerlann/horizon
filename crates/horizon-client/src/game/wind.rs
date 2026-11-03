@@ -50,12 +50,12 @@ fn push_waits_for_tick(ticks_after_projectiles: bool, id: u32, charge: Option<u3
 }
 /// `Projectile.deflect(REVERSE, entity, owner, false, 1.0)` of a breeze's
 /// deflection, through the one engine path (`Projectile::deflect`). The turn's
-/// float is `jitter`, drawn by the caller. The owner stays; a hurting
+/// float comes from the projectile's random. The owner stays; a hurting
 /// projectile's acceleration power halves (`onDeflection`).
-pub(super) fn reverse(p: &mut Projectile, jitter: f32) {
+pub(super) fn reverse(p: &mut Projectile) {
     let owner = (p.owner, p.owner_uuid, p.guest);
     p.deflect(
-        horizon_client::projectiles::Turn::Reverse { draw: Some(jitter) },
+        horizon_client::projectiles::Turn::Reverse,
         [1.0; 3],
         owner,
         false,
@@ -712,8 +712,8 @@ mod tests {
     fn a_deflected_projectile_turns_around_at_half_speed() {
         let mut p = Projectile::new(ProjectileKind::Snowball, Vec3::ZERO, None);
         p.velocity = Vec3::new(2.0, -1.0, 0.0);
-        reverse(&mut p, 0.5);
+        reverse(&mut p);
         assert!((p.velocity.x + 1.0).abs() < 1e-9 && (p.velocity.y - 0.5).abs() < 1e-9);
-        assert!((p.yaw - 180.0).abs() < 1e-4);
+        assert!((170.0..190.0).contains(&p.yaw));
     }
 }

@@ -141,6 +141,22 @@ impl Levels {
             .map(|(_, level)| &level.world)
     }
 
+    /// The streaming of the level not in place whose dimension is `dimension`.
+    pub(super) fn parked_streaming_of(&self, dimension: &str) -> Option<&Streaming> {
+        self.parked
+            .iter()
+            .find(|(dim, _)| dim.id() == dimension)
+            .map(|(_, level)| &level.streaming)
+    }
+
+    /// The streaming of the level not in place whose dimension is `dimension`, to change.
+    pub(super) fn parked_streaming_of_mut(&mut self, dimension: &str) -> Option<&mut Streaming> {
+        self.parked
+            .iter_mut()
+            .find(|(dim, _)| dim.id() == dimension)
+            .map(|(_, level)| &mut level.streaming)
+    }
+
     pub(super) fn parked_anims(&self, dim: Dim) -> Option<&BlockEntityAnims> {
         self.parked.get(&dim).map(|level| &level.anims)
     }
@@ -169,7 +185,7 @@ impl Levels {
     /// The forced chunks of every level not in place, released.
     pub(super) fn release_parked_forced_chunks(&mut self) {
         for level in self.parked.values_mut() {
-            level.streaming.forced.clear();
+            level.streaming.clear_forced();
         }
     }
 
@@ -359,6 +375,8 @@ impl Game<'_> {
             if opened {
                 // The new streaming's radius and meshing options.
                 self.apply_settings();
+                // ServerLevel's constructor reads the level's raids.
+                self.read_raids();
                 self.native_level_opened(target);
             }
         }

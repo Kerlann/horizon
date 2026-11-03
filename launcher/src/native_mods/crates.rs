@@ -315,8 +315,7 @@ pub(super) struct PostBuild {
     pub args: Vec<String>,
 }
 
-/// The post-build steps horizon-mixins listed in `stage` (none without the file: an older
-/// horizon-mixins, or no mod has one).
+/// The post-build steps horizon-mixins listed in `stage` (none when no mod has one).
 pub(super) fn post_builds(stage: &Path) -> Result<Vec<PostBuild>, String> {
     let path = stage.join(POST_BUILD);
     match fs::read_to_string(&path) {

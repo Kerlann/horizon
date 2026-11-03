@@ -1,0 +1,125 @@
+{
+ "hooks": [],
+ "helpers": [
+  {
+   "name": "level_raid",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_level_raid",
+   "receiver": "level"
+  },
+  {
+   "name": "level_raid_at",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_level_raid_at",
+   "receiver": "level"
+  },
+  {
+   "name": "level_raids",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_level_raids",
+   "receiver": "level"
+  },
+  {
+   "name": "mob_raid",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_mob_raid",
+   "receiver": "mob"
+  },
+  {
+   "name": "raid_center",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_center",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_omen_level",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_omen_level",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_set_omen_level",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_set_omen_level",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_groups_spawned",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_groups_spawned",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_num_groups",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_num_groups",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_has_bonus_wave",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_has_bonus_wave",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_is_started",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_is_started",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_is_active",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_is_active",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_status",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_status",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_total_health",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_total_health",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_living_health",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_living_health",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_bar_progress",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_bar_progress",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_raiders",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_raiders",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_wave_raiders",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_wave_raiders",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_heroes",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_heroes",
+   "receiver": "raid"
+  },
+  {
+   "name": "raid_stop",
+   "side": "server",
+   "target": "horizon_client::game::native_raid_refs::Game<'_>::native_raid_stop",
+   "receiver": "raid"
+  }
+ ]
+}

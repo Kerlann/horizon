@@ -26,7 +26,5 @@
       "target": "horizon_client::game::native_entity_sounds::Game<'_>::native_entity_spectator",
       "receiver": "entity"
     }
-  ],
-  "rust_summary": "an entity's sounds, game events, entity events and spectator state through an `EntityRef` (`native_entity_play_sound`...), and `NativeSoundSource` for `native_level_play_sound`.",
-  "doc_summary": "`entity.play_sound(host, sound, volume, pitch)`, `game_event(host, event)`, `broadcast_event(host, id)`, `sound_source(host)` (`NativeSoundSource`, as `Entity.getSoundSource`) and `spectator(host)`, with vanilla's names. `level.play_sound` takes a `NativeSoundSource` instead of an index. Sprint particles have no counterpart: vanilla spawns them only on the client."
+  ]
 }

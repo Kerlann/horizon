@@ -88,6 +88,7 @@ fn floor_pos(p: [f64; 3]) -> String {
 enum Target {
     Mob(u32),
     Stand(u32),
+    Cart(u32),
 }
 
 impl Game<'_> {
@@ -283,6 +284,7 @@ impl Game<'_> {
         LOG.with(|log| *log.borrow_mut() = Some(Vec::new()));
         let old_mobs: Vec<u32> = self.mobs.iter().map(|m| m.id).collect();
         let old_stands: Vec<u32> = self.armor_stands.iter().map(|s| s.id).collect();
+        let old_carts: Vec<u32> = self.carts.iter().map(|c| c.id).collect();
 
         let pos = &case["pos"];
         let origin = BlockPos::new(
@@ -426,7 +428,7 @@ impl Game<'_> {
                 s.spawn_delay as i16
             ));
         }
-        self.fixture_entities(&old_mobs, &old_stands, &mut out);
+        self.fixture_entities(&old_mobs, &old_stands, &old_carts, &mut out);
         for (i, t) in targets.iter().enumerate() {
             out.push(self.fixture_describe(i, t));
         }
@@ -687,7 +689,7 @@ impl Game<'_> {
                 let bonus = self.smash_damage_bonus("minecraft:armor_stand");
                 (bonus, self.hit_armor_stand(index, |_, _, _| {}))
             }
-            None => return Err("an attack case has a target".into()),
+            _ => return Err("an attack case has a living target or armor stand".into()),
         };
         self.process_level_events()?;
         let mut out = Vec::new();
@@ -708,6 +710,7 @@ impl Game<'_> {
         ));
         for (i, t) in targets.iter().enumerate() {
             let (health, v) = match *t {
+                Target::Cart(_) => continue,
                 Target::Mob(id) => match self.mobs.iter().find(|m| m.id == id) {
                     Some(m) => (num(f64::from(m.health)), m.velocity),
                     None => continue,
@@ -924,6 +927,15 @@ impl Game<'_> {
         let yaw = e["yaw"].as_f64().unwrap_or(0.0) as f32;
         self.next_entity += 1;
         let id = self.next_entity;
+        if let Some(cart_kind) = match kind {
+            "minecraft:chest_minecart" => Some(super::minecarts::CartKind::Chest),
+            "minecraft:hopper_minecart" => Some(super::minecarts::CartKind::Hopper),
+            _ => None,
+        } {
+            self.carts
+                .push(super::minecarts::Minecart::new(id, cart_kind, at));
+            return Ok(Target::Cart(id));
+        }
         if kind == "minecraft:armor_stand" {
             let mut stand = horizon_client::entities::ArmorStand::new(id, at, yaw);
             stand.marker = e["marker"].as_bool().unwrap_or(false);
@@ -1008,6 +1020,15 @@ impl Game<'_> {
     fn fixture_describe(&self, index: usize, target: &Target) -> String {
         let mut line = format!("T {index} ");
         match *target {
+            Target::Cart(id) => {
+                let cart = self.carts.iter().find(|c| c.id == id).unwrap();
+                line.push_str(cart.kind.id());
+                for (slot, item) in cart.items.iter().enumerate() {
+                    if item.is_some() {
+                        let _ = write!(line, " slot{slot}={}", canon_stack(item.as_ref()));
+                    }
+                }
+            }
             Target::Stand(id) => {
                 line.push_str("minecraft:armor_stand");
                 let Some(stand) = self.armor_stands.iter().find(|s| s.id == id) else {
@@ -1082,7 +1103,13 @@ impl Game<'_> {
     }
 
     /// `N` lines for every entity the dispenser added.
-    fn fixture_entities(&self, old_mobs: &[u32], old_stands: &[u32], out: &mut Vec<String>) {
+    fn fixture_entities(
+        &self,
+        old_mobs: &[u32],
+        old_stands: &[u32],
+        old_carts: &[u32],
+        out: &mut Vec<String>,
+    ) {
         let line = |kind: &str, p: [f64; 3], v: [f64; 3], extra: &str| {
             let mut l = format!(
                 "N {kind} {} {} {} {} {} {}",
@@ -1179,7 +1206,7 @@ impl Game<'_> {
                 ));
             }
         }
-        for c in &self.carts {
+        for c in self.carts.iter().filter(|c| !old_carts.contains(&c.id)) {
             let (p, v) = (c.position, c.velocity);
             out.push(line(c.kind.id(), [p.x, p.y, p.z], [v.x, v.y, v.z], ""));
         }

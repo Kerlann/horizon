@@ -958,5 +958,7 @@
   "Hide other players' cosmetics": "다른 플레이어의 코스메틱 숨기기",
   "Others look like plain players to you. Also in the game's Horizon settings.": "다른 플레이어가 일반 플레이어처럼 보입니다. 게임의 Horizon 설정에도 있습니다.",
   "Show other players' auras and trails": "다른 플레이어의 오라와 자취 보이기",
-  "Off by default. Also in the game's Horizon settings.": "기본값은 끔입니다. 게임의 Horizon 설정에도 있습니다."
+  "Off by default. Also in the game's Horizon settings.": "기본값은 끔입니다. 게임의 Horizon 설정에도 있습니다.",
+  "This game source has no readable native entry template. Update Horizon and rebuild the mods against this game.": "이 게임 소스에는 읽을 수 있는 네이티브 진입점 템플릿이 없습니다. Horizon을 업데이트하고 이 게임에 맞게 모드를 다시 빌드하세요.",
+  "Native build {version} has a missing or invalid native-mods.json record. Rebuild it from an installed Horizon version.": "네이티브 빌드 {version}의 native-mods.json 기록이 없거나 올바르지 않습니다. 설치된 Horizon 버전에서 다시 빌드하세요."
 }

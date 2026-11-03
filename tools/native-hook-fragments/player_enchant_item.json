@@ -10,7 +10,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "A player enchanted an item at an enchanting table (`native_player_enchant_item`).",
-  "doc_summary": "A server player enchanted an item at an enchanting table, in `EnchantmentMenu.clickMenuButton`: `native_player_enchant_item(player, player_entity_id, item, enchantments)`, with the player's UUID and entity id, the enchanted stack (an enchanted book for a book) and the enchantments it was given as (id, level), in order. Fires after the levels are paid, before `enchant_item`. Server-side, not cancellable. Bundles need \"hooks\": @API:player_enchant_item@."
+  ]
 }

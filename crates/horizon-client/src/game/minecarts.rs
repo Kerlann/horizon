@@ -112,7 +112,7 @@ pub(super) struct Minecart {
     pub lerp_steps: Vec<horizon_protocol::packets::play::MinecartStep>,
     pub flipped: bool,
     /// `AbstractMinecart.onRails`: transitions into rails need a position snap.
-    on_rails: bool,
+    pub(super) on_rails: bool,
     pub(super) on_ground: bool,
     horizontal_collision: bool,
     /// The horizontal speed the cart wanted when the collision stopped it:
@@ -613,7 +613,7 @@ impl Game<'_> {
     }
     /// `AbstractMinecart.getMaxSpeed`: the behavior's, which a furnace
     /// minecart cuts (`MinecartFurnace.getMaxSpeed`).
-    fn cart_max_speed(&self, c: &Minecart) -> f64 {
+    pub(super) fn cart_max_speed(&self, c: &Minecart) -> f64 {
         if self.minecart_improvements() {
             furnace_speed(c, self.max_speed_new(c))
         } else {
@@ -1196,8 +1196,13 @@ impl Game<'_> {
         c.previous = c.position;
         c.previous_yaw = c.yaw;
         c.previous_pitch = c.pitch;
-        c.hurt_time = (c.hurt_time - 1).max(0);
-        c.damage = (c.damage - 1.0).max(0.0);
+        // AbstractMinecart.tick: each counts down only while positive.
+        if c.hurt_time > 0 {
+            c.hurt_time -= 1;
+        }
+        if c.damage > 0.0 {
+            c.damage -= 1.0;
+        }
         // NewMinecartBehavior.tick snaps a newly created cart before gravity.
         if self.minecart_improvements() && c.first_tick {
             let pos = self.rail_block(c.position);
@@ -1346,12 +1351,14 @@ impl Game<'_> {
             _ => {}
         }
     }
-    fn prime_cart(&mut self, c: &mut Minecart) {
+    pub(super) fn prime_cart(&mut self, c: &mut Minecart) {
         if !self.ui.rules.bool("tnt_explodes") {
             return;
         }
         c.fuse = 80;
         let at = [c.position.x, c.position.y, c.position.z];
+        // MinecartTNT.primeFuse: clients start their own countdown.
+        self.lan_entity_event(c.id as i32, 70, at);
         self.audio
             .play("minecraft:entity.tnt.primed", Some(at), 1.0, 1.0);
     }
@@ -2023,10 +2030,13 @@ impl Game<'_> {
                     .as_ref()
                     .is_some_and(|s| matches!(&*s.item, "minecraft:coal" | "minecraft:charcoal"));
                 let c = &mut self.carts[i];
-                if fuel && c.fuel + 3600 <= 32000 {
-                    c.fuel += 3600;
-                    let p = self.player.as_ref().map_or(c.position, |p| p.position);
-                    c.push = Vec3::new(c.position.x - p.x, 0.0, c.position.z - p.z);
+                // Java int arithmetic: a mod can set any fuel.
+                if fuel && let Some(next) = furnace_fuel_after(c.fuel) {
+                    c.fuel = next;
+                    if c.fuel > 0 {
+                        let p = self.player.as_ref().map_or(c.position, |p| p.position);
+                        c.push = Vec3::new(c.position.x - p.x, 0.0, c.position.z - p.z);
+                    }
                     if !self.creative {
                         self.consume_held();
                     }
@@ -2688,6 +2698,13 @@ fn tnt_ignites_by_collision(horizontal_collision: bool, speed_sqr: f64) -> bool 
 /// the cast: HotSpot's atan2, multiplied then divided in Java's order.
 fn java_degrees(y: f64, x: f64) -> f64 {
     horizon_core::jmath::atan2(y, x) * 180.0 / std::f64::consts::PI
+}
+
+/// `MinecartFurnace.addFuel`: Java int arithmetic, so a fuel a mod set near
+/// `i32::MAX` wraps negative and takes more.
+pub(super) fn furnace_fuel_after(fuel: i32) -> Option<i32> {
+    let next = fuel.wrapping_add(3600);
+    (next <= 32000).then_some(next)
 }
 
 /// `MinecartFurnace.getMaxSpeed`: half the behavior's speed, three quarters

@@ -22,7 +22,7 @@ impl Game<'_> {
     /// `ServerLevel.playSound(null, ...)` does, under `source`'s volume
     /// slider. A `minecraft:` event must be registered; a mod's goes by name
     /// and is heard where its resources define it. True means queued, not
-    /// heard. API @API:level_effects@.
+    /// heard.
     pub(super) fn native_level_play_sound(
         &mut self,
         level: LevelRef,
@@ -33,9 +33,11 @@ impl Game<'_> {
         pitch: f32,
     ) -> bool {
         self.native_queue_sound(level, sound, at, source, volume, pitch, None)
+            .is_some()
     }
     /// `native_level_play_sound`, leaving out the player on connection
-    /// `except` (`Level.playSound(except, ...)`).
+    /// `except` (`Level.playSound(except, ...)`): the queued sound, None
+    /// when it can't be sent.
     pub(super) fn native_queue_sound(
         &mut self,
         level: LevelRef,
@@ -45,12 +47,10 @@ impl Game<'_> {
         volume: f32,
         pitch: f32,
         except: Option<u32>,
-    ) -> bool {
-        let Some(dimension) = self.native_level_dimension(level) else {
-            return false;
-        };
+    ) -> Option<&mut NativeSound> {
+        let dimension = self.native_level_dimension(level)?;
         if !mod_sound_ok(sound, at, source.index(), volume, pitch) {
-            return false;
+            return None;
         }
         self.creatures.lan_sounds.push(NativeSound {
             dimension,
@@ -60,15 +60,16 @@ impl Game<'_> {
             volume,
             pitch,
             except,
+            entity: None,
         });
-        true
+        self.creatures.lan_sounds.last_mut()
     }
     /// Sends `count` particles around `at` to the players in this level
     /// within 32 blocks, as `ServerLevel.sendParticles` does: each offset is
     /// a Gaussian times `spread`, and `speed` scales their motion (a zero
     /// count sends one particle moving along `spread`). Block particle types
     /// need `state`; item, trail and vibration particles aren't supported.
-    /// True means queued, not drawn. API @API:level_effects@.
+    /// True means queued, not drawn.
     pub(super) fn native_level_send_particles(
         &mut self,
         level: LevelRef,

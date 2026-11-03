@@ -17,7 +17,7 @@ fn takes_from(view: &View) -> bool {
 
 impl Game<'_> {
     /// The level in place (`minecraft:overworld`), for a hook that isn't told
-    /// which it runs in. API 48.
+    /// which it runs in.
     pub(in crate::game) fn native_dimension(&self) -> &'static str {
         self.dim.id()
     }

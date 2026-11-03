@@ -95,7 +95,8 @@ impl fmt::Debug for FluidResource {
 pub const FLUIDS: CapabilityKey<dyn ResourceHandler<FluidResource>> = CapabilityKey {
     name: "horizon:fluids",
     default: Some(|host, at| {
-        host.fluid_tank_count(at)
+        crate::mod_api::backend_of(host)
+            .and_then(|backend| backend.fluid_tank_count(at))
             .map(|_| Box::new(GameFluids(at)) as Box<dyn ResourceHandler<FluidResource>>)
     }),
     handler: PhantomData,
@@ -105,17 +106,24 @@ pub const FLUIDS: CapabilityKey<dyn ResourceHandler<FluidResource>> = Capability
 struct GameFluids(BlockSide);
 impl ResourceHandler<FluidResource> for GameFluids {
     fn size(&self, host: &mut dyn Host) -> usize {
-        host.fluid_tank_count(self.0).unwrap_or(0)
+        crate::mod_api::backend_of(host)
+            .and_then(|backend| backend.fluid_tank_count(self.0))
+            .unwrap_or(0)
     }
     fn resource(&self, host: &mut dyn Host, index: usize) -> Option<FluidResource> {
-        let held = host.fluid_tank(self.0, index)?;
+        let held = crate::mod_api::backend_of(host)
+            .and_then(|backend| backend.fluid_tank(self.0, index))?;
         Some(FluidResource::of(&held))
     }
     fn amount(&self, host: &mut dyn Host, index: usize) -> u32 {
-        host.fluid_tank(self.0, index).map_or(0, |held| held.amount)
+        crate::mod_api::backend_of(host)
+            .and_then(|backend| backend.fluid_tank(self.0, index))
+            .map_or(0, |held| held.amount)
     }
     fn capacity(&self, host: &mut dyn Host, index: usize, resource: &FluidResource) -> u32 {
-        host.fluid_tank_capacity(self.0, index, &resource.to_stack(1))
+        crate::mod_api::backend_of(host).map_or(0, |backend| {
+            backend.fluid_tank_capacity(self.0, index, &resource.to_stack(1))
+        })
     }
     fn insert(
         &self,
@@ -125,7 +133,10 @@ impl ResourceHandler<FluidResource> for GameFluids {
         resource: &FluidResource,
         amount: u32,
     ) -> u32 {
-        let rest = host.fluid_tank_insert(self.0, index, resource.to_stack(amount), tx);
+        let Some(backend) = crate::mod_api::backend_mut_of(host) else {
+            return 0;
+        };
+        let rest = backend.fluid_tank_insert(self.0, index, resource.to_stack(amount), tx);
         amount - rest.map_or(0, |rest| rest.amount.min(amount))
     }
     fn extract(
@@ -136,11 +147,13 @@ impl ResourceHandler<FluidResource> for GameFluids {
         resource: &FluidResource,
         amount: u32,
     ) -> u32 {
-        let held = host.fluid_tank(self.0, index);
+        let held =
+            crate::mod_api::backend_of(host).and_then(|backend| backend.fluid_tank(self.0, index));
         if !held.is_some_and(|held| resource.matches(&held)) {
             return 0;
         }
-        host.fluid_tank_extract(self.0, index, amount, tx)
+        crate::mod_api::backend_mut_of(host)
+            .and_then(|backend| backend.fluid_tank_extract(self.0, index, amount, tx))
             .map_or(0, |out| out.amount.min(amount))
     }
 }

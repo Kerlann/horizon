@@ -10,7 +10,5 @@
         "contract": "listen"
       }
     }
-  ],
-  "rust_summary": "Local player movement input before application (`native_movement_input`).",
-  "doc_summary": "`native_movement_input(forward, strafe, jump, sneak)` lets client mods change local movement after input is read and before it is applied. Positive strafe is left; servers receive direction flags rather than scalar magnitudes. Bundles need hooks API @API:movement_input@."
+  ]
 }

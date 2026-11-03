@@ -958,5 +958,7 @@
   "Hide other players' cosmetics": "إخفاء مظاهر اللاعبين الآخرين",
   "Others look like plain players to you. Also in the game's Horizon settings.": "يبدو لك الآخرون كلاعبين عاديين. موجود أيضًا في إعدادات Horizon داخل اللعبة.",
   "Show other players' auras and trails": "إظهار هالات اللاعبين الآخرين وآثارهم",
-  "Off by default. Also in the game's Horizon settings.": "متوقف افتراضيًا. موجود أيضًا في إعدادات Horizon داخل اللعبة."
+  "Off by default. Also in the game's Horizon settings.": "متوقف افتراضيًا. موجود أيضًا في إعدادات Horizon داخل اللعبة.",
+  "This game source has no readable native entry template. Update Horizon and rebuild the mods against this game.": "لا يحتوي مصدر اللعبة هذا على قالب دخول أصلي قابل للقراءة. حدّث Horizon وأعد بناء المودات لهذه اللعبة.",
+  "Native build {version} has a missing or invalid native-mods.json record. Rebuild it from an installed Horizon version.": "سجل native-mods.json للبناء الأصلي {version} مفقود أو غير صالح. أعد بناءه انطلاقًا من إصدار Horizon مثبت."
 }

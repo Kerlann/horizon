@@ -383,7 +383,7 @@ impl Game<'_> {
         let mut harvest =
             !facts.requires_tool || self.items().correct_for_drops(self.held(), &facts.name);
         let hardness = facts.hardness;
-        if !crate::mod_api::mods().is_empty() {
+        if crate::mod_api::listened(crate::mod_api::HookId::PlayerHarvestCheck) {
             self.native_player_harvest_check(
                 self.own_entity_id() as u32,
                 pos,
@@ -414,7 +414,7 @@ impl Game<'_> {
             speed /= 5.0;
         }
         let mut canceled = false;
-        if !crate::mod_api::mods().is_empty() {
+        if crate::mod_api::listened(crate::mod_api::HookId::PlayerBreakSpeed) {
             self.native_player_break_speed(
                 self.own_entity_id() as u32,
                 pos,

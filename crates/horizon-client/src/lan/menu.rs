@@ -7,6 +7,7 @@ use super::guest::Guest;
 use crate::{
     bundle::{Contents, can_be_in_bundle, toggle_selected},
     containers::BlockEntity,
+    enchant::Enchantments,
     items::{ItemStack, Items},
     world::World,
 };
@@ -14,6 +15,8 @@ use crate::{
 /// What the menus need to know about items and the slots' rules.
 pub trait Rules {
     fn items(&self) -> &Items;
+    /// The enchantment definitions: what keeps worn armour on (`PREVENT_ARMOR_CHANGE`).
+    fn enchantments(&self) -> &Enchantments;
     fn max_stack(&self, item: &str) -> u32;
     /// The armor slot (0 head .. 3 feet) an item can be worn in.
     fn armor_index(&self, item: &str) -> Option<usize>;
@@ -316,7 +319,7 @@ impl View<'_> {
             && !self.guest.creative()
             && stack
                 .as_ref()
-                .is_some_and(|s| s.enchantment_level("minecraft:binding_curse") > 0)
+                .is_some_and(|s| rules.enchantments().prevents_armor_change(s))
         {
             return false;
         }
@@ -351,7 +354,7 @@ impl crate::menu::SlotView for HostedSlotView<'_, '_> {
             || self
                 .view
                 .get(self.slot)
-                .is_none_or(|s| s.enchantment_level("minecraft:binding_curse") == 0)
+                .is_none_or(|s| !self.rules.enchantments().prevents_armor_change(&s))
     }
     fn allow_modification(&self) -> bool {
         let item = self
@@ -1031,6 +1034,14 @@ fn quick_craft(
 mod tests {
     use super::*;
     use crate::lan::{Joined, PlayerSender};
+
+    /// The test enchantments: Curse of Binding, and a data pack's `test:clinging` with its
+    /// `prevent_armor_change` effect.
+    fn enchantments() -> &'static Enchantments {
+        static ENCHANTMENTS: std::sync::LazyLock<Enchantments> =
+            std::sync::LazyLock::new(crate::enchant::tests::sample);
+        &ENCHANTMENTS
+    }
     use horizon_protocol::packets::configuration::ClientInformation;
     use horizon_world::loot::PackOverlay;
     use std::sync::{Arc, atomic::AtomicI32, mpsc};
@@ -1039,6 +1050,9 @@ mod tests {
     impl Rules for ItemRules {
         fn items(&self) -> &Items {
             &self.0
+        }
+        fn enchantments(&self) -> &Enchantments {
+            enchantments()
         }
         fn max_stack(&self, item: &str) -> u32 {
             self.0.get(item).map_or(64, |i| i.max_stack)
@@ -1440,6 +1454,9 @@ mod tests {
         fn items(&self) -> &Items {
             unreachable!("swap does not read the item catalog");
         }
+        fn enchantments(&self) -> &Enchantments {
+            enchantments()
+        }
         fn max_stack(&self, _: &str) -> u32 {
             64
         }
@@ -1532,6 +1549,9 @@ mod tests {
         fn items(&self) -> &Items {
             unreachable!("a quick move reads no item catalog");
         }
+        fn enchantments(&self) -> &Enchantments {
+            enchantments()
+        }
         fn max_stack(&self, _: &str) -> u32 {
             64
         }
@@ -1604,6 +1624,9 @@ mod tests {
     impl Rules for StrictRules {
         fn items(&self) -> &Items {
             &self.items
+        }
+        fn enchantments(&self) -> &Enchantments {
+            enchantments()
         }
         fn max_stack(&self, _: &str) -> u32 {
             64
@@ -1722,19 +1745,27 @@ mod tests {
         assert_eq!(view.get(0).map(|s| s.count), Some(4));
     }
 
-    /// `ArmorSlot.mayPickup`: a survival guest cannot take cursed armour off;
-    /// a creative one can, by a click and by a shift-click.
+    /// `ArmorSlot.mayPickup`: a survival guest cannot take armour with `prevent_armor_change` off,
+    /// Curse of Binding's or a data pack enchantment's under another id; a creative one can, by a
+    /// click and by a shift-click. Armour with another enchantment comes off.
     #[test]
     fn guest_survival_cannot_remove_cursed_armour() {
         let rules = StrictRules::new(&[]);
-        for (game_mode, taken) in [
-            (crate::lan::guest::SURVIVAL, false),
-            (crate::lan::guest::CREATIVE, true),
+        for (enchantment, game_mode, taken) in [
+            (
+                "minecraft:binding_curse",
+                crate::lan::guest::SURVIVAL,
+                false,
+            ),
+            ("test:clinging", crate::lan::guest::SURVIVAL, false),
+            ("minecraft:unbreaking", crate::lan::guest::SURVIVAL, true),
+            ("minecraft:binding_curse", crate::lan::guest::CREATIVE, true),
+            ("test:clinging", crate::lan::guest::CREATIVE, true),
         ] {
             for mode in [input::PICKUP, input::QUICK_MOVE] {
                 let mut g = guest();
                 let mut cursed = ItemStack::new("minecraft:diamond_chestplate", 1);
-                cursed.set_crafting_enchantments(vec![("minecraft:binding_curse".into(), 1)]);
+                cursed.set_crafting_enchantments(vec![(enchantment.into(), 1)]);
                 g.armor[1] = Some(cursed);
                 g.game_mode = game_mode;
                 let mut drag = None;
@@ -1746,8 +1777,9 @@ mod tests {
                 };
                 // Menu slot 6 is the chest slot.
                 click(&mut view, &mut drag, 6, 0, mode, &rules);
-                assert_eq!(view.get(6).is_some(), !taken);
-                assert_eq!(view.guest.carried.is_some() || view.get(9).is_some(), taken);
+                assert_eq!(view.get(6).is_some(), !taken, "{enchantment}");
+                let moved = view.guest.carried.is_some() || view.get(9).is_some();
+                assert_eq!(moved, taken, "{enchantment}");
             }
         }
     }
@@ -1756,6 +1788,9 @@ mod tests {
     impl Rules for ArmorRules {
         fn items(&self) -> &Items {
             unreachable!("a quick move reads no item catalog");
+        }
+        fn enchantments(&self) -> &Enchantments {
+            enchantments()
         }
         fn max_stack(&self, _: &str) -> u32 {
             64
@@ -1821,6 +1856,9 @@ mod tests {
         impl Rules for SmallRules {
             fn items(&self) -> &Items {
                 unreachable!("a quick move reads no item catalog");
+            }
+            fn enchantments(&self) -> &Enchantments {
+                enchantments()
             }
             fn max_stack(&self, item: &str) -> u32 {
                 if item == "minecraft:snowball" { 16 } else { 64 }

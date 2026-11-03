@@ -19,7 +19,6 @@ impl Game<'_> {
 
     /// Find a block entity in a loaded chunk of an open server level. A block
     /// entity temporarily taken out for its tick cannot be read in that tick.
-    /// API @API:block_entity_refs@.
     pub(super) fn native_block_entity_ref(
         &self,
         level: LevelRef,
@@ -32,7 +31,7 @@ impl Game<'_> {
         self.native_block_entity_target(entity).map(|_| entity)
     }
 
-    /// The block entity's type (`BlockEntity.getType`). API @API:block_entity_refs@.
+    /// The block entity's type (`BlockEntity.getType`).
     pub(super) fn native_block_entity_kind(&self, entity: BlockEntityRef) -> Option<&str> {
         let (world, block_entity) = self.native_block_entity_target(entity)?;
         let [x, y, z] = entity.position;
@@ -40,20 +39,20 @@ impl Game<'_> {
         Some(save::block_entity_id(block_entity, block))
     }
 
-    /// The block entity's position. API @API:block_entity_refs@.
+    /// The block entity's position.
     pub(super) fn native_block_entity_position(&self, entity: BlockEntityRef) -> Option<[i32; 3]> {
         self.native_block_entity_target(entity)?;
         Some(entity.position)
     }
 
-    /// The block entity's level. API @API:block_entity_refs@.
+    /// The block entity's level.
     pub(super) fn native_block_entity_level(&self, entity: BlockEntityRef) -> Option<LevelRef> {
         self.native_block_entity_target(entity)?;
         Some(entity.level)
     }
 
     /// The data saved without identity or position metadata
-    /// (`BlockEntity.saveWithoutMetadata`). API @API:block_entity_refs@.
+    /// (`BlockEntity.saveWithoutMetadata`).
     pub(super) fn native_block_entity_data(&self, entity: BlockEntityRef) -> Option<Compound> {
         let (world, block_entity) = self.native_block_entity_target(entity)?;
         let [x, y, z] = entity.position;
@@ -88,7 +87,7 @@ impl Game<'_> {
     /// `y` and `z` in `data` are ignored. True when the data changed; false for a stale
     /// handle, a client, another level than the one in place, data nested too deep or that
     /// changes nothing, or a result the block entity can't load. Inside a transaction an
-    /// abort puts the block entity, its name, `lock`, loot table roll and attachments back. API @API:block_entity_refs@.
+    /// abort puts the block entity, its name, `lock`, loot table roll and attachments back.
     pub(super) fn native_block_entity_merge_data(
         &mut self,
         entity: BlockEntityRef,
@@ -140,7 +139,6 @@ impl Game<'_> {
     /// `BlockEntity.setChanged`: the chunk is saved again and comparators re-read the
     /// container (`updateNeighbourForOutputSignal`). Inside a transaction it runs once at the
     /// root commit. False for a stale handle, a client or another level than the one in place.
-    /// API @API:block_entity_refs@.
     pub(super) fn native_block_entity_set_changed(&mut self, entity: BlockEntityRef) -> bool {
         let Some((key, _)) = self.native_block_entity_write_target(entity) else {
             return false;
@@ -152,7 +150,7 @@ impl Game<'_> {
     /// The custom name (`Nameable.getCustomName`) as plain text. None when the block entity
     /// has none or isn't nameable (chests, barrels, furnaces, hoppers, brewing stands,
     /// banners, beacons, enchanting tables, command blocks...), or for a stale handle or a
-    /// client. API @API:block_entity_refs@.
+    /// client.
     pub(super) fn native_block_entity_name(&self, entity: BlockEntityRef) -> Option<String> {
         let (world, block_entity) = self.native_block_entity_target(entity)?;
         let [x, y, z] = entity.position;
@@ -165,8 +163,7 @@ impl Game<'_> {
     /// Sets the custom name, or clears it with None, as an anvil-renamed item placed with
     /// `components` sets `CustomName`. Plain text only. Clients get a block entity update.
     /// False for a block entity that isn't nameable, a stale handle, a client or another
-    /// level than the one in place. Inside a transaction an abort puts the name back. API
-    /// @API:block_entity_refs@.
+    /// level than the one in place. Inside a transaction an abort puts the name back.
     pub(super) fn native_block_entity_set_name(
         &mut self,
         entity: BlockEntityRef,

@@ -1601,6 +1601,7 @@ impl B {
                         parent: m.id,
                         partner: id,
                         llama: None,
+                        parent_variant: None,
                         experience: super::BreedExperience::Deferred,
                     });
                     if brain_mut(m).kind == Kind::Sniffer {

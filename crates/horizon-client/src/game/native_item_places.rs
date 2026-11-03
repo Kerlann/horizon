@@ -99,7 +99,7 @@ impl Game<'_> {
         Some(super::mount_menu::mount_columns(m) * 3)
     }
     /// `EntityType.is(TagKey)`: whether `entity_type` (`minecraft:player`) is in the entity
-    /// type tag `tag` (`minecraft:cannot_be_pushed_onto_boats`). API @API:item_places@.
+    /// type tag `tag` (`minecraft:cannot_be_pushed_onto_boats`).
     pub(super) fn native_entity_type_in_tag(&self, entity_type: &str, tag: &str) -> bool {
         let tag = horizon_client::command::args::normalize(tag);
         self.res.mob_data().entity_has(&tag, entity_type)

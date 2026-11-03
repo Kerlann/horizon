@@ -119,7 +119,7 @@ fn game_holds(fluid: &FluidStack, at: &FluidAt) -> bool {
         && (matches!(at, FluidAt::Cauldron(_)) || !fluid.has_components())
 }
 
-/// A capability amount in the API 54 helpers' millibuckets.
+/// A capability amount in the fluid helpers' millibuckets.
 fn mb(amount: u32) -> i32 {
     i32::try_from(amount).unwrap_or(i32::MAX)
 }

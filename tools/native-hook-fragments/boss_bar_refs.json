@@ -154,7 +154,5 @@
       "target": "horizon_client::game::native_boss_bar_refs::Game<'_>::native_boss_bar_remove",
       "receiver": "boss_bar"
     }
-  ],
-  "rust_summary": "custom boss bar handles (`BossBarRef`): the `/bossbar` store, its viewers and saved form.",
-  "doc_summary": "`BossBarRef`, made with `host.boss_bar(id)` or `host.create_boss_bar(id, name)` (None if the id exists, as `/bossbar add` refuses), reads and changes a custom boss bar (vanilla's `CustomBossEvent`): `id`, `name`, `color` and `overlay` (`BossBarColor`, `BossBarOverlay`), the `darken_screen`, `play_boss_music` and `create_world_fog` flags, `value` (kept from 0 to `max`), `max` (at least 1), `visible`, `players` (the online ones), `add_player`, `remove_player` and `remove`. `host.boss_bars()` lists them as `/bossbar list` does. Changes reach clients as `/bossbar set` does (`ClientboundBossEventPacket`) and are saved with the level. A removed bar, or a handle from an earlier open of the world, reads as None and changes nothing. Boss bars of mobs (wither, ender dragon) and raids are not custom boss events and have no handle."
+  ]
 }

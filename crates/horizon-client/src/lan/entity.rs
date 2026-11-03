@@ -1660,6 +1660,38 @@ mod tests {
     }
 
     #[test]
+    fn a_minecart_wobble_reset_to_zero_is_sent() {
+        let mut e = state(0.0);
+        e.kind = "minecraft:minecart".into();
+        e.defaults = vec![
+            (8, serializer::INT, Value::Int(0)),
+            (9, serializer::INT, Value::Int(1)),
+            (10, serializer::FLOAT, Value::Float(0.0)),
+        ];
+        e.meta = vec![
+            (8, serializer::INT, Value::Int(7)),
+            (10, serializer::FLOAT, Value::Float(12.5)),
+        ];
+        let mut s = added(&e);
+        changes(&mut s, &e);
+        e.meta.clear();
+        let data = changes(&mut s, &e)
+            .into_iter()
+            .find_map(|p| match p {
+                play::Clientbound::SetEntityData(d) => Some(d),
+                _ => None,
+            })
+            .expect("the reset is sent");
+        assert_eq!(
+            data.values,
+            vec![
+                (8, serializer::INT, Value::Int(0)),
+                (10, serializer::FLOAT, Value::Float(0.0)),
+            ]
+        );
+    }
+
+    #[test]
     fn a_dragon_back_at_its_defaults_is_sent() {
         let mut e = state(0.0);
         e.kind = "minecraft:ender_dragon".into();

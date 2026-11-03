@@ -367,7 +367,7 @@ mod tests {
                 [(false, true), (true, true), (false, false), (true, false)]
             {
                 let w = MobWorld {
-                    ask_mods,
+                    asks_baby_spawn: ask_mods,
                     mob_drops,
                     ..w.clone()
                 };
