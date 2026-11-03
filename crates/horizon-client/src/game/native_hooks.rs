@@ -1891,11 +1891,7 @@ impl Game<'_> {
     }
     /// Initial saved data for a declared block entity (`EntityBlock.newBlockEntity`).
     /// The declaration owns the type id; no answer starts with an empty compound.
-    pub(super) fn native_block_entity(
-        &mut self,
-        block: &str,
-        entity: &mut Option<Compound>,
-    ) {
+    pub(super) fn native_block_entity(&mut self, block: &str, entity: &mut Option<Compound>) {
         mod_api::dispatch_block_entity(self, block, entity);
     }
     /// Whether block `block`'s block entity ticks (`EntityBlock.getTicker`):

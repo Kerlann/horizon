@@ -3054,11 +3054,26 @@ naming the thing it is about, has a method on that scope's trait: `BlockPart`, `
 thing, or an id with no namespace, stops the game at startup with a message naming the mods. A panic in a part
 adds `, part <type>` to the mod and hook it names. Parts take `&self` and are `Send + Sync`, like `Hooks`.
 
-A block entity part names its block entity type and the blocks that hold one, as vanilla's
-`BlockEntityType` does: `r.block_entity_part("mymod:press", &["mymod:press", "mymod:big_press"], Press)`.
+Declare a block entity type and its valid blocks during `Hooks::register`, then attach its part:
+
+```rust,ignore
+let press = r.block_entity_type("press")
+    .blocks(&["mymod:press", "mymod:big_press"])
+    .build();
+r.block_entity_part(&press, Press);
+```
+
+The builder qualifies the type ID with the registering mod's namespace. It owns the save ID, wire type
+and valid blocks; `block_entity` returns only initial `Compound` data (or none for an empty compound).
+Unknown blocks, duplicate types, overlapping membership and attempts to own a `minecraft:` block are
+refused at load. An explicitly declared mod template block uses its declared type; undeclared template
+blocks retain their vanilla behavior. Adding mod blocks to vanilla types is not supported by this builder.
+
 The hooks about the entity (`block_entity_tick`, `block_entity_update_tag`, `menu_button`, `menu_quick_move`)
-find it by the type id its `block_entity` hook gave the entity; the others (`block_entity`, `screen`, the
-block hooks) by block.
+find it by that declared type; the others (`block_entity`, `screen`, the block hooks) by block.
+`BlockEntityRef::kind(host)` returns a `BlockEntityTypeKey`. Keys compare by registry ID and can be shared
+through a mod's API crate. `r.block_entity_type_key("minecraft:chest")` or a cross-mod ID looks up a key,
+validated against the final registry at load; there is no string-based part or capability overload.
 
 `r.block_part_tag("minecraft:logs", Rotates)` and `r.item_part_tag("minecraft:axes", Sharp)` attach a part to
 every member of a tag (its name without `#`). Each game resolves them against its own tags when its world
@@ -3071,9 +3086,9 @@ doesn't have. Scoped hooks run on a game's thread; one dispatched from any other
 does) can't see tag parts, and warns once.
 
 A capability is answered by providers, registered by block entity type as NeoForge's
-`RegisterCapabilitiesEvent` registers them: `r.block_entity_capability(&ITEMS, "mymod:pipe", |host, at|
+`RegisterCapabilitiesEvent` registers them: `r.block_entity_capability(&ITEMS, &pipe, |host, at|
 Some(Box::new(PipeItems)))` gives a handler for the block entity and side `at` (a `BlockSide`), or none to
-leave it to the next provider. A provider may answer for a vanilla block entity type too (`minecraft:chest`).
+leave it to the next provider. A provider may answer for a vanilla block entity type too, using a key from `r.block_entity_type_key("minecraft:chest")`.
 Providers add up: `level.capability(host, &ITEMS, pos, side)` (`Level.getCapability`, on a `LevelRef`) asks those registered
 with `r.block_entity_capability_before_game` first, then the game's own (a block entity's slots by side, by the
 rules hoppers follow, and a mod block entity's `block_entity_container`), then the others, each in registration
@@ -3219,7 +3234,7 @@ player's slot, and two thirds of one fill none.
 
 Energy is the capability `ENERGY` (NeoForge's `Capabilities.Energy.BLOCK`), answered by an `EnergyHandler`: an
 amount and a capacity, with no resource, and `insert` and `extract` written in a transaction as a
-`ResourceHandler`'s are. `r.block_entity_capability(&ENERGY, "mymod:battery", …)` registers a provider, asked as
+`ResourceHandler`'s are. `r.block_entity_capability(&ENERGY, &battery, …)` registers a provider, asked as
 `ITEMS`' are, and `level.capability(host, &ENERGY, pos, side)` finds one. The game's own answer is a mod block
 entity's `block_entity_energy` buffer, as NeoForge's `SimpleEnergyHandler`: a fill through the sides it comes
 through, up to the buffer's room and its limit per insert, and a drain by the sides it leaves by, up to the limit per
@@ -3274,7 +3289,7 @@ pub const CHEMICALS: CapabilityKey<dyn ResourceHandler<Chemical>> = CapabilityKe
 ```
 
 A mod that names it under `[dependencies]` builds against the same `Chemical` and `CHEMICALS`, so its providers,
-`r.block_entity_capability(&chem_api::CHEMICALS, "chem_pipe:vat", …)`, answer the same capability, and
+`r.block_entity_capability(&chem_api::CHEMICALS, &vat, …)`, answer the same capability, and
 `level.capability(host, &chem_api::CHEMICALS, pos, side)` finds either mod's handler. `move_resources` moves a
 chemical as it moves items, in the caller's transaction. The game has no answer of its own for a mod's key, so only
 the mods' providers do, and a lookup with none registered costs one table check. A handler that keeps its amount in

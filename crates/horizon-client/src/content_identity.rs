@@ -252,7 +252,11 @@ mod tests {
                 ),
             )
             .unwrap();
-            std::fs::write(root.join(crate::mod_content::BLOCK_ENTITY_TYPES), membership).unwrap();
+            std::fs::write(
+                root.join(crate::mod_content::BLOCK_ENTITY_TYPES),
+                membership,
+            )
+            .unwrap();
             identity(&root).unwrap()
         };
         let mapping = r#"{"test:press":"test:machine","test:mill":"test:machine"}"#;

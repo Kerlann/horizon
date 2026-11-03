@@ -51,7 +51,7 @@ pub fn check_path(name: &str) -> Result<(), String> {
 /// A vanilla identifier, `minecraft:path`.
 /// `Identifier.isValidNamespace` and `isValidPath` on an id with both parts
 /// given: `[a-z0-9_.-]`, and `/` in the path too.
-fn namespaced_id(id: &str) -> bool {
+pub fn namespaced_id(id: &str) -> bool {
     let ok = |b: u8| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b);
     id.split_once(':').is_some_and(|(namespace, path)| {
         !namespace.is_empty()
