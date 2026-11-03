@@ -1042,31 +1042,57 @@ mod tests {
     fn stack(item: &str, count: u32) -> ItemStack {
         ItemStack::new(item, count)
     }
+    // Other tests load fixture registries into the process-global food table.
+    // Run food tests in fresh processes so they exercise the unloaded-registry fallback.
+    fn with_unloaded_food_registry(name: &str, test: impl FnOnce()) {
+        const CHILD: &str = "HORIZON_VILLAGER_FOOD_TEST";
+        if std::env::var(CHILD).as_deref() == Ok(name) {
+            test();
+        } else {
+            let module = module_path!().split_once("::").unwrap().1;
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", &format!("{module}::{name}"), "--nocapture"])
+                .env(CHILD, name)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success()
+                    && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+                "isolated food test failed:\n{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
     #[test]
     fn eating_fills_the_food_level_then_digests() {
-        let mut e = Ext {
-            inventory: vec![stack("minecraft:bread", 3), stack("minecraft:carrot", 5)],
-            ..Default::default()
-        };
-        assert_eq!(e.food_in_inventory(), 17);
-        // Hungry below 12: three breads fill it exactly, then 12 digest away.
-        e.eat_and_digest();
-        assert_eq!(e.food_level, 0);
-        assert_eq!(e.inventory.len(), 1);
-        assert_eq!(e.inventory[0].count, 5);
-        // Five carrots are not enough to be full again, and are all eaten.
-        e.eat_and_digest();
-        assert_eq!(e.food_level, 5 - 12);
-        assert!(e.inventory.is_empty());
+        with_unloaded_food_registry("eating_fills_the_food_level_then_digests", || {
+            let mut e = Ext {
+                inventory: vec![stack("minecraft:bread", 3), stack("minecraft:carrot", 5)],
+                ..Default::default()
+            };
+            assert_eq!(e.food_in_inventory(), 17);
+            // Hungry below 12: three breads fill it exactly, then 12 digest away.
+            e.eat_and_digest();
+            assert_eq!(e.food_level, 0);
+            assert_eq!(e.inventory.len(), 1);
+            assert_eq!(e.inventory[0].count, 5);
+            // Five carrots are not enough to be full again, and are all eaten.
+            e.eat_and_digest();
+            assert_eq!(e.food_level, 5 - 12);
+            assert!(e.inventory.is_empty());
+        });
     }
     #[test]
     fn willingness_to_breed_needs_twelve_food_points() {
-        let mut e = Ext::default();
-        assert!(e.wants_more_food() && !e.has_excess_food());
-        e.inventory.push(stack("minecraft:bread", 6));
-        assert!(e.has_excess_food() && !e.wants_more_food());
-        e.food_level = -5;
-        assert_eq!(e.food_level + e.food_in_inventory(), 19);
+        with_unloaded_food_registry("willingness_to_breed_needs_twelve_food_points", || {
+            let mut e = Ext::default();
+            assert!(e.wants_more_food() && !e.has_excess_food());
+            e.inventory.push(stack("minecraft:bread", 6));
+            assert!(e.has_excess_food() && !e.wants_more_food());
+            e.food_level = -5;
+            assert_eq!(e.food_level + e.food_in_inventory(), 19);
+        });
     }
     #[test]
     fn the_inventory_has_eight_stacking_slots() {
@@ -1148,8 +1174,10 @@ mod tests {
     }
     #[test]
     fn villager_food_values() {
-        assert_eq!(food_points("minecraft:bread"), 4);
-        assert_eq!(food_points("minecraft:beetroot"), 1);
-        assert_eq!(food_points("minecraft:apple"), 0);
+        with_unloaded_food_registry("villager_food_values", || {
+            assert_eq!(food_points("minecraft:bread"), 4);
+            assert_eq!(food_points("minecraft:beetroot"), 1);
+            assert_eq!(food_points("minecraft:apple"), 0);
+        });
     }
 }
