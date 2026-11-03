@@ -35,6 +35,9 @@ mod tests {
         pub(super) struct Suggestion;
         pub(super) struct HudBatch;
         pub(super) struct BiomeColors;
+        pub(super) struct SpawnEntry;
+        pub(super) struct StackView;
+        pub(super) struct NativeNoteBlockChange<'a>(pub &'a ());
         pub(super) struct UseAnimation;
         #[derive(Clone, Copy)]
         pub(super) struct Hand;
