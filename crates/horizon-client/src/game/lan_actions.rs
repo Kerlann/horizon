@@ -6198,11 +6198,7 @@ mod tests {
                 event: &mut UseItemOnEvent<'_>,
             ) -> Option<Answer> {
                 if let Some(state) = *self.replace_with.lock().unwrap() {
-                    let level = host
-                        .entity(event.click.player)
-                        .unwrap()
-                        .level(host)
-                        .unwrap();
+                    let level = host.level("minecraft:overworld").unwrap();
                     assert!(level.set_block(
                         host,
                         event.click.pos,
