@@ -1038,9 +1038,15 @@ fn sources(root: &Path, fill: FillMode) -> Result<Sources, String> {
         if !names.insert(name) {
             return Err(format!("duplicate helper {name}"));
         }
-        let native = format!("native_{name}");
         let target = helper["target"].as_str().ok_or("helper target missing")?;
-        let method = one_function(game.iter().map(|(_, method)| method), &native)?;
+        let native = target
+            .rsplit("::")
+            .next()
+            .ok_or("helper target missing method")?;
+        if !native.starts_with("native_") {
+            return Err(format!("invalid helper target {target}"));
+        }
+        let method = one_function(game.iter().map(|(_, method)| method), native)?;
         let (module, _) = game
             .iter()
             .find(|(_, other)| std::ptr::eq(other, method))

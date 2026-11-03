@@ -1,0 +1,15 @@
+{
+  "hooks": [],
+  "helpers": [
+    {"name": "player", "target": "horizon_client::game::native_server::Game<'_>::native_player_ref"},
+    {"name": "player_game_mode", "target": "horizon_client::game::native_server::Game<'_>::native_player_game_mode", "receiver": "player"},
+    {"name": "player_is_creative", "target": "horizon_client::game::native_server::Game<'_>::native_player_is_creative", "receiver": "player"},
+    {"name": "player_is_spectator", "target": "horizon_client::game::native_server::Game<'_>::native_player_is_spectator", "receiver": "player"},
+    {"name": "player_may_build", "target": "horizon_client::game::native_server::Game<'_>::native_player_may_build", "receiver": "player"},
+    {"name": "player_food", "target": "horizon_client::game::native_server::Game<'_>::native_player_food", "receiver": "player"},
+    {"name": "player_abilities", "target": "horizon_client::game::native_server::Game<'_>::native_player_abilities", "receiver": "player"}
+  ],
+  "rust_summary": "player handles and game mode, food and ability reads.",
+  "doc_summary": "player handles and game mode, food and ability reads. Bundles need \"hooks\": @API:player_read@.",
+  "comments": ["crates/horizon-client/src/game/native_server.rs"]
+}
