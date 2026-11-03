@@ -112,6 +112,9 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 max_stack,
             );
         },
+        item_stacked_on_other: |event, canceled| {
+            crate::mod_api::dispatch_item_stacked_on_other(crate::mod_api::mods(), event, canceled);
+        },
         living_heal: |entity, amount, cancel| {
             crate::mod_api::dispatch_living_heal(crate::mod_api::mods(), entity, amount, cancel);
         },

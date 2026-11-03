@@ -15,6 +15,8 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened]
+  schedule:
+    - cron: '17 3 * * *'
   workflow_dispatch:
     inputs:
       upstream_sync:
@@ -24,17 +26,30 @@ on:
 permissions:
   contents: read
 concurrency:
-  # A new push to a pull request replaces its running checks; main's runs all finish (releases follow them).
-  group: checks-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # A new push to a pull request replaces its running checks, and a new push to main replaces main's:
+  # the newest main run covers every commit before it (releases follow the newest that passes).
+  group: checks-${{ github.event.pull_request.number || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'main') || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
 env:
   # Test runs never reach the telemetry server: no live-count ping, no uploads (docs/telemetry.md).
   HORIZON_TELEMETRY_URL: "off"
 
 jobs:
+  # Dyna runners accept dispatches, not scheduled events.
+  nightly-dispatch:
+    if: github.repository == 'arismoko/horizon' && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref main
+
   # Dyna's image enforces the event and repository check again in job-started.sh.
   # GitHub's external-contributor approval is the third lock.
   changes:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
@@ -238,28 +253,60 @@ jobs:
       base: ${{ github.event.pull_request.base.sha }}
       head: ${{ github.event.pull_request.head.sha }}
       full: ${{ contains(github.event.pull_request.labels.*.name, 'full-parity') }}
-  # Horizon never downloads the game. These jobs need a self-hosted Linux runner
-  # (label horizon-game) holding the maintainer's own copy: the official launcher's
-  # game directory in HORIZON_MINECRAFT_DIR and the pinned server jar in
-  # HORIZON_SERVER_JAR. Start them by hand: gh workflow run checks --ref <branch>.
+  # The fork's Dyna runners have the owner's prepared vanilla data in a read-only cache.
   vanilla-parity:
-    if: github.event_name == 'workflow_dispatch' && !inputs.upstream_sync
-    runs-on: [self-hosted, linux, horizon-game]
+    if: github.repository == 'arismoko/horizon' && github.event_name == 'workflow_dispatch' && !inputs.upstream_sync
+    runs-on: dyna-large
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          persist-credentials: false
+      - name: Install Dyna runner dependencies
+        run: bash tools/ci/dyna_ci_deps.sh
+      - name: Use system Python for parity harnesses
+        run: |
+          mkdir -p "$DYNA_CI_BUILD/bin"
+          ln -sf "$(command -v python3)" "$DYNA_CI_BUILD/bin/python"
+          echo "$DYNA_CI_BUILD/bin" >> "$GITHUB_PATH"
       - name: Install Rust toolchain
-        run: rustup toolchain install stable --profile minimal
+        run: |
+          if [ ! -x "$CARGO_HOME/bin/rustup" ]; then
+            curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal
+          fi
+          rustup toolchain install stable --profile minimal
+      - name: Link prepared vanilla data
+        run: |
+          mkdir -p .local
+          for dir in minecraft datagen horizon-client tools; do
+            test -d "/cache/horizon-local/$dir"
+            ln -s "/cache/horizon-local/$dir" ".local/$dir"
+          done
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '25'
+      # Harness subprocess timeouts can be shorter than a cold release build. Match their build commands and target dir.
+      - name: Build parity probes
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: |
+          cargo build --release --bin horizon-parity
+          cargo build --release --bin horizon-tick-parity
+          cargo build --release --bin horizon-geometry-parity
+          cargo build --release --bin horizon-noise-parity
+          cargo build --release --bin horizon-density-parity
+          cargo build --release --bin horizon-worldgen-parity
+          cargo build --release --bin horizon-float-log-parity
+          cargo build --release -p horizon-core --example generation_tick_fixture
+          cargo build --release -p horizon-core --example biome_zoom_fixture
+          cargo build --release -p horizon-world --bin horizon-world --example world_probe
+          cargo build --release -p horizon-world --example world_probe
       - name: Compare Rust foundations with pinned vanilla client and server bytecode
         env:
           RUSTUP_TOOLCHAIN: stable
-        run: python tools/test_rust_parity.py --prepare
+        run: python tools/test_rust_parity.py
       - name: Check Rust world-data interoperability with pinned vanilla client and server
         env:
           RUSTUP_TOOLCHAIN: stable
@@ -591,7 +638,7 @@ jobs:
           RUSTUP_TOOLCHAIN: stable
         run: python tools/test_float_log_parity.py
   jfr-analysis:
-    if: github.event_name == 'workflow_dispatch' && !inputs.upstream_sync
+    if: github.repository != 'arismoko/horizon' && github.event_name == 'workflow_dispatch' && !inputs.upstream_sync
     runs-on: [self-hosted, linux, horizon-game]
     steps:
       - uses: actions/checkout@v4

@@ -27,6 +27,7 @@ pub use crate::gfx::native_render::{
 pub use crate::hud::HudBatch;
 pub use crate::hud_layout::{GuiDraw, HealthInputs};
 pub use crate::items::ItemStack;
+pub use crate::menu::StackedOnOther;
 pub use crate::merchant::MerchantOffer;
 pub use crate::music::{Music, MusicLayer};
 pub use crate::particles::{ParticleOptions, ParticleType};
@@ -39,6 +40,7 @@ pub use horizon_core::{
     random::{LegacyRandom, RandomSource},
 };
 pub use horizon_world::consumable::UseAnimation;
+pub use horizon_world::player_inventory::EquipmentSlot;
 pub use horizon_world::{
     attachments::{
         AttachmentCodec, AttachmentError, AttachmentHost, AttachmentType, Attachments, Holder,
@@ -388,6 +390,36 @@ impl EntityRef {
     }
 }
 
+/// A living entity of the open world: a mob, a player, an armor stand or the
+/// dragon (vanilla's `LivingEntity`). `host.living(entity)` makes one from an
+/// [`EntityRef`] of such an entity, and [`LivingRef::entity`] goes back, so the
+/// entity's methods work on it too. Stale handles read as `None`, as an
+/// `EntityRef`'s do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct LivingRef(EntityRef);
+
+impl LivingRef {
+    /// Create a handle for the game.
+    #[doc(hidden)]
+    pub fn new(entity: EntityRef) -> Self {
+        Self(entity)
+    }
+    /// The same entity as an [`EntityRef`].
+    pub fn entity(self) -> EntityRef {
+        self.0
+    }
+    /// The entity's id (the network id events carry).
+    pub fn id(self) -> u32 {
+        self.0.id()
+    }
+}
+
+impl From<LivingRef> for EntityRef {
+    fn from(living: LivingRef) -> Self {
+        living.0
+    }
+}
+
 /// A level of the open world, by its dimension (`minecraft:the_nether`).
 /// `Host::level` makes one, and `entity.level(host)` gives an entity's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -711,7 +743,7 @@ level_attachment_host!(LevelRandomHost, LevelWriteHost);
 
 mod part_table;
 pub use part_table::{Attached, Parts, Registrar};
-pub(crate) use part_table::{install_parts, parts};
+pub(crate) use part_table::{KnownIds, install_parts, mark_game_thread, parts, resolve_parts};
 
 mod generated;
 pub use generated::Hooks;
@@ -830,6 +862,8 @@ mod tests {
 
     #[test]
     fn a_test_host_implements_only_what_its_hook_calls() {
+        // Another test installs parts with tags: a dispatch must run on a game thread.
+        mark_game_thread();
         let mods = [Box::new(Probe) as Box<dyn Hooks>];
         let stack = stick();
         for (block, expected) in [("minecraft:stone", true), ("minecraft:dirt", false)] {
@@ -848,6 +882,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "Host::tell")]
     fn an_unexpected_host_call_names_the_method() {
+        // Another test installs parts with tags: a dispatch must run on a game thread.
+        mark_game_thread();
         let mods = [Box::new(Chatty) as Box<dyn Hooks>];
         let mut host = Reader {
             block: "minecraft:stone",

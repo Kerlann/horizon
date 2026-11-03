@@ -1356,6 +1356,44 @@ pub trait Host {
         let _ = max;
         unimplemented!("Host::level_entities_in")
     }
+    /// The entity as a living entity (vanilla's `LivingEntity`: a mob, a
+    /// player, an armor stand or the dragon), or None for another kind or a
+    /// stale handle. API @API:living_refs@.
+    fn living(&self, entity: EntityRef) -> Option<LivingRef> {
+        let _ = entity;
+        unimplemented!("Host::living")
+    }
+    /// The stack in equipment slot `slot` (`LivingEntity.getItemBySlot`):
+    /// None when it is empty, the entity has no such slot (a player has no
+    /// body or saddle slot), or the handle is stale. API @API:living_refs@.
+    fn living_equipment(&self, living: LivingRef, slot: EquipmentSlot) -> Option<ItemStack> {
+        let _ = living;
+        let _ = slot;
+        unimplemented!("Host::living_equipment")
+    }
+    /// The stack in hand `hand` (`LivingEntity.getItemInHand`). API
+    /// @API:living_refs@.
+    fn living_hand_item(&self, living: LivingRef, hand: Hand) -> Option<ItemStack> {
+        let _ = living;
+        let _ = hand;
+        unimplemented!("Host::living_hand_item")
+    }
+    /// Puts `stack` (None: empties it) in equipment slot `slot`
+    /// (`LivingEntity.setItemSlot`), as `/item replace entity` does. False
+    /// when the entity has no such slot or is a mob. Mob equipment writes
+    /// are not supported until full equipment stacks can be stored.
+    /// API @API:living_refs@.
+    fn living_set_equipment(
+        &mut self,
+        living: LivingRef,
+        slot: EquipmentSlot,
+        stack: Option<ItemStack>,
+    ) -> bool {
+        let _ = living;
+        let _ = slot;
+        let _ = stack;
+        unimplemented!("Host::living_set_equipment")
+    }
     /// Resolve an online UUID on this server. During a player swap only the
     /// acting player is available; other players return None because swaps can
     /// nest and their records may hold displaced state. API @API:player_read@.
@@ -1477,6 +1515,32 @@ impl LevelRef {
         max: [f64; 3],
     ) -> Option<Vec<EntityRef>> {
         host.level_entities_in(self, min, max)
+    }
+}
+impl LivingRef {
+    /// The stack in equipment slot `slot` (`LivingEntity.getItemBySlot`):
+    /// None when it is empty, the entity has no such slot (a player has no
+    /// body or saddle slot), or the handle is stale. API @API:living_refs@.
+    pub fn equipment(self, host: &dyn Host, slot: EquipmentSlot) -> Option<ItemStack> {
+        host.living_equipment(self, slot)
+    }
+    /// The stack in hand `hand` (`LivingEntity.getItemInHand`). API
+    /// @API:living_refs@.
+    pub fn hand_item(self, host: &dyn Host, hand: Hand) -> Option<ItemStack> {
+        host.living_hand_item(self, hand)
+    }
+    /// Puts `stack` (None: empties it) in equipment slot `slot`
+    /// (`LivingEntity.setItemSlot`), as `/item replace entity` does. False
+    /// when the entity has no such slot or is a mob. Mob equipment writes
+    /// are not supported until full equipment stacks can be stored.
+    /// API @API:living_refs@.
+    pub fn set_equipment(
+        self,
+        host: &mut dyn Host,
+        slot: EquipmentSlot,
+        stack: Option<ItemStack>,
+    ) -> bool {
+        host.living_set_equipment(self, slot, stack)
     }
 }
 impl PlayerRef {

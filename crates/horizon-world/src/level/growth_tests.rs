@@ -53,6 +53,8 @@ struct Level {
     biome: &'static str,
     day: i64,
     block_entities: Vec<(BlockPos, crate::nbt::Compound)>,
+    /// What a mod's `BlockGrowFeatureEvent` grows when vanilla has no feature.
+    supplied: Option<&'static str>,
 }
 impl LevelAccess for Level {
     fn day_time(&self) -> i64 {
@@ -82,6 +84,13 @@ impl LevelAccess for Level {
     fn load_block_entity(&mut self, pos: BlockPos, nbt: crate::nbt::Compound) {
         self.block_entities.push((pos, nbt));
     }
+    fn block_grow_feature<'a>(
+        &mut self,
+        _pos: BlockPos,
+        feature: Option<&'a str>,
+    ) -> Option<std::borrow::Cow<'a, str>> {
+        feature.or(self.supplied).map(std::borrow::Cow::Borrowed)
+    }
 }
 
 struct World {
@@ -106,6 +115,7 @@ impl World {
                 biome: "minecraft:plains",
                 day: 6000,
                 block_entities: Vec::new(),
+                supplied: None,
             },
             f,
             ticks,
@@ -238,6 +248,33 @@ fn lone_dark_oak_sapling_cannot_grow() {
     let sapling = w.id("dark_oak_sapling", &[]);
     w.put(BlockPos::new(0, 64, 0), sapling);
     assert!(!w.bone_meal(BlockPos::new(0, 64, 0)));
+}
+/// `BlockGrowFeatureEvent`'s feature is nullable: a lone dark oak sapling's
+/// random tick reaches `TreeGrower.growTree` with no feature, the event still
+/// asks, and a feature a mod supplies grows. With none supplied it stays.
+#[test]
+fn lone_dark_oak_sapling_grows_only_a_feature_a_mod_supplies() {
+    let Some(f) = fixture() else { return };
+    for supplied in [None, Some("minecraft:oak")] {
+        let mut w = World::new(f, 3);
+        w.level.supplied = supplied;
+        w.floor("grass_block", 8);
+        let pos = BlockPos::new(0, 64, 0);
+        let sapling = w.id("dark_oak_sapling", &[]);
+        w.put(pos, sapling);
+        for _ in 0..2000 {
+            if w.name(pos) != "minecraft:dark_oak_sapling" {
+                break;
+            }
+            f.behaviours.random_tick(&mut w.level, &mut w.ticks, pos);
+        }
+        let expected = if supplied.is_some() {
+            "minecraft:oak_log"
+        } else {
+            "minecraft:dark_oak_sapling"
+        };
+        assert_eq!(w.name(pos), expected);
+    }
 }
 #[test]
 fn bone_meal_on_a_client_succeeds_only_where_its_level_can_tell() {

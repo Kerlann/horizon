@@ -484,10 +484,8 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 self.grow_mushroom(pos, state);
             }
             Kind::Fungus => {
-                if let Some(feature) = b.data(state).feature.clone()
-                    && self.feature_exists(&feature)
-                    && let Some(feature) = self.grow_feature_event(pos, &feature)
-                {
+                let feature = b.data(state).feature.clone();
+                if let Some(feature) = self.grow_feature_event(pos, feature.as_deref()) {
                     self.place_configured_feature(&feature, pos);
                 }
             }

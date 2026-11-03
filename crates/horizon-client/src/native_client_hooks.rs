@@ -6,6 +6,7 @@ use std::sync::OnceLock;
 /// Client-library hooks, installed before any menu, entity or recipe is used.
 pub struct NativeClientHooks {
     pub menu_slot_rules: fn(&str, usize, &ItemStack, &mut bool, &mut u32),
+    pub item_stacked_on_other: fn(&mut crate::menu::StackedOnOther<'_>, &mut bool),
     pub living_heal: fn(u32, &mut f32, &mut bool),
     pub living_breathe: fn(u32, &str, &mut bool, &mut i32, &mut i32),
     pub has_mods: fn() -> bool,
@@ -34,6 +35,15 @@ pub(crate) fn menu_slot_rules(
 ) {
     if let Some(hooks) = HOOKS.get() {
         (hooks.menu_slot_rules)(menu, slot, stack, may_place, max_stack);
+    }
+}
+
+pub(crate) fn item_stacked_on_other(
+    event: &mut crate::menu::StackedOnOther<'_>,
+    canceled: &mut bool,
+) {
+    if let Some(hooks) = HOOKS.get() {
+        (hooks.item_stacked_on_other)(event, canceled);
     }
 }
 

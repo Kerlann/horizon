@@ -3036,6 +3036,10 @@ impl Game<'_> {
                 self.debug_charts.ping.log(delay);
             }
             C::Login(p) => {
+                // A client's parts, from the tags it plays with.
+                if let Err(e) = self.resolve_parts() {
+                    log::warn!("Horizon: {e}");
+                }
                 self.test_highlights.clear();
                 self.forget_synced_recipes();
                 self.level.hardcore = p.hardcore;
@@ -6590,6 +6594,7 @@ impl Game<'_> {
                     false,
                     &mut next_float,
                     border,
+                    &self.res.motion().fluids,
                 );
                 // `tick` set `previous` to the stepped position: keep the
                 // pre-step one, as `xo` is in vanilla.
@@ -9589,6 +9594,12 @@ impl Game<'_> {
         let r = self.remote.as_ref()?;
         Some(r.glowing.contains(&(id as i32)))
     }
+    /// The UUID of another player's entity in the level.
+    pub(super) fn remote_other_player_uuid(&self, id: u32) -> Option<u128> {
+        let r = self.remote.as_ref()?;
+        let uuid = *r.level_players.get(&(id as i32))?;
+        (uuid != r.profile).then_some(uuid)
+    }
     /// The profile name of another player the server sent, by entity id.
     pub(super) fn remote_player_name(&self, id: u32) -> Option<&str> {
         let r = self.remote.as_ref()?;
@@ -10840,6 +10851,9 @@ mod tests {
         let enchantments = Enchantments::default();
         let names = Names::default();
         let env = Env {
+            player: None,
+            player_entity_id: None,
+            side: horizon_client::menu::LogicalSide::Client,
             items: &items,
             recipes: &recipes,
             brewing: &brewing,
