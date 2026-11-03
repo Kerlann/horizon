@@ -5622,6 +5622,95 @@ mod tests {
         });
     }
 
+    #[test]
+    #[ignore = "requires prepared game resources"]
+    fn player_last_death_read_tracks_death_dimension_and_floored_position() {
+        check_player_last_death(false);
+    }
+
+    #[test]
+    #[ignore = "#316: acting guest's LanHost is unavailable during the turn"]
+    fn player_last_death_read_during_guest_turn() {
+        check_player_last_death(true);
+    }
+
+    fn check_player_last_death(during_turn: bool) {
+        use horizon_client::lan::{Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig};
+        use horizon_protocol::packets::configuration::ClientInformation;
+        use std::sync::Arc;
+        super::super::native_entity_refs::tests::with_game(|game| {
+            let config = HubConfig {
+                default_game_mode: 0,
+                guest_commands: false,
+                force_game_mode: false,
+                hardcore: false,
+                view_distance: 10,
+                simulation_distance: 10,
+                dimension: "minecraft:overworld".into(),
+                allow_flight: false,
+                seed: 0,
+                max_players: 20,
+                integrated: false,
+                levels: Default::default(),
+            };
+            game.lan_host(
+                super::super::lan::LanSettings {
+                    port: 0,
+                    guest_commands: false,
+                    force_game_mode: false,
+                },
+                NetConfig {
+                    announce: false,
+                    ..NetConfig::lan(0, "test".into(), 2)
+                },
+                config,
+            )
+            .unwrap();
+            let (tx, _rx) = std::sync::mpsc::channel();
+            let mut guest = Guest::new(
+                Joined {
+                    conn: 1,
+                    uuid: 123,
+                    name: "guest".into(),
+                    properties: Vec::new(),
+                    info: ClientInformation::new(8),
+                    brand: String::new(),
+                    sender: PlayerSender::new(tx, Arc::default()),
+                    latency: Arc::default(),
+                    address: ([127, 0, 0, 1], 1).into(),
+                },
+                5,
+                [0.0; 3],
+                10,
+            );
+            guest.placed = true;
+            guest.dimension = "minecraft:the_nether".into();
+            guest.position = [-1.2, 64.9, 7.1];
+            game.lan.as_mut().unwrap().hub.guests.push(guest);
+            let player = game.native_player_ref(123).unwrap();
+            assert_eq!(player.last_death_location(game), None);
+            let mut host = game.lan.take().unwrap();
+            host.hub.guests[0].health = 0.0;
+            game.guest_die(&mut host, 0, 1);
+            game.lan = Some(host);
+            assert_eq!(
+                player.last_death_location(game),
+                Some(("minecraft:the_nether".into(), [-2, 64, 7]))
+            );
+            if during_turn {
+                let mut host = game.lan.take().unwrap();
+                game.as_guest(&mut host, 1, |game| {
+                    assert_eq!(
+                        player.last_death_location(game),
+                        Some(("minecraft:the_nether".into(), [-2, 64, 7]))
+                    );
+                })
+                .unwrap();
+                game.lan = Some(host);
+            }
+        });
+    }
+
     /// `copyRespawnPosition` copies an Overworld forced point, not none; a
     /// point with a block is left to its block check.
     #[test]

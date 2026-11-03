@@ -417,6 +417,22 @@ impl Game<'_> {
         (id == player.entity.id()).then_some(read)
     }
 
+    /// `Player.getLastDeathLocation`: the dimension and block position of the last death.
+    pub(super) fn native_player_last_death_location(
+        &self,
+        player: PlayerRef,
+    ) -> Option<(String, [i32; 3])> {
+        self.player_handle_read(player)?;
+        self.lan
+            .as_ref()?
+            .hub
+            .guests
+            .iter()
+            .find(|guest| guest.entity_id as u32 == player.entity().id())?
+            .last_death
+            .clone()
+    }
+
     /// `ServerPlayerGameMode.getGameModeForPlayer`; Paper `HumanEntity#getGameMode`.
     /// None for stale, offline or unavailable players (including displaced outer players).
     pub(super) fn native_player_game_mode(&self, player: PlayerRef) -> Option<GameMode> {

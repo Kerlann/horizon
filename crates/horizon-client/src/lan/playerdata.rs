@@ -793,6 +793,19 @@ mod tests {
     }
 
     #[test]
+    fn last_death_survives_playerdata_save_and_load() {
+        let dir = world("last-death");
+        let mut original = guest();
+        original.last_death = Some(("minecraft:the_nether".into(), [-2, 64, 7]));
+        save(&original, &dir);
+        let mut loaded = guest();
+        loaded.uuid = original.uuid;
+        assert!(load(&mut loaded, &dir));
+        assert_eq!(loaded.last_death, original.last_death);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn player_attachments_survive_playerdata_and_respawn() {
         use horizon_world::attachments::{AttachmentCodec, AttachmentError, AttachmentType};
         let keep = AttachmentType {

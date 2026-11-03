@@ -2,6 +2,7 @@
   "hooks": [],
   "helpers": [
     {"name": "player", "side": "server", "target": "horizon_client::game::native_server::Game<'_>::native_player_ref"},
+    {"name": "player_last_death_location", "side": "server", "target": "horizon_client::game::native_server::Game<'_>::native_player_last_death_location", "receiver": "player"},
     {"name": "player_game_mode", "side": "server", "target": "horizon_client::game::native_server::Game<'_>::native_player_game_mode", "receiver": "player"},
     {"name": "player_is_creative", "side": "server", "target": "horizon_client::game::native_server::Game<'_>::native_player_is_creative", "receiver": "player"},
     {"name": "player_is_spectator", "side": "server", "target": "horizon_client::game::native_server::Game<'_>::native_player_is_spectator", "receiver": "player"},
