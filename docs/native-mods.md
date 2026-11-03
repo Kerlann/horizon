@@ -2791,6 +2791,14 @@ the mod: a vanilla client decodes the count with vanilla's 1 to 99 and cannot sh
   looks like it stacks to 64 there.
 - The creative search tab matches vanilla's exported tooltip text, so a changed `item_name` is not searchable yet.
 
+## Player death location
+
+`PlayerRef::last_death_location(&dyn Host)` reads a server player's last death as
+`Option<(String, [i32; 3])>`: the dimension ID and floored block position
+(`Player.getLastDeathLocation`). It is `None` before the first death, or for a stale,
+offline or unavailable handle. The existing player data saves it across reconnects.
+Reading the acting guest during a player turn is unavailable until #316.
+
 ## Trait mods (draft)
 
 `cargo horizon-mod new <path> --template native --horizon <commit>` writes a trait mod to start from: the bundle's
