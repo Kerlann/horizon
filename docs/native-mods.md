@@ -117,8 +117,8 @@ the catalog, not a global API number, source comments or documentation histories
 
 - Block entities for a mod's blocks (`native_block_entity`, `native_block_entity_ticks`,
   `native_block_entity_tick`): made when the block is placed, ticked on the server and saved with the chunk.
-  `entity.id()` reads its type identity, fixed at construction; its mutable payload contains `nbt`, `items` and `data`.
-  `ModBlockEntity::new(id, fields)` takes the identity separately from those mutable fields.
+  `entity.id()` reads its type identity, fixed at construction; mutable events give a `ModBlockEntityView` whose
+  payload contains `nbt`, `items` and `data`. A mod cannot replace the view or access its private entity handle.
 
 - Item slots for those block entities (`native_block_entity_container`): hoppers, comparators and breaking the
   block use them as they use vanilla's containers, and `native_block_entity_tick` also gets the slots.

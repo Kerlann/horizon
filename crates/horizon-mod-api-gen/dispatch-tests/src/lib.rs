@@ -96,6 +96,21 @@ mod tests {
                 &self.id
             }
         }
+        pub(super) struct ModBlockEntityView<'a> {
+            id: &'a str,
+            pub(super) data: &'a mut Vec<i32>,
+        }
+        impl<'a> ModBlockEntityView<'a> {
+            pub(super) fn new(entity: &'a mut ModBlockEntity) -> Self {
+                Self {
+                    id: &entity.id,
+                    data: &mut entity.data,
+                }
+            }
+            pub(super) fn id(&self) -> &str {
+                self.id
+            }
+        }
         pub(super) struct ModContainer;
         pub(super) struct MerchantOffer;
         pub(super) struct ModFluidTanks;
@@ -435,6 +450,7 @@ mod tests {
             assert_eq!(event.context.player_entity_id, 42);
             assert_eq!(event.context.pos, [1, 2, 3]);
             assert_eq!(event.context.id, 9);
+            assert_eq!(event.entity.id(), "machine");
             event.entity.data.push(9);
             *event.carried = Some(ItemStack {
                 item: "bucket".into(),

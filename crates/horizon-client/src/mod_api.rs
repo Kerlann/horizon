@@ -58,6 +58,52 @@ pub use horizon_world::{
 };
 pub use serde_json;
 
+/// A hook's mutable block entity payload, with a read-only type identity.
+/// The private handle cannot be constructed or taken out by a mod.
+///
+/// ```compile_fail
+/// use horizon_client::mod_api::{BlockEntityTickEvent, ModBlockEntity};
+/// fn replace(event: &mut BlockEntityTickEvent<'_>) {
+///     *event.entity = ModBlockEntity::default();
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use horizon_client::mod_api::BlockEntityTickEvent;
+/// fn take(event: &mut BlockEntityTickEvent<'_>) {
+///     let _ = std::mem::take(&mut event.entity);
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use horizon_client::mod_api::{BlockEntityTickEvent, ModBlockEntity};
+/// fn access(event: &mut BlockEntityTickEvent<'_>) {
+///     let _: &mut ModBlockEntity = event.entity.entity;
+/// }
+/// ```
+pub struct ModBlockEntityView<'a> {
+    entity: &'a mut ModBlockEntity,
+}
+impl<'a> ModBlockEntityView<'a> {
+    pub(crate) fn new(entity: &'a mut ModBlockEntity) -> Self {
+        Self { entity }
+    }
+    pub fn id(&self) -> &str {
+        self.entity.id()
+    }
+}
+impl std::ops::Deref for ModBlockEntityView<'_> {
+    type Target = crate::containers::ModBlockEntityFields;
+    fn deref(&self) -> &Self::Target {
+        self.entity
+    }
+}
+impl std::ops::DerefMut for ModBlockEntityView<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.entity
+    }
+}
+
 use serde_json::{Map, Value};
 use std::time::Duration;
 /// The window events `input_key` hands over (`winit::event::KeyEvent`) and their key types.

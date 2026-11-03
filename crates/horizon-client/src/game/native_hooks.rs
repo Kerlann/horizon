@@ -9283,6 +9283,7 @@ mod tests {
         use super::super::native_entity_refs::tests::with_game;
         use horizon_client::chunk::Chunk;
         use horizon_client::containers::{BlockEntity, ModBlockEntity, ModBlockEntityFields};
+        use horizon_client::mod_api;
         use horizon_client::save::{decode_block_entity, encode_block_entity};
         use std::sync::Arc;
 
@@ -9298,10 +9299,15 @@ mod tests {
                 .insert(pos, BlockEntity::Mod(Box::new(machine)));
             assert_eq!(
                 game.native_with_mod_block_entity([1, 64, 1], |entity| {
-                    **entity = ModBlockEntityFields {
+                    let mut event = mod_api::BlockEntityTickEvent {
+                        pos: [1, 64, 1],
+                        entity: mod_api::ModBlockEntityView::new(entity),
+                    };
+                    *event.entity = ModBlockEntityFields {
                         data: vec![7],
                         ..Default::default()
                     };
+                    assert_eq!(event.entity.id(), "test:machine");
                 }),
                 Some(())
             );
