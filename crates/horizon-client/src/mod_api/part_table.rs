@@ -930,18 +930,9 @@ pub(crate) mod tests {
             &mut self.kept
         }
     }
-    impl Host for PipeWorld {
+    impl Backend for PipeWorld {
         fn level_in_place(&self, level: LevelRef) -> bool {
             level == here()
-        }
-        fn transaction_open(&mut self, _: TransactionSeal) {
-            open(self);
-        }
-        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
-            close(self, commit);
-        }
-        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(BlockEntityRef { level, position })
         }
         fn block_entity_kind(
             &self,
@@ -959,6 +950,8 @@ pub(crate) mod tests {
         ) -> Option<ItemStack> {
             self.chest.clone().filter(|_| pos == CHEST && slot == 0)
         }
+    }
+    impl BackendMut for PipeWorld {
         fn container_insert(
             &mut self,
             BlockSide { pos, .. }: BlockSide,
@@ -971,6 +964,23 @@ pub(crate) mod tests {
             }
             self.chest = Some(stack);
             None
+        }
+    }
+    impl Host for PipeWorld {
+        fn backend(&self, _: BackendToken) -> &dyn Backend {
+            self
+        }
+        fn backend_mut(&mut self, _: BackendToken) -> &mut dyn BackendMut {
+            self
+        }
+        fn transaction_open(&mut self, _: TransactionSeal) {
+            open(self);
+        }
+        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
+            close(self, commit);
+        }
+        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
+            Some(BlockEntityRef { level, position })
         }
     }
 
@@ -1161,7 +1171,8 @@ pub(crate) mod tests {
     struct Charms;
     impl PlaceProvider for Charms {
         fn stack(&self, host: &mut dyn Host, key: u64) -> Option<ItemStack> {
-            host.game_stack(&charm_slot(key))
+            host.backend_mut(crate::mod_api::BackendToken(()))
+                .game_stack(&charm_slot(key))
         }
         fn insert(
             &self,
@@ -1215,19 +1226,15 @@ pub(crate) mod tests {
             &mut self.kept
         }
     }
-    impl Host for Player {
+    impl Backend for Player {
         fn level_in_place(&self, level: LevelRef) -> bool {
             level == here()
-        }
-        fn transaction_open(&mut self, _: TransactionSeal) {
-            open(self);
-        }
-        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
-            close(self, commit);
         }
         fn item_container_slots(&self, _: &ItemStack) -> Option<Vec<Option<ItemStack>>> {
             None
         }
+    }
+    impl BackendMut for Player {
         fn game_stack(&mut self, place: &ItemPlace) -> Option<ItemStack> {
             match place {
                 ItemPlace::PlayerHand { player: 1, .. } => self.main_hand.clone(),
@@ -1267,6 +1274,20 @@ pub(crate) mod tests {
             held.count -= took;
             self.put(place, (held.count > 0).then_some(held));
             took
+        }
+    }
+    impl Host for Player {
+        fn backend(&self, _: BackendToken) -> &dyn Backend {
+            self
+        }
+        fn backend_mut(&mut self, _: BackendToken) -> &mut dyn BackendMut {
+            self
+        }
+        fn transaction_open(&mut self, _: TransactionSeal) {
+            open(self);
+        }
+        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
+            close(self, commit);
         }
     }
     impl Player {
@@ -1344,30 +1365,9 @@ pub(crate) mod tests {
             &mut self.kept
         }
     }
-    impl Host for Shelf {
+    impl Backend for Shelf {
         fn level_in_place(&self, level: LevelRef) -> bool {
             level == here()
-        }
-        fn item_default_component(&self, item: &str, component: &str) -> Option<Tag> {
-            // An iron sword's, as its item report gives them.
-            let default = match component {
-                "minecraft:max_damage" => Tag::Int(250),
-                "minecraft:damage" => Tag::Int(0),
-                "minecraft:enchantable" => {
-                    Tag::Compound([("value".into(), Tag::Int(14))].into_iter().collect())
-                }
-                _ => return None,
-            };
-            (item == "minecraft:iron_sword").then_some(default)
-        }
-        fn transaction_open(&mut self, _: TransactionSeal) {
-            open(self);
-        }
-        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
-            close(self, commit);
-        }
-        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(BlockEntityRef { level, position })
         }
         fn block_entity_kind(&self, _: BlockEntityRef) -> Option<&str> {
             self.overstates.then_some("test:item_overstates")
@@ -1385,6 +1385,8 @@ pub(crate) mod tests {
         fn container_stack(&self, _: BlockSide, slot: usize) -> Option<ItemStack> {
             self.slots.get(slot)?.clone()
         }
+    }
+    impl BackendMut for Shelf {
         fn container_insert(
             &mut self,
             _: BlockSide,
@@ -1432,6 +1434,35 @@ pub(crate) mod tests {
             Some(out)
         }
     }
+    impl Host for Shelf {
+        fn backend(&self, _: BackendToken) -> &dyn Backend {
+            self
+        }
+        fn backend_mut(&mut self, _: BackendToken) -> &mut dyn BackendMut {
+            self
+        }
+        fn item_default_component(&self, item: &str, component: &str) -> Option<Tag> {
+            // An iron sword's, as its item report gives them.
+            let default = match component {
+                "minecraft:max_damage" => Tag::Int(250),
+                "minecraft:damage" => Tag::Int(0),
+                "minecraft:enchantable" => {
+                    Tag::Compound([("value".into(), Tag::Int(14))].into_iter().collect())
+                }
+                _ => return None,
+            };
+            (item == "minecraft:iron_sword").then_some(default)
+        }
+        fn transaction_open(&mut self, _: TransactionSeal) {
+            open(self);
+        }
+        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
+            close(self, commit);
+        }
+        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
+            Some(BlockEntityRef { level, position })
+        }
+    }
     impl Shelf {
         fn items(&self) -> u32 {
             items(self.slots.iter().flatten().cloned())
@@ -1443,19 +1474,25 @@ pub(crate) mod tests {
     struct ItemOverstates;
     impl ResourceHandler<ItemResource> for ItemOverstates {
         fn size(&self, host: &mut dyn Host) -> usize {
-            host.container_size(on(SHELF, None)).unwrap_or(0)
+            host.backend(crate::mod_api::BackendToken(()))
+                .container_size(on(SHELF, None))
+                .unwrap_or(0)
         }
         fn resource(&self, host: &mut dyn Host, index: usize) -> Option<ItemResource> {
             Some(ItemResource::of(
-                &host.container_stack(on(SHELF, None), index)?,
+                &host
+                    .backend(crate::mod_api::BackendToken(()))
+                    .container_stack(on(SHELF, None), index)?,
             ))
         }
         fn amount(&self, host: &mut dyn Host, index: usize) -> u32 {
-            host.container_stack(on(SHELF, None), index)
+            host.backend(crate::mod_api::BackendToken(()))
+                .container_stack(on(SHELF, None), index)
                 .map_or(0, |held| held.count)
         }
         fn capacity(&self, host: &mut dyn Host, index: usize, resource: &ItemResource) -> u32 {
-            host.container_capacity(on(SHELF, None), index, &resource.to_stack(1))
+            host.backend(crate::mod_api::BackendToken(()))
+                .container_capacity(on(SHELF, None), index, &resource.to_stack(1))
         }
         fn insert(
             &self,
@@ -1475,7 +1512,8 @@ pub(crate) mod tests {
             _: &ItemResource,
             amount: u32,
         ) -> u32 {
-            host.container_extract(on(SHELF, None), index, amount + 5, tx)
+            host.backend_mut(crate::mod_api::BackendToken(()))
+                .container_extract(on(SHELF, None), index, amount + 5, tx)
                 .map_or(0, |out| out.count)
         }
     }
@@ -1662,10 +1700,18 @@ pub(crate) mod tests {
         let aborted: Result<(), u32> =
             host.transaction(|host, tx| Err(pipe.insert(host, tx, 0, &stick_, 1)));
         assert_eq!(aborted, Err(1));
-        assert!(host.container_stack(on(CHEST, None), 0).is_none());
+        assert!(
+            host.backend(crate::mod_api::BackendToken(()))
+                .container_stack(on(CHEST, None), 0)
+                .is_none()
+        );
         let went = host.transaction(|host, tx| Ok::<_, ()>(pipe.insert(host, tx, 0, &stick_, 1)));
         assert_eq!(went, Ok(1));
-        assert_eq!(host.container_stack(on(CHEST, None), 0), Some(stick()));
+        assert_eq!(
+            host.backend(crate::mod_api::BackendToken(()))
+                .container_stack(on(CHEST, None), 0),
+            Some(stick())
+        );
         let went = host.transaction(|host, tx| Ok::<_, ()>(pipe.insert(host, tx, 0, &stick_, 1)));
         assert_eq!(went, Ok(0));
         // No block entity with slots: no answer. A mod's own capability has no game answer.
@@ -1802,18 +1848,9 @@ pub(crate) mod tests {
             &mut self.kept
         }
     }
-    impl Host for TwoChests {
+    impl Backend for TwoChests {
         fn level_in_place(&self, level: LevelRef) -> bool {
             level == here()
-        }
-        fn transaction_open(&mut self, _: TransactionSeal) {
-            open(self);
-        }
-        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
-            close(self, commit);
-        }
-        fn block_entity(&self, _: LevelRef, _: [i32; 3]) -> Option<BlockEntityRef> {
-            None
         }
         fn container_size(&self, BlockSide { pos, .. }: BlockSide) -> Option<usize> {
             [FROM, INTO].contains(&pos).then_some(3)
@@ -1832,6 +1869,8 @@ pub(crate) mod tests {
         fn container_capacity(&self, _: BlockSide, _: usize, _: &ItemStack) -> u32 {
             self.limit
         }
+    }
+    impl BackendMut for TwoChests {
         fn container_insert(
             &mut self,
             BlockSide { pos, .. }: BlockSide,
@@ -1878,6 +1917,23 @@ pub(crate) mod tests {
                 slots[slot] = None;
             }
             Some(out)
+        }
+    }
+    impl Host for TwoChests {
+        fn backend(&self, _: BackendToken) -> &dyn Backend {
+            self
+        }
+        fn backend_mut(&mut self, _: BackendToken) -> &mut dyn BackendMut {
+            self
+        }
+        fn transaction_open(&mut self, _: TransactionSeal) {
+            open(self);
+        }
+        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
+            close(self, commit);
+        }
+        fn block_entity(&self, _: LevelRef, _: [i32; 3]) -> Option<BlockEntityRef> {
+            None
         }
     }
 
@@ -2498,18 +2554,23 @@ pub(crate) mod tests {
 
     /// `test:ordered` block entities, where the game has slots of its own from x = 8 on.
     struct Ordered;
-    impl Host for Ordered {
+    impl Backend for Ordered {
         fn level_in_place(&self, level: LevelRef) -> bool {
             level == here()
-        }
-        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(BlockEntityRef { level, position })
         }
         fn block_entity_kind(&self, _: BlockEntityRef) -> Option<&str> {
             Some("test:ordered")
         }
         fn container_size(&self, BlockSide { pos, .. }: BlockSide) -> Option<usize> {
             (pos[0] >= 8).then_some(27)
+        }
+    }
+    impl Host for Ordered {
+        fn backend(&self, _: BackendToken) -> &dyn Backend {
+            self
+        }
+        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
+            Some(BlockEntityRef { level, position })
         }
     }
 
@@ -2537,7 +2598,10 @@ pub(crate) mod tests {
                 pos: [x, 64, 0],
                 side: None,
             };
-            let game_slots = host.container_size(at).is_some();
+            let game_slots = host
+                .backend(crate::mod_api::BackendToken(()))
+                .container_size(at)
+                .is_some();
             let providers = block_entity_providers(&ITEMS, host, at)?;
             providers
                 .ask(host, game_slots)
@@ -2573,24 +2637,39 @@ pub(crate) mod tests {
 
     /// Block entities of one type, or vanilla ones (none).
     struct TypeOf(Option<&'static str>);
-    impl Host for TypeOf {
-        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(BlockEntityRef { level, position })
-        }
+    impl Backend for TypeOf {
         fn block_entity_kind(&self, _: BlockEntityRef) -> Option<&str> {
             self.0
+        }
+    }
+    impl Host for TypeOf {
+        fn backend(&self, _: BackendToken) -> &dyn Backend {
+            self
+        }
+        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
+            Some(BlockEntityRef { level, position })
         }
     }
 
     /// Player 1 holding one stack in their hand, which has game slots (`item_container`) when
     /// its damage is 1.
     struct HeldItem(ItemStack);
-    impl Host for HeldItem {
+    impl Backend for HeldItem {
+        fn item_container_slots(&self, stack: &ItemStack) -> Option<Vec<Option<ItemStack>>> {
+            (stack.damage == 1).then(|| vec![None; 27])
+        }
+    }
+    impl BackendMut for HeldItem {
         fn game_stack(&mut self, place: &ItemPlace) -> Option<ItemStack> {
             (*place == HAND).then(|| self.0.clone())
         }
-        fn item_container_slots(&self, stack: &ItemStack) -> Option<Vec<Option<ItemStack>>> {
-            (stack.damage == 1).then(|| vec![None; 27])
+    }
+    impl Host for HeldItem {
+        fn backend(&self, _: BackendToken) -> &dyn Backend {
+            self
+        }
+        fn backend_mut(&mut self, _: BackendToken) -> &mut dyn BackendMut {
+            self
         }
     }
 
@@ -2601,7 +2680,9 @@ pub(crate) mod tests {
             if side == Some(Direction::Up) {
                 return 0;
             }
-            host.fluid_tank_count(on(at, None)).unwrap_or(0)
+            host.backend(crate::mod_api::BackendToken(()))
+                .fluid_tank_count(on(at, None))
+                .unwrap_or(0)
         }
         fn fluid(
             &self,
@@ -2610,7 +2691,8 @@ pub(crate) mod tests {
             _: Option<Direction>,
             tank: usize,
         ) -> Option<FluidStack> {
-            host.fluid_tank(on(at, None), tank)
+            host.backend(crate::mod_api::BackendToken(()))
+                .fluid_tank(on(at, None), tank)
         }
         fn capacity(
             &self,
@@ -2620,7 +2702,8 @@ pub(crate) mod tests {
             tank: usize,
             fluid: &FluidStack,
         ) -> u32 {
-            host.fluid_tank_capacity(on(at, None), tank, fluid)
+            host.backend(crate::mod_api::BackendToken(()))
+                .fluid_tank_capacity(on(at, None), tank, fluid)
         }
         fn insert(
             &self,
@@ -2631,7 +2714,8 @@ pub(crate) mod tests {
             fluid: FluidStack,
             simulate: bool,
         ) -> Option<FluidStack> {
-            host.fluid_tank_insert(on(at, None), tank, fluid, simulate)
+            host.backend_mut(crate::mod_api::BackendToken(()))
+                .fluid_tank_insert(on(at, None), tank, fluid, simulate)
         }
         fn extract(
             &self,
@@ -2642,7 +2726,8 @@ pub(crate) mod tests {
             max: u32,
             simulate: bool,
         ) -> Option<FluidStack> {
-            host.fluid_tank_extract(on(at, None), tank, max, simulate)
+            host.backend_mut(crate::mod_api::BackendToken(()))
+                .fluid_tank_extract(on(at, None), tank, max, simulate)
         }
     }
 
@@ -2706,7 +2791,9 @@ pub(crate) mod tests {
     }
     impl FluidHandler for Overstates {
         fn tanks(&self, host: &dyn Host, at: [i32; 3], side: Option<Direction>) -> usize {
-            host.fluid_tank_count(on(at, side)).unwrap_or(0)
+            host.backend(crate::mod_api::BackendToken(()))
+                .fluid_tank_count(on(at, side))
+                .unwrap_or(0)
         }
         fn fluid(
             &self,
@@ -2715,7 +2802,8 @@ pub(crate) mod tests {
             side: Option<Direction>,
             tank: usize,
         ) -> Option<FluidStack> {
-            host.fluid_tank(on(at, side), tank)
+            host.backend(crate::mod_api::BackendToken(()))
+                .fluid_tank(on(at, side), tank)
         }
         fn capacity(
             &self,
@@ -2725,7 +2813,8 @@ pub(crate) mod tests {
             tank: usize,
             fluid: &FluidStack,
         ) -> u32 {
-            host.fluid_tank_capacity(on(at, side), tank, fluid)
+            host.backend(crate::mod_api::BackendToken(()))
+                .fluid_tank_capacity(on(at, side), tank, fluid)
         }
         fn insert(
             &self,
@@ -2739,7 +2828,8 @@ pub(crate) mod tests {
             if *self == Self::RefusesMore && !simulate {
                 return Some(fluid.with_amount(fluid.amount + 100));
             }
-            host.fluid_tank_insert(on(at, side), tank, fluid, simulate)
+            host.backend_mut(crate::mod_api::BackendToken(()))
+                .fluid_tank_insert(on(at, side), tank, fluid, simulate)
         }
         fn extract(
             &self,
@@ -2751,10 +2841,14 @@ pub(crate) mod tests {
             simulate: bool,
         ) -> Option<FluidStack> {
             if simulate {
-                return host.fluid_tank_extract(on(at, side), tank, max, true);
+                return host
+                    .backend_mut(crate::mod_api::BackendToken(()))
+                    .fluid_tank_extract(on(at, side), tank, max, true);
             }
             let more = if *self == Self::GivesMore { 100 } else { 0 };
-            let out = host.fluid_tank_extract(on(at, side), tank, max + more, false)?;
+            let out = host
+                .backend_mut(crate::mod_api::BackendToken(()))
+                .fluid_tank_extract(on(at, side), tank, max + more, false)?;
             match self {
                 Self::GivesLava => Some(FluidStack::new("minecraft:lava", out.amount)),
                 _ => Some(out),
@@ -2807,12 +2901,9 @@ pub(crate) mod tests {
             self.tanks[&pos].held.as_ref().map_or(0, |held| held.amount)
         }
     }
-    impl Host for TankWorld {
+    impl Backend for TankWorld {
         fn level_in_place(&self, level: LevelRef) -> bool {
             level == here()
-        }
-        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(BlockEntityRef { level, position })
         }
         fn block_entity_kind(
             &self,
@@ -2837,6 +2928,8 @@ pub(crate) mod tests {
                 .filter(|tank| tank.fills)
                 .map_or(0, |tank| tank.capacity)
         }
+    }
+    impl BackendMut for TankWorld {
         fn fluid_tank_insert(
             &mut self,
             BlockSide { pos, .. }: BlockSide,
@@ -2901,6 +2994,17 @@ pub(crate) mod tests {
             Some(held.with_amount(take))
         }
     }
+    impl Host for TankWorld {
+        fn backend(&self, _: BackendToken) -> &dyn Backend {
+            self
+        }
+        fn backend_mut(&mut self, _: BackendToken) -> &mut dyn BackendMut {
+            self
+        }
+        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
+            Some(BlockEntityRef { level, position })
+        }
+    }
 
     fn potion(amount: u32, potion: &str) -> FluidStack {
         let components = crate::item_data::StackData {
@@ -2951,7 +3055,11 @@ pub(crate) mod tests {
         world.tank(SOURCE, Some(water.clone()), true);
         world.tank(TANK, None, false);
         let host: &mut dyn Host = &mut world;
-        assert_eq!(host.fluid_tank_capacity(on(TANK, None), 0, &water), 0);
+        assert_eq!(
+            host.backend(crate::mod_api::BackendToken(()))
+                .fluid_tank_capacity(on(TANK, None), 0, &water),
+            0
+        );
         assert!(
             host.transfer_fluids(here(), SOURCE, None, TANK, None, 1000)
                 .is_none()

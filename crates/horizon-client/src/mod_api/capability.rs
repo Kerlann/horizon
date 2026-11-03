@@ -73,7 +73,8 @@ impl<T: ?Sized + 'static> CapabilityKey<T> {
 pub const ITEMS: CapabilityKey<dyn ResourceHandler<ItemResource>> = CapabilityKey {
     name: "horizon:items",
     default: Some(|host, at| {
-        host.container_size(at)
+        host.backend(crate::mod_api::BackendToken(()))
+            .container_size(at)
             .map(|_| Box::new(GameItems(at)) as Box<dyn ResourceHandler<ItemResource>>)
     }),
     handler: PhantomData,
@@ -84,18 +85,24 @@ pub const ITEMS: CapabilityKey<dyn ResourceHandler<ItemResource>> = CapabilityKe
 struct GameItems(BlockSide);
 impl ResourceHandler<ItemResource> for GameItems {
     fn size(&self, host: &mut dyn Host) -> usize {
-        host.container_size(self.0).unwrap_or(0)
+        host.backend(crate::mod_api::BackendToken(()))
+            .container_size(self.0)
+            .unwrap_or(0)
     }
     fn resource(&self, host: &mut dyn Host, index: usize) -> Option<ItemResource> {
-        let stack = host.container_stack(self.0, index)?;
+        let stack = host
+            .backend(crate::mod_api::BackendToken(()))
+            .container_stack(self.0, index)?;
         Some(ItemResource::of(&stack))
     }
     fn amount(&self, host: &mut dyn Host, index: usize) -> u32 {
-        host.container_stack(self.0, index)
+        host.backend(crate::mod_api::BackendToken(()))
+            .container_stack(self.0, index)
             .map_or(0, |stack| stack.count)
     }
     fn capacity(&self, host: &mut dyn Host, index: usize, resource: &ItemResource) -> u32 {
-        host.container_capacity(self.0, index, &resource.to_stack(1))
+        host.backend(crate::mod_api::BackendToken(()))
+            .container_capacity(self.0, index, &resource.to_stack(1))
     }
     fn insert(
         &self,
@@ -106,7 +113,9 @@ impl ResourceHandler<ItemResource> for GameItems {
         amount: u32,
     ) -> u32 {
         let stack = resource.to_stack(amount);
-        let rest = host.container_insert(self.0, index, stack, tx);
+        let rest = host
+            .backend_mut(crate::mod_api::BackendToken(()))
+            .container_insert(self.0, index, stack, tx);
         amount - rest.map_or(0, |rest| rest.count.min(amount))
     }
     fn extract(
@@ -117,11 +126,14 @@ impl ResourceHandler<ItemResource> for GameItems {
         resource: &ItemResource,
         amount: u32,
     ) -> u32 {
-        let held = host.container_stack(self.0, index);
+        let held = host
+            .backend(crate::mod_api::BackendToken(()))
+            .container_stack(self.0, index);
         if !held.is_some_and(|held| resource.matches(&held)) {
             return 0;
         }
-        host.container_extract(self.0, index, amount, tx)
+        host.backend_mut(crate::mod_api::BackendToken(()))
+            .container_extract(self.0, index, amount, tx)
             .map_or(0, |out| out.count.min(amount))
     }
 }
@@ -169,6 +181,6 @@ impl BlockSide {
     /// providers are registered by.
     pub(super) fn kind(self, host: &dyn Host) -> Option<&str> {
         let entity = host.block_entity(self.level, self.pos)?;
-        host.block_entity_kind(entity)
+        entity.kind(host)
     }
 }

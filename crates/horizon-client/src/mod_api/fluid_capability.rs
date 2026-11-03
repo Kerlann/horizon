@@ -58,7 +58,8 @@ impl FluidStack {
 pub const FLUIDS: CapabilityKey<dyn FluidHandler> = CapabilityKey {
     name: "horizon:fluids",
     default: Some(|host, at| {
-        host.fluid_tank_count(at)
+        host.backend(crate::mod_api::BackendToken(()))
+            .fluid_tank_count(at)
             .map(|_| Box::new(GameFluids(at.level)) as Box<dyn FluidHandler>)
     }),
     handler: PhantomData,
@@ -126,7 +127,9 @@ impl GameFluids {
 }
 impl FluidHandler for GameFluids {
     fn tanks(&self, host: &dyn Host, at: [i32; 3], side: Option<Direction>) -> usize {
-        host.fluid_tank_count(self.at(at, side)).unwrap_or(0)
+        host.backend(crate::mod_api::BackendToken(()))
+            .fluid_tank_count(self.at(at, side))
+            .unwrap_or(0)
     }
     fn fluid(
         &self,
@@ -135,7 +138,8 @@ impl FluidHandler for GameFluids {
         side: Option<Direction>,
         tank: usize,
     ) -> Option<FluidStack> {
-        host.fluid_tank(self.at(at, side), tank)
+        host.backend(crate::mod_api::BackendToken(()))
+            .fluid_tank(self.at(at, side), tank)
     }
     fn capacity(
         &self,
@@ -145,7 +149,8 @@ impl FluidHandler for GameFluids {
         tank: usize,
         fluid: &FluidStack,
     ) -> u32 {
-        host.fluid_tank_capacity(self.at(at, side), tank, fluid)
+        host.backend(crate::mod_api::BackendToken(()))
+            .fluid_tank_capacity(self.at(at, side), tank, fluid)
     }
     fn insert(
         &self,
@@ -156,7 +161,8 @@ impl FluidHandler for GameFluids {
         fluid: FluidStack,
         simulate: bool,
     ) -> Option<FluidStack> {
-        host.fluid_tank_insert(self.at(at, side), tank, fluid, simulate)
+        host.backend_mut(crate::mod_api::BackendToken(()))
+            .fluid_tank_insert(self.at(at, side), tank, fluid, simulate)
     }
     fn extract(
         &self,
@@ -167,7 +173,8 @@ impl FluidHandler for GameFluids {
         max: u32,
         simulate: bool,
     ) -> Option<FluidStack> {
-        host.fluid_tank_extract(self.at(at, side), tank, max, simulate)
+        host.backend_mut(crate::mod_api::BackendToken(()))
+            .fluid_tank_extract(self.at(at, side), tank, max, simulate)
     }
 }
 
