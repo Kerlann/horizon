@@ -29,7 +29,8 @@ use horizon_client::mod_api::{
 };
 use horizon_client::mod_api::{
     AttachmentResult, Attachments, BlockHit, GameRuleValue, Holder, LegacyRandom, LevelRef,
-    LogicalSide, NativeBlockClick, NativeInteractionResult, NativeTriState, Suggestion,
+    LogicalSide, NativeBlockClick, NativeInteractionResult, NativeItemClick, NativeTriState,
+    Suggestion, UsePhase,
 };
 pub(crate) use horizon_client::mod_api::{
     NativeBlockRim, NativeColoredLight, NativeExplosionStart, NativeItemFished, NativeLootDrops,
@@ -5743,7 +5744,7 @@ impl Game<'_> {
     pub(super) fn native_use_item_on_block(
         &mut self,
         click: &NativeBlockClick<'_>,
-        phase: mod_api::UsePhase,
+        phase: UsePhase,
         cancellation_result: &mut NativeInteractionResult,
         canceled: &mut bool,
     ) {
@@ -5760,7 +5761,7 @@ impl Game<'_> {
     /// `Pass`. On the client only `Success` ends the hand loop.
     pub(super) fn native_right_click_item(
         &mut self,
-        click: &mod_api::NativeItemClick<'_>,
+        click: &NativeItemClick<'_>,
         cancellation_result: &mut NativeInteractionResult,
         canceled: &mut bool,
     ) {
@@ -8443,7 +8444,7 @@ impl Game<'_> {
         hit: &super::Hit,
         hand: Hand,
         stack: Option<&ItemStack>,
-        phase: mod_api::UsePhase,
+        phase: UsePhase,
     ) -> Option<NativeInteractionResult> {
         if !mod_api::listened(mod_api::HookId::UseItemOnBlock) {
             return None;
@@ -8467,10 +8468,10 @@ impl Game<'_> {
             return None;
         }
         let pos = self
-            .target_position(super::Target::Player)?
+            .target_position(super::commands::Target::Player)?
             .map(|v| v.floor() as i32);
         let (player, player_entity_id) = self.native_clicker();
-        let click = mod_api::NativeItemClick {
+        let click = NativeItemClick {
             side: if self.remote.is_some() {
                 LogicalSide::Client
             } else {
