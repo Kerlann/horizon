@@ -1202,7 +1202,7 @@ pub fn main() -> horizon_client::Result<()> {
                     items: Some(&items),
                     lid_openers: &lid_openers,
                     mod_effects: None,
-                    ask_taming: false,
+                    ask_mods: false,
                     border: None,
                 }
             };

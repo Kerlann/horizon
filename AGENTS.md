@@ -34,6 +34,47 @@ Feature → files → harness for the most-changed areas: [docs/architecture.md]
 - **Claim before you start**: comment `/claim` on the issue (no issue yet: open one, then claim it). An assigned
   issue is taken: pick another. `/unclaim` when you stop; a claim with no open PR linking it is released after 5 days.
 
+## Mod API on this fork: the clean break
+
+This fork (arismoko/horizon) is where the native mod API is built: hooks, the `Host`, handles, Parts,
+attachments and mod loading. Tracker: #26 (design), #44 (milestones). The mod API is taking **one clean
+break**, and every change to it follows these rules. Reviews block a PR that breaks any of them.
+
+- **No compatibility paths.** No aliases, shims, deprecated names, migration or fallback code, version
+  gates, or "kept for old mods" branches. Old mods rebuild; the compiler says what moved. Removing an old
+  path updates every caller, the catalog, docs, tests and horizon-machine-sample in the same change.
+- **One hook per moment.** A hook with a NeoForge 26.3 counterpart takes its name, side and full contract.
+  Two hooks at the same vanilla call site (including `_v1`/`_v2` pairs) merge into that one, and the old
+  one is deleted, not kept beside it. A veto before an action and a notice after it are separate moments
+  when vanilla runs code between them. A hook whose vanilla call site is gone is removed from the catalog.
+- **Every hook gets a `Host`.** Hooks that fire inside client-lib split into decide, fire, apply: client-lib
+  decides, the game fires the hook with a `Host`, then applies. The listener's writes and the apply run in
+  one transaction, and the apply re-checks the decision's preconditions and refuses (never recomputes) if
+  they changed.
+- **`Host` shape.** A small shared `Host` (handle constructors, registries, settings, `transaction`), with
+  `ServerHost: Host` and `ClientHost: Host` generated from each catalog entry's `side`, so a wrong-side
+  call doesn't compile; a hook that fires on both sides gets a typed `HostSide`. Per-object methods live on
+  handles (reads take `&dyn Host`, writes `&mut dyn ServerHost`), and the ID-based helper a handle method
+  covers is removed when it lands. Drawing goes through a `DrawContext` given only to render and screen
+  hooks. Items, fluids and energy go through Parts under transactions. Commands, players, messages and
+  scheduling are small service traits reached from `Host`; attachments live on handles. Don't add a
+  method to `Host` that has a natural receiver.
+- **Versions are the exact build.** A mod is built against one game build and the loader checks that build
+  id. `.hmod` is the one package format.
+- **DRY.** One implementation per behaviour: reuse the existing helper, write path or generator rule, and
+  let the catalog and generator own repetition instead of hand-written match arms.
+- **SOLID.** Each module, trait and handle has one job; traits stay small and split by side and concern;
+  new behaviour comes in through the catalog, handles and parts; mods depend on `mod_api`, never on game
+  internals, and lower crates never reach up into `Game`.
+- **Neat.** Names, layout and docs match the code around them. No dead code, leftover TODO paths, or
+  anything a later PR must tidy up.
+- **Fast.** No allocation, string building or scan over every mod on hot paths (tick, per-entity and
+  per-block hooks). Dispatch only to the mods and parts that subscribe, resolve keys once at load, and a
+  PR that touches a hot path states its tick-time effect.
+- **Differences from upstream are marked.** A change that renames or removes something horizon-rust/horizon
+  also has says "Diverges from upstream" in its PR body. Write upstream refs in full
+  (`horizon-rust/horizon#N`; a bare `#N` is this fork) and never put Fixes, Closes or Resolves before one.
+
 ## Crates
 
 Game workspace (root `Cargo.toml`); `launcher/` and `crates/horizon-telemetry-server` are separate workspaces.

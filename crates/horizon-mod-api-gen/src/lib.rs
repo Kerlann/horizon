@@ -583,8 +583,7 @@ fn catalog_hooks(
 
 /// The crate folder and module path of a hook target that is a free function
 /// outside `Game`. `horizon-client-lib` builds from `horizon-client/src`
-/// (`client_lib.rs`); `menu` and `breathing` are also accepted under their
-/// older `horizon_client::` names.
+/// (`client_lib.rs`).
 fn free_function_source(target: &str) -> Option<(&'static str, String)> {
     let prefixes = [
         ("horizon_world::", "horizon-world"),
@@ -594,13 +593,6 @@ fn free_function_source(target: &str) -> Option<(&'static str, String)> {
     prefixes
         .into_iter()
         .find_map(|(prefix, krate)| target.strip_prefix(prefix).map(|p| (krate, p.to_owned())))
-        .or_else(|| {
-            ["menu", "breathing"].into_iter().find_map(|module| {
-                target
-                    .strip_prefix(&format!("horizon_client::{module}::"))
-                    .map(|p| ("horizon-client", format!("{module}::{p}")))
-            })
-        })
 }
 
 /// Whether a hook function needs its dispatch `call` filled in: false when it
@@ -1787,14 +1779,22 @@ mod tests {
 
     #[test]
     fn library_crate_targets_resolve_to_their_source() {
+        assert_eq!(
+            super::free_function_source("horizon_client_lib::menu::native_menu_slot_rules"),
+            Some(("horizon-client", "menu::native_menu_slot_rules".to_owned()))
+        );
+        assert_eq!(
+            super::free_function_source("horizon_client_lib::breathing::native_living_breathe"),
+            Some((
+                "horizon-client",
+                "breathing::native_living_breathe".to_owned()
+            ))
+        );
         for target in [
-            "horizon_client_lib::menu::native_menu_slot_rules",
             "horizon_client::menu::native_menu_slot_rules",
+            "horizon_client::breathing::native_living_breathe",
         ] {
-            assert_eq!(
-                super::free_function_source(target),
-                Some(("horizon-client", "menu::native_menu_slot_rules".to_owned()))
-            );
+            assert_eq!(super::free_function_source(target), None);
         }
         assert_eq!(
             super::free_function_source("horizon_client_lib::crafting::native_ingredient"),

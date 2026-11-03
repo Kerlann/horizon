@@ -229,18 +229,21 @@ impl Mob {
     }
     /// GroundPathNavigation.findSurfacePosition.
     fn surface_position(&self, w: &MobWorld, mut p: [i32; 3]) -> [i32; 3] {
+        let min_y = w.world.shape.min_y;
+        let max_y = w.world.shape.max_y() - 1;
+        p[1] = p[1].clamp(min_y, max_y);
         let air = |p: [i32; 3]| w.facts.is_air(w.world.block(p[0], p[1], p[2]));
         let solid = |p: [i32; 3]| w.solid(p[0], p[1], p[2]);
         if air(p) {
             let mut q = [p[0], p[1] - 1, p[2]];
-            while q[1] >= w.world.bottom_y() && air(q) {
+            while q[1] >= min_y && air(q) {
                 q[1] -= 1;
             }
-            if q[1] >= w.world.bottom_y() {
+            if q[1] >= min_y {
                 return [q[0], q[1] + 1, q[2]];
             }
             q[1] = p[1] + 1;
-            while q[1] <= 319 && air(q) {
+            while q[1] <= max_y && air(q) {
                 q[1] += 1;
             }
             p = q;
@@ -249,7 +252,7 @@ impl Mob {
             return p;
         }
         let mut q = [p[0], p[1] + 1, p[2]];
-        while q[1] <= 319 && solid(q) {
+        while q[1] <= max_y && solid(q) {
             q[1] += 1;
         }
         q
@@ -738,6 +741,33 @@ mod recompute_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn surface_search_uses_the_world_build_range() {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        assert!(crate::mobs::world::with_resource_test_world(
+            &root,
+            &[],
+            true,
+            |world, _| world.shape =
+                crate::chunk::LevelShape::new(0, 128, 128, true, false).unwrap(),
+            |world, types| {
+                let kind = std::sync::Arc::new(types.types["minecraft:zombie"].clone());
+                let mob = Mob::new(1, kind, Vec3::ZERO, 0.0);
+                assert_eq!(
+                    mob.surface_position(world, [0, 2_000_000_000, 0]),
+                    [0, 128, 0]
+                );
+                assert_eq!(
+                    mob.surface_position(world, [0, -2_000_000_000, 0]),
+                    [0, 128, 0]
+                );
+                assert_eq!(mob.surface_position(world, [0, 127, 0]), [0, 128, 0]);
+                assert_eq!(mob.surface_position(world, [0, 0, 0]), [0, 128, 0]);
+            },
+        ));
+    }
+
     /// `Frog.FrogPathNavigation.prefersShallowSwimming` has to reach the path
     /// finder, or the shallow-water malus never applies to a frog.
     #[test]

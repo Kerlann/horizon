@@ -211,9 +211,13 @@ mod native_criteria;
 mod native_data_maps;
 mod native_entities;
 mod native_entity_data;
+mod native_entity_invulnerable;
 mod native_entity_motion;
 mod native_entity_moves;
 mod native_entity_refs;
+mod native_entity_remove;
+mod native_entity_riding;
+mod native_entity_state;
 mod native_explosions;
 mod native_falling;
 mod native_hooks;
@@ -224,12 +228,15 @@ mod native_item_entity_refs;
 mod native_item_fluids;
 mod native_item_places;
 mod native_level_effects;
+mod native_level_events;
 mod native_level_refs;
 mod native_level_world;
 mod native_lifecycle;
 mod native_living_refs;
+mod native_menu_refs;
 mod native_menus;
 mod native_mob_draw;
+mod native_mob_navigation;
 mod native_mob_refs;
 mod native_mobs;
 mod native_motion;
@@ -238,6 +245,9 @@ mod native_net;
 mod native_panel;
 mod native_panel_recipes;
 mod native_player_cooldowns;
+mod native_player_food;
+mod native_player_modes;
+mod native_player_stats;
 mod native_projectiles;
 mod native_quick_move;
 mod native_recipes;
@@ -1014,6 +1024,8 @@ struct GameLevel<'w> {
     /// Only the integrated or dedicated server dispatches native observations.
     native_authoritative: bool,
     native_player: Option<u128>,
+    /// The acting player's entity id, beside `native_player`.
+    native_player_entity: Option<i32>,
     /// `Level.isDebug`: `setBlock` changes nothing.
     debug: bool,
     native_sounds: &'w mut Vec<creatures::NativeSound>,
@@ -1300,7 +1312,7 @@ impl LevelAccess for GameLevel<'_> {
     fn note_block_change(
         &self,
         pos: BlockPos,
-        instrument: &str,
+        instrument: u8,
         old: i32,
         mut new: i32,
     ) -> Option<i32> {
@@ -1309,28 +1321,21 @@ impl LevelAccess for GameLevel<'_> {
             let context = horizon_client::mod_api::NativeNoteBlockChange {
                 dimension: self.dimension,
                 pos,
-                instrument,
+                instrument: horizon_client::mod_api::NativeNoteInstrument::ALL
+                    [usize::from(instrument)],
                 old_note: old,
             };
             self.native_note_block_change(&context, &mut new, &mut cancel);
         }
         (!cancel).then_some(new)
     }
-    fn allow_note_play(&self, pos: BlockPos, instrument: &str, note: i32) -> bool {
-        let mut cancel = false;
-        if self.native_authoritative {
-            self.native_note_play(
-                self.dimension,
-                self.native_player,
-                pos,
-                instrument,
-                note,
-                &mut cancel,
-            );
-        }
-        !cancel
-    }
-    fn note_block_play(&self, pos: BlockPos, instrument: &mut u8, note: &mut i32) -> bool {
+    fn note_block_play(
+        &self,
+        pos: BlockPos,
+        by_player: bool,
+        instrument: &mut u8,
+        note: &mut i32,
+    ) -> bool {
         use horizon_client::mod_api::NativeNoteInstrument;
         if !self.native_authoritative || crate::mod_api::mods().is_empty() {
             return true;
@@ -1338,8 +1343,15 @@ impl LevelAccess for GameLevel<'_> {
         let mut played_instrument = NativeNoteInstrument::ALL[usize::from(*instrument)];
         let mut played = *note;
         let mut cancel = false;
+        let (player, player_entity_id) = if by_player {
+            (self.native_player, self.native_player_entity)
+        } else {
+            (None, None)
+        };
         self.native_note_block_play(
             self.dimension,
+            player,
+            player_entity_id,
             pos,
             &mut played_instrument,
             &mut played,
@@ -4687,6 +4699,7 @@ impl Game<'_> {
             client_side: self.remote.is_some(),
             native_authoritative,
             native_player: self.lan_acting_uuid,
+            native_player_entity: self.lan_acting_entity.map(|id| id as i32),
             debug: self.world_debug,
             native_sounds: &mut self.creatures.lan_sounds,
             native_particles: &mut self.creatures.lan_particles,
@@ -7658,7 +7671,6 @@ impl Game<'_> {
         self.update_totem_ready();
         self.tick_command_extras();
         self.native_tick();
-        self.tell_native_now();
         self.tick_world(running)
     }
     /// What the tick runs after the local player's own update: effects, the
@@ -10073,6 +10085,10 @@ impl Game<'_> {
         let brewed = std::mem::take(&mut menu.brewed);
         let brewed_potion_takes = std::mem::take(&mut menu.brewed_potion_takes);
         let equipped = std::mem::take(&mut menu.equipped);
+        let item_crafted = std::mem::take(&mut menu.item_crafted);
+        for (_, stack) in &item_crafted {
+            self.tutorial_get_item(Some(stack));
+        }
         for (i, stack) in after.into_iter().enumerate() {
             if let Some(g) = game_of[i] {
                 *self.slot_mut(g) = stack;
@@ -10799,6 +10815,7 @@ impl Game<'_> {
                 // (native_item_crafted).
                 let player = self.native_acting_id();
                 self.native_item_crafted(player, &format!("minecraft:{recipe}"), &taken);
+                self.tutorial_get_item(Some(&taken));
                 self.award_stat("crafted", &made.0, made.1 as i32);
                 self.award_crafted(&[(format!("minecraft:{recipe}"), ingredients)]);
                 if !shift || crafted >= 64 {
@@ -15568,14 +15585,16 @@ impl Game<'_> {
     /// Save the level in place: its changed chunks, its entities and its raids.
     fn save_level(&mut self, wait: bool) -> Result<()> {
         self.save.save_forced_chunks(&self.streaming.forced)?;
-        self.streaming.save(&mut self.world, wait);
+        let protos = self.streaming.prepare_save(&mut self.world, wait);
+        self.native_proto_snapshots(&protos);
+        self.streaming.finish_save(protos, wait);
         let keys: Vec<_> = self.world.modified.iter().copied().collect();
-        self.native_full_chunk_saves(&keys);
         self.save.save_attachments(&self.world.attachments)?;
         for key in &keys {
             self.world.modified.remove(key);
         }
         let chunks = self.with_entities(keys.iter().filter_map(|k| self.world.chunks.get(k)));
+        self.native_full_chunk_snapshots(&chunks);
         self.save
             .save_later(&chunks, self.pack.assets.registry, world_biomes!(self))?;
         // Prepare entities while the chunk writer runs, then use one barrier.
@@ -16310,7 +16329,30 @@ impl Game<'_> {
     /// The frame shows the title's panorama, not a level: the title screen, or a
     /// LevelLoadingScreen (Reason.OTHER), which draws it too.
     fn shows_panorama(&self) -> bool {
-        self.title.is_some() || self.remote_loading()
+        // The two cases that always had one: the title screen and waiting on
+        // a server. Left exactly as they were.
+        self.title.is_some() || self.remote_loading() || self.screen_wants_panorama()
+    }
+    /// Whether the screen on top asked for the panorama through
+    /// [`horizon_client::screen_draw::Backdrop`].
+    ///
+    /// This is the opt-in path for Horizon's own screens: a screen sets its
+    /// `backdrop` and the renderer draws the panorama behind it, instead of
+    /// every such screen needing its own branch in `shows_panorama`. Vanilla
+    /// screens leave the backdrop at `None` and so never reach this.
+    ///
+    /// Only in a menu: in a world the panorama would replace the world the
+    /// player is standing in, which is not what any of these screens want.
+    fn screen_wants_panorama(&self) -> bool {
+        use horizon_client::screen_draw::Backdrop;
+        if self.player.is_some() {
+            return false;
+        }
+        self.ui
+            .options
+            .pack_screen
+            .as_ref()
+            .is_some_and(|p| p.backdrop == Backdrop::Panorama)
     }
     /// `LevelLoadingScreen.extractBackground`.
     pub(super) fn draw_level_loading_background(
@@ -16937,9 +16979,11 @@ impl Game<'_> {
         let plan = horizon_client::spans::time("streaming_plan", || {
             self.streaming.plan_update(&mut self.world)
         });
-        self.native_full_chunk_saves(plan.unloading());
+        let (commit, protos) = self.streaming.prepare_commit(&mut self.world, plan);
+        self.native_proto_snapshots(&protos);
+        self.streaming.submit_protos(protos);
         let (uploads, unloaded) = horizon_client::spans::time("streaming", || {
-            self.streaming.finish_update(&mut self.world, plan)
+            self.streaming.complete_commit(&mut self.world, commit)
         });
         self.streaming.extra.truncate(areas);
         let dirty: Vec<_> = unloaded
@@ -16948,6 +16992,7 @@ impl Game<'_> {
             .cloned()
             .collect();
         let modified = horizon_client::spans::time("with_entities", || self.with_entities(&dirty));
+        self.native_full_chunk_snapshots(&modified);
         if !modified.is_empty()
             && let Err(e) = horizon_client::spans::time("save_chunks", || {
                 self.save
@@ -17828,29 +17873,31 @@ impl Game<'_> {
                         && !self.screen_over_playing()
                         && self.sleeping.is_none()
                         && self.player.is_some()
-                        && !self.native_wheel_event(d)
-                        && let Some((wheel, (horizontal_steps, vertical_steps))) = self
-                            .mouse
-                            .on_scroll(raw_x, raw_y, discrete, wheel_sensitivity)
                     {
-                        if !self.pad_synthetic_input() {
-                            let mut canceled = false;
-                            self.native_mouse_scrolling(
-                                [scaled(raw_x), scaled(raw_y)],
-                                [horizontal_steps, vertical_steps],
-                                [
-                                    self.physical_buttons.contains(&MouseButton::Left),
-                                    self.physical_buttons.contains(&MouseButton::Middle),
-                                    self.physical_buttons.contains(&MouseButton::Right),
-                                ],
-                                [self.cursor.0, self.cursor.1],
-                                glfw_modifiers(self.modifiers),
-                                &mut canceled,
-                            );
-                            if canceled {
-                                return Ok(());
-                            }
+                        let scroll =
+                            self.mouse
+                                .on_scroll(raw_x, raw_y, discrete, wheel_sensitivity);
+                        let (horizontal_steps, vertical_steps) =
+                            scroll.map_or((0, 0), |(_, steps)| steps);
+                        let mut canceled = false;
+                        self.native_mouse_scrolling(
+                            [scaled(raw_x), scaled(raw_y)],
+                            [horizontal_steps, vertical_steps],
+                            [
+                                self.physical_buttons.contains(&MouseButton::Left),
+                                self.physical_buttons.contains(&MouseButton::Middle),
+                                self.physical_buttons.contains(&MouseButton::Right),
+                            ],
+                            [self.cursor.0, self.cursor.1],
+                            glfw_modifiers(self.modifiers),
+                            &mut canceled,
+                        );
+                        if canceled {
+                            return Ok(());
                         }
+                        let Some((wheel, _)) = scroll else {
+                            return Ok(());
+                        };
                         if self.spectator() && self.spectator_gui.is_menu_active() {
                             self.spectator_scroll(-wheel);
                         } else if self.spectator() {
@@ -20111,10 +20158,15 @@ fn gameplay_tables(
     progress: &Progress,
 ) -> std::result::Result<GameplayTables, String> {
     let facts_step = startup::step("core.block_facts");
-    let behaviour_json: serde_json::Value = serde_json::from_reader(std::io::BufReader::new(
-        std::fs::File::open(root.join("block-behaviours.json")).map_err(|e| e.to_string())?,
-    ))
-    .map_err(|e| e.to_string())?;
+    // Read whole, then parsed from the buffer: `serde_json::from_reader`
+    // pulls through a `BufReader` and is measurably slower on a file this
+    // size than one read plus `from_slice`, which is how `BlockFacts` next
+    // door already reads its own. Same value either way.
+    let behaviour_bytes =
+        std::fs::read(root.join("block-behaviours.json")).map_err(|e| e.to_string())?;
+    let behaviour_json: serde_json::Value =
+        serde_json::from_slice(&behaviour_bytes).map_err(|e| e.to_string())?;
+    drop(behaviour_bytes);
     let (facts, gameplay_projection) =
         BlockFacts::load_with_projection(root, assets.registry, &behaviour_json, parallel)
             .map_err(|e| e.to_string())?;
@@ -21350,6 +21402,12 @@ impl Loading {
         self.menu.handoff(&mut game);
         game.apply_settings();
         game.previous = Instant::now();
+        // Minecraft.onGameLoadFinished: a start that made it this far is clean.
+        game.settings.file.set(
+            "startedCleanly",
+            horizon_client::options_file::V::Bool(true),
+        );
+        game.settings.save(&Game::options_path());
         log::info!(
             "Horizon: startup handoff {} ms (renderer {} ms, start_game {} ms)",
             handoff_at.elapsed().as_millis(),
@@ -21452,6 +21510,25 @@ fn missing_resources(root: &std::path::Path) -> Option<String> {
         shown.display(),
         horizon_client::no_resources::DOWNLOAD_URL
     ))
+}
+
+/// `Minecraft.<init>`: `startedCleanly` left false means the previous start
+/// died before `onGameLoadFinished`. Vanilla then leaves fullscreen
+/// ("resetting fullscreen mode") so a start that died on the display mode can
+/// come back; the resource packs are rolled back only when their load fails
+/// (`rollbackResourcePacks`), not here. True when the last start was unclean.
+fn unclean_start_recovery(settings: &mut Settings) -> bool {
+    // Vanilla's field defaults true: only an explicit `false` is an unclean
+    // start; an options file that never had the key is not one.
+    let unclean = matches!(
+        settings.file.get("startedCleanly"),
+        Some(horizon_client::options_file::V::Bool(false))
+    );
+    if unclean {
+        settings.fullscreen = false;
+        settings.file.fullscreen_resolution = None;
+    }
+    unclean
 }
 
 /// The ordinary launch: load the resources on a worker while the window shows
@@ -21591,7 +21668,21 @@ pub fn run_with() -> Result<()> {
     }
     mods::register_components(&vanilla_root)?;
     mods::register_standalone_models();
-    let early_settings = Settings::load(&Game::options_path());
+    let mut early_settings = Settings::load(&Game::options_path());
+    // Minecraft.<init>: read the last start's flag, then mark this one as not
+    // finished until onGameLoadFinished. A dedicated server has no options.txt.
+    if options.execution_role.is_client() {
+        if unclean_start_recovery(&mut early_settings) {
+            log::warn!(
+                "Detected unexpected shutdown during last game startup: resetting fullscreen mode"
+            );
+        }
+        early_settings.file.set(
+            "startedCleanly",
+            horizon_client::options_file::V::Bool(false),
+        );
+        early_settings.save(&Game::options_path());
+    }
     // Minecraft's constructor opens the narrator; a server has none.
     if options.execution_role.is_client() {
         narrator::start(&early_settings);
@@ -21654,7 +21745,15 @@ pub fn run_with() -> Result<()> {
         None,
         None,
     )?;
-    if let Some(game) = game {
+    if let Some(mut game) = game {
+        // Minecraft.onGameLoadFinished: a start that made it this far is clean.
+        if game.options.execution_role.is_client() {
+            game.settings.file.set(
+                "startedCleanly",
+                horizon_client::options_file::V::Bool(true),
+            );
+            game.settings.save(&Game::options_path());
+        }
         run_event_loop(game)?;
     }
     Ok(())
@@ -21979,6 +22078,38 @@ mod tests {
         // ticks, and a frozen clock (0) does too.
         assert_eq!(autosave_interval(0.5), 150);
         assert_eq!(autosave_interval(0.0), 100);
+    }
+
+    /// `Minecraft.<init>`: only an explicit `startedCleanly: false` is an
+    /// unclean start, and it leaves fullscreen; the packs stay selected.
+    #[test]
+    fn an_unclean_start_leaves_fullscreen_and_keeps_the_packs() {
+        let fullscreen = || Settings {
+            fullscreen: true,
+            resource_packs: vec!["pack".into()],
+            ..Default::default()
+        };
+        // The key absent (a first boot) is a clean start.
+        let mut settings = fullscreen();
+        assert!(!unclean_start_recovery(&mut settings));
+        assert!(settings.fullscreen);
+        let mut settings = fullscreen();
+        settings.file.fullscreen_resolution = Some("1920x1080@60:24".into());
+        settings.file.set(
+            "startedCleanly",
+            horizon_client::options_file::V::Bool(false),
+        );
+        assert!(unclean_start_recovery(&mut settings));
+        assert!(!settings.fullscreen);
+        assert_eq!(settings.file.fullscreen_resolution, None);
+        assert_eq!(settings.resource_packs, ["pack"]);
+        let mut settings = fullscreen();
+        settings.file.set(
+            "startedCleanly",
+            horizon_client::options_file::V::Bool(true),
+        );
+        assert!(!unclean_start_recovery(&mut settings));
+        assert!(settings.fullscreen);
     }
 
     /// `NativeScreenView.id` (the `screen_render_post` hook) is a mod's

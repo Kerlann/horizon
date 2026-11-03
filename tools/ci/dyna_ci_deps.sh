@@ -33,11 +33,9 @@ fi
 arch=x86_64-linux-gnu
 {
   echo "$prefix/usr/bin"
-  echo "$DYNA_CI_BUILD/cargo/bin"
+  echo "$CARGO_HOME/bin"
 } >> "$GITHUB_PATH"
 {
-  echo "CARGO_TARGET_DIR=$DYNA_CI_BUILD/target"
-  echo "CARGO_HOME=$DYNA_CI_BUILD/cargo"
   echo "RUSTUP_HOME=$DYNA_CI_BUILD/rustup"
   echo "PKG_CONFIG_SYSROOT_DIR=$prefix"
   echo "PKG_CONFIG_PATH=$prefix/usr/lib/$arch/pkgconfig:$prefix/usr/share/pkgconfig"

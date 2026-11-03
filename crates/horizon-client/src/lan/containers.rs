@@ -245,8 +245,7 @@ impl Hub {
         };
         self.close_container_at(i);
         let g = &mut self.guests[i];
-        g.next_window = g.next_window % 100 + 1;
-        let window = g.next_window;
+        let window = g.next_menu_window();
         g.send(&C::OpenScreen(play::OpenScreen {
             container: window,
             menu: kind,
@@ -305,8 +304,7 @@ impl Hub {
         items.resize(size, None);
         let g = &mut self.guests[i];
         g.native_menu = items.clone();
-        g.next_window = g.next_window % 100 + 1;
-        let window = g.next_window;
+        let window = g.next_menu_window();
         g.send(&C::OpenScreen(play::OpenScreen {
             container: window,
             menu: kind,
@@ -357,8 +355,7 @@ impl Hub {
         let i = self.guests.iter().position(|g| g.conn == conn)?;
         self.close_container_at(i);
         let g = &mut self.guests[i];
-        g.next_window = g.next_window % 100 + 1;
-        let window = g.next_window;
+        let window = g.next_menu_window();
         g.send(&C::OpenScreen(play::OpenScreen {
             container: window,
             menu: kind,
@@ -374,8 +371,7 @@ impl Hub {
         let i = self.guests.iter().position(|g| g.conn == conn)?;
         self.close_container_at(i);
         let g = &mut self.guests[i];
-        g.next_window = g.next_window % 100 + 1;
-        let window = g.next_window;
+        let window = g.next_menu_window();
         g.send(&C::MountScreenOpen(play::MountScreenOpen {
             container: window,
             columns,

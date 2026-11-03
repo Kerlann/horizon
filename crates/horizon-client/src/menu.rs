@@ -3854,6 +3854,12 @@ pub(crate) mod tests {
             assert_eq!((menu.slot(2).cloned(), menu.data[0]), (vanilla.0, 5));
 
             let mut menu = renamed();
+            let mut empty = update.clone();
+            empty.output = None;
+            menu.anvil_updated(empty, false);
+            assert_eq!((menu.slot(2), menu.data[0]), (None, 5));
+
+            let mut menu = renamed();
             menu.anvil_updated(update, true);
             assert_eq!((menu.slot(2), menu.data[0]), (None, 0));
         });

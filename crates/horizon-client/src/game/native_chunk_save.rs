@@ -1,18 +1,42 @@
 //! Full-chunk save seam. Event dispatch will be added separately.
 use super::Game;
+use horizon_client::chunk::Chunk;
+use horizon_client::streaming::{ProtoSave, ProtoSnapshot};
+use std::sync::Arc;
 
 impl Game<'_> {
-    /// Dispatch while the selected dirty chunks are still live, before snapshotting.
-    pub(super) fn native_full_chunk_saves(&mut self, keys: &[(i32, i32)]) {
-        if self.remote.is_some() {
+    /// Dispatch on the server thread with the exact full-chunk save copies.
+    pub(super) fn native_full_chunk_snapshots(&mut self, chunks: &[Arc<Chunk>]) {
+        if self.remote.is_some() || horizon_client::mod_api::mods().is_empty() {
             return;
         }
-        for &(x, z) in keys {
-            if self.world.modified.contains(&(x, z)) && self.world.chunks.contains_key(&(x, z)) {
-                self.native_full_chunk_save([x, z]);
-            }
+        for chunk in chunks {
+            self.native_full_chunk_snapshot(chunk);
         }
     }
 
-    fn native_full_chunk_save(&mut self, _pos: [i32; 2]) {}
+    fn native_full_chunk_snapshot(&mut self, _chunk: &Chunk) {}
+
+    /// The proto stays checked out until all callbacks return and the save is submitted.
+    pub(super) fn native_proto_snapshots(&mut self, protos: &[ProtoSave]) {
+        if self.remote.is_some() || horizon_client::mod_api::mods().is_empty() {
+            return;
+        }
+        let access = self.streaming.proto_access();
+        let dimension = self.dim.id();
+        for save in protos {
+            let Some(status) = access.status(&save.proto) else {
+                continue;
+            };
+            self.native_proto_snapshot(ProtoSnapshot {
+                dimension,
+                pos: [save.pos.0, save.pos.1],
+                proto: &save.proto,
+                access: access.as_ref(),
+                status,
+            });
+        }
+    }
+
+    fn native_proto_snapshot(&mut self, _snapshot: ProtoSnapshot<'_>) {}
 }

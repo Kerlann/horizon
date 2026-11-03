@@ -99,7 +99,35 @@ pub enum Slots {
     Native,
 }
 
+/// The concrete storage a container slot uses, in the container's order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SlotBacking {
+    Block((i32, i32, i32), usize),
+    Ender(usize),
+    Native(usize),
+}
+
 impl Slots {
+    /// Locate a container slot, including the correct half of a double chest.
+    pub fn backing(self, world: &World, n: usize) -> Option<SlotBacking> {
+        match self {
+            Slots::Block(pos) => {
+                (n < shown(world, pos)?.len()).then_some(SlotBacking::Block(pos, n))
+            }
+            Slots::Double(a, b) => {
+                let first = shown(world, a)?.len();
+                if n < first {
+                    Some(SlotBacking::Block(a, n))
+                } else {
+                    let n = n - first;
+                    (n < shown(world, b)?.len()).then_some(SlotBacking::Block(b, n))
+                }
+            }
+            Slots::Ender => Some(SlotBacking::Ender(n)),
+            Slots::Native => Some(SlotBacking::Native(n)),
+        }
+    }
+
     fn halves(self) -> Vec<(i32, i32, i32)> {
         match self {
             Slots::Block(k) => vec![k],

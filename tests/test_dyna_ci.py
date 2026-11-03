@@ -36,13 +36,17 @@ class DynaRoutingTests(unittest.TestCase):
             prefix.mkdir()
             (prefix / ".dyna-hash").write_text(hashlib.sha256(script.read_bytes()).hexdigest() + "\n")
             envfile, pathfile = cache / "env", cache / "path"
-            env = dict(os.environ, DYNA_CI_BUILD=directory, GITHUB_ENV=str(envfile), GITHUB_PATH=str(pathfile))
+            # Dyna sets CARGO_HOME and CARGO_TARGET_DIR on the runner, as in session boxes, so the
+            # host's shared compiler cache matches; the script keeps them and only puts Cargo's bin on PATH.
+            cargo_home = cache / "dyna-cargo"
+            env = dict(os.environ, DYNA_CI_BUILD=directory, GITHUB_ENV=str(envfile), GITHUB_PATH=str(pathfile),
+                       CARGO_HOME=str(cargo_home))
             subprocess.run(["bash", script], env=env, check=True)
             exports = envfile.read_text()
-            for key, value in (("CARGO_TARGET_DIR", "target"), ("CARGO_HOME", "cargo"), ("RUSTUP_HOME", "rustup")):
-                self.assertIn(f"{key}={cache / value}\n", exports)
-            self.assertNotIn("CARGO_INCREMENTAL", exports)
-            self.assertIn(str(cache / "cargo/bin"), pathfile.read_text())
+            self.assertIn(f"RUSTUP_HOME={cache / 'rustup'}\n", exports)
+            for key in ("CARGO_TARGET_DIR", "CARGO_HOME", "CARGO_INCREMENTAL"):
+                self.assertNotIn(key, exports)
+            self.assertIn(str(cargo_home / "bin"), pathfile.read_text())
 
     def test_workflow_wires_route_and_keeps_privileges_off_pool(self):
         from test_ci_runners import jobs

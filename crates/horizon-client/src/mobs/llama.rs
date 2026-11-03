@@ -325,6 +325,62 @@ mod tests {
         assert!(fives > 0 && fives < 200);
     }
     #[test]
+    fn a_server_with_mods_leaves_the_breeding_experience_to_the_game() {
+        // Animal.finalizeSpawnChildFromBreeding draws the experience after
+        // BabyEntitySpawnEvent, so with mods to ask the breed goal leaves it
+        // to the game; without, the goal draws it with the baby.
+        let mut kind = None;
+        super::super::world::with_test_world(&[], |_, types| {
+            kind = Some(std::sync::Arc::new(types.types["minecraft:llama"].clone()));
+        });
+        let Some(kind) = kind else { return };
+        let llama = |id, x| {
+            let mut m = Mob::new(id, kind.clone(), Vec3::new(x, 64.0, 0.5), 0.0);
+            m.on_ground = true;
+            // AbstractHorse.canParent: tame and in love.
+            m.extra.tame = true;
+            m.extra.in_love = 600;
+            register(&mut m);
+            m
+        };
+        let partner = [llama(2, 2.5).seen(None)];
+        super::super::world::with_test_world(&partner, |w, _| {
+            for ask_mods in [false, true] {
+                let w = MobWorld {
+                    ask_mods,
+                    ..w.clone()
+                };
+                let mut m = llama(1, 0.5);
+                let mut events = Vec::new();
+                let mut goals = std::mem::take(&mut m.ai.goals);
+                let mut lr = LegacyRandom::new(0);
+                let mut cx = Cx {
+                    w: &w,
+                    lr: &mut lr,
+                    events: &mut events,
+                };
+                for _ in 0..80 {
+                    goals.tick(&mut m, &mut cx);
+                }
+                assert!(
+                    events.iter().any(|e| matches!(
+                        e,
+                        MobEvent::Breed {
+                            parent: 1,
+                            partner: 2,
+                            llama: Some(_)
+                        }
+                    )),
+                    "the pair breeds a llama"
+                );
+                let experience = events
+                    .iter()
+                    .any(|e| matches!(e, MobEvent::Experience { .. }));
+                assert_eq!(experience, !ask_mods, "asking mods: {ask_mods}");
+            }
+        });
+    }
+    #[test]
     fn a_chest_holds_strength_columns() {
         assert_eq!(DEFAULT_DESPAWN_DELAY, 47999);
         assert_eq!(MAX_TEMPER, 30);

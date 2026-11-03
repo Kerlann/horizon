@@ -65,7 +65,7 @@ pub const FLUIDS: CapabilityKey<dyn FluidHandler> = CapabilityKey {
 };
 
 /// The tanks of the block at `at` as its side `side` reaches them (none: every tank), numbered
-/// from 0 for that side, as [`ItemHandler`](super::ItemHandler)'s slots. `simulate` changes
+/// from 0 for that side, as [`ITEMS`](super::ITEMS)' slots. `simulate` changes
 /// nothing and must answer exactly as the real call would, as NeoForge's handlers must: a move
 /// plans with it at both ends, then commits.
 pub trait FluidHandler: Send + Sync + 'static {

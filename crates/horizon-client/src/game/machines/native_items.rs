@@ -5,7 +5,10 @@
 //! its `dimension` (`minecraft:overworld`), as `native_set_block` does.
 use super::{BlockEntity, Game, Kind, View};
 use crate::game::transactions::After;
-use horizon_client::{items::ItemStack, mod_api::Host};
+use horizon_client::{
+    items::ItemStack,
+    mod_api::{self, Host, ItemResource, Transaction},
+};
 use horizon_core::geometry::Direction;
 
 /// A slot of a container as a side reaches it (`native_container_slots`).
@@ -84,14 +87,19 @@ impl Game<'_> {
             return Some(stack);
         }
         if let Some(part) = self.item_part_at((pos[0], pos[1], pos[2]), face) {
-            let host: &mut dyn Host = self;
-            let slots = part.slots(host, pos, Some(face));
-            let mut rest = Some(stack);
-            for slot in 0..slots {
-                let Some(stack) = rest.take() else { break };
-                rest = host.insert_checked(&part, pos, Some(face), slot, stack);
-            }
-            return rest;
+            // In a transaction: a part taking more than it was offered is a mod bug, and
+            // nothing goes in.
+            let resource = ItemResource::of(&stack);
+            let went = mod_api::run_transaction(self, |game, tx| {
+                let host: &mut dyn Host = game;
+                let answer = part.insert_any(host, tx, &resource, stack.count);
+                part.checked(answer, stack.count, &pos).ok_or(())
+            });
+            let left = stack.count - went.unwrap_or(0);
+            return (left > 0).then_some(ItemStack {
+                count: left,
+                ..stack
+            });
         }
         let Some(view) = self.containers().view((pos[0], pos[1], pos[2]), false) else {
             return Some(stack);
@@ -294,11 +302,7 @@ impl Game<'_> {
         let slot = *view.slots_for_face(side).get(slot)?;
         self.containers().get(&view, slot).cloned()
     }
-    /// Puts as much of `stack` as slot `slot` of those `side` reaches at `pos` takes, as a
-    /// hopper would (`canPlaceItem`, the slot's limit, the same item and components); what
-    /// didn't fit. `simulate` changes nothing.
-    /// `view_changed` of a capability write: at once, or at the root commit of the open
-    /// transaction.
+    /// `view_changed` of a capability write, at the root commit of its transaction.
     fn view_told(&mut self, view: &View) {
         if let Kind::Composter(_) = view.kind {
             return;
@@ -307,14 +311,18 @@ impl Game<'_> {
             self.after_commit(After::Changed(pos));
         }
     }
+    /// Puts as much of `stack` as slot `slot` of those `side` reaches at `pos` takes, as a
+    /// hopper would (`canPlaceItem`, the slot's limit, the same item and components), in
+    /// transaction `tx`; what didn't fit.
     pub(in crate::game) fn native_container_insert(
         &mut self,
         pos: [i32; 3],
         side: Option<Direction>,
         slot: usize,
         stack: ItemStack,
-        simulate: bool,
+        tx: &Transaction,
     ) -> Option<ItemStack> {
+        let _ = tx;
         let Some(view) = self.capability_view(pos) else {
             return Some(stack);
         };
@@ -322,7 +330,7 @@ impl Game<'_> {
             return Some(stack);
         };
         let fits = self.containers().fits(&view, slot, &stack);
-        if fits > 0 && !simulate {
+        if fits > 0 {
             let some = ItemStack {
                 count: fits,
                 ..stack.clone()
@@ -330,13 +338,9 @@ impl Game<'_> {
             for &(part, _) in &view.parts {
                 self.journal_block_entity(part);
             }
+            // A jukebox's disc starts at the root commit (`JukeboxBlockEntity.setTheItem`).
             if self.move_in_item(None, &view, some, slot).1 {
                 self.view_told(&view);
-                // JukeboxBlockEntity.setTheItem through a transfer: the disc starts (in a
-                // transaction, at the root commit).
-                if view.kind == Kind::Jukebox && !self.in_transaction() {
-                    self.jukebox_inserted(pos);
-                }
             }
         }
         (fits < stack.count).then(|| ItemStack {
@@ -361,17 +365,18 @@ impl Game<'_> {
             .get(slot)
             .map_or(0, |&slot| self.containers().capacity(&view, slot, stack))
     }
-    /// Takes up to `max` out of slot `slot` of those `side` reaches at `pos`; through a side,
-    /// only what that side may take (`canTakeItemThroughFace`). What came out. `simulate`
-    /// changes nothing.
+    /// Takes up to `max` out of slot `slot` of those `side` reaches at `pos`, in transaction
+    /// `tx`; through a side, only what that side may take (`canTakeItemThroughFace`). What
+    /// came out.
     pub(in crate::game) fn native_container_extract(
         &mut self,
         pos: [i32; 3],
         side: Option<Direction>,
         slot: usize,
         max: u32,
-        simulate: bool,
+        tx: &Transaction,
     ) -> Option<ItemStack> {
+        let _ = tx;
         let view = self.capability_view(pos)?;
         let slot = *view.slots_for_face(side).get(slot)?;
         let c = self.containers();
@@ -379,22 +384,12 @@ impl Game<'_> {
         if max == 0 || side.is_some_and(|face| !c.can_take(&view, slot, stack, face)) {
             return None;
         }
-        if simulate {
-            return Some(ItemStack {
-                count: max.min(stack.count),
-                ..stack.clone()
-            });
-        }
         for &(part, _) in &view.parts {
             self.journal_block_entity(part);
         }
         let out = self.take_up_to(&view, slot, max)?;
+        // A jukebox's song stops at the root commit (`JukeboxBlockEntity.removeItem`).
         self.view_told(&view);
-        // JukeboxBlockEntity.removeItem: a disc taken out stops the song (in a transaction, at
-        // the root commit).
-        if view.kind == Kind::Jukebox && !self.in_transaction() {
-            self.jukebox_taken(pos);
-        }
         Some(out)
     }
 }

@@ -368,7 +368,7 @@ impl Goal for RunAroundLikeCrazy {
         {
             // tameWithName. When the game asks AnimalTameEvent it sets
             // `tame` itself, so nothing sees a horse tame that a mod refuses.
-            if !cx.w.ask_taming {
+            if !cx.w.ask_mods {
                 m.extra.tame = true;
             }
             cx.events.push(MobEvent::Tamed { mob: m.id });

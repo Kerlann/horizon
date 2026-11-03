@@ -57,6 +57,7 @@ pub use horizon_world::{
     registry::BlockStateId,
 };
 pub use serde_json;
+
 use serde_json::{Map, Value};
 use std::time::Duration;
 /// The window events `input_key` hands over (`winit::event::KeyEvent`) and their key types.
@@ -86,10 +87,11 @@ pub type NativeDispensed = (Option<ItemStack>, i32);
 
 /// Context for a player tuning a note block.
 #[derive(Clone, Copy, Debug)]
-pub struct NativeNoteBlockChange<'a> {
+pub struct NativeNoteBlockChange {
     pub dimension: LevelDimension,
     pub pos: BlockPos,
-    pub instrument: &'a str,
+    /// The block's instrument before tuning.
+    pub instrument: NativeNoteInstrument,
     /// The note before tuning, in the range 0 through 24.
     pub old_note: i32,
 }
@@ -130,6 +132,48 @@ pub struct NativeLootDrops<'a> {
     /// the mob, `player` its killer, `table` empty, `used` false). API
     /// 102.
     pub used: bool,
+}
+
+/// A statistic type (`BuiltInRegistries.STAT_TYPE`), for a player's
+/// statistics: what the stat's key names (a block, an item, an entity type,
+/// or a `minecraft:custom` stat).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum NativeStatType {
+    /// `minecraft:mined`, keyed by block.
+    Mined,
+    /// `minecraft:crafted`, keyed by item.
+    Crafted,
+    /// `minecraft:used`, keyed by item.
+    Used,
+    /// `minecraft:broken`, keyed by item.
+    Broken,
+    /// `minecraft:picked_up`, keyed by item.
+    PickedUp,
+    /// `minecraft:dropped`, keyed by item.
+    Dropped,
+    /// `minecraft:killed`, keyed by entity type.
+    Killed,
+    /// `minecraft:killed_by`, keyed by entity type.
+    KilledBy,
+    /// `minecraft:custom`, keyed by custom stat (`minecraft:jump`...).
+    Custom,
+}
+
+impl NativeStatType {
+    /// The type's registry path (`mined`, `killed_by`...).
+    pub fn path(self) -> &'static str {
+        match self {
+            Self::Mined => "mined",
+            Self::Crafted => "crafted",
+            Self::Used => "used",
+            Self::Broken => "broken",
+            Self::PickedUp => "picked_up",
+            Self::Dropped => "dropped",
+            Self::Killed => "killed",
+            Self::KilledBy => "killed_by",
+            Self::Custom => "custom",
+        }
+    }
 }
 
 /// A note block's instrument (`NoteBlockInstrument`), for `note_block_play`,
@@ -691,6 +735,19 @@ pub enum ChunkStatus {
     Full,
 }
 
+/// What an explosion a mod sets off does to blocks
+/// (`Level.ExplosionInteraction`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NativeExplosionInteraction {
+    /// Blocks stay; entities are hurt and pushed (`NONE`).
+    None,
+    /// Blocks break and drop by the `block_explosion_drop_decay` rule (`BLOCK`).
+    #[default]
+    Block,
+    /// Blocks break and drop by the `tnt_explosion_drop_decay` rule (`TNT`).
+    Tnt,
+}
+
 /// The empty-context block shape requested from a level.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeBlockShapeKind {
@@ -698,6 +755,75 @@ pub enum NativeBlockShapeKind {
     Outline,
     /// Collision shape (`BlockState.getCollisionShape`).
     Collision,
+}
+
+/// `ChatVisiblity`: which chat a client shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeChatVisibility {
+    Full,
+    System,
+    Hidden,
+}
+
+/// `HumanoidArm`: a player's main hand.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeMainHand {
+    Left,
+    Right,
+}
+
+/// `ParticleStatus`: how many particles a client shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeParticleStatus {
+    All,
+    Decreased,
+    Minimal,
+}
+
+/// A player's client options, as `ServerboundClientInformationPacket` carries them
+/// (vanilla's `ClientInformation`). Raw ids map as vanilla's `ByIdMap` does: chat
+/// visibility and particle status wrap (`floorMod(id, 3)`), the main hand reads an
+/// unknown id as left.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeClientInfo {
+    pub language: String,
+    pub view_distance: i8,
+    pub chat_visibility: NativeChatVisibility,
+    pub chat_colors: bool,
+    /// Skin layer bits (`PlayerModelPart`).
+    pub model_customisation: u8,
+    pub main_hand: NativeMainHand,
+    pub text_filtering: bool,
+    pub allows_listing: bool,
+    pub particle_status: NativeParticleStatus,
+}
+
+impl From<&horizon_protocol::packets::configuration::ClientInformation> for NativeClientInfo {
+    fn from(i: &horizon_protocol::packets::configuration::ClientInformation) -> Self {
+        Self {
+            language: i.language.clone(),
+            view_distance: i.view_distance,
+            chat_visibility: match i.chat_visibility.rem_euclid(3) {
+                0 => NativeChatVisibility::Full,
+                1 => NativeChatVisibility::System,
+                _ => NativeChatVisibility::Hidden,
+            },
+            chat_colors: i.chat_colors,
+            model_customisation: i.model_customisation,
+            main_hand: if i.main_hand == 1 {
+                NativeMainHand::Right
+            } else {
+                NativeMainHand::Left
+            },
+            text_filtering: i.text_filtering,
+            allows_listing: i.allows_listing,
+            particle_status: match i.particle_status.rem_euclid(3) {
+                0 => NativeParticleStatus::All,
+                1 => NativeParticleStatus::Decreased,
+                _ => NativeParticleStatus::Minimal,
+            },
+        }
+    }
 }
 
 /// A block face for a level support query.
@@ -719,6 +845,17 @@ pub enum NativeSupportType {
     Full,
     Center,
     Rigid,
+}
+
+/// Why a mod removes an entity (`Entity.RemovalReason`): the two reasons
+/// that destroy it. The unloading and dimension-change reasons belong to the
+/// game.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeRemovalReason {
+    /// `KILLED`: a mob's effects that act on removal run.
+    Killed,
+    /// `DISCARDED`, as `Entity.discard`.
+    Discarded,
 }
 
 /// Block shape used by an empty-context level ray.
@@ -747,6 +884,16 @@ pub struct NativeClipHit {
     pub world_border: bool,
 }
 
+/// One item cooldown a player waits on (`ItemCooldowns.cooldowns`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeItemCooldown {
+    /// The cooldown group: an item id, or the group an item's
+    /// `use_cooldown` component names.
+    pub group: String,
+    /// Ticks until the cooldown ends.
+    pub ticks_left: i32,
+}
+
 /// An online player in one open server world, keyed by UUID.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PlayerRef {
@@ -771,6 +918,57 @@ impl From<PlayerRef> for EntityRef {
     }
 }
 
+/// A player's game mode (vanilla's `GameType`).
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum GameMode {
+    Survival,
+    Creative,
+    Adventure,
+    Spectator,
+}
+
+impl GameMode {
+    /// Every mode, in id order.
+    pub const ALL: [Self; 4] = [
+        Self::Survival,
+        Self::Creative,
+        Self::Adventure,
+        Self::Spectator,
+    ];
+    /// `GameType.getId`: 0 survival, 1 creative, 2 adventure, 3 spectator.
+    pub fn id(self) -> i32 {
+        match self {
+            Self::Survival => 0,
+            Self::Creative => 1,
+            Self::Adventure => 2,
+            Self::Spectator => 3,
+        }
+    }
+    /// The mode with `GameType` id `id`, or None for an id vanilla doesn't
+    /// have.
+    pub fn from_id(id: i32) -> Option<Self> {
+        Self::ALL.into_iter().find(|mode| mode.id() == id)
+    }
+    /// `GameType.getName`: `survival`, `creative`, `adventure`, `spectator`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Survival => "survival",
+            Self::Creative => "creative",
+            Self::Adventure => "adventure",
+            Self::Spectator => "spectator",
+        }
+    }
+}
+
+/// One player's open menu, invalidated on close, replacement or reconnect.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct MenuRef {
+    pub(crate) player: PlayerRef,
+    pub(crate) window: i32,
+    pub(crate) generation: u64,
+}
+
 /// A player's food data.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
@@ -781,6 +979,19 @@ pub struct NativePlayerFood {
     pub saturation: f32,
     /// Food exhaustion.
     pub exhaustion: f32,
+}
+
+/// A player's experience (`Player.experienceLevel`, `experienceProgress`,
+/// `totalExperience`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct NativePlayerExperience {
+    /// Experience level.
+    pub level: i32,
+    /// Progress toward the next level, from 0 to 1.
+    pub progress: f32,
+    /// Points gained in all.
+    pub total: i32,
 }
 
 /// Damage sources supported for a mod effect tick.
@@ -925,6 +1136,13 @@ pub enum ToolAbility {
     ShovelFlatten,
     ShovelDouse,
     HoeTill,
+}
+
+/// How a criterion's advancement progress changed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeProgressType {
+    Grant,
+    Revoke,
 }
 
 /// Read-only context for a tool modification.
@@ -1152,13 +1370,15 @@ macro_rules! level_attachment_host {
 level_attachment_host!(LevelRandomHost, LevelWriteHost);
 
 mod capability;
-pub use capability::{BlockSide, Capability, CapabilityKey, ITEMS, ItemHandler};
+pub use capability::{BlockSide, Capability, CapabilityKey, ITEMS};
 mod fluid_capability;
 pub use fluid_capability::{FLUIDS, FluidHandler, FluidStack};
 mod item_place;
 mod transaction;
-pub use item_place::{ITEM_ITEMS, ItemCapabilityKey, ItemPlace, PlaceProvider, StackItemHandler};
-pub use transaction::TransactionSeal;
+pub use item_place::{ITEM_ITEMS, ItemCapabilityKey, ItemPlace, PlaceProvider};
+mod resource;
+pub use resource::{ItemResource, ResourceHandler};
+pub use transaction::{Transaction, TransactionSeal, run_transaction};
 mod part_table;
 pub(crate) use part_table::{
     Answer, KnownIds, ask_providers, install_parts, mark_game_thread, parts, place_provider,
@@ -1182,6 +1402,16 @@ pub(crate) use part_table::tests as part_tests;
 mod tests {
     use super::*;
     use std::sync::Mutex;
+
+    #[test]
+    fn game_modes_round_trip_through_their_ids() {
+        for mode in GameMode::ALL {
+            assert_eq!(GameMode::from_id(mode.id()), Some(mode));
+        }
+        assert_eq!(GameMode::from_id(-1), None);
+        assert_eq!(GameMode::from_id(4), None);
+        assert_eq!(GameMode::Adventure.name(), "adventure");
+    }
 
     struct Quiet;
     impl Hooks for Quiet {}

@@ -18,8 +18,33 @@ use horizon_protocol::{
 };
 use std::{
     collections::VecDeque,
-    sync::{Arc, atomic::AtomicI32},
+    sync::{
+        Arc,
+        atomic::{AtomicI32, AtomicU64, Ordering},
+    },
 };
+
+/// Unique across reconnects and server instances in this process, even when
+/// the protocol's container id wraps back to the same number.
+static NEXT_MENU_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+fn menu_generation() -> u64 {
+    let mut generation = NEXT_MENU_GENERATION.load(Ordering::Relaxed);
+    loop {
+        let next = generation
+            .checked_add(1)
+            .expect("menu generation exhausted");
+        match NEXT_MENU_GENERATION.compare_exchange_weak(
+            generation,
+            next,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => return generation,
+            Err(current) => generation = current,
+        }
+    }
+}
 
 /// GameType ids.
 pub const SURVIVAL: i32 = 0;
@@ -64,7 +89,26 @@ pub struct SentEffect {
 /// ServerGamePacketListenerImpl.CLIENT_LOADED_TIMEOUT_TIME.
 pub const CLIENT_LOADED_TIMEOUT: u8 = 60;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GuestKind {
+    Network,
+    Fake,
+}
+
+struct GuestInit {
+    conn: u32,
+    uuid: u128,
+    name: String,
+    properties: Vec<horizon_protocol::packets::login::Property>,
+    info: ClientInformation,
+    brand: String,
+    sender: PlayerSender,
+    latency: Arc<AtomicI32>,
+    address: std::net::SocketAddr,
+}
+
 pub struct Guest {
+    pub kind: GuestKind,
     pub conn: u32,
     /// The client's address (IP bans, `list`).
     pub address: std::net::SocketAddr,
@@ -306,7 +350,9 @@ pub struct Guest {
     pub dead: bool,
     /// `LivingEntity.deathTime`: ticks since the guest died.
     pub death_time: u32,
-    /// The join packets were sent (PlayerList.placeNewPlayer ran).
+    /// The player record is materialized for gameplay and handle lookup.
+    /// Network guests reach this state after placeNewPlayer; fake actors do not
+    /// log in. Online iterators must also check `participates_online`.
     pub placed: bool,
     /// Root command names the mods took out of this player's command tree
     /// (`native_player_commands_sent`); their tree is sent without them.
@@ -320,6 +366,8 @@ pub struct Guest {
     /// The open block container, if any.
     pub menu: Option<super::menu::Menu>,
     pub next_window: i32,
+    /// Identity of the current menu, distinct even when a window id is reused.
+    pub menu_generation: u64,
     /// An unfinished drag in the inventory menu.
     pub drag: Option<(u8, Vec<usize>)>,
     /// The compound this player was loaded from, for fields Horizon does not model.
@@ -349,8 +397,85 @@ pub struct Guest {
 }
 
 impl Guest {
+    /// Allocate the next protocol window and a non-reusable menu identity.
+    pub fn next_menu_window(&mut self) -> i32 {
+        self.next_window = self.next_window % 100 + 1;
+        self.menu_generation = menu_generation();
+        self.next_window
+    }
+
     pub fn new(j: Joined, entity_id: i32, position: [f64; 3], view_distance: i32) -> Self {
+        let Joined {
+            conn,
+            uuid,
+            name,
+            properties,
+            info,
+            brand,
+            sender,
+            latency,
+            address,
+        } = j;
+        Self::with_defaults(
+            GuestKind::Network,
+            GuestInit {
+                conn,
+                uuid,
+                name,
+                properties,
+                info,
+                brand,
+                sender,
+                latency,
+                address,
+            },
+            entity_id,
+            position,
+            view_distance,
+        )
+    }
+
+    pub fn connectionless(
+        conn: u32,
+        uuid: u128,
+        name: String,
+        entity_id: i32,
+        position: [f64; 3],
+        motion: PlayerMotion,
+    ) -> Self {
+        let init = GuestInit {
+            conn,
+            uuid,
+            name,
+            properties: Vec::new(),
+            info: ClientInformation::new(2),
+            brand: String::new(),
+            sender: PlayerSender::disabled(),
+            latency: Arc::default(),
+            address: ([0, 0, 0, 0], 0).into(),
+        };
+        let mut guest = Self::with_defaults(GuestKind::Fake, init, entity_id, position, 2);
+        guest.placed = true;
+        guest.motion = Some(Box::new(motion));
+        guest
+    }
+
+    pub fn participates_online(&self) -> bool {
+        self.kind == GuestKind::Network
+    }
+    pub fn participates_in_player_simulation(&self) -> bool {
+        self.kind == GuestKind::Network
+    }
+
+    fn with_defaults(
+        kind: GuestKind,
+        j: GuestInit,
+        entity_id: i32,
+        position: [f64; 3],
+        view_distance: i32,
+    ) -> Self {
         Self {
+            kind,
             conn: j.conn,
             address: j.address,
             last_action_tick: 0,
@@ -479,6 +604,7 @@ impl Guest {
             dimension: "minecraft:overworld".into(),
             menu: None,
             next_window: 0,
+            menu_generation: menu_generation(),
             drag: None,
             saved: None,
             attachments: Default::default(),
@@ -503,6 +629,9 @@ impl Guest {
         })
     }
     pub fn send(&self, packet: &play::Clientbound) {
+        if !self.participates_online() {
+            return;
+        }
         if self.anticheat.record.is_some() {
             self.note_change(packet);
         }

@@ -186,6 +186,8 @@ impl Game<'_> {
     /// dragon are refused. Brain-backed mobs refuse writes: vanilla's setter
     /// does not update their brain memory. Foxes, endermen and zombified
     /// piglins also refuse writes until their setter side effects are modeled.
+    /// Invalid targets are refused (false, mob unchanged); vanilla instead
+    /// stores `asValidTarget(target)`, clearing the target when it is invalid.
     /// False also means a stale handle, client, or an unavailable mob/player.
     /// API @API:mob_refs@.
     pub(super) fn native_mob_set_target(&mut self, mob: MobRef, target: Option<LivingRef>) -> bool {

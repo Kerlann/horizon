@@ -362,8 +362,20 @@ impl Shared {
     pub fn set_sync(&self, sync: Arc<data::SyncData>) {
         *self.sync.lock().unwrap_or_else(|e| e.into_inner()) = sync;
     }
-    pub fn next_id(&self) -> u32 {
-        self.next.fetch_add(1, Ordering::Relaxed)
+    /// Allocate from the shared network and connectionless actor namespace.
+    /// Exhaustion is permanent for this server; never wrap and reuse a token.
+    pub fn next_id(&self) -> Option<u32> {
+        let mut id = self.next.load(Ordering::Relaxed);
+        loop {
+            let next = id.checked_add(1)?;
+            match self
+                .next
+                .compare_exchange_weak(id, next, Ordering::Relaxed, Ordering::Relaxed)
+            {
+                Ok(_) => return Some(id),
+                Err(current) => id = current,
+            }
+        }
     }
     /// PlayerList.canPlayerLogin then disconnectAllPlayersWithProfile: the
     /// refusal reason, or None once the profile holds a place. A profile
@@ -896,6 +908,19 @@ pub fn available_port() -> u16 {
 mod tests {
     use super::*;
     use std::{io::Read, time::Instant};
+
+    #[test]
+    fn actor_ids_never_wrap() {
+        let config = NetConfig {
+            announce: false,
+            ..NetConfig::lan(0, "ids".into(), 1)
+        };
+        let lan = Lan::start_with(Arc::new(data::SyncData::empty()), config).unwrap();
+        lan.shared.next.store(u32::MAX - 1, Ordering::Relaxed);
+        assert_eq!(lan.shared.next_id(), Some(u32::MAX - 1));
+        assert_eq!(lan.shared.next_id(), None);
+        assert_eq!(lan.shared.next_id(), None);
+    }
 
     /// Sockets that never say a word each hold a connection thread until their read times out: past
     /// the player limit and [`SPARE_CONNECTIONS`], a new one is closed at once instead of taking one

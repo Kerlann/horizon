@@ -1260,32 +1260,26 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             self.set_block(pos, b.table.set_bool(next, p.powered, signal), 3);
         }
     }
-    /// `NoteBlock.playNote`: queues the block event and emits the game event.
-    pub(crate) fn note_play(&mut self, pos: BlockPos, state: BlockStateId) {
-        if !self.note_play_allowed(pos, state) {
-            return;
-        }
-        self.note_play_unchecked(pos, state);
-    }
-    pub(crate) fn note_play_allowed(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    /// The note block's `instrument`, as its index in `data::INSTRUMENTS`.
+    pub(crate) fn note_instrument(&self, state: BlockStateId) -> u8 {
         let b = self.b;
         let instrument = b.table.text(state, b.props.instrument);
-        let note = b.table.int(state, b.props.note);
-        self.level.allow_note_play(pos, instrument, note)
-    }
-    pub(crate) fn note_play_unchecked(&mut self, pos: BlockPos, state: BlockStateId) {
-        let b = self.b;
-        let instrument = b.table.text(state, b.props.instrument);
-        let index = super::data::INSTRUMENTS
+        super::data::INSTRUMENTS
             .iter()
             .position(|n| *n == instrument)
-            .map_or(0, |i| i as u8);
+            .map_or(0, |i| i as u8)
+    }
+    /// `NoteBlock.playNote`: queues the block event and emits the game event.
+    /// `by_player` for a tune or a punch, not for redstone.
+    pub(crate) fn note_play(&mut self, pos: BlockPos, state: BlockStateId, by_player: bool) {
+        let b = self.b;
+        let index = self.note_instrument(state);
         if super::data::instrument_works_above(index) || b.is_air(self.above_state(pos)) {
             let note = b.table.int(state, b.props.note);
             let (mut played, mut played_note) = (index, note);
             if !self
                 .level
-                .note_block_play(pos, &mut played, &mut played_note)
+                .note_block_play(pos, by_player, &mut played, &mut played_note)
             {
                 return;
             }
@@ -1303,7 +1297,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     }
     /// `NoteBlock.triggerEvent`: the note's particle (tunable instruments)
     /// and sound. `a` and `b` are the block event's parameters: a note the
-    /// mods changed (see `note_play_unchecked`) plays in place of the block's.
+    /// mods changed (see `note_play`) plays in place of the block's.
     pub(crate) fn note_trigger_event(
         &mut self,
         pos: BlockPos,
@@ -1374,7 +1368,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let signal = self.has_neighbor_signal(pos);
         if signal != b.table.bool(state, b.props.powered) {
             if signal {
-                self.note_play(pos, state);
+                self.note_play(pos, state, false);
             }
             self.set_block_and_update(pos, b.table.set_bool(state, b.props.powered, signal));
         }

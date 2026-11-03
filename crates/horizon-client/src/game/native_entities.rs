@@ -471,6 +471,7 @@ impl Game<'_> {
     /// runs when no mod is loaded or none was announced.
     pub(super) fn native_leaves_flush(&mut self) {
         use super::entity::Entity;
+        self.native_removals_flush();
         if self.persist.live.is_empty() || self.remote.is_some() {
             return;
         }

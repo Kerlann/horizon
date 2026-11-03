@@ -2107,7 +2107,7 @@ impl Game<'_> {
         // An entity in another level is killed in the level that holds it.
         let _ = self.in_target_level(t, |g| g.kill_target_in_level(t));
     }
-    fn kill_target_in_level(&mut self, t: Target) {
+    pub(super) fn kill_target_in_level(&mut self, t: Target) {
         match t {
             Target::Guest(_) => {
                 self.for_player(t, |g| g.kill_target(Target::Player));

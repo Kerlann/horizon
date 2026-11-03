@@ -492,7 +492,7 @@ pub(crate) fn with_resource_test_world(
         items: Some(&items),
         lid_openers: &lid_openers,
         mod_effects: None,
-        ask_taming: false,
+        ask_mods: false,
         border: None,
     };
     f(&w, &types);

@@ -172,7 +172,9 @@ impl Game<'_> {
     /// main hand, off hand, head, chest, legs and feet. All mobs also store
     /// body and saddle. Dragon equipment and player or armor-stand body and
     /// saddle storage are not yet modeled. False means unsupported or stale.
-    /// API @API:living_refs@.
+    /// This is a direct write: it takes effect and is final immediately, even
+    /// inside `host.transaction`. Any equip/unequip event and equip sound also
+    /// happen immediately. API @API:living_refs@.
     pub(super) fn native_living_set_equipment(
         &mut self,
         living: LivingRef,

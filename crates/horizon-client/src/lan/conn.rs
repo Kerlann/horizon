@@ -240,7 +240,7 @@ impl Drop for Holding {
 /// The sending half given to the game thread.
 #[derive(Clone)]
 pub struct PlayerSender {
-    pub tx: Sender<Out>,
+    tx: Option<Sender<Out>>,
     pub pending: Arc<AtomicUsize>,
     held: Arc<Mutex<Vec<Vec<u8>>>>,
     /// What [`flush_all`] gave the post thread and it hasn't passed on yet.
@@ -251,8 +251,18 @@ pub struct PlayerSender {
 impl PlayerSender {
     pub fn new(tx: Sender<Out>, pending: Arc<AtomicUsize>) -> Self {
         Self {
-            tx,
+            tx: Some(tx),
             pending,
+            held: Arc::default(),
+            posted: Arc::default(),
+            watch: None,
+        }
+    }
+    /// A connectionless actor has no writer, queue or packet delivery.
+    pub fn disabled() -> Self {
+        Self {
+            tx: None,
+            pending: Arc::default(),
             held: Arc::default(),
             posted: Arc::default(),
             watch: None,
@@ -274,6 +284,9 @@ impl PlayerSender {
         self.held.lock().unwrap_or_else(PoisonError::into_inner)
     }
     pub fn send(&self, body: Vec<u8>) {
+        if self.tx.is_none() {
+            return;
+        }
         self.pending.fetch_add(body.len(), Ordering::Relaxed);
         if HOLDING.get() {
             self.held().push(body);
@@ -285,6 +298,9 @@ impl PlayerSender {
     /// Several packets in order, as [`Self::send`] each: under one lock
     /// while the tick holds them.
     pub fn send_many(&self, bodies: impl IntoIterator<Item = Vec<u8>>) {
+        if self.tx.is_none() {
+            return;
+        }
         if !HOLDING.get() {
             bodies.into_iter().for_each(|body| self.send(body));
             return;
@@ -309,8 +325,11 @@ impl PlayerSender {
     }
     /// To the writer thread, after anything still with the post thread.
     fn deliver(&self, out: Out) {
+        let Some(tx) = &self.tx else {
+            return;
+        };
         if self.posted.load(Ordering::Acquire) == 0 {
-            let _ = self.tx.send(out);
+            let _ = tx.send(out);
         } else {
             post(vec![self.posting(out)]);
         }
@@ -318,7 +337,11 @@ impl PlayerSender {
     fn posting(&self, out: Out) -> Posted {
         self.posted.fetch_add(1, Ordering::AcqRel);
         Posted {
-            tx: self.tx.clone(),
+            tx: self
+                .tx
+                .as_ref()
+                .expect("only connected senders post")
+                .clone(),
             out,
             posted: self.posted.clone(),
         }
@@ -1250,8 +1273,11 @@ fn wait_alive<T>(
 }
 
 fn play(c: Connection, shared: &Arc<Shared>, parts: Parts, address: std::net::SocketAddr) {
+    let Some(conn_id) = shared.next_id() else {
+        shared.release(parts.uuid);
+        return;
+    };
     shared.entered_play();
-    let conn_id = shared.next_id();
     let events = shared.events.clone();
     let _ = c.reader.set_read_timeout(Some(READ_TIMEOUT));
     let (mut reader, writer) = c.split();

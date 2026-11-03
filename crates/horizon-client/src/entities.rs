@@ -1155,13 +1155,15 @@ impl Experience {
             *self = Self::default();
         }
     }
+    /// `Player.getXpNeededForNextLevel`, wrapping as Java's `int` does for
+    /// a level a command or a mod set out of range.
     pub fn needed(level: i32) -> i32 {
         if level >= 30 {
-            112 + (level - 30) * 9
+            (level - 30).wrapping_mul(9).wrapping_add(112)
         } else if level >= 15 {
-            37 + (level - 15) * 5
+            (level - 15).wrapping_mul(5).wrapping_add(37)
         } else {
-            7 + level * 2
+            level.wrapping_mul(2).wrapping_add(7)
         }
     }
     /// The first half of `Player.giveExperiencePoints`: the points go to the
@@ -3482,6 +3484,28 @@ mod item_destroyed_tests {
         assert!(
             box_item.stack.data().is_none_or(|d| d.container.is_empty()),
             "the destroyed box keeps no slot filled"
+        );
+    }
+}
+
+#[cfg(test)]
+mod experience_cost_tests {
+    use super::Experience;
+
+    /// Java's `int` arithmetic wraps; a huge or very negative level must not
+    /// panic where overflow checks are on.
+    #[test]
+    fn needed_wraps_for_levels_out_of_range() {
+        assert_eq!(Experience::needed(0), 7);
+        assert_eq!(Experience::needed(15), 37);
+        assert_eq!(Experience::needed(30), 112);
+        assert_eq!(
+            Experience::needed(i32::MAX),
+            (i32::MAX - 30).wrapping_mul(9).wrapping_add(112)
+        );
+        assert_eq!(
+            Experience::needed(i32::MIN),
+            i32::MIN.wrapping_mul(2).wrapping_add(7)
         );
     }
 }

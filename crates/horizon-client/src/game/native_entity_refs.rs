@@ -46,6 +46,9 @@ impl Game<'_> {
         }
         match self.level_entity(id)? {
             Target::Mob(id) if !self.mobs.iter().any(|m| m.id == id && !m.removed) => None,
+            // Removed by a mod and waiting for the sweep: `isRemoved` is
+            // true from the call on.
+            t if self.persist.removals.contains(&t) => None,
             t => Some(t),
         }
     }
@@ -558,7 +561,7 @@ pub(super) mod tests {
         use horizon_client::{
             items::ItemStack,
             lan::{Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig},
-            mod_api::EquipmentSlot,
+            mod_api::{EquipmentSlot, GameMode},
         };
         use horizon_protocol::packets::configuration::ClientInformation;
         use std::sync::{
@@ -618,15 +621,19 @@ pub(super) mod tests {
             }
             game.lan = Some(host);
             let player = game.native_player_ref(12).unwrap();
-            assert!(!game.native_player_set_game_mode(player, -1));
-            assert!(!game.native_player_set_game_mode(player, 4));
-            assert!(!game.native_player_set_game_mode(player, 0));
-            assert!(game.native_player_set_game_mode(player, 1));
-            assert_eq!(game.native_player_game_mode(player), Some(1));
+            assert!(!game.native_player_set_game_mode(player, GameMode::Survival));
+            assert!(game.native_player_set_game_mode(player, GameMode::Creative));
+            assert_eq!(
+                game.native_player_game_mode(player),
+                Some(GameMode::Creative)
+            );
             let abilities = game.native_player_abilities(player).unwrap();
             assert!(abilities.invulnerable && abilities.may_fly && abilities.instabuild);
-            assert!(game.native_player_set_game_mode(player, 0));
-            assert_eq!(game.native_player_game_mode(player), Some(0));
+            assert!(game.native_player_set_game_mode(player, GameMode::Survival));
+            assert_eq!(
+                game.native_player_game_mode(player),
+                Some(GameMode::Survival)
+            );
             let abilities = game.native_player_abilities(player).unwrap();
             assert!(!abilities.invulnerable && !abilities.may_fly && !abilities.instabuild);
             let mut stale = player;
@@ -634,7 +641,7 @@ pub(super) mod tests {
                 horizon_client::mod_api::NativeWorldEpoch::new(0),
                 player.entity.id(),
             );
-            assert!(!game.native_player_set_game_mode(stale, 1));
+            assert!(!game.native_player_set_game_mode(stale, GameMode::Creative));
             host = game.lan.take().unwrap();
             let other = game
                 .native_lifecycle
@@ -679,11 +686,14 @@ pub(super) mod tests {
             );
             let player = game.native_player_ref(13).unwrap();
             assert_eq!(player.entity, other);
-            assert_eq!(player.game_mode(game), Some(0));
-            assert!(!game.native_player_set_game_mode(player, 1));
+            assert_eq!(player.game_mode(game), Some(GameMode::Survival));
+            assert!(!game.native_player_set_game_mode(player, GameMode::Creative));
             let acting = game.native_player_ref(12).unwrap();
-            assert!(game.native_player_set_game_mode(acting, 2));
-            assert_eq!(game.native_player_game_mode(acting), Some(2));
+            assert!(game.native_player_set_game_mode(acting, GameMode::Adventure));
+            assert_eq!(
+                game.native_player_game_mode(acting),
+                Some(GameMode::Adventure)
+            );
             host = game.lan.take().unwrap();
             let nested = game.enter_guest(&mut host, 13).unwrap();
             game.lan = Some(host);
@@ -736,6 +746,235 @@ pub(super) mod tests {
                 )
                 .is_none()
             );
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn connectionless_guest_has_no_transport() {
+        use horizon_client::{
+            lan::{
+                Joined, Lan, NetConfig, PlayerSender,
+                chunks::ChunkEncoder,
+                conn::{Holding, flush_all},
+                data::SyncData,
+                guest::Guest,
+                hub::{Hub, HubConfig},
+            },
+            motion::PlayerMotion,
+        };
+        use horizon_core::geometry::Vec3;
+        use horizon_protocol::packets::{
+            configuration::ClientInformation,
+            play::{Clientbound, Distance},
+        };
+        use std::sync::{Arc, atomic::Ordering};
+        with_game(|game| {
+            let sync = Arc::new(SyncData::empty());
+            let net = NetConfig {
+                announce: false,
+                ..NetConfig::lan(0, "test".into(), 2)
+            };
+            let lan = Lan::start_with(sync.clone(), net).unwrap();
+            let real_id = lan.shared.next_id().unwrap();
+            let fake_id = lan.shared.next_id().unwrap();
+            assert_ne!(real_id, fake_id);
+            let encoder = ChunkEncoder::new(
+                [] as [(Arc<str>, bool); 0],
+                &horizon_protocol::registry::Builtin::default(),
+                &[],
+                &[],
+            );
+            let config = HubConfig {
+                default_game_mode: 0,
+                guest_commands: false,
+                force_game_mode: false,
+                hardcore: false,
+                view_distance: 10,
+                simulation_distance: 10,
+                dimension: "minecraft:overworld".into(),
+                allow_flight: false,
+                seed: 0,
+                max_players: 20,
+                integrated: false,
+                levels: Default::default(),
+            };
+            let mut hub = Hub::new(lan, sync, encoder, config.clone());
+            let motion = PlayerMotion::new(game.motion, Vec3::ZERO).unwrap();
+            let fake = Guest::connectionless(fake_id, 2, "fake".into(), 2, [0.0; 3], motion);
+            assert!(fake.placed && fake.motion.is_some());
+            assert!(!fake.participates_online() && !fake.participates_in_player_simulation());
+            assert_eq!((fake.game_mode, fake.permission, fake.input), (0, 0, 0));
+            assert!(fake.vehicle.is_none() && fake.bed.is_none() && fake.menu.is_none());
+            let (tx, rx) = std::sync::mpsc::channel();
+            let mut real = Guest::new(
+                Joined {
+                    conn: real_id,
+                    uuid: 1,
+                    name: "real".into(),
+                    properties: Vec::new(),
+                    info: ClientInformation::new(8),
+                    brand: String::new(),
+                    sender: PlayerSender::new(tx, Arc::default()),
+                    latency: Arc::default(),
+                    address: ([127, 0, 0, 1], 1).into(),
+                },
+                1,
+                [0.0; 3],
+                10,
+            );
+            real.placed = true;
+            hub.guests.push(real);
+            hub.guests.push(fake);
+            let packet = Clientbound::SetSimulationDistance(Distance { distance: 8 });
+            let hold = Holding::start();
+            hub.send_to(fake_id, &packet);
+            hub.broadcast(&packet);
+            hub.guests[1].sender.send_many([vec![1, 2, 3]]);
+            flush_all(hub.guests.iter().map(|g| &g.sender));
+            drop(hold);
+            assert_eq!(hub.guests[1].sender.pending.load(Ordering::Relaxed), 0);
+            assert!(rx.recv_timeout(std::time::Duration::from_secs(2)).is_ok());
+            game.lan_host(
+                super::super::lan::LanSettings {
+                    port: 0,
+                    guest_commands: false,
+                    force_game_mode: false,
+                },
+                NetConfig {
+                    announce: false,
+                    ..NetConfig::lan(0, "swap".into(), 2)
+                },
+                config,
+            )
+            .unwrap();
+            let mut host = game.lan.take().unwrap();
+            host.hub.guests = std::mem::take(&mut hub.guests);
+            game.guest_packets
+                .push(Clientbound::SetSimulationDistance(Distance { distance: 4 }));
+            game.as_guest(&mut host, fake_id, |game| {
+                game.guest_packets
+                    .push(Clientbound::SetSimulationDistance(Distance {
+                        distance: 12,
+                    }));
+                game.guest_entity_events.push(3);
+                game.guest_cooldowns.push(("minecraft:test".into(), 20));
+            })
+            .unwrap();
+            assert_eq!(game.guest_packets.len(), 1);
+            assert!(game.guest_entity_events.is_empty() && game.guest_cooldowns.is_empty());
+            assert_eq!(host.hub.guests[1].sender.pending.load(Ordering::Relaxed), 0);
+            assert!(rx.try_recv().is_err());
+            let outer = game.enter_guest(&mut host, real_id).unwrap();
+            game.guest_cooldowns.push(("minecraft:real".into(), 7));
+            game.guest_player_sounds
+                .push(("outer".into(), [0.0; 3], 1.0, 1.0));
+            game.as_guest(&mut host, fake_id, |game| {
+                game.guest_cooldowns.push(("minecraft:fake".into(), 20));
+            })
+            .unwrap();
+            assert_eq!(game.guest_cooldowns.len(), 1);
+            assert_eq!(&*game.guest_cooldowns[0].0, "minecraft:real");
+            assert_eq!(game.guest_player_sounds[0].0, "outer");
+            game.guest_player_sounds.clear();
+            game.leave_guest(&mut host, outer);
+            let out = rx.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+            let horizon_client::lan::Out::Packet(body) = out else {
+                panic!("expected cooldown packet")
+            };
+            let mut reader = horizon_protocol::buf::Reader::new(&body);
+            let id = reader.varint().unwrap();
+            let packet = Clientbound::decode(id, reader.rest()).unwrap();
+            let Clientbound::Cooldown(cooldown) = packet else {
+                panic!("expected cooldown")
+            };
+            assert_eq!(cooldown.group, "minecraft:real");
+            assert_eq!(cooldown.duration, 7);
+            assert!(rx.try_recv().is_err());
+
+            // A real turn nested in a fake must not receive the fake's cooldown.
+            let outer = game.enter_guest(&mut host, fake_id).unwrap();
+            game.guest_cooldowns
+                .push(("minecraft:fake_outer".into(), 8));
+            game.guest_player_sounds
+                .push(("fake_outer".into(), [0.0; 3], 1.0, 1.0));
+            game.as_guest(&mut host, real_id, |game| {
+                game.guest_cooldowns
+                    .push(("minecraft:real_inner".into(), 9));
+            })
+            .unwrap();
+            assert_eq!(&*game.guest_cooldowns[0].0, "minecraft:fake_outer");
+            assert_eq!(game.guest_player_sounds[0].0, "fake_outer");
+            game.guest_player_sounds.clear();
+            game.leave_guest(&mut host, outer);
+            let horizon_client::lan::Out::Packet(body) =
+                rx.recv_timeout(std::time::Duration::from_secs(2)).unwrap()
+            else {
+                panic!("expected cooldown")
+            };
+            let mut reader = horizon_protocol::buf::Reader::new(&body);
+            let id = reader.varint().unwrap();
+            let Clientbound::Cooldown(cooldown) = Clientbound::decode(id, reader.rest()).unwrap()
+            else {
+                panic!("expected cooldown")
+            };
+            assert_eq!(cooldown.group, "minecraft:real_inner");
+            assert!(rx.try_recv().is_err());
+
+            // Two real nested turns deliver each queue to its own connection.
+            let (tx2, rx2) = std::sync::mpsc::channel();
+            let mut second = Guest::new(
+                Joined {
+                    conn: 3,
+                    uuid: 3,
+                    name: "second".into(),
+                    properties: Vec::new(),
+                    info: ClientInformation::new(8),
+                    brand: String::new(),
+                    sender: PlayerSender::new(tx2, Arc::default()),
+                    latency: Arc::default(),
+                    address: ([127, 0, 0, 1], 3).into(),
+                },
+                3,
+                [0.0; 3],
+                10,
+            );
+            second.placed = true;
+            host.hub.guests.push(second);
+            let outer = game.enter_guest(&mut host, real_id).unwrap();
+            game.guest_cooldowns
+                .push(("minecraft:real_outer".into(), 10));
+            game.guest_player_sounds
+                .push(("real_outer".into(), [0.0; 3], 1.0, 1.0));
+            game.as_guest(&mut host, 3, |game| {
+                game.guest_cooldowns
+                    .push(("minecraft:real_second".into(), 11))
+            })
+            .unwrap();
+            assert_eq!(&*game.guest_cooldowns[0].0, "minecraft:real_outer");
+            assert_eq!(game.guest_player_sounds[0].0, "real_outer");
+            game.guest_player_sounds.clear();
+            game.leave_guest(&mut host, outer);
+            for (receiver, expected) in [
+                (&rx, "minecraft:real_outer"),
+                (&rx2, "minecraft:real_second"),
+            ] {
+                let horizon_client::lan::Out::Packet(body) = receiver
+                    .recv_timeout(std::time::Duration::from_secs(2))
+                    .unwrap()
+                else {
+                    panic!("expected cooldown")
+                };
+                let mut reader = horizon_protocol::buf::Reader::new(&body);
+                let id = reader.varint().unwrap();
+                let Clientbound::Cooldown(cooldown) =
+                    Clientbound::decode(id, reader.rest()).unwrap()
+                else {
+                    panic!("expected cooldown")
+                };
+                assert_eq!(cooldown.group, expected);
+                assert!(receiver.try_recv().is_err());
+            }
         });
     }
 

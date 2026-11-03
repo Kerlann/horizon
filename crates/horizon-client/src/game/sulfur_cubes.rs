@@ -287,7 +287,11 @@ impl Game<'_> {
             return;
         }
         let offset = f64::from(m.width()) / 2.0;
-        for i in 0..sulfur_cube::split_count(m) {
+        let drawn = sulfur_cube::split_count(m) as u32;
+        if drawn == 0 {
+            return;
+        }
+        for i in 0..self.mob_split_count(m, drawn) as i32 {
             let xd = (f64::from(i % 2) - 0.5) * offset;
             let zd = (f64::from(i / 2) - 0.5) * offset;
             let at = [m.position.x + xd, m.position.y + 0.5, m.position.z + zd];

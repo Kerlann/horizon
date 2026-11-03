@@ -1,13 +1,16 @@
 //! A player's item cooldowns for native server mods, through a `PlayerRef`
 //! (`Player.getCooldowns()`, vanilla's `ItemCooldowns`). A cooldown group
 //! is an item id unless the item's `use_cooldown` component names another
-//! (`minecraft:ender_pearl`, a mod's `mymod:wands`...). Reads return None and
-//! writes false for a stale handle, a player who isn't online here, and,
-//! inside another player's turn, for anyone but that player. Writes also
-//! refuse a dead player.
+//! (`minecraft:ender_pearl`, a mod's `mymod:wands`...);
+//! `item_cooldown_group` gives a stack's. Reads return None for a stale
+//! handle or a player who isn't online here; inside another player's turn
+//! they still read a resting guest. Writes return false for those, for a
+//! dead player, and, inside another player's turn, for anyone but that
+//! player.
 use super::Game;
 use horizon_client::cooldowns::Cooldowns;
-use horizon_client::mod_api::PlayerRef;
+use horizon_client::items::ItemStack;
+use horizon_client::mod_api::{NativeItemCooldown, PlayerRef};
 use std::sync::Arc;
 
 impl Game<'_> {
@@ -31,19 +34,33 @@ impl Game<'_> {
         }
     }
 
+    /// `ItemCooldowns.getCooldownGroup(stack)`: the group `stack`'s
+    /// cooldown is filed under, the group its `use_cooldown` component names
+    /// (its own, else its item's default), else its item id. API
+    /// @API:player_cooldowns@.
+    pub(super) fn native_item_cooldown_group(&self, stack: &ItemStack) -> String {
+        let default = self
+            .items()
+            .get(&stack.item)
+            .and_then(|info| info.use_cooldown.as_ref());
+        horizon_client::cooldowns::group(stack, default).to_string()
+    }
     /// Every group the player waits on and its ticks left, ordered by
     /// group. API @API:player_cooldowns@.
     pub(super) fn native_player_item_cooldowns(
         &self,
         player: PlayerRef,
-    ) -> Option<Vec<(String, i32)>> {
-        let mut out: Vec<(String, i32)> = self
+    ) -> Option<Vec<NativeItemCooldown>> {
+        let mut out: Vec<NativeItemCooldown> = self
             .native_cooldowns_of(player)?
             .remaining()
             .filter(|(_, left)| *left > 0)
-            .map(|(group, left)| (group.to_string(), left))
+            .map(|(group, left)| NativeItemCooldown {
+                group: group.to_string(),
+                ticks_left: left,
+            })
             .collect();
-        out.sort();
+        out.sort_by(|a, b| a.group.cmp(&b.group));
         Some(out)
     }
     /// `ItemCooldowns.isOnCooldown`: whether `group` still has time to run.
@@ -100,3 +117,36 @@ impl Game<'_> {
 
 /// What a guest with no play state yet waits on: nothing.
 static EMPTY: std::sync::LazyLock<Cooldowns> = std::sync::LazyLock::new(Cooldowns::default);
+
+#[cfg(test)]
+mod tests {
+    use super::super::native_entity_refs::tests::with_game;
+    use horizon_client::items::ItemStack;
+    use horizon_world::nbt::Tag;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_stack_names_its_cooldown_group() {
+        with_game(|game| {
+            let pearl = ItemStack::new("minecraft:ender_pearl", 1);
+            assert_eq!(
+                game.native_item_cooldown_group(&pearl),
+                "minecraft:ender_pearl"
+            );
+            let mut wand = ItemStack::new("minecraft:stick", 1);
+            wand.data_mut().set_other(
+                "minecraft:use_cooldown",
+                Some(Tag::compound([
+                    ("seconds", Tag::Float(1.0f32.to_bits())),
+                    ("cooldown_group", Tag::String("mymod:wands".into())),
+                ])),
+            );
+            assert_eq!(game.native_item_cooldown_group(&wand), "mymod:wands");
+            let unknown = ItemStack::new("mymod:not_an_item", 1);
+            assert_eq!(
+                game.native_item_cooldown_group(&unknown),
+                "mymod:not_an_item"
+            );
+        });
+    }
+}

@@ -1,0 +1,30 @@
+{
+  "hooks": [],
+  "helpers": [
+    {
+      "name": "entity_permanently_invulnerable",
+      "target": "horizon_client::game::native_entity_invulnerable::Game<'_>::native_entity_permanently_invulnerable",
+      "receiver": "entity"
+    },
+    {
+      "name": "entity_set_invulnerable",
+      "target": "horizon_client::game::native_entity_invulnerable::Game<'_>::native_entity_set_invulnerable",
+      "receiver": "entity"
+    },
+    {
+      "name": "entity_damage_cooldown_time",
+      "target": "horizon_client::game::native_entity_invulnerable::Game<'_>::native_entity_damage_cooldown_time",
+      "receiver": "entity"
+    },
+    {
+      "name": "entity_set_damage_cooldown_time",
+      "target": "horizon_client::game::native_entity_invulnerable::Game<'_>::native_entity_set_damage_cooldown_time",
+      "receiver": "entity"
+    }
+  ],
+  "rust_summary": "an entity's invulnerable flag and damage cooldown through an `EntityRef` (`native_entity_set_damage_cooldown_time`...).",
+  "doc_summary": "an entity's invulnerability through an `EntityRef`, with vanilla's names: `permanently_invulnerable(host)` and `set_invulnerable(host, on)` (`Entity.isPermanentlyInvulnerable`/`setInvulnerable`, the `Invulnerable` flag: mobs keep it, other kinds read None) and `damage_cooldown_time(host)` and `set_damage_cooldown_time(host, ticks)` (`LivingEntity.damageCooldownTime`: mobs and players). Horizon has no counterpart of 26.3's `Entity.invulnerableTime` timer yet. None or false for a stale handle, on a client, or a kind with no such state. Bundles need \"hooks\": @API:entity_invulnerable@.",
+  "comments": [
+    "crates/horizon-client/src/game/native_entity_invulnerable.rs"
+  ]
+}

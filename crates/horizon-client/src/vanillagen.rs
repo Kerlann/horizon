@@ -883,6 +883,30 @@ impl ChunkGenerator for VanillaTerrain {
     fn is_decorated(&self, proto: &Proto) -> bool {
         matches!(proto.downcast_ref::<VanillaProto>(), Some(VanillaProto::Ready(c)) if c.is_decorated())
     }
+    fn proto_status(&self, proto: &Proto) -> Option<horizon_world::chunk_status::ChunkStatus> {
+        let VanillaProto::Ready(chunk) = proto.downcast_ref::<VanillaProto>()? else {
+            return None;
+        };
+        Some(if chunk.is_decorated() {
+            horizon_world::chunk_status::ChunkStatus::Features
+        } else {
+            horizon_world::chunk_status::ChunkStatus::Terrain
+        })
+    }
+    fn proto_block(&self, proto: &Proto, [x, y, z]: [i32; 3]) -> Option<u32> {
+        let VanillaProto::Ready(chunk) = proto.downcast_ref::<VanillaProto>()? else {
+            return None;
+        };
+        let position = chunk.position();
+        if x.div_euclid(16) != position.x
+            || z.div_euclid(16) != position.z
+            || y < chunk.terrain.min_y()
+            || y >= chunk.terrain.min_y() + chunk.terrain.height()
+        {
+            return None;
+        }
+        Some(chunk.block(x, y, z).0)
+    }
     fn light_view(&self, proto: &Proto) -> Option<Chunk> {
         match proto.downcast_ref::<VanillaProto>() {
             Some(VanillaProto::Ready(chunk)) => Some(self.block_column(chunk)),

@@ -1996,16 +1996,13 @@ impl Game<'_> {
                         });
                     }
                 }
-                HostEvent::MainHandChanged(conn, left) => {
+                HostEvent::ClientInformation(conn, old, new) => {
                     if let Some(g) = host.hub.guest(conn) {
-                        let (uuid, name) = (g.uuid, g.name.clone());
-                        self.native_player_change_main_hand(uuid, &name, left);
-                    }
-                }
-                HostEvent::LocaleChanged(conn, locale) => {
-                    if let Some(g) = host.hub.guest(conn) {
-                        let (uuid, name) = (g.uuid, g.name.clone());
-                        self.native_player_locale_change(uuid, &name, &locale);
+                        let (uuid, entity_id, name) = (g.uuid, g.entity_id, g.name.clone());
+                        // The packet's raw ids become the enums once, here.
+                        let old = horizon_client::mod_api::NativeClientInfo::from(&*old);
+                        let new = horizon_client::mod_api::NativeClientInfo::from(&*new);
+                        self.native_client_information_updated(uuid, entity_id, &name, &old, &new);
                     }
                 }
                 HostEvent::PlayerLoaded(conn) => {

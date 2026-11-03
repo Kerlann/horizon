@@ -133,10 +133,12 @@ pub enum HostEvent {
     /// A guest left (state to save, entities to drop).
     Left(Box<Guest>),
     Packet(u32, Box<S>),
-    /// A guest changed the dominant hand in their client options.
-    MainHandChanged(u32, bool),
-    /// A guest changed their client language option.
-    LocaleChanged(u32, String),
+    /// A guest sent new client information: the values before and after, for the mods.
+    ClientInformation(
+        u32,
+        Box<horizon_protocol::packets::configuration::ClientInformation>,
+        Box<horizon_protocol::packets::configuration::ClientInformation>,
+    ),
     /// A guest's client finished loading the level around them.
     PlayerLoaded(u32),
     /// A guest changed recipe book settings.
@@ -206,6 +208,7 @@ pub enum HostEvent {
 /// The criteria `CriteriaTriggers.TICK` granted one player.
 pub struct TickGrants {
     pub player: u128,
+    pub entity_id: i32,
     pub name: String,
     pub grants: Vec<super::advancements::CriterionGrant>,
 }
@@ -747,9 +750,14 @@ impl Hub {
 
     /// `PlayerList.broadcastAll`: send a packet to every placed player.
     pub fn broadcast(&self, packet: &C) {
-        let body = packet.encode();
-        for g in self.guests.iter().filter(|g| g.placed) {
-            g.sender.send(body.clone());
+        let mut body = None;
+        for g in self
+            .guests
+            .iter()
+            .filter(|g| g.placed && g.participates_online())
+        {
+            g.sender
+                .send(body.get_or_insert_with(|| packet.encode()).clone());
         }
     }
     /// MinecraftServer.onGameRuleChanged: every player is told when
@@ -808,9 +816,14 @@ impl Hub {
     /// `PlayerList.broadcastAll(packet, dimension)`: the players in the
     /// level in place.
     pub fn broadcast_level(&self, packet: &C) {
-        let body = packet.encode();
-        for g in self.guests.iter().filter(|g| self.here(g)) {
-            g.sender.send(body.clone());
+        let mut body = None;
+        for g in self
+            .guests
+            .iter()
+            .filter(|g| self.here(g) && g.participates_online())
+        {
+            g.sender
+                .send(body.get_or_insert_with(|| packet.encode()).clone());
         }
     }
     /// `DedicatedServer.sendLowDiskSpaceWarning`: the players with
@@ -822,9 +835,14 @@ impl Hub {
         }
     }
     pub fn broadcast_except(&self, conn: u32, packet: &C) {
-        let body = packet.encode();
-        for g in self.guests.iter().filter(|g| g.placed && g.conn != conn) {
-            g.sender.send(body.clone());
+        let mut body = None;
+        for g in self
+            .guests
+            .iter()
+            .filter(|g| g.placed && g.conn != conn && g.participates_online())
+        {
+            g.sender
+                .send(body.get_or_insert_with(|| packet.encode()).clone());
         }
     }
     /// PlayerList.broadcastSystemMessage.
@@ -2842,11 +2860,14 @@ impl Hub {
                     g.send(&raw(ids::RECIPE_BOOK_ADD, add));
                 }
                 g.send(&raw(ids::UPDATE_ADVANCEMENTS, first.update_advancements));
-                self.native_advancement_grants.push(TickGrants {
-                    player: g.uuid,
-                    name: g.name.clone(),
-                    grants: first.granted,
-                });
+                if self.mods_loaded {
+                    self.native_advancement_grants.push(TickGrants {
+                        player: g.uuid,
+                        entity_id: g.entity_id,
+                        name: g.name.clone(),
+                        grants: first.granted,
+                    });
+                }
                 g.advancements_visible = sync.advancements.visibility(&g.advancements);
                 g.advancements_changed.clear();
             } else {
@@ -3010,11 +3031,14 @@ impl Hub {
             ) {
                 g.send(&raw(ids::RECIPE_BOOK_ADD, add));
             }
-            self.native_advancement_grants.push(TickGrants {
-                player: g.uuid,
-                name: g.name.clone(),
-                grants: granted,
-            });
+            if self.mods_loaded {
+                self.native_advancement_grants.push(TickGrants {
+                    player: g.uuid,
+                    entity_id: g.entity_id,
+                    name: g.name.clone(),
+                    grants: granted,
+                });
+            }
         }
         // broadcastAll(ClientboundUpdateTagsPacket).
         self.broadcast(&C::UpdateTags(sync.tags.clone()));
@@ -3324,18 +3348,15 @@ impl Hub {
                 }
                 S::ClientInformation(info) => {
                     let g = &mut self.guests[i];
-                    let old_main_hand = g.info.main_hand;
-                    let old_language = g.info.language.clone();
                     // PlayerModelPart.HAT (bit 6): the tab list shows the hat layer.
                     let was_hat = g.info.model_customisation & 0x40 != 0;
                     g.view_distance =
                         i32::from(info.view_distance).clamp(2, self.config.view_distance);
+                    let old_info = self.mods_loaded.then(|| Box::new(g.info.clone()));
                     g.info = info;
-                    if g.info.main_hand != old_main_hand {
-                        events.push(HostEvent::MainHandChanged(conn, g.info.main_hand == 0));
-                    }
-                    if g.info.language != old_language {
-                        events.push(HostEvent::LocaleChanged(conn, g.info.language.clone()));
+                    if let Some(old) = old_info {
+                        let new = Box::new(g.info.clone());
+                        events.push(HostEvent::ClientInformation(conn, old, new));
                     }
                     g.center = None;
                     let hat = g.info.model_customisation & 0x40 != 0;

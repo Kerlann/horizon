@@ -5002,6 +5002,15 @@ impl<G: ChunkGenerator> ChunkGenerator for Persistent<G> {
     fn is_decorated(&self, proto: &crate::streaming::Proto) -> bool {
         self.inner.is_decorated(proto)
     }
+    fn proto_status(
+        &self,
+        proto: &crate::streaming::Proto,
+    ) -> Option<horizon_world::chunk_status::ChunkStatus> {
+        self.inner.proto_status(proto)
+    }
+    fn proto_block(&self, proto: &crate::streaming::Proto, pos: [i32; 3]) -> Option<u32> {
+        self.inner.proto_block(proto, pos)
+    }
     fn light_view(&self, proto: &crate::streaming::Proto) -> Option<Chunk> {
         self.inner.light_view(proto)
     }
