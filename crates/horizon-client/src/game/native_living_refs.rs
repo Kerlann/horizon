@@ -48,17 +48,25 @@ fn slot_name(slot: EquipmentSlot) -> &'static str {
     }
 }
 
+fn available_living_target(target: Target, swapping: bool) -> Option<Target> {
+    match target {
+        Target::Guest(_) if swapping => None,
+        t @ (Target::Player
+        | Target::Guest(_)
+        | Target::Mob(_)
+        | Target::Stand(_)
+        | Target::Dragon(_)) => Some(t),
+        _ => None,
+    }
+}
+
 impl Game<'_> {
     /// What a living handle names now: a player, a mob, an armor stand or the dragon.
     fn native_living_target(&self, living: LivingRef) -> Option<Target> {
-        match self.native_entity_target(living.entity())? {
-            t @ (Target::Player
-            | Target::Guest(_)
-            | Target::Mob(_)
-            | Target::Stand(_)
-            | Target::Dragon(_)) => Some(t),
-            _ => None,
-        }
+        available_living_target(
+            self.native_entity_target(living.entity())?,
+            self.lan_acting_uuid.is_some(),
+        )
     }
     /// The entity as a living entity (vanilla's `LivingEntity`: a mob, a
     /// player, an armor stand or the dragon), or None for another kind or a
@@ -157,6 +165,19 @@ impl Game<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn displaced_guests_are_unavailable_during_a_swap() {
+        assert_eq!(available_living_target(Target::Guest(2), true), None);
+        assert_eq!(
+            available_living_target(Target::Guest(2), false),
+            Some(Target::Guest(2))
+        );
+        assert_eq!(
+            available_living_target(Target::Player, true),
+            Some(Target::Player)
+        );
+    }
 
     #[test]
     fn a_players_slots_come_from_its_inventory_armour_and_off_hand() {
