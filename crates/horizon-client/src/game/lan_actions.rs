@@ -5369,6 +5369,7 @@ fn no_respawn_point(has_config: bool, has_spawn: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{eye_columns, no_respawn_point};
+    use horizon_client::pose::Pose;
 
     #[test]
     fn forced_overworld_spawn_is_not_a_reset() {
@@ -5376,7 +5377,6 @@ mod tests {
         assert!(!no_respawn_point(true, false));
         assert!(no_respawn_point(false, false));
     }
-    use horizon_client::pose::Pose;
 
     /// #4124: a STOP is measured from the START that named its block (`destroyPos`) — an abort, or
     /// a STOP from out of reach, ends the dig the guest's button held but leaves that clock — and
