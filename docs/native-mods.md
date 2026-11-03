@@ -574,7 +574,7 @@ and the recipe fails, as an unknown kind does.
 
 A bundle's `data/` folder (any files) is staged as `native-data/<mod>/` at the root of the workspace. A helper or
 module compiles a file in with `horizon_client::native_data!("<mod id>", "path/in/data")` (`&'static [u8; N]`,
-`crate::native_data!` inside the lib), since hook points API 41. A mod's crate keeps its own data in its folder and
+`crate::native_data!` inside the lib). A mod's crate keeps its own data in its folder and
 reads it with `include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/data/…"))`. The registry's `.hmod` may carry
 both (`mixins/<id>/data/…`, `mixins/<id>/<crate>/data/…`).
 

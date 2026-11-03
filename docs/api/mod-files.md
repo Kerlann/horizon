@@ -21,7 +21,6 @@ What a file holds decides what it is (#5865):
 | `assets/…`, `data/…` | the content mod's resources and data | `Content` |
 | `horizon-native.json` | native code: the manifest below | `Bundle` |
 | `mixins/<id>/…` | the native bundle's sources ([native-mods.md](../native-mods.md#a-bundle)) | `Bundle` |
-| `mod.wasm` | a legacy WebAssembly mod: it doesn't run any more | refused in a file with native code |
 
 - **Content only:** `horizon-mod.toml` with `assets/` and `data/`. Nothing compiles.
 - **Native code:** `horizon-native.json` and `mixins/<id>/`. The launcher builds it into the game.
@@ -62,4 +61,3 @@ A JSON object. Unknown fields refuse the file.
 | Native files (everything but content entries) | 512 entries, 64 MiB unpacked in total |
 | Content files | 65,536 files, 16 MiB each, 512 MiB in total |
 | `horizon-mod.toml` inside a native file | 1 MiB |
-| `mod.wasm` (legacy) | 32 MiB |
