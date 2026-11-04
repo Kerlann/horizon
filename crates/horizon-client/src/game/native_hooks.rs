@@ -12109,6 +12109,10 @@ mod tests {
         let motion_hooks = free_hooks(include_str!("../motion.rs"));
         let hub_hooks = free_hooks(include_str!("../lan/hub.rs"));
         let ender_hooks = free_hooks(include_str!("../mobs/enderman.rs"));
+        // The sound engine's (`horizon_client_render::sound_engine::hooks`).
+        let sound_hooks = free_hooks(include_str!(
+            "../../../horizon-client-render/src/sound_engine/hooks.rs"
+        ));
         let declared: BTreeSet<_> = section
             .lines()
             .filter_map(|line| {
@@ -12132,6 +12136,7 @@ mod tests {
             .chain(motion_hooks.iter().copied())
             .chain(hub_hooks.iter().copied())
             .chain(ender_hooks.iter().copied())
+            .chain(sound_hooks.iter().copied())
             .collect();
         let mut names = BTreeSet::new();
         let mut contracts = BTreeSet::new();
@@ -12169,6 +12174,8 @@ mod tests {
                 // menu.rs compiles into horizon-client-lib (#5446's
                 // split): horizon-mixins resolves the crate by its package.
                 format!("horizon_client_lib::menu::native_{name}")
+            } else if sound_hooks.contains(name) {
+                format!("horizon_client_render::sound_engine::hooks::native_{name}")
             } else if ender_hooks.contains(name) {
                 format!("horizon_client_lib::mobs::enderman::native_{name}")
             } else if breath_hooks.contains(name) {
