@@ -2098,15 +2098,15 @@ impl Game<'_> {
                     let mut text = original.clone();
                     let mut cancel = false;
                     let mut replies = Vec::new();
-                    self.native_server_chat(
-                        id,
-                        sender,
-                        &name,
-                        &raw,
-                        &mut text,
-                        &mut replies,
-                        &mut cancel,
-                    );
+                    self.native_server_chat(mod_api::__private::ServerChatCall {
+                        player_id: id,
+                        player: sender,
+                        username: &name,
+                        raw_text: &raw,
+                        message: &mut text,
+                        replies: &mut replies,
+                        cancel: &mut cancel,
+                    });
                     // The mods' replies reach the sender alone, as a
                     // command's do, before the message (if any) goes out.
                     if !replies.is_empty() {

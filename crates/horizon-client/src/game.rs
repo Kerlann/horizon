@@ -1715,13 +1715,15 @@ impl LevelAccess for GameLevel<'_> {
         if self.native_authoritative {
             self.native_update_shape(
                 ticks,
-                self.dimension,
-                pos,
-                state,
-                direction,
-                neighbour_pos,
-                neighbour,
-                new,
+                mod_api::__private::UpdateShapeCall {
+                    dimension: self.dimension,
+                    pos,
+                    state,
+                    direction,
+                    neighbour_pos,
+                    neighbour,
+                    new,
+                },
             );
         }
     }

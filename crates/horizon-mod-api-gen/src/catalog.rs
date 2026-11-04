@@ -4,6 +4,7 @@
 //! (the `Hooks` dispatch, the Host traits, the game's entry points, the rustdoc, the mixin hook
 //! names) reads these types.
 
+use quote::ToTokens;
 use serde::Deserialize;
 use std::{collections::HashSet, fmt, fs, path::Path};
 
@@ -100,6 +101,9 @@ pub struct Hook {
     /// stamper from the counterpart's javadoc; documentation metadata, not the
     /// contract (a hook that listens can still name a cancellable event).
     pub cancellable: Option<bool>,
+    /// The parameters of a hook whose game target takes them as one generated `<Name>Call`
+    /// (name and type, in order, without a `Ticks` parameter); empty for a flat target.
+    pub call: Vec<(String, String)>,
 }
 
 /// A game function mods reach through the `Host` or a handle.
@@ -262,6 +266,8 @@ struct HookEntry {
     cancellable: Option<bool>,
     host: Option<HostAccess>,
     context: Option<PhaseContext>,
+    #[serde(default)]
+    call: Vec<(String, String)>,
     neoforge: Option<serde_json::Value>,
     fabric: Option<serde_json::Value>,
     paper: Option<serde_json::Value>,
@@ -338,6 +344,7 @@ impl Hook {
             counterparts,
             version: entry.version.unwrap_or(1),
             cancellable: entry.cancellable,
+            call: entry.call,
         })
     }
 }
@@ -490,7 +497,24 @@ impl Declared {
                     .or_insert_with(|| default_target(&name).into());
                 match kind.as_str() {
                     "Hooks" => {
-                        entry.insert("name".into(), name.into());
+                        entry.insert("name".into(), name.clone().into());
+                        let call = function
+                            .sig
+                            .inputs
+                            .iter()
+                            .map(|input| match input {
+                                syn::FnArg::Typed(input) => Ok(serde_json::json!([
+                                    input.pat.to_token_stream().to_string(),
+                                    input.ty.to_token_stream().to_string()
+                                ])),
+                                syn::FnArg::Receiver(_) => {
+                                    Err(invalid(format!("{name}: a declaration has no receiver")))
+                                }
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+                        if !call.is_empty() {
+                            entry.insert("call".into(), call.into());
+                        }
                         if let Some(doc) = doc(&function.attrs) {
                             entry.insert("doc".into(), doc.into());
                         }
@@ -664,6 +688,7 @@ impl Hook {
             counterparts: Counterparts::default(),
             version: 1,
             cancellable: None,
+            call: Vec::new(),
         }
     }
 }

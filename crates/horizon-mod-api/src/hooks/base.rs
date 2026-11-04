@@ -155,7 +155,15 @@ pub trait Hooks {
         key = "state",
         target = "horizon_client::game::native_hooks::GameLevel<'_>::native_update_shape"
     )]
-    fn update_shape();
+    fn update_shape(
+        dimension: LevelDimension,
+        pos: BlockPos,
+        state: BlockStateId,
+        direction: Direction,
+        neighbour_pos: BlockPos,
+        neighbour: BlockStateId,
+        new: &mut Option<BlockStateId>,
+    );
     /// A command typed or clicked in chat, without its slash, before the
     /// server and Horizon's commands see it: set `ran` when the mod ran it.
     #[hook(side = "both", contract = "cancel", out = "ran")]
@@ -1518,7 +1526,17 @@ pub trait Hooks {
         contract = "listen",
         neoforge = "PlayerRespawnPositionEvent"
     )]
-    fn player_respawn_position();
+    fn player_respawn_position(
+        player: PlayerRef,
+        original_level: LevelDimension,
+        original_position: [f64; 3],
+        missing_respawn_block: bool,
+        level: &mut LevelDimension,
+        position: &mut [f64; 3],
+        yaw: &mut f32,
+        pitch: &mut f32,
+        copy_original_spawn_position: &mut bool,
+    );
     /// `player` (`name`) respawned (NeoForge's `PlayerRespawnEvent`): at the
     /// end of `PlayerList.respawn`, once they are placed and their health,
     /// food and experience reset, with their state swapped in. Once for each

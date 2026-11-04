@@ -12,6 +12,14 @@ The book follows [Diátaxis](https://diataxis.fr): a page is one of four kinds, 
 - **A hook, event or `Host` method:** its `///` lines in the declaration under `crates/horizon-mod-api/src/hooks/`.
   The generator writes it as `///` on the generated item; `cargo doc -p horizon-mod-api` shows it. A hook without
   a `doc` fails the build.
+- **A hook whose game target has many parameters:** a `native_*` target takes at most 7 parameters (receiver included;
+  `MAX_TARGET_PARAMETERS` in `crates/horizon-mod-api-gen/src/dispatch.rs`). A hook with more declares its parameters
+  on the hook (`fn update_shape(dimension: LevelDimension, ...);`, as written in `hooks/*.rs`) and the target takes them
+  as one generated `<Name>Call` (`native_update_shape(&self, ticks, call: UpdateShapeCall<'_>)`),
+  handed to `dispatch_<name>(host, call)`. The generator refuses a flat target over the limit, and a target never carries
+  `#[allow(clippy::too_many_arguments)]`. The hooks that were already over the limit are listed in
+  `FLAT_TARGETS_OVER_THE_LIMIT` in the same file; that list only shrinks (convert a hook, delete its line) and a new hook
+  is never added to it. The carrier is host-internal plain data, never on wasm, and no modder sees it.
 - **A guide page:** `docs/modding/src/`. Code in a page is `{{#include}}`d from `docs/modding/examples`, which
   compiles, so a change to the API that breaks an example fails the build.
 - **A mod API change** updates its fragment `doc` and any page it affects in the same PR.

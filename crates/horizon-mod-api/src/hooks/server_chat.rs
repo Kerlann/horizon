@@ -17,5 +17,13 @@ pub trait Hooks {
         neoforge = "ServerChatEvent",
         cancellable = true
     )]
-    fn server_chat();
+    fn server_chat(
+        player_id: i32,
+        player: u128,
+        username: &str,
+        raw_text: &str,
+        message: &mut Text,
+        replies: &mut Vec<Text>,
+        cancel: &mut bool,
+    );
 }

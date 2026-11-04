@@ -70,17 +70,17 @@ impl Game<'_> {
         let (mut level, mut position) = (found.dim.level(), original);
         let (mut yaw, mut pitch) = (found.yaw, found.pitch);
         let mut copy = missing.is_none();
-        self.native_player_respawn_position(
+        self.native_player_respawn_position(mod_api::__private::PlayerRespawnPositionCall {
             player,
-            found.dim.level(),
-            original,
-            missing.is_some(),
-            &mut level,
-            &mut position,
-            &mut yaw,
-            &mut pitch,
-            &mut copy,
-        );
+            original_level: found.dim.level(),
+            original_position: original,
+            missing_respawn_block: missing.is_some(),
+            level: &mut level,
+            position: &mut position,
+            yaw: &mut yaw,
+            pitch: &mut pitch,
+            copy_original_spawn_position: &mut copy,
+        });
         let to = Respawn {
             dim: Dim::from_level(level),
             at: Vec3::new(position[0], position[1], position[2]),
