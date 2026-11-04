@@ -165,7 +165,7 @@ impl Game<'_> {
         &self,
         uuid: u128,
         kind: NativeInventoryKind,
-    ) -> Result<NativeInventory, String> {
+    ) -> Result<NativeInventory, String> { if let Some(__l) = crate::points_generated::P3770.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_inventory_side(uuid)? {
             Side::Live(i) => {
                 let host = self.lan.as_ref().expect("live");
@@ -181,7 +181,7 @@ impl Game<'_> {
         }
     }
 
-    fn native_inventory_side(&self, uuid: u128) -> Result<Side, String> {
+    fn native_inventory_side(&self, uuid: u128) -> Result<Side, String> { if let Some(__l) = crate::points_generated::P3769.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return Err("no server".into());
         };
@@ -222,7 +222,7 @@ impl Game<'_> {
         from: (u128, NativeInventoryKind, usize),
         expected: &ItemStack,
         to: (u128, NativeInventoryKind),
-    ) -> Result<(), String> {
+    ) -> Result<(), String> { if let Some(__l) = crate::points_generated::P3768.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (from_uuid, from_kind, from_slot) = from;
         let (to_uuid, to_kind) = to;
         if from_uuid == to_uuid && from_kind == to_kind {
@@ -312,7 +312,7 @@ impl Game<'_> {
     /// map is never sent again by the game), so send it again after the
     /// player joins. Use ids far from the world's own (they count up from 0).
     /// False for a player not here, or `colors` not 16384 long.
-    pub(super) fn native_send_map(&mut self, uuid: u128, map_id: i32, colors: &[u8]) -> bool {
+    pub(super) fn native_send_map(&mut self, uuid: u128, map_id: i32, colors: &[u8]) -> bool { let (map_id,) = match crate::points_generated::P3767.get() { Some(__l) => { let mut __a = (map_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (map_id,) };
         use horizon_protocol::packets::play::{Clientbound, MapItemData, MapPatch};
         if colors.len() != 128 * 128 {
             return false;

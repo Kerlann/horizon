@@ -29,7 +29,7 @@ impl Game<'_> {
     /// `Zombie.hurtServer` after the hit: on Hard, with the zombie's chance
     /// and monsters spawning, a copy of it appears out of sight and takes
     /// `target`; both then call less often.
-    pub(super) fn call_reinforcements(&mut self, caller: u32, target: Who) {
+    pub(super) fn call_reinforcements(&mut self, caller: u32, target: Who) { let (caller,) = match crate::points_generated::P5837.get() { Some(__l) => { let mut __a = (caller,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (caller,) };
         let Some(index) = self.mobs.iter().position(|m| m.id == caller) else {
             return;
         };
@@ -98,7 +98,7 @@ impl Game<'_> {
         from: [i32; 3],
         own: &mut LegacyRandom,
         rules: &mut LegacyRandom,
-    ) -> Option<[i32; 3]> {
+    ) -> Option<[i32; 3]> { let (from,) = match crate::points_generated::P5836.get() { Some(__l) => { let mut __a = (from,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from,) };
         let level = self.natural_level();
         let (width, height) = (kind.width as f32, kind.height as f32);
         for _ in 0..ATTEMPTS {

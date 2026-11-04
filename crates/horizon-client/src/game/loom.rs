@@ -47,7 +47,7 @@ fn inside(p: (f32, f32), x: f32, y: f32, w: f32, h: f32) -> bool {
 impl Game<'_> {
     /// `LoomScreen.containerChanged`: the error flag, whether the pattern
     /// buttons show (only when an input changed), and the scroller reset.
-    pub(super) fn loom_screen_changed(&mut self) {
+    pub(super) fn loom_screen_changed(&mut self) { if let Some(__l) = crate::points_generated::P2573.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(s) = self.station.as_mut().filter(|s| s.kind == Kind::Loom) else {
             return;
         };
@@ -70,7 +70,7 @@ impl Game<'_> {
     }
     /// A sound the loom or stonecutter menu played: the result's once per
     /// tick (`lastSoundTime`).
-    pub(super) fn station_sound(&mut self, sound: &str) {
+    pub(super) fn station_sound(&mut self, sound: &str) { if let Some(__l) = crate::points_generated::P2572.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ticks = self.ticks;
         let Some(s) = self.station.as_mut() else {
             return;
@@ -89,7 +89,7 @@ impl Game<'_> {
     }
     /// `LoomScreen.mouseClicked` on a pattern button: `clickMenuButton`, and
     /// the select sound when the menu took it.
-    fn loom_button(&mut self, index: usize) -> bool {
+    fn loom_button(&mut self, index: usize) -> bool { let (index,) = match crate::points_generated::P2571.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let mut taken = false;
         let flag = &mut taken;
         self.menu_session(|menu, env, _| {
@@ -104,7 +104,7 @@ impl Game<'_> {
         taken
     }
     /// A left click inside the loom's pattern grid or scroller.
-    pub(super) fn loom_click(&mut self, local: (f32, f32)) -> bool {
+    pub(super) fn loom_click(&mut self, local: (f32, f32)) -> bool { if let Some(__l) = crate::points_generated::P2570.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(start_row) = self
             .station
             .as_ref()
@@ -131,7 +131,7 @@ impl Game<'_> {
         false
     }
     /// The pattern buttons a controller can focus (GUI origin relative).
-    pub(super) fn loom_targets(&self) -> Vec<[f32; 4]> {
+    pub(super) fn loom_targets(&self) -> Vec<[f32; 4]> { if let Some(__l) = crate::points_generated::P2569.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(loom) = self.station.as_ref().map(|s| &s.loom).filter(|l| l.display) else {
             return Vec::new();
         };
@@ -149,7 +149,7 @@ impl Game<'_> {
             .collect()
     }
     /// `LoomScreen.mouseDragged` on the scroller.
-    pub(super) fn loom_drag(&mut self) {
+    pub(super) fn loom_drag(&mut self) { if let Some(__l) = crate::points_generated::P2568.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(size) = self
             .renderer
             .as_ref()
@@ -168,13 +168,13 @@ impl Game<'_> {
             l.start_row = l.row_for(l.scroll);
         }
     }
-    pub(super) fn loom_release(&mut self) {
+    pub(super) fn loom_release(&mut self) { if let Some(__l) = crate::points_generated::P2567.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(s) = self.station.as_mut() {
             s.loom.scrolling = false;
         }
     }
     /// `LoomScreen.mouseScrolled`.
-    pub(super) fn loom_scroll(&mut self, d: f32) {
+    pub(super) fn loom_scroll(&mut self, d: f32) { let (d,) = match crate::points_generated::P2566.get() { Some(__l) => { let mut __a = (d,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (d,) };
         let Some(l) = self.station.as_mut().map(|s| &mut s.loom) else {
             return;
         };
@@ -193,7 +193,7 @@ impl Game<'_> {
         y: f32,
         base: &str,
         layers: &[BannerLayer],
-    ) {
+    ) { let (x,y,) = match crate::points_generated::P2565.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,) };
         let banners = &self.stations().banners;
         let layers: Vec<(String, String)> = layers
             .iter()
@@ -218,7 +218,7 @@ impl Game<'_> {
         oy: f32,
         draws: &[ScreenDraw],
         background: bool,
-    ) -> Option<Vec<(horizon_client::text::Text, u32)>> {
+    ) -> Option<Vec<(horizon_client::text::Text, u32)>> { let (ox,oy,background,) = match crate::points_generated::P2564.get() { Some(__l) => { let mut __a = (ox,oy,background,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ox,oy,background,) };
         let atlas = &self.gui.atlas;
         let mut tooltip = None;
         let mut sheet: Option<String> = None;
@@ -317,7 +317,7 @@ impl Game<'_> {
         ox: f32,
         oy: f32,
         local: (f32, f32),
-    ) -> Option<Vec<(horizon_client::text::Text, u32)>> {
+    ) -> Option<Vec<(horizon_client::text::Text, u32)>> { let (ox,oy,) = match crate::points_generated::P2563.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ox,oy,) };
         let s = self.station.as_ref()?;
         let l = &s.loom;
         let dye = s.inputs[1]

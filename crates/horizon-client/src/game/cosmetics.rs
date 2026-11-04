@@ -137,7 +137,7 @@ fn covered(m: &Mob, slot: Slot) -> bool {
 impl Game<'_> {
     /// Once a frame, before drawing: starts the service's client on first use and puts the
     /// textures the last frame wanted into the atlas.
-    pub(super) fn cosmetics_frame(&mut self) {
+    pub(super) fn cosmetics_frame(&mut self) { if let Some(__l) = crate::points_generated::P1315.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !horizon_cosmetics::enabled() {
             return;
         }
@@ -193,7 +193,7 @@ impl Game<'_> {
 
     /// The name tag style `m` wears, if cosmetics are shown for it (name tags only counts): its
     /// mark's place in the atlas and its line's colour. None until the mark is in the atlas.
-    pub(super) fn cosmetics_tag(&self, m: &Mob, own: bool) -> Option<super::names::TagStyle> {
+    pub(super) fn cosmetics_tag(&self, m: &Mob, own: bool) -> Option<super::names::TagStyle> { let (own,) = match crate::points_generated::P1314.get() { Some(__l) => { let mut __a = (own,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (own,) };
         let worn = self.worn(m, own)?;
         let item = worn.iter().find(|i| i.slot == Slot::NameTag)?;
         let [r, g, b] = item.tag?.line;
@@ -225,7 +225,7 @@ impl Game<'_> {
     }
 
     /// What `m` wears, if cosmetics are shown for it: `own` for the player's own model.
-    fn worn(&self, m: &Mob, own: bool) -> Option<horizon_cosmetics::Worn> {
+    fn worn(&self, m: &Mob, own: bool) -> Option<horizon_cosmetics::Worn> { let (own,) = match crate::points_generated::P1313.get() { Some(__l) => { let mut __a = (own,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (own,) };
         let client = self.cosmetics.client.as_ref()?;
         let extras = &self.settings.extras;
         if if own {
@@ -260,7 +260,7 @@ impl Game<'_> {
         light: u32,
         gpu: bool,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) -> Option<(glam::Vec3, glam::Vec3)> {
+    ) -> Option<(glam::Vec3, glam::Vec3)> { let (own,alpha,light,gpu,) = match crate::points_generated::P1312.get() { Some(__l) => { let mut __a = (own,alpha,light,gpu,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (own,alpha,light,gpu,) };
         use horizon_client::mobs::{anim, render};
         let worn = self.worn(m, own)?;
         if m.is_invisible() {

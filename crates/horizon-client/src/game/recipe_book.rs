@@ -115,7 +115,7 @@ fn sprite(name: &str) -> String {
 
 impl Game<'_> {
     /// The book the open screen has, if any.
-    fn active_book(&self) -> Option<BookType> {
+    fn active_book(&self) -> Option<BookType> { if let Some(__l) = crate::points_generated::P4780.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.screen != Screen::Inventory || self.station.is_some() {
             return None;
         }
@@ -133,15 +133,15 @@ impl Game<'_> {
             _ => None,
         }
     }
-    fn book_open(&self, book: BookType) -> bool {
+    fn book_open(&self, book: BookType) -> bool { if let Some(__l) = crate::points_generated::P4779.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.level.recipe_book.open[book.index()]
     }
-    fn book_filtering(&self, book: BookType) -> bool {
+    fn book_filtering(&self, book: BookType) -> bool { if let Some(__l) = crate::points_generated::P4778.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.level.recipe_book.filtering[book.index()]
     }
     /// How far the open book pushes the menu to the right
     /// (`RecipeBookComponent.updateScreenPosition`).
-    pub(super) fn recipe_book_shift(&self, width: f32) -> f32 {
+    pub(super) fn recipe_book_shift(&self, width: f32) -> f32 { let (width,) = match crate::points_generated::P4777.get() { Some(__l) => { let mut __a = (width,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (width,) };
         match self.active_book() {
             Some(book) if self.book_open(book) && width >= NARROW => 77.0,
             _ => 0.0,
@@ -150,16 +150,16 @@ impl Game<'_> {
     /// `AbstractRecipeBookScreen.isHovering` is false while the book is
     /// visible in a window narrower than `NARROW`: the book covers the menu,
     /// so no slot is hovered or clicked.
-    pub(super) fn book_covers_menu(&self, width: f32) -> bool {
+    pub(super) fn book_covers_menu(&self, width: f32) -> bool { let (width,) = match crate::points_generated::P4776.get() { Some(__l) => { let mut __a = (width,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (width,) };
         width < NARROW && self.active_book().is_some_and(|b| self.book_open(b))
     }
     /// Whether typed keys go to the search box.
-    pub(super) fn recipe_search_focused(&self) -> bool {
+    pub(super) fn recipe_search_focused(&self) -> bool { if let Some(__l) = crate::points_generated::P4775.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.active_book().is_some_and(|b| self.book_open(b))
             && self.recipe_ui.search.as_ref().is_some_and(|s| s.focused)
     }
     /// `keyChat` focuses the search box.
-    pub(super) fn recipe_focus_search(&mut self) {
+    pub(super) fn recipe_focus_search(&mut self) { if let Some(__l) = crate::points_generated::P4774.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.active_book().is_some_and(|b| self.book_open(b))
             && let Some(s) = self.recipe_ui.search.as_mut()
         {
@@ -168,7 +168,7 @@ impl Game<'_> {
         }
     }
     /// Text typed (or one backspace) into the search box.
-    pub(super) fn recipe_text(&mut self, text: Option<&str>, backspace: bool) {
+    pub(super) fn recipe_text(&mut self, text: Option<&str>, backspace: bool) { let (backspace,) = match crate::points_generated::P4773.get() { Some(__l) => { let mut __a = (backspace,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (backspace,) };
         let Some(search) = self.recipe_ui.search.as_mut() else {
             return;
         };
@@ -179,13 +179,13 @@ impl Game<'_> {
         }
     }
     /// Ctrl+A/C/V/X in the search box.
-    pub(super) fn recipe_shortcut(&mut self, shortcut: horizon_client::clipboard::EditShortcut) {
+    pub(super) fn recipe_shortcut(&mut self, shortcut: horizon_client::clipboard::EditShortcut) { if let Some(__l) = crate::points_generated::P4772.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(search) = self.recipe_ui.search.as_mut() {
             search.shortcut(shortcut, &mut self.clipboard);
         }
     }
     /// A key press while the search box has focus.
-    pub(super) fn recipe_key(&mut self, event: &winit::event::KeyEvent) {
+    pub(super) fn recipe_key(&mut self, event: &winit::event::KeyEvent) { if let Some(__l) = crate::points_generated::P4771.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use winit::keyboard::PhysicalKey;
         if let Some(shortcut) = self.edit_shortcut(event) {
             self.recipe_shortcut(shortcut);
@@ -214,7 +214,7 @@ impl Game<'_> {
     /// `RecipeToast.addOrUpdate` for each display of the recipes just
     /// unlocked: its crafting station and result join the toast still
     /// queued or shown, or a new one.
-    pub(super) fn recipe_toast(&mut self, recipes: &[String]) {
+    pub(super) fn recipe_toast(&mut self, recipes: &[String]) { if let Some(__l) = crate::points_generated::P4770.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if recipes.is_empty() || self.adv.quiet {
             return;
         }
@@ -270,12 +270,12 @@ impl Game<'_> {
     // ---- recipes and what can be crafted ----
 
     /// The grid size of the open crafting menu.
-    fn book_grid(&self) -> (usize, usize) {
+    fn book_grid(&self) -> (usize, usize) { if let Some(__l) = crate::points_generated::P4769.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (self.craft_size, self.craft_size)
     }
     /// The items the book counts (`RecipeBookComponent.updateStackedContents`):
     /// the inventory and the menu's crafting slots, as the menu engine counts them.
-    fn book_available(&mut self, _book: BookType) -> Stacked {
+    fn book_available(&mut self, _book: BookType) -> Stacked { if let Some(__l) = crate::points_generated::P4768.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             // A server's menu: the slots it last sent, counted the same way.
             use horizon_client::menu::{Env, Kind, Menu};
@@ -323,7 +323,7 @@ impl Game<'_> {
     /// Sends the client book what changed in the server's: the first time a
     /// replacing batch (vanilla's server iterates an identity hash set; this
     /// one goes in id order), then each unlock and removal.
-    fn sync_client_book(&mut self) {
+    fn sync_client_book(&mut self) { if let Some(__l) = crate::points_generated::P4767.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // On a server the book is the server's packets' (remote_recipe_book_*).
         if self.remote.is_some() {
             return;
@@ -358,7 +358,7 @@ impl Game<'_> {
         ui.client_version += 1;
     }
     /// Every entry of the book, in its order (`native_recipes`).
-    pub(super) fn recipe_book_entries(&mut self) -> Vec<Entry> {
+    pub(super) fn recipe_book_entries(&mut self) -> Vec<Entry> { if let Some(__l) = crate::points_generated::P4766.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.ensure_book();
         self.recipe_ui
             .book
@@ -367,7 +367,7 @@ impl Game<'_> {
     }
     /// The display ids the player's book holds, and a number that changes
     /// whenever they do (`native_known_recipes`).
-    pub(super) fn recipe_book_displays(&mut self) -> (u64, Vec<i32>) {
+    pub(super) fn recipe_book_displays(&mut self) -> (u64, Vec<i32>) { if let Some(__l) = crate::points_generated::P4765.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.sync_client_book();
         (
             self.recipe_ui.client_version,
@@ -376,11 +376,11 @@ impl Game<'_> {
     }
     /// The book's model is made again from `Game::recipes` when next needed:
     /// the server's recipes arrived, or a new session began.
-    pub(super) fn forget_book(&mut self) {
+    pub(super) fn forget_book(&mut self) { if let Some(__l) = crate::points_generated::P4764.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.recipe_ui.book = None;
         self.recipe_tables.categories = None;
     }
-    fn ensure_book(&mut self) {
+    fn ensure_book(&mut self) { if let Some(__l) = crate::points_generated::P4763.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.recipe_ui.book.is_none() {
             let mut book = Book::build(self.recipes(), self.items());
             book.set_display_ids(&self.stations().recipe_index);
@@ -396,7 +396,7 @@ impl Game<'_> {
         }
     }
     /// Rebuilds the tab and button lists when anything they depend on changed.
-    fn refresh_book_view(&mut self, book_type: BookType) {
+    fn refresh_book_view(&mut self, book_type: BookType) { if let Some(__l) = crate::points_generated::P4762.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.ensure_book();
         self.sync_client_book();
         let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -442,7 +442,7 @@ impl Game<'_> {
     /// `RecipeBookTabButton.startAnimation` and `RecipeButton.init`: tabs
     /// holding a recipe still to be displayed squeeze, and the buttons of the
     /// shown page squeeze once and clear their recipes' highlight.
-    fn start_new_recipe_animations(&mut self, book_type: BookType) {
+    fn start_new_recipe_animations(&mut self, book_type: BookType) { if let Some(__l) = crate::points_generated::P4761.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.level.recipe_book.to_be_displayed.is_empty() {
             return;
         }
@@ -504,7 +504,7 @@ impl Game<'_> {
         self.recipe_ui.button_anim = buttons;
         self.recipe_ui.book = Some(book);
     }
-    fn build_view(&mut self, ui: &RecipeUi, book_type: BookType) -> View {
+    fn build_view(&mut self, ui: &RecipeUi, book_type: BookType) -> View { if let Some(__l) = crate::points_generated::P4760.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(book) = ui.book.as_ref() else {
             return View::default();
         };
@@ -574,7 +574,7 @@ impl Game<'_> {
 
     /// `RecipeBookComponent.getXOrigin` / `getYOrigin` (`widthTooNarrow`
     /// centres the book over the menu).
-    fn book_origin(&self, batch: &HudBatch) -> (f32, f32) {
+    fn book_origin(&self, batch: &HudBatch) -> (f32, f32) { if let Some(__l) = crate::points_generated::P4759.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let offset = if batch.width < NARROW { 0.0 } else { 86.0 };
         (
             ((batch.width - WIDTH) / 2.0).floor() - offset,
@@ -583,13 +583,13 @@ impl Game<'_> {
     }
     /// The open book's panel, `[x, y, width, height]` in GUI pixels; none
     /// while the screen has no book or it is closed.
-    pub(super) fn recipe_book_rect(&self, batch: &HudBatch) -> Option<[f32; 4]> {
+    pub(super) fn recipe_book_rect(&self, batch: &HudBatch) -> Option<[f32; 4]> { if let Some(__l) = crate::points_generated::P4758.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.active_book().filter(|b| self.book_open(*b))?;
         let (x, y) = self.book_origin(batch);
         Some([x, y, WIDTH, HEIGHT])
     }
     /// The green book button's top-left corner.
-    fn book_button_pos(&self, book: BookType, ox: f32, batch: &HudBatch) -> (f32, f32) {
+    fn book_button_pos(&self, book: BookType, ox: f32, batch: &HudBatch) -> (f32, f32) { let (ox,) = match crate::points_generated::P4757.get() { Some(__l) => { let mut __a = (ox,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ox,) };
         let mid = (batch.height / 2.0).floor();
         match book {
             BookType::Crafting if self.craft_size == 2 => (ox + 104.0, mid - 22.0),
@@ -597,7 +597,7 @@ impl Game<'_> {
             _ => (ox + 20.0, mid - 49.0),
         }
     }
-    fn tab_pos(&self, xo: f32, yo: f32, index: usize) -> (f32, f32) {
+    fn tab_pos(&self, xo: f32, yo: f32, index: usize) -> (f32, f32) { let (xo,yo,index,) = match crate::points_generated::P4756.get() { Some(__l) => { let mut __a = (xo,yo,index,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (xo,yo,index,) };
         (xo - 30.0, yo + 3.0 + 27.0 * index as f32)
     }
     fn button_pos(xo: f32, yo: f32, i: usize) -> (f32, f32) {
@@ -607,10 +607,10 @@ impl Game<'_> {
         )
     }
     /// `RecipeBookComponent.slotSelectTime`.
-    fn swap_index(&self) -> usize {
+    fn swap_index(&self) -> usize { if let Some(__l) = crate::points_generated::P4755.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (self.recipe_ui.time / SWAP_TICKS).floor() as usize
     }
-    fn batch_for_size(&self) -> Option<HudBatch> {
+    fn batch_for_size(&self) -> Option<HudBatch> { if let Some(__l) = crate::points_generated::P4754.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.renderer.as_ref()?;
         Some(HudBatch::new([r.config.width, r.config.height]))
     }
@@ -619,7 +619,7 @@ impl Game<'_> {
 
     /// A click while a screen with a recipe book is open; true when the book
     /// used it.
-    pub(super) fn recipe_book_click(&mut self, right: bool) -> bool {
+    pub(super) fn recipe_book_click(&mut self, right: bool) -> bool { let (right,) = match crate::points_generated::P4753.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         let Some(book_type) = self.active_book() else {
             return false;
         };
@@ -764,7 +764,7 @@ impl Game<'_> {
     }
     /// `RecipeBookComponent.mouseClicked` after a placed recipe: it becomes
     /// `lastRecipe`.
-    fn remember_click(&mut self, entry: usize) {
+    fn remember_click(&mut self, entry: usize) { let (entry,) = match crate::points_generated::P4752.get() { Some(__l) => { let mut __a = (entry,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entry,) };
         self.recipe_ui.last_clicked = self
             .recipe_ui
             .book
@@ -775,7 +775,7 @@ impl Game<'_> {
     /// `RecipeBookComponent.keyPressed`: Enter or Space (`isSelection`) places
     /// the recipe clicked last again, key repeats included, as many as fit
     /// with Shift. The focused search box takes the key first.
-    pub(super) fn recipe_book_key(&mut self, key: winit::keyboard::KeyCode) -> bool {
+    pub(super) fn recipe_book_key(&mut self, key: winit::keyboard::KeyCode) -> bool { if let Some(__l) = crate::points_generated::P4751.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use winit::keyboard::KeyCode;
         if !matches!(key, KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space) {
             return false;
@@ -806,7 +806,7 @@ impl Game<'_> {
     }
     /// `RecipeBookComponent.mouseDragged`: while the search box is focused a
     /// drag moves its selection end to the pointer (`EditBox.onDrag`).
-    pub(super) fn recipe_book_drag(&mut self) {
+    pub(super) fn recipe_book_drag(&mut self) { if let Some(__l) = crate::points_generated::P4750.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.recipe_ui.search_drag || !self.active_book().is_some_and(|b| self.book_open(b)) {
             return;
         }
@@ -818,11 +818,11 @@ impl Game<'_> {
         }
     }
     /// A mouse button let go: a drag no longer selects in the search box.
-    pub(super) fn recipe_book_release(&mut self) {
+    pub(super) fn recipe_book_release(&mut self) { if let Some(__l) = crate::points_generated::P4749.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.recipe_ui.search_drag = false;
     }
     /// `RecipeBookComponent.sendUpdateSettings`: the server owns the saved book.
-    fn send_book_settings(&self, book_type: BookType) {
+    fn send_book_settings(&self, book_type: BookType) { if let Some(__l) = crate::points_generated::P4748.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.send(
             horizon_protocol::packets::play::Serverbound::RecipeBookChangeSettings(
                 horizon_protocol::packets::recipes::RecipeBookChangeSettings {
@@ -833,18 +833,18 @@ impl Game<'_> {
             ),
         );
     }
-    pub(super) fn recipe_book_flags(&self) -> Option<(bool, bool)> {
+    pub(super) fn recipe_book_flags(&self) -> Option<(bool, bool)> { if let Some(__l) = crate::points_generated::P4747.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let book = self.active_book()?;
         Some((self.book_open(book), self.book_filtering(book)))
     }
     /// How many displays the client's book holds.
-    pub(super) fn recipe_book_known(&self) -> usize {
+    pub(super) fn recipe_book_known(&self) -> usize { if let Some(__l) = crate::points_generated::P4746.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.recipe_ui.client.displays().len()
     }
     /// The recipe book's buttons a controller can focus: the book button,
     /// recipes, page arrows, the craftable filter and the tabs (GUI pixels;
     /// the search box registers itself as a field).
-    pub(super) fn recipe_book_targets(&self) -> Vec<horizon_client::widgets::Target> {
+    pub(super) fn recipe_book_targets(&self) -> Vec<horizon_client::widgets::Target> { if let Some(__l) = crate::points_generated::P4745.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::widgets::{Kind, Target};
         let (Some(book_type), Some(batch)) = (self.active_book(), self.batch_for_size()) else {
             return Vec::new();
@@ -901,12 +901,12 @@ impl Game<'_> {
         }
         out
     }
-    fn shift_down(&self) -> bool {
+    fn shift_down(&self) -> bool { if let Some(__l) = crate::points_generated::P4744.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.has_shift_down()
     }
     /// The open screen's book for `hasClickedOutside`: (visible, selected tab
     /// hovered); None when the screen has no book.
-    pub(super) fn recipe_book_area(&self, batch: &HudBatch) -> Option<(bool, bool)> {
+    pub(super) fn recipe_book_area(&self, batch: &HudBatch) -> Option<(bool, bool)> { if let Some(__l) = crate::points_generated::P4743.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let book = self.active_book()?;
         if !self.book_open(book) {
             return Some((false, false));
@@ -921,14 +921,14 @@ impl Game<'_> {
         Some((true, hovered))
     }
     /// The grid, result and furnace slots clicks on which end a ghost recipe.
-    fn is_book_slot(&self, book: BookType, slot: usize) -> bool {
+    fn is_book_slot(&self, book: BookType, slot: usize) -> bool { let (slot,) = match crate::points_generated::P4742.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         match book {
             BookType::Crafting => (100..109).contains(&slot) || slot == 200,
             _ => (300..303).contains(&slot),
         }
     }
     /// `OverlayRecipeComponent.init`.
-    fn open_overlay(&mut self, button: &Button, bx: f32, by: f32, xo: f32, yo: f32) {
+    fn open_overlay(&mut self, button: &Button, bx: f32, by: f32, xo: f32, yo: f32) { let (bx,by,xo,yo,) = match crate::points_generated::P4741.get() { Some(__l) => { let mut __a = (bx,by,xo,yo,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (bx,by,xo,yo,) };
         let mut entries: Vec<(usize, bool)> =
             button.entries.iter().copied().filter(|e| e.1).collect();
         entries.extend(button.entries.iter().copied().filter(|e| !e.1));
@@ -943,7 +943,7 @@ impl Game<'_> {
     /// What the book's click handler does once a recipe was placed: a book
     /// that is not offset next to the menu (`!isOffsetNextToMainGUI`, a window
     /// narrower than `NARROW`) closes with `setVisible(false)`.
-    fn close_narrow_book(&mut self, book_type: BookType, batch: &HudBatch) {
+    fn close_narrow_book(&mut self, book_type: BookType, batch: &HudBatch) { if let Some(__l) = crate::points_generated::P4740.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if batch.width >= NARROW {
             return;
         }
@@ -952,7 +952,7 @@ impl Game<'_> {
         self.recipe_ui.overlay = None;
     }
     /// `RecipeBookComponent.tryPlaceRecipe`: false when the click is refused.
-    fn try_place(&mut self, entry_index: usize, use_max: bool) -> bool {
+    fn try_place(&mut self, entry_index: usize, use_max: bool) -> bool { let (entry_index,use_max,) = match crate::points_generated::P4739.get() { Some(__l) => { let mut __a = (entry_index,use_max,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entry_index,use_max,) };
         let Some(book_type) = self.active_book() else {
             return false;
         };
@@ -982,7 +982,7 @@ impl Game<'_> {
     }
     /// Whether the open screen takes `native_place_recipe`: a crafting grid's
     /// book (the inventory's or a crafting table's).
-    pub(super) fn mod_recipe_screen(&self) -> bool {
+    pub(super) fn mod_recipe_screen(&self) -> bool { if let Some(__l) = crate::points_generated::P4738.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.screen == Screen::Inventory
             && self.active_book() == Some(BookType::Crafting)
             && !self.spectator()
@@ -990,7 +990,7 @@ impl Game<'_> {
     /// `native_place_recipe`: the book's click on the recipe with this display
     /// id, refused as `handlePlaceRecipe` refuses it (no crafting screen,
     /// not in the player's book; an impossible one in `place_recipe`).
-    pub(super) fn mod_place_recipe(&mut self, display_id: i32, all: bool) {
+    pub(super) fn mod_place_recipe(&mut self, display_id: i32, all: bool) { let (display_id,all,) = match crate::points_generated::P4737.get() { Some(__l) => { let mut __a = (display_id,all,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (display_id,all,) };
         if !self.mod_recipe_screen() || !self.recipe_ui.client.displays().contains(&display_id) {
             return;
         }
@@ -1009,7 +1009,7 @@ impl Game<'_> {
     /// `ServerboundPlaceRecipePacket`: the server places the recipe
     /// (`ServerPlaceRecipe` on the menu engine) and answers with a ghost
     /// recipe when the items are missing.
-    fn place_recipe(&mut self, book_type: BookType, entry_index: usize, use_max: bool) {
+    fn place_recipe(&mut self, book_type: BookType, entry_index: usize, use_max: bool) { let (entry_index,use_max,) = match crate::points_generated::P4736.get() { Some(__l) => { let mut __a = (entry_index,use_max,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entry_index,use_max,) };
         let Some(entry) = self
             .recipe_ui
             .book
@@ -1052,7 +1052,7 @@ impl Game<'_> {
         self.recipe_book_changed();
     }
     /// The container changed under the book: comparators and saving.
-    fn recipe_book_changed(&mut self) {
+    fn recipe_book_changed(&mut self) { if let Some(__l) = crate::points_generated::P4735.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(key) = self.container {
             self.world.modified.insert((key.0 >> 4, key.2 >> 4));
             self.container_changed(key);
@@ -1067,7 +1067,7 @@ impl Game<'_> {
     pub(super) fn remote_recipe_book_add(
         &mut self,
         p: horizon_protocol::packets::recipes::RecipeBookAdd,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4734.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ui = &mut self.recipe_ui;
         if p.replace {
             ui.client.clear();
@@ -1094,7 +1094,7 @@ impl Game<'_> {
     pub(super) fn remote_recipe_book_remove(
         &mut self,
         p: horizon_protocol::packets::recipes::RecipeBookRemove,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4733.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for id in p.ids {
             self.recipe_ui.client.remove(id);
         }
@@ -1104,7 +1104,7 @@ impl Game<'_> {
     pub(super) fn remote_recipe_book_settings(
         &mut self,
         p: horizon_protocol::packets::recipes::RecipeBookSettings,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4732.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (i, (open, filtering)) in p.books.into_iter().enumerate() {
             self.level.recipe_book.open[i] = open;
             self.level.recipe_book.filtering[i] = filtering;
@@ -1115,7 +1115,7 @@ impl Game<'_> {
     pub(super) fn remote_ghost_recipe(
         &mut self,
         p: horizon_protocol::packets::recipes::PlaceGhostRecipe,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4731.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let open = self.remote_menu_id();
         let Some(book_type) = self.active_book() else {
             return;
@@ -1136,7 +1136,7 @@ impl Game<'_> {
     // ---- ghost recipe ----
 
     /// `fillGhostRecipe`: the recipe's ingredients faded into the slots.
-    fn fill_ghost(&mut self, book_type: BookType, entry: &Entry) {
+    fn fill_ghost(&mut self, book_type: BookType, entry: &Entry) { if let Some(__l) = crate::points_generated::P4730.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let grid = self.craft_size;
         let fuel_empty = self.slot_mut(301).is_none();
         let Some(book) = self.recipe_ui.book.as_ref() else {
@@ -1163,7 +1163,7 @@ impl Game<'_> {
     // ---- drawing ----
 
     /// The book button, ghost recipe and the open book.
-    pub(super) fn draw_recipe_book(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_recipe_book(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P4729.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(book_type) = self.active_book() else {
             return;
         };
@@ -1195,7 +1195,7 @@ impl Game<'_> {
     /// `AbstractRecipeBookScreen`'s narratables: the book button (an
     /// `ImageButton` without a message) and the `RecipeBookComponent`, which
     /// narrates its recipe buttons, search box, filter and tabs while open.
-    fn narrate_recipe_book(&self, batch: &HudBatch, book_type: BookType, button: [f32; 4]) {
+    fn narrate_recipe_book(&self, batch: &HudBatch, book_type: BookType, button: [f32; 4]) { let (button,) = match crate::points_generated::P4728.get() { Some(__l) => { let mut __a = (button,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (button,) };
         use horizon_client::widgets::{self, Narratable, key_of};
         if !widgets::narrating() {
             return;
@@ -1287,11 +1287,11 @@ impl Game<'_> {
             });
         }
     }
-    fn shift_down_or_ctrl(&self) -> bool {
+    fn shift_down_or_ctrl(&self) -> bool { if let Some(__l) = crate::points_generated::P4727.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.has_control_down()
     }
     /// `GhostSlots.extractRenderState`, among the container's slots.
-    fn draw_ghost(&mut self, batch: &mut HudBatch, book_type: BookType) {
+    fn draw_ghost(&mut self, batch: &mut HudBatch, book_type: BookType) { if let Some(__l) = crate::points_generated::P4726.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.recipe_ui.ghost.is_empty() {
             return;
         }
@@ -1317,7 +1317,7 @@ impl Game<'_> {
     /// `GhostSlots.extractTooltip`: the stack a ghost shows on menu slot
     /// `slot` now, cycling like its draw; only while the open book is visible
     /// (`RecipeBookComponent.extractTooltip`).
-    pub(super) fn ghost_stack(&self, slot: usize) -> Option<ItemStack> {
+    pub(super) fn ghost_stack(&self, slot: usize) -> Option<ItemStack> { let (slot,) = match crate::points_generated::P4725.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         if !self.book_open(self.active_book()?) {
             return None;
         }
@@ -1330,7 +1330,7 @@ impl Game<'_> {
     }
     /// `RecipeBookComponent.extractRenderState` and `extractTooltip`, laid
     /// out by `horizon_client::recipe_book_screen`.
-    fn draw_book_panel(&mut self, batch: &mut HudBatch, book_type: BookType) {
+    fn draw_book_panel(&mut self, batch: &mut HudBatch, book_type: BookType) { if let Some(__l) = crate::points_generated::P4724.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (xo, yo) = self.book_origin(batch);
         let cursor = self.cursor;
         let atlas = &self.gui.atlas;
@@ -1456,7 +1456,7 @@ impl Game<'_> {
         &mut self,
         batch: &mut HudBatch,
         calls: &[Drawn],
-    ) -> Option<Vec<(horizon_client::text::Text, u32)>> {
+    ) -> Option<Vec<(horizon_client::text::Text, u32)>> { if let Some(__l) = crate::points_generated::P4723.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut tooltip: Option<Vec<(horizon_client::text::Text, u32)>> = None;
         for d in calls {
             let start = batch.vertices.len();

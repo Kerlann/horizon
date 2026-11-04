@@ -525,7 +525,7 @@ fn rgb_of(rgba: u32) -> u32 {
 }
 impl Game<'_> {
     /// `EnchantmentScreen.containerTick`'s `tickBook` for an open enchanting table.
-    pub(super) fn tick_enchanting_book(&mut self) {
+    pub(super) fn tick_enchanting_book(&mut self) { if let Some(__l) = crate::points_generated::P5497.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(s) = self.station.as_mut().filter(|s| s.kind == Kind::Enchanting) {
             let costs = s.offers.costs;
             s.book.tick(s.inputs[0].as_ref(), costs);
@@ -533,14 +533,14 @@ impl Game<'_> {
     }
     /// `Component.translatable`: the selected language (which `lang` layers
     /// over `en_us`), the caller's English text last.
-    pub(super) fn translate(&self, key: &str, fallback: &str) -> String {
+    pub(super) fn translate(&self, key: &str, fallback: &str) -> String { if let Some(__l) = crate::points_generated::P5496.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         horizon_client::lang::get_or(key, fallback)
     }
-    fn brewing_open(&self) -> bool {
+    fn brewing_open(&self) -> bool { if let Some(__l) = crate::points_generated::P5495.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         matches!(self.container_kind(), Some(BlockEntity::Brewing(_)))
     }
     /// Opens a workstation menu for the block; false when it is not one.
-    pub(super) fn open_station(&mut self, pos: [i32; 3], name: &str) -> bool {
+    pub(super) fn open_station(&mut self, pos: [i32; 3], name: &str) -> bool { let (pos,) = match crate::points_generated::P5494.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let Some(kind) = Kind::from_block(name) else {
             return false;
         };
@@ -572,7 +572,7 @@ impl Game<'_> {
         true
     }
     /// `AbstractContainerMenu.clearContainer`: inputs go back to the player.
-    pub(super) fn close_station(&mut self) {
+    pub(super) fn close_station(&mut self) { if let Some(__l) = crate::points_generated::P5493.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .station
             .as_ref()
@@ -598,7 +598,7 @@ impl Game<'_> {
             self.give_or_drop(stack);
         }
     }
-    pub(super) fn station_slots(&self) -> Option<Vec<usize>> {
+    pub(super) fn station_slots(&self) -> Option<Vec<usize>> { if let Some(__l) = crate::points_generated::P5492.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut v: Vec<usize> = (0..36).collect();
         if self.brewing_open() {
             v.extend(300..305);
@@ -613,14 +613,14 @@ impl Game<'_> {
     }
     /// How many slots `station_slots` lists, counted without building it
     /// (`Game::slot_count` asks every frame): same branches, same order.
-    pub(super) fn station_slot_count(&self) -> Option<usize> {
+    pub(super) fn station_slot_count(&self) -> Option<usize> { if let Some(__l) = crate::points_generated::P5491.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.brewing_open() {
             return Some(36 + 5);
         }
         let s = self.station.as_ref()?;
         Some(36 + s.inputs.len() + usize::from(s.kind.result_pos().is_some()))
     }
-    pub(super) fn station_slot_position(&self, i: usize) -> Option<(f32, f32)> {
+    pub(super) fn station_slot_position(&self, i: usize) -> Option<(f32, f32)> { let (i,) = match crate::points_generated::P5490.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         if self.brewing_open() && (300..305).contains(&i) {
             return Some(
                 [
@@ -645,21 +645,21 @@ impl Game<'_> {
             _ => None,
         }
     }
-    pub(super) fn station_slot(&self, i: usize) -> &Option<ItemStack> {
+    pub(super) fn station_slot(&self, i: usize) -> &Option<ItemStack> { let (i,) = match crate::points_generated::P5489.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         match self.station.as_ref() {
             Some(s) if i == RESULT => &s.result,
             Some(s) if i >= INPUT && i < INPUT + s.inputs.len() => &s.inputs[i - INPUT],
             _ => &self.scratch_slot,
         }
     }
-    pub(super) fn station_slot_mut(&mut self, i: usize) -> &mut Option<ItemStack> {
+    pub(super) fn station_slot_mut(&mut self, i: usize) -> &mut Option<ItemStack> { let (i,) = match crate::points_generated::P5488.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         match self.station.as_mut() {
             Some(s) if i == RESULT => &mut s.result,
             Some(s) if i >= INPUT && i < INPUT + s.inputs.len() => &mut s.inputs[i - INPUT],
             _ => &mut self.scratch_slot,
         }
     }
-    pub(super) fn count_bookshelves(&self, pos: [i32; 3]) -> i32 {
+    pub(super) fn count_bookshelves(&self, pos: [i32; 3]) -> i32 { let (pos,) = match crate::points_generated::P5487.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let tags = &self.items().block_tags;
         let is = |p: [i32; 3], tag: &str| {
             let name = &self
@@ -683,7 +683,7 @@ impl Game<'_> {
             .count() as i32
     }
     /// The anvil name the menu works with (`AnvilScreen.onNameChanged`).
-    pub(super) fn anvil_item_name(&self, s: &Station) -> String {
+    pub(super) fn anvil_item_name(&self, s: &Station) -> String { if let Some(__l) = crate::points_generated::P5486.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match &s.inputs[0] {
             Some(input)
                 if input.custom_name().is_none()
@@ -696,7 +696,7 @@ impl Game<'_> {
         }
     }
     /// Apply the client anvil hook once for each input and name combination.
-    fn update_anvil_answer(&mut self, s: &mut Station, name: String) {
+    fn update_anvil_answer(&mut self, s: &mut Station, name: String) { if let Some(__l) = crate::points_generated::P5485.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !mod_api::__private::listened(mod_api::HookId::AnvilUpdate) {
             return;
         }
@@ -723,7 +723,7 @@ impl Game<'_> {
         }
     }
     /// `slotsChanged` / `createResult` for the open station.
-    pub(super) fn station_changed(&mut self) {
+    pub(super) fn station_changed(&mut self) { if let Some(__l) = crate::points_generated::P5484.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut s) = self.station.take() else {
             return;
         };
@@ -802,14 +802,14 @@ impl Game<'_> {
         }
         self.station = Some(s);
     }
-    pub(super) fn max_stack(&self, stack: &ItemStack) -> u32 {
+    pub(super) fn max_stack(&self, stack: &ItemStack) -> u32 { if let Some(__l) = crate::points_generated::P5483.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res
             .items()
             .get(&stack.item)
             .map_or(64, |i| i.max_stack)
     }
     /// `Slot.mayPlace` and `getMaxStackSize` for station slots.
-    fn slot_rules(&self, slot: usize, stack: &ItemStack) -> (bool, u32) {
+    fn slot_rules(&self, slot: usize, stack: &ItemStack) -> (bool, u32) { let (slot,) = match crate::points_generated::P5482.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         if slot >= super::mount_menu::SADDLE {
             return self.mount_slot_rules(slot, stack);
         }
@@ -835,7 +835,7 @@ impl Game<'_> {
         (s.kind != Kind::Loom, 64)
     }
     /// `AbstractContainerMenu.doClick` PICKUP on a filtered slot.
-    pub(super) fn click_filtered(&mut self, slot: usize, right: bool) {
+    pub(super) fn click_filtered(&mut self, slot: usize, right: bool) { let (slot,right,) = match crate::points_generated::P5481.get() { Some(__l) => { let mut __a = (slot,right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,right,) };
         let carried = self.carried.take();
         let current = self.slot_mut(slot).take();
         let (new_slot, new_carried) = match (carried, current) {
@@ -892,7 +892,7 @@ impl Game<'_> {
         stack: &mut ItemStack,
         targets: &[usize],
         reverse: bool,
-    ) -> bool {
+    ) -> bool { let (reverse,) = match crate::points_generated::P5480.get() { Some(__l) => { let mut __a = (reverse,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (reverse,) };
         let order: Vec<usize> = if reverse {
             targets.iter().rev().copied().collect()
         } else {
@@ -940,7 +940,7 @@ impl Game<'_> {
         &mut self,
         menu: &horizon_client::menu::Menu,
         predicting: bool,
-    ) {
+    ) { let (predicting,) = match crate::points_generated::P5479.get() { Some(__l) => { let mut __a = (predicting,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (predicting,) };
         let Some(s) = self.station.as_mut() else {
             return;
         };
@@ -969,7 +969,7 @@ impl Game<'_> {
     /// `AnvilMenu.onTake`'s level part: out of creative a 12% chance
     /// (`AnvilBlock.damage`) to wear the anvil a stage, or break a damaged one
     /// (level event 1029); otherwise level event 1030. True when it broke.
-    pub(super) fn anvil_used(&mut self, pos: [i32; 3], creative: bool) -> bool {
+    pub(super) fn anvil_used(&mut self, pos: [i32; 3], creative: bool) -> bool { let (pos,creative,) = match crate::points_generated::P5478.get() { Some(__l) => { let mut __a = (pos,creative,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,creative,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let name = self.res.facts().get(state).name.clone();
         let anvil = matches!(
@@ -1002,19 +1002,19 @@ impl Game<'_> {
     /// `getExperienceAmount` sum): the orbs at the block's centre
     /// (`ExperienceOrb.award`), then level event 1042, the grindstone's sound
     /// for everyone around.
-    pub(super) fn grindstone_taken(&mut self, pos: [i32; 3], amount: i32) {
+    pub(super) fn grindstone_taken(&mut self, pos: [i32; 3], amount: i32) { let (pos,amount,) = match crate::points_generated::P5477.get() { Some(__l) => { let mut __a = (pos,amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,amount,) };
         let xp = stations::grindstone_xp_roll(amount, &mut self.world.random);
         self.grindstone_award(pos, xp);
     }
     /// The rest of `onTake` with the experience `xp` decided: the orbs and
     /// level event 1042.
-    pub(super) fn grindstone_award(&mut self, pos: [i32; 3], xp: u32) {
+    pub(super) fn grindstone_award(&mut self, pos: [i32; 3], xp: u32) { let (pos,xp,) = match crate::points_generated::P5476.get() { Some(__l) => { let mut __a = (pos,xp,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,xp,) };
         if xp > 0 {
             self.spawn_orbs(pos.map(|v| f64::from(v) + 0.5), xp);
         }
         self.level_event_at(1042, pos, 0);
     }
-    fn play_at(&mut self, sound: &str, pos: [i32; 3], volume: f32, pitch: f32) {
+    fn play_at(&mut self, sound: &str, pos: [i32; 3], volume: f32, pitch: f32) { let (pos,volume,pitch,) = match crate::points_generated::P5475.get() { Some(__l) => { let mut __a = (pos,volume,pitch,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,volume,pitch,) };
         let at = [
             f64::from(pos[0]) + 0.5,
             f64::from(pos[1]) + 0.5,
@@ -1022,7 +1022,7 @@ impl Game<'_> {
         ];
         self.audio.play(sound, Some(at), volume, pitch);
     }
-    pub(super) fn give_or_drop(&mut self, stack: ItemStack) {
+    pub(super) fn give_or_drop(&mut self, stack: ItemStack) { if let Some(__l) = crate::points_generated::P5474.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(rest) = self.give(stack)
             && let Some(eye) = self.eye_position()
         {
@@ -1031,7 +1031,7 @@ impl Game<'_> {
         }
     }
     /// `Player.giveExperienceLevels`, and the level change reported to the mods.
-    pub(super) fn give_levels(&mut self, levels: i32) {
+    pub(super) fn give_levels(&mut self, levels: i32) { let (levels,) = match crate::points_generated::P5473.get() { Some(__l) => { let mut __a = (levels,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (levels,) };
         let old_level = self.experience.level;
         self.add_experience_levels(levels);
         self.native_player_level_changed(old_level);
@@ -1039,7 +1039,7 @@ impl Game<'_> {
     /// `ServerPlayer.giveExperienceLevels`: the mods of a server player may change
     /// or cancel the levels, and every fifth level gained plays the level-up sound
     /// (at most every 100 ticks).
-    pub(super) fn add_experience_levels(&mut self, mut levels: i32) {
+    pub(super) fn add_experience_levels(&mut self, mut levels: i32) { let (mut levels,) = match crate::points_generated::P5472.get() { Some(__l) => { let mut __a = (levels,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (levels,) };
         // ServerPlayer.giveExperienceLevels
         if levels == 0 {
             return;
@@ -1065,13 +1065,13 @@ impl Game<'_> {
     }
     /// `Player.onEnchantmentPerformed`: the cost leaves the level directly, not
     /// through `giveExperienceLevels`, and the mods hear of the level change.
-    pub(super) fn enchantment_performed(&mut self, cost: i32) {
+    pub(super) fn enchantment_performed(&mut self, cost: i32) { let (cost,) = match crate::points_generated::P5471.get() { Some(__l) => { let mut __a = (cost,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (cost,) };
         let old_level = self.experience.level;
         self.experience.add_levels(-cost);
         self.native_player_level_changed(old_level);
     }
     /// Whether the result slot may be taken (`mayPickup`).
-    fn may_take_result(&self) -> bool {
+    fn may_take_result(&self) -> bool { if let Some(__l) = crate::points_generated::P5470.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(s) = self.station.as_ref() else {
             return false;
         };
@@ -1083,7 +1083,7 @@ impl Game<'_> {
         }
     }
     /// `EnchantmentMenu.clickMenuButton`.
-    fn click_enchant(&mut self, button: usize) {
+    fn click_enchant(&mut self, button: usize) { let (button,) = match crate::points_generated::P5469.get() { Some(__l) => { let mut __a = (button,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (button,) };
         let Some(s) = self.station.as_ref() else {
             return;
         };
@@ -1142,7 +1142,7 @@ impl Game<'_> {
     /// A station's own buttons a controller can focus besides its slots
     /// (GUI origin relative): offers, patterns, effects, enchantments and
     /// stonecutter recipes.
-    pub(super) fn station_targets(&self) -> Vec<[f32; 4]> {
+    pub(super) fn station_targets(&self) -> Vec<[f32; 4]> { if let Some(__l) = crate::points_generated::P5468.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(s) = self.station.as_ref() else {
             return Vec::new();
         };
@@ -1171,7 +1171,7 @@ impl Game<'_> {
             _ => Vec::new(),
         }
     }
-    pub(super) fn station_click(&mut self, right: bool) -> bool {
+    pub(super) fn station_click(&mut self, right: bool) -> bool { let (right,) = match crate::points_generated::P5467.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         // A server's brewing stand: its slots are the server's.
         if self.station.is_none() && (!self.brewing_open() || self.remote.is_some()) {
             return false;
@@ -1231,7 +1231,7 @@ impl Game<'_> {
         true
     }
     /// Recompute after slot changes; the anvil box follows its input item.
-    fn station_after_input(&mut self) {
+    fn station_after_input(&mut self) { if let Some(__l) = crate::points_generated::P5466.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(s) = self.station.as_mut() else {
             return;
         };
@@ -1251,7 +1251,7 @@ impl Game<'_> {
     /// with the cell's index (an empty cell's too), and the select sound when
     /// the menu took it.
     /// Beside the grid, a press on the scroller's track holds it (`scrolling`).
-    fn stonecutter_click(&mut self, local: (f32, f32)) -> bool {
+    fn stonecutter_click(&mut self, local: (f32, f32)) -> bool { if let Some(__l) = crate::points_generated::P5465.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(s) = self.station.as_mut() else {
             return false;
         };
@@ -1270,7 +1270,7 @@ impl Game<'_> {
         }
         false
     }
-    fn stonecutter_recipe_click(&mut self, local: (f32, f32), start: usize) -> bool {
+    fn stonecutter_recipe_click(&mut self, local: (f32, f32), start: usize) -> bool { let (start,) = match crate::points_generated::P5464.get() { Some(__l) => { let mut __a = (start,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (start,) };
         for index in start..start + 12 {
             let p = index - start;
             let (x, y) = (52.0 + (p % 4) as f32 * 16.0, 14.0 + (p / 4) as f32 * 18.0);
@@ -1293,7 +1293,7 @@ impl Game<'_> {
         false
     }
     /// `StonecutterScreen.mouseScrolled`.
-    pub(super) fn station_scroll(&mut self, d: f32) {
+    pub(super) fn station_scroll(&mut self, d: f32) { let (d,) = match crate::points_generated::P5463.get() { Some(__l) => { let mut __a = (d,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (d,) };
         self.merchant_scroll(d);
         self.loom_scroll(d);
         let Some(s) = self.station.as_mut() else {
@@ -1307,7 +1307,7 @@ impl Game<'_> {
     }
     /// The mouse moved with a button held on a station: the loom's,
     /// stonecutter's and merchant's scrollers follow it.
-    pub(super) fn station_drag(&mut self) {
+    pub(super) fn station_drag(&mut self) { if let Some(__l) = crate::points_generated::P5462.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.loom_drag();
         self.merchant_drag();
         let Some(size) = self
@@ -1329,7 +1329,7 @@ impl Game<'_> {
         }
     }
     /// A mouse button let go: no scroller is held any more.
-    pub(super) fn station_release(&mut self) {
+    pub(super) fn station_release(&mut self) { if let Some(__l) = crate::points_generated::P5461.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.loom_release();
         if let Some(s) = self.station.as_mut() {
             s.scrolling = false;
@@ -1339,14 +1339,14 @@ impl Game<'_> {
         }
     }
     /// Whether keyboard text goes to the anvil rename box.
-    pub(super) fn station_typing(&self) -> bool {
+    pub(super) fn station_typing(&self) -> bool { if let Some(__l) = crate::points_generated::P5460.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.screen == Screen::Inventory
             && self
                 .station
                 .as_ref()
                 .is_some_and(|s| s.kind == Kind::Anvil && s.inputs[0].is_some())
     }
-    pub(super) fn station_text(&mut self, text: Option<&str>, backspace: bool) {
+    pub(super) fn station_text(&mut self, text: Option<&str>, backspace: bool) { let (backspace,) = match crate::points_generated::P5459.get() { Some(__l) => { let mut __a = (backspace,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (backspace,) };
         // The recipe book's search box takes scripted typing too.
         if self.recipe_search_focused() {
             self.recipe_text(text, backspace);
@@ -1365,7 +1365,7 @@ impl Game<'_> {
         self.remote_anvil_rename();
     }
     /// `AnvilScreen.keyPressed`: the rename box handles the key.
-    pub(super) fn station_key(&mut self, key: winit::keyboard::KeyCode) -> bool {
+    pub(super) fn station_key(&mut self, key: winit::keyboard::KeyCode) -> bool { if let Some(__l) = crate::points_generated::P5458.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (ctrl, shift) = (self.has_control_down(), self.has_shift_down());
         let Some(s) = self.station.as_mut() else {
             return false;
@@ -1380,7 +1380,7 @@ impl Game<'_> {
     }
     /// Ctrl+A/C/V/X in the anvil's rename box (an `EditBox` of 50) or the
     /// recipe book's search box.
-    pub(super) fn station_shortcut(&mut self, shortcut: horizon_client::clipboard::EditShortcut) {
+    pub(super) fn station_shortcut(&mut self, shortcut: horizon_client::clipboard::EditShortcut) { if let Some(__l) = crate::points_generated::P5457.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.recipe_search_focused() {
             self.recipe_shortcut(shortcut);
             return;
@@ -1395,7 +1395,7 @@ impl Game<'_> {
         }
     }
     /// A click in the anvil's name box (`EditBox.onClick`).
-    fn anvil_name_click(&mut self, ox: f32, oy: f32) -> bool {
+    fn anvil_name_click(&mut self, ox: f32, oy: f32) -> bool { let (ox,oy,) = match crate::points_generated::P5456.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ox,oy,) };
         let open = self
             .station
             .as_ref()
@@ -1419,7 +1419,7 @@ impl Game<'_> {
         true
     }
     /// AnvilScreen's name box, drawn after the station picture.
-    fn draw_anvil_name(&mut self, batch: &mut HudBatch, ox: f32, oy: f32) {
+    fn draw_anvil_name(&mut self, batch: &mut HudBatch, ox: f32, oy: f32) { let (ox,oy,) = match crate::points_generated::P5455.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ox,oy,) };
         let Some(s) = self.station.as_mut() else {
             return;
         };
@@ -1455,7 +1455,7 @@ impl Game<'_> {
         }
     }
     /// Text in the Standard Galactic alphabet (`minecraft:alt`), cut to `max` pixels.
-    fn galactic(&self, batch: &mut HudBatch, text: &str, x: f32, y: f32, max: f32, color: u32) {
+    fn galactic(&self, batch: &mut HudBatch, text: &str, x: f32, y: f32, max: f32, color: u32) { let (x,y,max,color,) = match crate::points_generated::P5454.get() { Some(__l) => { let mut __a = (x,y,max,color,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,max,color,) };
         let atlas = &self.gui.atlas;
         let Some(sheet) = atlas.sprites.get("font/ascii_sga").copied() else {
             batch.text(atlas, text, x, y, color, false);
@@ -1500,7 +1500,7 @@ impl Game<'_> {
         }
     }
     /// Draws the open station or brewing stand screen; false when none is open.
-    pub(super) fn draw_station(&mut self, batch: &mut HudBatch) -> bool {
+    pub(super) fn draw_station(&mut self, batch: &mut HudBatch) -> bool { if let Some(__l) = crate::points_generated::P5453.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .station
             .as_ref()
@@ -2128,10 +2128,10 @@ impl Game<'_> {
         y: f32,
         max: f32,
         color: u32,
-    ) {
+    ) { let (x,y,max,color,) = match crate::points_generated::P5452.get() { Some(__l) => { let mut __a = (x,y,max,color,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,max,color,) };
         self.galactic(batch, text, x, y, max, color);
     }
-    fn slot_position_any(&self, i: usize) -> Option<(f32, f32)> {
+    fn slot_position_any(&self, i: usize) -> Option<(f32, f32)> { let (i,) = match crate::points_generated::P5451.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         self.station_slot_position(i)
             .or_else(|| (i < 36).then(|| self.slot_position(i)))
     }
@@ -2143,11 +2143,11 @@ impl Game<'_> {
     pub(super) fn stack_tooltip(
         &self,
         stack: &ItemStack,
-    ) -> Vec<(horizon_client::text::Text, u32)> {
+    ) -> Vec<(horizon_client::text::Text, u32)> { if let Some(__l) = crate::points_generated::P5450.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.stack_tooltip_lines(stack, false, false)
     }
     /// `ItemStack.getRarity`'s colour for the name line and a `[name]` link.
-    fn rarity_color(&self, stack: &ItemStack) -> u32 {
+    fn rarity_color(&self, stack: &ItemStack) -> u32 { if let Some(__l) = crate::points_generated::P5449.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let props = self.stations().enchantments.props(&stack.item);
         let rarity = horizon_client::item_tooltip::rarity(
             stack,
@@ -2162,7 +2162,7 @@ impl Game<'_> {
     }
     /// `ItemStack.getHoverName`: the custom name, a written book's title, the
     /// item name component, else the item's or potion's name.
-    fn stack_hover_name(&self, stack: &ItemStack) -> String {
+    fn stack_hover_name(&self, stack: &ItemStack) -> String { if let Some(__l) = crate::points_generated::P5448.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(n) = stack.custom_name() {
             n.to_owned()
         } else if let Some(title) = stack
@@ -2200,7 +2200,7 @@ impl Game<'_> {
         stack: &ItemStack,
         nested: bool,
         creative: bool,
-    ) -> Vec<(horizon_client::text::Text, u32)> {
+    ) -> Vec<(horizon_client::text::Text, u32)> { let (nested,creative,) = match crate::points_generated::P5447.get() { Some(__l) => { let mut __a = (nested,creative,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (nested,creative,) };
         let e: &Enchantments = &self.stations().enchantments;
         let color = self.rarity_color(stack);
         let advanced = !nested && self.options_advanced_tooltips();
@@ -2623,7 +2623,7 @@ impl Game<'_> {
         lines
     }
     /// Menu state for the control socket.
-    pub(super) fn station_info(&self) -> serde_json::Value {
+    pub(super) fn station_info(&self) -> serde_json::Value { if let Some(__l) = crate::points_generated::P5446.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(s) = self.station.as_ref() else {
             return match self.container_kind() {
                 Some(BlockEntity::Brewing(b)) => {
@@ -2644,7 +2644,7 @@ impl Game<'_> {
         })
     }
     /// Options.advancedItemTooltips (F3+H).
-    fn options_advanced_tooltips(&self) -> bool {
+    fn options_advanced_tooltips(&self) -> bool { if let Some(__l) = crate::points_generated::P5445.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.settings.file.bool("advancedItemTooltips")
     }
     /// `TooltipRenderUtil`: dark box with the purple border, first line spaced.
@@ -2709,7 +2709,7 @@ impl Game<'_> {
         y: f32,
         w: f32,
         h: f32,
-    ) {
+    ) { let (x,y,w,h,) = match crate::points_generated::P5444.get() { Some(__l) => { let mut __a = (x,y,w,h,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,w,h,) };
         let (mut background, mut border_top, mut border_bottom) =
             (0xf0100010, 0x505000ff, 0x5028007f);
         self.native_tooltip_color(stack, &mut background, &mut border_top, &mut border_bottom);
@@ -2763,7 +2763,7 @@ impl Game<'_> {
         stack: &ItemStack,
         x: f32,
         y: f32,
-    ) {
+    ) { let (x,y,) = match crate::points_generated::P5443.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,y,) };
         self.draw_stack_tooltip_with(batch, stack, false, x, y, Vec::new());
     }
     /// [`Self::draw_stack_tooltip`] with `TooltipFlag.isCreative` set when
@@ -2777,7 +2777,7 @@ impl Game<'_> {
         x: f32,
         y: f32,
         after_name: Vec<(horizon_client::text::Text, u32)>,
-    ) {
+    ) { let (creative,x,y,) = match crate::points_generated::P5442.get() { Some(__l) => { let mut __a = (creative,x,y,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (creative,x,y,) };
         let mut lines = self.stack_tooltip_lines(stack, false, creative);
         if lines.is_empty() {
             return;
@@ -2847,7 +2847,7 @@ impl Game<'_> {
         lines: Vec<(horizon_client::text::Text, u32)>,
         images: Vec<TooltipImage>,
         (width, height): (f32, f32),
-    ) -> Option<(Vec<(horizon_client::text::Text, u32)>, Vec<TooltipImage>)> {
+    ) -> Option<(Vec<(horizon_client::text::Text, u32)>, Vec<TooltipImage>)> { if let Some(__l) = crate::points_generated::P5441.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !mod_api::__private::listened(mod_api::HookId::RenderTooltipGatherComponents) {
             return Some((lines, images));
         }
@@ -2898,7 +2898,7 @@ impl Game<'_> {
         x: f32,
         y: f32,
         w: f32,
-    ) {
+    ) { let (x,y,w,) = match crate::points_generated::P5440.get() { Some(__l) => { let mut __a = (x,y,w,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,w,) };
         let Some((_, stack)) = layout.selected.and_then(|i| layout.slots.get(i)) else {
             return;
         };
@@ -2925,7 +2925,7 @@ impl Game<'_> {
         &mut self,
         batch: &mut HudBatch,
         layout: &horizon_client::bundle::TooltipLayout,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P5439.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (i, (at, stack)) in layout.slots.iter().enumerate() {
             let selected = layout.selected == Some(i);
             let sprite = |name: &str| format!("gui/sprites/container/bundle/{name}");
@@ -3026,12 +3026,12 @@ impl Game<'_> {
     /// `AbstractContainerScreen.showTooltipWithItemInHand`: a hovered stack's
     /// tooltip shows while a stack is carried only when its image says so, as
     /// a bundle's contents do (`ClientBundleTooltip`).
-    pub(super) fn tooltip_with_carried(&self, stack: &ItemStack) -> bool {
+    pub(super) fn tooltip_with_carried(&self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P5438.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.carried.is_none()
             || horizon_client::bundle::Contents::of(self.items(), stack).is_some()
     }
     /// Hovered-slot tooltip on the plain inventory, crafting and container screens.
-    pub(super) fn draw_slot_tooltip(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_slot_tooltip(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5437.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(slot) = self.slot_at(batch, self.cursor.0, self.cursor.1) else {
             return;
         };
@@ -3063,7 +3063,7 @@ impl Game<'_> {
     pub(super) fn tick_brewing_stand(
         &mut self,
         pos: (i32, i32, i32),
-    ) -> horizon_client::Result<()> {
+    ) -> horizon_client::Result<()> { if let Some(__l) = crate::points_generated::P5436.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BlockEntity::Brewing(b)) = self.world.block_entities.get_mut(&pos) else {
             return Ok(());
         };

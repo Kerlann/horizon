@@ -17,7 +17,7 @@ impl Game<'_> {
     /// The cooldowns of `player`, where they are kept now: a guest's own
     /// outside their turn, the game's while theirs is swapped in (as
     /// `native_player_ref` finds the player).
-    fn native_cooldowns_of(&self, player: PlayerRef) -> Option<&Cooldowns> {
+    fn native_cooldowns_of(&self, player: PlayerRef) -> Option<&Cooldowns> { if let Some(__l) = crate::points_generated::P4050.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.player_handle_read(player)? {
             super::native_server::PlayerRead::Acting { .. } => Some(&self.cooldowns),
             super::native_server::PlayerRead::Guest(g) => Some(
@@ -33,7 +33,7 @@ impl Game<'_> {
     /// `ItemCooldowns.getCooldownGroup(stack)`: the group `stack`'s
     /// cooldown is filed under, the group its `use_cooldown` component names
     /// (its own, else its item's default), else its item id.
-    pub(super) fn native_item_cooldown_group(&self, stack: &ItemStack) -> String {
+    pub(super) fn native_item_cooldown_group(&self, stack: &ItemStack) -> String { if let Some(__l) = crate::points_generated::P4049.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let default = self
             .items()
             .get(&stack.item)
@@ -45,7 +45,7 @@ impl Game<'_> {
     pub(super) fn native_player_item_cooldowns(
         &self,
         player: PlayerRef,
-    ) -> Option<Vec<NativeItemCooldown>> {
+    ) -> Option<Vec<NativeItemCooldown>> { if let Some(__l) = crate::points_generated::P4048.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out: Vec<NativeItemCooldown> = self
             .native_cooldowns_of(player)?
             .remaining()
@@ -63,7 +63,7 @@ impl Game<'_> {
         &self,
         player: PlayerRef,
         group: &str,
-    ) -> Option<bool> {
+    ) -> Option<bool> { if let Some(__l) = crate::points_generated::P4047.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_cooldowns_of(player)?.is_on_cooldown(group))
     }
     /// `ItemCooldowns.getCooldownPercent(group, 0)`: what is left of the
@@ -72,7 +72,7 @@ impl Game<'_> {
         &self,
         player: PlayerRef,
         group: &str,
-    ) -> Option<f32> {
+    ) -> Option<f32> { if let Some(__l) = crate::points_generated::P4046.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_cooldowns_of(player)?.percent(group, 0.0))
     }
     /// `ItemCooldowns.addCooldown(group, ticks)`: starts (or restarts) the
@@ -83,7 +83,7 @@ impl Game<'_> {
         player: PlayerRef,
         group: &str,
         ticks: i32,
-    ) -> bool {
+    ) -> bool { let (ticks,) = match crate::points_generated::P4045.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         let group: Arc<str> = group.into();
         self.native_as_player_handle(player, |game| game.add_cooldown(group, ticks))
     }
@@ -93,7 +93,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         group: &str,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4044.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let group: Arc<str> = group.into();
         self.native_as_player_handle(player, |game| {
             game.cooldowns.remove(&group);

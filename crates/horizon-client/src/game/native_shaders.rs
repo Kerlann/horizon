@@ -39,7 +39,7 @@ impl NativeShaders {
 
 impl Game<'_> {
     /// Builds the pack at `path` when its files changed since it was last read.
-    pub(super) fn tick_native_shader_pack(&mut self, path: &Path) {
+    pub(super) fn tick_native_shader_pack(&mut self, path: &Path) { if let Some(__l) = crate::points_generated::P4187.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let now = Instant::now();
         let state = &mut self.native_shaders;
         if state.looked.is_some_and(|t| now - t < LOOK_EVERY) {

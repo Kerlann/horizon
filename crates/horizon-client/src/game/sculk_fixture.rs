@@ -157,7 +157,7 @@ const CLIENT_SOUNDS: &[&str] = &[
 
 impl Game<'_> {
     /// Run every scenario of `spec` ("SCENARIOS,OUTPUT") and write the results.
-    pub(super) fn sculk_fixture(&mut self, spec: &str) -> Result<()> {
+    pub(super) fn sculk_fixture(&mut self, spec: &str) -> Result<()> { if let Some(__l) = crate::points_generated::P5247.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         assert!(
             !self.options.execution_role.is_client(),
             "fixture requires a server Game"
@@ -178,7 +178,7 @@ impl Game<'_> {
     }
 
     /// `minecraft:name[key=value,...]` to a state.
-    fn fixture_state(&self, text: &str) -> Result<BlockStateId> {
+    fn fixture_state(&self, text: &str) -> Result<BlockStateId> { if let Some(__l) = crate::points_generated::P5246.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (name, props) = match text.split_once('[') {
             Some((n, rest)) => (n, rest.trim_end_matches(']')),
             None => (text, ""),
@@ -202,7 +202,7 @@ impl Game<'_> {
     }
 
     /// `BlockStateParser.serialize`.
-    fn fixture_state_text(&self, state: BlockStateId) -> String {
+    fn fixture_state_text(&self, state: BlockStateId) -> String { if let Some(__l) = crate::points_generated::P5245.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(s) = self.pack.assets.registry.state(state) else {
             return "?".into();
         };
@@ -215,7 +215,7 @@ impl Game<'_> {
         format!("{}[{}]", s.name, props.join(","))
     }
 
-    fn fixture_who(&self, who: Option<Who>, names: &HashMap<u32, String>) -> String {
+    fn fixture_who(&self, who: Option<Who>, names: &HashMap<u32, String>) -> String { if let Some(__l) = crate::points_generated::P5244.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match who {
             None => "none".into(),
             Some(Who::Player) => "player".into(),
@@ -223,7 +223,7 @@ impl Game<'_> {
         }
     }
 
-    fn fixture_info(&self, info: Option<&Info>, names: &HashMap<u32, String>) -> String {
+    fn fixture_info(&self, info: Option<&Info>, names: &HashMap<u32, String>) -> String { if let Some(__l) = crate::points_generated::P5243.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(i) = info else {
             return "-".into();
         };
@@ -244,7 +244,7 @@ impl Game<'_> {
         )
     }
 
-    fn sculk_describe(&self, p: [i32; 3], names: &HashMap<u32, String>) -> String {
+    fn sculk_describe(&self, p: [i32; 3], names: &HashMap<u32, String>) -> String { let (p,) = match crate::points_generated::P5242.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let state = self.world.block(p[0], p[1], p[2]);
         let mut line = self.fixture_state_text(state);
         if let Some(BlockEntity::Sculk(e)) = self.world.block_entities.get(&(p[0], p[1], p[2])) {
@@ -308,7 +308,7 @@ impl Game<'_> {
         line
     }
 
-    fn sculk_fixture_reset(&mut self, s: &Scenario) -> Result<()> {
+    fn sculk_fixture_reset(&mut self, s: &Scenario) -> Result<()> { if let Some(__l) = crate::points_generated::P5241.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.world = World::new(self.res.facts().air, 0);
         let plains = u32::from(world_biomes!(self).id("minecraft:plains"));
         let layers = [
@@ -391,7 +391,7 @@ impl Game<'_> {
         Ok(())
     }
 
-    fn sculk_scenario(&mut self, s: &Scenario) -> Result<String> {
+    fn sculk_scenario(&mut self, s: &Scenario) -> Result<String> { if let Some(__l) = crate::points_generated::P5240.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.sculk_fixture_reset(s)?;
         let at = s.player.unwrap_or([
             f64::from(s.origin[0]) + 0.5,
@@ -653,7 +653,7 @@ impl Game<'_> {
         known: &HashSet<u32>,
         named: usize,
         seeded: &mut HashSet<u32>,
-    ) -> Result<()> {
+    ) -> Result<()> { let (t,named,) = match crate::points_generated::P5239.get() { Some(__l) => { let mut __a = (t,named,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (t,named,) };
         self.world.game_time += 1;
         // Scheduled block and fluid ticks, then block events.
         self.tick_scheduled()?;

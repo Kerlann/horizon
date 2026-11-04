@@ -58,7 +58,7 @@ impl Game<'_> {
     /// Show Invisible Blocks on, a marker for every barrier, light, structure
     /// void and air block in it. Blocks beyond `getViewDistance` (96) are
     /// not drawn.
-    pub(super) fn bounding_box_gizmos(&self, camera: [f64; 3], g: &mut Gizmos) {
+    pub(super) fn bounding_box_gizmos(&self, camera: [f64; 3], g: &mut Gizmos) { let (camera,) = match crate::points_generated::P5569.get() { Some(__l) => { let mut __a = (camera,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (camera,) };
         let game_master = self.can_use_game_master_blocks() || self.spectator();
         let facts = self.res.facts();
         for (pos, entity) in self.world.block_entities.boxes() {
@@ -116,13 +116,13 @@ impl Game<'_> {
         }
     }
 
-    fn structure_block_at(&self, pos: Pos) -> Option<&StructureBlock> {
+    fn structure_block_at(&self, pos: Pos) -> Option<&StructureBlock> { if let Some(__l) = crate::points_generated::P5568.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.world.block_entities.get(&pos)? {
             BlockEntity::StructureBlock(b) => Some(b),
             _ => None,
         }
     }
-    fn structure_block_mut(&mut self, pos: Pos) -> Option<&mut StructureBlock> {
+    fn structure_block_mut(&mut self, pos: Pos) -> Option<&mut StructureBlock> { if let Some(__l) = crate::points_generated::P5567.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.world.block_entities.get_mut(&pos)? {
             BlockEntity::StructureBlock(b) => Some(b),
             _ => None,
@@ -130,7 +130,7 @@ impl Game<'_> {
     }
 
     /// `StructureBlock.setPlacedBy`: the placing player is the author.
-    pub(super) fn structure_block_placed(&mut self, pos: Pos) {
+    pub(super) fn structure_block_placed(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5566.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let author = self
             .lan_acting_name
             .clone()
@@ -142,7 +142,7 @@ impl Game<'_> {
 
     /// `StructureTemplateManager.get`: the cache (misses included), else the
     /// world's saved structures, else the game's own.
-    pub(super) fn template_entry(&mut self, name: &str) -> Option<TemplateEntry> {
+    pub(super) fn template_entry(&mut self, name: &str) -> Option<TemplateEntry> { if let Some(__l) = crate::points_generated::P5565.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(cached) = self.structure_templates.get(name) {
             return cached.clone();
         }
@@ -157,7 +157,7 @@ impl Game<'_> {
 
     /// `StructureTemplateManager.save`: the file under the world's
     /// `generated` folder.
-    fn write_template(&self, name: &str, tag: &Tag) -> bool {
+    fn write_template(&self, name: &str, tag: &Tag) -> bool { if let Some(__l) = crate::points_generated::P5564.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (ns, path) = name.split_once(':').unwrap_or(("minecraft", name));
         if !portable_path(path) || !portable_path(ns) {
             return false;
@@ -193,7 +193,7 @@ impl Game<'_> {
         size: [i32; 3],
         include_entities: bool,
         ignore_air: bool,
-    ) -> Tag {
+    ) -> Tag { let (origin,size,include_entities,ignore_air,) = match crate::points_generated::P5563.get() { Some(__l) => { let mut __a = (origin,size,include_entities,ignore_air,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,size,include_entities,ignore_air,) };
         let registry = self.pack.assets.registry;
         let void = registry.default_state("minecraft:structure_void");
         let air = ignore_air
@@ -246,7 +246,7 @@ impl Game<'_> {
 
     /// `StructureTemplate.fillEntityList`: the entities inside the box, at
     /// positions relative to its minimum corner.
-    fn template_entities(&mut self, origin: [i32; 3], size: [i32; 3]) -> Vec<EntityInfo> {
+    fn template_entities(&mut self, origin: [i32; 3], size: [i32; 3]) -> Vec<EntityInfo> { let (origin,size,) = match crate::points_generated::P5562.get() { Some(__l) => { let mut __a = (origin,size,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,size,) };
         let min = origin.map(f64::from);
         let max = [0, 1, 2].map(|i| min[i] + f64::from(size[i]));
         let chunks: HashSet<(i32, i32)> = (origin[0] >> 4..=(origin[0] + size[0] - 1) >> 4)
@@ -288,7 +288,7 @@ impl Game<'_> {
 
     /// `StructureBlockEntity.saveStructure(boolean)`: the template under the
     /// block's name takes the area, and is written when `to_disk`.
-    fn save_structure(&mut self, pos: Pos, to_disk: bool) -> bool {
+    fn save_structure(&mut self, pos: Pos, to_disk: bool) -> bool { let (to_disk,) = match crate::points_generated::P5561.get() { Some(__l) => { let mut __a = (to_disk,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (to_disk,) };
         let Some(b) = self.structure_block_at(pos).cloned() else {
             return false;
         };
@@ -320,7 +320,7 @@ impl Game<'_> {
         author: &str,
         to_disk: bool,
         ignore_air: bool,
-    ) -> bool {
+    ) -> bool { let (origin,size,ignore_entities,to_disk,ignore_air,) = match crate::points_generated::P5560.get() { Some(__l) => { let mut __a = (origin,size,ignore_entities,to_disk,ignore_air,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,size,ignore_entities,to_disk,ignore_air,) };
         let existing = self.template_entry(name);
         let tag = if size.iter().all(|s| *s >= 1) {
             self.template_from_world(origin, size, !ignore_entities, ignore_air)
@@ -352,7 +352,7 @@ impl Game<'_> {
     }
 
     /// `StructureBlockEntity.loadStructureInfo(template)`.
-    fn load_structure_info(&mut self, pos: Pos, entry: &TemplateEntry) {
+    fn load_structure_info(&mut self, pos: Pos, entry: &TemplateEntry) { if let Some(__l) = crate::points_generated::P5559.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let size = template_size(&entry.tag);
         if let Some(b) = self.structure_block_mut(pos) {
             b.author = entry.author.clone();
@@ -361,7 +361,7 @@ impl Game<'_> {
     }
 
     /// `StructureBlockEntity.placeStructure(level, template)`.
-    fn place_structure(&mut self, pos: Pos, entry: &TemplateEntry) {
+    fn place_structure(&mut self, pos: Pos, entry: &TemplateEntry) { if let Some(__l) = crate::points_generated::P5558.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.load_structure_info(pos, entry);
         let Some(b) = self.structure_block_at(pos).cloned() else {
             return;
@@ -382,7 +382,7 @@ impl Game<'_> {
         settings: TemplateSettings,
         mirror: horizon_world::worldgen::structure::Mirror,
         rotation: horizon_world::worldgen::structure::Rotation,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P5557.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (Some(transforms), registry) = (self.state_transforms(), self.pack.assets.registry)
         else {
             return false;
@@ -414,7 +414,7 @@ impl Game<'_> {
     }
 
     /// `StructureBlockEntity.placeStructureIfSameSize`.
-    fn place_structure_if_same_size(&mut self, pos: Pos) -> bool {
+    fn place_structure_if_same_size(&mut self, pos: Pos) -> bool { if let Some(__l) = crate::points_generated::P5556.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(b) = self.structure_block_at(pos) else {
             return false;
         };
@@ -435,7 +435,7 @@ impl Game<'_> {
     }
 
     /// `StructureBlockEntity.isStructureLoadable`.
-    fn structure_loadable(&mut self, pos: Pos) -> bool {
+    fn structure_loadable(&mut self, pos: Pos) -> bool { if let Some(__l) = crate::points_generated::P5555.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(b) = self.structure_block_at(pos) else {
             return false;
         };
@@ -445,7 +445,7 @@ impl Game<'_> {
 
     /// `StructureBlockEntity.detectSize`: the box the corner blocks of this
     /// structure's name enclose.
-    fn detect_structure_size(&mut self, pos: Pos) -> bool {
+    fn detect_structure_size(&mut self, pos: Pos) -> bool { if let Some(__l) = crate::points_generated::P5554.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(b) = self.structure_block_at(pos) else {
             return false;
         };
@@ -481,7 +481,7 @@ impl Game<'_> {
     }
 
     /// `StructureBlockEntity.setMode`: the entity's and the block state's.
-    fn set_structure_mode(&mut self, pos: Pos, mode: StructureMode) {
+    fn set_structure_mode(&mut self, pos: Pos, mode: StructureMode) { if let Some(__l) = crate::points_generated::P5553.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(b) = self.structure_block_mut(pos) {
             b.mode = mode;
         }
@@ -490,7 +490,7 @@ impl Game<'_> {
 
     /// The `mode` of the block state at `pos` (if it is `block`), set with
     /// `UPDATE_CLIENTS` and the block entity kept.
-    pub(super) fn set_mode_property(&mut self, pos: Pos, block: &str, mode: &str) {
+    pub(super) fn set_mode_property(&mut self, pos: Pos, block: &str, mode: &str) { if let Some(__l) = crate::points_generated::P5552.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let registry = self.pack.assets.registry;
         let current = registry.state(self.world.block(pos.0, pos.1, pos.2));
         let Some(current) = current.filter(|s| s.name == block) else {
@@ -516,7 +516,7 @@ impl Game<'_> {
     }
 
     /// `StructureBlock.trigger`.
-    fn trigger_structure_block(&mut self, pos: Pos) {
+    fn trigger_structure_block(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5551.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mode) = self.structure_block_at(pos).map(|b| b.mode) else {
             return;
         };
@@ -543,7 +543,7 @@ impl Game<'_> {
 
     /// `StructureBlock.neighborChanged` (the level's neighbour hook): a rising
     /// signal triggers the block once.
-    pub(super) fn structure_block_neighbor_changed(&mut self, pos: Pos) {
+    pub(super) fn structure_block_neighbor_changed(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5550.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.structure_block_at(pos).is_none() {
             return;
         }
@@ -565,7 +565,7 @@ impl Game<'_> {
 
     /// `ServerGamePacketListenerImpl.handleSetStructureBlock` for a guest:
     /// only a creative player with game master commands edits the block.
-    pub(super) fn lan_set_structure_block(&mut self, conn: u32, p: play::SetStructureBlock) {
+    pub(super) fn lan_set_structure_block(&mut self, conn: u32, p: play::SetStructureBlock) { let (conn,) = match crate::points_generated::P5549.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
@@ -578,7 +578,7 @@ impl Game<'_> {
     }
 
     /// What `handleSetStructureBlock` does once the player may edit blocks.
-    fn apply_set_structure_block(&mut self, p: &play::SetStructureBlock) {
+    fn apply_set_structure_block(&mut self, p: &play::SetStructureBlock) { if let Some(__l) = crate::points_generated::P5548.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = (p.pos[0], p.pos[1], p.pos[2]);
         if self.structure_block_at(pos).is_none() {
             return;

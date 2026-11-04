@@ -79,7 +79,7 @@ impl Game<'_> {
     }
 
     /// `trigger` for a mod's trigger, for the player in place.
-    fn trigger_mod_criteria(&mut self, trigger: &str, test: &dyn Fn(&NativeCriterion<'_>) -> bool) {
+    fn trigger_mod_criteria(&mut self, trigger: &str, test: &dyn Fn(&NativeCriterion<'_>) -> bool) { if let Some(__l) = crate::points_generated::P2970.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         self.trigger(trigger, |conditions, world| {
             passes(conditions, &me, world, test)

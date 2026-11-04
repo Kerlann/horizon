@@ -17,7 +17,7 @@ use horizon_core::{
 impl Game<'_> {
     /// `Fox.handleEntityEvent(45)`: eight crumbs of the item in its mouth,
     /// thrown from in front of it along `Entity.getLookAngle`.
-    pub(super) fn fox_eat_particles(&mut self, id: u32) {
+    pub(super) fn fox_eat_particles(&mut self, id: u32) { let (id,) = match crate::points_generated::P4992.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(m) = self
             .mobs
             .iter_mut()
@@ -60,7 +60,7 @@ impl Game<'_> {
     /// `Witch.handleEntityEvent(15)`: `nextInt(35) + 10` purple puffs about
     /// half a block over its head; the count is drawn again every pass, as
     /// the Java loop condition does.
-    pub(super) fn witch_magic_particles(&mut self, id: u32) {
+    pub(super) fn witch_magic_particles(&mut self, id: u32) { let (id,) = match crate::points_generated::P4991.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(m) = self
             .mobs
             .iter_mut()
@@ -89,7 +89,7 @@ impl Game<'_> {
     /// `Ravager.handleEntityEvent(69)`: forty puffs of smoke from the middle
     /// of its box, then `applyRoarKnockbackClient`: this client's own player
     /// within 4 blocks is thrown away from it.
-    pub(super) fn remote_ravager_roar(&mut self, id: i32) {
+    pub(super) fn remote_ravager_roar(&mut self, id: i32) { let (id,) = match crate::points_generated::P4990.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(m) = self
             .mobs
             .iter()

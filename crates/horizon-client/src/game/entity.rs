@@ -659,11 +659,11 @@ impl Game<'_> {
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
         tag: Tag,
-    ) -> Result<(), Tag> {
+    ) -> Result<(), Tag> { if let Some(__l) = crate::points_generated::P1829.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         load_entity_of_any_kind!(self, kind, uuid, player_uuid, tag)
     }
     /// The ids of the entities that are not on the walk of `entity_lists!`.
-    pub(super) fn entity_ids_off_walk(&self) -> impl Iterator<Item = u32> + '_ {
+    pub(super) fn entity_ids_off_walk(&self) -> impl Iterator<Item = u32> + '_ { if let Some(__l) = crate::points_generated::P1828.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.cushions
             .iter()
             .map(|e| e.id)
@@ -676,7 +676,7 @@ impl Game<'_> {
             .chain(self.ominous_spawners.iter().map(|e| e.id))
     }
     /// The ids of every entity in the level that is not removed: one walk.
-    pub(super) fn live_entity_ids(&self) -> HashSet<u32> {
+    pub(super) fn live_entity_ids(&self) -> HashSet<u32> { if let Some(__l) = crate::points_generated::P1827.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut alive: HashSet<u32> = self.entity_ids_off_walk().collect();
         for_each_entity!(entity_lists_of!(self), entity => {
             if !entity.is_removed() {
@@ -690,7 +690,7 @@ impl Game<'_> {
         &mut self,
         keys: &HashSet<ChunkKey>,
         out: &mut HashMap<ChunkKey, Vec<Tag>>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P1826.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Saved by chunk in the order they joined, so a reload adds them in
         // that order (a chunk's entity list is in insertion order in vanilla).
         let mut staged: HashMap<ChunkKey, Vec<(JoinSeq, Tag)>> = HashMap::new();

@@ -64,7 +64,7 @@ impl Game<'_> {
         mob: MobRef,
         priority: i32,
         goal: &NativeGoal,
-    ) -> bool {
+    ) -> bool { let (priority,) = match crate::points_generated::P3975.get() { Some(__l) => { let mut __a = (priority,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (priority,) };
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -93,7 +93,7 @@ impl Game<'_> {
         mob: MobRef,
         priority: i32,
         goal: &NativeGoal,
-    ) -> bool {
+    ) -> bool { let (priority,) = match crate::points_generated::P3974.get() { Some(__l) => { let mut __a = (priority,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (priority,) };
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -121,7 +121,7 @@ impl Game<'_> {
     /// unavailable mob, a client, and the dragon. Nothing in a mob's tick
     /// resolves, as its copy is held out there: add what a mod needs in
     /// `entity_join`, which fires for a loaded chunk's mobs too.
-    pub(super) fn native_mob_remove_goal(&mut self, mob: MobRef, id: &str) -> Option<usize> {
+    pub(super) fn native_mob_remove_goal(&mut self, mob: MobRef, id: &str) -> Option<usize> { if let Some(__l) = crate::points_generated::P3973.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Target::Mob(entity)) = self.native_entity_target(mob.entity()) else {
             return None;
         };
@@ -131,7 +131,7 @@ impl Game<'_> {
 
     /// `GoalSelector.removeGoal` on the target selector, by kind, as
     /// `remove_goal` does on the goal selector.
-    pub(super) fn native_mob_remove_target_goal(&mut self, mob: MobRef, id: &str) -> Option<usize> {
+    pub(super) fn native_mob_remove_target_goal(&mut self, mob: MobRef, id: &str) -> Option<usize> { if let Some(__l) = crate::points_generated::P3972.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Target::Mob(entity)) = self.native_entity_target(mob.entity()) else {
             return None;
         };
@@ -143,7 +143,7 @@ impl Game<'_> {
     /// selector as a `NativeMobGoalEntry` (the priority, the kind id and
     /// whether it runs), in registration order. None for a stale or
     /// unavailable mob, a client, and the dragon.
-    pub(super) fn native_mob_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> {
+    pub(super) fn native_mob_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> { if let Some(__l) = crate::points_generated::P3971.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return None;
         };
@@ -162,7 +162,7 @@ impl Game<'_> {
 
     /// Every goal of the target selector, as `goals` reads the goal
     /// selector's.
-    pub(super) fn native_mob_target_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> {
+    pub(super) fn native_mob_target_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> { if let Some(__l) = crate::points_generated::P3970.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return None;
         };
@@ -183,7 +183,7 @@ impl Game<'_> {
     /// out, as the mob tick takes it, so the goal's `stop` sees the world
     /// the tick's `Cx` sees; no hook fires in between. The events a stop
     /// makes land as any tick's do.
-    fn remove_from_selector(&mut self, index: usize, id: &str, targets: bool) -> usize {
+    fn remove_from_selector(&mut self, index: usize, id: &str, targets: bool) -> usize { let (index,targets,) = match crate::points_generated::P3969.get() { Some(__l) => { let mut __a = (index,targets,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,targets,) };
         let snapshot: Vec<_> = self
             .mobs
             .iter()
@@ -238,7 +238,7 @@ impl Game<'_> {
         species: Species,
         navigation: NavKind,
         goal: &NativeGoal,
-    ) -> Option<Box<dyn Goal>> {
+    ) -> Option<Box<dyn Goal>> { if let Some(__l) = crate::points_generated::P3968.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let needs_pathfinder = !matches!(
             goal,
             NativeGoal::Float
@@ -444,7 +444,7 @@ impl Game<'_> {
 
     /// Every species id of a filter, all of them known; None when one is
     /// not. Bare ids read as `minecraft:`'s.
-    fn species_list(&self, ids: &[String]) -> Option<Vec<Species>> {
+    fn species_list(&self, ids: &[String]) -> Option<Vec<Species>> { if let Some(__l) = crate::points_generated::P3967.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if ids.is_empty() {
             return None;
         }
@@ -452,7 +452,7 @@ impl Game<'_> {
     }
 
     /// The species of the mob type `id` names (`minecraft:zombie`).
-    fn species_of(&self, id: &str) -> Option<Species> {
+    fn species_of(&self, id: &str) -> Option<Species> { if let Some(__l) = crate::points_generated::P3966.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res
             .mob_types()
             .get(&namespaced(id.to_owned()))

@@ -15,7 +15,7 @@ use horizon_core::geometry::Vec3;
 
 impl Game<'_> {
     /// `Fox.ALLOWED_ITEMS` and the looting block of `Mob.aiStep` for foxes, once a tick.
-    pub(super) fn tick_foxes(&mut self) {
+    pub(super) fn tick_foxes(&mut self) { if let Some(__l) = crate::points_generated::P1958.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let griefing = self.ui.rules.bool("mob_griefing");
         let mut near = super::item_areas::ItemAreas::default();
         for i in 0..self.mobs.len() {
@@ -65,7 +65,7 @@ impl Game<'_> {
     }
     /// `Dolphin.pickUpItem` in `Mob.aiStep`'s looting block, and the item
     /// `Dolphin.MoveToItemGoal` swims to (`Dolphin.ALLOWED_ITEMS`: no pickup delay, alive, in water).
-    pub(super) fn tick_dolphins(&mut self) {
+    pub(super) fn tick_dolphins(&mut self) { if let Some(__l) = crate::points_generated::P1957.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let griefing = self.ui.rules.bool("mob_griefing");
         let in_water = |g: &Self, e: &horizon_client::entities::ItemEntity| {
             g.res
@@ -130,14 +130,14 @@ impl Game<'_> {
         }
     }
     /// `Fox.isConsumableFood`.
-    fn fox_food(&self, item: &str) -> bool {
+    fn fox_food(&self, item: &str) -> bool { if let Some(__l) = crate::points_generated::P1956.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.items()
             .get(item)
             .is_some_and(|i| i.food.is_some() && i.consumable.is_some())
     }
     /// `Fox.pickUpItem`: the extra items drop where it stands, what it held is spat out
     /// ahead of it, and it holds one of the item.
-    fn fox_pick_up(&mut self, fox_index: usize, item_index: usize) {
+    fn fox_pick_up(&mut self, fox_index: usize, item_index: usize) { let (fox_index,item_index,) = match crate::points_generated::P1955.get() { Some(__l) => { let mut __a = (fox_index,item_index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (fox_index,item_index,) };
         let before = self.dropped[item_index].clone();
         let mut stack = before.stack.clone();
         let count = stack.count;

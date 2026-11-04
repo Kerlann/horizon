@@ -145,7 +145,7 @@ fn rebound(velocity: Vec3, hit: Vec3, at: Vec3) -> Vec3 {
     velocity.normalize().scale(hit.distance_squared(at))
 }
 impl Game<'_> {
-    fn holds_rod(&self) -> bool {
+    fn holds_rod(&self) -> bool { if let Some(__l) = crate::points_generated::P1938.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.held()
             .is_some_and(|s| &*s.item == "minecraft:fishing_rod")
             || self
@@ -154,7 +154,7 @@ impl Game<'_> {
                 .is_some_and(|s| &*s.item == "minecraft:fishing_rod")
     }
     /// `FishingRodItem.use`.
-    pub(super) fn use_fishing_rod(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn use_fishing_rod(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P1937.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:fishing_rod" {
             return false;
         }
@@ -241,7 +241,7 @@ impl Game<'_> {
         true
     }
     /// The boat the hook's owner rides (`Entity.isPassengerOfSameVehicle`).
-    fn own_vehicle(&self) -> Option<u32> {
+    fn own_vehicle(&self) -> Option<u32> { if let Some(__l) = crate::points_generated::P1936.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.lan_acting {
             None => self.riding,
             Some(conn) => self.lan.as_ref().and_then(|h| {
@@ -254,7 +254,7 @@ impl Game<'_> {
         }
     }
     /// `FishingHook.retrieve`: the rod damage it costs.
-    fn retrieve_hook(&mut self, rod: &ItemStack) -> u32 {
+    fn retrieve_hook(&mut self, rod: &ItemStack) -> u32 { if let Some(__l) = crate::points_generated::P1935.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(hook) = self.hook.take() else {
             return 0;
         };
@@ -412,7 +412,7 @@ impl Game<'_> {
         }
         damage
     }
-    pub(super) fn biome_name_at(&self, p: Vec3) -> Option<String> {
+    pub(super) fn biome_name_at(&self, p: Vec3) -> Option<String> { if let Some(__l) = crate::points_generated::P1934.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (x, y, z) = (p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32);
         let c = self.world.chunks.get(&(x >> 4, z >> 4))?;
         Some(
@@ -421,7 +421,7 @@ impl Game<'_> {
                 .clone(),
         )
     }
-    fn water_height(&self, x: i32, y: i32, z: i32) -> Option<(f32, bool)> {
+    fn water_height(&self, x: i32, y: i32, z: i32) -> Option<(f32, bool)> { let (x,y,z,) = match crate::points_generated::P1933.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,z,) };
         let f = self.res.facts().get(self.world.block(x, y, z));
         if f.fluid != Fluid::Water {
             return None;
@@ -435,7 +435,7 @@ impl Game<'_> {
         Some((h, f.fluid_level == 8 && !f.fluid_falling))
     }
     /// getOpenWaterTypeForBlock: 0 above water, 1 inside water, 2 invalid.
-    fn open_water_type(&self, x: i32, y: i32, z: i32) -> u8 {
+    fn open_water_type(&self, x: i32, y: i32, z: i32) -> u8 { let (x,y,z,) = match crate::points_generated::P1932.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,z,) };
         let f = self.res.facts().get(self.world.block(x, y, z));
         if self.world.is_air(self.world.block(x, y, z)) || &*f.name == "minecraft:lily_pad" {
             return 0;
@@ -452,7 +452,7 @@ impl Game<'_> {
         }
     }
     /// calculateOpenWater over the 5x4x5 area around the hook.
-    fn calculate_open_water(&self, b: [i32; 3]) -> bool {
+    fn calculate_open_water(&self, b: [i32; 3]) -> bool { let (b,) = match crate::points_generated::P1931.get() { Some(__l) => { let mut __a = (b,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (b,) };
         let mut previous = 2u8;
         for dy in -1..=2 {
             let mut layer = None;
@@ -478,7 +478,7 @@ impl Game<'_> {
         true
     }
     /// `FishingHook.catchingFish`.
-    fn catching_fish(&mut self, h: &mut Hook, b: [i32; 3]) {
+    fn catching_fish(&mut self, h: &mut Hook, b: [i32; 3]) { let (b,) = match crate::points_generated::P1930.get() { Some(__l) => { let mut __a = (b,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (b,) };
         let mut speed = 1;
         let above = [b[0], b[1] + 1, b[2]];
         let sky = self.world.light(above[0], above[1], above[2]) >> 4 == 15;
@@ -593,7 +593,7 @@ impl Game<'_> {
         }
     }
     /// `catchingFish`'s check below a fish: the block under it is water.
-    fn water_block(&self, fish: [f64; 3]) -> bool {
+    fn water_block(&self, fish: [f64; 3]) -> bool { let (fish,) = match crate::points_generated::P1929.get() { Some(__l) => { let mut __a = (fish,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (fish,) };
         let state = self.world.block(
             fish[0].floor() as i32,
             (fish[1] - 1.0).floor() as i32,
@@ -609,7 +609,7 @@ impl Game<'_> {
         spread: [f64; 3],
         speed: f64,
         count: u32,
-    ) {
+    ) { let (at,spread,speed,count,) = match crate::points_generated::P1928.get() { Some(__l) => { let mut __a = (at,spread,speed,count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,spread,speed,count,) };
         let options = ParticleOptions::simple(kind);
         self.particles
             .send_particles(&options, at, spread, speed, count);
@@ -626,7 +626,7 @@ impl Game<'_> {
         });
     }
     /// `FishingHook.tick`.
-    pub(super) fn tick_fishing(&mut self) {
+    pub(super) fn tick_fishing(&mut self) { if let Some(__l) = crate::points_generated::P1927.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut h) = self.hook.take() else {
             return;
         };
@@ -863,7 +863,7 @@ impl Game<'_> {
     }
     /// The players a hook can catch: everyone but spectators and the dead
     /// (`Projectile.canHitEntity`), the host and the guests in the level.
-    pub(super) fn refresh_hook_targets(&mut self) {
+    pub(super) fn refresh_hook_targets(&mut self) { if let Some(__l) = crate::points_generated::P1926.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -881,7 +881,7 @@ impl Game<'_> {
     }
     /// `FishingHook.pullEntity` on the players the hooks reeled in this tick
     /// pulled: their velocity moves, and a guest's reaches their client.
-    pub(super) fn flush_hook_pulls(&mut self) {
+    pub(super) fn flush_hook_pulls(&mut self) { if let Some(__l) = crate::points_generated::P1925.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pulls = std::mem::take(&mut self.creatures.hook_pulls);
         for (id, delta) in pulls {
             let push = |g: &mut Self| {
@@ -903,7 +903,7 @@ impl Game<'_> {
     }
     /// `FishingRodCast`: the stack in the arm holding the rod
     /// (`FishingHookRenderer.getHoldingArm`) while the hook is out.
-    pub(super) fn cast_rod(&self) -> Option<&ItemStack> {
+    pub(super) fn cast_rod(&self) -> Option<&ItemStack> { if let Some(__l) = crate::points_generated::P1924.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.hook.as_ref()?;
         if self.main_hand_rod() {
             self.held()
@@ -911,12 +911,12 @@ impl Game<'_> {
             self.offhand.as_ref()
         }
     }
-    pub(super) fn main_hand_rod(&self) -> bool {
+    pub(super) fn main_hand_rod(&self) -> bool { if let Some(__l) = crate::points_generated::P1923.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.held()
             .is_some_and(|s| &*s.item == "minecraft:fishing_rod")
     }
     /// The hook's position this frame.
-    fn hook_position(&self, alpha: f64) -> Option<glam::DVec3> {
+    fn hook_position(&self, alpha: f64) -> Option<glam::DVec3> { let (alpha,) = match crate::points_generated::P1922.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let h = self.hook.as_ref()?;
         let lerp = |a: f64, b: f64| a + (b - a) * alpha;
         Some(glam::DVec3::new(
@@ -927,7 +927,7 @@ impl Game<'_> {
     }
     /// FishingHookRenderer: the bobbers (this player's and the others' a
     /// server tracks), camera-facing half-block quads centred on the hooks.
-    pub(super) fn fishing_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
+    pub(super) fn fishing_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) { let (alpha,) = match crate::points_generated::P1921.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let hooks: Vec<glam::DVec3> = self
             .hook_position(alpha)
             .into_iter()
@@ -978,7 +978,7 @@ impl Game<'_> {
     /// FishingHookRenderer: each line, 16 black `lines` segments sagging
     /// from a quarter block above the hook to the rod in its owner's hand,
     /// `width` pixels wide (`Window.getAppropriateLineWidth`).
-    pub(super) fn fishing_line(&self, alpha: f64, size: [u32; 2]) -> Vec<Line> {
+    pub(super) fn fishing_line(&self, alpha: f64, size: [u32; 2]) -> Vec<Line> { let (alpha,size,) = match crate::points_generated::P1920.get() { Some(__l) => { let mut __a = (alpha,size,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,size,) };
         let own = self
             .hook_position(alpha)
             .zip(self.rod_hand_position(alpha, size));
@@ -1001,7 +1001,7 @@ impl Game<'_> {
     }
     /// `FishingHookRenderer.getPlayerHandPos`: on the near plane in first
     /// person, beside the body otherwise.
-    fn rod_hand_position(&self, alpha: f64, size: [u32; 2]) -> Option<glam::DVec3> {
+    fn rod_hand_position(&self, alpha: f64, size: [u32; 2]) -> Option<glam::DVec3> { let (alpha,size,) = match crate::points_generated::P1919.get() { Some(__l) => { let mut __a = (alpha,size,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,size,) };
         let p = self.player.as_ref()?;
         let right_arm = self.main_hand_rod() != self.settings.main_hand_left;
         let invert: f32 = if right_arm { 1.0 } else { -1.0 };
@@ -1065,7 +1065,7 @@ impl Game<'_> {
 }
 impl Game<'_> {
     /// The hooks drawn here, with their owners' ids (0 for this player's own).
-    pub(super) fn hooks_status(&self) -> Vec<serde_json::Value> {
+    pub(super) fn hooks_status(&self) -> Vec<serde_json::Value> { if let Some(__l) = crate::points_generated::P1918.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let at = |p: Vec3| [p.x, p.y, p.z];
         let own = self.hook.iter().map(|h| (h.id, 0, h.position));
         let others = self
@@ -1079,7 +1079,7 @@ impl Game<'_> {
             .collect()
     }
     /// The hook for `horizon-ctl status`.
-    pub(super) fn hook_status(&self) -> Option<serde_json::Value> {
+    pub(super) fn hook_status(&self) -> Option<serde_json::Value> { if let Some(__l) = crate::points_generated::P1917.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let h = self.hook.as_ref()?;
         Some(serde_json::json!({
             "state": format!("{:?}", h.state),
@@ -1224,7 +1224,7 @@ impl Hook {
 
 impl Game<'_> {
     /// The hooks guests track: each player's in the level.
-    pub(super) fn lan_hook_states(&self, out: &mut States) {
+    pub(super) fn lan_hook_states(&self, out: &mut States) { if let Some(__l) = crate::points_generated::P1916.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -1237,7 +1237,7 @@ impl Game<'_> {
 
     /// `handleAddEntity` for a fishing bobber: this player's own becomes its
     /// hook (`Player.fishing`), another player's is drawn on its line to them.
-    pub(super) fn spawn_remote_hook(&mut self, id: u32, at: Vec3, velocity: Vec3, owner: i32) {
+    pub(super) fn spawn_remote_hook(&mut self, id: u32, at: Vec3, velocity: Vec3, owner: i32) { let (id,owner,) = match crate::points_generated::P1915.get() { Some(__l) => { let mut __a = (id,owner,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,owner,) };
         let own = self.remote.as_ref().map(|r| r.entity_id);
         if own == Some(owner) {
             let mut hook = Hook::remote(id, at);
@@ -1259,7 +1259,7 @@ impl Game<'_> {
 
     /// `FishingHook.onSyncedDataUpdated`: this player's hook is biting
     /// (DATA_BITING), which `status` shows as a nibble.
-    pub(super) fn remote_hook_data(&mut self, id: u32, values: &[(u8, i32, Value)]) {
+    pub(super) fn remote_hook_data(&mut self, id: u32, values: &[(u8, i32, Value)]) { let (id,) = match crate::points_generated::P1914.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         // DATA_HOOKED_ENTITY (the hooked id plus one, 0 for none): a hook on a
         // client follows what it hooked (`FishingHook.onSyncedDataUpdated`).
         let hooked = |value: &Value| match value {
@@ -1289,7 +1289,7 @@ impl Game<'_> {
 
     /// `Entity.lerpMotion` for a hook a server tracks: the motion its own tick
     /// moves it on with between the tracker's updates.
-    pub(super) fn remote_hook_motion(&mut self, id: u32, v: Vec3) -> bool {
+    pub(super) fn remote_hook_motion(&mut self, id: u32, v: Vec3) -> bool { let (id,) = match crate::points_generated::P1913.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if self.remote.is_none() {
             return false;
         }
@@ -1307,7 +1307,7 @@ impl Game<'_> {
     /// server's last update, then its own movement between the tracker's
     /// updates (every five ticks), floating in water and riding what it
     /// hooked, as the server's does.
-    pub(super) fn tick_remote_hooks(&mut self) {
+    pub(super) fn tick_remote_hooks(&mut self) { if let Some(__l) = crate::points_generated::P1912.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_none() {
             return;
         }
@@ -1337,7 +1337,7 @@ impl Game<'_> {
     fn client_hook_step(
         &mut self,
         (mut position, mut velocity, state, mut on_ground): (Vec3, Vec3, State, bool),
-    ) -> (Vec3, Vec3, State, bool) {
+    ) -> (Vec3, Vec3, State, bool) { if let Some(__l) = crate::points_generated::P1911.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let b = [
             position.x.floor() as i32,
             position.y.floor() as i32,
@@ -1426,14 +1426,14 @@ impl Game<'_> {
         (position, velocity, state, on_ground)
     }
 
-    pub(super) fn remove_remote_hook(&mut self, id: u32) {
+    pub(super) fn remove_remote_hook(&mut self, id: u32) { let (id,) = match crate::points_generated::P1910.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if self.remote.is_some() && self.hook.as_ref().is_some_and(|h| h.id == id) {
             self.hook = None;
         }
         self.remote_hooks.retain(|h| h.id != id);
     }
 
-    pub(super) fn clear_remote_hooks(&mut self) {
+    pub(super) fn clear_remote_hooks(&mut self) { if let Some(__l) = crate::points_generated::P1909.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             self.hook = None;
         }
@@ -1443,7 +1443,7 @@ impl Game<'_> {
     /// Other players' hooks: the bobber and its line to the owner's hand
     /// (`FishingHookRenderer.getPlayerHandPos` in third person), as
     /// (hook, hand) this frame.
-    fn remote_hook_ends(&self, alpha: f64) -> Vec<(glam::DVec3, glam::DVec3)> {
+    fn remote_hook_ends(&self, alpha: f64) -> Vec<(glam::DVec3, glam::DVec3)> { let (alpha,) = match crate::points_generated::P1908.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let lerp = |a: Vec3, b: Vec3| {
             glam::DVec3::new(
                 a.x + (b.x - a.x) * alpha,

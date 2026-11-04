@@ -121,7 +121,7 @@ mod hardware {
         pub(super) fn pad_output_frame(&mut self) {}
         pub(in crate::game) fn pad_close_output(&mut self) {}
         pub(super) fn pad_vibrate(&mut self, _: Rumble, _: Pulse) {}
-        pub(super) fn pad_devices_status(&self) -> Value {
+        pub(super) fn pad_devices_status(&self) -> Value { if let Some(__l) = crate::points_generated::P4364.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
             json!({ "backend": false, "controllers": [] })
         }
     }
@@ -167,7 +167,7 @@ impl Pads {
 
 impl Game<'_> {
     /// Once per loop iteration: read the pads and act on button changes.
-    pub(super) fn poll_pads(&mut self, event_loop: &dyn EventLoopCtl) {
+    pub(super) fn poll_pads(&mut self, event_loop: &dyn EventLoopCtl) { if let Some(__l) = crate::points_generated::P4363.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let settings = &self.settings.controller;
         if !settings.enabled {
             self.pad_output_off();
@@ -235,7 +235,7 @@ impl Game<'_> {
         self.pad_menu_frame(event_loop);
     }
 
-    fn pad_edge(&mut self, event_loop: &dyn EventLoopCtl, button: Button, down: bool) {
+    fn pad_edge(&mut self, event_loop: &dyn EventLoopCtl, button: Button, down: bool) { let (down,) = match crate::points_generated::P4362.get() { Some(__l) => { let mut __a = (down,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (down,) };
         let ticking = self.title.is_none() && self.screen == Screen::Playing && !self.pause;
         if down {
             // Pressed again before its held-back release went out.
@@ -251,7 +251,7 @@ impl Game<'_> {
         self.pad_button_logged(event_loop, button, down);
     }
 
-    fn pad_button_logged(&mut self, event_loop: &dyn EventLoopCtl, button: Button, down: bool) {
+    fn pad_button_logged(&mut self, event_loop: &dyn EventLoopCtl, button: Button, down: bool) { let (down,) = match crate::points_generated::P4361.get() { Some(__l) => { let mut __a = (down,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (down,) };
         if let Err(e) = self.pad_button(event_loop, button, down) {
             log::warn!("Horizon: controller {}: {e}", button.name());
         }
@@ -259,7 +259,7 @@ impl Game<'_> {
 
     /// Input from the pad counts while the window has focus, or always for
     /// the virtual pad (a script can't focus the window).
-    fn pad_focused(&self) -> bool {
+    fn pad_focused(&self) -> bool { if let Some(__l) = crate::points_generated::P4360.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.focused || self.pad.virtual_input
     }
 
@@ -268,7 +268,7 @@ impl Game<'_> {
         event_loop: &dyn EventLoopCtl,
         button: Button,
         down: bool,
-    ) -> Result<()> {
+    ) -> Result<()> { let (down,) = match crate::points_generated::P4359.get() { Some(__l) => { let mut __a = (down,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (down,) };
         if down && !self.pad_focused() {
             return Ok(());
         }
@@ -295,7 +295,7 @@ impl Game<'_> {
 
     /// A bound action: a vanilla mapping acts as its default key or mouse
     /// button, like a rebound keyboard key.
-    fn pad_action(&mut self, action: &str, down: bool) -> Result<()> {
+    fn pad_action(&mut self, action: &str, down: bool) -> Result<()> { let (down,) = match crate::points_generated::P4358.get() { Some(__l) => { let mut __a = (down,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (down,) };
         match action {
             gamepad::HOTBAR_PREVIOUS | gamepad::HOTBAR_NEXT => {
                 if down && self.screen == Screen::Playing {
@@ -335,7 +335,7 @@ impl Game<'_> {
     }
 
     /// B and Start: what Escape does where the pad is.
-    pub(super) fn pad_back(&mut self) -> Result<()> {
+    pub(super) fn pad_back(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P4357.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The options open over the title screen too: they come first, as
         // for the keyboard's Escape.
         if self.screen == Screen::Options {
@@ -358,7 +358,7 @@ impl Game<'_> {
     }
 
     /// The left stick as the move vector, while playing.
-    pub(super) fn pad_move(&self) -> Option<[f32; 2]> {
+    pub(super) fn pad_move(&self) -> Option<[f32; 2]> { if let Some(__l) = crate::points_generated::P4356.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let settings = &self.settings.controller;
         if !settings.enabled || self.pad_in_menu() || !self.pad_focused() {
             return None;
@@ -367,7 +367,7 @@ impl Game<'_> {
     }
 
     /// The right stick turns the view, once per frame (`Entity.turn`).
-    pub(super) fn pad_look(&mut self, seconds: f32) {
+    pub(super) fn pad_look(&mut self, seconds: f32) { let (seconds,) = match crate::points_generated::P4355.get() { Some(__l) => { let mut __a = (seconds,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (seconds,) };
         let settings = &self.settings.controller;
         if !settings.enabled || self.pad_in_menu() || self.player.is_none() || !self.pad_focused() {
             return;
@@ -387,7 +387,7 @@ impl Game<'_> {
 
     /// Vibrate the active pad, when vibration is on and the pad is the one
     /// playing (a pad lying idle while the mouse plays stays still).
-    pub(super) fn pad_rumble(&mut self, rumble: Rumble) {
+    pub(super) fn pad_rumble(&mut self, rumble: Rumble) { if let Some(__l) = crate::points_generated::P4354.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let settings = &self.settings.controller;
         if !settings.enabled || !settings.vibration || !self.pad.in_use {
             return;
@@ -400,7 +400,7 @@ impl Game<'_> {
     }
 
     /// `horizon-ctl pad ...`.
-    pub(super) fn pad_command(&mut self, words: &[&str]) -> Result<Value> {
+    pub(super) fn pad_command(&mut self, words: &[&str]) -> Result<Value> { if let Some(__l) = crate::points_generated::P4353.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let arg = |i: usize| -> Result<&str> {
             words
                 .get(i)

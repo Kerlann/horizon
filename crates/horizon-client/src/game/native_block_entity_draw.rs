@@ -276,7 +276,7 @@ impl Game<'_> {
     /// the template) leave out: where they are and their block's state, for
     /// `mod_block_entity_geometry`. From the per-chunk list of
     /// `BlockEntities::mods_near`, not a scan of every block entity.
-    pub(super) fn untemplated_mod_block_entities(&self, camera: DVec3) -> Vec<([i32; 3], u32)> {
+    pub(super) fn untemplated_mod_block_entities(&self, camera: DVec3) -> Vec<([i32; 3], u32)> { if let Some(__l) = crate::points_generated::P2891.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world
             .block_entities
             .mods_near(camera.x, camera.z, VIEW_DISTANCE)
@@ -382,15 +382,15 @@ impl Game<'_> {
 #[allow(dead_code)]
 impl Game<'_> {
     /// `PoseStack.pushPose`: `pop` comes back to the pose as it is now.
-    pub(super) fn native_draw_push(&self, draw: &mut BlockEntityDraw) {
+    pub(super) fn native_draw_push(&self, draw: &mut BlockEntityDraw) { if let Some(__l) = crate::points_generated::P2890.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         draw.push();
     }
     /// `PoseStack.popPose`; the block's own pose is never popped.
-    pub(super) fn native_draw_pop(&self, draw: &mut BlockEntityDraw) {
+    pub(super) fn native_draw_pop(&self, draw: &mut BlockEntityDraw) { if let Some(__l) = crate::points_generated::P2889.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         draw.pop();
     }
     /// Moves what is drawn next by `by`, in blocks.
-    pub(super) fn native_draw_translate(&self, draw: &mut BlockEntityDraw, by: [f32; 3]) {
+    pub(super) fn native_draw_translate(&self, draw: &mut BlockEntityDraw, by: [f32; 3]) { let (by,) = match crate::points_generated::P2888.get() { Some(__l) => { let mut __a = (by,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (by,) };
         draw.translate(by);
     }
     /// Turns what is drawn next by `degrees` about `axis` (counterclockwise
@@ -402,11 +402,11 @@ impl Game<'_> {
         axis: [f32; 3],
         degrees: f32,
         pivot: [f32; 3],
-    ) {
+    ) { let (axis,degrees,pivot,) = match crate::points_generated::P2887.get() { Some(__l) => { let mut __a = (axis,degrees,pivot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (axis,degrees,pivot,) };
         draw.rotate_about(axis, degrees, pivot);
     }
     /// Scales what is drawn next by `by` about the pose's origin.
-    pub(super) fn native_draw_scale(&self, draw: &mut BlockEntityDraw, by: [f32; 3]) {
+    pub(super) fn native_draw_scale(&self, draw: &mut BlockEntityDraw, by: [f32; 3]) { let (by,) = match crate::points_generated::P2886.get() { Some(__l) => { let mut __a = (by,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (by,) };
         draw.scale(by);
     }
     /// Keeps what this call drew: the block is drawn the same again, with
@@ -419,25 +419,25 @@ impl Game<'_> {
     /// shaft. Kept geometry stands still: an enchanted item's glint, and an
     /// item drawn with `native_draw_item` whose model reads the time (a clock,
     /// a compass), stop where they were.
-    pub(super) fn native_draw_keep(&self, draw: &mut BlockEntityDraw) {
+    pub(super) fn native_draw_keep(&self, draw: &mut BlockEntityDraw) { if let Some(__l) = crate::points_generated::P2885.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         draw.keep();
     }
     /// The frame's partial tick, 0 to 1 (`BlockEntityRenderState`).
-    pub(super) fn native_draw_partial(&self, draw: &BlockEntityDraw) -> f32 {
+    pub(super) fn native_draw_partial(&self, draw: &BlockEntityDraw) -> f32 { if let Some(__l) = crate::points_generated::P2884.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         draw.partial
     }
     /// The level's game time, for animations.
-    pub(super) fn native_draw_game_time(&self, draw: &BlockEntityDraw) -> i64 {
+    pub(super) fn native_draw_game_time(&self, draw: &BlockEntityDraw) -> i64 { if let Some(__l) = crate::points_generated::P2883.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         draw.game_time
     }
     /// The light the helpers draw with: the block's own
     /// (`LevelRenderer.getLightCoords`), 16 times sky light in bits 0..8 and
     /// 16 times block light in bits 8..16.
-    pub(super) fn native_draw_light(&self, draw: &BlockEntityDraw) -> u32 {
+    pub(super) fn native_draw_light(&self, draw: &BlockEntityDraw) -> u32 { if let Some(__l) = crate::points_generated::P2882.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         draw.light
     }
     /// Lights what is drawn next with `light` (as `native_draw_light` reads it).
-    pub(super) fn native_draw_set_light(&self, draw: &mut BlockEntityDraw, light: u32) {
+    pub(super) fn native_draw_set_light(&self, draw: &mut BlockEntityDraw, light: u32) { let (light,) = match crate::points_generated::P2881.get() { Some(__l) => { let mut __a = (light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (light,) };
         draw.light = light;
     }
     /// Draws a quad with `corners` in blocks under `draw`'s pose, in a model
@@ -453,7 +453,7 @@ impl Game<'_> {
         corners: [[f32; 3]; 4],
         uv: [f32; 4],
         tint: u32,
-    ) -> bool {
+    ) -> bool { let (uv,tint,) = match crate::points_generated::P2880.get() { Some(__l) => { let mut __a = (uv,tint,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (uv,tint,) };
         let Some(rect) = self.gui.atlas.sprites.get(sprite).copied() else {
             return false;
         };
@@ -480,7 +480,7 @@ impl Game<'_> {
         to: [f32; 3],
         faces: [Option<CubeFace<'_>>; 6],
         tint: u32,
-    ) -> bool {
+    ) -> bool { let (from,to,tint,) = match crate::points_generated::P2879.get() { Some(__l) => { let mut __a = (from,to,tint,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from,to,tint,) };
         let mut all = true;
         for (direction, face) in Direction::ALL.into_iter().zip(faces) {
             let Some(face) = face else { continue };
@@ -511,7 +511,7 @@ impl Game<'_> {
         draw: &mut BlockEntityDraw,
         block: &str,
         properties: &[(&str, &str)],
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2878.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let registry = &self.pack.assets.registry;
         let Some(mut state) = registry
             .default_state(block)
@@ -546,7 +546,7 @@ impl Game<'_> {
         draw: &mut BlockEntityDraw,
         model: &str,
         tint: u32,
-    ) -> bool {
+    ) -> bool { let (tint,) = match crate::points_generated::P2877.get() { Some(__l) => { let mut __a = (tint,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (tint,) };
         let Some(baked) = self.pack.render.model_catalog.standalone(model) else {
             return false;
         };
@@ -577,7 +577,7 @@ impl Game<'_> {
         display: DisplayContext,
         owner_yaw: Option<f32>,
         seed: i32,
-    ) -> bool {
+    ) -> bool { let (seed,) = match crate::points_generated::P2876.get() { Some(__l) => { let mut __a = (seed,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (seed,) };
         // ShelfBlockEntity.position(): Vec3.atCenterOf(getBlockPos()).
         let owner = owner_yaw
             .map(|yaw| super::item_draw::owner_at(draw.block.map(|c| f64::from(c) + 0.5), yaw, ""));
@@ -597,7 +597,7 @@ impl Game<'_> {
         &self,
         state: BlockStateId,
         key: &str,
-    ) -> Option<&str> {
+    ) -> Option<&str> { if let Some(__l) = crate::points_generated::P2875.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pack
             .assets
             .registry
@@ -608,7 +608,7 @@ impl Game<'_> {
     }
     /// The block `state` is a state of: its name, as `GameLevel`'s helper of
     /// the same name gives it for the hooks that get a state in the world.
-    pub(super) fn native_state_block(&self, state: BlockStateId) -> Option<&str> {
+    pub(super) fn native_state_block(&self, state: BlockStateId) -> Option<&str> { if let Some(__l) = crate::points_generated::P2874.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pack.assets.registry.state(state).map(|s| &*s.name)
     }
 }

@@ -207,10 +207,10 @@ fn use_duration(components: &Components) -> i32 {
 }
 
 impl Game<'_> {
-    pub(super) fn item_env(&self) -> Env<'_, '_> {
+    pub(super) fn item_env(&self) -> Env<'_, '_> { if let Some(__l) = crate::points_generated::P2137.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Env { game: self }
     }
-    pub(super) fn item_host(&self) -> Host<'_> {
+    pub(super) fn item_host(&self) -> Host<'_> { if let Some(__l) = crate::points_generated::P2136.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Host {
             banners: &self.stations().banners,
             sprites: &self.gui.atlas.sprites,
@@ -220,7 +220,7 @@ impl Game<'_> {
     }
     /// The client level as item models read it: worked out once a frame (a
     /// screen of items read the same level, its sky sampled once).
-    pub(super) fn item_level(&self) -> LevelState {
+    pub(super) fn item_level(&self) -> LevelState { if let Some(__l) = crate::points_generated::P2135.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let dimension = match self.dim {
             Dim::Overworld => "minecraft:overworld",
             Dim::Nether => "minecraft:the_nether",
@@ -242,7 +242,7 @@ impl Game<'_> {
         *cached = Some((key, level.clone()));
         level
     }
-    fn level_state_now(&self, dimension: &'static str) -> LevelState {
+    fn level_state_now(&self, dimension: &'static str) -> LevelState { if let Some(__l) = crate::points_generated::P2134.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let sky = self
             .dim_environment()
             .sample(self.world.day_time, None, None);
@@ -260,7 +260,7 @@ impl Game<'_> {
     }
     /// The local player as `ItemOwner`; `stack` is the stack drawn, to tell
     /// whether it is the one in use.
-    pub(super) fn player_owner(&self, stack: Option<&ItemStack>) -> OwnerState {
+    pub(super) fn player_owner(&self, stack: Option<&ItemStack>) -> OwnerState { if let Some(__l) = crate::points_generated::P2133.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let position = self
             .player
             .as_ref()
@@ -302,11 +302,11 @@ impl Game<'_> {
         display: DisplayContext,
         owner: Option<&OwnerState>,
         seed: i32,
-    ) -> ItemRenderState {
+    ) -> ItemRenderState { let (seed,) = match crate::points_generated::P2132.get() { Some(__l) => { let mut __a = (seed,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (seed,) };
         self.resolve_item_in_hand(stack, display, owner, seed, CitHand::Main)
     }
     /// `ItemStack.hasFoil`, with the item's default glint.
-    fn has_foil(&self, stack: &ItemStack) -> bool {
+    fn has_foil(&self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P2131.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let item_glint = self
             .res
             .items()
@@ -325,7 +325,7 @@ impl Game<'_> {
         owner: Option<&OwnerState>,
         seed: i32,
         hand: CitHand,
-    ) -> ItemRenderState {
+    ) -> ItemRenderState { let (seed,) = match crate::points_generated::P2130.get() { Some(__l) => { let mut __a = (seed,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (seed,) };
         let level = self.item_level();
         let renderer = &self.pack.item_renderer;
         let (rule, glint) = renderer.cit.as_ref().map_or((None, None), |cit| {
@@ -375,7 +375,7 @@ impl Game<'_> {
         state
     }
     /// `GuiGraphics.renderItem(player, level, stack, x, y, 0)`.
-    pub(super) fn draw_item_model(&self, batch: &mut HudBatch, stack: &ItemStack, x: f32, y: f32) {
+    pub(super) fn draw_item_model(&self, batch: &mut HudBatch, stack: &ItemStack, x: f32, y: f32) { let (x,y,) = match crate::points_generated::P2129.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,) };
         let owner = self.player_owner(Some(stack));
         let state = self.resolve_item(stack, DisplayContext::Gui, Some(&owner), 0);
         item_render::gui::draw(
@@ -393,7 +393,7 @@ impl Game<'_> {
     }
     /// The glint clock, options and sprite for this frame: read once per
     /// frame, not per item (`GameRenderer.extractOptions`).
-    pub(super) fn capture_glint_frame(&self) -> item_render::GlintFrame {
+    pub(super) fn capture_glint_frame(&self) -> item_render::GlintFrame { if let Some(__l) = crate::points_generated::P2128.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         item_render::GlintFrame {
             millis: self.started.elapsed().as_secs_f32() * 1000.0,
             speed: self.settings.file.double("glintSpeed") as f32,
@@ -406,7 +406,7 @@ impl Game<'_> {
         }
     }
     /// The `ENTITY_GLINT_TEXTURING` inputs of this frame.
-    pub(super) fn glint(&self) -> Option<item_render::Glint> {
+    pub(super) fn glint(&self) -> Option<item_render::Glint> { if let Some(__l) = crate::points_generated::P2127.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.glint_frame.glint(0.5)
     }
     /// Submit a resolved item under `pose` (camera-relative) at `light`
@@ -417,7 +417,7 @@ impl Game<'_> {
         pose: glam::Mat4,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (light,) = match crate::points_generated::P2126.get() { Some(__l) => { let mut __a = (light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (light,) };
         let lights = diffuse_lights(self.dim == Dim::Nether);
         self.submit_item_lit(state, pose, light, lights, out);
     }
@@ -430,7 +430,7 @@ impl Game<'_> {
         light: u32,
         lights: (glam::Vec3, glam::Vec3),
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (light,) = match crate::points_generated::P2125.get() { Some(__l) => { let mut __a = (light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (light,) };
         let mut sink = WorldSink {
             out,
             light: item_hdr_light(state, light),
@@ -453,7 +453,7 @@ impl Game<'_> {
         pose: glam::Mat4,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (light,) = match crate::points_generated::P2124.get() { Some(__l) => { let mut __a = (light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (light,) };
         let mut sink = WorldSink {
             out,
             light: item_hdr_light(state, light),
@@ -478,7 +478,7 @@ impl Game<'_> {
         poses: &[glam::Mat4],
         light: u32,
         lights: (glam::Vec3, glam::Vec3),
-    ) -> Option<((usize, usize, u32), Option<(glam::Vec3, glam::Vec3)>)> {
+    ) -> Option<((usize, usize, u32), Option<(glam::Vec3, glam::Vec3)>)> { let (light,) = match crate::points_generated::P2123.get() { Some(__l) => { let mut __a = (light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (light,) };
         let mut models = self.skin_models.borrow_mut();
         let mut frame = self.skin_frame.borrow_mut();
         let mark = frame.mark();
@@ -501,7 +501,7 @@ impl Game<'_> {
         light: u32,
         lights: (glam::Vec3, glam::Vec3),
         skin: &mut horizon_client::mobs::skin::Skin,
-    ) -> bool {
+    ) -> bool { let (light,) = match crate::points_generated::P2122.get() { Some(__l) => { let mut __a = (light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (light,) };
         let sink = (
             item_hdr_light(state, light),
             (state.hdr_light == 0).then_some(lights),
@@ -519,7 +519,7 @@ impl Game<'_> {
         pose: glam::Mat4,
         light: u32,
         skinned: &mut super::creatures::Skinned,
-    ) -> bool {
+    ) -> bool { let (light,) = match crate::points_generated::P2121.get() { Some(__l) => { let mut __a = (light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (light,) };
         let lights = diffuse_lights(self.dim == Dim::Nether);
         let Some((mark, bounds)) = self.submit_item_skinned(state, &[pose], light, lights) else {
             return false;
@@ -542,7 +542,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         alpha: f64,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P2120.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let live = self.dropped.iter().map(|item| {
             let (p, q) = (item.previous, item.position);
             let at = [

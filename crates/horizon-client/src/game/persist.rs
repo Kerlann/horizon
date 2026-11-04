@@ -185,7 +185,7 @@ fn chunk_of(p: Vec3) -> (i32, i32) {
 
 impl Game<'_> {
     /// Saved ticks and the save time for a chunk about to be written.
-    pub(super) fn attach_save_data(&self, chunk: &mut Chunk) {
+    pub(super) fn attach_save_data(&self, chunk: &mut Chunk) { if let Some(__l) = crate::points_generated::P4526.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let pos = ChunkPos::new(chunk.x, chunk.z);
         let time = self.world.game_time;
         let mut extras: ChunkExtras = chunk.saved.as_deref().cloned().unwrap_or_default();
@@ -237,7 +237,7 @@ impl Game<'_> {
     /// block and fluid ticks it was saved with (`LevelChunk.registerTickContainerInLevel`
     /// at FULL). They are unpacked when the chunk starts ticking
     /// (`start_ticking_chunks`).
-    pub(super) fn register_chunk_ticks(&mut self, key: (i32, i32)) {
+    pub(super) fn register_chunk_ticks(&mut self, key: (i32, i32)) { if let Some(__l) = crate::points_generated::P4525.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = ChunkPos::new(key.0, key.1);
         let saved = self.world.chunks.get(&key).and_then(|c| c.saved.clone());
         // ChunkAccess.inhabitedTime as saved.
@@ -297,7 +297,7 @@ impl Game<'_> {
         }
     }
     /// `PistonMovingBlockEntity.saveAdditional`.
-    fn moving_piston_to_nbt(&self, pos: BlockPos, piston: &MovingPiston) -> Tag {
+    fn moving_piston_to_nbt(&self, pos: BlockPos, piston: &MovingPiston) -> Tag { if let Some(__l) = crate::points_generated::P4524.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let flag = |b: bool| Tag::Byte(i8::from(b));
         Tag::compound([
             ("id", Tag::String("minecraft:piston".into())),
@@ -314,7 +314,7 @@ impl Game<'_> {
     }
     /// `PistonMovingBlockEntity.loadAdditional`, for a `minecraft:piston`
     /// entity whose block is still a moving piston.
-    fn moving_piston_from_nbt(&self, tag: &Tag) -> Option<(BlockPos, MovingPiston)> {
+    fn moving_piston_from_nbt(&self, tag: &Tag) -> Option<(BlockPos, MovingPiston)> { if let Some(__l) = crate::points_generated::P4523.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::save::{float, number, text};
         if text(tag.get("id")).as_deref() != Some("minecraft:piston") {
             return None;
@@ -350,7 +350,7 @@ impl Game<'_> {
         ))
     }
     /// Spawn the entities of chunks that finished loading.
-    pub(super) fn spawn_loaded_entities(&mut self) {
+    pub(super) fn spawn_loaded_entities(&mut self) { if let Some(__l) = crate::points_generated::P4522.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let loaded = std::mem::take(&mut self.world.loaded_entities);
         let player_uuid = self.level.player_uuid;
         for (key, tags) in loaded {
@@ -428,7 +428,7 @@ impl Game<'_> {
         kind: &str,
         uuid: Option<[i32; 4]>,
         tag: Tag,
-    ) -> std::result::Result<(), Tag> {
+    ) -> std::result::Result<(), Tag> { if let Some(__l) = crate::points_generated::P4521.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match kind {
             "minecraft:evoker_fangs" => {
                 if let Some(at) = entity_nbt::position(&tag) {
@@ -457,7 +457,7 @@ impl Game<'_> {
         Ok(())
     }
     /// A saved dropped item.
-    pub(super) fn load_item(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+    pub(super) fn load_item(&mut self, tag: Tag, uuid: Option<[i32; 4]>) { if let Some(__l) = crate::points_generated::P4520.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.next_entity += 1;
         let bob = self.world.random.next_float() * std::f32::consts::PI * 2.0;
         if let Some(e) = entity_nbt::item_entity_from_nbt(&tag, self.next_entity, bob) {
@@ -467,7 +467,7 @@ impl Game<'_> {
     }
 
     /// A saved experience orb (or the orbs it stands for).
-    pub(super) fn load_orb(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+    pub(super) fn load_orb(&mut self, tag: Tag, uuid: Option<[i32; 4]>) { if let Some(__l) = crate::points_generated::P4519.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (i, mut orb) in entity_nbt::orbs_from_nbt(&tag).into_iter().enumerate() {
             self.next_entity += 1;
             orb.id = self.next_entity;
@@ -489,7 +489,7 @@ impl Game<'_> {
         tag: Tag,
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4518.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some((mut p, in_block)) =
             entity_nbt::arrow_from_nbt(&tag, player_uuid, super::dispenser::tipped_effect)
         {
@@ -509,7 +509,7 @@ impl Game<'_> {
     }
 
     /// A saved llama spit or shulker bullet.
-    pub(super) fn load_spit_or_bullet(&mut self, tag: Tag, player_uuid: Option<[i32; 4]>) {
+    pub(super) fn load_spit_or_bullet(&mut self, tag: Tag, player_uuid: Option<[i32; 4]>) { if let Some(__l) = crate::points_generated::P4517.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(mut p) = entity_nbt::spit_or_bullet_from_nbt(&tag, player_uuid) {
             self.claim_owner(&mut p);
             self.next_entity += 1;
@@ -525,7 +525,7 @@ impl Game<'_> {
         tag: Tag,
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4516.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(mut p) = entity_nbt::fireball_from_nbt(&tag, player_uuid) {
             self.claim_owner(&mut p);
             // A projectile that came through a portal keeps its cooldown.
@@ -544,7 +544,7 @@ impl Game<'_> {
         tag: Tag,
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4515.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(mut p) = entity_nbt::throwable_from_nbt(&tag, player_uuid) {
             self.claim_owner(&mut p);
             // A projectile that came through a portal keeps its cooldown.
@@ -558,7 +558,7 @@ impl Game<'_> {
     }
 
     /// A saved falling block.
-    pub(super) fn load_falling(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+    pub(super) fn load_falling(&mut self, tag: Tag, uuid: Option<[i32; 4]>) { if let Some(__l) = crate::points_generated::P4514.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some((state, position, velocity, age, fall_distance)) =
             entity_nbt::falling_block_from_nbt(&tag)
             && let Some(state) = self.state_from_nbt(&state)
@@ -597,7 +597,7 @@ impl Game<'_> {
     }
 
     /// A saved thrown trident.
-    pub(super) fn load_trident(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+    pub(super) fn load_trident(&mut self, tag: Tag, uuid: Option<[i32; 4]>) { if let Some(__l) = crate::points_generated::P4513.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(n) = entity_nbt::trident_from_nbt(&tag) {
             let mut t = super::trident::ThrownTrident::from_nbt(n);
             t.id = self.take_entity_id();
@@ -614,7 +614,7 @@ impl Game<'_> {
         tag: Tag,
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4512.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(r) = entity_nbt::firework_rocket_from_nbt(&tag, player_uuid) {
             let id = self.take_entity_id();
             let mut rocket = super::fireworks::Rocket::from_nbt(r);
@@ -629,7 +629,7 @@ impl Game<'_> {
     /// A saved primed TNT.
     // PrimedTnt.readAdditionalSaveData: its fuse (80 when absent) and motion.
     // Its Passengers ride it (EntityType.loadEntityRecursive forces them on).
-    pub(super) fn load_tnt(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+    pub(super) fn load_tnt(&mut self, tag: Tag, uuid: Option<[i32; 4]>) { if let Some(__l) = crate::points_generated::P4511.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut tag = tag;
         let riders = self.take_mob_passengers(&mut tag);
         if let Some(position) = entity_nbt::position(&tag) {
@@ -663,7 +663,7 @@ impl Game<'_> {
     }
 
     /// A saved boat.
-    pub(super) fn load_boat(&mut self, tag: Tag, uuid: Option<[i32; 4]>, k: &str) {
+    pub(super) fn load_boat(&mut self, tag: Tag, uuid: Option<[i32; 4]>, k: &str) { if let Some(__l) = crate::points_generated::P4510.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some((position, velocity, yaw)) = entity_nbt::boat_from_nbt(&tag) {
             let mut tag = tag;
             let riders = self.take_mob_passengers(&mut tag);
@@ -689,7 +689,7 @@ impl Game<'_> {
     }
 
     /// A saved minecart.
-    pub(super) fn load_cart(&mut self, tag: Tag, uuid: Option<[i32; 4]>, k: &str) {
+    pub(super) fn load_cart(&mut self, tag: Tag, uuid: Option<[i32; 4]>, k: &str) { if let Some(__l) = crate::points_generated::P4509.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let kind = super::minecarts::CartKind::from_id(k).unwrap();
         let mut tag = tag;
         let riders = self.take_mob_passengers(&mut tag);
@@ -709,7 +709,7 @@ impl Game<'_> {
     }
 
     /// A saved armor stand.
-    pub(super) fn load_armor_stand(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+    pub(super) fn load_armor_stand(&mut self, tag: Tag, uuid: Option<[i32; 4]>) { if let Some(__l) = crate::points_generated::P4508.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.next_entity += 1;
         if let Some(mut a) = entity_nbt::armor_stand_from_nbt(&tag, self.next_entity) {
             a.live
@@ -720,7 +720,7 @@ impl Game<'_> {
     }
 
     /// The saved ender dragon.
-    pub(super) fn load_dragon(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+    pub(super) fn load_dragon(&mut self, tag: Tag, uuid: Option<[i32; 4]>) { if let Some(__l) = crate::points_generated::P4507.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let seed = self.world.random.next_long();
         if self.dragon.is_none()
             && let Some(mut d) = super::dragon::Dragon::from_nbt(&tag, seed)
@@ -739,7 +739,7 @@ impl Game<'_> {
     }
 
     /// A saved end crystal.
-    pub(super) fn load_crystal(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+    pub(super) fn load_crystal(&mut self, tag: Tag, uuid: Option<[i32; 4]>) { if let Some(__l) = crate::points_generated::P4506.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let time = self.world.random.next_int_bound(100_000).unwrap_or(0);
         if let Some(mut c) = super::dragon::Crystal::from_nbt(&tag, time) {
             // EndCrystal's constructor takes an id from the
@@ -753,7 +753,7 @@ impl Game<'_> {
     }
 
     /// A saved item frame.
-    pub(super) fn load_item_frame(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+    pub(super) fn load_item_frame(&mut self, tag: Tag, uuid: Option<[i32; 4]>) { if let Some(__l) = crate::points_generated::P4505.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.next_entity += 1;
         if let Some(f) = entity_nbt::item_frame_from_nbt(&tag, self.next_entity) {
             self.remember(f.id, uuid, tag);
@@ -762,7 +762,7 @@ impl Game<'_> {
     }
 
     /// A saved cushion.
-    pub(super) fn load_cushion(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+    pub(super) fn load_cushion(&mut self, tag: Tag, uuid: Option<[i32; 4]>) { if let Some(__l) = crate::points_generated::P4504.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.next_entity += 1;
         if let Some(c) = entity_nbt::cushion_from_nbt(&tag, self.next_entity) {
             self.remember(c.id, uuid, tag);
@@ -771,7 +771,7 @@ impl Game<'_> {
     }
 
     /// A saved painting, or its compound when its variant is unknown.
-    pub(super) fn load_painting(&mut self, tag: Tag, uuid: Option<[i32; 4]>, key: ChunkKey) {
+    pub(super) fn load_painting(&mut self, tag: Tag, uuid: Option<[i32; 4]>, key: ChunkKey) { if let Some(__l) = crate::points_generated::P4503.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some((pos, facing, variant)) = entity_nbt::painting_from_nbt(&tag)
             && let Some(v) = self.painting_variants.get(&variant).cloned()
         {
@@ -793,7 +793,7 @@ impl Game<'_> {
         }
     }
     /// A saved mob and, under `Passengers`, the mobs riding it.
-    pub(super) fn load_mob(&mut self, tag: Tag, mount: Option<u32>) -> Option<u32> {
+    pub(super) fn load_mob(&mut self, tag: Tag, mount: Option<u32>) -> Option<u32> { if let Some(__l) = crate::points_generated::P4502.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let uuid = entity_nbt::uuid(&tag);
         if let Some(id) = uuid.and_then(|u| self.restored_vehicle(u)) {
             return Some(id);
@@ -867,7 +867,7 @@ impl Game<'_> {
     }
     /// The mobs under an entity's `Passengers`, taken out of it; the
     /// passengers Horizon doesn't simulate stay.
-    fn take_mob_passengers(&self, tag: &mut Tag) -> Vec<Tag> {
+    fn take_mob_passengers(&self, tag: &mut Tag) -> Vec<Tag> { if let Some(__l) = crate::points_generated::P4501.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut riders = Vec::new();
         if let Tag::Compound(c) = tag
             && let Some(Tag::List(list)) = c.remove(&"Passengers".into())
@@ -890,7 +890,7 @@ impl Game<'_> {
     }
     /// The mobs riding entity `id` under `tag`'s `Passengers`, after the
     /// passengers it kept from loading.
-    pub(super) fn put_mob_passengers(&mut self, tag: &mut Tag, id: u32) {
+    pub(super) fn put_mob_passengers(&mut self, tag: &mut Tag, id: u32) { let (id,) = match crate::points_generated::P4500.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let riders: Vec<usize> = (0..self.mobs.len())
             .filter(|&j| self.mobs[j].extra.mount == Some(id) && self.mobs[j].alive())
             .collect();
@@ -915,7 +915,7 @@ impl Game<'_> {
     }
 
     /// An entity of a type Horizon does not simulate, kept as its compound.
-    fn load_other(&mut self, mut tag: Tag, kind: &str) -> Option<u32> {
+    fn load_other(&mut self, mut tag: Tag, kind: &str) -> Option<u32> { if let Some(__l) = crate::points_generated::P4499.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         strip_finalize(&mut tag);
         let id = self.next_entity + 1;
         let other = Self::other_from_nbt(&tag, id, kind)?;
@@ -927,7 +927,7 @@ impl Game<'_> {
     }
     /// The compound of an entity Horizon does not simulate, with its current
     /// position, rotation and UUID.
-    pub(super) fn other_to_nbt(&self, o: &super::commands::OtherEntity, uuid: [i32; 4]) -> Tag {
+    pub(super) fn other_to_nbt(&self, o: &super::commands::OtherEntity, uuid: [i32; 4]) -> Tag { let (uuid,) = match crate::points_generated::P4498.get() { Some(__l) => { let mut __a = (uuid,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (uuid,) };
         let mut tag = self
             .persist
             .raw
@@ -963,7 +963,7 @@ impl Game<'_> {
         tag
     }
     /// The root of a stack of riders (`Entity.getRootVehicle`).
-    fn mob_root(&self, mut i: usize) -> usize {
+    fn mob_root(&self, mut i: usize) -> usize { let (mut i,) = match crate::points_generated::P4497.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         for _ in 0..8 {
             let Some(v) = self.mobs[i].extra.mount else {
                 break;
@@ -977,7 +977,7 @@ impl Game<'_> {
     }
     /// `Entity.getVehicle` of entity `id`: the mob, boat or minecart a mob
     /// rides (only a mob rides another entity here).
-    fn vehicle_of(&self, id: u32) -> Option<u32> {
+    fn vehicle_of(&self, id: u32) -> Option<u32> { let (id,) = match crate::points_generated::P4496.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let v = self.mobs.iter().find(|m| m.id == id)?.extra.mount?;
         let there = self.mobs.iter().any(|m| m.id == v)
             || self.boats.iter().any(|b| b.id == v)
@@ -985,7 +985,7 @@ impl Game<'_> {
         there.then_some(v)
     }
     /// The root vehicle `root` with its passengers (`Entity.save`).
-    fn vehicle_tree_nbt(&mut self, root: u32) -> Option<Tag> {
+    fn vehicle_tree_nbt(&mut self, root: u32) -> Option<Tag> { let (root,) = match crate::points_generated::P4495.get() { Some(__l) => { let mut __a = (root,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (root,) };
         if let Some(i) = self.mobs.iter().position(|m| m.id == root) {
             return Some(self.mob_tree_nbt(i));
         }
@@ -1022,7 +1022,7 @@ impl Game<'_> {
         &mut self,
         vehicle: Option<u32>,
         others: &[u32],
-    ) -> Option<(Tag, u32, [i32; 4])> {
+    ) -> Option<(Tag, u32, [i32; 4])> { if let Some(__l) = crate::points_generated::P4494.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let vehicle = vehicle?;
         let root = parent_vehicle_root(vehicle, others, |id| self.vehicle_of(id))?;
         let mut entity = self.vehicle_tree_nbt(root)?;
@@ -1032,7 +1032,7 @@ impl Game<'_> {
     }
     /// `PlayerList.remove`: the root vehicle and its passengers leave the
     /// world with the player (`setRemoved(UNLOADED_WITH_PLAYER)`).
-    pub(super) fn remove_vehicle_tree(&mut self, root: u32) {
+    pub(super) fn remove_vehicle_tree(&mut self, root: u32) { let (root,) = match crate::points_generated::P4493.get() { Some(__l) => { let mut __a = (root,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (root,) };
         // The mobs `put_mob_passengers` saves under each vehicle of the tree.
         let mounts: Vec<(u32, Option<u32>)> = self
             .mobs
@@ -1052,7 +1052,7 @@ impl Game<'_> {
         }
     }
     /// The vehicle with this UUID, among the ones in the world.
-    pub(super) fn vehicle_by_uuid(&self, uuid: [i32; 4]) -> Option<u32> {
+    pub(super) fn vehicle_by_uuid(&self, uuid: [i32; 4]) -> Option<u32> { let (uuid,) = match crate::points_generated::P4492.get() { Some(__l) => { let mut __a = (uuid,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (uuid,) };
         let id = *self
             .persist
             .uuids
@@ -1066,7 +1066,7 @@ impl Game<'_> {
     }
     /// A vehicle already in the world that was restored from the player's file
     /// during this load (not any entity whose UUID is remembered).
-    fn restored_vehicle(&self, uuid: [i32; 4]) -> Option<u32> {
+    fn restored_vehicle(&self, uuid: [i32; 4]) -> Option<u32> { let (uuid,) = match crate::points_generated::P4491.get() { Some(__l) => { let mut __a = (uuid,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (uuid,) };
         if !self.persist.restored.contains(&uuid) {
             return None;
         }
@@ -1078,7 +1078,7 @@ impl Game<'_> {
         &mut self,
         uuid: [i32; 4],
         raw: Option<&Tag>,
-    ) -> Option<u32> {
+    ) -> Option<u32> { let (uuid,) = match crate::points_generated::P4490.get() { Some(__l) => { let mut __a = (uuid,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (uuid,) };
         if let Some(id) = self.vehicle_by_uuid(uuid) {
             return Some(id);
         }
@@ -1106,7 +1106,7 @@ impl Game<'_> {
     }
     /// `ServerPlayer.loadAndSpawnParentVehicle`: the ride the player's file
     /// names, once the vehicle is in the world.
-    pub(super) fn restore_root_vehicle(&mut self) {
+    pub(super) fn restore_root_vehicle(&mut self) { if let Some(__l) = crate::points_generated::P4489.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.serving.is_some()
             || self.options.dedicated.is_some()
             || self.riding.is_some()
@@ -1128,7 +1128,7 @@ impl Game<'_> {
         self.riding = Some(id);
     }
     /// A mob's entity tag with the mobs riding it under `Passengers`.
-    pub(super) fn mob_tree_nbt(&mut self, i: usize) -> Tag {
+    pub(super) fn mob_tree_nbt(&mut self, i: usize) -> Tag { let (i,) = match crate::points_generated::P4488.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let id = self.mobs[i].id;
         let uuid = self.uuid_for(id);
         // `NeutralMob.addPersistentAngerSaveData`: the anger ends at an
@@ -1169,33 +1169,33 @@ impl Game<'_> {
         tag
     }
     /// Forget an entity that left the world (its UUID and loaded compound).
-    pub(super) fn forget_entity(&mut self, id: u32) {
+    pub(super) fn forget_entity(&mut self, id: u32) { let (id,) = match crate::points_generated::P4487.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Some(uuid) = self.persist.uuids.remove(&id) {
             self.entity_attachments.remove(&uuid);
         }
         self.persist.raw.remove(&id);
     }
     /// Detach a travelling entity without discarding its in-memory attachments.
-    pub(super) fn detach_entity(&mut self, id: u32) {
+    pub(super) fn detach_entity(&mut self, id: u32) { let (id,) = match crate::points_generated::P4486.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.persist.uuids.remove(&id);
         self.persist.raw.remove(&id);
     }
     /// The compound a crystal or the dragon was loaded with, found again by type
     /// and position.
-    pub(super) fn persist_anon(&self, kind: &str, p: Vec3) -> Option<&Tag> {
+    pub(super) fn persist_anon(&self, kind: &str, p: Vec3) -> Option<&Tag> { if let Some(__l) = crate::points_generated::P4485.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.persist
             .anon
             .get(&anon_key(kind, p))
             .map(|(_, raw)| raw)
     }
     /// The compound an entity was loaded with (and commands have edited).
-    pub(super) fn persist_raw(&self, id: u32) -> Option<&Tag> {
+    pub(super) fn persist_raw(&self, id: u32) -> Option<&Tag> { let (id,) = match crate::points_generated::P4484.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.persist.raw.get(&id)
     }
     /// A loaded chest minecart with a loot table and no items: the table
     /// rolled now, as generated containers are (Horizon does not unpack on
     /// first open), and kept to save it again while unchanged.
-    fn roll_cart_loot(&self, cart: &mut super::minecarts::Minecart, tag: &Tag) {
+    fn roll_cart_loot(&self, cart: &mut super::minecarts::Minecart, tag: &Tag) { if let Some(__l) = crate::points_generated::P4483.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(table) = horizon_client::save::text(tag.get("LootTable")) else {
             return;
         };
@@ -1220,7 +1220,7 @@ impl Game<'_> {
     /// crystals and the dragon) still keeps its `Tags`, by entity id, so
     /// `@e[tag=]`, `/tag` and `/data get` see them, and the `Item` a
     /// fireball or a thrown item projectile was loaded with.
-    pub(super) fn remember_tags(&mut self, id: u32, tag: &Tag) {
+    pub(super) fn remember_tags(&mut self, id: u32, tag: &Tag) { let (id,) = match crate::points_generated::P4482.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let mut map = horizon_world::nbt::Compound::new();
         if let Some(tags @ Tag::List(_)) = tag.get("Tags") {
             map.insert("Tags".into(), tags.clone());
@@ -1246,25 +1246,25 @@ impl Game<'_> {
         }
     }
     /// The `Tags` of the projectile `add_projectile` just pushed.
-    fn remember_last_projectile_tags(&mut self, tag: &Tag) {
+    fn remember_last_projectile_tags(&mut self, tag: &Tag) { if let Some(__l) = crate::points_generated::P4481.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(id) = self.creatures.projectiles.last().map(|p| p.id) {
             self.remember_tags(id, tag);
         }
     }
-    fn remember(&mut self, id: u32, uuid: Option<[i32; 4]>, tag: Tag) {
+    fn remember(&mut self, id: u32, uuid: Option<[i32; 4]>, tag: Tag) { let (id,) = match crate::points_generated::P4480.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.restore_portal_cooldown(id, &tag);
         self.remember_uuid(id, uuid, &tag);
         self.persist.raw.insert(id, tag);
     }
     /// The UUID entity `id` was loaded with, and the attachments `tag` saved under it.
-    pub(super) fn remember_uuid(&mut self, id: u32, uuid: Option<[i32; 4]>, tag: &Tag) {
+    pub(super) fn remember_uuid(&mut self, id: u32, uuid: Option<[i32; 4]>, tag: &Tag) { let (id,) = match crate::points_generated::P4479.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Some(u) = uuid {
             self.persist.uuids.insert(id, u);
             read_attachments(tag, u, &mut self.entity_attachments);
         }
     }
     /// The mob that was loaded or saved with a UUID.
-    pub(super) fn mob_by_uuid(&self, uuid: [i32; 4]) -> Option<u32> {
+    pub(super) fn mob_by_uuid(&self, uuid: [i32; 4]) -> Option<u32> { let (uuid,) = match crate::points_generated::P4478.get() { Some(__l) => { let mut __a = (uuid,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (uuid,) };
         self.persist
             .uuids
             .iter()
@@ -1272,17 +1272,17 @@ impl Game<'_> {
             .map(|(id, _)| *id)
     }
     /// A mob's UUID, made up for new ones.
-    pub(super) fn mob_uuid(&mut self, id: u32) -> [i32; 4] {
+    pub(super) fn mob_uuid(&mut self, id: u32) -> [i32; 4] { let (id,) = match crate::points_generated::P4477.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.uuid_for(id)
     }
-    pub(super) fn uuid_for(&mut self, id: u32) -> [i32; 4] {
+    pub(super) fn uuid_for(&mut self, id: u32) -> [i32; 4] { let (id,) = match crate::points_generated::P4476.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         *self.persist.uuids.entry(id).or_insert_with(random_uuid)
     }
     /// `BlockState.CODEC`: a block name or `{id, properties}` (or legacy `{Name, Properties}`).
-    pub(super) fn state_from_nbt(&self, tag: &Tag) -> Option<BlockStateId> {
+    pub(super) fn state_from_nbt(&self, tag: &Tag) -> Option<BlockStateId> { if let Some(__l) = crate::points_generated::P4475.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         entity_nbt::state_from_nbt(self.pack.assets.registry, tag)
     }
-    pub(in crate::game) fn state_to_nbt(&self, state: BlockStateId) -> Tag {
+    pub(in crate::game) fn state_to_nbt(&self, state: BlockStateId) -> Tag { if let Some(__l) = crate::points_generated::P4474.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         entity_nbt::state_to_nbt(self.pack.assets.registry, state)
     }
     /// The entity NBT of every simulated entity in `keys`, plus the unknown
@@ -1292,7 +1292,7 @@ impl Game<'_> {
         &mut self,
         keys: &HashSet<(i32, i32)>,
         remove: bool,
-    ) -> Vec<((i32, i32), Vec<Tag>)> {
+    ) -> Vec<((i32, i32), Vec<Tag>)> { let (remove,) = match crate::points_generated::P4473.get() { Some(__l) => { let mut __a = (remove,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (remove,) };
         let mut out: HashMap<(i32, i32), Vec<Tag>> =
             keys.iter().map(|k| (*k, Vec::new())).collect();
         // Every kind in `entity_lists!` saves itself (`Entity::save_nbt`).
@@ -1534,7 +1534,7 @@ impl Game<'_> {
     /// Without `wait` (the autosave) they are written on the region writer
     /// meanwhile: `PersistentEntitySectionManager.autoSave` stores them
     /// without `saveAll`'s flush.
-    pub(super) fn save_entities(&mut self, wait: bool) -> Result<()> {
+    pub(super) fn save_entities(&mut self, wait: bool) -> Result<()> { let (wait,) = match crate::points_generated::P4472.get() { Some(__l) => { let mut __a = (wait,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (wait,) };
         self.spawn_loaded_entities();
         let keys: HashSet<(i32, i32)> = self.world.chunks.keys().copied().collect();
         let chunks = self.entity_chunks(&keys, false);
@@ -1545,7 +1545,7 @@ impl Game<'_> {
             self.save.save_entities_later(chunks)
         }
     }
-    pub(super) fn prune_entity_memory(&mut self) {
+    pub(super) fn prune_entity_memory(&mut self) { if let Some(__l) = crate::points_generated::P4471.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Forget entities that no longer exist.
         let alive = self.live_entity_ids();
         for (id, uuid) in &self.persist.uuids {
@@ -1557,7 +1557,7 @@ impl Game<'_> {
         self.persist.raw.retain(|id, _| alive.contains(id));
     }
     /// A loaded projectile's `Owner`: a connected guest, else a mob by UUID.
-    fn claim_owner(&self, p: &mut horizon_client::projectiles::Projectile) {
+    fn claim_owner(&self, p: &mut horizon_client::projectiles::Projectile) { if let Some(__l) = crate::points_generated::P4470.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(uuid) = p.owner_uuid else {
             return;
         };
@@ -1576,7 +1576,7 @@ impl Game<'_> {
         }
     }
     /// Save and remove the entities of chunks that unloaded.
-    pub(super) fn unload_entities(&mut self, unloaded: &[Arc<Chunk>]) {
+    pub(super) fn unload_entities(&mut self, unloaded: &[Arc<Chunk>]) { if let Some(__l) = crate::points_generated::P4469.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if unloaded.is_empty() {
             return;
         }
@@ -1602,7 +1602,7 @@ impl Game<'_> {
         &mut self,
         i: usize,
         keys: &HashSet<ChunkKey>,
-    ) -> Option<(ChunkKey, Tag)> {
+    ) -> Option<(ChunkKey, Tag)> { let (i,) = match crate::points_generated::P4468.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let m = &self.mobs[i];
         let saves = self.mob_root(i) == i
             && m.extra.mount.is_none_or(|v| {
@@ -1617,7 +1617,7 @@ impl Game<'_> {
         &mut self,
         i: usize,
         keys: &HashSet<ChunkKey>,
-    ) -> Option<(ChunkKey, Tag)> {
+    ) -> Option<(ChunkKey, Tag)> { let (i,) = match crate::points_generated::P4467.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let at = self.dropped[i].position;
         keys.contains(&chunk_of(at)).then(|| {
             let id = self.dropped[i].id;
@@ -1631,7 +1631,7 @@ impl Game<'_> {
         &mut self,
         i: usize,
         keys: &HashSet<ChunkKey>,
-    ) -> Option<(ChunkKey, Tag)> {
+    ) -> Option<(ChunkKey, Tag)> { let (i,) = match crate::points_generated::P4466.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let o = &self.orbs[i];
         keys.contains(&chunk_of(o.position)).then(|| {
             let raw = anon_raw(&self.persist, "minecraft:experience_orb", o.position);
@@ -1647,7 +1647,7 @@ impl Game<'_> {
         &mut self,
         i: usize,
         keys: &HashSet<ChunkKey>,
-    ) -> Option<(ChunkKey, Tag)> {
+    ) -> Option<(ChunkKey, Tag)> { let (i,) = match crate::points_generated::P4465.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let p = &self.creatures.projectiles[i];
         if !keys.contains(&chunk_of(p.position)) || !entity_nbt::saved_with_chunk(p) {
             return None;
@@ -1677,7 +1677,7 @@ impl Game<'_> {
         &mut self,
         i: usize,
         keys: &HashSet<ChunkKey>,
-    ) -> Option<(ChunkKey, Tag)> {
+    ) -> Option<(ChunkKey, Tag)> { let (i,) = match crate::points_generated::P4464.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let f = &self.falling[i];
         if !keys.contains(&chunk_of(f.position)) {
             return None;
@@ -1707,7 +1707,7 @@ impl Game<'_> {
         &mut self,
         i: usize,
         keys: &HashSet<ChunkKey>,
-    ) -> Option<(ChunkKey, Tag)> {
+    ) -> Option<(ChunkKey, Tag)> { let (i,) = match crate::points_generated::P4463.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let (id, at) = (self.rockets[i].id, self.rockets[i].position);
         keys.contains(&chunk_of(at)).then(|| {
             let uuid = self.uuid_for(id);
@@ -1720,7 +1720,7 @@ impl Game<'_> {
         &mut self,
         i: usize,
         keys: &HashSet<ChunkKey>,
-    ) -> Option<(ChunkKey, Tag)> {
+    ) -> Option<(ChunkKey, Tag)> { let (i,) = match crate::points_generated::P4462.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let (id, at) = (self.tridents[i].id, self.tridents[i].position);
         keys.contains(&chunk_of(at)).then(|| {
             let uuid = self.uuid_for(id);
@@ -1732,7 +1732,7 @@ impl Game<'_> {
         &mut self,
         i: usize,
         keys: &HashSet<ChunkKey>,
-    ) -> Option<(ChunkKey, Tag)> {
+    ) -> Option<(ChunkKey, Tag)> { let (i,) = match crate::points_generated::P4461.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let (id, at) = (self.tnts[i].id, self.tnts[i].position);
         keys.contains(&chunk_of(at)).then(|| {
             let uuid = self.uuid_for(id);
@@ -1753,7 +1753,7 @@ impl Game<'_> {
         &mut self,
         i: usize,
         keys: &HashSet<ChunkKey>,
-    ) -> Option<(ChunkKey, Tag)> {
+    ) -> Option<(ChunkKey, Tag)> { let (i,) = match crate::points_generated::P4460.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let b = &self.boats[i];
         let (id, at) = (b.id, b.position);
         if !keys.contains(&chunk_of(at)) {
@@ -1778,7 +1778,7 @@ impl Game<'_> {
         &mut self,
         i: usize,
         keys: &HashSet<ChunkKey>,
-    ) -> Option<(ChunkKey, Tag)> {
+    ) -> Option<(ChunkKey, Tag)> { let (i,) = match crate::points_generated::P4459.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let (id, at) = (self.carts[i].id, self.carts[i].position);
         if !keys.contains(&chunk_of(at)) {
             return None;
@@ -1792,7 +1792,7 @@ impl Game<'_> {
         &mut self,
         i: usize,
         keys: &HashSet<ChunkKey>,
-    ) -> Option<(ChunkKey, Tag)> {
+    ) -> Option<(ChunkKey, Tag)> { let (i,) = match crate::points_generated::P4458.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let a = &self.armor_stands[i];
         keys.contains(&chunk_of(a.position)).then(|| {
             let uuid = self.saved_uuid_or_random(a.id);
@@ -1802,7 +1802,7 @@ impl Game<'_> {
     }
     /// The UUID kept for `id`, or a new one that is not remembered (what a
     /// saved vehicle or stand gets when it never had one).
-    fn saved_uuid_or_random(&self, id: u32) -> [i32; 4] {
+    fn saved_uuid_or_random(&self, id: u32) -> [i32; 4] { let (id,) = match crate::points_generated::P4457.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.persist
             .uuids
             .get(&id)

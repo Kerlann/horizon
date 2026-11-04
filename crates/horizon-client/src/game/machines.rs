@@ -589,7 +589,7 @@ pub(super) fn shelf_signal(
 }
 
 impl Game<'_> {
-    pub(super) fn containers(&self) -> Containers<'_> {
+    pub(super) fn containers(&self) -> Containers<'_> { if let Some(__l) = crate::points_generated::P2630.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Containers {
             world: &self.world,
             behaviours: self.res.behaviours(),
@@ -599,7 +599,7 @@ impl Game<'_> {
             bone_meal: bone_meal(),
         }
     }
-    fn slot_mut_at(&mut self, view: &View, slot: usize) -> Option<&mut Option<ItemStack>> {
+    fn slot_mut_at(&mut self, view: &View, slot: usize) -> Option<&mut Option<ItemStack>> { let (slot,) = match crate::points_generated::P2629.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let (pos, i) = view.locate(slot)?;
         let entity = self.world.block_entities.get_mut(&pos)?;
         // A mod's slots grow to its container's count when first used.
@@ -611,7 +611,7 @@ impl Game<'_> {
         entity.slots_mut().get_mut(i)
     }
     /// `BlockEntity.setChanged` for every block entity of a container.
-    fn view_changed(&mut self, view: &View) {
+    fn view_changed(&mut self, view: &View) { if let Some(__l) = crate::points_generated::P2628.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A composter's containers change its block state instead.
         if let Kind::Composter(_) = view.kind {
             return;
@@ -621,7 +621,7 @@ impl Game<'_> {
         }
     }
     /// `BlockEntity.setChanged` at `pos`: comparators re-read the container.
-    pub(super) fn container_changed(&mut self, pos: Pos) {
+    pub(super) fn container_changed(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P2627.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if pos.1 == super::minecarts::CART_KEY_Y {
             return;
         }
@@ -656,7 +656,7 @@ impl Game<'_> {
         view: &View,
         stack: ItemStack,
         slot: usize,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { let (slot,) = match crate::points_generated::P2626.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let (rest, moved) = self.move_in_item(from_hopper, view, stack, slot);
         if moved {
             self.view_changed(view);
@@ -677,7 +677,7 @@ impl Game<'_> {
         view: &View,
         mut stack: ItemStack,
         slot: usize,
-    ) -> (Option<ItemStack>, bool) {
+    ) -> (Option<ItemStack>, bool) { let (slot,) = match crate::points_generated::P2625.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let c = self.containers();
         if !c.can_place(view, slot, &stack) {
             return (Some(stack), false);
@@ -728,7 +728,7 @@ impl Game<'_> {
         view: &View,
         stack: ItemStack,
         face: Option<Direction>,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P2624.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Kind::Composter(_) = view.kind {
             let (x, y, z) = view.parts[0].0;
             return self.composter_container_insert([x, y, z], stack, face == Some(Direction::Up));
@@ -741,7 +741,7 @@ impl Game<'_> {
         rest
     }
     /// Remove one item from a slot (`removeItem(slot, 1)`).
-    fn take_one(&mut self, view: &View, slot: usize) -> Option<ItemStack> {
+    fn take_one(&mut self, view: &View, slot: usize) -> Option<ItemStack> { let (slot,) = match crate::points_generated::P2623.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let target = self.slot_mut_at(view, slot)?;
         let current = target.as_mut().filter(|s| s.count > 0)?;
         let one = ItemStack {
@@ -755,7 +755,7 @@ impl Game<'_> {
         Some(one)
     }
     /// Undo `take_one` after a failed move.
-    fn put_back(&mut self, view: &View, slot: usize, one: ItemStack) {
+    fn put_back(&mut self, view: &View, slot: usize, one: ItemStack) { let (slot,) = match crate::points_generated::P2622.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         if let Some(target) = self.slot_mut_at(view, slot) {
             match target {
                 Some(current) => current.count += one.count,
@@ -765,7 +765,7 @@ impl Game<'_> {
     }
     /// `HopperBlockEntity.pushItemsTick` of the hopper at `pos`, if its block
     /// is still a hopper (`BlockEntityType.isValid`).
-    pub(super) fn tick_hopper(&mut self, pos: Pos) {
+    pub(super) fn tick_hopper(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P2621.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let time = self.world.game_time;
         let waiting = {
             let state = self.hoppers.entry(pos).or_default();
@@ -795,14 +795,14 @@ impl Game<'_> {
         self.hopper_try_move_items(pos);
     }
     /// Drops the cooldowns of hoppers whose block entity is gone.
-    pub(super) fn forget_gone_hoppers(&mut self) {
+    pub(super) fn forget_gone_hoppers(&mut self) { if let Some(__l) = crate::points_generated::P2620.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let entities = &self.world.block_entities;
         self.hoppers.retain(|p, _| {
             matches!(entities.get(p), Some(BlockEntity::Chest(items)) if items.len() == HOPPER_SLOTS)
         });
     }
     /// `HopperBlockEntity.tryMoveItems` with `suckInItems`.
-    pub(super) fn hopper_try_move_items(&mut self, pos: Pos) {
+    pub(super) fn hopper_try_move_items(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P2619.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let state = self.world.block(pos.0, pos.1, pos.2);
         let c = self.containers();
         let enabled = c.prop(state, "enabled") != Some("false");
@@ -833,7 +833,7 @@ impl Game<'_> {
     /// tick: an item whose box meets the hopper's bowl (`Hopper.INSIDE`) and
     /// its suck area runs `tryMoveItems` with that item as the pickup, in the
     /// entity phase, before the hopper's own tick counts its cooldown down.
-    pub(super) fn hoppers_catch_items(&mut self) {
+    pub(super) fn hoppers_catch_items(&mut self) { if let Some(__l) = crate::points_generated::P2618.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut i = 0;
         while i < self.dropped.len() {
             let item = &self.dropped[i];
@@ -882,7 +882,7 @@ impl Game<'_> {
     }
     /// `tryMoveItems(…, () -> addItem(hopper, itemEntity))`; true when the
     /// item entity was taken whole.
-    fn hopper_take_item(&mut self, pos: Pos, i: usize) -> bool {
+    fn hopper_take_item(&mut self, pos: Pos, i: usize) -> bool { let (i,) = match crate::points_generated::P2617.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let state = self.world.block(pos.0, pos.1, pos.2);
         let c = self.containers();
         let Some(view) = c.view(pos, false) else {
@@ -936,7 +936,7 @@ impl Game<'_> {
         &mut self,
         pos: Pos,
         side: Direction,
-    ) -> Option<Capability<dyn ResourceHandler<ItemResource>>> {
+    ) -> Option<Capability<dyn ResourceHandler<ItemResource>>> { if let Some(__l) = crate::points_generated::P2616.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = BlockSide {
             level: self.native_level_here()?,
             pos: [pos.0, pos.1, pos.2],
@@ -969,7 +969,7 @@ impl Game<'_> {
         .unwrap_or(0)
     }
     /// Takes one item from `slot` of `view`, as it is now, journaled for the transaction.
-    fn take_one_journaled(&mut self, view: &View, slot: usize) -> Option<()> {
+    fn take_one_journaled(&mut self, view: &View, slot: usize) -> Option<()> { let (slot,) = match crate::points_generated::P2615.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         for &(pos, _) in &view.parts {
             self.journal_block_entity(pos);
         }
@@ -977,7 +977,7 @@ impl Game<'_> {
     }
     /// `InventoryMoveItemEvent` for `item` going from `source` to `destination`, where one end
     /// is a capability part: whether a mod canceled the move.
-    fn part_move_canceled(&mut self, source: [i32; 3], destination: [i32; 3], item: &str) -> bool {
+    fn part_move_canceled(&mut self, source: [i32; 3], destination: [i32; 3], item: &str) -> bool { let (source,destination,) = match crate::points_generated::P2614.get() { Some(__l) => { let mut __a = (source,destination,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (source,destination,) };
         let mut cancel = false;
         self.native_inventory_move_item(source, destination, item, &mut cancel);
         cancel
@@ -990,7 +990,7 @@ impl Game<'_> {
         hopper: &View,
         part: &Capability<dyn ResourceHandler<ItemResource>>,
         at: [i32; 3],
-    ) -> bool {
+    ) -> bool { let (at,) = match crate::points_generated::P2613.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let from = self.container_world_pos(hopper);
         for slot in 0..hopper.len() {
             let Some(stack) = self.containers().get(hopper, slot).cloned() else {
@@ -1016,7 +1016,7 @@ impl Game<'_> {
         part: &Capability<dyn ResourceHandler<ItemResource>>,
         at: [i32; 3],
         hopper: &View,
-    ) -> bool {
+    ) -> bool { let (at,) = match crate::points_generated::P2612.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let into = self.container_world_pos(hopper);
         for slot in 0..part.size(self) {
             let Some(resource) = part.resource(self, slot) else {
@@ -1050,7 +1050,7 @@ impl Game<'_> {
     /// `HopperBlockEntity.ejectItems`: into the block container in front, else
     /// a container entity there (`getContainerAt`). A capability part in front takes the
     /// container's place.
-    fn hopper_eject(&mut self, pos: Pos, hopper: &View) -> bool {
+    fn hopper_eject(&mut self, pos: Pos, hopper: &View) -> bool { if let Some(__l) = crate::points_generated::P2611.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let state = self.world.block(pos.0, pos.1, pos.2);
         let c = self.containers();
         let Some(facing) = c.prop(state, "facing").and_then(dir_from_name) else {
@@ -1095,7 +1095,7 @@ impl Game<'_> {
     }
     /// Where a container is in the world for the mods: its block, or the block a chest
     /// boat or minecart is in (its view sits under a placeholder key).
-    fn container_world_pos(&self, view: &View) -> [i32; 3] {
+    fn container_world_pos(&self, view: &View) -> [i32; 3] { if let Some(__l) = crate::points_generated::P2610.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (x, y, z) = view.parts[0].0;
         if x == i32::MAX - 15 && y == super::minecarts::CART_KEY_Y {
             let id = z as u32;
@@ -1119,7 +1119,7 @@ impl Game<'_> {
         slot: usize,
         source: &View,
         destination: &View,
-    ) -> bool {
+    ) -> bool { let (slot,) = match crate::points_generated::P2609.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         if !mod_api::__private::listened(mod_api::HookId::InventoryMoveItem) {
             return false;
         }
@@ -1137,7 +1137,7 @@ impl Game<'_> {
         cancel
     }
     /// The rest of `HopperBlockEntity.ejectItems`: one item into `target`.
-    fn eject_into(&mut self, pos: Pos, hopper: &View, target: &View, face: Direction) -> bool {
+    fn eject_into(&mut self, pos: Pos, hopper: &View, target: &View, face: Direction) -> bool { if let Some(__l) = crate::points_generated::P2608.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.containers().is_full(target, face) {
             return false;
         }
@@ -1159,7 +1159,7 @@ impl Game<'_> {
         false
     }
     /// `HopperBlockEntity.suckInItems`: from the container above, or item entities.
-    fn hopper_suck(&mut self, pos: Pos, hopper: &View) -> bool {
+    fn hopper_suck(&mut self, pos: Pos, hopper: &View) -> bool { if let Some(__l) = crate::points_generated::P2607.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let above = (pos.0, pos.1 + 1, pos.2);
         let at = [
             f64::from(pos.0) + 0.5,
@@ -1204,7 +1204,7 @@ impl Game<'_> {
     /// there, from a container entity whose box meets the one around `at`
     /// (`getSourceContainerOrHandler`). `None` when there is no container. A capability part
     /// above takes the container's place.
-    fn suck_from_container(&mut self, above: Pos, at: [f64; 3], hopper: &View) -> Option<bool> {
+    fn suck_from_container(&mut self, above: Pos, at: [f64; 3], hopper: &View) -> Option<bool> { let (at,) = match crate::points_generated::P2606.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         if let Some(part) = self.item_part_at(above, Direction::Down) {
             let (x, y, z) = hopper.parts[0].0;
             let above = [above.0, above.1, above.2];
@@ -1276,7 +1276,7 @@ impl Game<'_> {
         source_hopper: Option<Pos>,
         source: &View,
         hopper: &View,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2605.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for slot in source.slots_for_face(Some(Direction::Down)) {
             let c = self.containers();
             let Some(stack) = c.get(source, slot) else {
@@ -1309,7 +1309,7 @@ impl Game<'_> {
     }
     /// The alive container entities (`EntitySelector.CONTAINER_ENTITY_SELECTOR`: chest and
     /// hopper minecarts, chest boats) whose box meets the 1x1x1 box around `at`.
-    fn container_entities_at(&self, at: [f64; 3]) -> Vec<u32> {
+    fn container_entities_at(&self, at: [f64; 3]) -> Vec<u32> { let (at,) = match crate::points_generated::P2604.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,) };
         let meets = |b: horizon_core::geometry::Aabb| {
             let (lo, hi) = (b.min_position(), b.max_position());
             lo.x < at[0] + 0.5
@@ -1340,7 +1340,7 @@ impl Game<'_> {
     }
     /// The index `RandomSource.nextInt(len)` picks of `len` candidates: the level's one draw,
     /// none for no candidate.
-    fn pick_index(&mut self, len: usize) -> Option<usize> {
+    fn pick_index(&mut self, len: usize) -> Option<usize> { let (len,) = match crate::points_generated::P2603.get() { Some(__l) => { let mut __a = (len,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (len,) };
         if len == 0 {
             return None;
         }
@@ -1353,7 +1353,7 @@ impl Game<'_> {
     /// A game container entity a mod provider answers ahead of the game is reached through
     /// that answer. With no mod providing `ENTITY_AUTOMATION`, only vanilla containers are
     /// considered: nothing more is looked up.
-    fn automation_entity_at(&mut self, at: [f64; 3], side: Direction) -> Option<AutomationEntity> {
+    fn automation_entity_at(&mut self, at: [f64; 3], side: Direction) -> Option<AutomationEntity> { let (at,) = match crate::points_generated::P2602.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let vanilla = self.container_entities_at(at);
         if !mod_api::has_entity_providers(&ENTITY_AUTOMATION) {
             let pick = self.pick_index(vanilla.len())?;
@@ -1442,7 +1442,7 @@ impl Game<'_> {
     /// A vehicle's slots as a container under its placeholder `key`. When its
     /// menu is open the placeholder is the live copy and stays as it is.
     /// Returns the view and whether the menu was open.
-    fn lend_items(&mut self, key: Pos, items: &mut Vec<Option<ItemStack>>) -> (View, bool) {
+    fn lend_items(&mut self, key: Pos, items: &mut Vec<Option<ItemStack>>) -> (View, bool) { if let Some(__l) = crate::points_generated::P2601.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let open = self.world.block_entities.contains_key(&key);
         if !open {
             let slots = BlockEntity::Chest(std::mem::take(items));
@@ -1463,7 +1463,7 @@ impl Game<'_> {
     /// Gives `lend_items`' slots back to the vehicle, so its own items stay
     /// the one source of truth: a menu copy that is still around (open, or
     /// left by a guest's close) gets the changed items copied to `items`.
-    fn reclaim_items(&mut self, key: Pos, open: bool, items: &mut Vec<Option<ItemStack>>) {
+    fn reclaim_items(&mut self, key: Pos, open: bool, items: &mut Vec<Option<ItemStack>>) { let (open,) = match crate::points_generated::P2600.get() { Some(__l) => { let mut __a = (open,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (open,) };
         let slots = if open {
             self.world.block_entities.get(&key).cloned()
         } else {
@@ -1481,7 +1481,7 @@ impl Game<'_> {
         hopper: &View,
         min: [f64; 3],
         max: [f64; 3],
-    ) -> bool {
+    ) -> bool { let (min,max,) = match crate::points_generated::P2599.get() { Some(__l) => { let mut __a = (min,max,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (min,max,) };
         let mut i = 0;
         while i < self.dropped.len() {
             let b = self.dropped[i].bounds();
@@ -1522,7 +1522,7 @@ impl Game<'_> {
     /// `MinecartHopper.tick`'s `tryConsumeItems` (`suckInItems`) for an enabled
     /// hopper minecart: one item from the container above, else the item
     /// entities over it or touching it, each tick without a cooldown.
-    pub(super) fn hopper_cart_suck(&mut self, cart: &mut super::minecarts::Minecart) {
+    pub(super) fn hopper_cart_suck(&mut self, cart: &mut super::minecarts::Minecart) { if let Some(__l) = crate::points_generated::P2598.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The cart's slots are edited as a container under the placeholder key
         // its menu uses; when that menu is open the placeholder is the live copy.
         let key = (i32::MAX - 15, super::minecarts::CART_KEY_Y, cart.id as i32);
@@ -1563,7 +1563,7 @@ impl Game<'_> {
     // ---- dispensers and droppers ----
 
     /// `DispenserBlock.dispenseFrom` / `DropperBlock.dispenseFrom`.
-    pub(super) fn dispense_from(&mut self, pos: BlockPos, state: BlockStateId) -> Result<()> {
+    pub(super) fn dispense_from(&mut self, pos: BlockPos, state: BlockStateId) -> Result<()> { if let Some(__l) = crate::points_generated::P2597.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let key = (pos.x, pos.y, pos.z);
         let name = self.res.facts().get(state).name.clone();
         if &*name == "minecraft:crafter" {
@@ -1668,7 +1668,7 @@ enum Screen {
 }
 
 impl Game<'_> {
-    fn machine_screen(&self) -> Option<Screen> {
+    fn machine_screen(&self) -> Option<Screen> { if let Some(__l) = crate::points_generated::P2596.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let key = self.container?;
         // A mod's screen over a hopper or dispenser menu lays out its own slots.
         if self.native_screen_inventory_y().is_some() {
@@ -1695,7 +1695,7 @@ impl Game<'_> {
         }
     }
     /// `imageHeight` of the open screen (HopperScreen is 133 tall).
-    pub(super) fn screen_height(&self) -> f32 {
+    pub(super) fn screen_height(&self) -> f32 { if let Some(__l) = crate::points_generated::P2595.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(height) = self.native_screen_height() {
             return height;
         }
@@ -1720,7 +1720,7 @@ impl Game<'_> {
         }
     }
     /// HopperMenu / DispenserMenu slot layouts; None for other screens.
-    pub(super) fn machine_slot_position(&self, i: usize) -> Option<(f32, f32)> {
+    pub(super) fn machine_slot_position(&self, i: usize) -> Option<(f32, f32)> { let (i,) = match crate::points_generated::P2594.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         let screen = self.machine_screen()?;
         let inventory_y = if screen == Screen::Hopper { 51.0 } else { 84.0 };
         Some(match i {
@@ -1743,7 +1743,7 @@ impl Game<'_> {
         batch: &mut horizon_client::hud::HudBatch,
         ox: f32,
         oy: f32,
-    ) -> bool {
+    ) -> bool { let (ox,oy,) = match crate::points_generated::P2593.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ox,oy,) };
         let Some(screen) = self.machine_screen() else {
             return false;
         };

@@ -16,7 +16,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         alpha: f64,
         lines: &mut Vec<gizmos::Line>,
-    ) -> Vec<dynamic_light::Colored> {
+    ) -> Vec<dynamic_light::Colored> { let (alpha,) = match crate::points_generated::P4198.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let mut particle_lights = self
             .renderer
             .as_ref()

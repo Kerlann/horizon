@@ -16,23 +16,23 @@ fn takes_from(view: &View) -> bool {
 impl Game<'_> {
     /// The level in place (`minecraft:overworld`), for a hook that isn't told
     /// which it runs in.
-    pub(in crate::game) fn native_dimension(&self) -> &'static str {
+    pub(in crate::game) fn native_dimension(&self) -> &'static str { if let Some(__l) = crate::points_generated::P2669.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.dim.id()
     }
     /// Whether this game simulates a world, as `native_set_block` asks
     /// (the fluid helpers ask it too).
-    pub(in crate::game) fn native_simulates(&self) -> bool {
+    pub(in crate::game) fn native_simulates(&self) -> bool { if let Some(__l) = crate::points_generated::P2668.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.is_logical_server()
     }
     /// The level in place, as a handle: where the game's capability lookups (a hopper's) are.
     /// None where no world is simulated.
-    pub(super) fn native_level_here(&self) -> Option<LevelRef> {
+    pub(super) fn native_level_here(&self) -> Option<LevelRef> { if let Some(__l) = crate::points_generated::P2667.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let epoch = self.native_lifecycle.epoch()?;
         self.native_simulates()
             .then(|| LevelRef::new(epoch, self.dim.id()))
     }
     /// Up to `count` out of slot `slot` of `view`, without `setChanged`.
-    fn take_up_to(&mut self, view: &View, slot: usize, count: u32) -> Option<ItemStack> {
+    fn take_up_to(&mut self, view: &View, slot: usize, count: u32) -> Option<ItemStack> { let (slot,count,) = match crate::points_generated::P2666.get() { Some(__l) => { let mut __a = (slot,count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,count,) };
         let target = self.slot_mut_at(view, slot)?;
         let current = target.as_mut()?;
         let taken = count.min(current.count);
@@ -49,7 +49,7 @@ impl Game<'_> {
     /// The container at `at` the item capability reaches: a block entity with slots in the
     /// level in place. Not a composter, which has no block entity, nor a block entity without
     /// slots (a sign, a banner, a mod's without a container).
-    fn capability_view(&self, at: BlockSide) -> Option<View> {
+    fn capability_view(&self, at: BlockSide) -> Option<View> { if let Some(__l) = crate::points_generated::P2665.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_level_in_place(at.level) {
             return None;
         }
@@ -61,7 +61,7 @@ impl Game<'_> {
     /// How many slots of the block entity at `at` its side reaches (none: every slot), by its
     /// `WorldlyContainer` rules: a furnace's top reaches its input only. None where no block
     /// entity has slots, in a level not in place, and on a client's copy of the world.
-    pub(in crate::game) fn native_container_size(&self, at: BlockSide) -> Option<usize> {
+    pub(in crate::game) fn native_container_size(&self, at: BlockSide) -> Option<usize> { if let Some(__l) = crate::points_generated::P2664.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.capability_view(at)?.slots_for_face(at.side).len())
     }
     /// The stack in slot `slot` of those `at`'s side reaches (`native_container_size`).
@@ -69,13 +69,13 @@ impl Game<'_> {
         &self,
         at: BlockSide,
         slot: usize,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { let (slot,) = match crate::points_generated::P2663.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let view = self.capability_view(at)?;
         let slot = *view.slots_for_face(at.side).get(slot)?;
         self.containers().get(&view, slot).cloned()
     }
     /// `view_changed` of a capability write, at the root commit of its transaction.
-    fn view_told(&mut self, view: &View) {
+    fn view_told(&mut self, view: &View) { if let Some(__l) = crate::points_generated::P2662.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Kind::Composter(_) = view.kind {
             return;
         }
@@ -92,7 +92,7 @@ impl Game<'_> {
         slot: usize,
         stack: ItemStack,
         tx: &Transaction,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { let (slot,) = match crate::points_generated::P2661.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let _ = tx;
         let Some(view) = self.capability_view(at) else {
             return Some(stack);
@@ -127,7 +127,7 @@ impl Game<'_> {
         at: BlockSide,
         slot: usize,
         stack: &ItemStack,
-    ) -> u32 {
+    ) -> u32 { let (slot,) = match crate::points_generated::P2660.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let Some(view) = self.capability_view(at) else {
             return 0;
         };
@@ -143,7 +143,7 @@ impl Game<'_> {
         slot: usize,
         max: u32,
         tx: &Transaction,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { let (slot,max,) = match crate::points_generated::P2659.get() { Some(__l) => { let mut __a = (slot,max,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,max,) };
         let _ = tx;
         let view = self.capability_view(at)?;
         let slot = *view.slots_for_face(at.side).get(slot)?;

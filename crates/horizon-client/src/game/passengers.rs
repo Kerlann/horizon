@@ -46,11 +46,11 @@ fn mount_rolls(species: Species, baby: bool, natural: bool) -> MountRolls {
 
 impl Game<'_> {
     /// `Entity.startRiding` for two mobs.
-    pub(super) fn mount_mob(&mut self, rider: u32, vehicle: u32) {
+    pub(super) fn mount_mob(&mut self, rider: u32, vehicle: u32) { let (rider,vehicle,) = match crate::points_generated::P4456.get() { Some(__l) => { let mut __a = (rider,vehicle,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (rider,vehicle,) };
         self.try_mount_mob(rider, vehicle);
     }
     /// `Entity.startRiding` for two mobs: false when a mod canceled it.
-    pub(super) fn try_mount_mob(&mut self, rider: u32, vehicle: u32) -> bool {
+    pub(super) fn try_mount_mob(&mut self, rider: u32, vehicle: u32) -> bool { let (rider,vehicle,) = match crate::points_generated::P4455.get() { Some(__l) => { let mut __a = (rider,vehicle,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (rider,vehicle,) };
         let vehicle = if self.boats.iter().any(|b| b.id == vehicle) {
             super::commands::Target::Boat(vehicle)
         } else if self.carts.iter().any(|c| c.id == vehicle) {
@@ -62,7 +62,7 @@ impl Game<'_> {
     }
     /// Riders sit on their vehicles (`Entity.positionRider`), mobs or boats,
     /// and let go when the vehicle dies or is gone.
-    pub(super) fn sync_riders(&mut self) {
+    pub(super) fn sync_riders(&mut self) { if let Some(__l) = crate::points_generated::P4454.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Entity.baseTick.
         for m in &mut self.mobs {
             if m.extra.boarding_cooldown > 0 {
@@ -114,7 +114,7 @@ impl Game<'_> {
     /// `Entity.positionRider` for every mob passenger: in its boat, then on
     /// its mob. A server's client places them itself too, as the server sends
     /// no passenger's position.
-    pub(super) fn position_riders(&mut self) {
+    pub(super) fn position_riders(&mut self) { if let Some(__l) = crate::points_generated::P4453.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.seat_boat_mobs();
         self.seat_cart_mobs();
         self.seat_tnt_mobs();
@@ -259,7 +259,7 @@ impl Game<'_> {
     /// ticks the player (`tickNonPassenger`) before its passengers
     /// (`tickPassenger` -> `positionRider`), so a rider's `xo` and `x` are the
     /// seats before and after the same move: call this after the player's.
-    pub(super) fn seat_own_stands(&mut self) {
+    pub(super) fn seat_own_stands(&mut self) { if let Some(__l) = crate::points_generated::P4452.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (Some(me), Some(p)) = (
             self.remote.as_ref().map(|r| r.entity_id as u32),
             self.player.as_ref(),
@@ -290,7 +290,7 @@ impl Game<'_> {
         me: Option<u32>,
         own_seat: Option<Vec3>,
         index: &HashMap<u32, usize>,
-    ) -> Option<glam::DVec3> {
+    ) -> Option<glam::DVec3> { let (vehicle,) = match crate::points_generated::P4451.get() { Some(__l) => { let mut __a = (vehicle,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (vehicle,) };
         if Some(vehicle) == me {
             let at = own_seat?;
             return Some(glam::DVec3::new(at.x, at.y, at.z));
@@ -352,7 +352,7 @@ impl Game<'_> {
     /// `finalizeSpawn` jockeys of a naturally spawned mob: baby zombies on
     /// chickens, skeletons on spiders, piglins and baby striders on striders,
     /// zombies on zombie horses.
-    pub(super) fn spawn_jockeys(&mut self, id: u32, natural: bool) {
+    pub(super) fn spawn_jockeys(&mut self, id: u32, natural: bool) { let (id,natural,) = match crate::points_generated::P4450.get() { Some(__l) => { let mut __a = (id,natural,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,natural,) };
         let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
             return;
         };
@@ -409,7 +409,7 @@ impl Game<'_> {
     /// `Husk.finalizeSpawn`: where a camel husk fits, one natural husk in ten
     /// takes an iron spear and rides one (with a parched; Horizon seats one
     /// rider, so the parched stands beside it).
-    fn spawn_camel_husk_jockey(&mut self, id: u32, at: [f64; 3]) {
+    fn spawn_camel_husk_jockey(&mut self, id: u32, at: [f64; 3]) { let (id,at,) = match crate::points_generated::P4449.get() { Some(__l) => { let mut __a = (id,at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,at,) };
         let (bx, by, bz) = (at[0].floor(), at[1].floor(), at[2].floor());
         let room = {
             let w = self.mob_world_base(&[]);
@@ -433,7 +433,7 @@ impl Game<'_> {
     /// `Drowned.finalizeSpawn`: half the natural drowned holding a trident,
     /// outside the rivers and oceans that breed more drowned, ride a zombie
     /// nautilus.
-    fn spawn_zombie_nautilus_jockey(&mut self, id: u32, at: [f64; 3]) {
+    fn spawn_zombie_nautilus_jockey(&mut self, id: u32, at: [f64; 3]) { let (id,at,) = match crate::points_generated::P4448.get() { Some(__l) => { let mut __a = (id,at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,at,) };
         let Some(d) = self.mobs.iter().find(|m| m.id == id) else {
             return;
         };
@@ -460,7 +460,7 @@ impl Game<'_> {
             self.mount_mob(id, n);
         }
     }
-    fn free_chicken_near(&self, at: [f64; 3]) -> Option<u32> {
+    fn free_chicken_near(&self, at: [f64; 3]) -> Option<u32> { let (at,) = match crate::points_generated::P4447.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,) };
         self.mobs
             .iter()
             .find(|c| {
@@ -474,7 +474,7 @@ impl Game<'_> {
             })
             .map(|c| c.id)
     }
-    fn make_chicken_jockey(&mut self, chicken: u32) {
+    fn make_chicken_jockey(&mut self, chicken: u32) { let (chicken,) = match crate::points_generated::P4446.get() { Some(__l) => { let mut __a = (chicken,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (chicken,) };
         if let Some(c) = self.mobs.iter_mut().find(|m| m.id == chicken) {
             c.extra.jockey = true;
         }
@@ -482,7 +482,7 @@ impl Game<'_> {
     /// `Strider.finalizeSpawn`: one strider in thirty carries a zombified
     /// piglin holding a warped fungus on a stick (and wears a saddle), one in
     /// ten of the rest a baby strider.
-    fn spawn_strider_jockey(&mut self, id: u32, at: [f64; 3]) {
+    fn spawn_strider_jockey(&mut self, id: u32, at: [f64; 3]) { let (id,at,) = match crate::points_generated::P4445.get() { Some(__l) => { let mut __a = (id,at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,at,) };
         if self.world.random.next_int_bound(30).unwrap_or(1) == 0 {
             if !self.ui.rules.bool("spawn_mobs") {
                 return;
@@ -512,7 +512,7 @@ impl Game<'_> {
     /// `SkeletonHorse.customServerAiStep` and `SkeletonTrapGoal`: a trap
     /// horse is a trap for fifteen minutes; a player within ten blocks springs
     /// it.
-    pub(super) fn tick_skeleton_traps(&mut self) {
+    pub(super) fn tick_skeleton_traps(&mut self) { if let Some(__l) = crate::points_generated::P4444.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // `Level.hasNearbyAlivePlayer`: alive, not a spectator, in the level.
         let players: Vec<_> = self
             .level_players()
@@ -543,7 +543,7 @@ impl Game<'_> {
             self.spring_skeleton_trap(id);
         }
     }
-    fn spring_skeleton_trap(&mut self, id: u32) {
+    fn spring_skeleton_trap(&mut self, id: u32) { let (id,) = match crate::points_generated::P4443.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(horse) = self.mobs.iter_mut().find(|m| m.id == id) else {
             return;
         };
@@ -577,7 +577,7 @@ impl Game<'_> {
     }
     /// `SkeletonTrapGoal.createSkeleton`: an iron helmet unless it already
     /// has a helm.
-    fn trap_skeleton(&mut self, at: [f64; 3]) -> Option<u32> {
+    fn trap_skeleton(&mut self, at: [f64; 3]) -> Option<u32> { let (at,) = match crate::points_generated::P4442.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let id = self.spawn_mob("minecraft:skeleton", at, true)?;
         let m = self.mobs.iter_mut().find(|m| m.id == id)?;
         m.invulnerable = TRAP_INVULNERABLE;

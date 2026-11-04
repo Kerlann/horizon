@@ -14,13 +14,13 @@ use serde_json::Value;
 impl Game<'_> {
     /// `ItemParticleOption(ITEM, stack)`: the layer particle sprites of the
     /// stack's model resolved for the ground, with seed 0.
-    pub(super) fn item_particle(&self, stack: &ItemStack) -> ParticleOptions {
+    pub(super) fn item_particle(&self, stack: &ItemStack) -> ParticleOptions { if let Some(__l) = crate::points_generated::P2142.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let state = self.resolve_item(stack, DisplayContext::Ground, None, 0);
         ParticleOptions::item(state.layers.iter().map(|l| l.particle.clone()).collect())
     }
     /// `LivingEntity.spawnItemParticles(stack, count)` for the local player,
     /// drawing from the world random as its eating sounds do.
-    pub(super) fn eat_particles(&mut self, stack: &ItemStack, count: u32) {
+    pub(super) fn eat_particles(&mut self, stack: &ItemStack, count: u32) { let (count,) = match crate::points_generated::P2141.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         let Some(p) = self.player.as_ref().map(|p| p.position) else {
             return;
         };
@@ -43,7 +43,7 @@ impl Game<'_> {
     /// `LivingEntity.handleEntityEvent` 47 to 52, 65 and 68 from a server:
     /// the entity's item in `slot` broke, so `breakItem` the stack this
     /// client still has there (the slot is emptied by a later update).
-    pub(super) fn remote_equipment_break(&mut self, id: i32, slot: EquipmentSlot) {
+    pub(super) fn remote_equipment_break(&mut self, id: i32, slot: EquipmentSlot) { let (id,) = match crate::points_generated::P2140.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if self.remote.as_ref().is_some_and(|r| r.entity_id == id) {
             let stack = match slot {
                 EquipmentSlot::MainHand => self.held().cloned(),
@@ -93,7 +93,7 @@ impl Game<'_> {
     /// the component is removed), heard by this client only
     /// (`playLocalSound`) at the entity's feet, at 0.8 volume and a pitch of
     /// 0.8 to 1.2.
-    pub(super) fn break_sound_at(&mut self, stack: &ItemStack, at: [f64; 3]) {
+    pub(super) fn break_sound_at(&mut self, stack: &ItemStack, at: [f64; 3]) { let (at,) = match crate::points_generated::P2139.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let models = &self.pack.item_renderer.models;
         let sound = match models
             .components(&stack_view(stack))
@@ -111,7 +111,7 @@ impl Game<'_> {
     }
     /// The slime ball, snowball and cobweb models behind `item_slime`,
     /// `item_snowball` and `item_cobweb`, resolved on first use.
-    pub(super) fn ensure_item_particle_sprites(&mut self) {
+    pub(super) fn ensure_item_particle_sprites(&mut self) { if let Some(__l) = crate::points_generated::P2138.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.particles.item_sprites.is_empty() {
             return;
         }

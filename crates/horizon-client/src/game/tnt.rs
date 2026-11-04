@@ -140,14 +140,14 @@ impl PrimedTnt {
 impl Game<'_> {
     /// Asks the mods whether the TNT at `pos` may be primed
     /// (`native_tnt_primed`); the acting guest, if any, is its player.
-    pub(super) fn tnt_prime_allowed(&mut self, pos: BlockPos) -> bool {
+    pub(super) fn tnt_prime_allowed(&mut self, pos: BlockPos) -> bool { if let Some(__l) = crate::points_generated::P5655.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut cancel = false;
         self.native_tnt_primed(self.lan_acting_uuid, [pos.x, pos.y, pos.z], &mut cancel);
         !cancel
     }
     /// Primes TNT a level event announced, or, when the mods refuse, puts
     /// back the block the fire or signal had already taken out.
-    pub(super) fn prime_tnt_event(&mut self, pos: BlockPos, rot: f64) {
+    pub(super) fn prime_tnt_event(&mut self, pos: BlockPos, rot: f64) { let (rot,) = match crate::points_generated::P5654.get() { Some(__l) => { let mut __a = (rot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (rot,) };
         if self.tnt_prime_allowed(pos) {
             self.add_primed_tnt(pos, rot, 80, None, None);
             return;
@@ -171,7 +171,7 @@ impl Game<'_> {
         short: bool,
         owner: Option<Who>,
         guest: Option<u32>,
-    ) {
+    ) { let (short,) = match crate::points_generated::P5653.get() { Some(__l) => { let mut __a = (short,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (short,) };
         // PrimedTnt: the fuse is lit.
         let who = self.sculk_actor();
         self.post_block_game_event("minecraft:prime_fuse", [pos.x, pos.y, pos.z], who, None);
@@ -203,7 +203,7 @@ impl Game<'_> {
         fuse: i32,
         owner: Option<Who>,
         guest: Option<u32>,
-    ) {
+    ) { let (rot,fuse,) = match crate::points_generated::P5652.get() { Some(__l) => { let mut __a = (rot,fuse,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (rot,fuse,) };
         let position = Vec3::new(
             f64::from(pos.x) + 0.5,
             f64::from(pos.y),
@@ -228,7 +228,7 @@ impl Game<'_> {
     }
     /// One primed TNT's `tick`: it moves, and explodes when its fuse is out.
     /// `i` is its place in the list; the caller has checked it is ticking.
-    pub(super) fn tick_one_tnt(&mut self, i: usize) -> Result<()> {
+    pub(super) fn tick_one_tnt(&mut self, i: usize) -> Result<()> { let (i,) = match crate::points_generated::P5651.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let t = &mut self.tnts[i];
         let tops = t.tick(
             &self.world,
@@ -275,7 +275,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `TntBlock.useItemOn`: flint and steel or a fire charge primes TNT.
-    pub(super) fn ignite_tnt(&mut self, stack: &ItemStack) -> Result<bool> {
+    pub(super) fn ignite_tnt(&mut self, stack: &ItemStack) -> Result<bool> { if let Some(__l) = crate::points_generated::P5650.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let item = &*stack.item;
         if item != "minecraft:flint_and_steel" && item != "minecraft:fire_charge" {
             return Ok(false);
@@ -308,7 +308,7 @@ impl Game<'_> {
     }
     /// `TntRenderer`: the block centred on the entity, swelling over the last
     /// 10 ticks and flashing white every 5 ticks.
-    pub(super) fn tnt_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
+    pub(super) fn tnt_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) { let (alpha,) = match crate::points_generated::P5649.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         if self.tnts.is_empty() {
             return;
         }
@@ -437,7 +437,7 @@ impl Game<'_> {
 impl Game<'_> {
     /// `positionRider` for the mobs riding primed TNT: the passenger attachment
     /// (the top of its 0.98 box), less the rider's own vehicle attachment.
-    pub(super) fn seat_tnt_mobs(&mut self) {
+    pub(super) fn seat_tnt_mobs(&mut self) { if let Some(__l) = crate::points_generated::P5648.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for i in 0..self.tnts.len() {
             let (id, pos, prev) = (
                 self.tnts[i].id,

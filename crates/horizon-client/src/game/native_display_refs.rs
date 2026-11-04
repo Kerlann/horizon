@@ -50,7 +50,7 @@ fn rotation(q: &[f32; 4]) -> bool {
 impl Game<'_> {
     /// The display's kind and entity id, or None for a stale handle, a client,
     /// or an entity that isn't a display.
-    fn display_entity(&self, display: DisplayRef) -> Option<(NativeDisplayKind, u32)> {
+    fn display_entity(&self, display: DisplayRef) -> Option<(NativeDisplayKind, u32)> { if let Some(__l) = crate::points_generated::P3031.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Target::Other(id) = self.native_entity_target(display.entity())? else {
             return None;
         };
@@ -63,7 +63,7 @@ impl Game<'_> {
         &self,
         display: DisplayRef,
         only: Option<NativeDisplayKind>,
-    ) -> Option<(NativeDisplayKind, Tag)> {
+    ) -> Option<(NativeDisplayKind, Tag)> { if let Some(__l) = crate::points_generated::P3030.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (kind, id) = self.display_entity(display)?;
         if only.is_some_and(|only| only != kind) {
             return None;
@@ -77,12 +77,12 @@ impl Game<'_> {
         display: DisplayRef,
         only: Option<NativeDisplayKind>,
         id: u8,
-    ) -> Option<Value> {
+    ) -> Option<Value> { let (id,) = match crate::points_generated::P3029.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let (kind, tag) = self.display_tag(display, only)?;
         entry(kind, &tag, id)
     }
 
-    fn display_float(&self, display: DisplayRef, id: u8) -> Option<f32> {
+    fn display_float(&self, display: DisplayRef, id: u8) -> Option<f32> { let (id,) = match crate::points_generated::P3028.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         match self.display_value(display, None, id)? {
             Value::Float(v) => Some(v),
             _ => None,
@@ -94,14 +94,14 @@ impl Game<'_> {
         display: DisplayRef,
         only: Option<NativeDisplayKind>,
         id: u8,
-    ) -> Option<i32> {
+    ) -> Option<i32> { let (id,) = match crate::points_generated::P3027.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         match self.display_value(display, only, id)? {
             Value::Int(v) => Some(v),
             _ => None,
         }
     }
 
-    fn display_byte(&self, display: DisplayRef, only: NativeDisplayKind, id: u8) -> Option<i8> {
+    fn display_byte(&self, display: DisplayRef, only: NativeDisplayKind, id: u8) -> Option<i8> { let (id,) = match crate::points_generated::P3026.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         match self.display_value(display, Some(only), id)? {
             Value::Byte(v) => Some(v),
             _ => None,
@@ -139,25 +139,25 @@ impl Game<'_> {
         only: Option<NativeDisplayKind>,
         key: &str,
         value: Tag,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3025.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.display_edit(display, only, |c| {
             c.insert(key.into(), value);
         })
     }
 
-    fn display_put_float(&mut self, display: DisplayRef, key: &str, value: f32) -> bool {
+    fn display_put_float(&mut self, display: DisplayRef, key: &str, value: f32) -> bool { let (value,) = match crate::points_generated::P3024.get() { Some(__l) => { let mut __a = (value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (value,) };
         value.is_finite() && self.display_put(display, None, key, Tag::Float(value.to_bits()))
     }
 
     /// Narrows an entity to a display, or None for another kind, a stale
     /// handle or a client.
-    pub(super) fn native_display(&self, entity: EntityRef) -> Option<DisplayRef> {
+    pub(super) fn native_display(&self, entity: EntityRef) -> Option<DisplayRef> { if let Some(__l) = crate::points_generated::P3023.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let display = DisplayRef::new(entity);
         self.display_entity(display).map(|_| display)
     }
 
     /// Which `Display` subclass the entity is.
-    pub(super) fn native_display_kind(&self, display: DisplayRef) -> Option<NativeDisplayKind> {
+    pub(super) fn native_display_kind(&self, display: DisplayRef) -> Option<NativeDisplayKind> { if let Some(__l) = crate::points_generated::P3022.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.display_entity(display)?.0)
     }
 
@@ -165,7 +165,7 @@ impl Game<'_> {
     pub(super) fn native_display_transformation(
         &self,
         display: DisplayRef,
-    ) -> Option<NativeTransformation> {
+    ) -> Option<NativeTransformation> { if let Some(__l) = crate::points_generated::P3021.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (kind, tag) = self.display_tag(display, None)?;
         let part = |id| match entry(kind, &tag, id)? {
             Value::Floats(v) => Some(v),
@@ -186,7 +186,7 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         transformation: NativeTransformation,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3020.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let t = transformation;
         if !finite(&t.translation)
             || !finite(&t.scale)
@@ -205,7 +205,7 @@ impl Game<'_> {
     }
 
     /// `Display.getBillboardConstraints`.
-    pub(super) fn native_display_billboard(&self, display: DisplayRef) -> Option<NativeBillboard> {
+    pub(super) fn native_display_billboard(&self, display: DisplayRef) -> Option<NativeBillboard> { if let Some(__l) = crate::points_generated::P3019.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.display_value(display, None, 15)? {
             Value::Byte(v) => NativeBillboard::ALL.get(usize::try_from(v).ok()?).copied(),
             _ => None,
@@ -217,13 +217,13 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         billboard: NativeBillboard,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3018.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let name = Tag::String(billboard.name().into());
         self.display_put(display, None, "billboard", name)
     }
 
     /// `Display.getBrightnessOverride`: block and sky light, 0 to 15 each, or None for no override.
-    pub(super) fn native_display_brightness(&self, display: DisplayRef) -> Option<(u8, u8)> {
+    pub(super) fn native_display_brightness(&self, display: DisplayRef) -> Option<(u8, u8)> { if let Some(__l) = crate::points_generated::P3017.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let packed = self.display_int(display, None, 16)?;
         (packed != -1).then_some((((packed >> 4) & 15) as u8, ((packed >> 20) & 15) as u8))
     }
@@ -234,7 +234,7 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         brightness: Option<(u8, u8)>,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3016.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if brightness.is_some_and(|(block, sky)| block > 15 || sky > 15) {
             return false;
         }
@@ -253,7 +253,7 @@ impl Game<'_> {
     }
 
     /// `Display.getViewRange`.
-    pub(super) fn native_display_view_range(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn native_display_view_range(&self, display: DisplayRef) -> Option<f32> { if let Some(__l) = crate::points_generated::P3015.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_float(display, 17)
     }
 
@@ -262,12 +262,12 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         range: f32,
-    ) -> bool {
+    ) -> bool { let (range,) = match crate::points_generated::P3014.get() { Some(__l) => { let mut __a = (range,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (range,) };
         self.display_put_float(display, "view_range", range)
     }
 
     /// `Display.getShadowRadius`.
-    pub(super) fn native_display_shadow_radius(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn native_display_shadow_radius(&self, display: DisplayRef) -> Option<f32> { if let Some(__l) = crate::points_generated::P3013.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_float(display, 18)
     }
 
@@ -276,12 +276,12 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         radius: f32,
-    ) -> bool {
+    ) -> bool { let (radius,) = match crate::points_generated::P3012.get() { Some(__l) => { let mut __a = (radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (radius,) };
         self.display_put_float(display, "shadow_radius", radius)
     }
 
     /// `Display.getShadowStrength`.
-    pub(super) fn native_display_shadow_strength(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn native_display_shadow_strength(&self, display: DisplayRef) -> Option<f32> { if let Some(__l) = crate::points_generated::P3011.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_float(display, 19)
     }
 
@@ -290,32 +290,32 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         strength: f32,
-    ) -> bool {
+    ) -> bool { let (strength,) = match crate::points_generated::P3010.get() { Some(__l) => { let mut __a = (strength,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (strength,) };
         self.display_put_float(display, "shadow_strength", strength)
     }
 
     /// `Display.getWidth`: the culling box's width, 0 for none.
-    pub(super) fn native_display_width(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn native_display_width(&self, display: DisplayRef) -> Option<f32> { if let Some(__l) = crate::points_generated::P3009.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_float(display, 20)
     }
 
     /// `Display.setWidth`. False for a value that isn't finite.
-    pub(super) fn native_display_set_width(&mut self, display: DisplayRef, width: f32) -> bool {
+    pub(super) fn native_display_set_width(&mut self, display: DisplayRef, width: f32) -> bool { let (width,) = match crate::points_generated::P3008.get() { Some(__l) => { let mut __a = (width,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (width,) };
         self.display_put_float(display, "width", width)
     }
 
     /// `Display.getHeight`: the culling box's height, 0 for none.
-    pub(super) fn native_display_height(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn native_display_height(&self, display: DisplayRef) -> Option<f32> { if let Some(__l) = crate::points_generated::P3007.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_float(display, 21)
     }
 
     /// `Display.setHeight`. False for a value that isn't finite.
-    pub(super) fn native_display_set_height(&mut self, display: DisplayRef, height: f32) -> bool {
+    pub(super) fn native_display_set_height(&mut self, display: DisplayRef, height: f32) -> bool { let (height,) = match crate::points_generated::P3006.get() { Some(__l) => { let mut __a = (height,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (height,) };
         self.display_put_float(display, "height", height)
     }
 
     /// `Display.getGlowColorOverride`: an ARGB color, or -1 for none.
-    pub(super) fn native_display_glow_color_override(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn native_display_glow_color_override(&self, display: DisplayRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3005.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_int(display, None, 22)
     }
 
@@ -324,12 +324,12 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         color: i32,
-    ) -> bool {
+    ) -> bool { let (color,) = match crate::points_generated::P3004.get() { Some(__l) => { let mut __a = (color,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (color,) };
         self.display_put(display, None, "glow_color_override", Tag::Int(color))
     }
 
     /// `Display.getTransformationInterpolationDuration`, in ticks.
-    pub(super) fn native_display_interpolation_duration(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn native_display_interpolation_duration(&self, display: DisplayRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3003.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_int(display, None, 9)
     }
 
@@ -338,13 +338,13 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         ticks: i32,
-    ) -> bool {
+    ) -> bool { let (ticks,) = match crate::points_generated::P3002.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         self.display_put(display, None, "interpolation_duration", Tag::Int(ticks))
     }
 
     /// `Display.getTransformationInterpolationDelay`: ticks before an
     /// interpolation starts.
-    pub(super) fn native_display_start_interpolation(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn native_display_start_interpolation(&self, display: DisplayRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3001.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_int(display, None, 8)
     }
 
@@ -355,7 +355,7 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         ticks: i32,
-    ) -> bool {
+    ) -> bool { let (ticks,) = match crate::points_generated::P3000.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         let Some((_, id)) = self.display_entity(display) else {
             return false;
         };
@@ -365,7 +365,7 @@ impl Game<'_> {
     }
 
     /// `Display.getPosRotInterpolationDuration`: ticks a move eases over, 0 to 59.
-    pub(super) fn native_display_teleport_duration(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn native_display_teleport_duration(&self, display: DisplayRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P2999.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_int(display, None, 10)
     }
 
@@ -375,13 +375,13 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         ticks: i32,
-    ) -> bool {
+    ) -> bool { let (ticks,) = match crate::points_generated::P2998.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         let ticks = Tag::Int(ticks.clamp(0, 59));
         self.display_put(display, None, "teleport_duration", ticks)
     }
 
     /// `TextDisplay.getText`; None for another kind of display.
-    pub(super) fn native_display_text(&self, display: DisplayRef) -> Option<Text> {
+    pub(super) fn native_display_text(&self, display: DisplayRef) -> Option<Text> { if let Some(__l) = crate::points_generated::P2997.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.display_value(display, Some(NativeDisplayKind::Text), 23)? {
             Value::Text(tag) => Some(comp_text(&tag_to_json(&tag))),
             _ => None,
@@ -389,13 +389,13 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.setText`; false for another kind of display.
-    pub(super) fn native_display_set_text(&mut self, display: DisplayRef, text: Text) -> bool {
+    pub(super) fn native_display_set_text(&mut self, display: DisplayRef, text: Text) -> bool { if let Some(__l) = crate::points_generated::P2996.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let text = json_to_tag(&text.component());
         self.display_put(display, Some(NativeDisplayKind::Text), "text", text)
     }
 
     /// `TextDisplay.getLineWidth`.
-    pub(super) fn native_display_line_width(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn native_display_line_width(&self, display: DisplayRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P2995.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_int(display, Some(NativeDisplayKind::Text), 24)
     }
 
@@ -404,7 +404,7 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         width: i32,
-    ) -> bool {
+    ) -> bool { let (width,) = match crate::points_generated::P2994.get() { Some(__l) => { let mut __a = (width,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (width,) };
         self.display_put(
             display,
             Some(NativeDisplayKind::Text),
@@ -414,12 +414,12 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.getBackgroundColor`: ARGB.
-    pub(super) fn native_display_background(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn native_display_background(&self, display: DisplayRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P2993.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_int(display, Some(NativeDisplayKind::Text), 25)
     }
 
     /// `TextDisplay.setBackgroundColor`; false for another kind of display.
-    pub(super) fn native_display_set_background(&mut self, display: DisplayRef, argb: i32) -> bool {
+    pub(super) fn native_display_set_background(&mut self, display: DisplayRef, argb: i32) -> bool { let (argb,) = match crate::points_generated::P2992.get() { Some(__l) => { let mut __a = (argb,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (argb,) };
         self.display_put(
             display,
             Some(NativeDisplayKind::Text),
@@ -429,7 +429,7 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.getTextOpacity`: -1 is opaque, else 0 to 127 then -128 to -2.
-    pub(super) fn native_display_text_opacity(&self, display: DisplayRef) -> Option<i8> {
+    pub(super) fn native_display_text_opacity(&self, display: DisplayRef) -> Option<i8> { if let Some(__l) = crate::points_generated::P2991.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_byte(display, NativeDisplayKind::Text, 26)
     }
 
@@ -438,7 +438,7 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         opacity: i8,
-    ) -> bool {
+    ) -> bool { let (opacity,) = match crate::points_generated::P2990.get() { Some(__l) => { let mut __a = (opacity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (opacity,) };
         self.display_put(
             display,
             Some(NativeDisplayKind::Text),
@@ -447,37 +447,37 @@ impl Game<'_> {
         )
     }
 
-    fn display_text_flag(&self, display: DisplayRef, bit: i8) -> Option<bool> {
+    fn display_text_flag(&self, display: DisplayRef, bit: i8) -> Option<bool> { let (bit,) = match crate::points_generated::P2989.get() { Some(__l) => { let mut __a = (bit,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (bit,) };
         Some(self.display_byte(display, NativeDisplayKind::Text, 27)? & bit != 0)
     }
 
-    fn display_set_text_flag(&mut self, display: DisplayRef, key: &str, on: bool) -> bool {
+    fn display_set_text_flag(&mut self, display: DisplayRef, key: &str, on: bool) -> bool { let (on,) = match crate::points_generated::P2988.get() { Some(__l) => { let mut __a = (on,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (on,) };
         let value = Tag::Byte(i8::from(on));
         self.display_put(display, Some(NativeDisplayKind::Text), key, value)
     }
 
     /// `TextDisplay.FLAG_SHADOW`.
-    pub(super) fn native_display_text_shadow(&self, display: DisplayRef) -> Option<bool> {
+    pub(super) fn native_display_text_shadow(&self, display: DisplayRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P2987.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_text_flag(display, 1)
     }
 
     /// Sets the shadow flag; false for another kind of display.
-    pub(super) fn native_display_set_text_shadow(&mut self, display: DisplayRef, on: bool) -> bool {
+    pub(super) fn native_display_set_text_shadow(&mut self, display: DisplayRef, on: bool) -> bool { let (on,) = match crate::points_generated::P2986.get() { Some(__l) => { let mut __a = (on,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (on,) };
         self.display_set_text_flag(display, "shadow", on)
     }
 
     /// `TextDisplay.FLAG_SEE_THROUGH`.
-    pub(super) fn native_display_see_through(&self, display: DisplayRef) -> Option<bool> {
+    pub(super) fn native_display_see_through(&self, display: DisplayRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P2985.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_text_flag(display, 2)
     }
 
     /// Sets the see-through flag; false for another kind of display.
-    pub(super) fn native_display_set_see_through(&mut self, display: DisplayRef, on: bool) -> bool {
+    pub(super) fn native_display_set_see_through(&mut self, display: DisplayRef, on: bool) -> bool { let (on,) = match crate::points_generated::P2984.get() { Some(__l) => { let mut __a = (on,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (on,) };
         self.display_set_text_flag(display, "see_through", on)
     }
 
     /// `TextDisplay.FLAG_USE_DEFAULT_BACKGROUND`.
-    pub(super) fn native_display_default_background(&self, display: DisplayRef) -> Option<bool> {
+    pub(super) fn native_display_default_background(&self, display: DisplayRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P2983.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.display_text_flag(display, 4)
     }
 
@@ -486,7 +486,7 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         on: bool,
-    ) -> bool {
+    ) -> bool { let (on,) = match crate::points_generated::P2982.get() { Some(__l) => { let mut __a = (on,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (on,) };
         self.display_set_text_flag(display, "default_background", on)
     }
 
@@ -494,7 +494,7 @@ impl Game<'_> {
     pub(super) fn native_display_alignment(
         &self,
         display: DisplayRef,
-    ) -> Option<NativeTextAlignment> {
+    ) -> Option<NativeTextAlignment> { if let Some(__l) = crate::points_generated::P2981.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let flags = self.display_byte(display, NativeDisplayKind::Text, 27)?;
         Some(match (flags & 8 != 0, flags & 16 != 0) {
             (true, _) => NativeTextAlignment::Left,
@@ -508,13 +508,13 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         alignment: NativeTextAlignment,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2980.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let name = Tag::String(alignment.name().into());
         self.display_put(display, Some(NativeDisplayKind::Text), "alignment", name)
     }
 
     /// `BlockDisplay.getBlockState`; None for another kind of display.
-    pub(super) fn native_display_block_state(&self, display: DisplayRef) -> Option<BlockStateId> {
+    pub(super) fn native_display_block_state(&self, display: DisplayRef) -> Option<BlockStateId> { if let Some(__l) = crate::points_generated::P2979.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (_, tag) = self.display_tag(display, Some(NativeDisplayKind::Block))?;
         tag.get("block_state")
             .and_then(|t| self.state_from_nbt(t))
@@ -526,7 +526,7 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         state: BlockStateId,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2978.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.pack.assets.registry.state(state).is_none() {
             return false;
         }
@@ -535,7 +535,7 @@ impl Game<'_> {
     }
 
     /// `ItemDisplay.getItemStack`; None for another kind of display or an empty stack.
-    pub(super) fn native_display_item(&self, display: DisplayRef) -> Option<ItemStack> {
+    pub(super) fn native_display_item(&self, display: DisplayRef) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P2977.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (_, tag) = self.display_tag(display, Some(NativeDisplayKind::Item))?;
         item_from_nbt(tag.get("item")?)
     }
@@ -545,7 +545,7 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         stack: Option<ItemStack>,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2976.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let stack = stack.filter(|s| s.count > 0 && &*s.item != "minecraft:air");
         self.display_edit(display, Some(NativeDisplayKind::Item), |c| match stack {
             Some(stack) => {
@@ -561,7 +561,7 @@ impl Game<'_> {
     pub(super) fn native_display_item_context(
         &self,
         display: DisplayRef,
-    ) -> Option<NativeItemDisplayContext> {
+    ) -> Option<NativeItemDisplayContext> { if let Some(__l) = crate::points_generated::P2975.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (_, tag) = self.display_tag(display, Some(NativeDisplayKind::Item))?;
         let name = match tag.get("item_display") {
             Some(Tag::String(s)) => s.to_string_lossy(),
@@ -575,7 +575,7 @@ impl Game<'_> {
         &mut self,
         display: DisplayRef,
         context: NativeItemDisplayContext,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2974.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let name = Tag::String(context.name().into());
         self.display_put(display, Some(NativeDisplayKind::Item), "item_display", name)
     }

@@ -12,7 +12,7 @@ use horizon_client::{
 
 impl Game<'_> {
     /// `Hud.extractOverlayMessage`: the action bar.
-    pub(super) fn draw_overlay_message(&self, batch: &mut HudBatch, bar_height: i32) {
+    pub(super) fn draw_overlay_message(&self, batch: &mut HudBatch, bar_height: i32) { let (bar_height,) = match crate::points_generated::P5647.get() { Some(__l) => { let mut __a = (bar_height,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (bar_height,) };
         let (w, h) = (batch.width as i32, batch.height as i32);
         let partial = self.clock.fraction() as f32;
         let background = self.settings.text_background(0.0);
@@ -23,7 +23,7 @@ impl Game<'_> {
         hud_layout::paint(batch, &self.gui.atlas, &draws);
     }
     /// `Hud.extractTitle`.
-    pub(super) fn draw_title(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_title(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5646.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (w, h) = (batch.width as i32, batch.height as i32);
         let partial = self.clock.fraction() as f32;
         let background = self.settings.text_background(0.0);
@@ -33,7 +33,7 @@ impl Game<'_> {
     }
     /// `Hud.extractSavingIndicator`, under the screens: the option, then the
     /// fading "Saving world" text.
-    pub(super) fn draw_saving_indicator(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_saving_indicator(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5645.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.settings.autosave_indicator {
             return;
         }
@@ -48,7 +48,7 @@ impl Game<'_> {
         hud_layout::paint(batch, &self.gui.atlas, &draws);
     }
     /// The selected stack as `Hud.tick` compares it for the name highlight.
-    fn held_name(&self) -> Option<HeldName> {
+    fn held_name(&self) -> Option<HeldName> { if let Some(__l) = crate::points_generated::P5644.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let stack = self.inventory.get(self.selected)?.as_ref()?;
         let custom = stack.data().is_some_and(|data| data.custom_name.is_some());
         let default_rarity = self.item_rarity(&stack.item);
@@ -68,7 +68,7 @@ impl Game<'_> {
         })
     }
     /// The title, action bar and selected-item parts of `Hud.tick`.
-    pub(super) fn tick_hud(&mut self) {
+    pub(super) fn tick_hud(&mut self) { if let Some(__l) = crate::points_generated::P5643.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.titles.tick();
         self.tick_in_bed_chat();
         // `MinecraftServer.isCurrentlySaving` of single player's server.
@@ -82,7 +82,7 @@ impl Game<'_> {
             .tick(held, f64::from(self.settings.notification_display_time));
     }
     /// `Hud.extractSelectedItemName`.
-    pub(super) fn draw_selected_name(&self, batch: &mut HudBatch, bar_height: i32, can_hurt: bool) {
+    pub(super) fn draw_selected_name(&self, batch: &mut HudBatch, bar_height: i32, can_hurt: bool) { let (bar_height,can_hurt,) = match crate::points_generated::P5642.get() { Some(__l) => { let mut __a = (bar_height,can_hurt,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (bar_height,can_hurt,) };
         let draws = self.tool_highlight.draw(
             batch.width as i32,
             batch.height as i32,

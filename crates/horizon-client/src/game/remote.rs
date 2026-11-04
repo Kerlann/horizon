@@ -746,7 +746,7 @@ impl Game<'_> {
     pub(super) fn remote_sound_name(
         &self,
         sound: &(i32, Option<(String, Option<f32>)>),
-    ) -> Option<String> {
+    ) -> Option<String> { if let Some(__l) = crate::points_generated::P4963.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match &sound.1 {
             Some((location, _)) => Some(location.clone()),
             None => self.remote.as_ref().and_then(|r| {
@@ -758,7 +758,7 @@ impl Game<'_> {
         }
     }
     /// Position of an entity `ClientboundSoundEntityPacket` names.
-    fn remote_entity_position(&self, id: i32) -> Option<[f64; 3]> {
+    fn remote_entity_position(&self, id: i32) -> Option<[f64; 3]> { let (id,) = match crate::points_generated::P4962.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let r = self.remote.as_ref()?;
         let player = self
             .player
@@ -770,14 +770,14 @@ impl Game<'_> {
     /// `ClientboundDamageEventPacket` (`LivingEntity.handleDamageEvent`):
     /// `Player.getHurtSound` is the damage type's effects, with the codec's
     /// `hurt` default when the type is unknown.
-    pub(super) fn remote_hurt_sound(&self, source_type: i32) -> &'static str {
+    pub(super) fn remote_hurt_sound(&self, source_type: i32) -> &'static str { let (source_type,) = match crate::points_generated::P4961.get() { Some(__l) => { let mut __a = (source_type,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (source_type,) };
         match self.remote.as_ref() {
             Some(r) => hurt_sound_for(&r.registries, &self.motion.health.damage, source_type),
             None => horizon_client::health::hurt_sound("hurt"),
         }
     }
     /// Leave the title for a server (ConnectScreen): an empty world fed by the connection.
-    pub(super) fn connect_server(&mut self, address: &str, name: &str) -> Result<()> {
+    pub(super) fn connect_server(&mut self, address: &str, name: &str) -> Result<()> { if let Some(__l) = crate::points_generated::P4960.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.connect_server_with_cookies(address, name, None)
     }
     /// `connect_server` carrying a transfer's stored server cookies
@@ -787,7 +787,7 @@ impl Game<'_> {
         address: &str,
         name: &str,
         cookies: Option<horizon_client::net::Cookies>,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P4959.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.connect_server_with_options(address, name, cookies, false)
     }
     /// `ConnectScreen.startConnecting`: keep LAN discovery's server kind through loading.
@@ -797,7 +797,7 @@ impl Game<'_> {
         name: &str,
         cookies: Option<horizon_client::net::Cookies>,
         lan: bool,
-    ) -> Result<()> {
+    ) -> Result<()> { let (lan,) = match crate::points_generated::P4958.get() { Some(__l) => { let mut __a = (lan,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (lan,) };
         super::world_loading::preload_server_loot(
             &self.options.resources,
             &self.res.core.item_data,
@@ -837,7 +837,7 @@ impl Game<'_> {
         &mut self,
         pipe: horizon_protocol::connection::Pipe,
         name: &str,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P4957.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.join_server("local", name, Some(pipe), None, false)
     }
     fn join_server(
@@ -847,7 +847,7 @@ impl Game<'_> {
         local: Option<horizon_protocol::connection::Pipe>,
         cookies: Option<horizon_client::net::Cookies>,
         lan: bool,
-    ) -> Result<()> {
+    ) -> Result<()> { let (lan,) = match crate::points_generated::P4956.get() { Some(__l) => { let mut __a = (lan,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (lan,) };
         self.reset_tutorial();
         self.perf.world_opening();
         // A server's own biomes come over the connection; the last local
@@ -1132,7 +1132,7 @@ impl Game<'_> {
     /// Minecraft.disconnect's `ClientPlayerNetworkEvent.LoggingOut`: on
     /// leaving a world, and on quitting the game from one. Once per
     /// connection, whichever way out runs first.
-    pub(super) fn client_logging_out(&mut self) {
+    pub(super) fn client_logging_out(&mut self) { if let Some(__l) = crate::points_generated::P4955.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(remote) = self.remote.as_mut().filter(|r| !r.logged_out) else {
             return;
         };
@@ -1147,7 +1147,7 @@ impl Game<'_> {
     }
 
     /// Disconnect and return to the multiplayer screen (DisconnectedScreen).
-    pub(super) fn leave_server(&mut self, reason: Option<String>) -> Result<()> {
+    pub(super) fn leave_server(&mut self, reason: Option<String>) -> Result<()> { if let Some(__l) = crate::points_generated::P4954.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if reason.is_none() && self.integrated.as_ref().is_some_and(|s| !s.stopped()) {
             return self.begin_closing_save(false);
         }
@@ -1259,7 +1259,7 @@ impl Game<'_> {
     /// `Hud.onDisconnected`, from `Minecraft.disconnect` and `clearClientLevel`
     /// (a proxy's reconfiguration too), but the chat: joining clears it and a
     /// reconfiguration keeps it (`ChatComponent.storeState`).
-    fn hud_disconnected(&mut self) {
+    fn hud_disconnected(&mut self) { if let Some(__l) = crate::points_generated::P4953.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.tab_list.reset();
         self.boss_overlay.reset();
         self.adv.toasts.clear();
@@ -1268,17 +1268,17 @@ impl Game<'_> {
         self.titles.reset_times();
     }
 
-    pub(super) fn send(&self, packet: S) {
+    pub(super) fn send(&self, packet: S) { if let Some(__l) = crate::points_generated::P4952.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(r) = &self.remote {
             r.session.send(packet);
         }
     }
-    fn next_sequence(&mut self) -> i32 {
+    fn next_sequence(&mut self) -> i32 { if let Some(__l) = crate::points_generated::P4951.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let r = self.remote.as_mut().expect("remote");
         r.sequence += 1;
         r.sequence
     }
-    fn item_name(&self, id: i32) -> Arc<str> {
+    fn item_name(&self, id: i32) -> Arc<str> { let (id,) = match crate::points_generated::P4950.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let r = self.remote.as_ref().expect("remote");
         Arc::from(
             r.builtin
@@ -1288,14 +1288,14 @@ impl Game<'_> {
         )
     }
     /// The server's network id of a mob effect (`brewing::EFFECTS` id).
-    pub(super) fn remote_effect_network_id(&self, effect: &str) -> Option<i32> {
+    pub(super) fn remote_effect_network_id(&self, effect: &str) -> Option<i32> { if let Some(__l) = crate::points_generated::P4949.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.remote.as_ref()?;
         r.builtin
             .get("minecraft:mob_effect")?
             .id(&format!("minecraft:{effect}"))
     }
     /// A mob effect's network id as the effect (`brewing::EFFECTS` id).
-    pub(super) fn remote_effect_id(&self, effect: i32) -> Option<&'static str> {
+    pub(super) fn remote_effect_id(&self, effect: i32) -> Option<&'static str> { let (effect,) = match crate::points_generated::P4948.get() { Some(__l) => { let mut __a = (effect,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (effect,) };
         let r = self.remote.as_ref()?;
         let name = r.builtin.get("minecraft:mob_effect")?.name(effect)?;
         horizon_client::brewing::effect(name).map(|d| d.id)
@@ -1303,7 +1303,7 @@ impl Game<'_> {
     /// ClientPacketListener.handleUpdateMobEffect for the player itself
     /// (`LivingEntity.forceAddEffect`): the effect replaces any of its kind.
     /// Other entities' effects are not shown.
-    fn remote_effect(&mut self, p: &play::UpdateMobEffect) {
+    fn remote_effect(&mut self, p: &play::UpdateMobEffect) { if let Some(__l) = crate::points_generated::P4947.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.as_ref().is_none_or(|r| r.entity_id != p.id) {
             return;
         }
@@ -1331,7 +1331,7 @@ impl Game<'_> {
             }
         }
     }
-    fn item_id(&self, name: &str) -> i32 {
+    fn item_id(&self, name: &str) -> i32 { if let Some(__l) = crate::points_generated::P4946.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.remote.as_ref().expect("remote");
         r.builtin
             .get("minecraft:item")
@@ -1340,7 +1340,7 @@ impl Game<'_> {
     }
     /// A stack from the server, decoded as the saved and command item NBT
     /// are, so tooltips and models see every field.
-    pub(super) fn to_stack(&self, s: &Option<Stack>) -> Option<ItemStack> {
+    pub(super) fn to_stack(&self, s: &Option<Stack>) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P4945.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.remote.as_ref()?;
         let stack = s.as_ref()?;
         if !horizon_protocol::item::custom::permitted(stack, r.registries.custom_components)
@@ -1358,7 +1358,7 @@ impl Game<'_> {
     /// A stack to the server (`SetCreativeModeSlot`): the same component
     /// patch a Horizon server sends its clients, with the registries' ids, so
     /// the server's echo doesn't hand back a bare item.
-    fn to_network(&self, s: &Option<ItemStack>) -> Option<Stack> {
+    fn to_network(&self, s: &Option<ItemStack>) -> Option<Stack> { if let Some(__l) = crate::points_generated::P4944.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.remote.as_ref()?;
         // A stack as the server sent it, only its count changed: its own
         // components go back, as a vanilla client keeps them.
@@ -1402,7 +1402,7 @@ impl Game<'_> {
     }
     /// `HashedStack.create` with the connection's registries (the client's
     /// `decoratedHashOpsGenerator`).
-    fn hashed_stack(&self, s: &Option<ItemStack>) -> Option<Hashed> {
+    fn hashed_stack(&self, s: &Option<ItemStack>) -> Option<Hashed> { if let Some(__l) = crate::points_generated::P4943.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.remote.as_ref()?;
         let names = SyncedNames {
             builtin: &r.builtin,
@@ -1417,7 +1417,7 @@ impl Game<'_> {
         &mut self,
         content: horizon_client::text::Text,
         source: horizon_client::chat::ChatSource,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4942.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.signed_chat_line(content, source, None, ChatTrust::Secure)
     }
     /// `chat_line` of a player message, keeping its signature for a
@@ -1428,7 +1428,7 @@ impl Game<'_> {
         source: horizon_client::chat::ChatSource,
         signature: Option<Signature>,
         trust: ChatTrust,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4941.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.ui.chat.shows(source) {
             return false;
         }
@@ -1469,7 +1469,7 @@ impl Game<'_> {
     /// `ChatListener.handleMessage` for player and disguised chat: held in the
     /// queue while Chat Delay is set, shown at once otherwise. `narration` is
     /// the chat type's narration of it (`decorateNarration`).
-    fn handle_player_chat(&mut self, chat: QueuedChat) {
+    fn handle_player_chat(&mut self, chat: QueuedChat) { if let Some(__l) = crate::points_generated::P4940.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.chat_delay_ms() > 0 {
             if let Some(r) = self.remote.as_mut() {
                 r.chat_queue.push_back(chat);
@@ -1489,7 +1489,7 @@ impl Game<'_> {
         &mut self,
         chat_type: &play::ChatTypeBound,
         signature: Option<&Signature>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4939.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(signature) = signature {
             self.mark_message_processed(signature, false);
         }
@@ -1525,7 +1525,7 @@ impl Game<'_> {
         content: &str,
         unsigned: Option<&Tag>,
         decorated: &horizon_client::text::Text,
-    ) -> ChatTrust {
+    ) -> ChatTrust { let (signed,timestamp,) = match crate::points_generated::P4938.get() { Some(__l) => { let mut __a = (signed,timestamp,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (signed,timestamp,) };
         use horizon_client::scoreboard::{comp_text, tag_to_json};
         if self.integrated.is_some() && self.remote.as_ref().is_some_and(|r| r.profile == sender) {
             return ChatTrust::Secure;
@@ -1564,7 +1564,7 @@ impl Game<'_> {
     /// (`ChatListener.removeFromDelayedMessageQueue`), a shown one is
     /// replaced (`ChatComponent.deleteMessage`). A signature the cache
     /// doesn't hold is an invalid packet.
-    fn handle_delete_chat(&mut self, packed: &(i32, Option<Vec<u8>>)) -> Result<()> {
+    fn handle_delete_chat(&mut self, packed: &(i32, Option<Vec<u8>>)) -> Result<()> { if let Some(__l) = crate::points_generated::P4937.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(r) = self.remote.as_mut() else {
             return Ok(());
         };
@@ -1587,7 +1587,7 @@ impl Game<'_> {
 
     /// A message's `accept`: shown, it is narrated (`narrateChatMessage`) and
     /// starts the Chat Delay wait again.
-    fn accept_chat(&mut self, chat: QueuedChat) -> bool {
+    fn accept_chat(&mut self, chat: QueuedChat) -> bool { if let Some(__l) = crate::points_generated::P4936.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let signature = chat.signature;
         let shown = self.player_chat_line(chat);
         if let Some(signature) = &signature {
@@ -1602,7 +1602,7 @@ impl Game<'_> {
     /// `showMessageToPlayer`: the line joins the chat if Only Show Secure
     /// Chat, mods and the Chat option let it through, and the narrator says
     /// it (`sayChatQueued`).
-    fn player_chat_line(&mut self, chat: QueuedChat) -> bool {
+    fn player_chat_line(&mut self, chat: QueuedChat) -> bool { if let Some(__l) = crate::points_generated::P4935.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let QueuedChat {
             mut line,
             signature,
@@ -1640,7 +1640,7 @@ impl Game<'_> {
         sender: u128,
         chat_type: Option<i32>,
         line: &mut horizon_client::text::Text,
-    ) -> bool {
+    ) -> bool { let (system,overlay,) = match crate::points_generated::P4934.get() { Some(__l) => { let mut __a = (system,overlay,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (system,overlay,) };
         if !mod_api::__private::listened(mod_api::HookId::ClientChatReceived) {
             return true;
         }
@@ -1655,14 +1655,14 @@ impl Game<'_> {
 
     /// `ChatListener.messageDelay`: Chat Delay in milliseconds, as Java
     /// truncates it.
-    fn chat_delay_ms(&self) -> i64 {
+    fn chat_delay_ms(&self) -> i64 { if let Some(__l) = crate::points_generated::P4933.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (self.settings.chat_delay * 1000.0) as i64
     }
 
     /// `ChatListener.tick`: while paused the wait does not run down; with no
     /// Chat Delay the queue flushes; otherwise the next message the chat takes
     /// shows once the delay has passed since the last shown one.
-    pub(super) fn tick_chat_queue(&mut self) {
+    pub(super) fn tick_chat_queue(&mut self) { if let Some(__l) = crate::points_generated::P4932.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let delay = self.chat_delay_ms();
         // Minecraft.isPaused: a single-player pausing screen, not every pause menu.
         if self.pause {
@@ -1701,7 +1701,7 @@ impl Game<'_> {
 
     /// `ChatListener.flushQueue`: every held-back message shows now, and the
     /// delay starts over.
-    fn flush_chat_queue(&mut self) {
+    fn flush_chat_queue(&mut self) { if let Some(__l) = crate::points_generated::P4931.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(queue) = self
             .remote
             .as_mut()
@@ -1719,7 +1719,7 @@ impl Game<'_> {
 
     /// The minecarts the server sent, for the control socket's `status`
     /// (their velocity is not tracked here).
-    pub(super) fn remote_carts(&self) -> Option<Vec<serde_json::Value>> {
+    pub(super) fn remote_carts(&self) -> Option<Vec<serde_json::Value>> { if let Some(__l) = crate::points_generated::P4930.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.remote.as_ref()?;
         let mut carts: Vec<&Tracked> = r
             .entities
@@ -1740,53 +1740,53 @@ impl Game<'_> {
     }
 
     /// This player's account: a splitscreen player's own, else the game's (P1's).
-    pub(super) fn auth(&self) -> Option<std::sync::Arc<horizon_client::auth::AuthSession>> {
+    pub(super) fn auth(&self) -> Option<std::sync::Arc<horizon_client::auth::AuthSession>> { if let Some(__l) = crate::points_generated::P4929.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.options.split_guest {
             true => self.split_auth.clone(),
             false => horizon_client::auth::current(),
         }
     }
     /// Connected to a server in online mode (its Login): each player needs its own account.
-    pub(super) fn online_server(&self) -> bool {
+    pub(super) fn online_server(&self) -> bool { if let Some(__l) = crate::points_generated::P4928.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote.as_ref().is_some_and(|r| r.online_mode)
     }
 
     /// `ClientSuggestionProvider.customCompletionSuggestions` of the server
     /// connection (none without one).
-    pub(super) fn remote_custom_completions(&self) -> std::collections::BTreeSet<String> {
+    pub(super) fn remote_custom_completions(&self) -> std::collections::BTreeSet<String> { if let Some(__l) = crate::points_generated::P4927.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote
             .as_ref()
             .map(|r| r.custom_completions.clone())
             .unwrap_or_default()
     }
     /// The names in the server's player list, sorted.
-    pub(super) fn remote_online_names(&self) -> Option<Vec<String>> {
+    pub(super) fn remote_online_names(&self) -> Option<Vec<String>> { if let Some(__l) = crate::points_generated::P4926.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.remote.as_ref()?;
         let mut names: Vec<String> = r.players.values().cloned().collect();
         names.sort();
         Some(names)
     }
     /// The open menu's window id (0: the inventory).
-    pub(super) fn remote_menu_id(&self) -> i32 {
+    pub(super) fn remote_menu_id(&self) -> i32 { if let Some(__l) = crate::points_generated::P4925.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote
             .as_ref()
             .and_then(|r| r.menu.as_ref())
             .map_or(0, |m| m.0)
     }
     /// The server's last `n` chat lines, newest first.
-    pub(super) fn remote_chat(&self, n: usize) -> Option<Vec<String>> {
+    pub(super) fn remote_chat(&self, n: usize) -> Option<Vec<String>> { let (n,) = match crate::points_generated::P4924.get() { Some(__l) => { let mut __a = (n,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (n,) };
         let r = self.remote.as_ref()?;
         Some(r.chat.iter().rev().take(n).map(|l| l.0.clone()).collect())
     }
 
     /// Received events left for the next frame (`poll_remote`): until they
     /// are handled, the terrain the server sent is not all there.
-    pub(super) fn remote_backlog(&self) -> usize {
+    pub(super) fn remote_backlog(&self) -> usize { if let Some(__l) = crate::points_generated::P4923.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote.as_ref().map_or(0, |r| r.backlog.len())
     }
     /// A headless command oracle has a real connection but no movement tick.
     /// Acknowledge loaded terrain without predicting or sending movement.
-    pub(super) fn poll_stationary_client(&mut self) -> Result<()> {
+    pub(super) fn poll_stationary_client(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P4922.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.poll_remote()?;
         let loaded = self.player.as_ref().is_some_and(|p| {
             self.streaming.is_lit(
@@ -1809,7 +1809,7 @@ impl Game<'_> {
     /// the next chunk packet on wait for the next frame, unless they have
     /// already waited `BACKLOG_LIMIT`. A chunk packet still decoding holds
     /// back what follows it.
-    pub(super) fn poll_remote(&mut self) -> Result<()> {
+    pub(super) fn poll_remote(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P4921.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(r) = self.remote.as_mut() else {
             return Ok(());
         };
@@ -2056,7 +2056,7 @@ impl Game<'_> {
     }
     /// ClientSuggestionProvider.customSuggestion: the chat's completion
     /// request for an `ask_server` node goes to the server.
-    fn send_suggestion_request(&mut self) {
+    fn send_suggestion_request(&mut self) { if let Some(__l) = crate::points_generated::P4920.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_none() {
             return;
         }
@@ -2079,7 +2079,7 @@ impl Game<'_> {
     }
     /// ClientboundCommandSuggestionsPacket: id, range start and length, then
     /// each suggestion's text and optional tooltip.
-    fn handle_command_suggestions(&mut self, data: &[u8]) {
+    fn handle_command_suggestions(&mut self, data: &[u8]) { if let Some(__l) = crate::points_generated::P4919.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let lang = self
             .remote
             .as_ref()
@@ -2109,7 +2109,7 @@ impl Game<'_> {
             self.command_block_server_suggestions(id, range, list);
         }
     }
-    fn set_registries(&mut self, registries: Arc<Dynamic>) {
+    fn set_registries(&mut self, registries: Arc<Dynamic>) { if let Some(__l) = crate::points_generated::P4918.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The server's biomes the game lacks (a world data pack's) join the
         // game's table, from the data it sent: colours, meshing and the
         // chunk format all go through that table. The window's own server
@@ -2150,7 +2150,7 @@ impl Game<'_> {
         spawn: &play::SpawnInfo,
         keep_world: bool,
         reason: horizon_client::level_loading::Reason,
-    ) {
+    ) { let (keep_world,) = match crate::points_generated::P4917.get() { Some(__l) => { let mut __a = (keep_world,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (keep_world,) };
         // The replacement player starts with its inventory menu, even if the
         // server switched levels without closing the previous container.
         self.remote_close_local();
@@ -2286,7 +2286,7 @@ impl Game<'_> {
     /// `ClientChunkCache.Storage.inRange`: within the storage around the
     /// view centre, `calculateStorageRange` (the server's radius, at least
     /// two, plus three) chunks each way.
-    pub(super) fn remote_chunk_in_range(&self, x: i32, z: i32) -> bool {
+    pub(super) fn remote_chunk_in_range(&self, x: i32, z: i32) -> bool { let (x,z,) = match crate::points_generated::P4916.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,z,) };
         self.remote
             .as_ref()
             .is_none_or(|r| Self::chunk_inside_remote_range(r.chunk_center, r.view_distance, x, z))
@@ -2301,7 +2301,7 @@ impl Game<'_> {
         &mut self,
         center: (i32, i32),
         distance: i32,
-    ) -> Vec<(i32, i32)> {
+    ) -> Vec<(i32, i32)> { let (distance,) = match crate::points_generated::P4915.get() { Some(__l) => { let mut __a = (distance,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (distance,) };
         let mut gone: horizon_client::fast_hash::FxHashSet<(i32, i32)> = self
             .world
             .chunks
@@ -2313,7 +2313,7 @@ impl Game<'_> {
     }
     /// Every column goes with the client level. Returns the positions it
     /// freed (`forget_remote_columns`).
-    fn forget_all_remote_columns(&mut self) -> Vec<(i32, i32)> {
+    fn forget_all_remote_columns(&mut self) -> Vec<(i32, i32)> { if let Some(__l) = crate::points_generated::P4914.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut gone = self.world.chunks.keys().copied().collect();
         self.forget_remote_columns(&mut gone, false)
     }
@@ -2327,7 +2327,7 @@ impl Game<'_> {
         &mut self,
         gone: &mut horizon_client::fast_hash::FxHashSet<(i32, i32)>,
         keep_terrain: bool,
-    ) -> Vec<(i32, i32)> {
+    ) -> Vec<(i32, i32)> { let (keep_terrain,) = match crate::points_generated::P4913.get() { Some(__l) => { let mut __a = (keep_terrain,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (keep_terrain,) };
         if gone.is_empty() {
             return Vec::new();
         }
@@ -2369,7 +2369,7 @@ impl Game<'_> {
     /// `handleBlockEntityData`: the block entity at `pos`, when it is of the
     /// packet's type, loads the tag (`loadWithComponents`); an empty tag
     /// changes nothing.
-    pub(super) fn remote_block_entity_data(&mut self, pos: [i32; 3], kind: i32, tag: &Tag) {
+    pub(super) fn remote_block_entity_data(&mut self, pos: [i32; 3], kind: i32, tag: &Tag) { let (pos,kind,) = match crate::points_generated::P4912.get() { Some(__l) => { let mut __a = (pos,kind,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,kind,) };
         let key = (pos[0], pos[1], pos[2]);
         let Some(name) = self
             .remote
@@ -2438,7 +2438,7 @@ impl Game<'_> {
     }
     /// `handleAnimate`: a player wakes up, or an entity gets the critical
     /// hit (`CRIT`) or magic critical hit (`ENCHANTED_HIT`) emitter.
-    fn remote_animate(&mut self, id: i32, action: u8) {
+    fn remote_animate(&mut self, id: i32, action: u8) { let (id,action,) = match crate::points_generated::P4911.get() { Some(__l) => { let mut __a = (id,action,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,action,) };
         use horizon_client::particles::{ParticleOptions, ParticleType};
         let me = self.remote.as_ref().is_some_and(|r| r.entity_id == id);
         let body = if me {
@@ -2481,7 +2481,7 @@ impl Game<'_> {
     /// `handleServerData`: the server list entry of the server joined keeps
     /// the icon the server sends (`ServerList.saveSingleServer`). Single
     /// player has no entry.
-    fn remote_server_data(&mut self, icon: Option<&[u8]>) {
+    fn remote_server_data(&mut self, icon: Option<&[u8]>) { if let Some(__l) = crate::points_generated::P4910.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (Some(r), Some(png)) = (self.remote.as_ref(), icon) else {
             return;
         };
@@ -2505,7 +2505,7 @@ impl Game<'_> {
         pos: (i32, i32, i32),
         previous: Option<BlockStateId>,
         state: BlockStateId,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4909.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let name = self.res.facts().get(state).name.clone();
         // LevelChunk.setBlockState: another block's block entity goes, even
         // one of the same type (a mod's blocks may share one).
@@ -2532,7 +2532,7 @@ impl Game<'_> {
         }
     }
     /// The server's synced attachments of a block entity that goes with it.
-    fn forget_block_entity_attachments(&mut self, (x, y, z): (i32, i32, i32)) {
+    fn forget_block_entity_attachments(&mut self, (x, y, z): (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P4908.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(r) = self.remote.as_mut() {
             r.attachments.remove(&Holder::BlockEntity([x, y, z]));
         }
@@ -2540,7 +2540,7 @@ impl Game<'_> {
     /// ClientLevel.setServerVerifiedBlockState: a block the client predicted keeps its
     /// predicted state until the server acknowledges the action; the server's state is
     /// remembered for then.
-    fn server_block(&mut self, pos: [i32; 3], state: i32) {
+    fn server_block(&mut self, pos: [i32; 3], state: i32) { let (pos,state,) = match crate::points_generated::P4907.get() { Some(__l) => { let mut __a = (pos,state,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,state,) };
         if let Some((_, known)) = self
             .remote
             .as_mut()
@@ -2554,7 +2554,7 @@ impl Game<'_> {
     /// BlockStatePredictionHandler.endPredictionsUpTo (ClientboundBlockChangedAckPacket): the
     /// actions up to `sequence` are settled, so the blocks they predicted take the state the
     /// server gave them (a break the server refused comes back).
-    fn end_predictions(&mut self, sequence: i32) {
+    fn end_predictions(&mut self, sequence: i32) { let (sequence,) = match crate::points_generated::P4906.get() { Some(__l) => { let mut __a = (sequence,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (sequence,) };
         let Some(r) = self.remote.as_mut() else {
             return;
         };
@@ -2573,7 +2573,7 @@ impl Game<'_> {
             }
         }
     }
-    fn set_block(&mut self, pos: [i32; 3], state: i32) {
+    fn set_block(&mut self, pos: [i32; 3], state: i32) { let (pos,state,) = match crate::points_generated::P4905.get() { Some(__l) => { let mut __a = (pos,state,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,state,) };
         let state = BlockStateId(state.max(0) as u32);
         let previous = self.world.block(pos[0], pos[1], pos[2]);
         if self.world.loaded(pos[0], pos[2])
@@ -2611,7 +2611,7 @@ impl Game<'_> {
     }
     /// `recreateFromPacket`: yRot and xRot from the packet, the body and head
     /// both at its head yaw (LivingEntity).
-    fn spawn_entity(&mut self, id: i32, kind: &str, position: [f64; 3], rotation: [f32; 3]) {
+    fn spawn_entity(&mut self, id: i32, kind: &str, position: [f64; 3], rotation: [f32; 3]) { let (id,position,rotation,) = match crate::points_generated::P4904.get() { Some(__l) => { let mut __a = (id,position,rotation,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,position,rotation,) };
         let [yaw, pitch, head] = rotation;
         let at = Vec3::new(position[0], position[1], position[2]);
         let mob_type = if kind == "minecraft:player" {
@@ -2676,7 +2676,7 @@ impl Game<'_> {
         rotation: Option<(f32, f32)>,
         on_ground: bool,
         packet: MovePacket,
-    ) {
+    ) { let (id,on_ground,) = match crate::points_generated::P4903.get() { Some(__l) => { let mut __a = (id,on_ground,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,on_ground,) };
         // The dragon is drawn from its own state (game/dragon.rs), which
         // tick_remote_dragon eases to the server's moves through `lerps`. Its
         // copy in the mob list draws nothing: given the move, it kept the
@@ -2898,7 +2898,7 @@ impl Game<'_> {
         self.move_remote_text_display(id, position, rotation);
         self.turn_remote_projectile(id, rotation);
     }
-    fn remove_entity(&mut self, id: i32) {
+    fn remove_entity(&mut self, id: i32) { let (id,) = match crate::points_generated::P4902.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         // Entity.setRemoved detaches every passenger, even when no empty
         // SetPassengers packet preceded the vehicle's removal. Otherwise
         // mobs and other players keep their passenger pose after it is gone.
@@ -3031,13 +3031,13 @@ impl Game<'_> {
             _ => return None,
         })
     }
-    fn open_menu_name(&self, container: i32) -> String {
+    fn open_menu_name(&self, container: i32) -> String { let (container,) = match crate::points_generated::P4901.get() { Some(__l) => { let mut __a = (container,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (container,) };
         match self.remote.as_ref().and_then(|r| r.menu.as_ref()) {
             Some((id, name)) if *id == container && container != 0 => name.clone(),
             _ => "inventory".into(),
         }
     }
-    fn set_menu_slot(&mut self, container: i32, slot: i32, item: Option<ItemStack>) {
+    fn set_menu_slot(&mut self, container: i32, slot: i32, item: Option<ItemStack>) { let (container,slot,) = match crate::points_generated::P4900.get() { Some(__l) => { let mut __a = (container,slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (container,slot,) };
         let menu = self.open_menu_name(container);
         if menu == "minecraft:lectern" {
             if slot == 0 {
@@ -3080,7 +3080,7 @@ impl Game<'_> {
     /// (`LivingEntity.getDimensions`) and model (`LivingEntityRenderState.scale`)
     /// as the local player's does: NPC plugins make their fake players bigger
     /// with it, datapacks scale any mob.
-    fn remote_mob_attributes(&mut self, id: i32, values: &[play::AttributeSnapshot]) {
+    fn remote_mob_attributes(&mut self, id: i32, values: &[play::AttributeSnapshot]) { let (id,) = match crate::points_generated::P4899.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let catalog = &self.motion.attributes;
         let value = |name: &str| {
             let attribute = catalog.id(name)?;
@@ -3128,7 +3128,7 @@ impl Game<'_> {
         }
     }
 
-    fn handle_packet(&mut self, packet: C) -> Result<()> {
+    fn handle_packet(&mut self, packet: C) -> Result<()> { if let Some(__l) = crate::points_generated::P4898.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match packet {
             // ClientCommonPacketListenerImpl.handlePing runs on the game
             // thread, after all preceding packets (especially teleports).
@@ -5040,7 +5040,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `handleAddObjective`: add, remove or change an objective.
-    fn remote_objective(&mut self, p: play::SetObjective) {
+    fn remote_objective(&mut self, p: play::SetObjective) { if let Some(__l) = crate::points_generated::P4897.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::scoreboard::{RenderType, tag_to_json};
         let board = &mut self.score.board;
         match (p.method, p.display) {
@@ -5071,7 +5071,7 @@ impl Game<'_> {
         }
     }
     /// `handleSetPlayerTeamPacket`.
-    fn remote_team(&mut self, p: play::SetPlayerTeam) {
+    fn remote_team(&mut self, p: play::SetPlayerTeam) { if let Some(__l) = crate::points_generated::P4896.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::scoreboard::{CollisionRule, Visibility, tag_to_json};
         let board = &mut self.score.board;
         if p.method == 1 {
@@ -5125,7 +5125,7 @@ impl Game<'_> {
     /// are in the level with an upside-down name.
     pub(super) fn remote_tab_players(
         &mut self,
-    ) -> Option<(Vec<horizon_client::tab_list::TabPlayer>, bool, Vec<u128>)> {
+    ) -> Option<(Vec<horizon_client::tab_list::TabPlayer>, bool, Vec<u128>)> { if let Some(__l) = crate::points_generated::P4895.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.update_remote_skins();
         let mut players: Vec<_> = {
             let r = self.remote.as_ref()?;
@@ -5162,7 +5162,7 @@ impl Game<'_> {
 
     /// Resolve inline `object:player` profiles through the same skin cache as
     /// player heads on items. The next frame uses the uploaded atlas texture.
-    pub(super) fn resolve_inline_profiles(&mut self, profiles: &[serde_json::Value]) {
+    pub(super) fn resolve_inline_profiles(&mut self, profiles: &[serde_json::Value]) { if let Some(__l) = crate::points_generated::P4894.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::skins;
         for profile in profiles {
             let skin = skins::head_skin(
@@ -5198,7 +5198,7 @@ impl Game<'_> {
             }
         }
     }
-    fn poll_own_profile(&mut self) {
+    fn poll_own_profile(&mut self) { if let Some(__l) = crate::points_generated::P4893.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let auth = self.auth();
         let Some(r) = self.remote.as_mut() else {
             return;
@@ -5239,7 +5239,7 @@ impl Game<'_> {
         kind: &std::sync::Arc<horizon_client::mobs::MobType>,
         skin: &str,
         slim: bool,
-    ) -> Option<std::sync::Arc<horizon_client::mobs::Part>> {
+    ) -> Option<std::sync::Arc<horizon_client::mobs::Part>> { let (slim,) = match crate::points_generated::P4892.get() { Some(__l) => { let mut __a = (slim,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slim,) };
         use horizon_client::mobs::skin_layers;
         if !self.settings.three_d_skin_layers {
             return None;
@@ -5264,7 +5264,7 @@ impl Game<'_> {
         Some(model)
     }
 
-    pub(super) fn update_remote_skins(&mut self) {
+    pub(super) fn update_remote_skins(&mut self) { if let Some(__l) = crate::points_generated::P4891.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let local = self.remote.as_ref().map(|r| r.profile);
         self.poll_own_profile();
         let Some(r) = self.remote.as_mut() else {
@@ -5481,7 +5481,7 @@ impl Game<'_> {
     }
     /// Puts a downloaded skin in an atlas skin slot (`SkinSlots::place`),
     /// unless every slot holds a skin drawn in the last frame.
-    pub(super) fn store_skin(&mut self, location: String, rgba: Vec<u8>) {
+    pub(super) fn store_skin(&mut self, location: String, rgba: Vec<u8>) { if let Some(__l) = crate::points_generated::P4890.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // 3D skin layers reads the pixels back when it builds the slabs.
         self.skin_downloads
             .borrow_mut()
@@ -5518,7 +5518,7 @@ impl Game<'_> {
     /// Whether a downloaded skin or cape is in the atlas to draw, marking it
     /// drawn; if not (new, or its slot taken), its image is queued for upload
     /// again and it is drawn from the next frame.
-    fn again_skin(&mut self, location: &str) -> bool {
+    fn again_skin(&mut self, location: &str) -> bool { if let Some(__l) = crate::points_generated::P4889.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut downloads = self.skin_downloads.borrow_mut();
         // A slot without its sprite (the atlas was rebuilt, or the upload
         // never happened) counts as missing, so the skin is stored again.
@@ -5537,7 +5537,7 @@ impl Game<'_> {
         &mut self,
         uuid: u128,
         (skin, slim): (String, bool),
-    ) -> (String, bool) {
+    ) -> (String, bool) { if let Some(__l) = crate::points_generated::P4888.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if (skin.starts_with("skins/") || skin == "horizon/offline_skin") && !self.again_skin(&skin)
         {
             let skin = horizon_client::tab_list::default_skin(uuid);
@@ -5546,7 +5546,7 @@ impl Game<'_> {
         (skin, slim)
     }
     /// `drawn_skin` for a face in the player list or spectator menu.
-    pub(super) fn face_skin(&mut self, uuid: u128, skin: &str) -> String {
+    pub(super) fn face_skin(&mut self, uuid: u128, skin: &str) -> String { if let Some(__l) = crate::points_generated::P4887.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.drawn_skin(uuid, (skin.to_owned(), false)).0
     }
     /// ChatType.Bound.decorate (`Decoration::Chat`) and `decorateNarration`
@@ -5557,7 +5557,7 @@ impl Game<'_> {
         bound: &play::ChatTypeBound,
         content: &serde_json::Value,
         decoration: Decoration,
-    ) -> horizon_client::text::Text {
+    ) -> horizon_client::text::Text { if let Some(__l) = crate::points_generated::P4886.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::scoreboard::comp_text;
         let Some(r) = self.remote.as_ref() else {
             return comp_text(content);
@@ -5565,7 +5565,7 @@ impl Game<'_> {
         let chat_type = r.registries.data("minecraft:chat_type", bound.chat_type);
         comp_text(&chat_type_decorate(chat_type, decoration, bound, content))
     }
-    fn remote_item_data(&mut self, id: i32, stack: &Option<Stack>) {
+    fn remote_item_data(&mut self, id: i32, stack: &Option<Stack>) { let (id,) = match crate::points_generated::P4885.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(stack) = self.to_stack(stack) else {
             return;
         };
@@ -5608,7 +5608,7 @@ impl Game<'_> {
     /// `Entity.lerpMotion` (and `recreateFromPacket`'s motion) for the
     /// entities whose own tick moves them on a client: dropped items, experience
     /// orbs, falling blocks and primed TNT.
-    fn remote_motion(&mut self, id: i32, velocity: [f64; 3]) {
+    fn remote_motion(&mut self, id: i32, velocity: [f64; 3]) { let (id,velocity,) = match crate::points_generated::P4884.get() { Some(__l) => { let mut __a = (id,velocity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,velocity,) };
         self.remote_dragon_motion(id, velocity);
         let v = Vec3::new(velocity[0], velocity[1], velocity[2]);
         if let Some(m) = self.mob_index.get_mut(&mut self.mobs, id as u32) {
@@ -5648,7 +5648,7 @@ impl Game<'_> {
             self.end.remote_eye_motion(id as u32, velocity);
         }
     }
-    fn apply_remote_health(&mut self) {
+    fn apply_remote_health(&mut self) { if let Some(__l) = crate::points_generated::P4883.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((health, food, saturation)) = self.remote.as_ref().map(|r| r.health) else {
             return;
         };
@@ -5666,7 +5666,7 @@ impl Game<'_> {
     /// this window's copy trails the server's by the stepped interpolation and
     /// would rise into the rider's feet, which lets the rider fall through.
     /// Put the copy under the landing spot.
-    fn place_ghast_under(&mut self, id: u32, spot: Vec3) {
+    fn place_ghast_under(&mut self, id: u32, spot: Vec3) { let (id,) = match crate::points_generated::P4882.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(m) = self
             .mobs
             .iter_mut()
@@ -5694,7 +5694,7 @@ impl Game<'_> {
     /// `ClientPacketListener.handleLookAt`: `Entity.lookAt` from this
     /// player's feet or eyes, towards the packet's entity (its feet or eyes)
     /// when this client tracks it, else towards the packet's point.
-    fn remote_look_at(&mut self, p: &play::PlayerLookAt) {
+    fn remote_look_at(&mut self, p: &play::PlayerLookAt) { if let Some(__l) = crate::points_generated::P4881.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // `EntityAnchorArgument.Anchor`: 0 feet, 1 eyes.
         const EYES: i32 = 1;
         let Some(player) = self.player.as_ref() else {
@@ -5720,7 +5720,7 @@ impl Game<'_> {
         (self.yaw, self.pitch) = look_at_rotation(from, to);
     }
     /// ClientPacketListener.handleMovePlayer.
-    fn remote_teleport(&mut self, p: &play::PlayerPosition) -> Result<()> {
+    fn remote_teleport(&mut self, p: &play::PlayerPosition) -> Result<()> { if let Some(__l) = crate::points_generated::P4880.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use play::relative as rel;
         let current = self
             .player
@@ -5809,7 +5809,7 @@ impl Game<'_> {
     /// player's section is shown once its column is lit; when the level is
     /// ready the loading screen closes and the server hears `PlayerLoaded`
     /// (`notifyPlayerLoaded`).
-    fn tick_client_load(&mut self) {
+    fn tick_client_load(&mut self) { if let Some(__l) = crate::points_generated::P4879.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(player) = self.player.as_ref() else {
             return;
         };
@@ -5861,7 +5861,7 @@ impl Game<'_> {
     }
 
     /// One client tick while connected (Minecraft.tick with a ClientLevel).
-    pub(super) fn tick_remote(&mut self) -> Result<()> {
+    pub(super) fn tick_remote(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P4878.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.tick_remote_level()?;
         // The rockets boosting this player tick after it, also while it waits
         // for chunks.
@@ -5882,7 +5882,7 @@ impl Game<'_> {
         Ok(())
     }
 
-    fn tick_remote_level(&mut self) -> Result<()> {
+    fn tick_remote_level(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P4877.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.ticks += 1;
         self.repro_tick();
         // Hud.tick ends with ChatComponent.tick.
@@ -6288,12 +6288,12 @@ impl Game<'_> {
     }
 
     /// The last `ClientboundPlayerAbilities` the server sent, on a client.
-    pub(super) fn remote_abilities(&self) -> Option<&play::PlayerAbilities> {
+    pub(super) fn remote_abilities(&self) -> Option<&play::PlayerAbilities> { if let Some(__l) = crate::points_generated::P4876.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote.as_ref()?.abilities.as_ref()
     }
     /// ClientPacketListener.handlePlayerAbilities: the player flies, may fly
     /// and is invulnerable as the server says (bits 2, 4 and 1).
-    fn apply_remote_abilities(&mut self) {
+    fn apply_remote_abilities(&mut self) { if let Some(__l) = crate::points_generated::P4875.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (Some(player), Some(a)) = (
             self.player.as_mut(),
             self.remote.as_ref().and_then(|r| r.abilities.as_ref()),
@@ -6310,7 +6310,7 @@ impl Game<'_> {
     /// `EntitySelector.pushableBy` lets entities push only the local player,
     /// so the server never sends these pushes. `doPush(player)` is
     /// `player.push(entity)`.
-    fn remote_pushes(&self) -> Vec3 {
+    fn remote_pushes(&self) -> Vec3 { if let Some(__l) = crate::points_generated::P4874.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (Some(p), Some(r)) = (self.player.as_ref(), self.remote.as_ref()) else {
             return Vec3::ZERO;
         };
@@ -6399,7 +6399,7 @@ impl Game<'_> {
     /// (`TickRateManager.isEntityFrozen`).
     /// `GuardianRenderer.getEntityToLookAt`: a guardian's eye follows its
     /// synched attack target, else the camera.
-    fn tick_remote_guardian_eyes(&mut self, running: bool) {
+    fn tick_remote_guardian_eyes(&mut self, running: bool) { let (running,) = match crate::points_generated::P4873.get() { Some(__l) => { let mut __a = (running,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (running,) };
         use horizon_client::mobs::{Species, Who, guardian};
         if !running {
             return;
@@ -6434,7 +6434,7 @@ impl Game<'_> {
             guardian::look_at(&mut self.mobs[i], look);
         }
     }
-    fn tick_remote_entities(&mut self, running: bool) {
+    fn tick_remote_entities(&mut self, running: bool) { let (running,) = match crate::points_generated::P4872.get() { Some(__l) => { let mut __a = (running,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (running,) };
         if running {
             self.tick_text_displays();
             self.tick_remote_ominous_item_spawners();
@@ -6983,7 +6983,7 @@ impl Game<'_> {
         &self,
         id: u32,
         partial: f32,
-    ) -> Option<([f64; 3], f32, f32)> {
+    ) -> Option<([f64; 3], f32, f32)> { let (id,partial,) = match crate::points_generated::P4871.get() { Some(__l) => { let mut __a = (id,partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,partial,) };
         let lerp = self.remote.as_ref()?.cart_lerps.get(&(id as i32))?;
         if lerp.current.is_empty() {
             return None;
@@ -6994,7 +6994,7 @@ impl Game<'_> {
 
     /// `ClientPacketListener.handleMinecartAlongTrack`: the steps join the ones
     /// the minecart has queued, if it runs `NewMinecartBehavior`.
-    fn remote_move_minecart(&mut self, p: play::MoveMinecartAlongTrack) {
+    fn remote_move_minecart(&mut self, p: play::MoveMinecartAlongTrack) { if let Some(__l) = crate::points_generated::P4870.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.minecart_improvements() || !self.carts.iter().any(|c| c.id == p.id as u32) {
             return;
         }
@@ -7025,7 +7025,7 @@ impl Game<'_> {
         eye: f64,
         pitch: f32,
         yaw: f32,
-    ) {
+    ) { let (ticks,at,eye,pitch,yaw,) = match crate::points_generated::P4869.get() { Some(__l) => { let mut __a = (ticks,at,eye,pitch,yaw,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,at,eye,pitch,yaw,) };
         let Some(consumable) = self
             .res
             .items()
@@ -7056,7 +7056,7 @@ impl Game<'_> {
         }
     }
     /// LocalPlayer.sendPosition plus input, sprint and held-slot updates.
-    fn remote_send_state(&mut self, input: u8) {
+    fn remote_send_state(&mut self, input: u8) { let (input,) = match crate::points_generated::P4868.get() { Some(__l) => { let mut __a = (input,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (input,) };
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -7138,7 +7138,7 @@ impl Game<'_> {
             }));
         }
     }
-    fn creative_stacks(&self) -> Vec<Option<ItemStack>> {
+    fn creative_stacks(&self) -> Vec<Option<ItemStack>> { if let Some(__l) = crate::points_generated::P4867.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         creative_sync_stacks(&self.inventory, &self.offhand, &self.armor)
     }
     /// `CreativeInventoryListener.slotChanged`: `handleCreativeModeItemAdd` for every slot the
@@ -7146,7 +7146,7 @@ impl Game<'_> {
     /// `broadcastChanges`, so a click's slots go out with the click, right behind a thrown
     /// stack, and not at the end of the tick: a slot update the server sends meanwhile (the
     /// pickup of what a held Q threw) can then never land on a change still unsent and undo it.
-    pub(super) fn send_creative_slots(&mut self) {
+    pub(super) fn send_creative_slots(&mut self) { if let Some(__l) = crate::points_generated::P4866.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.creative {
             return;
         }
@@ -7170,7 +7170,7 @@ impl Game<'_> {
         }
     }
     /// Inventory as the server last described it.
-    fn remote_synced(&mut self) {
+    fn remote_synced(&mut self) { if let Some(__l) = crate::points_generated::P4865.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let stacks = self.creative_stacks();
         if let Some(r) = self.remote.as_mut() {
             r.synced = stacks;
@@ -7178,7 +7178,7 @@ impl Game<'_> {
     }
     /// The slots a server packet changed since `before` are as the server has them; the
     /// others keep what was last sent, so a creative click made since still goes out.
-    fn remote_synced_since(&mut self, before: &[Option<ItemStack>]) {
+    fn remote_synced_since(&mut self, before: &[Option<ItemStack>]) { if let Some(__l) = crate::points_generated::P4864.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let now = self.creative_stacks();
         if let Some(r) = self.remote.as_mut() {
             mark_synced(&mut r.synced, before, now);
@@ -7189,7 +7189,7 @@ impl Game<'_> {
     /// again, if one is running (`if (!isDestroying) return;`), and says whether it did. Only the
     /// progress goes: `destroyBlockPos` and `destroyingItem` keep the target, so a dig resumed on
     /// the same block sends no START and the server's clock runs on (#4124).
-    pub(super) fn stop_remote_mining(&mut self) -> bool {
+    pub(super) fn stop_remote_mining(&mut self) -> bool { if let Some(__l) = crate::points_generated::P4863.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let kept = self.remote.as_mut().and_then(|r| {
             if !std::mem::take(&mut r.is_destroying) {
                 return None;
@@ -7214,7 +7214,7 @@ impl Game<'_> {
     }
 
     /// MultiPlayerGameMode.startDestroyBlock / continueDestroyBlock.
-    fn remote_mining(&mut self, start: bool) {
+    fn remote_mining(&mut self, start: bool) { let (start,) = match crate::points_generated::P4862.get() { Some(__l) => { let mut __a = (start,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (start,) };
         let debug_stick = self
             .held()
             .is_some_and(|stack| &*stack.item == "minecraft:debug_stick");
@@ -7383,7 +7383,7 @@ impl Game<'_> {
         }
     }
     /// MultiPlayerGameMode.destroyBlock: the predicted break.
-    fn predict_break(&mut self, pos: [i32; 3], state: BlockStateId, sequence: i32) {
+    fn predict_break(&mut self, pos: [i32; 3], state: BlockStateId, sequence: i32) { let (pos,sequence,) = match crate::points_generated::P4861.get() { Some(__l) => { let mut __a = (pos,sequence,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,sequence,) };
         self.tutorial_destroy(state, 1.0);
         // BlockStatePredictionHandler.retainKnownServerState.
         if let Some(r) = self.remote.as_mut() {
@@ -7422,7 +7422,7 @@ impl Game<'_> {
     /// spectator never breaks, an adventure player only with a main-hand
     /// item the server gave `can_break`. Whether its predicate matches the
     /// block is left to the server, which sends the block back if not.
-    fn remote_break_restricted(&self) -> bool {
+    fn remote_break_restricted(&self) -> bool { if let Some(__l) = crate::points_generated::P4860.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_protocol::item::{WirePatch, component::CAN_BREAK};
         self.spectator()
             || (!self.may_build()
@@ -7432,7 +7432,7 @@ impl Game<'_> {
                     .is_some_and(|p| WirePatch::adds(&p, CAN_BREAK)))
     }
     /// Minecraft.startUseItem: use one crosshair target, then the item itself.
-    fn remote_use(&mut self) {
+    fn remote_use(&mut self) { if let Some(__l) = crate::points_generated::P4859.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Minecraft.startUseItem returns before resetting rightClickDelay
         // while a survival block break is active.
         if self.remote.as_ref().is_some_and(|r| r.is_destroying) {
@@ -7464,7 +7464,7 @@ impl Game<'_> {
     /// `Minecraft.startUseItem`'s entity turn for `hand`: Interact goes to
     /// the server, and whether the click ends there is what this client's
     /// copy of the entity answers (`MultiPlayerGameMode.interact`).
-    fn remote_use_entity(&mut self, hand: Hand) -> bool {
+    fn remote_use_entity(&mut self, hand: Hand) -> bool { if let Some(__l) = crate::points_generated::P4858.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A menu this use opens (a chest minecart's) is no clicked block's.
         if let Some(r) = self.remote.as_mut() {
             r.use_target = None;
@@ -7554,7 +7554,7 @@ impl Game<'_> {
     /// `Minecraft.startUseItem`'s block turn for `hand`: a use that swung drops
     /// the hand (`LocalPlayer.itemUsed`) when it spent the held item or the
     /// player has infinite materials.
-    fn remote_use_block(&mut self, hand: Hand) -> bool {
+    fn remote_use_block(&mut self, hand: Hand) -> bool { if let Some(__l) = crate::points_generated::P4857.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let before = self.with_hand(hand, |g| g.held().map(|s| s.count));
         let swings = self.swings_started;
         let done = self.remote_use_item_on(hand);
@@ -7570,7 +7570,7 @@ impl Game<'_> {
 
     /// MultiPlayerGameMode.useItemOn for `hand`: whether the click ends there
     /// (the block reacts, or a block item is placed).
-    fn remote_use_item_on(&mut self, hand: Hand) -> bool {
+    fn remote_use_item_on(&mut self, hand: Hand) -> bool { if let Some(__l) = crate::points_generated::P4856.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let held = self.with_hand(hand, |g| g.held().cloned());
         let held_block = held
             .as_ref()
@@ -7881,7 +7881,7 @@ impl Game<'_> {
     /// firework rocket wherever it may be used, and the server launches it.
     /// Whether the item's use succeeded, which ends the click.
     /// The caller has selected Item.useOn after cooldown and adventure gates.
-    fn predict_item_on_block(&mut self, stack: &ItemStack, hit: &super::Hit) -> bool {
+    fn predict_item_on_block(&mut self, stack: &ItemStack, hit: &super::Hit) -> bool { if let Some(__l) = crate::points_generated::P4855.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // FireworkRocketItem.useOn: SUCCESS unless gliding, when Item.use
         // boosts instead. The phase's cooldown/adventure gates already ran.
         if &*stack.item == "minecraft:firework_rocket" {
@@ -7933,14 +7933,14 @@ impl Game<'_> {
     /// whatever its data says (the server toggles the marker, or fails
     /// quietly), so this hand swings and the click ends. The caller applies
     /// ItemStack.useOn's adventure predicate before selecting this phase.
-    fn predict_map_on_banner(&self, stack: &ItemStack, hit: &super::Hit) -> bool {
+    fn predict_map_on_banner(&self, stack: &ItemStack, hit: &super::Hit) -> bool { if let Some(__l) = crate::points_generated::P4854.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         super::maps::map_id(stack).is_some()
             && self.block_in_tag("minecraft:banners", &self.block_name(hit.pos))
     }
 
     /// `BoneMealItem.useOn` with the acting hand's `stack` on this client's
     /// level (a copy: nothing grows here): whether it succeeds.
-    fn remote_bone_meal_succeeds(&mut self, hit: &super::Hit, stack: &ItemStack) -> bool {
+    fn remote_bone_meal_succeeds(&mut self, hit: &super::Hit, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P4853.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = horizon_core::position::BlockPos::new(hit.pos[0], hit.pos[1], hit.pos[2]);
         let face = horizon_core::geometry::Direction::ALL[face_direction(hit.face) as usize];
         let (crop, _) = self.held_bonemeal(pos, stack);
@@ -7955,7 +7955,7 @@ impl Game<'_> {
     /// server refused goes back). Only the blocks a hand opens or flips: a
     /// wooden or copper door, trapdoor or fence gate, a lever or a button;
     /// whatever else the use changes waits for the server.
-    fn predict_use(&mut self, (changes, sounds): &DryUse, seq: i32) {
+    fn predict_use(&mut self, (changes, sounds): &DryUse, seq: i32) { let (seq,) = match crate::points_generated::P4852.get() { Some(__l) => { let mut __a = (seq,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (seq,) };
         let facts = self.res.facts();
         let predicted = |state: BlockStateId| hand_operated(&facts.get(state).name);
         if changes.is_empty()
@@ -7993,7 +7993,7 @@ impl Game<'_> {
         &mut self,
         hit: &super::Hit,
         held: Option<&ItemStack>,
-    ) -> (InteractionResult, DryUse) {
+    ) -> (InteractionResult, DryUse) { if let Some(__l) = crate::points_generated::P4851.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // AbstractCauldronBlock.useItemOn (CauldronInteractions): a bucket,
         // bottle or dye the cauldron takes fills or lowers it, and the click
         // ends there instead of falling through to Item.use (which would
@@ -8036,7 +8036,7 @@ impl Game<'_> {
         hit: &super::Hit,
         held: Option<&ItemStack>,
         without_item: bool,
-    ) -> (InteractionResult, DryUse) {
+    ) -> (InteractionResult, DryUse) { let (without_item,) = match crate::points_generated::P4850.get() { Some(__l) => { let mut __a = (without_item,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (without_item,) };
         use horizon_core::geometry::Direction;
         let face = match hit.face {
             [0, 1, 0] => Direction::Up,
@@ -8080,7 +8080,7 @@ impl Game<'_> {
         &self,
         hit: &super::Hit,
         held: Option<&ItemStack>,
-    ) -> Option<(InteractionResult, DryUse)> {
+    ) -> Option<(InteractionResult, DryUse)> { if let Some(__l) = crate::points_generated::P4849.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::cauldron::{self, Outcome};
         struct DryHand<'a> {
             creative: bool,
@@ -8147,7 +8147,7 @@ impl Game<'_> {
     /// than past them (the server would refuse it). Its place sound is the
     /// placer's own (`playSound(player, ...)`: the server sends it to the
     /// others only).
-    fn predict_place(&mut self, (pos, changes): &DryPlace, seq: i32) {
+    fn predict_place(&mut self, (pos, changes): &DryPlace, seq: i32) { let (seq,) = match crate::points_generated::P4848.get() { Some(__l) => { let mut __a = (seq,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (seq,) };
         let ticks = self.ticks;
         if let Some(r) = self.remote.as_mut() {
             // set_block plays the place sound of the block at `placing`.
@@ -8159,7 +8159,7 @@ impl Game<'_> {
     /// predicted under the use's sequence until the server acknowledges it
     /// (`BlockStatePredictionHandler.retainKnownServerState`): a use the
     /// server refused goes back.
-    pub(super) fn predict_blocks(&mut self, changes: &DryChanges, seq: i32) {
+    pub(super) fn predict_blocks(&mut self, changes: &DryChanges, seq: i32) { let (seq,) = match crate::points_generated::P4847.get() { Some(__l) => { let mut __a = (seq,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (seq,) };
         for &(p, state) in changes {
             let pos = [p.x, p.y, p.z];
             let before = self.world.block(p.x, p.y, p.z);
@@ -8177,7 +8177,7 @@ impl Game<'_> {
     /// blocks it set. The real level supplies collision shapes and
     /// building-blocking entities; random draws, scheduled ticks and events
     /// stay in the preview.
-    fn remote_can_place(&mut self, hit: &super::Hit, stack: &ItemStack) -> Option<DryPlace> {
+    fn remote_can_place(&mut self, hit: &super::Hit, stack: &ItemStack) -> Option<DryPlace> { if let Some(__l) = crate::points_generated::P4846.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.may_build() {
             return None;
         }
@@ -8217,7 +8217,7 @@ impl Game<'_> {
     fn remote_use_bucket(
         &mut self,
         stack: &ItemStack,
-    ) -> (bool, Option<DryChanges>, Vec<DrySound>) {
+    ) -> (bool, Option<DryChanges>, Vec<DrySound>) { if let Some(__l) = crate::points_generated::P4845.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // `BucketItem.use`: `level.mayInteract` and `mayUseItemAt`.
         if !self.may_build() {
             return (false, None, Vec::new());
@@ -8272,7 +8272,7 @@ impl Game<'_> {
 
     /// MultiPlayerGameMode.useItem for `hand`, if it holds something: whether
     /// the click ends there, as far as this client can tell (`use_ends_click`).
-    fn remote_use_item(&mut self, hand: Hand) -> bool {
+    fn remote_use_item(&mut self, hand: Hand) -> bool { if let Some(__l) = crate::points_generated::P4844.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(held) = self.with_hand(hand, |g| g.held().cloned()) else {
             return false;
         };
@@ -8412,7 +8412,7 @@ impl Game<'_> {
     /// up through `ClipContext.Fluid.SOURCE_ONLY`, a block to empty a full
     /// one against, `mayUseItemAt`), BottleItem.use (water to fill from) and
     /// BoatItem.use (a block or fluid surface with room for the boat).
-    fn use_finds_no_target(&self, held: &ItemStack) -> bool {
+    fn use_finds_no_target(&self, held: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P4843.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let id = &*held.item;
         let facts = |pos: [i32; 3]| {
             self.res
@@ -8473,7 +8473,7 @@ impl Game<'_> {
     /// sounds, loaded arrows and thrown tridents come from the server.
     /// False when the use FAILs here: a bow or an uncharged crossbow with
     /// nothing to shoot.
-    fn remote_start_held_use(&mut self, held: &ItemStack) -> bool {
+    fn remote_start_held_use(&mut self, held: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P4842.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.using.is_some() {
             return true;
         }
@@ -8522,7 +8522,7 @@ impl Game<'_> {
     }
     /// `InstrumentItem.use` on this client: unless the horn is on cooldown,
     /// it is held up, plays its sound at the player and starts its cooldown.
-    fn remote_use_instrument(&mut self, held: &ItemStack) {
+    fn remote_use_instrument(&mut self, held: &ItemStack) { if let Some(__l) = crate::points_generated::P4841.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(instrument) = self.res.items().instrument(held) else {
             return;
         };
@@ -8545,7 +8545,7 @@ impl Game<'_> {
     /// crossbows, tridents, spyglasses, shields, eyes of ender, whose
     /// `getUseDuration` 0 never counts down to the end) or the server ends
     /// it (a mod's item): its use only counts ticks here.
-    fn held_until_released(&self, stack: &ItemStack) -> bool {
+    fn held_until_released(&self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P4840.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.mod_use(stack) {
             return true;
         }
@@ -8563,7 +8563,7 @@ impl Game<'_> {
     /// The rest of Minecraft.startUseItem once the main hand's target passed:
     /// the main hand's item, then the off hand's turn (its block, its item).
     /// The server does each packet's part with that packet's hand only.
-    fn remote_use_hands(&mut self) {
+    fn remote_use_hands(&mut self) { if let Some(__l) = crate::points_generated::P4839.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Nothing in the crosshair: an empty hand's click is heard, by mods only.
         let miss = mod_api::__private::listened(mod_api::HookId::RightClickEmpty)
             && !self.entity_targeted()
@@ -8602,7 +8602,7 @@ impl Game<'_> {
     /// use (`held_until_released`), and a consumable's eating animation and
     /// its crumbs until the server's USE_ITEM_COMPLETE. The server sends the
     /// stack, its hunger and the sounds.
-    fn remote_tick_using(&mut self) {
+    fn remote_tick_using(&mut self) { if let Some(__l) = crate::points_generated::P4838.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((slot, ticks)) = self.using else {
             // A mod's use the game reset (the server stopping the use...).
             self.end_mod_use();
@@ -8725,7 +8725,7 @@ impl Game<'_> {
     /// ConsumableListeners on both sides): the client's FoodData eats at once,
     /// so a held right click finds `Player.canEat` false instead of starting
     /// another bite before the server's ClientboundSetHealth arrives.
-    fn remote_complete_using(&mut self) {
+    fn remote_complete_using(&mut self) { if let Some(__l) = crate::points_generated::P4837.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((slot, _)) = self.using.take() else {
             return;
         };
@@ -8754,7 +8754,7 @@ impl Game<'_> {
         self.apply_use_cooldown(&stack);
     }
     /// MouseHandler updates KeyMapping; handleKeybinds sends packets on a tick.
-    pub(super) fn remote_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> {
+    pub(super) fn remote_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> { let (pressed,) = match crate::points_generated::P4836.get() { Some(__l) => { let mut __a = (pressed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pressed,) };
         use horizon_client::interaction_input::Button;
         let input = match button {
             MouseButton::Left => {
@@ -8781,13 +8781,13 @@ impl Game<'_> {
         Ok(())
     }
 
-    pub(super) fn request_remote_mining_stop(&mut self) {
+    pub(super) fn request_remote_mining_stop(&mut self) { if let Some(__l) = crate::points_generated::P4835.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(r) = self.remote.as_mut() {
             r.stop_mining = true;
         }
     }
 
-    fn remote_handle_input(&mut self) {
+    fn remote_handle_input(&mut self) { if let Some(__l) = crate::points_generated::P4834.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(r) = self.remote.as_mut() else {
             return;
         };
@@ -8820,7 +8820,7 @@ impl Game<'_> {
 
     /// `MultiPlayerGameMode.ensureHasSentCarriedItem`: the server hears of a
     /// new selected slot before anything the slot acts with.
-    fn remote_send_carried(&mut self) {
+    fn remote_send_carried(&mut self) { if let Some(__l) = crate::points_generated::P4833.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let carried_changed = self.remote.as_mut().is_some_and(|r| {
             if r.carried == Some(self.selected) {
                 false
@@ -8836,7 +8836,7 @@ impl Game<'_> {
         }
     }
 
-    fn remote_queued_keys(&mut self) {
+    fn remote_queued_keys(&mut self) { if let Some(__l) = crate::points_generated::P4832.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // handleKeybinds' keybind polls: the queued presses act now, in tick
         // order, so no packet goes out between CLIENT_TICK_END and a pong.
         let pending = self
@@ -8869,7 +8869,7 @@ impl Game<'_> {
         }
     }
 
-    fn remote_start_attack(&mut self) -> bool {
+    fn remote_start_attack(&mut self) -> bool { if let Some(__l) = crate::points_generated::P4831.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.clicks.miss_time > 0 || self.hands_busy() {
             return false;
         }
@@ -8994,7 +8994,7 @@ impl Game<'_> {
     /// `isSweepAttack` for a damaging hit on `target` (`living`: a
     /// `LivingEntity`, which may be hit critically), heard by native mods on
     /// both sides. Only the server sweeps.
-    fn remote_sweep_event(&mut self, target: &str, living: bool) {
+    fn remote_sweep_event(&mut self, target: &str, living: bool) { let (living,) = match crate::points_generated::P4830.get() { Some(__l) => { let mut __a = (living,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (living,) };
         if mod_api::mods().is_empty() {
             return;
         }
@@ -9020,7 +9020,7 @@ impl Game<'_> {
     /// server id `id` that an attack reaches `Player.attack`'s sweep check on,
     /// and whether it is living. A painting or item frame is not: on this
     /// client `skipAttackInteraction` hurts it and stops the attack there.
-    fn remote_attacked_object(&self, id: i32) -> Option<(String, bool)> {
+    fn remote_attacked_object(&self, id: i32) -> Option<(String, bool)> { let (id,) = match crate::points_generated::P4829.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let id = id as u32;
         if let Some(b) = self.boats.iter().find(|b| b.id == id) {
             return Some((b.entity_type(), false));
@@ -9042,7 +9042,7 @@ impl Game<'_> {
     /// hit on another player with extra knockback runs the attacker's side of
     /// `causeExtraKnockback`: the 0.6 horizontal speed cut and the sprint
     /// stop. Without it the next move outruns the server's player.
-    fn remote_player_attack(&mut self, mob: usize) {
+    fn remote_player_attack(&mut self, mob: usize) { let (mob,) = match crate::points_generated::P4828.get() { Some(__l) => { let mut __a = (mob,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,) };
         // Java dispatches this through the target's RemotePlayer type. The
         // level_players map is profile bookkeeping and can lag the entity;
         // mobs must stay out because their hurtClient returns false.
@@ -9086,7 +9086,7 @@ impl Game<'_> {
     }
 
     /// An attribute's value on this client's player, if its map has the attribute.
-    fn own_attribute(&mut self, id: &str) -> Option<f64> {
+    fn own_attribute(&mut self, id: &str) -> Option<f64> { if let Some(__l) = crate::points_generated::P4827.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let p = self.player.as_mut()?;
         let key = p.attributes.key(id)?;
         p.attributes.lookup(Some(&key))?;
@@ -9095,7 +9095,7 @@ impl Game<'_> {
             .ok()
     }
 
-    fn remote_continue_attack(&mut self, down: bool) {
+    fn remote_continue_attack(&mut self, down: bool) { let (down,) = match crate::points_generated::P4826.get() { Some(__l) => { let mut __a = (down,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (down,) };
         if !down {
             self.clicks.miss_time = 0;
         }
@@ -9150,7 +9150,7 @@ impl Game<'_> {
         }
     }
     /// Keys with a multiplayer meaning; returns true when consumed.
-    pub(super) fn remote_key(&mut self, key: KeyCode) -> Result<bool> {
+    pub(super) fn remote_key(&mut self, key: KeyCode) -> Result<bool> { if let Some(__l) = crate::points_generated::P4825.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.screen != Screen::Playing {
             if (key == KeyCode::KeyE || key == KeyCode::Escape) && self.screen == Screen::Inventory
             {
@@ -9222,7 +9222,7 @@ impl Game<'_> {
     /// advancements); the pause menu, server containers, mount inventories and
     /// dialogs release on the first tick after closing instead, as vanilla
     /// does.
-    pub(super) fn release_use_for_keybind_screen(&mut self) {
+    pub(super) fn release_use_for_keybind_screen(&mut self) { if let Some(__l) = crate::points_generated::P4824.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Only a server's client holds a use to release.
         if self.remote.is_none() {
             return;
@@ -9238,7 +9238,7 @@ impl Game<'_> {
     /// runs the client half of `Item.releaseUsing` (a Riptide launch moves the
     /// player itself). Vanilla reaches it both when the use key is let go and,
     /// in the same tick, when a keybind opens a screen.
-    fn release_remote_use(&mut self) {
+    fn release_remote_use(&mut self) { if let Some(__l) = crate::points_generated::P4823.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.send(S::PlayerAction(play::PlayerAction {
             action: 6,
             pos: [0; 3],
@@ -9265,7 +9265,7 @@ impl Game<'_> {
     /// ClientPacketListener.sendChat / sendCommand, signed with a chat
     /// session (game/remote_chat.rs). The Chat option's Hidden and System
     /// levels keep chat out and Hidden keeps the commands out (ChatAbilities).
-    pub(super) fn send_chat(&mut self, message: &str) {
+    pub(super) fn send_chat(&mut self, message: &str) { if let Some(__l) = crate::points_generated::P4822.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let message = message.trim();
         if message.is_empty() || !self.chat_abilities().allows(message) {
             return;
@@ -9280,7 +9280,7 @@ impl Game<'_> {
         }
     }
     /// ChatScreen.handleChatInput fires the client event for chat, not commands.
-    pub(super) fn send_chat_from_screen(&mut self, message: &str) {
+    pub(super) fn send_chat_from_screen(&mut self, message: &str) { if let Some(__l) = crate::points_generated::P4821.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if message.starts_with('/') || !mod_api::__private::listened(mod_api::HookId::ClientChat) {
             self.send_chat(message);
         } else if let Some(uuid) = self.remote.as_ref().map(|r| r.profile) {
@@ -9295,7 +9295,7 @@ impl Game<'_> {
     }
     /// MultiPlayerGameMode.dropItem (key.drop): predict the removal, then send
     /// the action; swing only if a nonempty stack was removed.
-    pub(super) fn remote_drop(&mut self, all: bool) {
+    pub(super) fn remote_drop(&mut self, all: bool) { let (all,) = match crate::points_generated::P4820.get() { Some(__l) => { let mut __a = (all,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (all,) };
         let dropped =
             horizon_client::items::take_held_drop(&mut self.inventory[self.selected], all, false);
         self.send(S::PlayerAction(play::PlayerAction {
@@ -9311,7 +9311,7 @@ impl Game<'_> {
     /// Minecraft.handleKeybinds, key.swapOffhand: the server swaps the hands
     /// (ServerboundPlayerActionPacket SWAP_ITEM_WITH_OFFHAND at BlockPos.ZERO, facing down) and
     /// sends both slots back; nothing is predicted.
-    pub(super) fn remote_swap_hands(&mut self) {
+    pub(super) fn remote_swap_hands(&mut self) { if let Some(__l) = crate::points_generated::P4819.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.send(S::PlayerAction(play::PlayerAction {
             action: 7,
             pos: [0; 3],
@@ -9332,7 +9332,7 @@ impl Game<'_> {
     /// updates of a hand's slot count as the held stack changing in place,
     /// as this client doesn't predict every use the way vanilla's does
     /// (a thrown snowball's stack shrinks only when the server says so).
-    fn remote_hand_slot_set(&mut self, slot: usize, changed: bool) {
+    fn remote_hand_slot_set(&mut self, slot: usize, changed: bool) { let (slot,changed,) = match crate::points_generated::P4818.get() { Some(__l) => { let mut __a = (slot,changed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,changed,) };
         let hand = if slot == super::shield::OFFHAND_SLOT {
             1
         } else if slot == self.selected {
@@ -9349,7 +9349,7 @@ impl Game<'_> {
         }
     }
     /// A container click: the server answers with the authoritative slots.
-    pub(super) fn remote_click(&mut self, right: bool) {
+    pub(super) fn remote_click(&mut self, right: bool) { let (right,) = match crate::points_generated::P4817.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         let Some(size) = self
             .renderer
             .as_ref()
@@ -9378,7 +9378,7 @@ impl Game<'_> {
     }
     /// `AbstractContainerMenu.setItem`/`initializeContents`: the state id a
     /// click answers with is the open menu's, not another window's.
-    fn remote_menu_state(&mut self, container: i32, state: i32) {
+    fn remote_menu_state(&mut self, container: i32, state: i32) { let (container,state,) = match crate::points_generated::P4816.get() { Some(__l) => { let mut __a = (container,state,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (container,state,) };
         let open = self.remote_menu().0;
         if let Some(r) = self.remote.as_mut().filter(|_| container == open) {
             r.state_id = state;
@@ -9386,7 +9386,7 @@ impl Game<'_> {
     }
     /// The server's open menu: its window id and menu type (0, "inventory"
     /// when none is open).
-    pub(super) fn remote_menu(&self) -> (i32, String) {
+    pub(super) fn remote_menu(&self) -> (i32, String) { if let Some(__l) = crate::points_generated::P4815.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.remote.as_ref().and_then(|r| r.menu.as_ref().cloned()) {
             Some((id, name)) => (id, name),
             None => (0, "inventory".to_owned()),
@@ -9399,7 +9399,7 @@ impl Game<'_> {
     /// after it; the server corrects anything it sees differently. A menu the
     /// engine doesn't model sends the clicks unpredicted. False when a click's
     /// slot isn't one of the menu's.
-    pub(super) fn remote_menu_ops(&mut self, ops: &[(Option<usize>, i32, Input)]) -> bool {
+    pub(super) fn remote_menu_ops(&mut self, ops: &[(Option<usize>, i32, Input)]) -> bool { if let Some(__l) = crate::points_generated::P4814.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // CrafterScreen.slotClicked: a slot toggle goes out before the click.
         if let [(Some(slot), button, input)] = ops {
             self.crafter_slot_clicked(*slot, *button, *input);
@@ -9442,7 +9442,7 @@ impl Game<'_> {
     }
     /// A Shift double click on a server (`AbstractContainerScreen.mouseReleased`):
     /// a predicted QUICK_MOVE for every slot the engine moves, each sent.
-    pub(super) fn remote_quick_move_all(&mut self, slot: usize, moved: &ItemStack) {
+    pub(super) fn remote_quick_move_all(&mut self, slot: usize, moved: &ItemStack) { let (slot,) = match crate::points_generated::P4813.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let (container, _) = self.remote_menu();
         let mut sent: Vec<Predicted> = Vec::new();
         self.menu_session(|m, env, to_menu| {
@@ -9460,7 +9460,7 @@ impl Game<'_> {
         });
         self.send_clicks(container, sent);
     }
-    fn send_clicks(&mut self, container: i32, clicks: Vec<Predicted>) {
+    fn send_clicks(&mut self, container: i32, clicks: Vec<Predicted>) { let (container,) = match crate::points_generated::P4812.get() { Some(__l) => { let mut __a = (container,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (container,) };
         // A result the engine claims to have changed is the one the server
         // agrees to (`click_agreed`), so it sends none: keep it. A result the
         // engine doesn't claim (a recipe it doesn't know) the server sends.
@@ -9493,7 +9493,7 @@ impl Game<'_> {
     }
     /// The server's open menu is the inventory or a chest-like container
     /// (chests, barrels, ender chests: `generic_9xN`; shulker boxes).
-    pub(super) fn remote_storage_open(&self) -> bool {
+    pub(super) fn remote_storage_open(&self) -> bool { if let Some(__l) = crate::points_generated::P4811.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.remote.as_ref().and_then(|r| r.menu.as_ref()) {
             None => true,
             Some((_, name)) => {
@@ -9506,7 +9506,7 @@ impl Game<'_> {
     /// A click outside a server's window (slot -999): predicted like
     /// `MultiPlayerGameMode.handleContainerInput` (the carried stack after
     /// `doClick`; the server drops the stack and swings the hand).
-    pub(super) fn remote_throw(&mut self, right: bool, input: horizon_client::menu::Input) {
+    pub(super) fn remote_throw(&mut self, right: bool, input: horizon_client::menu::Input) { let (right,) = match crate::points_generated::P4810.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         use horizon_client::menu::Input;
         let container = self
             .remote
@@ -9539,7 +9539,7 @@ impl Game<'_> {
     /// a stack picked from the creative screen, so the carried stack (an item tab's right click:
     /// one of it) is dropped through `handleCreativeModeItemDrop`, a SetCreativeModeSlot to slot
     /// -1, and the hand swings as `Player.drop` predicts.
-    pub(super) fn remote_creative_drop(&mut self, right: bool) {
+    pub(super) fn remote_creative_drop(&mut self, right: bool) { let (right,) = match crate::points_generated::P4809.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         let one = right && !self.creative_inventory_open();
         let Some(carried) = self.carried.as_mut() else {
             return;
@@ -9558,7 +9558,7 @@ impl Game<'_> {
     /// `MultiPlayerGameMode.handleCreativeModeItemDrop`: a stack thrown out of the creative
     /// screen goes to the server as a SetCreativeModeSlot to slot -1, which drops it from the
     /// player's hand; the client only swings (`Player.drop` on a client).
-    pub(super) fn remote_creative_throw(&mut self, thrown: ItemStack) {
+    pub(super) fn remote_creative_throw(&mut self, thrown: ItemStack) { if let Some(__l) = crate::points_generated::P4808.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.creative {
             return;
         }
@@ -9569,7 +9569,7 @@ impl Game<'_> {
             item,
         }));
     }
-    pub(super) fn remote_close_container(&mut self) {
+    pub(super) fn remote_close_container(&mut self) { if let Some(__l) = crate::points_generated::P4807.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = self
             .remote
             .as_ref()
@@ -9578,7 +9578,7 @@ impl Game<'_> {
         self.send(S::ContainerClose(play::ContainerClose { container: id }));
         self.remote_close_local();
     }
-    fn remote_reject_container(&mut self, container: i32) {
+    fn remote_reject_container(&mut self, container: i32) { let (container,) = match crate::points_generated::P4806.get() { Some(__l) => { let mut __a = (container,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (container,) };
         self.remote_close_local();
         if self.screen == Screen::Inventory {
             self.set_screen(Screen::Playing);
@@ -9586,7 +9586,7 @@ impl Game<'_> {
         }
         self.send(S::ContainerClose(play::ContainerClose { container }));
     }
-    fn remote_close_local(&mut self) {
+    fn remote_close_local(&mut self) { if let Some(__l) = crate::points_generated::P4805.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // `Gui.setScreen` clears the focus of the screen it takes down: the
         // container's keyboard focus must not outlive it (a Tab bound to the
         // inventory moves the focus and closes the container in one press).
@@ -9621,7 +9621,7 @@ impl Game<'_> {
         container: i32,
         title: String,
         text: horizon_client::text::Text,
-    ) {
+    ) { let (container,) = match crate::points_generated::P4804.get() { Some(__l) => { let mut __a = (container,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (container,) };
         if let Some(r) = self.remote.as_mut() {
             r.menu
                 .set(Some((container, "minecraft:merchant".to_owned())));
@@ -9631,7 +9631,7 @@ impl Game<'_> {
         self.open_remote_merchant(session, (!title.is_empty()).then_some(title));
     }
     /// ClientboundMerchantOffersPacket.
-    fn remote_merchant_offers(&mut self, p: play::MerchantOffers) {
+    fn remote_merchant_offers(&mut self, p: play::MerchantOffers) { if let Some(__l) = crate::points_generated::P4803.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.open_menu_name(p.container) != "minecraft:merchant" {
             return;
         }
@@ -9673,7 +9673,7 @@ impl Game<'_> {
         }
     }
     /// ClientboundOpenScreenPacket for the menus Horizon draws.
-    fn remote_open_screen(&mut self, p: play::OpenScreen) {
+    fn remote_open_screen(&mut self, p: play::OpenScreen) { if let Some(__l) = crate::points_generated::P4802.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A new RecipeBookComponent owns fresh ghost slots and an overlay,
         // even when the server replaces a menu without a close packet.
         self.recipe_ui.reset_screen();
@@ -9820,7 +9820,7 @@ impl Game<'_> {
     }
     /// `ClientPacketListener.handleMountScreenOpen`: a horse's or llama's
     /// inventory; for another entity the window is closed again.
-    fn remote_open_mount(&mut self, p: play::MountScreenOpen) {
+    fn remote_open_mount(&mut self, p: play::MountScreenOpen) { if let Some(__l) = crate::points_generated::P4801.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let columns = usize::try_from(p.columns).unwrap_or(0).min(5);
         if !self.open_remote_mount_menu(p.entity as u32, columns) {
             self.remote_reject_container(p.container);
@@ -9833,16 +9833,16 @@ impl Game<'_> {
         }
     }
     /// The type of the menu a server opened (`MenuType`'s id).
-    pub(super) fn remote_menu_type(&self) -> Option<&str> {
+    pub(super) fn remote_menu_type(&self) -> Option<&str> { if let Some(__l) = crate::points_generated::P4800.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.remote.as_ref()?.menu.as_ref()?.1.as_str())
     }
     /// The title the server gave the menu it opened.
-    pub(super) fn remote_menu_title(&self) -> Option<horizon_client::text::Text> {
+    pub(super) fn remote_menu_title(&self) -> Option<horizon_client::text::Text> { if let Some(__l) = crate::points_generated::P4799.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote.as_ref()?.menu_title.clone()
     }
     /// A language change reaches the server-sent components too: their titles
     /// are resolved when the packet arrives, with the session's language.
-    pub(super) fn refresh_remote_language(&mut self) {
+    pub(super) fn refresh_remote_language(&mut self) { if let Some(__l) = crate::points_generated::P4798.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(lang) = horizon_client::lang::current()
             && let Some(r) = self.remote.as_mut()
         {
@@ -9850,7 +9850,7 @@ impl Game<'_> {
         }
     }
     /// A server's chest-like menu (`MenuType.GENERIC_9xN`): its rows and title.
-    pub(super) fn remote_chest_menu(&self) -> Option<(usize, horizon_client::text::Text)> {
+    pub(super) fn remote_chest_menu(&self) -> Option<(usize, horizon_client::text::Text)> { if let Some(__l) = crate::points_generated::P4797.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.remote.as_ref()?;
         let rows = r
             .menu
@@ -9867,7 +9867,7 @@ impl Game<'_> {
         ))
     }
     /// ServerboundPlayerCommandPacket STOP_SLEEPING.
-    pub(super) fn remote_stop_sleeping(&mut self) {
+    pub(super) fn remote_stop_sleeping(&mut self) { if let Some(__l) = crate::points_generated::P4796.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = self.remote.as_ref().map_or(0, |r| r.entity_id);
         self.send(S::PlayerCommand(play::PlayerCommand {
             id,
@@ -9875,12 +9875,12 @@ impl Game<'_> {
             data: 0,
         }));
     }
-    pub(super) fn remote_respawn(&mut self) {
+    pub(super) fn remote_respawn(&mut self) { if let Some(__l) = crate::points_generated::P4795.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.send(S::ClientCommand(play::ClientCommand { action: 0 }));
     }
 
     /// Connecting / loading screens; true when it covered the frame.
-    pub(super) fn remote_overlay(&mut self, batch: &mut HudBatch) -> bool {
+    pub(super) fn remote_overlay(&mut self, batch: &mut HudBatch) -> bool { if let Some(__l) = crate::points_generated::P4794.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(r) = &self.remote else { return false };
         let loading = r.level_load.is_active();
         if self.player.is_some() && !loading {
@@ -9956,7 +9956,7 @@ impl Game<'_> {
     }
     /// Connected or connecting with no player yet: `ConnectScreen`, then
     /// `LevelLoadingScreen`, over the panorama with its blur.
-    pub(super) fn remote_loading(&self) -> bool {
+    pub(super) fn remote_loading(&self) -> bool { if let Some(__l) = crate::points_generated::P4793.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::level_loading::Reason;
         self.remote.as_ref().is_some_and(|r| {
             if r.level_load.is_active() {
@@ -9970,7 +9970,7 @@ impl Game<'_> {
     /// `ServerReconfigScreen`: a vertical layout of cells padded by 10, the
     /// title (9 high) over Disconnect (150 x 20), centred. The title's and the
     /// button's top left corners.
-    fn reconfigure_layout(&self, (w, h): (f32, f32)) -> ((f32, f32), (f32, f32)) {
+    fn reconfigure_layout(&self, (w, h): (f32, f32)) -> ((f32, f32), (f32, f32)) { if let Some(__l) = crate::points_generated::P4792.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let title = horizon_client::text::Text::translate("connect.reconfiguring", &[]);
         let title_w = self.gui.atlas.font.width_text(&title).ceil() as i32;
         let width = (title_w + 20).max(170);
@@ -9984,7 +9984,7 @@ impl Game<'_> {
     }
     /// `ServerReconfigScreen` over the panorama; Disconnect wakes up after
     /// `DISCONNECT_TIME` (600 ticks).
-    fn draw_reconfiguring(&self, batch: &mut HudBatch, since: u64) {
+    fn draw_reconfiguring(&self, batch: &mut HudBatch, since: u64) { let (since,) = match crate::points_generated::P4791.get() { Some(__l) => { let mut __a = (since,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (since,) };
         let atlas = &self.gui.atlas;
         let (w, h) = (batch.width, batch.height);
         horizon_client::ui::menu_background(batch, atlas, 0.0, 0.0, w, h, false);
@@ -9999,7 +9999,7 @@ impl Game<'_> {
     }
     /// `ConnectScreen`'s Cancel: a server's (single player's server isn't
     /// joined through `ConnectScreen`), until the login is done.
-    fn connect_cancel(&self, (w, h): (f32, f32)) -> Option<(f32, f32)> {
+    fn connect_cancel(&self, (w, h): (f32, f32)) -> Option<(f32, f32)> { if let Some(__l) = crate::points_generated::P4790.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.remote.as_ref()?;
         (self.player.is_none() && !r.joined && self.integrated.is_none())
             .then(|| horizon_client::level_loading::connect_cancel(w, h))
@@ -10007,7 +10007,7 @@ impl Game<'_> {
     /// A click on `ConnectScreen`: Cancel aborts the connection
     /// (`connect.aborted`) and goes back. Escape does nothing there
     /// (`shouldCloseOnEsc` is false).
-    pub(super) fn connect_screen_click(&mut self) -> Result<()> {
+    pub(super) fn connect_screen_click(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P4789.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // ServerReconfigScreen's Disconnect, once it is active.
         if let Some(since) = self.remote.as_ref().and_then(|r| r.reconfiguring) {
             let (_, (x, y)) = self.reconfigure_layout(self.gui_size());
@@ -10029,7 +10029,7 @@ impl Game<'_> {
         Ok(())
     }
     /// The server's death message; chat uses the shared ChatComponent.
-    pub(super) fn remote_hud(&self, batch: &mut HudBatch) {
+    pub(super) fn remote_hud(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P4788.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(r) = &self.remote else { return };
         let atlas = &self.gui.atlas;
         let w = batch.width;
@@ -10049,18 +10049,18 @@ impl Game<'_> {
         }
     }
     /// Shared flag 6 of an entity on a server's client (`None` without a server).
-    pub(super) fn remote_glowing(&self, id: u32) -> Option<bool> {
+    pub(super) fn remote_glowing(&self, id: u32) -> Option<bool> { let (id,) = match crate::points_generated::P4787.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let r = self.remote.as_ref()?;
         Some(r.glowing.contains(&(id as i32)))
     }
     /// The UUID of another player's entity in the level.
-    pub(super) fn remote_other_player_uuid(&self, id: u32) -> Option<u128> {
+    pub(super) fn remote_other_player_uuid(&self, id: u32) -> Option<u128> { let (id,) = match crate::points_generated::P4786.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let r = self.remote.as_ref()?;
         let uuid = *r.level_players.get(&(id as i32))?;
         (uuid != r.profile).then_some(uuid)
     }
     /// The profile name of another player the server sent, by entity id.
-    pub(super) fn remote_player_name(&self, id: u32) -> Option<&str> {
+    pub(super) fn remote_player_name(&self, id: u32) -> Option<&str> { let (id,) = match crate::points_generated::P4785.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let r = self.remote.as_ref()?;
         let uuid = r.level_players.get(&(id as i32))?;
         if *uuid == r.profile {
@@ -10068,7 +10068,7 @@ impl Game<'_> {
         }
         r.level_player_name(id as i32, uuid)
     }
-    pub(super) fn remote_player_uuid(&self, id: u32) -> Option<u128> {
+    pub(super) fn remote_player_uuid(&self, id: u32) -> Option<u128> { let (id,) = match crate::points_generated::P4784.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let remote = self.remote.as_ref()?;
         if self.player_model.as_ref().is_some_and(|m| m.id == id) {
             Some(remote.profile)
@@ -10079,7 +10079,7 @@ impl Game<'_> {
     /// Status for `horizon-ctl status`.
     /// The other players' entities in the level and their names (their
     /// profiles', which outlive the player list's entries).
-    pub(super) fn remote_player_names(&self) -> Vec<(u32, String)> {
+    pub(super) fn remote_player_names(&self) -> Vec<(u32, String)> { if let Some(__l) = crate::points_generated::P4783.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(r) = self.remote.as_ref() else {
             return Vec::new();
         };
@@ -10092,7 +10092,7 @@ impl Game<'_> {
     /// `ClientClockManager.tick`: the clock moves on by the game time that
     /// passed since its last tick, at its rate. A game time the server sets
     /// forward (its sync every second) moves the clock with it.
-    fn remote_clock_tick(&mut self) {
+    fn remote_clock_tick(&mut self) { if let Some(__l) = crate::points_generated::P4782.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(r) = self.remote.as_mut() else {
             return;
         };
@@ -10103,7 +10103,7 @@ impl Game<'_> {
         r.clock_partial = (partial - full) as f32;
         self.world.day_time += full as i64;
     }
-    pub(super) fn remote_status(&self) -> Option<serde_json::Value> {
+    pub(super) fn remote_status(&self) -> Option<serde_json::Value> { if let Some(__l) = crate::points_generated::P4781.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.remote.as_ref()?;
         Some(serde_json::json!({
             "address": horizon_client::net::shown_address(&r.session.address),

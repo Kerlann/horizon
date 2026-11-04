@@ -36,7 +36,7 @@ fn infects(difficulty: Difficulty, coin: impl FnOnce() -> bool) -> bool {
 impl Game<'_> {
     /// `Zombie.killedEntity`: a villager killed by a zombie may rise as a
     /// zombie villager keeping its profession, trades and gossip.
-    pub(super) fn zombie_killed(&mut self, killer: u32, victim: u32) {
+    pub(super) fn zombie_killed(&mut self, killer: u32, victim: u32) { let (killer,victim,) = match crate::points_generated::P5842.get() { Some(__l) => { let mut __a = (killer,victim,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (killer,victim,) };
         let Some(k) = self.mobs.iter().position(|m| m.id == killer) else {
             return;
         };
@@ -85,7 +85,7 @@ impl Game<'_> {
     /// `ZombieVillager.mobInteract`: a golden apple on a weakened zombie
     /// villager starts the cure and is eaten; without weakness it does
     /// nothing. Returns whether the click was used.
-    pub(super) fn interact_zombie_villager(&mut self, index: usize, item: &str) -> bool {
+    pub(super) fn interact_zombie_villager(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P5841.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         if m.species() != Species::ZombieVillager || item != "minecraft:golden_apple" {
             return false;
@@ -112,7 +112,7 @@ impl Game<'_> {
     /// `ZombieVillager.finishConversion`: the villager returns with its
     /// data, trades, experience and gossip, and the curing player earns the
     /// village's trust.
-    pub(super) fn cure_zombie_villager(&mut self, id: u32) {
+    pub(super) fn cure_zombie_villager(&mut self, id: u32) { let (id,) = match crate::points_generated::P5840.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(i) = self.mobs.iter().position(|m| m.id == id) else {
             return;
         };
@@ -160,7 +160,7 @@ impl Game<'_> {
     }
 
     /// `ServerLevel.getPlayerByUUID`: the player with `uuid` in this level.
-    fn player_here(&self, uuid: [i32; 4]) -> Option<Target> {
+    fn player_here(&self, uuid: [i32; 4]) -> Option<Target> { let (uuid,) = match crate::points_generated::P5839.get() { Some(__l) => { let mut __a = (uuid,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (uuid,) };
         match self.target_by_uuid(playerdata::ints_uuid(uuid))? {
             Target::Player => Some(Target::Player),
             Target::Guest(conn) => {
@@ -176,7 +176,7 @@ impl Game<'_> {
         &mut self,
         zombie: &adv::EntityView,
         villager: &adv::EntityView,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P5838.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let (zombie, villager) = (zombie.clone(), villager.clone());
         self.trigger("minecraft:cured_zombie_villager", move |c, w| {

@@ -31,11 +31,11 @@ pub(super) struct ExtrasState {
 const MINIMAP_BUDGET: Duration = Duration::from_micros(300);
 
 impl Game<'_> {
-    fn extras_now(&self) -> f64 {
+    fn extras_now(&self) -> f64 { if let Some(__l) = crate::points_generated::P1877.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.started.elapsed().as_secs_f64()
     }
     /// Mouse buttons while playing, for mods' clicks.
-    pub(super) fn extras_mouse(&mut self, button: MouseButton, pressed: bool) {
+    pub(super) fn extras_mouse(&mut self, button: MouseButton, pressed: bool) { let (pressed,) = match crate::points_generated::P1876.get() { Some(__l) => { let mut __a = (pressed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pressed,) };
         let i = match button {
             MouseButton::Left => 0,
             MouseButton::Right => 1,
@@ -49,7 +49,7 @@ impl Game<'_> {
         }
     }
     /// Once per frame: the frame's time, and keys let go behind screens.
-    pub(super) fn extras_frame(&mut self, elapsed: Duration) {
+    pub(super) fn extras_frame(&mut self, elapsed: Duration) { if let Some(__l) = crate::points_generated::P1875.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Under agent control the window may lack focus without pausing.
         let focused = self.focused || self.control.is_some();
         let playing = self.screen == Screen::Playing && self.title.is_none() && focused;
@@ -64,31 +64,31 @@ impl Game<'_> {
         self.recipes_received_now();
     }
     /// The frame counter for mods: fps, min, 1% low.
-    pub(super) fn frame_reading(&self) -> (u32, u32, u32) {
+    pub(super) fn frame_reading(&self) -> (u32, u32, u32) { if let Some(__l) = crate::points_generated::P1874.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.extras.fps.reading();
         (r.fps, r.min, r.low)
     }
     /// Attack and use clicks in the last second, and whether each is held.
-    pub(super) fn mouse_reading(&mut self) -> ((u32, u32), [bool; 2]) {
+    pub(super) fn mouse_reading(&mut self) -> ((u32, u32), [bool; 2]) { if let Some(__l) = crate::points_generated::P1873.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let now = self.extras_now();
         let [l, r] = &mut self.extras.cps;
         let cps = (l.per_second(now) as u32, r.per_second(now) as u32);
         (cps, self.extras.mouse)
     }
     /// Auto-reconnect: a connection to `address` as `name` starts.
-    pub(super) fn extras_connecting(&mut self, address: &str, name: &str, lan: bool) {
+    pub(super) fn extras_connecting(&mut self, address: &str, name: &str, lan: bool) { let (lan,) = match crate::points_generated::P1872.get() { Some(__l) => { let mut __a = (lan,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (lan,) };
         self.extras.reconnect.connecting(address, name, lan);
     }
     /// The server this game connected to last.
-    pub(super) fn server_address(&self) -> Option<&str> {
+    pub(super) fn server_address(&self) -> Option<&str> { if let Some(__l) = crate::points_generated::P1871.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.extras.reconnect.address()
     }
     /// Auto-reconnect: the server let the player in.
-    pub(super) fn extras_joined(&mut self) {
+    pub(super) fn extras_joined(&mut self) { if let Some(__l) = crate::points_generated::P1870.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.extras.reconnect.joined(std::time::Instant::now());
     }
     /// Auto-reconnect: the player left the server on purpose.
-    pub(super) fn extras_left(&mut self) {
+    pub(super) fn extras_left(&mut self) { if let Some(__l) = crate::points_generated::P1869.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.extras.reconnect.reset();
     }
     /// Auto-reconnect's next attempt after a disconnect, when it is on and
@@ -98,7 +98,7 @@ impl Game<'_> {
         reason: &str,
         key: Option<&str>,
         from_server: bool,
-    ) -> Option<Retry> {
+    ) -> Option<Retry> { let (from_server,) = match crate::points_generated::P1868.get() { Some(__l) => { let mut __a = (from_server,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from_server,) };
         if !self.settings.extras.auto_reconnect {
             self.extras.reconnect.reset();
             return None;
@@ -107,7 +107,7 @@ impl Game<'_> {
         self.extras.reconnect.ended(reason, key, from_server, now)
     }
     /// Show the attempt's countdown on the Disconnected screen.
-    pub(super) fn offer_reconnect(&mut self, retry: Option<Retry>) {
+    pub(super) fn offer_reconnect(&mut self, retry: Option<Retry>) { if let Some(__l) = crate::points_generated::P1867.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(retry) = retry else {
             return;
         };
@@ -127,7 +127,7 @@ impl Game<'_> {
     /// online-mode server gets the signed-in account again: `connect_server`
     /// takes it from `auth::current()`, held in memory for the whole run
     /// (the launcher's session file is gone after the first read).
-    pub(super) fn extras_retry(&mut self) -> horizon_client::Result<()> {
+    pub(super) fn extras_retry(&mut self) -> horizon_client::Result<()> { if let Some(__l) = crate::points_generated::P1866.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(retry) = self.title.as_mut().and_then(|t| t.due_retry()) {
             self.connect_server_with_options(&retry.address, &retry.name, None, retry.lan)?;
         }
@@ -135,7 +135,7 @@ impl Game<'_> {
     }
     /// The minimap a mod shows (`native_minimap`): its corner, its side
     /// in GUI pixels and its view of the player.
-    fn minimap_shown(&self) -> Option<(Corner, f32, View)> {
+    fn minimap_shown(&self) -> Option<(Corner, f32, View)> { if let Some(__l) = crate::points_generated::P1865.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let p = self.player.as_ref()?;
         if self.title.is_some() || self.ui.hide_gui {
             return None;
@@ -152,12 +152,12 @@ impl Game<'_> {
         Some((m.corner, m.size, view))
     }
     /// The minimap shown: a native mod's (`native_minimap`).
-    fn minimap_wanted(&self) -> Option<NativeMinimap> {
+    fn minimap_wanted(&self) -> Option<NativeMinimap> { if let Some(__l) = crate::points_generated::P1864.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_minimap_now()
     }
     /// Refresh the minimap's tiles within the frame budget, recompose its
     /// image when the view or a tile changed, and queue the upload.
-    fn update_minimap(&mut self) {
+    fn update_minimap(&mut self) { if let Some(__l) = crate::points_generated::P1863.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((_, _, view)) = self.minimap_shown() else {
             if self.minimap_wanted().is_none() || self.player.is_none() {
                 self.extras.minimap.clear();
@@ -209,32 +209,32 @@ impl Game<'_> {
     }
     /// A mod's zoom in effect (`native_zoom`): (factor, smooth, turning
     /// scale); none is 1.
-    fn zoom_now(&self) -> (f32, bool, f64) {
+    fn zoom_now(&self) -> (f32, bool, f64) { if let Some(__l) = crate::points_generated::P1862.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_zoom_now().map_or((1.0, true, 1.0), |z| {
             (z.factor, z.smooth, f64::from(z.turn))
         })
     }
     /// The field-of-view modifier target, divided by a smooth zoom.
-    pub(super) fn zoomed_fov_target(&self, vanilla: f32) -> f32 {
+    pub(super) fn zoomed_fov_target(&self, vanilla: f32) -> f32 { let (vanilla,) = match crate::points_generated::P1861.get() { Some(__l) => { let mut __a = (vanilla,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (vanilla,) };
         match self.zoom_now() {
             (factor, true, _) => fov_target(vanilla, factor),
             _ => vanilla,
         }
     }
     /// The field of view in degrees, divided by an instant zoom.
-    pub(super) fn zoomed_fov_degrees(&self, fov: f32) -> f32 {
+    pub(super) fn zoomed_fov_degrees(&self, fov: f32) -> f32 { let (fov,) = match crate::points_generated::P1860.get() { Some(__l) => { let mut __a = (fov,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (fov,) };
         match self.zoom_now() {
             (factor, false, _) => fov / factor,
             _ => fov,
         }
     }
     /// Mouse turning while zoomed.
-    pub(super) fn zoom_turn_scale(&self) -> f64 {
+    pub(super) fn zoom_turn_scale(&self) -> f64 { if let Some(__l) = crate::points_generated::P1859.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.zoom_now().2
     }
     /// The minimap and mods' corner panels, in the HUD layer (hidden with F1
     /// by the caller). The top left corner gives way to the debug screen.
-    pub(super) fn draw_extras(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_extras(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P1858.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let map = self.minimap_shown();
         let visible = |corner| !(self.debug && corner == Corner::TopLeft);
         let mut corners = Corners::new(batch.width, batch.height, self.effect_rows_height());
@@ -262,7 +262,7 @@ impl Game<'_> {
     }
     /// The height the status effect icons take at the top right
     /// (`Hud.extractEffects`: beneficial at y 1, harmful at y 26).
-    fn effect_rows_height(&self) -> f32 {
+    fn effect_rows_height(&self) -> f32 { if let Some(__l) = crate::points_generated::P1857.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let effects = &self.potions.effects.list;
         if effects.is_empty() || self.screen != Screen::Playing {
             return 0.0;

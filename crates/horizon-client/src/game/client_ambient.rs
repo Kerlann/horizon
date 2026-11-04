@@ -12,7 +12,7 @@ use horizon_client::pose::Pose;
 use horizon_core::{geometry::Vec3, random::RandomSource};
 
 impl Game<'_> {
-    pub(super) fn tick_client_ambient(&mut self) {
+    pub(super) fn tick_client_ambient(&mut self) { if let Some(__l) = crate::points_generated::P876.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.serving.is_some() || self.options.dedicated.is_some() {
             return;
         }
@@ -47,7 +47,7 @@ impl Game<'_> {
     /// `Entity.baseTick`'s `spawnSprintParticle` on a client: dust of the
     /// block under a sprinting player's feet streams back from them every
     /// tick, for the window's own player and for the other players it sees.
-    fn sprint_dust(&mut self) {
+    fn sprint_dust(&mut self) { if let Some(__l) = crate::points_generated::P875.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Each runner's feet, movement, supporting block and box width.
         let mut runners: Vec<(Vec3, Vec3, Option<[i32; 3]>, f64)> = Vec::new();
         // Entity.canSpawnSprintParticle.
@@ -151,7 +151,7 @@ impl Game<'_> {
     /// window's player has its own effects, a server's mobs and players the
     /// list the server sent, and the mobs and guests of a game in the frame
     /// theirs.
-    fn effect_swirls(&mut self) {
+    fn effect_swirls(&mut self) { if let Some(__l) = crate::points_generated::P874.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(p) = self.player.as_ref() {
             let effects = &self.potions.effects.list;
             let list: Vec<_> = effects

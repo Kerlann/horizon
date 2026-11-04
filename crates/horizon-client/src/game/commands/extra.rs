@@ -188,21 +188,21 @@ fn civil(secs: i64) -> (i64, i64, i64, i64, i64, i64) {
 
 impl Game<'_> {
     /// CommandSourceStack.getPlayerOrException.
-    pub(super) fn source_player(&self) -> R<Target> {
+    pub(super) fn source_player(&self) -> R<Target> { if let Some(__l) = crate::points_generated::P1147.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.command_source.map(|s| s.entity) {
             None | Some(Some(Target::Player)) => Ok(Target::Player),
             _ => Err(err("permissions.requires.player", &[])),
         }
     }
     /// EntityArgument.getEntity / getPlayer.
-    fn one_entity(&mut self, ctx: &Context, name: &str, player: bool) -> R<Target> {
+    fn one_entity(&mut self, ctx: &Context, name: &str, player: bool) -> R<Target> { let (player,) = match crate::points_generated::P1146.get() { Some(__l) => { let mut __a = (player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player,) };
         Ok(self.entities(ctx, name, player)?[0])
     }
 
     // ---- /spectate ------------------------------------------------------
 
     /// `SpectateCommand.spectate`.
-    pub(super) fn cmd_spectate(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_spectate(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1145.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = if ctx.get("target").is_some() {
             Some(self.one_entity(ctx, "target", false)?)
         } else {
@@ -257,7 +257,7 @@ impl Game<'_> {
         Ok(1)
     }
     /// `ServerPlayer.setCamera`: a new camera moves the player to it.
-    pub(in crate::game) fn set_camera(&mut self, target: Option<Target>) {
+    pub(in crate::game) fn set_camera(&mut self, target: Option<Target>) { if let Some(__l) = crate::points_generated::P1144.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = target.filter(|t| *t != Target::Player);
         if self.cmds.camera == target {
             return;
@@ -273,7 +273,7 @@ impl Game<'_> {
     }
     /// Per-tick server work of these commands: the delayed tick profiler
     /// start, queued messages and the spectator camera.
-    pub(in crate::game) fn tick_command_extras(&mut self) {
+    pub(in crate::game) fn tick_command_extras(&mut self) { if let Some(__l) = crate::points_generated::P1143.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.cmds.profiler_delay {
             self.cmds.profiler_delay = false;
             self.cmds.profiler = Some((Instant::now(), self.ticks));
@@ -284,7 +284,7 @@ impl Game<'_> {
     }
     /// The camera part of `ServerPlayer.tick`: follow a living camera, drop a
     /// removed one, and stop when the player sneaks or leaves spectator mode.
-    fn tick_camera(&mut self) {
+    fn tick_camera(&mut self) { if let Some(__l) = crate::points_generated::P1142.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(t) = self.cmds.camera else {
             return;
         };
@@ -311,7 +311,7 @@ impl Game<'_> {
 
     /// A guest's body is only `Player` during its turn; retained command state
     /// must use its connection so the next server tick still finds that body.
-    pub(super) fn waypoint_target(&self, t: Target) -> Target {
+    pub(super) fn waypoint_target(&self, t: Target) -> Target { if let Some(__l) = crate::points_generated::P1141.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match t {
             Target::Player => self.lan_acting.map_or(t, Target::Guest),
             _ => t,
@@ -319,7 +319,7 @@ impl Game<'_> {
     }
 
     /// A living entity's `waypoint_transmit_range` (`isTransmittingWaypoint`).
-    fn transmit_range(&mut self, t: Target) -> f64 {
+    fn transmit_range(&mut self, t: Target) -> f64 { if let Some(__l) = crate::points_generated::P1140.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if matches!(t, Target::Guest(_)) {
             return self
                 .for_player(t, |g| g.transmit_range(Target::Player))
@@ -350,7 +350,7 @@ impl Game<'_> {
     /// joins tracked when transmitting; a changed range takes effect when the
     /// entity next ticks (`LivingEntity.onAttributeUpdated`), and
     /// `/waypoint modify` re-tracks its waypoint whatever its range.
-    fn waypoint_transmitters(&mut self) -> Vec<Target> {
+    fn waypoint_transmitters(&mut self) -> Vec<Target> { if let Some(__l) = crate::points_generated::P1139.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.cmds.waypoints.is_none() {
             let tracked = if self.transmit_range(Target::Player) > 0.0 {
                 vec![self.waypoint_target(Target::Player)]
@@ -375,7 +375,7 @@ impl Game<'_> {
     }
     /// The waypoint part of a living entity's tick: dirty transmit ranges
     /// track or untrack it.
-    pub(in crate::game) fn tick_waypoints(&mut self) {
+    pub(in crate::game) fn tick_waypoints(&mut self) { if let Some(__l) = crate::points_generated::P1138.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let dirty = std::mem::take(&mut self.cmds.waypoint_dirty);
         if dirty.is_empty() {
             return;
@@ -391,7 +391,7 @@ impl Game<'_> {
             }
         }
     }
-    fn waypoint_icon(&self, t: Target) -> WaypointIcon {
+    fn waypoint_icon(&self, t: Target) -> WaypointIcon { if let Some(__l) = crate::points_generated::P1137.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.cmds
             .waypoint_icons
             .get(&self.waypoint_target(t))
@@ -399,17 +399,17 @@ impl Game<'_> {
             .unwrap_or_default()
     }
     /// `WaypointArgument.getWaypoint`.
-    fn waypoint_arg(&mut self, ctx: &Context) -> R<Target> {
+    fn waypoint_arg(&mut self, ctx: &Context) -> R<Target> { if let Some(__l) = crate::points_generated::P1136.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let t = self.one_entity(ctx, "waypoint", false)?;
         if !self.is_living(t) {
             return Err(err("argument.waypoint.invalid", &[]));
         }
         Ok(t)
     }
-    fn is_living(&self, t: Target) -> bool {
+    fn is_living(&self, t: Target) -> bool { if let Some(__l) = crate::points_generated::P1135.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         matches!(t, Target::Player | Target::Mob(_) | Target::Stand(_))
     }
-    pub(super) fn cmd_waypoint(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_waypoint(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1134.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if id == "waypoint.list" {
             let dimension = self.dim.id();
             let waypoints = self.waypoint_transmitters();
@@ -518,7 +518,7 @@ impl Game<'_> {
 
     // ---- /dialog --------------------------------------------------------
 
-    pub(super) fn cmd_dialog(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_dialog(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1133.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = self.entities(ctx, "targets", true)?;
         let n = targets.len() as i32;
         if id == "dialog.show" {
@@ -553,7 +553,7 @@ impl Game<'_> {
 
     /// `ServerPlayer.postEffects` of a player target: a connected player's
     /// (told to their client at the end of their tick), or the host's own.
-    fn post_effects_of(&self, t: Target) -> Vec<String> {
+    fn post_effects_of(&self, t: Target) -> Vec<String> { if let Some(__l) = crate::points_generated::P1132.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let conn = match t {
             Target::Guest(conn) => Some(conn),
             Target::Player => self.lan_acting,
@@ -593,7 +593,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn cmd_posteffect(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_posteffect(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1131.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if id == "posteffect.list" {
             let t = self.one_entity(ctx, "target", true)?;
             let name = self.target_name(t);
@@ -671,7 +671,7 @@ impl Game<'_> {
 
     /// `TestCommand`: running, resetting and clearing tests is
     /// `test_runs`; `locate`, `pos` and `create` are `test_locate`.
-    pub(super) fn cmd_test(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_test(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1130.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match id {
             "test.run" | "test.run.found" | "test.clear" | "test.stop" => {
                 self.cmd_test_runs(id, ctx)
@@ -684,7 +684,7 @@ impl Game<'_> {
     }
     /// `Entity.pick(10, 1, false)`: the first non-air block on the view ray,
     /// else the block at the ray's end.
-    pub(super) fn test_pick_block(&self) -> [i32; 3] {
+    pub(super) fn test_pick_block(&self) -> [i32; 3] { if let Some(__l) = crate::points_generated::P1129.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_core::{
             geometry::{Vec3, traverse_blocks},
             position::BlockPos,
@@ -726,7 +726,7 @@ impl Game<'_> {
 
     /// `KickCommand.kickPlayers`: only guests of a published world can be
     /// kicked; the owner never.
-    pub(super) fn cmd_kick(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_kick(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1128.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let selector = match ctx.get("targets") {
             Some(Arg::Entity(s)) => Some(s.clone()),
             _ => None,
@@ -791,7 +791,7 @@ impl Game<'_> {
     /// background threads (`Util.nonCriticalIoPool`, here the cached profile
     /// resolver's), and the answer is reported by a later tick;
     /// `printForEntity` reports the player's own profile at once.
-    pub(super) fn cmd_fetchprofile(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_fetchprofile(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1127.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if ctx.literals.iter().any(|l| l == "name") {
             let name = match ctx.get("name") {
                 Some(Arg::Str(s)) => s.clone(),
@@ -845,14 +845,14 @@ impl Game<'_> {
     /// (`server.execute(() -> result.ifPresentOrElse(...))`).
     /// Whether a `/fetchprofile` lookup is still in flight (the command
     /// harness waits for them, as vanilla's oracle resolves at once).
-    pub(in crate::game) fn profile_fetches_pending(&mut self) -> bool {
+    pub(in crate::game) fn profile_fetches_pending(&mut self) -> bool { if let Some(__l) = crate::points_generated::P1126.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut resolver = self.skin_profiles.borrow_mut();
         self.cmds
             .profile_fetches
             .iter()
             .any(|f| matches!(resolver.state(&f.key), Resolve::Pending))
     }
-    fn tick_profile_fetches(&mut self) {
+    fn tick_profile_fetches(&mut self) { if let Some(__l) = crate::points_generated::P1125.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let fetches = std::mem::take(&mut self.cmds.profile_fetches);
         for fetch in fetches {
             let state = self.skin_profiles.borrow_mut().state(&fetch.key);
@@ -885,7 +885,7 @@ impl Game<'_> {
         message_id: &str,
         argument: Text,
         profile: &ResolvedProfile,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P1124.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (profile_tag, json) = encode_profile(profile);
         let encoded_profile = snbt::to_snbt(&profile_tag);
         // `Component.object(new PlayerSprite(profile, true))`, encoded: `hat`
@@ -939,7 +939,7 @@ impl Game<'_> {
     // ---- /publish, /unpublish -------------------------------------------
 
     /// `PublishCommand.publish` with `IntegratedServer.publishServer`.
-    pub(super) fn cmd_publish(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_publish(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1123.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let allow = matches!(ctx.get("allowCommands"), Some(Arg::Bool(true)));
         let port = match ctx.get("port") {
             Some(Arg::Int(p)) => *p,
@@ -978,7 +978,7 @@ impl Game<'_> {
         ));
         Ok(port)
     }
-    pub(super) fn cmd_unpublish(&mut self) -> R<i32> {
+    pub(super) fn cmd_unpublish(&mut self) -> R<i32> { if let Some(__l) = crate::points_generated::P1122.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.unpublish() {
             return Err(err("commands.unpublish.notPublished", &[]));
         }
@@ -988,7 +988,7 @@ impl Game<'_> {
 
     // ---- /debug, /jfr, /version -----------------------------------------
 
-    pub(super) fn cmd_debug(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_debug(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1121.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if ctx.literals.iter().any(|l| l == "function") {
             return self.cmd_debug_function(ctx);
         }
@@ -1027,7 +1027,7 @@ impl Game<'_> {
     }
     /// `DebugCommand.TraceCustomExecutor`: run the functions with a tracer
     /// writing to `debug/debug-trace-<time>.txt`.
-    fn cmd_debug_function(&mut self, ctx: &Context) -> R<i32> {
+    fn cmd_debug_function(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1120.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.exec.function_depth > 0 {
             return Err(err("commands.debug.function.noRecursion", &[]));
         }
@@ -1085,7 +1085,7 @@ impl Game<'_> {
         Ok(total)
     }
     /// The tracer's `[F]`/`[C]` lines for one function, running its commands.
-    fn trace_function(&mut self, id: &str, lines: &[String], depth: usize, out: &mut String) {
+    fn trace_function(&mut self, id: &str, lines: &[String], depth: usize, out: &mut String) { let (depth,) = match crate::points_generated::P1119.get() { Some(__l) => { let mut __a = (depth,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (depth,) };
         let indent = |d: usize| "    ".repeat(d + 1);
         out.push_str(&format!("{}[F] {id} size={}\n", indent(depth), lines.len()));
         let source = super::execute::Source {
@@ -1106,7 +1106,7 @@ impl Game<'_> {
 
     /// `/jfr start|stop` (JfrCommand). Horizon has no JVM flight recorder:
     /// the recording is its own tick timing, dumped as JSON.
-    pub(super) fn cmd_jfr(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_jfr(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1118.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if ctx.literals.iter().any(|l| l == "start") {
             if self.cmds.jfr.is_some() {
                 return Err(err("commands.jfr.start.failed", &[]));
@@ -1149,7 +1149,7 @@ impl Game<'_> {
 
     /// `VersionCommand.dumpVersion`'s lines: Horizon reports the version it
     /// implements.
-    pub(in crate::game) fn version_lines(&self) -> Vec<Text> {
+    pub(in crate::game) fn version_lines(&self) -> Vec<Text> { if let Some(__l) = crate::points_generated::P1117.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let protocol = horizon_protocol::PROTOCOL_VERSION;
         let mut lines: Vec<Text> = [
             ("commands.version.id", vec![Text::literal(VERSION_ID)]),
@@ -1187,7 +1187,7 @@ impl Game<'_> {
         lines
     }
     /// `VersionCommand`.
-    pub(super) fn cmd_version(&mut self) -> R<i32> {
+    pub(super) fn cmd_version(&mut self) -> R<i32> { if let Some(__l) = crate::points_generated::P1116.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.command_source.is_some_and(|s| s.silent) {
             self.system_message(Text::translate("commands.version.header", &[]));
             for line in self.version_lines() {
@@ -1202,7 +1202,7 @@ impl Game<'_> {
     /// `ServerPlayer.openDialog` for every target of `/dialog show`: a guest
     /// is sent `ClientboundShowDialogPacket`, the window's own player opens
     /// the dialog on its screen.
-    fn show_dialog_to(&mut self, targets: &[Target], dialog: &str) {
+    fn show_dialog_to(&mut self, targets: &[Target], dialog: &str) { if let Some(__l) = crate::points_generated::P1115.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(holder) = self.dialog_holder(dialog) else {
             return;
         };
@@ -1211,7 +1211,7 @@ impl Game<'_> {
     /// `ServerPlayer.openDialog` for the dialog of a `show_dialog` click
     /// event (a sign's): a registry id or the dialog itself, opened for the
     /// player the game acts for.
-    pub(in crate::game) fn show_click_dialog(&mut self, dialog: &horizon_world::nbt::Tag) {
+    pub(in crate::game) fn show_click_dialog(&mut self, dialog: &horizon_world::nbt::Tag) { if let Some(__l) = crate::points_generated::P1114.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let holder = match dialog {
             horizon_world::nbt::Tag::String(id) => self.dialog_holder(&id.to_string_lossy()),
             direct => Some(DialogHolder::Direct(direct.clone())),
@@ -1222,7 +1222,7 @@ impl Game<'_> {
     }
     /// `ServerPlayer.openDialog` for each target: the packet to a guest, the
     /// screen to the window's own player.
-    fn send_dialog(&mut self, targets: &[Target], holder: &DialogHolder) {
+    fn send_dialog(&mut self, targets: &[Target], holder: &DialogHolder) { if let Some(__l) = crate::points_generated::P1113.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let packet = C::ShowDialog(play::ShowDialog {
             dialog: holder.clone(),
         });
@@ -1242,7 +1242,7 @@ impl Game<'_> {
         }
     }
     /// `ServerPlayer.closeDialog` for every target of `/dialog clear`.
-    fn clear_dialog_to(&mut self, targets: &[Target]) {
+    fn clear_dialog_to(&mut self, targets: &[Target]) { if let Some(__l) = crate::points_generated::P1112.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let packet = C::ClearDialog(Empty);
         for &t in targets {
             match t {
@@ -1261,7 +1261,7 @@ impl Game<'_> {
     }
     /// `ServerPlayer.openDialog`'s dialog: an entry of the `minecraft:dialog`
     /// registry, or the dialog an inline `ResourceOrIdArgument` carries.
-    fn dialog_holder(&self, dialog: &str) -> Option<DialogHolder> {
+    fn dialog_holder(&self, dialog: &str) -> Option<DialogHolder> { if let Some(__l) = crate::points_generated::P1111.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let text = dialog.trim();
         if text.starts_with('{') {
             return horizon_client::command::snbt::parse_fully(text)

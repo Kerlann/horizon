@@ -165,47 +165,47 @@ pub(super) fn cycle_status(settings: &mut Settings) -> bool {
 impl Game<'_> {
     /// Whether this `Game` is the window's: a server thread's `Game` shares
     /// the process (and its narrator) but has no `Minecraft` to narrate for.
-    fn narrates(&self) -> bool {
+    fn narrates(&self) -> bool { if let Some(__l) = crate::points_generated::P2872.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.options.execution_role.is_client()
     }
     /// `GameNarrator.saySystemNow(message)`: cuts off what is being said.
-    pub(super) fn say_system_now(&self, message: &Text) {
+    pub(super) fn say_system_now(&self, message: &Text) { if let Some(__l) = crate::points_generated::P2871.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.narrates() {
             horizon_narrator::say_system_now(&message.plain());
         }
     }
     /// `GameNarrator.saySystemQueued(message)`.
-    pub(super) fn say_system_queued(&self, message: &Text) {
+    pub(super) fn say_system_queued(&self, message: &Text) { if let Some(__l) = crate::points_generated::P2870.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.narrates() {
             horizon_narrator::say_system_queued(&message.plain());
         }
     }
     /// `GameNarrator.saySystemChatQueued(message)`.
-    pub(super) fn say_system_chat_queued(&self, message: &Text) {
+    pub(super) fn say_system_chat_queued(&self, message: &Text) { if let Some(__l) = crate::points_generated::P2869.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.narrates() {
             horizon_narrator::say_system_chat_queued(&message.plain());
         }
     }
     /// `GameNarrator.sayChatQueued(message)`, its text already made.
-    pub(super) fn say_chat_queued(&self, message: &str) {
+    pub(super) fn say_chat_queued(&self, message: &str) { if let Some(__l) = crate::points_generated::P2868.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.narrates() {
             horizon_narrator::say_chat_queued(message);
         }
     }
     /// `GameNarrator.clear()`: what is being said and queued stops.
-    pub(super) fn clear_narrator(&self) {
+    pub(super) fn clear_narrator(&self) { if let Some(__l) = crate::points_generated::P2867.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.narrates() {
             horizon_narrator::clear();
         }
     }
     /// The narrator option changed, on the options screen or by its hotkey.
-    pub(super) fn narrator_status_changed(&mut self) {
+    pub(super) fn narrator_status_changed(&mut self) { if let Some(__l) = crate::points_generated::P2866.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         update_status(self.settings.narrator(), &mut self.narrator_toast);
     }
     /// The narrator hotkey on a key press or repeat, before the screen or
     /// the game takes the key (it doesn't consume it): the next status,
     /// announced with its toast, saved, then the screen hears of it.
-    pub(super) fn narrator_hotkey(&mut self, event: &KeyEvent) {
+    pub(super) fn narrator_hotkey(&mut self, event: &KeyEvent) { if let Some(__l) = crate::points_generated::P2865.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let letter = clipboard::shortcut_letter(&event.logical_key, event.physical_key);
         if letter != Some('b') {
             return;
@@ -232,12 +232,12 @@ impl Game<'_> {
     /// after the narrator came on (`NARRATE_DELAY_NARRATOR_ENABLED`) and its
     /// narrator button shows the new value. Horizon's narrator buttons read
     /// the option each frame.
-    pub(super) fn on_narrator_status_changed(&mut self, was_disabled: bool, trigger: Trigger) {
+    pub(super) fn on_narrator_status_changed(&mut self, was_disabled: bool, trigger: Trigger) { let (was_disabled,) = match crate::points_generated::P2864.get() { Some(__l) => { let mut __a = (was_disabled,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (was_disabled,) };
         self.narration.status_changed(was_disabled, trigger);
     }
     /// The open screen's narration, once a turn after the frame's widgets
     /// were read: `handleDelayedNarration` and a new screen's narration.
-    pub(super) fn narrate_screen(&mut self) {
+    pub(super) fn narrate_screen(&mut self) { if let Some(__l) = crate::points_generated::P2863.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.narrates() {
             return;
         }
@@ -252,7 +252,7 @@ impl Game<'_> {
     /// book (no `EditBox`), the recipe book (its component has the focus) and
     /// the creative search (focused as a widget, not as the screen's focus)
     /// do not.
-    pub(super) fn edit_box_focused(&mut self) -> bool {
+    pub(super) fn edit_box_focused(&mut self) -> bool { if let Some(__l) = crate::points_generated::P2862.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.dialog_open() {
             return self.dialog_typing();
         }
@@ -270,7 +270,7 @@ impl Game<'_> {
     }
     /// The narrator toast over whatever is on screen, the title's own toast
     /// keeping the first slot.
-    pub(super) fn draw_narrator_toast(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_narrator_toast(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P2861.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let title = self.title.as_ref().is_some_and(|t| t.has_toast());
         let used = self.toast_slots_used() | u32::from(title);
         let multiplier = f64::from(self.settings.notification_display_time);

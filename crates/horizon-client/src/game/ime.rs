@@ -10,7 +10,7 @@ use horizon_client::{
 
 impl Game<'_> {
     /// Whether a text box has focus right now (the fields `ime_commit` can fill).
-    pub(super) fn text_field_focused(&mut self) -> bool {
+    pub(super) fn text_field_focused(&mut self) -> bool { if let Some(__l) = crate::points_generated::P2077.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.dialog_open() {
             return self.dialog_has_text_field();
         }
@@ -43,7 +43,7 @@ impl Game<'_> {
     }
 
     /// Allow the input method only while a text box has focus.
-    pub(super) fn sync_ime(&mut self) {
+    pub(super) fn sync_ime(&mut self) { if let Some(__l) = crate::points_generated::P2076.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let want = self.text_field_focused();
         if want != self.ime_allowed
             && let Some(window) = &self.window
@@ -61,7 +61,7 @@ impl Game<'_> {
 
     /// `WindowEvent::Ime(Preedit)`: `KeyboardHandler.textEditing`. The text
     /// still being composed is shown under the focused field's caret.
-    pub(super) fn ime_preedit(&mut self, text: &str, cursor: Option<(usize, usize)>) {
+    pub(super) fn ime_preedit(&mut self, text: &str, cursor: Option<(usize, usize)>) { if let Some(__l) = crate::points_generated::P2075.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         preedit::set_preedit(
             self.text_field_focused()
                 .then(|| PreeditEvent::from_winit(text, cursor))
@@ -72,7 +72,7 @@ impl Game<'_> {
     /// With the frame's GUI built: draw the composition over it and move the
     /// input method's candidate window to the caret
     /// (`TextInputManager.setTextInputArea`, in window pixels).
-    pub(super) fn flush_ime(&mut self, hud: &mut HudBatch) {
+    pub(super) fn flush_ime(&mut self, hud: &mut HudBatch) { if let Some(__l) = crate::points_generated::P2074.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         preedit::draw_overlay(hud, &self.gui.atlas);
         let Some([x0, y0, x1, y1]) = preedit::take_text_input_area() else {
             return;
@@ -98,7 +98,7 @@ impl Game<'_> {
     }
 
     /// Text the input method committed (`WindowEvent::Ime(Commit)`).
-    pub(super) fn ime_commit(&mut self, text: &str) {
+    pub(super) fn ime_commit(&mut self, text: &str) { if let Some(__l) = crate::points_generated::P2073.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         preedit::set_preedit(None);
         let text: String = text.chars().filter(|c| !c.is_control()).collect();
         // ScreenEvent.CharacterTyped.Pre: the input method's committed text

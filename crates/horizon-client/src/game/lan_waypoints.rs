@@ -21,7 +21,7 @@ impl Game<'_> {
     /// level: a player who changes level leaves the old one's manager
     /// (`ServerLevel.removePlayerImmediately`: untracked for everyone there)
     /// and joins the new one's (`addDuringTeleport`).
-    pub(super) fn lan_update_waypoints(&mut self) {
+    pub(super) fn lan_update_waypoints(&mut self) { if let Some(__l) = crate::points_generated::P2480.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };

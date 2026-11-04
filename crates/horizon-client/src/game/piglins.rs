@@ -16,24 +16,24 @@ use horizon_client::{
 use horizon_core::{geometry::Vec3, random::RandomSource};
 
 impl Game<'_> {
-    fn item_in_tag(&self, tag: &str, item: &str) -> bool {
+    fn item_in_tag(&self, tag: &str, item: &str) -> bool { if let Some(__l) = crate::points_generated::P4581.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res
             .items()
             .item_tags
             .get(tag)
             .is_some_and(|t| t.contains(item))
     }
-    fn piglin_loved(&self, item: &str) -> bool {
+    fn piglin_loved(&self, item: &str) -> bool { if let Some(__l) = crate::points_generated::P4580.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.item_in_tag("minecraft:piglin_loved", item)
     }
     /// `PiglinAi.isLovedItem` or a preferred weapon (`Piglin.canReplaceCurrentItem`).
-    fn piglin_wanted(&self, m: &Mob, item: &str) -> bool {
+    fn piglin_wanted(&self, m: &Mob, item: &str) -> bool { if let Some(__l) = crate::points_generated::P4579.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.piglin_loved(item)
             || !m.is_baby() && self.item_in_tag("minecraft:piglin_preferred_weapons", item)
     }
     /// The `SLOT_NAMES` index `getEquipmentSlotForItem` picks: armour goes
     /// to its slot, anything else to the main hand.
-    fn piglin_slot(&self, item: &str) -> usize {
+    fn piglin_slot(&self, item: &str) -> usize { if let Some(__l) = crate::points_generated::P4578.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let slot = self
             .res
             .items()
@@ -47,25 +47,25 @@ impl Game<'_> {
     /// item replaces an unwanted one and never the other way round. Vanilla's
     /// armour and weapon comparison for two equal-interest items is left out
     /// (the piglin keeps what it has).
-    fn piglin_can_replace(&self, m: &Mob, item: &str, slot: usize) -> bool {
+    fn piglin_can_replace(&self, m: &Mob, item: &str, slot: usize) -> bool { let (slot,) = match crate::points_generated::P4577.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let Some(current) = horizon_client::mobs::finalize::item(m, slot) else {
             return true;
         };
         self.piglin_wanted(m, item) && !self.piglin_wanted(m, &current)
     }
     /// `SimpleContainer.canAddItem` on the piglin's eight slots.
-    fn piglin_can_add(&self, m: &Mob, stack: &ItemStack) -> bool {
+    fn piglin_can_add(&self, m: &Mob, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P4576.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         m.extra.inventory.len() < 8
             || m.extra.inventory.iter().any(|s| {
                 s.same_item_same_components(stack) && s.count < self.piglin_max_stack(&s.item)
             })
     }
-    fn piglin_max_stack(&self, item: &str) -> u32 {
+    fn piglin_max_stack(&self, item: &str) -> u32 { if let Some(__l) = crate::points_generated::P4575.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.items().get(item).map_or(64, |i| i.max_stack)
     }
     /// `PiglinAi.wantsToPickup`: babies ignore their own item tag, but can
     /// pick up currency and other loved items just like adults.
-    fn piglin_wants(&self, m: &Mob, stack: &ItemStack) -> bool {
+    fn piglin_wants(&self, m: &Mob, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P4574.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let item = &*stack.item;
         if m.is_baby() && self.item_in_tag("minecraft:ignored_by_piglin_babies", item)
             || self.item_in_tag("minecraft:piglin_repellents", item)
@@ -90,7 +90,7 @@ impl Game<'_> {
     /// `Mob.equipItemIfPossible` for a piglin: put it in its slot when that
     /// slot takes it (an armour piece that cannot replace what is worn goes
     /// to an empty main hand), dropping what it replaces by drop chance.
-    fn piglin_equip(&mut self, index: usize, stack: &ItemStack) -> bool {
+    fn piglin_equip(&mut self, index: usize, stack: &ItemStack) -> bool { let (index,) = match crate::points_generated::P4573.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let item = &*stack.item;
         let mut slot = self.piglin_slot(item);
         let m = &self.mobs[index];
@@ -123,7 +123,7 @@ impl Game<'_> {
     }
     /// `PiglinAi.putInInventory`: what does not fit is thrown at a random
     /// spot nearby.
-    fn piglin_stash(&mut self, index: usize, mut stack: ItemStack) {
+    fn piglin_stash(&mut self, index: usize, mut stack: ItemStack) { let (index,) = match crate::points_generated::P4572.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let max = self.piglin_max_stack(&stack.item);
         let m = &mut self.mobs[index];
         for s in &mut m.extra.inventory {
@@ -155,7 +155,7 @@ impl Game<'_> {
     }
     /// `PiglinAi.stopHoldingOffHandItem` for something that is not
     /// bartering currency: wear it if it can, else keep it in the inventory.
-    fn piglin_keep(&mut self, index: usize, stack: ItemStack) {
+    fn piglin_keep(&mut self, index: usize, stack: ItemStack) { let (index,) = match crate::points_generated::P4571.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         // Nuggets keep their whole stack in the inventory (a hand slot here
         // holds one item id only).
         if &*stack.item == "minecraft:gold_nugget" || !self.piglin_equip(index, &stack) {
@@ -163,14 +163,14 @@ impl Game<'_> {
         }
     }
     /// `BehaviorUtils.throwItem`: toss a stack from a point toward another.
-    fn piglin_throw(&mut self, from: [f64; 3], to: [f64; 3], stack: ItemStack) {
+    fn piglin_throw(&mut self, from: [f64; 3], to: [f64; 3], stack: ItemStack) { let (from,to,) = match crate::points_generated::P4570.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,to,) };
         let d = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
         let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-6);
         let v = [d[0] / len * 0.3, d[1] / len * 0.3 + 0.1, d[2] / len * 0.3];
         self.spawn_item(stack, from, v, 40);
     }
     /// `PiglinAi.isWearingSafeArmor`.
-    pub(super) fn wearing_gold(&self) -> bool {
+    pub(super) fn wearing_gold(&self) -> bool { if let Some(__l) = crate::points_generated::P4569.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let tag = self
             .res
             .items()
@@ -184,7 +184,7 @@ impl Game<'_> {
     /// Piglins notice wanted items on the ground within 9 blocks (`PiglinAi.wantsToPickup`:
     /// gold and other loved items, nuggets, food, gear), walk to them and
     /// take them (`GoToWantedItem`, `Piglin.pickUpItem`).
-    pub(super) fn piglin_pickups(&mut self) {
+    pub(super) fn piglin_pickups(&mut self) { if let Some(__l) = crate::points_generated::P4568.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.ui.rules.bool("mob_griefing") {
             return;
         }
@@ -267,12 +267,12 @@ impl Game<'_> {
     }
     /// `StartAdmiringItemIfSeen` and the admire activity's stop behaviours, from the
     /// distance squared to `NEAREST_VISIBLE_WANTED_ITEM` and whether that item is loved.
-    fn admire_seen_item(&mut self, index: usize, nearest: Option<f64>, loved: bool) {
+    fn admire_seen_item(&mut self, index: usize, nearest: Option<f64>, loved: bool) { let (index,loved,) = match crate::points_generated::P4567.get() { Some(__l) => { let mut __a = (index,loved,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,loved,) };
         let m = &mut self.mobs[index];
         let holding = m.extra.off_hand_id().is_some();
         m.extra.piglin.admire_seen(holding, nearest, loved);
     }
-    fn start_admiring(&mut self, index: usize, item: std::sync::Arc<str>) {
+    fn start_admiring(&mut self, index: usize, item: std::sync::Arc<str>) { let (index,) = match crate::points_generated::P4566.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &mut self.mobs[index];
         // The memory is set again, for the item it holds now.
         m.extra.piglin.seen_admire = 0;
@@ -285,7 +285,7 @@ impl Game<'_> {
     }
     /// `PiglinAi.mobInteract`: hand a piglin a gold ingot (only piglin
     /// currency is accepted from the hand; other loved items are passed over).
-    pub(super) fn give_piglin(&mut self, index: usize, item: &str) -> bool {
+    pub(super) fn give_piglin(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P4565.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         if m.species() != Species::Piglin
             || m.is_baby()
@@ -302,7 +302,7 @@ impl Game<'_> {
     /// `PiglinAi.stopHoldingOffHandItem` after admiring: gold ingots buy a
     /// roll of the bartering table for adults. Babies equip the admired item,
     /// or hold it in the main hand after stashing or throwing the old item.
-    pub(super) fn finish_admiring(&mut self, mob: u32) {
+    pub(super) fn finish_admiring(&mut self, mob: u32) { let (mob,) = match crate::points_generated::P4564.get() { Some(__l) => { let mut __a = (mob,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,) };
         let Some(i) = self.mobs.iter().position(|m| m.id == mob) else {
             return;
         };
@@ -343,7 +343,7 @@ impl Game<'_> {
     }
     /// `PiglinAi.throwItems`: barters and a baby's unwanted main-hand item
     /// use the same player-directed throw.
-    fn piglin_throw_items(&mut self, i: usize, items: Vec<ItemStack>) {
+    fn piglin_throw_items(&mut self, i: usize, items: Vec<ItemStack>) { let (i,) = match crate::points_generated::P4563.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let m = &self.mobs[i];
         let from = [m.position.x, m.position.y + 1.3, m.position.z];
         // BehaviorUtils.throwItem toward the nearest visible player
@@ -382,7 +382,7 @@ impl Game<'_> {
         }
     }
     /// `PiglinAi.angerNearbyPiglins`.
-    pub(super) fn anger_piglins(&mut self, only_if_seen: bool) {
+    pub(super) fn anger_piglins(&mut self, only_if_seen: bool) { let (only_if_seen,) = match crate::points_generated::P4562.get() { Some(__l) => { let mut __a = (only_if_seen,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (only_if_seen,) };
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -412,7 +412,7 @@ impl Game<'_> {
         }
     }
     /// A clear line of sight between two points (blocks with collision stop it).
-    fn can_see(&self, from: [f64; 3], to: [f64; 3]) -> bool {
+    fn can_see(&self, from: [f64; 3], to: [f64; 3]) -> bool { let (from,to,) = match crate::points_generated::P4561.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from,to,) };
         let steps = 32;
         (1..steps).all(|i| {
             let f = f64::from(i) / f64::from(steps);
@@ -433,7 +433,7 @@ impl Game<'_> {
         })
     }
     /// Whether breaking or opening this block angers piglins.
-    pub(super) fn guarded_by_piglins(&self, name: &str) -> bool {
+    pub(super) fn guarded_by_piglins(&self, name: &str) -> bool { if let Some(__l) = crate::points_generated::P4560.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res
             .items()
             .block_tags

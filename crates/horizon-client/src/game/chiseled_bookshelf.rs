@@ -22,7 +22,7 @@ impl Game<'_> {
         state: horizon_world::registry::BlockStateId,
         held: Option<&ItemStack>,
         branch: horizon_world::level::UseBranch,
-    ) -> Option<mod_api::NativeInteractionResult> {
+    ) -> Option<mod_api::NativeInteractionResult> { if let Some(__l) = crate::points_generated::P873.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use mod_api::NativeInteractionResult as Answer;
         let pos = hit.pos;
         let registry = self.pack.assets.registry;
@@ -107,7 +107,7 @@ impl Game<'_> {
     }
 
     /// The bookshelf's six slots (made if the block has no block entity yet).
-    fn bookshelf_items(&mut self, pos: [i32; 3]) -> Option<&mut [Option<ItemStack>; 6]> {
+    fn bookshelf_items(&mut self, pos: [i32; 3]) -> Option<&mut [Option<ItemStack>; 6]> { let (pos,) = match crate::points_generated::P872.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if &*self
             .res
             .facts()
@@ -132,7 +132,7 @@ impl Game<'_> {
     /// `ChiseledBookShelfBlockEntity.updateState`: `slot` becomes the last
     /// one touched, the block state takes the slots' occupancy
     /// (`setBlockAndUpdate`) and `BLOCK_CHANGE` goes out.
-    fn chiseled_bookshelf_update_state(&mut self, pos: [i32; 3], slot: usize) {
+    fn chiseled_bookshelf_update_state(&mut self, pos: [i32; 3], slot: usize) { let (pos,slot,) = match crate::points_generated::P871.get() { Some(__l) => { let mut __a = (pos,slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,slot,) };
         let key = (pos[0], pos[1], pos[2]);
         let Some(BlockEntity::ChiseledBookshelf(b)) = self.world.block_entities.get_mut(&key)
         else {
@@ -164,7 +164,7 @@ impl Game<'_> {
     /// The books a hopper or dropper put in or took out: the slot whose
     /// occupancy no longer matches the block state is the one `setItem` or
     /// `removeItem` updated.
-    pub(super) fn chiseled_bookshelf_synced(&mut self, pos: (i32, i32, i32)) {
+    pub(super) fn chiseled_bookshelf_synced(&mut self, pos: (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P870.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BlockEntity::ChiseledBookshelf(b)) = self.world.block_entities.get(&pos) else {
             return;
         };

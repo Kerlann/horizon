@@ -18,7 +18,7 @@ impl Game<'_> {
     /// `getUseDuration` ticks, which mods may change or refuse
     /// (`LivingEntityUseItemEvent.Start`), on both sides as in vanilla. True
     /// when the use started.
-    pub(super) fn start_using_item(&mut self) -> bool {
+    pub(super) fn start_using_item(&mut self) -> bool { if let Some(__l) = crate::points_generated::P2155.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(stack) = self.held().cloned().filter(|_| self.using.is_none()) else {
             return false;
         };
@@ -40,7 +40,7 @@ impl Game<'_> {
     /// `ItemStack.getUseDuration`: a consumable's time, 72000 for what is
     /// held until let go, the fixed times of brushes, bundles, spyglasses and
     /// goat horns, 0 for the rest, then a mod's answer.
-    pub(super) fn use_duration(&self, stack: &ItemStack) -> i32 {
+    pub(super) fn use_duration(&self, stack: &ItemStack) -> i32 { if let Some(__l) = crate::points_generated::P2154.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let info = self.items().get(&stack.item);
         let mut duration = match &*stack.item {
             "minecraft:bow" | "minecraft:crossbow" | "minecraft:trident" => 72_000,
@@ -61,7 +61,7 @@ impl Game<'_> {
     /// Whether `stack` is a mod's item that only a mod uses over time: no
     /// `consumable`, `blocks_attacks` or kinetic weapon of vanilla's own, and
     /// a `native_use_duration` above 0. Its use is its own `Item.use`.
-    pub(super) fn mod_use(&self, stack: &ItemStack) -> bool {
+    pub(super) fn mod_use(&self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P2153.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         !stack.item.starts_with("minecraft:")
             && self
                 .items()
@@ -71,7 +71,7 @@ impl Game<'_> {
             && self.use_duration(stack) > 0
     }
     /// A right click with a `mod_use` item: `startUsingItem` (CONSUME).
-    pub(super) fn start_mod_use(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn start_mod_use(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P2152.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.mod_use(stack) {
             return false;
         }
@@ -80,7 +80,7 @@ impl Game<'_> {
     }
     /// `LivingEntity.updateUsingItem` for a `mod_use` item used `ticks` so far:
     /// `completeUsingItem` once its duration ran out.
-    pub(super) fn tick_mod_use(&mut self, slot: usize, ticks: u32, stack: &ItemStack) {
+    pub(super) fn tick_mod_use(&mut self, slot: usize, ticks: u32, stack: &ItemStack) { let (slot,ticks,) = match crate::points_generated::P2151.get() { Some(__l) => { let mut __a = (slot,ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,ticks,) };
         self.item_on_use_tick(stack, ticks);
         if let Some(ticks) = count_down(ticks, self.use_duration) {
             self.using = Some((slot, ticks));
@@ -96,7 +96,7 @@ impl Game<'_> {
     /// told, `ItemStack.finishUsingItem` (a consumable is eaten, a potion
     /// drunk, a spyglass lowered, anything else given back) with its use
     /// cooldown, then `LivingEntityUseItemEvent.Finish`.
-    pub(super) fn complete_using_item(&mut self, slot: usize, stack: &ItemStack, info: &ItemInfo) {
+    pub(super) fn complete_using_item(&mut self, slot: usize, stack: &ItemStack, info: &ItemInfo) { let (slot,) = match crate::points_generated::P2150.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         // a potion is drunk (no last tick of its own: a mod's tick ran it out).
         if self.finish_drinking(slot, stack) {
             self.use_item_finished(stack);
@@ -117,7 +117,7 @@ impl Game<'_> {
     }
     /// `LivingEntityUseItemEvent.Finish` after `finishUsingItem` of `stack`
     /// (no ticks left): the hand holds what a mod made the result.
-    pub(super) fn use_item_finished(&mut self, stack: &ItemStack) {
+    pub(super) fn use_item_finished(&mut self, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P2149.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut result = self.held().cloned();
         let before = result.clone();
         let hand = self.hand;
@@ -130,7 +130,7 @@ impl Game<'_> {
     /// `updatingUsingItem` starts: a mod may change the ticks left, which
     /// moves the end. False when it ran the use out (`tick_ran_out`): the
     /// item's tick and countdown are skipped.
-    pub(super) fn use_item_ticked(&mut self, stack: &ItemStack, ticks: u32) -> bool {
+    pub(super) fn use_item_ticked(&mut self, stack: &ItemStack, ticks: u32) -> bool { let (ticks,) = match crate::points_generated::P2148.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         let before = ticks_left(self.use_duration, ticks);
         let (mut remaining, mut canceled) = (before, false);
         let hand = self.used_hand().unwrap_or(self.hand);
@@ -141,7 +141,7 @@ impl Game<'_> {
         left > 0 || !set
     }
     /// A mod's `Item.onUseTick` of `stack` used `ticks`, while ticks are left.
-    pub(super) fn item_on_use_tick(&mut self, stack: &ItemStack, ticks: u32) {
+    pub(super) fn item_on_use_tick(&mut self, stack: &ItemStack, ticks: u32) { let (ticks,) = match crate::points_generated::P2147.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         let remaining = ticks_left(self.use_duration, ticks);
         if remaining > 0 {
             self.native_on_use_tick(stack, None, remaining);
@@ -151,7 +151,7 @@ impl Game<'_> {
     /// the ticks left (`BowItem.releaseUsing`, `CrossbowItem.onUseTick`,
     /// `TridentItem.releaseUsing`), `ticks` unless a mod's Start or Tick
     /// moved the ticks left.
-    pub(super) fn ticks_held(&self, stack: &ItemStack, ticks: u32) -> u32 {
+    pub(super) fn ticks_held(&self, stack: &ItemStack, ticks: u32) -> u32 { let (ticks,) = match crate::points_generated::P2146.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ticks,) };
         held(
             self.use_duration(stack),
             ticks_left(self.use_duration, ticks),
@@ -159,7 +159,7 @@ impl Game<'_> {
     }
     /// `LivingEntityUseItemEvent.Stop` as `releaseUsingItem` lets go of
     /// `stack` used `ticks`: false when a mod skips its `releaseUsing`.
-    pub(super) fn use_item_stopped(&mut self, stack: &ItemStack, ticks: u32) -> bool {
+    pub(super) fn use_item_stopped(&mut self, stack: &ItemStack, ticks: u32) -> bool { let (ticks,) = match crate::points_generated::P2145.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         let mut canceled = false;
         let remaining = ticks_left(self.use_duration, ticks);
         let hand = self.hand;
@@ -168,7 +168,7 @@ impl Game<'_> {
     }
     /// A mod's `Item.releaseUsing` of `stack` used `ticks`: when it says it
     /// was used, `ItemStack.releaseUsing` applies the use cooldown.
-    pub(super) fn mod_release_using(&mut self, stack: &ItemStack, ticks: u32) {
+    pub(super) fn mod_release_using(&mut self, stack: &ItemStack, ticks: u32) { let (ticks,) = match crate::points_generated::P2144.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         let mut used = false;
         let remaining = ticks_left(self.use_duration, ticks);
         self.native_release_using(stack, None, remaining, &mut used);
@@ -178,7 +178,7 @@ impl Game<'_> {
     }
     /// `Player.canEat(canAlwaysEat)` for `stack`, food that is eaten only
     /// when hungry, then a mod's answer.
-    pub(super) fn can_eat(&self, stack: &ItemStack, can_always_eat: bool) -> bool {
+    pub(super) fn can_eat(&self, stack: &ItemStack, can_always_eat: bool) -> bool { let (can_always_eat,) = match crate::points_generated::P2143.get() { Some(__l) => { let mut __a = (can_always_eat,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (can_always_eat,) };
         let mut can_eat = can_always_eat
             || self.creative
             || self

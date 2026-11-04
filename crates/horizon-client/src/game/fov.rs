@@ -27,21 +27,21 @@ fn valid_fov_modifier(modifier: f32, fallback: f32) -> f32 {
 
 impl Game<'_> {
     /// `Player.isScoping`: using a spyglass.
-    pub(super) fn scoping(&self) -> bool {
+    pub(super) fn scoping(&self) -> bool { if let Some(__l) = crate::points_generated::P1954.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.using
             .and_then(|(slot, _)| self.stack_in(slot))
             .is_some_and(|s| &*s.item == "minecraft:spyglass")
     }
     /// `options.fovEffectScale`.
-    pub(super) fn fov_effect_scale(&self) -> f32 {
+    pub(super) fn fov_effect_scale(&self) -> f32 { if let Some(__l) = crate::points_generated::P1953.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.settings.file.double("fovEffectScale") as f32
     }
     /// `options.screenEffectScale` (Distortion Effects).
-    pub(super) fn screen_effect_scale(&self) -> f32 {
+    pub(super) fn screen_effect_scale(&self) -> f32 { if let Some(__l) = crate::points_generated::P1952.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.settings.file.double("screenEffectScale") as f32
     }
     /// `LocalPlayer.getEffectBlendFactor(NAUSEA, partial)`: 0 without the effect.
-    pub(super) fn nausea_blend(&self, partial: f32) -> f32 {
+    pub(super) fn nausea_blend(&self, partial: f32) -> f32 { let (partial,) = match crate::points_generated::P1951.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         if self.potions.effects.get("nausea").is_none() {
             return 0.0;
         }
@@ -51,7 +51,7 @@ impl Game<'_> {
     /// The spin `GameRenderer.renderLevel` multiplies into the level's
     /// projection: the larger of the portal and Nausea intensities, scaled by
     /// Distortion Effects squared, turning by `LocalPlayer.getSpinningEffectAngle`.
-    pub(super) fn spinning_matrix(&self, partial: f32) -> glam::Mat4 {
+    pub(super) fn spinning_matrix(&self, partial: f32) -> glam::Mat4 { let (partial,) = match crate::points_generated::P1950.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         let fx = &self.screen_fx;
         let portal = fx.o_portal + partial * (fx.portal - fx.o_portal);
         let scale = self.screen_effect_scale();
@@ -59,7 +59,7 @@ impl Game<'_> {
         spinning_effect_matrix(intensity, fx.spinning_time + partial * fx.spinning_speed)
     }
     /// What `AbstractClientPlayer.getFieldOfViewModifier` reads.
-    fn fov_player(&self) -> Option<FovPlayer> {
+    fn fov_player(&self) -> Option<FovPlayer> { if let Some(__l) = crate::points_generated::P1949.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let p = self.player.as_ref()?;
         let using = self.using.and_then(|(slot, ticks)| {
             let stack = self.stack_in(slot)?;
@@ -80,7 +80,7 @@ impl Game<'_> {
     }
     /// `Camera.tick`: the eye height and the field-of-view modifier ease
     /// halfway toward the player's each tick.
-    pub(super) fn tick_fov(&mut self) {
+    pub(super) fn tick_fov(&mut self) { if let Some(__l) = crate::points_generated::P1948.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let first_person = self.camera_type.first_person();
         let effect = self.fov_effect_scale();
         let target = self.fov_player().map_or(1.0, |player| {
@@ -110,14 +110,14 @@ impl Game<'_> {
     /// The player's `deathTime` while dead or dying: whole ticks counted by
     /// `LivingEntity.tickDeath`, so `deathTime + partialTicks` in
     /// `Camera.extractRenderState` rises smoothly across frames.
-    pub(super) fn death_time(&self) -> Option<i32> {
+    pub(super) fn death_time(&self) -> Option<i32> { if let Some(__l) = crate::points_generated::P1947.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let p = self.player.as_ref()?;
         p.health
             .dead_or_dying()
             .then(|| self.ui.death_time.min(i32::MAX as u32) as i32)
     }
     /// The fluid at the camera, as `Camera.getFluidInCamera` reports it.
-    pub(super) fn camera_fluid(&self, camera: [f64; 3]) -> CameraFluid {
+    pub(super) fn camera_fluid(&self, camera: [f64; 3]) -> CameraFluid { let (camera,) = match crate::points_generated::P1946.get() { Some(__l) => { let mut __a = (camera,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (camera,) };
         match fog_type(&self.world, self.res.facts(), camera, &self.near_plane()) {
             FogType::Water => CameraFluid::Water,
             FogType::Lava => CameraFluid::Lava,
@@ -126,7 +126,7 @@ impl Game<'_> {
         }
     }
     /// `Camera.calculateFov` with `modifyFovBasedOnDeathOrFluid`.
-    pub(super) fn fov_degrees(&self, partial: f32, camera: [f64; 3]) -> f32 {
+    pub(super) fn fov_degrees(&self, partial: f32, camera: [f64; 3]) -> f32 { let (partial,camera,) = match crate::points_generated::P1945.get() { Some(__l) => { let mut __a = (partial,camera,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,camera,) };
         let fov = self.view.calculate_fov(
             partial,
             self.settings.fov as i32,
@@ -145,7 +145,7 @@ impl Game<'_> {
         }
     }
     /// `Camera.calculateHudFov`: the first-person hand's field of view.
-    pub(super) fn hud_fov_degrees(&self, partial: f32, camera: [f64; 3]) -> f32 {
+    pub(super) fn hud_fov_degrees(&self, partial: f32, camera: [f64; 3]) -> f32 { let (partial,camera,) = match crate::points_generated::P1944.get() { Some(__l) => { let mut __a = (partial,camera,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,camera,) };
         self.view.calculate_hud_fov(
             partial,
             self.fov_effect_scale(),
@@ -155,7 +155,7 @@ impl Game<'_> {
     }
     /// The pose `GameRenderer.renderLevel` multiplies into the projection:
     /// `bobHurt`, then `bobView` with the View Bobbing option.
-    pub(super) fn bob_matrix(&self, partial: f32) -> glam::Mat4 {
+    pub(super) fn bob_matrix(&self, partial: f32) -> glam::Mat4 { let (partial,) = match crate::points_generated::P1943.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         let Some(p) = self.player.as_ref() else {
             return glam::Mat4::IDENTITY;
         };
@@ -180,7 +180,7 @@ impl Game<'_> {
     /// `updateBob`), `rideTick`'s `resetBob` and `LocalPlayer.move`'s walked
     /// distance, after the player's movement this tick. `before` is the
     /// ground state, velocity and position at the start of the tick.
-    pub(super) fn tick_avatar(&mut self, before: (bool, [f64; 3], [f64; 3]), riding: bool) {
+    pub(super) fn tick_avatar(&mut self, before: (bool, [f64; 3], [f64; 3]), riding: bool) { let (riding,) = match crate::points_generated::P1942.get() { Some(__l) => { let mut __a = (riding,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (riding,) };
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -202,13 +202,13 @@ impl Game<'_> {
     }
     /// `SpyglassItem.use`: the sound, then start scoping (a mod's `Start`
     /// may refuse that, not the sound).
-    pub(super) fn use_spyglass(&mut self) {
+    pub(super) fn use_spyglass(&mut self) { if let Some(__l) = crate::points_generated::P1941.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = self.eye_position();
         self.audio.play("minecraft:item.spyglass.use", at, 1.0, 1.0);
         self.start_using_item();
     }
     /// `SpyglassItem.releaseUsing` / `finishUsingItem` (after 1200 ticks).
-    pub(super) fn stop_spyglass(&mut self) {
+    pub(super) fn stop_spyglass(&mut self) { if let Some(__l) = crate::points_generated::P1940.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = self.eye_position();
         self.audio
             .play("minecraft:item.spyglass.stop_using", at, 1.0, 1.0);
@@ -216,7 +216,7 @@ impl Game<'_> {
     /// `Hud.extractCameraOverlays`: the spyglass scope, its size easing
     /// towards 1.125 by half the frame's game ticks and reset to 0.5 while
     /// not scoping in first person.
-    pub(super) fn draw_spyglass(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_spyglass(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P1939.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.scope_scale += 0.5 * self.frame_ticks * (1.125 - self.scope_scale);
         if !self.camera_type.first_person() {
             return;

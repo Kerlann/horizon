@@ -108,7 +108,7 @@ impl Strike {
 
 impl Game<'_> {
     /// Whether the player a hit landed on stands on the ground.
-    pub(super) fn pvp_victim_on_ground(&self, victim: Victim) -> bool {
+    pub(super) fn pvp_victim_on_ground(&self, victim: Victim) -> bool { if let Some(__l) = crate::points_generated::P2409.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return false;
         };
@@ -122,7 +122,7 @@ impl Game<'_> {
     }
 
     /// The player `id` that guest `conn` attacks, if it is one.
-    pub(super) fn pvp_victim(&self, conn: u32, id: i32) -> Option<Victim> {
+    pub(super) fn pvp_victim(&self, conn: u32, id: i32) -> Option<Victim> { let (conn,id,) = match crate::points_generated::P2408.get() { Some(__l) => { let mut __a = (conn,id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,id,) };
         let host = self.lan.as_ref()?;
         host.hub
             .guests
@@ -133,7 +133,7 @@ impl Game<'_> {
 
     /// `Player.attack`'s `causeFoodExhaustion(0.1F)`, charged to the attacker
     /// (the host, or a guest swapped in) only once the hit hurt the victim.
-    pub(super) fn pvp_exhaustion(&mut self) {
+    pub(super) fn pvp_exhaustion(&mut self) { if let Some(__l) = crate::points_generated::P2407.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(p) = self.player.as_mut()
             && !self.creative
         {
@@ -143,7 +143,7 @@ impl Game<'_> {
 
     /// The attacker's side of `Player.attack` (the host, or a guest swapped
     /// in): the damage, the charge reset and the swing.
-    pub(super) fn pvp_strike(&mut self) -> Option<Strike> {
+    pub(super) fn pvp_strike(&mut self) -> Option<Strike> { if let Some(__l) = crate::points_generated::P2406.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let p = self.player.as_ref()?;
         let from = [p.position.x, p.position.y, p.position.z];
         let (amount, scale, crit, magic) = self.melee_damage("minecraft:player", true);
@@ -194,7 +194,7 @@ impl Game<'_> {
     }
 
     /// The guests by connection, with their entity ids.
-    pub(super) fn lan_guest_entities(&self) -> Vec<(u32, u32)> {
+    pub(super) fn lan_guest_entities(&self) -> Vec<(u32, u32)> { if let Some(__l) = crate::points_generated::P2405.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.lan.as_ref().map_or_else(Vec::new, |host| {
             host.hub
                 .guests
@@ -205,7 +205,7 @@ impl Game<'_> {
     }
 
     /// The player a player's projectile hit, when it hit one.
-    pub(super) fn projectile_pvp_victim(&self, p: &Projectile, hit: Hit) -> Option<Victim> {
+    pub(super) fn projectile_pvp_victim(&self, p: &Projectile, hit: Hit) -> Option<Victim> { if let Some(__l) = crate::points_generated::P2404.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if p.owner != Some(Who::Player) || !meets_players(&p.kind) {
             return None;
         }
@@ -234,7 +234,7 @@ impl Game<'_> {
         p: &Projectile,
         hit: Hit,
         victim: Victim,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P2403.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Hit::Entity { at, .. } = hit else {
             return Ok(());
         };
@@ -269,7 +269,7 @@ impl Game<'_> {
         result.unwrap_or(Ok(()))
     }
 
-    pub(super) fn player_attacker(&self, conn: Option<u32>) -> Option<(u32, Text)> {
+    pub(super) fn player_attacker(&self, conn: Option<u32>) -> Option<(u32, Text)> { if let Some(__l) = crate::points_generated::P2402.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match conn {
             Some(conn) => {
                 let g = self.lan.as_ref()?.hub.guest(conn)?;
@@ -281,7 +281,7 @@ impl Game<'_> {
 
     /// The hit landing on the victim with its extra knockback, then the
     /// attacker's attack sound. Whether the victim was hurt.
-    pub(super) fn pvp_land(&mut self, victim: Victim, s: &Strike) -> bool {
+    pub(super) fn pvp_land(&mut self, victim: Victim, s: &Strike) -> bool { if let Some(__l) = crate::points_generated::P2401.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return false;
         };
@@ -449,7 +449,7 @@ impl Game<'_> {
     /// damage (`1 + ratio * baseDamage`, plus the enchantments against a
     /// player, scaled by the attack strength) and who hits. The box is set
     /// by the caller.
-    pub(super) fn player_sweep(&mut self, base: f32, scale: f32) -> Sweep {
+    pub(super) fn player_sweep(&mut self, base: f32, scale: f32) -> Sweep { let (base,scale,) = match crate::points_generated::P2400.get() { Some(__l) => { let mut __a = (base,scale,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (base,scale,) };
         let from = self
             .player
             .as_ref()
@@ -469,7 +469,7 @@ impl Game<'_> {
     /// A sweep from a mob hit reaches the other players. Inside a guest's
     /// turn the host holds the other players (`as_guest`), so it waits for
     /// the turn to end.
-    pub(super) fn sweep_other_players(&mut self, sweep: Sweep) {
+    pub(super) fn sweep_other_players(&mut self, sweep: Sweep) { if let Some(__l) = crate::points_generated::P2399.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(collect) = self.combat.sweeps.as_mut() {
             collect.push(sweep);
         } else if self.lan_acting.is_some() {
@@ -480,7 +480,7 @@ impl Game<'_> {
     }
 
     /// The sweeps guests' turns put off.
-    pub(super) fn flush_sweeps(&mut self) {
+    pub(super) fn flush_sweeps(&mut self) { if let Some(__l) = crate::points_generated::P2398.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for sweep in std::mem::take(&mut self.creatures.sweeps) {
             self.sweep_other_players(sweep);
         }
@@ -490,7 +490,7 @@ impl Game<'_> {
     /// closer than 3 blocks (`distanceToSqr < 9`) and not an ally
     /// (`isAlliedTo`), is hurt (`ServerPlayer.canHarmPlayer`: the `pvp` rule)
     /// and pushed 0.4 along the attacker's yaw.
-    pub(super) fn sweep_players(&mut self, sweep: &Sweep) {
+    pub(super) fn sweep_players(&mut self, sweep: &Sweep) { if let Some(__l) = crate::points_generated::P2397.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };

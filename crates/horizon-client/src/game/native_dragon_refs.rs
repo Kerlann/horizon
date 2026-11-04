@@ -9,13 +9,13 @@ use mod_api::{DragonRef, EntityRef, LivingRef, NativeDragonPhase};
 
 impl Game<'_> {
     /// The dragon an entity handle names now.
-    pub(super) fn native_dragon(&self, entity: EntityRef) -> Option<&Dragon> {
+    pub(super) fn native_dragon(&self, entity: EntityRef) -> Option<&Dragon> { if let Some(__l) = crate::points_generated::P3042.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Target::Dragon(id) = self.native_entity_target(entity)? else {
             return None;
         };
         self.dragon.as_ref().filter(|d| d.id == id)
     }
-    pub(super) fn native_dragon_mut(&mut self, entity: EntityRef) -> Option<&mut Dragon> {
+    pub(super) fn native_dragon_mut(&mut self, entity: EntityRef) -> Option<&mut Dragon> { if let Some(__l) = crate::points_generated::P3041.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Target::Dragon(id) = self.native_entity_target(entity)? else {
             return None;
         };
@@ -24,13 +24,13 @@ impl Game<'_> {
 
     /// The entity as the ender dragon, or None for another kind, a stale
     /// handle or a client.
-    pub(super) fn native_dragon_ref(&self, entity: EntityRef) -> Option<DragonRef> {
+    pub(super) fn native_dragon_ref(&self, entity: EntityRef) -> Option<DragonRef> { if let Some(__l) = crate::points_generated::P3040.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_dragon(entity)?;
         Some(DragonRef::new(entity))
     }
 
     /// `EnderDragonPhaseManager.getCurrentPhase`.
-    pub(super) fn native_dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase> {
+    pub(super) fn native_dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase> { if let Some(__l) = crate::points_generated::P3039.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_dragon(dragon.entity())?.native_phase())
     }
 
@@ -44,7 +44,7 @@ impl Game<'_> {
         &mut self,
         dragon: DragonRef,
         phase: NativeDragonPhase,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3038.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(d) = self.native_dragon_mut(dragon.entity()) else {
             return false;
         };
@@ -55,7 +55,7 @@ impl Game<'_> {
 
     /// The dragon's fight: Horizon keeps the End's fight only, so it is the
     /// fight of a dragon in the level in place when that is the End.
-    fn native_dragon_fight(&self, dragon: DragonRef) -> Option<&Fight> {
+    fn native_dragon_fight(&self, dragon: DragonRef) -> Option<&Fight> { if let Some(__l) = crate::points_generated::P3037.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_dragon(dragon.entity())?;
         (self.dim == Dim::End && self.fight.loaded).then_some(&self.fight)
     }
@@ -63,20 +63,20 @@ impl Game<'_> {
     /// `EnderDragonFight.aliveCrystals`: the crystals the last scan found
     /// (every 100 ticks). None for a stale handle, a client, or a dragon
     /// outside the End or whose fight is not loaded.
-    pub(super) fn native_dragon_alive_crystals(&self, dragon: DragonRef) -> Option<i32> {
+    pub(super) fn native_dragon_alive_crystals(&self, dragon: DragonRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3036.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_dragon_fight(dragon)?.alive_crystals)
     }
 
     /// `EnderDragonFight.hasPreviouslyKilledDragon`. None as
     /// `alive_crystals` is.
-    pub(super) fn native_dragon_previously_killed(&self, dragon: DragonRef) -> Option<bool> {
+    pub(super) fn native_dragon_previously_killed(&self, dragon: DragonRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3035.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_dragon_fight(dragon)?.previously_killed)
     }
 
     /// `EnderDragon.canAttack` (`canBeSeenAsEnemy`) and `Mob.asValidTarget`
     /// for the targets Horizon models: mobs and players. Armor stands, end
     /// crystals and the like are not supported.
-    fn native_dragon_valid_target(&self, target: Target) -> bool {
+    fn native_dragon_valid_target(&self, target: Target) -> bool { if let Some(__l) = crate::points_generated::P3034.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match target {
             Target::Mob(id) => self
                 .mobs
@@ -92,7 +92,7 @@ impl Game<'_> {
     /// `Mob.getTarget` for the dragon: the mob or player a mod set, None once
     /// it is no longer a valid target. The dragon's flight never sets or
     /// reads it.
-    pub(super) fn native_dragon_target(&self, entity: EntityRef) -> Option<LivingRef> {
+    pub(super) fn native_dragon_target(&self, entity: EntityRef) -> Option<LivingRef> { if let Some(__l) = crate::points_generated::P3033.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let target = self.native_entity(self.native_dragon(entity)?.target?)?;
         self.native_dragon_valid_target(self.native_entity_target(target)?)
             .then(|| self.native_living(target))?
@@ -105,7 +105,7 @@ impl Game<'_> {
         &mut self,
         entity: EntityRef,
         target: Option<LivingRef>,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3032.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = match target {
             None => None,
             Some(target) => {

@@ -4,14 +4,14 @@ use horizon_client::discord_presence::{self as presence, Dimension, Play, Status
 
 impl Game<'_> {
     /// Each frame: only a change reaches the presence thread.
-    pub(super) fn update_discord_presence(&self) {
+    pub(super) fn update_discord_presence(&self) { if let Some(__l) = crate::points_generated::P1598.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // One Discord status per computer: P1's, not a splitscreen player's.
         if self.options.split_guest {
             return;
         }
         presence::set(self.discord_status());
     }
-    fn discord_status(&self) -> Status {
+    fn discord_status(&self) -> Status { if let Some(__l) = crate::points_generated::P1597.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.settings.extras.discord_presence {
             return Status::Off;
         }

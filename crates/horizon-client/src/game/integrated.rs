@@ -328,11 +328,11 @@ struct Launch {
 impl Game<'_> {
     /// `Minecraft.hasSingleplayerServer`: a world of this window's own, run
     /// in the frame or on its server thread.
-    pub(super) fn has_singleplayer_server(&self) -> bool {
+    pub(super) fn has_singleplayer_server(&self) -> bool { if let Some(__l) = crate::points_generated::P2116.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote.is_none() || self.integrated.is_some()
     }
     /// `IntegratedServer.isPublished`: the world is open to the network.
-    pub(super) fn is_published(&self) -> bool {
+    pub(super) fn is_published(&self) -> bool { if let Some(__l) = crate::points_generated::P2115.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.lan.is_some()
             || self
                 .integrated
@@ -348,7 +348,7 @@ impl Game<'_> {
         seed: Option<i64>,
         creative: bool,
         create: Option<&WorldOptions>,
-    ) -> Result<()> {
+    ) -> Result<()> { let (creative,) = match crate::points_generated::P2114.get() { Some(__l) => { let mut __a = (creative,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (creative,) };
         // The window's mod configs before the server's, as on NeoForge.
         self.native_configs_client_start();
         self.client_logging_out();
@@ -470,7 +470,7 @@ impl Game<'_> {
     }
 
     /// The starting server's answer, polled each frame: joined once it is ready.
-    pub(super) fn poll_integrated_start(&mut self) -> Result<()> {
+    pub(super) fn poll_integrated_start(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P2113.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.integrated_starting.is_none() {
             return Ok(());
         }
@@ -534,7 +534,7 @@ impl Game<'_> {
     /// loading screen: the focus moves to the spawn chunk when the stage
     /// starts, the 7x7 chunks around it count as they are ready, and the
     /// status map around the focus follows (`ChunkLoadStatusView.get`).
-    pub(super) fn publish_load_view(&mut self) {
+    pub(super) fn publish_load_view(&mut self) { if let Some(__l) = crate::points_generated::P2112.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(serving) = self.serving.as_mut() else {
             return;
         };
@@ -580,7 +580,7 @@ impl Game<'_> {
 
     /// `LevelLoadingScreen.tick`'s easing of the server's progress, every 50 ms
     /// of wall time (the starting server has no client tick yet).
-    pub(super) fn tick_load_progress(&mut self) {
+    pub(super) fn tick_load_progress(&mut self) { if let Some(__l) = crate::points_generated::P2111.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let view = match (&self.integrated_starting, &self.integrated) {
             (Some(s), _) => s.handle.load_view().clone(),
             (None, Some(i)) => i.load_view().clone(),
@@ -610,7 +610,7 @@ impl Game<'_> {
         tasks: Receiver<Task>,
         ready: &Sender<Ready>,
         opening: Opening,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P2110.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let result = self.run_integrated_inner(launch, flags, tasks, ready, opening);
         if let Err(error) = &result {
             self.native_players_leaving();
@@ -626,7 +626,7 @@ impl Game<'_> {
         tasks: Receiver<Task>,
         ready: &Sender<Ready>,
         opening: Opening,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P2109.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The open segment runs as one unit (`integrated_open`) so its
         // failures fire `WorldOpenFailed` with the engine's own error text.
         if let Err(e) = self.integrated_open(&launch, &flags, tasks, ready, opening) {
@@ -693,7 +693,7 @@ impl Game<'_> {
 
     /// After the level of `dim` ticked: the window's debug entries' server
     /// lines, when they want them from this level.
-    pub(super) fn publish_server_debug(&self, dim: Dim) {
+    pub(super) fn publish_server_debug(&self, dim: Dim) { if let Some(__l) = crate::points_generated::P2108.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(serving) = &self.serving else {
             return;
         };
@@ -718,7 +718,7 @@ impl Game<'_> {
         tasks: Receiver<Task>,
         ready: &Sender<Ready>,
         opening: Opening,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P2107.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The mods' server configs, read before the server starts.
         if let Ok(dir) = std::env::current_dir() {
             self.native_configs_server_start(&dir.join("saves").join(&launch.folder), false);
@@ -828,7 +828,7 @@ impl Game<'_> {
 
     /// `MinecraftServer.stopServer`: the players are saved and sent away,
     /// then the world is saved.
-    fn stop_integrated(&mut self) -> Result<()> {
+    fn stop_integrated(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P2106.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Abort background terrain generation/decoration on shutdown, matching vanilla behavior.
         self.streaming.abort_generation();
         // The close request: lifecycle observation stops.
@@ -888,14 +888,14 @@ pub(super) struct ServerOptions {
 /// The server thread's side.
 impl Game<'_> {
     /// Whether this game is an integrated server's.
-    pub(super) fn serving(&self) -> bool {
+    pub(super) fn serving(&self) -> bool { if let Some(__l) = crate::points_generated::P2105.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.serving.is_some()
     }
     /// The window's agent runs a command as single player's console does
     /// (`as_console`, as without a server thread): as the world's owner, in
     /// the owner's level, at the owner permission level. The feedback goes to
     /// the owner's chat and is returned.
-    pub(super) fn owner_console_command(&mut self, command: &str) -> Vec<String> {
+    pub(super) fn owner_console_command(&mut self, command: &str) -> Vec<String> { if let Some(__l) = crate::points_generated::P2104.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(owner) = self.serving.as_ref().map(|s| s.owner) else {
             return Vec::new();
         };
@@ -972,7 +972,7 @@ impl Game<'_> {
     }
 
     /// The window's requests, between two ticks.
-    fn run_tasks(&mut self) {
+    fn run_tasks(&mut self) { if let Some(__l) = crate::points_generated::P2103.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let tasks: Vec<Task> = match &self.serving {
             Some(s) => s.tasks.try_iter().collect(),
             None => return,
@@ -983,14 +983,14 @@ impl Game<'_> {
         }
     }
     /// `IntegratedServer.getPort` while published.
-    pub(super) fn published_port(&self) -> Option<u16> {
+    pub(super) fn published_port(&self) -> Option<u16> { if let Some(__l) = crate::points_generated::P2102.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let s = self.serving.as_ref()?;
         Some(s.flags.published.load(Ordering::Relaxed)).filter(|&p| p != 0)
     }
     /// `IntegratedServer.publishServer`: listen on `settings.port` (0 picks
     /// one) and announce the world. The socket is bound at once so a busy
     /// port fails here; the hub starts listening once it is at hand.
-    pub(super) fn publish(&mut self, settings: LanSettings) -> std::result::Result<u16, String> {
+    pub(super) fn publish(&mut self, settings: LanSettings) -> std::result::Result<u16, String> { if let Some(__l) = crate::points_generated::P2101.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(s) = self.serving.as_mut() else {
             return Err("not an integrated server".into());
         };
@@ -1007,7 +1007,7 @@ impl Game<'_> {
     }
     /// `IntegratedServer.unpublishServer`: stop listening and send every
     /// player but the owner away. False when it was not published.
-    pub(super) fn unpublish(&mut self) -> bool {
+    pub(super) fn unpublish(&mut self) -> bool { if let Some(__l) = crate::points_generated::P2100.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(s) = self.serving.as_mut() else {
             return false;
         };
@@ -1020,7 +1020,7 @@ impl Game<'_> {
     }
     /// IntegratedServer.tickServer: the server follows the window's render
     /// and simulation distances when they change.
-    fn follow_distances(&mut self, flags: &Flags) {
+    fn follow_distances(&mut self, flags: &Flags) { if let Some(__l) = crate::points_generated::P2099.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // IntegratedServer.getScaledTrackingDistance reads the option each time.
         self.settings.entity_distance =
             f32::from_bits(flags.entity_distance.load(Ordering::Relaxed));
@@ -1043,7 +1043,7 @@ impl Game<'_> {
         }
     }
 
-    fn apply_publish(&mut self) {
+    fn apply_publish(&mut self) { if let Some(__l) = crate::points_generated::P2098.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.lan.is_none() {
             return;
         }
@@ -1091,7 +1091,7 @@ impl Game<'_> {
         }
     }
     /// The world options screen's state, read on the server.
-    pub(super) fn server_options(&self) -> ServerOptions {
+    pub(super) fn server_options(&self) -> ServerOptions { if let Some(__l) = crate::points_generated::P2097.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let owner = self.serving.as_ref().map(|s| s.owner);
         let host = self.lan.as_ref();
         let personal_mode = host
@@ -1111,7 +1111,7 @@ impl Game<'_> {
         }
     }
     /// `IntegratedServer.setPersonalGameType`: the owner's game mode.
-    pub(super) fn set_owner_mode(&mut self, mode: i32) {
+    pub(super) fn set_owner_mode(&mut self, mode: i32) { let (mode,) = match crate::points_generated::P2096.get() { Some(__l) => { let mut __a = (mode,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mode,) };
         let Some(owner) = self.serving.as_ref().map(|s| s.owner) else {
             return;
         };
@@ -1129,7 +1129,7 @@ impl Game<'_> {
     }
     /// `IntegratedServer.setWorldAllowCommands`: the owner is an operator
     /// while the world allows commands; everyone's level is sent again.
-    pub(super) fn owner_allow_commands(&mut self, allow: bool) {
+    pub(super) fn owner_allow_commands(&mut self, allow: bool) { let (allow,) = match crate::points_generated::P2095.get() { Some(__l) => { let mut __a = (allow,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (allow,) };
         let Some((owner, flags)) = self.serving.as_ref().map(|s| (s.owner, s.flags.clone())) else {
             return;
         };
@@ -1214,7 +1214,7 @@ pub(super) enum ComponentHarness {
 }
 
 impl Game<'_> {
-    pub(super) fn run_component_harness(&self, fixture: ComponentHarness) -> Result<()> {
+    pub(super) fn run_component_harness(&self, fixture: ComponentHarness) -> Result<()> { if let Some(__l) = crate::points_generated::P2094.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (res, pack, settings) = (self.res.clone(), self.pack.clone(), self.settings.clone());
         let mut options = self.options.clone();
         options.execution_role = ExecutionRole::IntegratedServer;

@@ -18,7 +18,7 @@ pub(super) const TOTEM_EVENT: i8 = 35;
 impl Game<'_> {
     /// Whether either hand holds a totem, for the next hurt: the window's
     /// player once a tick, a server's player for each of its turns.
-    pub(super) fn update_totem_ready(&mut self) {
+    pub(super) fn update_totem_ready(&mut self) { if let Some(__l) = crate::points_generated::P5663.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ready = self.held().is_some_and(|s| &*s.item == TOTEM)
             || self.offhand.as_ref().is_some_and(|s| &*s.item == TOTEM);
         let off = !self.held().is_some_and(|s| &*s.item == TOTEM);
@@ -30,7 +30,7 @@ impl Game<'_> {
     /// The server's half once a totem fired: use it up (main hand first),
     /// count it, set health to 1, then clear and apply its effects. Returns
     /// the player's body, for entity event 35, which the caller broadcasts.
-    pub(super) fn apply_totem(&mut self) -> Option<Body> {
+    pub(super) fn apply_totem(&mut self) -> Option<Body> { if let Some(__l) = crate::points_generated::P5662.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.player.as_ref()?.health.totem_used {
             return None;
         }
@@ -84,7 +84,7 @@ impl Game<'_> {
     }
     /// The window's player's totem: the server's half, then the event to
     /// the guests and to this window's own client.
-    pub(super) fn tick_totem(&mut self) {
+    pub(super) fn tick_totem(&mut self) { if let Some(__l) = crate::points_generated::P5661.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(body) = self.apply_totem() else {
             return;
         };
@@ -92,7 +92,7 @@ impl Game<'_> {
     }
     /// Entity event 35 from a server, for this client's own player or an
     /// entity it draws.
-    pub(super) fn remote_totem(&mut self, id: i32) {
+    pub(super) fn remote_totem(&mut self, id: i32) { let (id,) = match crate::points_generated::P5660.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let own = self.remote.as_ref().is_some_and(|r| r.entity_id == id);
         let body = if own {
             self.player.as_ref().map(|p| Body {
@@ -114,7 +114,7 @@ impl Game<'_> {
     /// `ClientPacketListener.handleEntityEvent` 35: the totem particles (a
     /// 30-tick emitter) and its sound, heard here only (`playLocalSound`),
     /// and the player's own rumble.
-    pub(super) fn totem_event(&mut self, body: Body, own: bool) {
+    pub(super) fn totem_event(&mut self, body: Body, own: bool) { let (own,) = match crate::points_generated::P5659.get() { Some(__l) => { let mut __a = (own,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (own,) };
         self.particles.tracking_emitter_for(
             ParticleOptions::simple(ParticleType::TotemOfUndying),
             body.at,
@@ -137,7 +137,7 @@ impl Game<'_> {
     /// `ClientPacketListener.findTotem`: the first hand's item with
     /// `death_protection`, else a new totem (a used single totem is gone by
     /// the time the event arrives).
-    fn find_totem(&self) -> ItemStack {
+    fn find_totem(&self) -> ItemStack { if let Some(__l) = crate::points_generated::P5658.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let models = &self.pack.item_renderer.models;
         [self.held(), self.offhand.as_ref()]
             .into_iter()
@@ -152,7 +152,7 @@ impl Game<'_> {
             .unwrap_or_else(|| ItemStack::new(TOTEM, 1))
     }
     /// `GameRenderer.tick`: the activated item counts down.
-    pub(super) fn tick_item_activation(&mut self) {
+    pub(super) fn tick_item_activation(&mut self) { if let Some(__l) = crate::points_generated::P5657.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player.is_some() {
             self.item_activation.tick();
         }
@@ -168,7 +168,7 @@ impl Game<'_> {
         view: glam::Mat4,
         aspect: f32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (partial,aspect,) = match crate::points_generated::P5656.get() { Some(__l) => { let mut __a = (partial,aspect,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,aspect,) };
         if self.ui.hide_gui {
             return;
         }

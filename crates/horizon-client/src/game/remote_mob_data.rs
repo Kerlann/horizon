@@ -478,7 +478,7 @@ fn villager_data(m: &mut Mob, data: &[i32], builtin: &Builtin) {
 
 impl Game<'_> {
     /// SetEntityData for a mob of the server's.
-    pub(super) fn remote_mob_data(&mut self, id: i32, values: &[(u8, i32, Value)]) {
+    pub(super) fn remote_mob_data(&mut self, id: i32, values: &[(u8, i32, Value)]) { let (id,) = match crate::points_generated::P4989.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(r) = &self.remote else {
             return;
         };

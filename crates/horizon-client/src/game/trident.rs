@@ -231,7 +231,7 @@ fn segment_box(from: Vec3, d: Vec3, b: Aabb) -> Option<f64> {
 }
 impl Game<'_> {
     /// `TridentItem.use`: start the throw unless one more use would break it.
-    pub(super) fn use_trident(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn use_trident(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P5739.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:trident" {
             return false;
         }
@@ -247,7 +247,7 @@ impl Game<'_> {
         self.start_using_item();
         true
     }
-    fn in_water_or_rain(&mut self) -> bool {
+    fn in_water_or_rain(&mut self) -> bool { if let Some(__l) = crate::points_generated::P5738.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = &self.player else { return false };
         let (x, y, z) = (
             p.position.x.floor() as i32,
@@ -262,7 +262,7 @@ impl Game<'_> {
     /// The `summon_entity` and `play_sound` effects of `channeling.json`: in a
     /// thunderstorm (`weather_check`) a spot that sees the sky (`can_see_sky`)
     /// gets a lightning bolt and the thunder sound.
-    fn channel_lightning(&mut self, at: [f64; 3], guest: Option<u32>) {
+    fn channel_lightning(&mut self, at: [f64; 3], guest: Option<u32>) { let (at,) = match crate::points_generated::P5737.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         // Level.isThundering: the thunder level, in dimensions with weather.
         if !self.can_have_weather() || self.weather_levels(1.0).1 <= 0.9 {
             return;
@@ -290,7 +290,7 @@ impl Game<'_> {
     /// `minecraft:hit_block` of Channeling (`AbstractArrow.hitBlockEnchantmentEffects`):
     /// the block the trident's path first hits, if it is a lightning rod, with
     /// the hit location clamped into the block (`BlockPos.clampLocationWithin`).
-    fn channel_rod_hit(&mut self, from: Vec3, velocity: Vec3, guest: Option<u32>) {
+    fn channel_rod_hit(&mut self, from: Vec3, velocity: Vec3, guest: Option<u32>) { if let Some(__l) = crate::points_generated::P5736.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let to = Vec3::new(
             from.x + velocity.x,
             from.y + velocity.y,
@@ -333,7 +333,7 @@ impl Game<'_> {
         );
     }
     /// `TridentItem.releaseUsing`.
-    pub(super) fn release_trident(&mut self, ticks: u32) {
+    pub(super) fn release_trident(&mut self, ticks: u32) { let (ticks,) = match crate::points_generated::P5735.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         if ticks < 10 {
             return;
         }
@@ -469,7 +469,7 @@ impl Game<'_> {
         victim: &horizon_client::advancements::EntityView,
         direct: horizon_client::advancements::EntityView,
         damage: f32,
-    ) {
+    ) { let (damage,) = match crate::points_generated::P5734.get() { Some(__l) => { let mut __a = (damage,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (damage,) };
         let Some(conn) = guest.filter(|c| self.lan_acting != Some(*c)) else {
             self.player_hit(victim, "minecraft:trident", Some(direct), damage);
             return;
@@ -481,7 +481,7 @@ impl Game<'_> {
     /// The players tridents fly back to or land at: this game's player and the
     /// guests in this level. A server has no player of its own, so its
     /// tridents belong to guests.
-    fn trident_catchers(&self) -> Vec<Catcher> {
+    fn trident_catchers(&self) -> Vec<Catcher> { if let Some(__l) = crate::points_generated::P5733.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out = Vec::new();
         if let Some(eye) = self.eye_position() {
             let feet = self.player.as_ref().map_or(Vec3::ZERO, |p| p.position);
@@ -511,7 +511,7 @@ impl Game<'_> {
     /// returning: the player takes the item (a creative thrower's trident is
     /// only removed) and the rest that does not fit drops at their feet.
     /// False when it could not be given.
-    fn trident_taken(&mut self, t: &ThrownTrident, by: &Catcher) -> bool {
+    fn trident_taken(&mut self, t: &ThrownTrident, by: &Catcher) -> bool { if let Some(__l) = crate::points_generated::P5732.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !t.creative_only {
             let rest = match by.guest {
                 None => self.give(t.stack.clone()),
@@ -549,7 +549,7 @@ impl Game<'_> {
         true
     }
     /// Apply the environment before impact callbacks can change the world.
-    fn trident_block_effects(&mut self, t: &mut ThrownTrident, from: Vec3, to: Vec3) {
+    fn trident_block_effects(&mut self, t: &mut ThrownTrident, from: Vec3, to: Vec3) { if let Some(__l) = crate::points_generated::P5731.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let extinguished = {
             let rain = self.arrow_rain();
             // Block-contact hooks are already delivered by the game's inside pass.
@@ -569,7 +569,7 @@ impl Game<'_> {
             );
         }
     }
-    pub(super) fn tick_tridents(&mut self) {
+    pub(super) fn tick_tridents(&mut self) { if let Some(__l) = crate::points_generated::P5730.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.tridents.is_empty() {
             return;
         }
@@ -892,7 +892,7 @@ impl Game<'_> {
         }
     }
     /// ThrownTridentRenderer.
-    pub(super) fn trident_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
+    pub(super) fn trident_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) { let (alpha,) = match crate::points_generated::P5729.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let Some(model) = &self.trident_model else {
             return;
         };

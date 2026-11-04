@@ -31,7 +31,7 @@ pub(super) struct Win {
     frame: Instant,
 }
 impl Game<'_> {
-    pub(super) fn open_win_screen(&mut self, poem: bool, finish: Finish) {
+    pub(super) fn open_win_screen(&mut self, poem: bool, finish: Finish) { let (poem,) = match crate::points_generated::P5817.get() { Some(__l) => { let mut __a = (poem,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (poem,) };
         let screen = WinScreen::new(
             poem,
             &self.options.resources,
@@ -48,16 +48,16 @@ impl Game<'_> {
         self.capture(false);
     }
     /// Stop the scroll `scroll` pixels in (`horizon-ctl credits ... SCROLL`).
-    pub(super) fn hold_win_screen(&mut self, scroll: f32) {
+    pub(super) fn hold_win_screen(&mut self, scroll: f32) { let (scroll,) = match crate::points_generated::P5816.get() { Some(__l) => { let mut __a = (scroll,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (scroll,) };
         if let Some(win) = self.win.as_mut() {
             win.screen.hold(scroll);
         }
     }
     /// `WinScreen.isPauseScreen`: only the credits without the poem pause.
-    pub(super) fn win_screen_pauses(&self) -> bool {
+    pub(super) fn win_screen_pauses(&self) -> bool { if let Some(__l) = crate::points_generated::P5815.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.win.as_ref().is_some_and(|w| !w.screen.poem)
     }
-    pub(super) fn draw_win_screen(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_win_screen(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5814.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(win) = self.win.as_mut() else {
             return;
         };
@@ -84,7 +84,7 @@ impl Game<'_> {
         win.screen.draw(batch, &self.gui.atlas, delta_ticks, fill);
     }
     /// `WinScreen.keyPressed` / `keyReleased`; Escape closes it (`onClose`).
-    pub(super) fn win_key(&mut self, event: &KeyEvent) -> Result<()> {
+    pub(super) fn win_key(&mut self, event: &KeyEvent) -> Result<()> { if let Some(__l) = crate::points_generated::P5813.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let PhysicalKey::Code(code) = event.physical_key else {
             return Ok(());
         };
@@ -101,7 +101,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `WinScreen.tick`: done once everything has rolled past the top.
-    pub(super) fn tick_win_screen(&mut self) -> Result<()> {
+    pub(super) fn tick_win_screen(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P5812.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let height = self.gui_size().1;
         if self.win.as_ref().is_some_and(|w| w.screen.finished(height)) {
             self.close_win_screen()?;
@@ -109,7 +109,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `WinScreen.respawn` (`onFinished`) and `removed`: the credits music stops.
-    pub(super) fn close_win_screen(&mut self) -> Result<()> {
+    pub(super) fn close_win_screen(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P5811.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(win) = self.win.take() else {
             return Ok(());
         };

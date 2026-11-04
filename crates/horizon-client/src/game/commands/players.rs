@@ -28,13 +28,13 @@ fn mode_name(id: i32) -> &'static str {
 
 impl Game<'_> {
     /// The guest `conn`, while the hub is in `self.lan`.
-    pub(in crate::game) fn command_guest(&self, conn: u32) -> Option<&Guest> {
+    pub(in crate::game) fn command_guest(&self, conn: u32) -> Option<&Guest> { let (conn,) = match crate::points_generated::P1184.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,) };
         self.lan.as_ref()?.hub.guest(conn)
     }
 
     /// `PlayerList.getPlayers` but the player in place: the guests who
     /// joined the world.
-    fn command_players(&self) -> impl Iterator<Item = &Guest> {
+    fn command_players(&self) -> impl Iterator<Item = &Guest> { if let Some(__l) = crate::points_generated::P1183.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let acting = self.lan_acting;
         self.lan
             .iter()
@@ -44,14 +44,14 @@ impl Game<'_> {
 
     /// Native console calls cannot reach an outer turn's displaced player.
     /// Ordinary command resolution is unchanged, including nested turns.
-    fn native_command_player_available(&self, guest: &Guest) -> bool {
+    fn native_command_player_available(&self, guest: &Guest) -> bool { if let Some(__l) = crate::points_generated::P1182.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         !self.native_command_filter || self.native_entity(guest.entity_id as u32).is_some()
     }
 
     /// The entity the command runs as (`CommandSourceStack.getEntity`): a
     /// command typed by the player in place runs as them, the server
     /// console's as nobody.
-    pub(in crate::game) fn source_entity(&self) -> Option<Target> {
+    pub(in crate::game) fn source_entity(&self) -> Option<Target> { if let Some(__l) = crate::points_generated::P1181.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.command_source {
             Some(s) => s.entity,
             None => self.player.is_some().then_some(Target::Player),
@@ -61,7 +61,7 @@ impl Game<'_> {
     /// `CommandSourceStack.getPlayerOrException` for the commands whose
     /// player argument is optional: the source's player (the player in
     /// place when it has none, as before).
-    pub(in crate::game) fn implied_player(&self) -> Target {
+    pub(in crate::game) fn implied_player(&self) -> Target { if let Some(__l) = crate::points_generated::P1180.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.source_entity()
             .filter(|t| t.is_player())
             .unwrap_or(Target::Player)
@@ -72,7 +72,7 @@ impl Game<'_> {
     /// (`native_set_nickname`), a name no player has finds the player going
     /// by it, without its `~` or with it (quoted), so `/msg` and `/tell`
     /// reach a player by the name chat shows. No nickname, no change.
-    pub(super) fn player_named(&self, name: &str) -> Option<Target> {
+    pub(super) fn player_named(&self, name: &str) -> Option<Target> { if let Some(__l) = crate::points_generated::P1179.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.lan_acting_fake
             && self.player.is_some()
             && name.eq_ignore_ascii_case(self.acting_player_name())
@@ -87,7 +87,7 @@ impl Game<'_> {
 
     /// The player whose nickname is `name` (any case, a leading `~` either
     /// side ignored).
-    fn player_nicknamed(&self, name: &str) -> Option<Target> {
+    fn player_nicknamed(&self, name: &str) -> Option<Target> { if let Some(__l) = crate::points_generated::P1178.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let bare = |s: &str| s.strip_prefix('~').unwrap_or(s).to_ascii_lowercase();
         let wanted = bare(name);
         let hub = &self.lan.as_ref()?.hub;
@@ -101,7 +101,7 @@ impl Game<'_> {
 
     /// `EntitySelector.findEntities` with a UUID: the player with it, else
     /// the entity.
-    pub(in crate::game) fn target_by_uuid(&self, uuid: u128) -> Option<Target> {
+    pub(in crate::game) fn target_by_uuid(&self, uuid: u128) -> Option<Target> { if let Some(__l) = crate::points_generated::P1177.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let own = self.lan_acting_uuid.or_else(|| {
             self.level.player_uuid.map(|[a, b, c, d]| {
                 (u128::from(a as u32) << 96)
@@ -124,7 +124,7 @@ impl Game<'_> {
     /// the one in place as `Target::Player`: all of them, or those in the
     /// source's level when it limits the search to a place
     /// (`isWorldLimited`); `@e` and `@n` skip the dead (`Entity::isAlive`).
-    pub(super) fn player_candidates(&self, s: &Selector) -> Vec<Target> {
+    pub(super) fn player_candidates(&self, s: &Selector) -> Vec<Target> { if let Some(__l) = crate::points_generated::P1176.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let limited = s.distance.is_some()
             || s.pos.iter().any(Option::is_some)
             || s.delta.iter().any(Option::is_some);
@@ -148,14 +148,14 @@ impl Game<'_> {
     }
 
     /// A guest's experience level and game mode, for `level=` and `gamemode=`.
-    pub(super) fn guest_level_and_mode(&self, conn: u32) -> Option<(i32, &'static str)> {
+    pub(super) fn guest_level_and_mode(&self, conn: u32) -> Option<(i32, &'static str)> { let (conn,) = match crate::points_generated::P1175.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,) };
         self.command_guest(conn)
             .map(|g| (g.xp_level, mode_name(g.game_mode)))
     }
 
     /// `Player.getDisplayName`: the name as its team shows it, suggesting a
     /// `/tell`, showing the player on hover, inserting the name.
-    pub(in crate::game) fn player_text(&self, name: &str, uuid: u128) -> Text {
+    pub(in crate::game) fn player_text(&self, name: &str, uuid: u128) -> Text { if let Some(__l) = crate::points_generated::P1174.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let shown = match self.score.board.players_team(name) {
             Some(team) => team.formatted_name(Text::literal(name)),
             None => Text::literal(name),

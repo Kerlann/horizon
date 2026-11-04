@@ -208,7 +208,7 @@ pub(super) fn send_hub_level_particles(
 impl Game<'_> {
     /// `SonicBoom.tick` uses `ServerLevel.sendParticles` for each ray point.
     /// Keep the local event's rendering; connected players receive one at rest.
-    pub(super) fn lan_sonic_boom(&self, options: &ParticleOptions, at: [f64; 3]) {
+    pub(super) fn lan_sonic_boom(&self, options: &ParticleOptions, at: [f64; 3]) { let (at,) = match crate::points_generated::P2396.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,) };
         let (Some(host), Some(particle)) = (&self.lan, self.network_particle(options, None)) else {
             return;
         };
@@ -244,7 +244,7 @@ impl Game<'_> {
         speed: f64,
         count: u32,
         state: Option<BlockStateId>,
-    ) {
+    ) { let (at,spread,speed,count,) = match crate::points_generated::P2395.get() { Some(__l) => { let mut __a = (at,spread,speed,count,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,spread,speed,count,) };
         let Some(hub) = self.lan.as_ref().map(|h| &h.hub) else {
             return;
         };
@@ -254,7 +254,7 @@ impl Game<'_> {
     /// `LivingEntity.checkFallDamage`'s `ServerLevel.sendParticles` of the
     /// landing block's crumbs: drawn in this window, when it has one, and
     /// sent to each player within 32 blocks.
-    pub(super) fn landing_dust(&mut self, state: BlockStateId, at: Vec3, count: i32, speed: f64) {
+    pub(super) fn landing_dust(&mut self, state: BlockStateId, at: Vec3, count: i32, speed: f64) { let (count,speed,) = match crate::points_generated::P2394.get() { Some(__l) => { let mut __a = (count,speed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,speed,) };
         let at = [at.x, at.y, at.z];
         if self.serving.is_none() && self.options.dedicated.is_none() {
             let block = [
@@ -311,7 +311,7 @@ impl Game<'_> {
         bounds: Aabb,
         known_movement: Vec3,
         living: bool,
-    ) {
+    ) { let (living,) = match crate::points_generated::P2393.get() { Some(__l) => { let mut __a = (living,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (living,) };
         // `particle_velocity` refuses no horizontal movement before any draw,
         // so a resting entity skips the sweep (most items, orbs and carts).
         if self.remote.is_some() || (known_movement.x == 0.0 && known_movement.z == 0.0) {
@@ -331,7 +331,7 @@ impl Game<'_> {
         block: BlockPos,
         position: Vec3,
         known_movement: Vec3,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P2392.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return;
         }
@@ -342,7 +342,7 @@ impl Game<'_> {
     }
 
     /// Locally draw the level's own particle, then send it to LAN players.
-    pub(super) fn snowflake_particle(&mut self, at: [f64; 3], velocity: [f64; 3]) {
+    pub(super) fn snowflake_particle(&mut self, at: [f64; 3], velocity: [f64; 3]) { let (at,velocity,) = match crate::points_generated::P2391.get() { Some(__l) => { let mut __a = (at,velocity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,velocity,) };
         let options = ParticleOptions::simple(ParticleType::Snowflake);
         if self.options.execution_role.is_client() {
             self.particles.add(&options, at, velocity);
@@ -367,7 +367,7 @@ impl Game<'_> {
         &self,
         options: &ParticleOptions,
         state: Option<BlockStateId>,
-    ) -> Option<Particle> {
+    ) -> Option<Particle> { if let Some(__l) = crate::points_generated::P2390.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Self::hub_particle(&self.lan.as_ref()?.hub, options, state)
     }
 
@@ -423,7 +423,7 @@ impl Game<'_> {
         &mut self,
         p: &Particle,
         at: [f64; 3],
-    ) -> Option<ParticleOptions> {
+    ) -> Option<ParticleOptions> { let (at,) = match crate::points_generated::P2389.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         if p.id == MOD_PARTICLE_ID
             && let Some(ParticleData::Mod(name)) = &p.data
         {
@@ -483,7 +483,7 @@ impl Game<'_> {
     /// raised by the option's offset. An entity this client does not have is
     /// no destination at all: vanilla makes the particle and removes it on its
     /// first tick, so nothing of it is ever drawn.
-    fn vibration_destination(&self, source: &PositionSource) -> Option<[f64; 3]> {
+    fn vibration_destination(&self, source: &PositionSource) -> Option<[f64; 3]> { if let Some(__l) = crate::points_generated::P2388.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match source {
             PositionSource::Block([x, y, z]) => Some([
                 f64::from(*x) + 0.5,
@@ -509,7 +509,7 @@ impl Game<'_> {
     /// `ClientPacketListener.handleParticleEvent`: no count is one particle
     /// moving by speed times spread; otherwise each is spread and sped up by
     /// gaussians on each axis.
-    pub(super) fn remote_level_particles(&mut self, p: &play::LevelParticles) {
+    pub(super) fn remote_level_particles(&mut self, p: &play::LevelParticles) { if let Some(__l) = crate::points_generated::P2387.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(options) = self.received_particle(&p.particle, p.pos) else {
             return;
         };
@@ -535,7 +535,7 @@ impl Game<'_> {
 
     /// `ClientPacketListener.handleExplosion`: the blast's particles (and its
     /// sound, when the packet carries it), then the player's push.
-    pub(super) fn remote_explode(&mut self, p: &play::Explode) {
+    pub(super) fn remote_explode(&mut self, p: &play::Explode) { if let Some(__l) = crate::points_generated::P2386.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if p.play_sound {
             let pitch = (1.0
                 + (self.particles.random().next_float() - self.particles.random().next_float())
@@ -573,7 +573,7 @@ impl Game<'_> {
     /// the players (a guest's turn through `as_guest`, a host's hit on a
     /// guest) the packet waits for the turn to end so that it reaches every
     /// player, the guest too.
-    pub(super) fn lan_send_particles(&mut self, request: QueuedParticle) {
+    pub(super) fn lan_send_particles(&mut self, request: QueuedParticle) { if let Some(__l) = crate::points_generated::P2385.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.lan.is_none() {
             if self.serving.is_some() || self.options.dedicated.is_some() {
                 self.creatures.lan_particles.push(request);
@@ -620,7 +620,7 @@ impl Game<'_> {
 
     /// Native sounds wait until the server host is available. An unknown
     /// `minecraft:` event is dropped; a mod's goes by name (`sound_packet`).
-    pub(super) fn flush_native_sounds(&mut self) {
+    pub(super) fn flush_native_sounds(&mut self) { if let Some(__l) = crate::points_generated::P2384.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = &self.lan else { return };
         for sound in std::mem::take(&mut self.creatures.lan_sounds) {
             if sound.sound.starts_with("minecraft:")
@@ -668,7 +668,7 @@ impl Game<'_> {
     /// `BucketItem.emptyContents` where water evaporates: `sendParticles(
     /// LARGE_SMOKE, x, y, z, 8, 1, 1, 1, 0, ALTERNATIVE)` from the block's
     /// corner, so each puff lands inside the block. The window draws its own.
-    pub(super) fn evaporation_smoke(&mut self, pos: [i32; 3]) {
+    pub(super) fn evaporation_smoke(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P2383.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let options = ParticleOptions::simple(ParticleType::LargeSmoke);
         let at = pos.map(f64::from);
         for _ in 0..8 {
@@ -693,7 +693,7 @@ impl Game<'_> {
     }
 
     /// The particles guests' turns put off.
-    pub(super) fn flush_lan_particles(&mut self) {
+    pub(super) fn flush_lan_particles(&mut self) { if let Some(__l) = crate::points_generated::P2382.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for request in std::mem::take(&mut self.creatures.lan_particles) {
             self.lan_send_particles(request);
         }
@@ -711,7 +711,7 @@ impl Game<'_> {
         radius: f32,
         block_count: usize,
         pushed: Vec<(u32, [f64; 3])>,
-    ) {
+    ) { let (center,small,radius,block_count,) = match crate::points_generated::P2381.get() { Some(__l) => { let mut __a = (center,small,radius,block_count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,small,radius,block_count,) };
         // In a guest's turn (their hit on an end crystal or a minecart) the
         // host holds the players (`as_guest`): the packet waits for the turn
         // to end so that it reaches every player, the guest too.
@@ -735,7 +735,7 @@ impl Game<'_> {
     }
 
     /// The explosions guests' turns put off.
-    pub(super) fn flush_lan_explosions(&mut self) {
+    pub(super) fn flush_lan_explosions(&mut self) { if let Some(__l) = crate::points_generated::P2380.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (center, small, radius, block_count, pushed) in
             std::mem::take(&mut self.creatures.lan_explosions)
         {
@@ -754,7 +754,7 @@ impl Game<'_> {
         sound: &str,
         block_count: usize,
         pushed: &[(u32, [f64; 3])],
-    ) {
+    ) { let (center,radius,block_count,) = match crate::points_generated::P2379.get() { Some(__l) => { let mut __a = (center,radius,block_count,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (center,radius,block_count,) };
         let emitter = if radius < 2.0 {
             "minecraft:gust_emitter_small"
         } else {
@@ -778,7 +778,7 @@ impl Game<'_> {
         emitter: &str,
         sound: &str,
         block_particles: bool,
-    ) -> Option<play::Explode> {
+    ) -> Option<play::Explode> { let (center,radius,block_count,block_particles,) = match crate::points_generated::P2378.get() { Some(__l) => { let mut __a = (center,radius,block_count,block_particles,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (center,radius,block_count,block_particles,) };
         let hub = &self.lan.as_ref()?.hub;
         let particle = |name: &str| {
             Some(Particle {
@@ -818,7 +818,7 @@ impl Game<'_> {
 
     /// `packet` to each player within 64 blocks of its centre, with the push
     /// `pushed` holds for them.
-    fn send_explosion(&self, mut packet: play::Explode, pushed: &[(u32, [f64; 3])]) {
+    fn send_explosion(&self, mut packet: play::Explode, pushed: &[(u32, [f64; 3])]) { if let Some(__l) = crate::points_generated::P2377.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };

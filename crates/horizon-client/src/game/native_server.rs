@@ -384,7 +384,7 @@ impl Game<'_> {
         level: LevelRef,
         uuid: u128,
         name: &str,
-    ) -> Option<PlayerRef> {
+    ) -> Option<PlayerRef> { if let Some(__l) = crate::points_generated::P4186.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.native_level_in_place(level)
             || !self.lan_guest_swaps.is_empty()
             || !horizon_client::lan::conn::valid_name(name)
@@ -442,7 +442,7 @@ impl Game<'_> {
     }
 
     /// Discard state belonging to an already removed connectionless guest.
-    pub(super) fn cleanup_fake_player(&mut self, host: &mut super::lan::LanHost, guest: &Guest) {
+    pub(super) fn cleanup_fake_player(&mut self, host: &mut super::lan::LanHost, guest: &Guest) { if let Some(__l) = crate::points_generated::P4185.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         host.play.remove(&guest.conn);
         host.poses.remove(&guest.conn);
         host.mob_players.retain(|_, conn| *conn != guest.conn);
@@ -452,7 +452,7 @@ impl Game<'_> {
     }
 
     /// Remove a fake without treating it as a disconnect or saving it.
-    pub(super) fn native_player_remove_fake(&mut self, player: PlayerRef) -> bool {
+    pub(super) fn native_player_remove_fake(&mut self, player: PlayerRef) -> bool { if let Some(__l) = crate::points_generated::P4184.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.native_lifecycle.epoch() != Some(player.fields().entity.epoch())
             || !self.lan_guest_swaps.is_empty()
         {
@@ -482,7 +482,7 @@ impl Game<'_> {
     }
 
     /// Drop the fake players belonging to a level as it closes.
-    pub(super) fn remove_level_fake_players(&mut self, dimension: &str) {
+    pub(super) fn remove_level_fake_players(&mut self, dimension: &str) { if let Some(__l) = crate::points_generated::P4183.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut host) = self.lan.take() else {
             return;
         };
@@ -500,7 +500,7 @@ impl Game<'_> {
     }
 
     /// Whether a live player handle names a connectionless actor.
-    pub(super) fn native_player_is_fake(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn native_player_is_fake(&self, player: PlayerRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P4182.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.player_handle_read(player)? {
             PlayerRead::Acting { .. } => Some(self.lan_acting_fake),
             PlayerRead::Guest(guest) => Some(!guest.participates_online()),
@@ -510,7 +510,7 @@ impl Game<'_> {
     /// Resolve a real online player by UUID, never a fake. A fake is reached
     /// through the handle returned by its factory. During a nested player swap,
     /// outer players whose records are displaced return None.
-    pub(super) fn native_player_ref(&self, uuid: u128) -> Option<PlayerRef> {
+    pub(super) fn native_player_ref(&self, uuid: u128) -> Option<PlayerRef> { if let Some(__l) = crate::points_generated::P4181.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let epoch = self.native_lifecycle.epoch()?;
         if let Some(remote) = self
             .remote
@@ -529,7 +529,7 @@ impl Game<'_> {
         ))
     }
 
-    fn player_lookup(&self, uuid: u128) -> Option<(PlayerRead<'_>, u32)> {
+    fn player_lookup(&self, uuid: u128) -> Option<(PlayerRead<'_>, u32)> { if let Some(__l) = crate::points_generated::P4180.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.lan_acting_uuid == Some(uuid) && !self.lan_acting_fake {
             return Some((
                 PlayerRead::Acting {
@@ -578,7 +578,7 @@ impl Game<'_> {
     pub(super) fn native_player_last_death_record(
         &self,
         player: PlayerRef,
-    ) -> Option<(String, [i32; 3])> {
+    ) -> Option<(String, [i32; 3])> { if let Some(__l) = crate::points_generated::P4179.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.is_logical_server() {
             // A client's copy: what the login and respawn packets carried.
             return (self.native_local_player()? == player)
@@ -593,7 +593,7 @@ impl Game<'_> {
     /// what the server sent (`LocalPlayer`): the game mode, food, abilities,
     /// hotbar slot and experience. Any other player reads None there: the
     /// client is not sent their state.
-    pub(super) fn player_read_both(&self, player: PlayerRef) -> Option<PlayerRead<'_>> {
+    pub(super) fn player_read_both(&self, player: PlayerRef) -> Option<PlayerRead<'_>> { if let Some(__l) = crate::points_generated::P4178.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.is_logical_server() {
             return self.player_handle_read(player);
         }
@@ -607,7 +607,7 @@ impl Game<'_> {
     /// The local player's `Abilities` on a client: what its game mode gives
     /// (`GameType.updatePlayerAbilities`, `mayBuild` among them), then the
     /// flags and speeds `ClientPacketListener.handlePlayerAbilities` took.
-    fn client_abilities(&self) -> PlayerAbilities {
+    fn client_abilities(&self) -> PlayerAbilities { if let Some(__l) = crate::points_generated::P4177.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut a = PlayerAbilities::default();
         a.update_for_mode(self.mode_id());
         if let Some(p) = self.remote_abilities() {
@@ -621,7 +621,7 @@ impl Game<'_> {
         a
     }
 
-    pub(super) fn player_handle_read(&self, player: PlayerRef) -> Option<PlayerRead<'_>> {
+    pub(super) fn player_handle_read(&self, player: PlayerRef) -> Option<PlayerRead<'_>> { if let Some(__l) = crate::points_generated::P4176.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (self.native_lifecycle.epoch()? == player.fields().entity.epoch()).then_some(())?;
         if self.lan_acting_fake
             && self.lan_acting_uuid == Some(player.fields().uuid)
@@ -651,7 +651,7 @@ impl Game<'_> {
 
     /// `ServerPlayerGameMode.getGameModeForPlayer`; Paper `HumanEntity#getGameMode`.
     /// None for stale, offline or unavailable players (including displaced outer players).
-    pub(super) fn native_player_game_mode(&self, player: PlayerRef) -> Option<GameMode> {
+    pub(super) fn native_player_game_mode(&self, player: PlayerRef) -> Option<GameMode> { if let Some(__l) = crate::points_generated::P4175.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         GameMode::from_id(self.player_read_both(player)?.mode())
     }
 
@@ -663,7 +663,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         mode: GameMode,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4174.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player_handle_read(player).is_none() {
             return false;
         }
@@ -684,7 +684,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         abilities: NativePlayerAbilities,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4173.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !abilities.fly_speed.is_finite() || !abilities.walk_speed.is_finite() {
             return false;
         }
@@ -717,12 +717,12 @@ impl Game<'_> {
     }
 
     /// `Player.isCreative`; Paper `HumanEntity#getGameMode`.
-    pub(super) fn native_player_is_creative(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn native_player_is_creative(&self, player: PlayerRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P4172.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.player_read_both(player)?.creative())
     }
 
     /// `Inventory.getSelectedSlot`: the hotbar slot the player holds, 0..9.
-    pub(super) fn native_player_selected_slot(&self, player: PlayerRef) -> Option<usize> {
+    pub(super) fn native_player_selected_slot(&self, player: PlayerRef) -> Option<usize> { if let Some(__l) = crate::points_generated::P4171.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(match self.player_read_both(player)? {
             PlayerRead::Acting { .. } => self.selected,
             PlayerRead::Guest(guest) => guest.selected,
@@ -730,19 +730,19 @@ impl Game<'_> {
     }
 
     /// `Player.isSpectator`; Paper `HumanEntity#getGameMode`.
-    pub(super) fn native_player_is_spectator(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn native_player_is_spectator(&self, player: PlayerRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P4170.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.player_read_both(player)?.mode() == 3)
     }
 
     /// `Player.mayBuild`; Paper `HumanEntity#getGameMode`.
-    pub(super) fn native_player_may_build(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn native_player_may_build(&self, player: PlayerRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P4169.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.player_read_both(player)?.may_build())
     }
 
     /// `FoodData.getFoodLevel/getSaturationLevel/getExhaustionLevel`; Paper
     /// `HumanEntity#getFoodLevel/getSaturation/getExhaustion`. None until the
     /// guest's body exists, as well as for stale or unavailable players.
-    pub(super) fn native_player_food(&self, player: PlayerRef) -> Option<NativePlayerFood> {
+    pub(super) fn native_player_food(&self, player: PlayerRef) -> Option<NativePlayerFood> { if let Some(__l) = crate::points_generated::P4168.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player_read_both(player)?.food()
     }
 
@@ -750,13 +750,13 @@ impl Game<'_> {
     pub(super) fn native_player_abilities(
         &self,
         player: PlayerRef,
-    ) -> Option<NativePlayerAbilities> {
+    ) -> Option<NativePlayerAbilities> { if let Some(__l) = crate::points_generated::P4167.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player_read_both(player)?.abilities()
     }
 
     /// The players on this server, in the order they joined. Empty on a
     /// client and in a world nobody else can join.
-    pub(super) fn native_server_players(&self) -> Vec<NativeServerPlayer> {
+    pub(super) fn native_server_players(&self) -> Vec<NativeServerPlayer> { if let Some(__l) = crate::points_generated::P4166.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(host) = &self.lan else {
             return Vec::new();
         };
@@ -780,12 +780,12 @@ impl Game<'_> {
     }
     /// A system line in that player's chat, also inside a player's hook for
     /// the acting player; false when they aren't on.
-    pub(super) fn native_tell(&mut self, uuid: u128, line: Text) -> bool {
+    pub(super) fn native_tell(&mut self, uuid: u128, line: Text) -> bool { if let Some(__l) = crate::points_generated::P4165.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_send(uuid, system_chat(&line))
     }
     /// A line over that player's hotbar (the action bar), also inside a
     /// player's hook for the acting player; false when they aren't on.
-    pub(super) fn native_action_bar(&mut self, uuid: u128, line: Text) -> bool {
+    pub(super) fn native_action_bar(&mut self, uuid: u128, line: Text) -> bool { if let Some(__l) = crate::points_generated::P4164.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let packet = C::SystemChat(play::SystemChat {
             content: component_nbt(&line.component()),
             overlay: true,
@@ -794,10 +794,10 @@ impl Game<'_> {
     }
     /// Sends `packet` to that player, also when they are the acting player
     /// (their packets then go after the hook); false when they aren't on.
-    pub(super) fn native_send(&mut self, uuid: u128, packet: C) -> bool {
+    pub(super) fn native_send(&mut self, uuid: u128, packet: C) -> bool { if let Some(__l) = crate::points_generated::P4163.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_send_all(uuid, vec![packet])
     }
-    fn native_send_all(&mut self, uuid: u128, packets: Vec<C>) -> bool {
+    fn native_send_all(&mut self, uuid: u128, packets: Vec<C>) -> bool { if let Some(__l) = crate::points_generated::P4162.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.lan_acting_uuid == Some(uuid) && !self.lan_acting_fake {
             self.guest_packets.extend(packets);
             return true;
@@ -820,7 +820,7 @@ impl Game<'_> {
     /// they come back). It takes the sidebar's place from an objective the
     /// world shows there, for this player, until they rejoin. False when
     /// they aren't on.
-    pub(super) fn native_sidebar(&mut self, uuid: u128, sidebar: Option<&NativeSidebar>) -> bool {
+    pub(super) fn native_sidebar(&mut self, uuid: u128, sidebar: Option<&NativeSidebar>) -> bool { if let Some(__l) = crate::points_generated::P4161.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let objective = SIDEBAR_OBJECTIVE.to_owned();
         // Removed first, so the new one's lines replace all the old ones.
         let mut packets = vec![C::SetObjective(play::SetObjective {
@@ -862,7 +862,7 @@ impl Game<'_> {
     /// The lines over and under that player's list of players (Tab):
     /// `ClientboundTabListPacket`, an empty text for none. False when they
     /// aren't on.
-    pub(super) fn native_tab_list(&mut self, uuid: u128, header: &Text, footer: &Text) -> bool {
+    pub(super) fn native_tab_list(&mut self, uuid: u128, header: &Text, footer: &Text) -> bool { if let Some(__l) = crate::points_generated::P4160.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let packet = C::TabList(play::TabList {
             header: component_nbt(&header.component()),
             footer: component_nbt(&footer.component()),
@@ -873,7 +873,7 @@ impl Game<'_> {
     /// milliseconds its ticks took on average lately, as `/tick query`
     /// reports them. The ticks a second it keeps up is the rate, or
     /// 1000 / milliseconds when that is lower.
-    pub(super) fn native_tick_stats(&self) -> (f32, f64) {
+    pub(super) fn native_tick_stats(&self) -> (f32, f64) { if let Some(__l) = crate::points_generated::P4159.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (
             self.clock.rate(),
             self.clock.average_nanos() as f64 / 1_000_000.0,
@@ -885,7 +885,7 @@ impl Game<'_> {
     /// until a mod sets it back or the server stops, also if they leave and
     /// come back. Only where no player's state is swapped in, as
     /// `native_run_command`; false there and when they aren't on.
-    pub(super) fn native_sleep_ignored(&mut self, uuid: u128, ignored: bool) -> bool {
+    pub(super) fn native_sleep_ignored(&mut self, uuid: u128, ignored: bool) -> bool { let (ignored,) = match crate::points_generated::P4158.get() { Some(__l) => { let mut __a = (ignored,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ignored,) };
         let Some(host) = &mut self.lan else {
             return false;
         };
@@ -908,7 +908,7 @@ impl Game<'_> {
     /// for a player who is off (who joins hidden), until a mod sets it again
     /// or the server stops. Works anywhere on a server, inside a player's
     /// hook too; false on a client and in a world nobody else can join.
-    pub(super) fn native_hide_player(&mut self, uuid: u128, level: Option<u8>) -> bool {
+    pub(super) fn native_hide_player(&mut self, uuid: u128, level: Option<u8>) -> bool { if let Some(__l) = crate::points_generated::P4157.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = &mut self.lan else {
             return false;
         };
@@ -926,7 +926,7 @@ impl Game<'_> {
     /// Plain text: the mod checks it (`native_text_allowed`, its length,
     /// other players' names). Only where no player's state is swapped in,
     /// as `native_run_command`; false there and when they aren't on.
-    pub(super) fn native_set_nickname(&mut self, uuid: u128, nickname: Option<&str>) -> bool {
+    pub(super) fn native_set_nickname(&mut self, uuid: u128, nickname: Option<&str>) -> bool { if let Some(__l) = crate::points_generated::P4156.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = &mut self.lan else {
             return false;
         };
@@ -939,7 +939,7 @@ impl Game<'_> {
     /// Whether the server's chat filter (`server.toml` `[chat_filter]`)
     /// lets `text` through: true without a filter, None inside a player's
     /// hook (where the server is out of reach).
-    pub(super) fn native_text_allowed(&self, text: &str) -> Option<bool> {
+    pub(super) fn native_text_allowed(&self, text: &str) -> Option<bool> { if let Some(__l) = crate::points_generated::P4155.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let host = self.lan.as_ref()?;
         Some(
             host.hub
@@ -949,7 +949,7 @@ impl Game<'_> {
         )
     }
     /// A system line in every player's chat and the server's log.
-    pub(super) fn native_broadcast(&self, mut line: Text) {
+    pub(super) fn native_broadcast(&self, mut line: Text) { if let Some(__l) = crate::points_generated::P4154.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut cancel = false;
         self.native_broadcast_message(&mut line, &mut cancel);
         if cancel {
@@ -974,7 +974,7 @@ impl Game<'_> {
     /// `[discord] events` lists `announce`: `name` and `uuid` say who it is
     /// about (empty and 0 for no one), `message` is the line (`§` codes colour it).
     /// Only on a dedicated server; false elsewhere and for an empty message.
-    pub(super) fn native_server_event(&self, name: &str, uuid: u128, message: &str) -> bool {
+    pub(super) fn native_server_event(&self, name: &str, uuid: u128, message: &str) -> bool { if let Some(__l) = crate::points_generated::P4153.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.options.dedicated.is_none() || message.trim().is_empty() {
             return false;
         }
@@ -984,7 +984,7 @@ impl Game<'_> {
     /// A line of the command's answer, inside `native_perform_command`:
     /// sent to the player whose command it is after the call, as vanilla
     /// commands' feedback is.
-    pub(super) fn native_feedback(&mut self, line: Text) {
+    pub(super) fn native_feedback(&mut self, line: Text) { if let Some(__l) = crate::points_generated::P4152.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match &mut self.chat_capture {
             Some(lines) => lines.push(line),
             None => self.system_message(line),
@@ -994,7 +994,7 @@ impl Game<'_> {
     /// swapped in (`native_perform_command`, `native_right_click_block`,
     /// `native_use_on`, `native_destroy_block`...): None outside such a
     /// hook.
-    pub(super) fn native_acting_player(&self) -> Option<NativeServerPlayer> {
+    pub(super) fn native_acting_player(&self) -> Option<NativeServerPlayer> { if let Some(__l) = crate::points_generated::P4151.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let p = self.player.as_ref()?;
         Some(NativeServerPlayer::from(
             mod_api::__private::built::NativeServerPlayer {
@@ -1018,7 +1018,7 @@ impl Game<'_> {
     /// without failing. During a guest's turn, live players (including the
     /// acting player) are reachable; displaced outer players are excluded
     /// from name, UUID and selector resolution on this path only.
-    pub(super) fn native_run_command(&mut self, line: &str) -> bool {
+    pub(super) fn native_run_command(&mut self, line: &str) -> bool { if let Some(__l) = crate::points_generated::P4150.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.lan.is_none() {
             return false;
         }
@@ -1036,7 +1036,7 @@ impl Game<'_> {
     /// The open world's folder (`world/`, beside its `level.dat`): a server
     /// mod keeps its data in a folder of its own there, so the world's
     /// backups carry it. None when no world is open.
-    pub(super) fn native_world_dir(&self) -> Option<PathBuf> {
+    pub(super) fn native_world_dir(&self) -> Option<PathBuf> { if let Some(__l) = crate::points_generated::P4149.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (!self.world_root.as_os_str().is_empty()).then(|| self.world_root.clone())
     }
 }
@@ -1065,7 +1065,7 @@ impl Game<'_> {
         dimension: &str,
         min: [f64; 3],
         max: [f64; 3],
-    ) -> Vec<NativeExperienceOrb> {
+    ) -> Vec<NativeExperienceOrb> { let (min,max,) = match crate::points_generated::P4148.get() { Some(__l) => { let mut __a = (min,max,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (min,max,) };
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
         {
@@ -1095,7 +1095,7 @@ impl Game<'_> {
         value: Option<u32>,
         count: Option<u32>,
         age: Option<u32>,
-    ) -> bool {
+    ) -> bool { let (id,) = match crate::points_generated::P4147.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
             || value == Some(0)
@@ -1183,7 +1183,7 @@ pub(super) struct NativeCommands {
 impl Game<'_> {
     /// Asks the mods for their commands once per hub, and puts them in every
     /// player's command tree.
-    pub(super) fn register_native_commands(&mut self) {
+    pub(super) fn register_native_commands(&mut self) { if let Some(__l) = crate::points_generated::P4146.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .lan
             .as_ref()
@@ -1219,7 +1219,7 @@ impl Game<'_> {
     /// (`native_player_commands_sent`) and stores the answer in the hub,
     /// which sends the trees without what the mods took out: for `only`, or
     /// for every placed player.
-    pub(super) fn native_filter_commands(&mut self, only: Option<u32>) {
+    pub(super) fn native_filter_commands(&mut self, only: Option<u32>) { if let Some(__l) = crate::points_generated::P4145.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -1254,7 +1254,7 @@ impl Game<'_> {
     }
 
     /// `Hub::resend_commands` with the mods' say on each tree.
-    pub(super) fn resend_commands_filtered(&mut self) {
+    pub(super) fn resend_commands_filtered(&mut self) { if let Some(__l) = crate::points_generated::P4144.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -1273,7 +1273,7 @@ impl Game<'_> {
     }
 
     /// Parse a registered command using the source's permission before dispatching it.
-    fn native_command_valid(&mut self, line: &str, permission: u8) -> bool {
+    fn native_command_valid(&mut self, line: &str, permission: u8) -> bool { let (permission,) = match crate::points_generated::P4143.get() { Some(__l) => { let mut __a = (permission,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (permission,) };
         let Some(commands) = self
             .lan
             .as_ref()
@@ -1294,7 +1294,7 @@ impl Game<'_> {
 
     /// A guest's command for the mods, inside their swap
     /// (`run_guest_command`): true when one ran it.
-    pub(super) fn perform_native_command(&mut self, conn: u32, permission: u8, line: &str) -> bool {
+    pub(super) fn perform_native_command(&mut self, conn: u32, permission: u8, line: &str) -> bool { let (conn,permission,) = match crate::points_generated::P4142.get() { Some(__l) => { let mut __a = (conn,permission,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,permission,) };
         let Some(host) = &self.lan else {
             return false;
         };
@@ -1337,7 +1337,7 @@ impl Game<'_> {
     /// (`native_register_commands`). The console is level 4, so a registered
     /// usage is always allowed; a command no mod takes answers as vanilla's
     /// unknown command.
-    pub(super) fn perform_native_console_command(&mut self, line: &str) -> bool {
+    pub(super) fn perform_native_console_command(&mut self, line: &str) -> bool { if let Some(__l) = crate::points_generated::P4141.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = &self.lan else {
             return false;
         };

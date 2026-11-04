@@ -11,7 +11,7 @@ impl Game<'_> {
     /// entities that `canBeCollidedWith` it, solid happy ghasts, living
     /// shulkers (`Shulker.canBeCollidedWith`) and boats
     /// (`AbstractBoat.canBeCollidedWith`), except the player's own vehicle.
-    pub(super) fn player_entity_collisions(&self) -> Vec<Aabb> {
+    pub(super) fn player_entity_collisions(&self) -> Vec<Aabb> { if let Some(__l) = crate::points_generated::P2023.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(p) = &self.player else {
             return Vec::new();
         };
@@ -36,7 +36,7 @@ impl Game<'_> {
     /// `canBeCollidedWith(item)` is true. A boat and a minecart always, a living shulker,
     /// and a happy ghast only while it is held still (`isOnStillTimeout`): a player on its
     /// back keeps it still, so an item dropped there stays on top.
-    pub(super) fn item_entity_collisions(&self) -> Vec<Aabb> {
+    pub(super) fn item_entity_collisions(&self) -> Vec<Aabb> { if let Some(__l) = crate::points_generated::P2022.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.mobs
             .iter()
             .filter(|m| {
@@ -52,7 +52,7 @@ impl Game<'_> {
             .collect()
     }
     /// `HappyGhast.mobInteract`. Returns whether the click was used.
-    pub(super) fn interact_happy_ghast(&mut self, index: usize, item: &str) -> bool {
+    pub(super) fn interact_happy_ghast(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P2021.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         if !m.alive() || Some(m.id) == self.riding {
             return false;
@@ -112,7 +112,7 @@ impl Game<'_> {
         false
     }
     /// Getting off lands on top of it.
-    pub(super) fn dismount_happy_ghast(&mut self, id: u32) {
+    pub(super) fn dismount_happy_ghast(&mut self, id: u32) { let (id,) = match crate::points_generated::P2020.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         // removePassenger: held still for half a second, and with no one
         // aboard the ghast forgets its home.
         if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
@@ -135,7 +135,7 @@ impl Game<'_> {
         let _ = self.handle_mob_events(vec![up]);
     }
     /// `DriedGhastBlock.spawnGhastling`: a ghastling facing the way the block did.
-    pub(super) fn spawn_ghastling(&mut self, pos: [i32; 3], state: BlockStateId) {
+    pub(super) fn spawn_ghastling(&mut self, pos: [i32; 3], state: BlockStateId) { let (pos,) = match crate::points_generated::P2019.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let at = [
             f64::from(pos[0]) + 0.5,
             f64::from(pos[1]),

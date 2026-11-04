@@ -55,7 +55,7 @@ impl Game<'_> {
     /// A round for a family about to tick: on a server only (the server thread or a dedicated
     /// server, never a client), and only while a mod listens
     /// (`native_entity_tick_listened`). Its list is kept between ticks.
-    pub(super) fn native_tick_round(&mut self) -> TickRound {
+    pub(super) fn native_tick_round(&mut self) -> TickRound { if let Some(__l) = crate::points_generated::P4197.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let server = self.serving.is_some() || self.options.dedicated.is_some();
         let mut listened = false;
         if server {
@@ -80,7 +80,7 @@ impl Game<'_> {
         round: &mut TickRound,
         id: u32,
         kind: TickKind,
-    ) -> bool {
+    ) -> bool { let (id,) = match crate::points_generated::P4196.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if !round.listening {
             return true;
         }
@@ -95,7 +95,7 @@ impl Game<'_> {
     }
 
     /// `native_entity_tick_post` for each entity the round let through, and the round is over.
-    pub(super) fn native_tick_post_batch(&mut self, mut round: TickRound) {
+    pub(super) fn native_tick_post_batch(&mut self, mut round: TickRound) { if let Some(__l) = crate::points_generated::P4195.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !round.listening {
             return;
         }
@@ -113,7 +113,7 @@ impl Game<'_> {
         round: &mut TickRound,
         id: u32,
         kind: &str,
-    ) -> bool {
+    ) -> bool { let (id,) = match crate::points_generated::P4194.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if !round.listening {
             return true;
         }
@@ -126,7 +126,7 @@ impl Game<'_> {
     }
 
     /// `native_entity_tick_post` for one entity that ticked.
-    pub(super) fn native_tick_post_one(&mut self, round: &TickRound, id: u32, kind: &str) {
+    pub(super) fn native_tick_post_one(&mut self, round: &TickRound, id: u32, kind: &str) { let (id,) = match crate::points_generated::P4193.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if round.listening {
             self.native_entity_tick_post(self.dim.id(), id, kind);
         }

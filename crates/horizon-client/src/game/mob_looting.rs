@@ -21,7 +21,7 @@ use horizon_core::{geometry::Vec3, random::RandomSource};
 
 impl Game<'_> {
     /// `Mob.aiStep`'s looting block, once per mob per tick.
-    pub(super) fn tick_mob_looting(&mut self) {
+    pub(super) fn tick_mob_looting(&mut self) { if let Some(__l) = crate::points_generated::P2777.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.dropped.is_empty() || !self.ui.rules.bool("mob_griefing") {
             return;
         }
@@ -79,7 +79,7 @@ impl Game<'_> {
 
     /// `Mob.equipItemIfPossible`: what `slot` would take of `stack`, and how
     /// many items that takes. `None` when the mob has no use for it.
-    fn equip_item_if_possible(&mut self, index: usize, stack: &ItemStack) -> Option<u32> {
+    fn equip_item_if_possible(&mut self, index: usize, stack: &ItemStack) -> Option<u32> { let (index,) = match crate::points_generated::P2776.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let item = &*stack.item;
         let equip_slot = self.items().get(item).and_then(|i| i.equip_slot.clone());
         let mut slot = equip::slot_for(equip_slot.as_deref())?;
@@ -121,7 +121,7 @@ impl Game<'_> {
     }
 
     /// `Mob.canReplaceCurrentItem` for what `m` wears or holds in `slot`.
-    fn can_replace(&self, index: usize, stack: &ItemStack, slot: Slot) -> bool {
+    fn can_replace(&self, index: usize, stack: &ItemStack, slot: Slot) -> bool { let (index,) = match crate::points_generated::P2775.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         let Some(worn_stack) = finalize::item_stack(m, slot.index()) else {
             return true;
@@ -167,7 +167,7 @@ impl Game<'_> {
 
     /// `Mob.getApproximateAttributeWith` for the item `id` in `slot`: each
     /// attribute starts from the mob's own value. (armour, toughness, damage)
-    fn attributes(&self, m: &Mob, id: &str, slot: Slot) -> (f64, f64, f64) {
+    fn attributes(&self, m: &Mob, id: &str, slot: Slot) -> (f64, f64, f64) { if let Some(__l) = crate::points_generated::P2774.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let empty: &[(String, String, f64, String, String)] = &[];
         let modifiers = self
             .items()
@@ -192,7 +192,7 @@ impl Game<'_> {
 
     /// `LivingEntity.onItemPickup`: the advancement of whoever threw the item,
     /// whichever mob took it.
-    pub(super) fn mob_item_pickup_trigger(&mut self, index: usize, e: &ItemEntity) {
+    pub(super) fn mob_item_pickup_trigger(&mut self, index: usize, e: &ItemEntity) { let (index,) = match crate::points_generated::P2773.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let Some(owner) = e.thrower else {
             return;
         };

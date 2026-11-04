@@ -49,7 +49,7 @@ impl Game<'_> {
     /// server thread or a dedicated server, never a client) and a mod asked to hear their impacts
     /// (`native_hears_projectile_impacts`). Without one, the tick keeps no copy
     /// of its projectiles: it costs nothing.
-    pub(super) fn native_hears_impacts(&self) -> bool {
+    pub(super) fn native_hears_impacts(&self) -> bool { if let Some(__l) = crate::points_generated::P4105.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.serving.is_none() && self.options.dedicated.is_none() {
             return false;
         }
@@ -59,7 +59,7 @@ impl Game<'_> {
     }
 
     /// The entity id of the one who shot `p`: a mob's, a player's, else 0.
-    fn native_impact_owner(&self, p: &Projectile) -> u32 {
+    fn native_impact_owner(&self, p: &Projectile) -> u32 { if let Some(__l) = crate::points_generated::P4104.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match p.owner {
             Some(Who::Mob(id)) => id,
             Some(Who::Player) => self.native_thrower(p.guest),
@@ -69,7 +69,7 @@ impl Game<'_> {
 
     /// The entity id of the player who threw something: the guest `guest`, or
     /// the host.
-    fn native_thrower(&self, guest: Option<u32>) -> u32 {
+    fn native_thrower(&self, guest: Option<u32>) -> u32 { if let Some(__l) = crate::points_generated::P4103.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match guest {
             Some(conn) => self
                 .lan_guest_entities()
@@ -92,7 +92,7 @@ impl Game<'_> {
         block: [i32; 3],
         face: [i32; 3],
         at: Vec3,
-    ) -> bool {
+    ) -> bool { let (trident,block,face,) = match crate::points_generated::P4102.get() { Some(__l) => { let mut __a = (trident,block,face,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (trident,block,face,) };
         if !self.native_hears_impacts() {
             return false;
         }
@@ -123,7 +123,7 @@ impl Game<'_> {
 
     /// The entity id and type a projectile's hit on the reserved or ordinary
     /// `id` stands for: a dragon part is the dragon, an End crystal its own id.
-    fn native_impact_entity(&self, id: u32) -> (u32, String) {
+    fn native_impact_entity(&self, id: u32) -> (u32, String) { let (id,) = match crate::points_generated::P4101.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         if id >= SPECIAL {
             return if id < CRYSTAL_IDS {
                 let dragon = self.dragon.as_ref().map_or(0, |d| d.id);
@@ -147,7 +147,7 @@ impl Game<'_> {
 
     /// `native_projectile_impact` for each of `impacts`: whether the mods
     /// canceled it. A hit on a wind charge is not told.
-    fn native_projectile_impacts(&mut self, impacts: &[Impact]) -> Vec<bool> {
+    fn native_projectile_impacts(&mut self, impacts: &[Impact]) -> Vec<bool> { if let Some(__l) = crate::points_generated::P4100.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let dimension = self.dim.id();
         let mut canceled = Vec::with_capacity(impacts.len());
         for impact in impacts {
@@ -209,7 +209,7 @@ impl Game<'_> {
         impacts: Vec<Impact>,
         hits: &mut Vec<(Projectile, Hit)>,
         arrow_events: &mut Vec<(Vec3, ArrowEvent)>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4099.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The mods see the projectiles where they will be, as `projectile_hit` does.
         self.creatures.projectiles = std::mem::take(projectiles).into();
         let canceled = self.native_projectile_impacts(&impacts);
@@ -261,7 +261,7 @@ impl Game<'_> {
     fn native_projectile_through(
         &self,
         mut p: Projectile,
-    ) -> (Projectile, bool, Vec<(Vec3, ArrowEvent)>) {
+    ) -> (Projectile, bool, Vec<(Vec3, ArrowEvent)>) { if let Some(__l) = crate::points_generated::P4098.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mob_shot = !matches!(p.owner, Some(Who::Player));
         let pvp = !mob_shot && meets_players(&p.kind);
         // A guest's shot flies from that guest, as in `tick_projectiles`.

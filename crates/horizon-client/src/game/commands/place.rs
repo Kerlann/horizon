@@ -16,7 +16,7 @@ fn num(n: impl std::fmt::Display) -> Text {
 }
 
 impl Game<'_> {
-    pub(in crate::game) fn state_transforms(&self) -> Option<&'static StateTransforms> {
+    pub(in crate::game) fn state_transforms(&self) -> Option<&'static StateTransforms> { if let Some(__l) = crate::points_generated::P1173.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         static TRANSFORMS: OnceLock<Option<StateTransforms>> = OnceLock::new();
         TRANSFORMS
             .get_or_init(|| {
@@ -32,7 +32,7 @@ impl Game<'_> {
     }
     /// A template's tree by id, as `StructureTemplateManager` reads it from
     /// disk.
-    pub(in crate::game) fn read_template_tag(&self, id: &str) -> Option<Tag> {
+    pub(in crate::game) fn read_template_tag(&self, id: &str) -> Option<Tag> { if let Some(__l) = crate::points_generated::P1172.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (ns, path) = id.split_once(':').unwrap_or(("minecraft", id));
         let candidates = [
             self.world_root
@@ -61,14 +61,14 @@ impl Game<'_> {
         None
     }
     /// `BlockPosArgument.getLoadedBlockPos(pos)`, or the source's block.
-    fn place_pos(&self, ctx: &Context, name: &str) -> R<[i32; 3]> {
+    fn place_pos(&self, ctx: &Context, name: &str) -> R<[i32; 3]> { if let Some(__l) = crate::points_generated::P1171.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if ctx.get(name).is_some() {
             return self.block_pos_arg(ctx, name);
         }
         Ok(self.source_position().map(|v| v.floor() as i32))
     }
     /// `PlaceCommand.checkLoaded`: every chunk of the inclusive range.
-    fn place_check_loaded(&self, min: [i32; 2], max: [i32; 2]) -> R<()> {
+    fn place_check_loaded(&self, min: [i32; 2], max: [i32; 2]) -> R<()> { let (min,max,) = match crate::points_generated::P1170.get() { Some(__l) => { let mut __a = (min,max,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (min,max,) };
         let dimension = self.command_source.map_or(self.dim, |s| s.dimension);
         for cx in min[0]..=max[0] {
             for cz in min[1]..=max[1] {
@@ -80,7 +80,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `PlaceCommand.placeFeature`, `placeJigsaw` and `placeStructure`.
-    pub(super) fn cmd_place_generated(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_place_generated(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1169.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match id {
             "place.feature" => {
                 let raw = match ctx.get("feature") {
@@ -209,7 +209,7 @@ impl Game<'_> {
             }
         }
     }
-    pub(super) fn cmd_place(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_place(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1168.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Arg::Resource(id)) = ctx.get("template").cloned() else {
             return Ok(0);
         };

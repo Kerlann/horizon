@@ -13,7 +13,7 @@ impl Game<'_> {
         pos: [i32; 3],
         face: [i32; 3],
         held: Option<&ItemStack>,
-    ) -> Result<bool> {
+    ) -> Result<bool> { let (pos,face,) = match crate::points_generated::P4663.get() { Some(__l) => { let mut __a = (pos,face,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,face,) };
         let Some(shears) = held.filter(|s| &*s.item == "minecraft:shears") else {
             return Ok(false);
         };

@@ -162,7 +162,7 @@ impl ArmorStandAssets {
 impl Game<'_> {
     /// OptiFine CIT: the winning armour or elytra rule (`kind`) of the worn `stack`. No lookup
     /// without CIT rules.
-    pub(super) fn cit_worn_rule(&self, kind: Kind, stack: &ItemStack) -> Option<&Rule> {
+    pub(super) fn cit_worn_rule(&self, kind: Kind, stack: &ItemStack) -> Option<&Rule> { if let Some(__l) = crate::points_generated::P542.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let rules = &self.pack.item_renderer.cit.as_ref()?.rules;
         let item_max = self.items().get(&stack.item).map_or(0, |i| i.max_damage);
         horizon_client::item_render::cit::worn_rule(rules, kind, stack, item_max)
@@ -176,21 +176,21 @@ impl Game<'_> {
         asset: &str,
         kind: &str,
         texture: &str,
-    ) -> Option<[f32; 4]> {
+    ) -> Option<[f32; 4]> { if let Some(__l) = crate::points_generated::P541.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let sprites = &self.gui.atlas.sprites;
         let r = cit_armor::worn_layer(cit, asset, kind, texture, |s| sprites.get(s))?;
         Some([r.u0, r.v0, r.u1, r.v1])
     }
     /// `HumanoidArmorLayer` for the player: (model, texture rect, colour,
     /// overlay) of each worn piece, head to feet.
-    pub(super) fn player_armor_layers(&self) -> Vec<(&Part, [f32; 4], u32, u32, bool)> {
+    pub(super) fn player_armor_layers(&self) -> Vec<(&Part, [f32; 4], u32, u32, bool)> { if let Some(__l) = crate::points_generated::P540.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.stack_armor_layers(&self.armor)
     }
     /// `HumanoidArmorLayer` for worn stacks (head to feet), trims included.
     pub(super) fn stack_armor_layers(
         &self,
         armor: &[Option<ItemStack>; 4],
-    ) -> Vec<(&Part, [f32; 4], u32, u32, bool)> {
+    ) -> Vec<(&Part, [f32; 4], u32, u32, bool)> { if let Some(__l) = crate::points_generated::P539.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.armor_layers(
             armor
                 .each_ref()
@@ -199,7 +199,7 @@ impl Game<'_> {
     }
     /// `HumanoidArmorLayer` for another player's model: the armour it wears
     /// (`extra.equipment`, head to feet).
-    pub(super) fn worn_armor_layers(&self, m: &Mob) -> Vec<(&Part, [f32; 4], u32, u32, bool)> {
+    pub(super) fn worn_armor_layers(&self, m: &Mob) -> Vec<(&Part, [f32; 4], u32, u32, bool)> { if let Some(__l) = crate::points_generated::P538.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let e = &m.extra;
         self.armor_layers(
             horizon_items::equipment::ARMOR
@@ -211,7 +211,7 @@ impl Game<'_> {
     fn armor_layers(
         &self,
         worn: [Option<(&str, Option<&ItemStack>)>; 4],
-    ) -> Vec<(&Part, [f32; 4], u32, u32, bool)> {
+    ) -> Vec<(&Part, [f32; 4], u32, u32, bool)> { if let Some(__l) = crate::points_generated::P537.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let assets = &self.armor_stand_assets;
         let emissive = self
             .res
@@ -290,7 +290,7 @@ impl Game<'_> {
     /// (the player's armour and the armour stands'): each generated texture
     /// goes into an atlas trim slot, a free one, else the least recently
     /// drawn.
-    pub(super) fn prepare_trims(&mut self) {
+    pub(super) fn prepare_trims(&mut self) { if let Some(__l) = crate::points_generated::P536.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::hud::TRIM_SLOTS;
         let assets = &self.armor_stand_assets;
         let items = self.items();
@@ -398,7 +398,7 @@ impl Game<'_> {
         &self,
         hit: &super::Hit,
         stack: &ItemStack,
-    ) -> Option<([i32; 3], ArmorStand)> {
+    ) -> Option<([i32; 3], ArmorStand)> { if let Some(__l) = crate::points_generated::P535.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if hit.face == [0, -1, 0] {
             return None;
         }
@@ -447,7 +447,7 @@ impl Game<'_> {
         }
         Some((pos, stand))
     }
-    pub(super) fn place_armor_stand(&mut self, hit: &super::Hit, stack: &ItemStack) -> bool {
+    pub(super) fn place_armor_stand(&mut self, hit: &super::Hit, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P534.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:armor_stand" {
             return false;
         }
@@ -472,7 +472,7 @@ impl Game<'_> {
         true
     }
     /// The armor stand under the crosshair, its distance and the hit point.
-    pub(super) fn armor_stand_hit(&self) -> Option<(usize, f64, [f64; 3])> {
+    pub(super) fn armor_stand_hit(&self) -> Option<(usize, f64, [f64; 3])> { if let Some(__l) = crate::points_generated::P533.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (eye, dir) = self.aim()?;
         let reach: f64 = self.entity_reach;
         let mut best: Option<(usize, f64, [f64; 3])> = None;
@@ -503,7 +503,7 @@ impl Game<'_> {
         }
         best
     }
-    fn equipment_slot(&self, stack: &ItemStack) -> usize {
+    fn equipment_slot(&self, stack: &ItemStack) -> usize { if let Some(__l) = crate::points_generated::P532.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self
             .res
             .items()
@@ -520,7 +520,7 @@ impl Game<'_> {
     }
     /// `ArmorStand.interactAt` for the stand under the crosshair, or for the
     /// stand a guest's interact packet named (its client's click point).
-    pub(super) fn interact_armor_stand(&mut self, target: Option<InteractTarget>) -> bool {
+    pub(super) fn interact_armor_stand(&mut self, target: Option<InteractTarget>) -> bool { if let Some(__l) = crate::points_generated::P531.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((i, d, point)) = (match target {
             // interactAt gets the packet's location, measured from the stand's
             // position, so getClickedSlot reads the height the client clicked.
@@ -667,7 +667,7 @@ impl Game<'_> {
         true
     }
     /// `ArmorStand.hurtServer` from a player attack.
-    pub(super) fn attack_armor_stand(&mut self) -> bool {
+    pub(super) fn attack_armor_stand(&mut self) -> bool { if let Some(__l) = crate::points_generated::P530.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((i, d, _)) = self.armor_stand_hit() else {
             return false;
         };
@@ -719,7 +719,7 @@ impl Game<'_> {
     }
     /// `ArmorStand.showBreakingParticles`: ten oak plank crumbs from the box,
     /// spread by a quarter of its width and height, sent like `sendParticles`.
-    fn show_breaking_particles(&mut self, at: [f64; 3], width: f64, height: f64) {
+    fn show_breaking_particles(&mut self, at: [f64; 3], width: f64, height: f64) { let (at,width,height,) = match crate::points_generated::P529.get() { Some(__l) => { let mut __a = (at,width,height,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,width,height,) };
         let Some(state) = self
             .pack
             .assets
@@ -751,7 +751,7 @@ impl Game<'_> {
     /// `ArmorStand.hurtServer` for a player's attack (also a sweep's): a
     /// creative player breaks it, otherwise the first hit wobbles it and a
     /// second within five ticks breaks it.
-    pub(super) fn punch_armor_stand(&mut self, i: usize) -> bool {
+    pub(super) fn punch_armor_stand(&mut self, i: usize) -> bool { let (i,) = match crate::points_generated::P528.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let time = self.world.game_time;
         let at = self.armor_stands[i].position;
         let at = [at.x, at.y, at.z];
@@ -799,7 +799,7 @@ impl Game<'_> {
             .insert(((at[0].floor() as i32) >> 4, (at[2].floor() as i32) >> 4));
         true
     }
-    pub(super) fn tick_armor_stands(&mut self) -> Result<()> {
+    pub(super) fn tick_armor_stands(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P527.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut dead = Vec::new();
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
@@ -893,7 +893,7 @@ impl Game<'_> {
     /// in 100 while it is on the ground (`LivingEntity.aiStep`'s
     /// `applyEffectsFromBlocks`, after `travel`, so a marker that has landed
     /// still steps). `canDestroyEgg` wants mob griefing before the level's roll.
-    fn armor_stand_turtle_eggs(&mut self, i: usize, landed: bool) -> Result<()> {
+    fn armor_stand_turtle_eggs(&mut self, i: usize, landed: bool) -> Result<()> { let (i,landed,) = match crate::points_generated::P526.get() { Some(__l) => { let mut __a = (i,landed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,landed,) };
         let stand = &self.armor_stands[i];
         if !stand.on_ground || self.remote.is_some() || self.options.execution_role.is_client() {
             return Ok(());
@@ -929,7 +929,7 @@ impl Game<'_> {
     /// loot of its own, so the list is empty and a mod may add to it or hear
     /// that the stand broke (`native_living_drops`). The stand item and the
     /// equipment pop outside the list, as in vanilla.
-    fn armor_stand_death_drops(&mut self, id: u32, damage_type: &str, causing: u32) {
+    fn armor_stand_death_drops(&mut self, id: u32, damage_type: &str, causing: u32) { let (id,causing,) = match crate::points_generated::P525.get() { Some(__l) => { let mut __a = (id,causing,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,causing,) };
         let source = (!mod_api::mods().is_empty())
             .then(|| super::creatures::death_hurt_source(damage_type, causing));
         let dying = super::creatures::DyingDrops {
@@ -951,7 +951,7 @@ impl Game<'_> {
         i: usize,
         damage_type: &str,
         causing: u32,
-    ) {
+    ) { let (i,causing,) = match crate::points_generated::P524.get() { Some(__l) => { let mut __a = (i,causing,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,causing,) };
         let a = self.armor_stands.remove(i);
         let at = [a.position.x, a.position.y, a.position.z];
         self.armor_stand_death_drops(a.id, damage_type, causing);
@@ -969,7 +969,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         alpha: f64,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P523.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         // The stands' models posed on the GPU path (`mobs::skin`), when it runs this frame.
         let skinning = self.skinning();
         for a in &self.armor_stands {
@@ -1050,7 +1050,7 @@ impl Game<'_> {
         packed: u32,
         mut skin: Option<&mut horizon_client::mobs::skin::Skin>,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (packed,) = match crate::points_generated::P522.get() { Some(__l) => { let mut __a = (packed,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (packed,) };
         use horizon_client::mobs::render::put;
         let assets = &self.armor_stand_assets;
         let sprites = &self.gui.atlas.sprites;
@@ -1251,7 +1251,7 @@ impl Game<'_> {
         batch: &mut horizon_client::hud::HudBatch,
         result: Option<&ItemStack>,
         [x0, y0, x1, y1]: [f32; 4],
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P521.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut stand = ArmorStand::new(0, Vec3::ZERO, 210.0);
         stand.no_base_plate = true;
         stand.show_arms = true;
@@ -1385,7 +1385,7 @@ impl Game<'_> {
     /// `Equippable.swapWithEquipmentSlot`: right-clicking armor swaps it into
     /// its slot (the worn piece comes back to the hand). It runs on a client
     /// too (`Item.use`), as the prediction the server's slot packets confirm.
-    pub(super) fn equip_from_hand(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn equip_from_hand(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P520.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(info) = self.items().get(&stack.item) else {
             return false;
         };
@@ -1448,7 +1448,7 @@ impl Game<'_> {
         light: u32,
         mut skin: Option<&mut horizon_client::mobs::skin::Skin>,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (light,) = match crate::points_generated::P519.get() { Some(__l) => { let mut __a = (light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (light,) };
         let lights =
             horizon_client::block_entity_render::diffuse_lights(self.dim == super::Dim::Nether);
         let mut submit = |state: &horizon_client::item_render::ItemRenderState,

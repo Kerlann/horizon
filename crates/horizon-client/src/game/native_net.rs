@@ -42,7 +42,7 @@ fn payload(channel: &str, data: &[u8]) -> Result<Vec<u8>, String> {
 impl Game<'_> {
     /// A `horizon:mod_net` payload from `conn`: queued for
     /// `run_native_net`. Past the caps it is dropped in silence.
-    pub(super) fn guest_native_net(&mut self, conn: u32, data: &[u8]) {
+    pub(super) fn guest_native_net(&mut self, conn: u32, data: &[u8]) { let (conn,) = match crate::points_generated::P4015.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(player) = self
             .lan
             .as_ref()
@@ -62,19 +62,19 @@ impl Game<'_> {
     }
 
     /// Whether messages from players wait for `run_native_net`.
-    pub(super) fn native_net_waiting(&self) -> bool {
+    pub(super) fn native_net_waiting(&self) -> bool { if let Some(__l) = crate::points_generated::P4014.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         !self.native_net.from_players.is_empty()
     }
 
     /// The waiting messages reach the mods with the hub in the game.
-    pub(super) fn run_native_net(&mut self) {
+    pub(super) fn run_native_net(&mut self) { if let Some(__l) = crate::points_generated::P4013.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (player, m) in std::mem::take(&mut self.native_net.from_players) {
             self.native_net_from_client(player, &m.channel, &m.data);
         }
     }
 
     /// What the mods sent this tick leaves; the tick's allowances start over.
-    pub(super) fn flush_native_net(&mut self) {
+    pub(super) fn flush_native_net(&mut self) { if let Some(__l) = crate::points_generated::P4012.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -100,7 +100,7 @@ impl Game<'_> {
     }
 
     /// A `horizon:mod_net` payload the server sent the window.
-    pub(super) fn remote_native_net(&mut self, data: &[u8]) {
+    pub(super) fn remote_native_net(&mut self, data: &[u8]) { if let Some(__l) = crate::points_generated::P4011.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match mod_net::decode(data) {
             Ok(m) => self.native_net_from_server(&m.channel, &m.data),
             Err(e) => log::debug!("Horizon: a bad mod message: {e}"),
@@ -120,7 +120,7 @@ impl Game<'_> {
         player: u128,
         channel: &str,
         data: &[u8],
-    ) -> Result<(), String> {
+    ) -> Result<(), String> { if let Some(__l) = crate::points_generated::P4010.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return Err("a client has no players to send to".into());
         }
@@ -142,7 +142,7 @@ impl Game<'_> {
         &mut self,
         channel: &str,
         data: &[u8],
-    ) -> Result<(), String> {
+    ) -> Result<(), String> { if let Some(__l) = crate::points_generated::P4009.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Not joined first: the announcement may still be on its way, and a
         // mod that gives up on "carries no mod messages" never tries again.
         let Some(remote) = self.remote.as_ref() else {
@@ -171,7 +171,7 @@ impl Game<'_> {
     /// it: no `client_chat` event (vanilla's `ClientChatEvent` comes only
     /// from ChatScreen) and no chat history. An error when the player isn't
     /// in a server's play state or the Chat option blocks the message.
-    pub(super) fn native_send_chat(&mut self, message: &str) -> Result<(), String> {
+    pub(super) fn native_send_chat(&mut self, message: &str) -> Result<(), String> { if let Some(__l) = crate::points_generated::P4008.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(remote) = self.remote.as_ref() else {
             return Err("not connected to a server".into());
         };

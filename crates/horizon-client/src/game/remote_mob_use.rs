@@ -12,7 +12,7 @@ use horizon_client::{
 impl Game<'_> {
     /// Whether mob `i` takes a right click with `hand`'s item on this
     /// client (`Mob.interact`'s result consumes the action).
-    pub(super) fn remote_mob_takes(&self, i: usize, hand: Hand) -> bool {
+    pub(super) fn remote_mob_takes(&self, i: usize, hand: Hand) -> bool { let (i,) = match crate::points_generated::P4994.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         let Some(m) = self.mobs.get(i).filter(|m| m.alive()) else {
             return false;
         };
@@ -105,7 +105,7 @@ impl Game<'_> {
     /// client's copy: a baby fed something that ages it draws one happy
     /// villager particle. The server draws it on its own level only, so no
     /// packet brings it.
-    pub(super) fn remote_feed_particles(&mut self, i: usize, hand: Hand) {
+    pub(super) fn remote_feed_particles(&mut self, i: usize, hand: Hand) { let (i,) = match crate::points_generated::P4993.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let Some(m) = self.mobs.get(i).filter(|m| m.alive() && m.is_baby()) else {
             return;
         };

@@ -8,13 +8,13 @@ impl Game<'_> {
     /// Fills `dynamic_lights` for the frame: the player's and mobs' held items and fire, and
     /// glowing dropped items, the nearest [`dynamic_light::MAX`] of them.
     /// How brightly each item glows, built on first use.
-    pub(super) fn luminance(&self) -> &Luminance {
+    pub(super) fn luminance(&self) -> &Luminance { if let Some(__l) = crate::points_generated::P1755.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.luminance
             .get_or_init(|| Luminance::new(self.res.facts(), self.pack.assets.registry))
     }
     /// The light sources this frame while the extra is on: the player's and mobs' held items and
     /// fire, and glowing dropped items, each with the item that gives the light (none for fire).
-    pub(super) fn dynamic_light_sources(&self, alpha: f64) -> Vec<(Source, Option<String>)> {
+    pub(super) fn dynamic_light_sources(&self, alpha: f64) -> Vec<(Source, Option<String>)> { let (alpha,) = match crate::points_generated::P1754.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let mut sources = Vec::new();
         if !self.settings.extras.dynamic_lights {
             return sources;
@@ -93,7 +93,7 @@ impl Game<'_> {
     }
     /// Fills `dynamic_lights` for the frame from [`Self::dynamic_light_sources`], the nearest
     /// [`dynamic_light::MAX`] of them.
-    pub(super) fn gather_dynamic_lights(&mut self, camera: DVec3, alpha: f64) {
+    pub(super) fn gather_dynamic_lights(&mut self, camera: DVec3, alpha: f64) { let (alpha,) = match crate::points_generated::P1753.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (alpha,) };
         let mut out = std::mem::take(&mut self.dynamic_lights);
         out.clear();
         let sources: Vec<Source> = self

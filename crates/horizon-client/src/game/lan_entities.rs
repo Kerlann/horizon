@@ -22,7 +22,7 @@ pub(super) fn assign_entity_id(next: &mut u32, id: &mut u32) -> u32 {
 
 impl Game<'_> {
     /// `Entity.nextEntityId`: the id a new entity takes from the one counter.
-    pub(super) fn take_entity_id(&mut self) -> u32 {
+    pub(super) fn take_entity_id(&mut self) -> u32 { if let Some(__l) = crate::points_generated::P2356.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.next_entity += 1;
         self.next_entity
     }
@@ -101,7 +101,7 @@ impl Game<'_> {
     /// tick, told to the mods in order with the hub in `self.lan` and
     /// no player's state swapped in (`ServerEntity.addPairing` and
     /// `removePairing`).
-    pub(super) fn run_native_tracking(&mut self) {
+    pub(super) fn run_native_tracking(&mut self) { if let Some(__l) = crate::points_generated::P2355.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let batches = match self.lan.as_mut() {
             Some(host) => std::mem::take(&mut host.hub.native_tracking),
             None => return,
@@ -135,7 +135,7 @@ impl Game<'_> {
 
     /// Who rides what (`Entity.getPassengers`): the players in their vehicles and
     /// mobs on mobs.
-    pub(super) fn lan_riding(&self, guests: &[(u32, i32)], riding: &mut Riding) {
+    pub(super) fn lan_riding(&self, guests: &[(u32, i32)], riding: &mut Riding) { if let Some(__l) = crate::points_generated::P2354.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         riding.clear();
         // The server's players in their boats and minecarts.
         for &(vehicle, guest) in guests {
@@ -155,7 +155,7 @@ impl Game<'_> {
         out: &mut States,
         drain_minecart_steps: bool,
         after: u32,
-    ) {
+    ) { let (drain_minecart_steps,after,) = match crate::points_generated::P2353.get() { Some(__l) => { let mut __a = (drain_minecart_steps,after,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (drain_minecart_steps,after,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -453,7 +453,7 @@ impl Game<'_> {
         &self,
         tag: &Tag,
         e: &mut EntityState,
-    ) -> Option<horizon_client::items::ItemStack> {
+    ) -> Option<horizon_client::items::ItemStack> { if let Some(__l) = crate::points_generated::P2352.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::text_display::{display_data, text_display_data};
         let mut item_stack = None;
         let empty = Tag::Compound(Default::default());
@@ -519,7 +519,7 @@ impl Game<'_> {
     /// own UUID (`Entity.getUUID`), the one `/data`, saves and UUID
     /// selectors use, so a client can name it back (the crosshair UUID that
     /// `ClientSuggestionProvider.getSelectedEntities` suggests).
-    pub(super) fn lan_entity_uuids(&mut self, states: &mut States) {
+    pub(super) fn lan_entity_uuids(&mut self, states: &mut States) { if let Some(__l) = crate::points_generated::P2351.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for e in states.as_mut_slice() {
             e.uuid = ints_uuid(self.uuid_for(e.id as u32));
             if let Some(bits) = self.persist.forced_meta.get(&(e.id as u32)) {
@@ -530,7 +530,7 @@ impl Game<'_> {
 
     /// Gives the entities Horizon keeps without an id one (`Entity.id`, from
     /// the same counter as the rest) before they are first tracked.
-    pub(super) fn lan_assign_ids(&mut self) {
+    pub(super) fn lan_assign_ids(&mut self) { if let Some(__l) = crate::points_generated::P2350.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // LeashFenceKnotEntity: one per fence post with a lead on it
         // (`notifyLeasheeRemoved` discards it once the last lead is gone).
         let knots: Vec<[i32; 3]> = self
@@ -580,7 +580,7 @@ impl Game<'_> {
 
     /// Primed TNT, falling blocks, projectiles, tridents, firework rockets and
     /// end crystals, as guests track them.
-    fn lan_projectile_states(&mut self, out: &mut States, after: u32) {
+    fn lan_projectile_states(&mut self, out: &mut States, after: u32) { let (after,) = match crate::points_generated::P2349.get() { Some(__l) => { let mut __a = (after,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (after,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };

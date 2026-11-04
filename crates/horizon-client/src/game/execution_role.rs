@@ -55,7 +55,7 @@ impl Game<'_> {
     /// This game's side: a server simulates the world, a client does not. The
     /// one source for a helper's side; `remote` says whether a client is
     /// connected, not which side this game is.
-    pub(super) fn is_logical_server(&self) -> bool {
+    pub(super) fn is_logical_server(&self) -> bool { if let Some(__l) = crate::points_generated::P1842.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.options.execution_role.is_logical_server()
     }
 }

@@ -349,7 +349,7 @@ impl BoatModels {
     }
 }
 impl Game<'_> {
-    fn fluid_height(&self, x: i32, y: i32, z: i32) -> Option<(f32, bool)> {
+    fn fluid_height(&self, x: i32, y: i32, z: i32) -> Option<(f32, bool)> { let (x,y,z,) = match crate::points_generated::P718.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,z,) };
         self.fluid_height_of(x, y, z, Some(Fluid::Water))
     }
     /// The horizontal water plane around the camera for the water mirror: the median
@@ -357,7 +357,7 @@ impl Game<'_> {
     /// the camera to its ground. A lake or the sea has one plane; the mirror shows only the
     /// water on it. With no water in reach the last plane found stays, so the mirror never
     /// switches off as the camera moves.
-    pub(super) fn water_plane(&self, camera: glam::DVec3) -> Option<f32> {
+    pub(super) fn water_plane(&self, camera: glam::DVec3) -> Option<f32> { if let Some(__l) = crate::points_generated::P717.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         const RADIUS: i32 = 48;
         const STEP: usize = 4;
         const DEPTH: i32 = 96;
@@ -417,7 +417,7 @@ impl Game<'_> {
         y: i32,
         z: i32,
         fluid: Option<Fluid>,
-    ) -> Option<(f32, bool)> {
+    ) -> Option<(f32, bool)> { let (x,y,z,) = match crate::points_generated::P716.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,z,) };
         let f = self.res.facts().get(self.world.block(x, y, z));
         if f.fluid == Fluid::None || fluid.is_some_and(|want| f.fluid != want) {
             return None;
@@ -432,7 +432,7 @@ impl Game<'_> {
         Some((height, f.fluid_level == 8 && !f.fluid_falling))
     }
     /// `getWaterLevelAbove`: the top of the water column the hull is in.
-    fn water_level_above(&self, b: &Boat) -> f64 {
+    fn water_level_above(&self, b: &Boat) -> f64 { if let Some(__l) = crate::points_generated::P715.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let bb = b.bounds();
         let (lo, hi) = (bb.min_position(), bb.max_position());
         let (y0, y1) = (hi.y.floor() as i32, hi.y.ceil() as i32);
@@ -454,7 +454,7 @@ impl Game<'_> {
         }
         f64::from(y1 + 1)
     }
-    fn boat_status(&self, b: &mut Boat) -> Status {
+    fn boat_status(&self, b: &mut Boat) -> Status { if let Some(__l) = crate::points_generated::P714.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let bb = b.bounds();
         let (lo, hi) = (bb.min_position(), bb.max_position());
         // isUnderwater
@@ -506,7 +506,7 @@ impl Game<'_> {
     }
     /// `AbstractBoat.getGroundFriction`: average friction of the blocks whose
     /// collision shape meets a thin slab just under the hull (lily pads skipped).
-    fn boat_ground_friction(&self, bb: Aabb) -> f32 {
+    fn boat_ground_friction(&self, bb: Aabb) -> f32 { if let Some(__l) = crate::points_generated::P713.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (lo, hi) = (bb.min_position(), bb.max_position());
         let ground = Aabb::new(
             Vec3::new(lo.x, lo.y - 0.001, lo.z),
@@ -570,7 +570,7 @@ impl Game<'_> {
         }
     }
     /// `AbstractBoat.tick` for one boat (`controlled` when the player rides it).
-    pub(super) fn tick_boat(&mut self, mut b: Boat, controlled: bool) -> Boat {
+    pub(super) fn tick_boat(&mut self, mut b: Boat, controlled: bool) -> Boat { let (controlled,) = match crate::points_generated::P712.get() { Some(__l) => { let mut __a = (controlled,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (controlled,) };
         b.previous = b.position;
         b.previous_yaw = b.yaw;
         // Entity.baseTick ends with Leashable.tickLeash, on a server only
@@ -744,7 +744,7 @@ impl Game<'_> {
         b
     }
     /// Every boat but the ridden one (which ticks with its rider).
-    pub(super) fn tick_boats(&mut self) {
+    pub(super) fn tick_boats(&mut self) { if let Some(__l) = crate::points_generated::P711.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
         let mut round = self.native_tick_round();
@@ -818,7 +818,7 @@ impl Game<'_> {
         driven: &[u32],
         ticking: &impl Fn(i32, i32) -> bool,
         round: &super::native_ticks::TickRound,
-    ) {
+    ) { let (id,) = match crate::points_generated::P710.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(i) = self.boats.iter().position(|b| b.id == id) else {
             return;
         };
@@ -843,7 +843,7 @@ impl Game<'_> {
     /// `Entity.canSimulateMovement`: for a boat (`AUTHORITATIVE_SIDE`) a
     /// server leaves the boat its player drives to that player's client, and a
     /// client moves only the boat its player drives.
-    fn boat_can_simulate_movement(&self, id: u32) -> bool {
+    fn boat_can_simulate_movement(&self, id: u32) -> bool { let (id,) = match crate::points_generated::P709.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         if self.remote.is_some() {
             self.riding == Some(id)
         } else {
@@ -853,7 +853,7 @@ impl Game<'_> {
     /// `AbstractBoat.tick`: `status = getStatus()` for a boat this window
     /// does not tick (`tick_boat` sets it for the others): a client's boats
     /// other than the one it drives, and a server's boats its players drive.
-    pub(super) fn refresh_boat_status(&mut self, i: usize) {
+    pub(super) fn refresh_boat_status(&mut self, i: usize) { let (i,) = match crate::points_generated::P708.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let b = &self.boats[i];
         let mut probe = Boat::new(b.id, b.wood.clone(), b.position, b.yaw);
         let status = self.boat_status(&mut probe);
@@ -865,7 +865,7 @@ impl Game<'_> {
     /// `BubbleColumnBlock.entityInside`: the bubble columns boat `i` touches
     /// (its box deflated by 1e-5 as `Entity.checkInsideBlocks` does), in x, y,
     /// z order.
-    pub(super) fn boat_bubble_columns(&self, i: usize) -> Vec<BubbleColumn> {
+    pub(super) fn boat_bubble_columns(&self, i: usize) -> Vec<BubbleColumn> { let (i,) = match crate::points_generated::P707.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         let b = self.boats[i].bounds().deflate(Vec3::new(
             f64::from(1.0e-5f32),
             f64::from(1.0e-5f32),
@@ -894,7 +894,7 @@ impl Game<'_> {
     /// boat `i` up to 0.7 or drags it down to -0.3 (`AbstractBoat` does not
     /// override `onInsideBubbleColumn`), applied by the column's own push below
     /// the surface.
-    pub(super) fn boat_inside_bubble_column(&mut self, i: usize, column: BubbleColumn) {
+    pub(super) fn boat_inside_bubble_column(&mut self, i: usize, column: BubbleColumn) { let (i,) = match crate::points_generated::P706.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         if !self.boat_can_simulate_movement(self.boats[i].id) {
             return;
         }
@@ -902,12 +902,12 @@ impl Game<'_> {
     }
     /// `AbstractBoat.onAboveBubbleColumn`: whether the splash comes up, one
     /// time in a hundred for a boat that is not under water.
-    pub(super) fn boat_splash_roll(&mut self, i: usize) -> bool {
+    pub(super) fn boat_splash_roll(&mut self, i: usize) -> bool { let (i,) = match crate::points_generated::P705.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         !self.boats[i].under_water() && self.world.random.next_int_bound(100).unwrap_or(1) == 0
     }
     /// `AbstractBoat.onAboveBubbleColumn`: the client's half after the roll,
     /// the splash sound and particle at the boat.
-    pub(super) fn boat_bubble_splash(&mut self, i: usize) {
+    pub(super) fn boat_bubble_splash(&mut self, i: usize) { let (i,) = match crate::points_generated::P704.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         use horizon_client::particles::{ParticleOptions, ParticleType};
         let p = self.boats[i].position;
         let pitch = 0.8 + 0.4 * self.world.random.next_float();
@@ -929,7 +929,7 @@ impl Game<'_> {
     /// simulates the boat) the column is remembered, the countdown starts and
     /// the splash's game event goes to the listeners (its sound and particle
     /// are the client's).
-    fn boat_above_bubble_column(&mut self, i: usize, drag_down: bool) {
+    fn boat_above_bubble_column(&mut self, i: usize, drag_down: bool) { let (i,drag_down,) = match crate::points_generated::P703.get() { Some(__l) => { let mut __a = (i,drag_down,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,drag_down,) };
         let b = &mut self.boats[i];
         b.above_bubble_column = true;
         b.bubble_down = drag_down;
@@ -955,7 +955,7 @@ impl Game<'_> {
     }
     /// `AbstractBoat.handleBubbleColumnEffect`: an up column throws the boat
     /// up at 0.6, a down column pulls it down by 0.7.
-    pub(super) fn handle_bubble_column_effect(&mut self, i: usize, drag_down: bool) {
+    pub(super) fn handle_bubble_column_effect(&mut self, i: usize, drag_down: bool) { let (i,drag_down,) = match crate::points_generated::P702.get() { Some(__l) => { let mut __a = (i,drag_down,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,drag_down,) };
         if !self.boat_can_simulate_movement(self.boats[i].id) {
             return;
         }
@@ -970,7 +970,7 @@ impl Game<'_> {
     /// `Entity.ejectPassengers`: the mobs get out here, this window's player
     /// gets out, and a server's player is asked to
     /// (`guest_vehicle_tick` lets it out through its client).
-    fn eject_boat_riders(&mut self, i: usize) {
+    fn eject_boat_riders(&mut self, i: usize) { let (i,) = match crate::points_generated::P701.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         self.eject_boat_mobs(i, false);
         let id = self.boats[i].id;
         if self.riding == Some(id) && self.player.is_some() {
@@ -982,7 +982,7 @@ impl Game<'_> {
     /// `AbstractBoat.tickBubbleColumn`: on the server, a boat that stays over
     /// a column for `BUBBLE_TIME` ticks is thrown up or pulled down (a down
     /// column lets the riders out first), and every client is told.
-    fn tick_boat_bubble_column(&mut self, i: usize) {
+    fn tick_boat_bubble_column(&mut self, i: usize) { let (i,) = match crate::points_generated::P700.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         if let Some(down) = self.boats[i].tick_bubble_countdown() {
             let (id, p) = (self.boats[i].id, self.boats[i].position);
             let event = if down {
@@ -1001,7 +1001,7 @@ impl Game<'_> {
     /// `applyEffectsFromBlocks` that reach bubble columns (the lava is
     /// `boat_lava_tick`'s), then `tickBubbleColumn`; and the wobble when this
     /// window is its own client.
-    fn boat_bubble_tick(&mut self, i: usize) {
+    fn boat_bubble_tick(&mut self, i: usize) { let (i,) = match crate::points_generated::P699.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let id = self.boats[i].id;
         // An ejection nobody took (its player left the boat first) is void.
         if !self.guest_rides(id) {
@@ -1027,7 +1027,7 @@ impl Game<'_> {
     /// `applyEffectsFromBlocks` calls in `AbstractBoat.tick`: twice 40
     /// damage, so lava breaks a boat on its first tick inside, and the fire
     /// `lavaIgnite` lights never gets to burn it. True when the boat broke.
-    fn boat_lava_tick(&mut self, i: usize) -> bool {
+    fn boat_lava_tick(&mut self, i: usize) -> bool { let (i,) = match crate::points_generated::P698.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         if !self.in_lava(self.boats[i].bounds()) {
             return false;
         }
@@ -1042,14 +1042,14 @@ impl Game<'_> {
         false
     }
     /// `Entity.lavaHurt`'s sound once the hurt went through.
-    pub(super) fn lava_hurt_sound(&mut self, at: [f64; 3]) {
+    pub(super) fn lava_hurt_sound(&mut self, at: [f64; 3]) { let (at,) = match crate::points_generated::P697.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let pitch = 2.0 + self.world.random.next_float() * 0.4;
         self.audio
             .play("minecraft:entity.generic.burn", Some(at), 0.4, pitch);
     }
     /// Whether a vehicle's box, deflated by 1e-5, reaches into lava below its
     /// surface (`Entity.collidedWithFluid`).
-    pub(super) fn in_lava(&self, bb: Aabb) -> bool {
+    pub(super) fn in_lava(&self, bb: Aabb) -> bool { if let Some(__l) = crate::points_generated::P696.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (lo, hi) = (bb.min_position(), bb.max_position());
         let e = 1.0e-5;
         for x in (lo.x + e).floor() as i32..=(hi.x - e).floor() as i32 {
@@ -1069,7 +1069,7 @@ impl Game<'_> {
     /// and whether it is underwater, for `Entity.getFluidInteractionBox`. A boat
     /// keeps only the part of the passenger's box above its own top, so a boat
     /// bobbing on water never sinks the passenger's eyes or body.
-    pub(super) fn riding_boat_fluid_box(&self) -> Option<RiddenBoat> {
+    pub(super) fn riding_boat_fluid_box(&self) -> Option<RiddenBoat> { if let Some(__l) = crate::points_generated::P695.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.boats
             .iter()
             .find(|b| Some(b.id) == self.riding)
@@ -1080,7 +1080,7 @@ impl Game<'_> {
     }
     /// `getDismountLocationForPassenger`: in front of the player if there is
     /// floor there, else on top of the boat.
-    pub(super) fn dismount(&mut self, i: usize) {
+    pub(super) fn dismount(&mut self, i: usize) { let (i,) = match crate::points_generated::P694.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let id = self.boats[i].id;
         if self.riding == Some(id) && !self.native_may_leave(id) {
             return;
@@ -1101,7 +1101,7 @@ impl Game<'_> {
     }
     /// `getDismountLocationForPassenger` for a passenger `width` wide
     /// facing `yaw`.
-    pub(super) fn boat_dismount_target(&self, i: usize, width: f64, yaw: f32) -> Vec3 {
+    pub(super) fn boat_dismount_target(&self, i: usize, width: f64, yaw: f32) -> Vec3 { let (i,width,yaw,) = match crate::points_generated::P693.get() { Some(__l) => { let mut __a = (i,width,yaw,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,width,yaw,) };
         let b = &self.boats[i];
         let r = yaw.to_radians();
         let distance = (WIDTH * std::f64::consts::SQRT_2 + width + 1.0e-5) / 2.0;
@@ -1125,7 +1125,7 @@ impl Game<'_> {
         }
     }
     /// `BoatItem.use`: aim at a block or the water surface.
-    pub(super) fn place_boat(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn place_boat(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P692.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(boat) = self.boat_to_place(stack) else {
             return false;
         };
@@ -1154,7 +1154,7 @@ impl Game<'_> {
     }
     /// The boat `BoatItem.use` would place for `stack` (its SUCCESS), or
     /// None when it aims at nothing (PASS) or the spot is taken (FAIL).
-    pub(super) fn boat_to_place(&self, stack: &ItemStack) -> Option<Boat> {
+    pub(super) fn boat_to_place(&self, stack: &ItemStack) -> Option<Boat> { if let Some(__l) = crate::points_generated::P691.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (wood, chest) = any_boat_wood(&stack.item)?;
         if !self.boat_models.has(wood, chest) {
             return None;
@@ -1227,7 +1227,7 @@ impl Game<'_> {
         }
         Some(boat)
     }
-    pub(super) fn boat_hit(&self) -> Option<(usize, f64)> {
+    pub(super) fn boat_hit(&self) -> Option<(usize, f64)> { if let Some(__l) = crate::points_generated::P690.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (eye, dir) = self.aim()?;
         let reach: f64 = self.entity_reach;
         let mut best: Option<(usize, f64)> = None;
@@ -1260,7 +1260,7 @@ impl Game<'_> {
     }
     /// `AbstractBoat.interact`: board the boat under the crosshair, or the one
     /// a guest's interact packet named.
-    pub(super) fn interact_boat(&mut self, target: Option<InteractTarget>) -> bool {
+    pub(super) fn interact_boat(&mut self, target: Option<InteractTarget>) -> bool { if let Some(__l) = crate::points_generated::P689.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((i, d)) = (match target {
             Some(t) => Self::named_entity(&self.boats, t.id, |b| b.id).map(|i| (i, 0.0)),
             None => self.boat_hit(),
@@ -1304,7 +1304,7 @@ impl Game<'_> {
     /// server hands them to the player as a `ChestMenu` (`as_guest` ->
     /// `lan_open_container`). `AbstractChestBoat.interact` fires
     /// `CONTAINER_OPEN` and angers the piglins that see it.
-    pub(super) fn open_chest_boat_container(&mut self, i: usize) {
+    pub(super) fn open_chest_boat_container(&mut self, i: usize) { let (i,) = match crate::points_generated::P688.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let b = &self.boats[i];
         let key = (i32::MAX - 15, super::minecarts::CART_KEY_Y, b.id as i32);
         let at = [b.position.x, b.position.y, b.position.z];
@@ -1323,7 +1323,7 @@ impl Game<'_> {
     /// `AbstractChestBoat.openCustomInventoryScreen` (`HasCustomInventoryScreen`),
     /// the inventory key while riding a chest boat: its chest opens, not the
     /// player's inventory.
-    pub(super) fn open_ridden_chest_boat(&mut self) -> bool {
+    pub(super) fn open_ridden_chest_boat(&mut self) -> bool { if let Some(__l) = crate::points_generated::P687.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(id) = self.riding else {
             return false;
         };
@@ -1339,13 +1339,13 @@ impl Game<'_> {
     /// Whether the player rides a chest boat: `HasCustomInventoryScreen`, so
     /// the inventory key sends `ServerboundPlayerCommandPacket.Action.OPEN_INVENTORY`
     /// (`ServerGamePacketListenerImpl.handlePlayerCommand` opens its screen).
-    pub(super) fn riding_chest_boat(&self) -> bool {
+    pub(super) fn riding_chest_boat(&self) -> bool { if let Some(__l) = crate::points_generated::P686.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.riding
             .and_then(|id| self.boats.iter().find(|b| b.id == id))
             .is_some_and(|b| b.chest)
     }
     /// `VehicleEntity.hurtServer` from the player's attack.
-    pub(super) fn attack_boat(&mut self) -> bool {
+    pub(super) fn attack_boat(&mut self) -> bool { if let Some(__l) = crate::points_generated::P685.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((i, d)) = self.boat_hit() else {
             return false;
         };
@@ -1370,7 +1370,7 @@ impl Game<'_> {
     /// reason that destroys the boat (DISCARDED included), while the boat item
     /// itself only drops on the death path (`VehicleEntity.destroy`), not when
     /// a creative hit discards it. True when the boat was removed.
-    pub(super) fn hurt_boat(&mut self, i: usize, mut damage: f32, creative: bool) -> bool {
+    pub(super) fn hurt_boat(&mut self, i: usize, mut damage: f32, creative: bool) -> bool { let (i,mut damage,creative,) = match crate::points_generated::P684.get() { Some(__l) => { let mut __a = (i,damage,creative,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,damage,creative,) };
         let mut cancel = false;
         self.native_vehicle_damage("boat", &mut damage, &mut cancel);
         if cancel {
@@ -1416,7 +1416,7 @@ impl Game<'_> {
         destroyed
     }
     /// AbstractBoatRenderer.
-    pub(super) fn boat_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
+    pub(super) fn boat_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) { let (alpha,) = match crate::points_generated::P683.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let a = alpha as f32;
         let range = super::entity_culling::default_range(
             glam::DVec3::new(WIDTH, HEIGHT, WIDTH),

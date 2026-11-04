@@ -414,7 +414,7 @@ impl Editor for StructureEditor {
 
 impl Game<'_> {
     /// `LocalPlayer.openStructureBlock`.
-    pub(super) fn open_structure_block(&mut self, pos: Pos) {
+    pub(super) fn open_structure_block(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5570.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BlockEntity::StructureBlock(b)) = self.world.block_entities.get(&pos) else {
             return;
         };

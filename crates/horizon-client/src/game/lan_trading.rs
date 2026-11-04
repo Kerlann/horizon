@@ -39,7 +39,7 @@ fn uuid_words(uuid: u128) -> [i32; 4] {
 impl Game<'_> {
     /// A trading screen the guest's interaction opened (it opened as a
     /// station while the guest acted): handed to the guest.
-    pub(super) fn lan_open_merchant(&mut self, conn: u32, mut state: MerchantState) {
+    pub(super) fn lan_open_merchant(&mut self, conn: u32, mut state: MerchantState) { let (conn,) = match crate::points_generated::P2468.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(uuid) = self
             .lan
             .as_ref()
@@ -89,7 +89,7 @@ impl Game<'_> {
     /// `Entity.getDisplayName` of the merchant, the screen's title: its name
     /// (custom, else the profession's) with the show_entity hover event and
     /// its UUID as insertion.
-    fn merchant_display_name(&mut self, state: &MerchantState) -> horizon_world::nbt::Tag {
+    fn merchant_display_name(&mut self, state: &MerchantState) -> horizon_world::nbt::Tag { if let Some(__l) = crate::points_generated::P2467.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_world::nbt::Tag;
         let s = &state.session;
         let (kind, key) = if s.villager {
@@ -142,7 +142,7 @@ impl Game<'_> {
     /// The screen title: the custom name, else the profession (the client
     /// adds the level itself).
     /// `ServerPlayer.sendMerchantOffers`, when the offers changed.
-    fn lan_send_offers(&mut self, conn: u32, gm: &mut GuestMerchant, force: bool) {
+    fn lan_send_offers(&mut self, conn: u32, gm: &mut GuestMerchant, force: bool) { let (conn,force,) = match crate::points_generated::P2466.get() { Some(__l) => { let mut __a = (conn,force,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,force,) };
         let s = &gm.merchant.session;
         if !force && s.offers == gm.sent && s.level == gm.sent_level && s.xp == gm.sent_xp {
             return;
@@ -188,7 +188,7 @@ impl Game<'_> {
             gm.sent_xp = s.xp;
         }
     }
-    fn lan_send_merchant_content(&mut self, conn: u32, gm: &mut GuestMerchant) {
+    fn lan_send_merchant_content(&mut self, conn: u32, gm: &mut GuestMerchant) { let (conn,) = match crate::points_generated::P2465.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         if let Some(host) = self.lan.as_mut() {
             let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
                 return;
@@ -333,7 +333,7 @@ impl Game<'_> {
         true
     }
     /// A container click on the guest's trading window.
-    pub(super) fn lan_merchant_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool {
+    pub(super) fn lan_merchant_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool { let (conn,) = match crate::points_generated::P2464.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let input = match p.input {
             0 => Input::Pickup,
             1 => Input::QuickMove,
@@ -349,7 +349,7 @@ impl Game<'_> {
         })
     }
     /// ServerboundSelectTradePacket: the selection hint, then tryMoveItems.
-    pub(super) fn lan_select_trade(&mut self, conn: u32, index: i32) {
+    pub(super) fn lan_select_trade(&mut self, conn: u32, index: i32) { let (conn,index,) = match crate::points_generated::P2463.get() { Some(__l) => { let mut __a = (conn,index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,index,) };
         let Ok(index) = usize::try_from(index) else {
             return;
         };
@@ -373,7 +373,7 @@ impl Game<'_> {
     }
     /// The guest closed the trading window (or it is closed for them):
     /// MerchantMenu.removed, then the villager gets its state back.
-    pub(super) fn lan_merchant_closed(&mut self, conn: u32, window: Option<i32>) -> bool {
+    pub(super) fn lan_merchant_closed(&mut self, conn: u32, window: Option<i32>) -> bool { let (conn,) = match crate::points_generated::P2462.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         if !self.lan_merchant_op(conn, window, |menu, env| menu.merchant_close(env)) {
             return false;
         }
@@ -404,7 +404,7 @@ impl Game<'_> {
         &self,
         g: &horizon_client::lan::guest::Guest,
         id: u32,
-    ) -> bool {
+    ) -> bool { let (id,) = match crate::points_generated::P2461.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.mobs
             .iter()
             .find(|m| m.id == id)
@@ -412,7 +412,7 @@ impl Game<'_> {
     }
     /// `Villager.customServerAiStep` for the guests' trading villagers: the
     /// TRADE reputation event, then the prices follow.
-    pub(super) fn lan_merchant_tick(&mut self) {
+    pub(super) fn lan_merchant_tick(&mut self) { if let Some(__l) = crate::points_generated::P2460.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // `AbstractVillager.stillValid`: the trade screen closes once the trader
         // is gone or dead, or the guest is more than 4 blocks past its reach.
         let far: Vec<(u32, i32)> = self
@@ -498,7 +498,7 @@ impl Game<'_> {
     }
     /// Takes a station a guest's action opened: a trading screen or a
     /// workstation menu goes to the guest (game/lan_stations.rs).
-    pub(super) fn lan_station_opened(&mut self, conn: u32, station: super::stations::Station) {
+    pub(super) fn lan_station_opened(&mut self, conn: u32, station: super::stations::Station) { let (conn,) = match crate::points_generated::P2459.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let mut station = station;
         if station.kind == StationKind::Merchant
             && let Some(m) = station.merchant.take()
@@ -512,7 +512,7 @@ impl Game<'_> {
 
 impl Game<'_> {
     /// The guest whose trading screen is open on mob `mob`.
-    pub(super) fn lan_trade_conn(&self, mob: u32) -> Option<u32> {
+    pub(super) fn lan_trade_conn(&self, mob: u32) -> Option<u32> { let (mob,) = match crate::points_generated::P2458.get() { Some(__l) => { let mut __a = (mob,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (mob,) };
         let host = self.lan.as_ref()?;
         host.play
             .iter()
@@ -525,12 +525,12 @@ impl Game<'_> {
     }
     /// The live session of a guest's open trading screen, whose offers,
     /// experience and level are newer than the mob's until the screen closes.
-    pub(super) fn lan_trade_session(&self, conn: u32) -> Option<&merchant::Session> {
+    pub(super) fn lan_trade_session(&self, conn: u32) -> Option<&merchant::Session> { let (conn,) = match crate::points_generated::P2457.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,) };
         let gm = self.lan.as_ref()?.play.get(&conn)?.merchant.as_ref()?;
         Some(&gm.merchant.session)
     }
     /// The guest's player UUID.
-    pub(super) fn lan_trade_player(&self, conn: u32) -> Option<u128> {
+    pub(super) fn lan_trade_player(&self, conn: u32) -> Option<u128> { let (conn,) = match crate::points_generated::P2456.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,) };
         Some(self.lan.as_ref()?.hub.guest(conn)?.uuid)
     }
     /// Changes the session of a guest's open trading screen and sends the
@@ -563,7 +563,7 @@ impl Game<'_> {
     /// Lends the open session the world sequences of the levels above its
     /// level, and gives back the ones it no longer needs, so a level-up after
     /// the level was changed still rolls its trade set.
-    fn lan_trade_sequences(&mut self, conn: u32) {
+    fn lan_trade_sequences(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2455.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(session) = self.lan_trade_session(conn) else {
             return;
         };

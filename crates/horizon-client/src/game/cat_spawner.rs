@@ -11,7 +11,7 @@ const TICK_DELAY: i32 = 1200;
 
 impl Game<'_> {
     /// `CatSpawner.tick` (the overworld's custom spawner).
-    pub(super) fn tick_cat_spawner(&mut self) {
+    pub(super) fn tick_cat_spawner(&mut self) { if let Some(__l) = crate::points_generated::P820.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.dim != Dim::Overworld {
             return;
         }
@@ -80,7 +80,7 @@ impl Game<'_> {
     }
     /// `spawnInVillage`: more than four occupied beds within 48 blocks and
     /// fewer than five cats around.
-    fn spawn_cat_in_village(&mut self, pos: [i32; 3]) {
+    fn spawn_cat_in_village(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P819.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         // PoiManager.getCountInRange(HOME, IS_OCCUPIED): beds villagers have claimed.
         let mut beds: Vec<[i32; 3]> = self
             .mobs
@@ -101,13 +101,13 @@ impl Game<'_> {
         }
     }
     /// `spawnInHut`: no cat within 16 blocks; the cat stays.
-    fn spawn_cat_in_hut(&mut self, pos: [i32; 3]) {
+    fn spawn_cat_in_hut(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P818.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if self.cats_near(pos, 16.0) == 0 {
             self.spawn_cat(pos, true);
         }
     }
     /// Cats in `AABB(pos).inflate(radius, 8, radius)`.
-    fn cats_near(&self, pos: [i32; 3], radius: f64) -> usize {
+    fn cats_near(&self, pos: [i32; 3], radius: f64) -> usize { let (pos,radius,) = match crate::points_generated::P817.get() { Some(__l) => { let mut __a = (pos,radius,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,radius,) };
         let [x, y, z] = pos.map(f64::from);
         let min = Vec3::new(x - radius, y - 8.0, z - radius);
         let max = Vec3::new(x + 1.0 + radius, y + 9.0, z + 1.0 + radius);
@@ -120,7 +120,7 @@ impl Game<'_> {
     }
     /// `spawnCat`: finalized for a natural spawn, black inside
     /// `#cats_spawn_as_black` structures (`Cat.finalizeSpawn`).
-    fn spawn_cat(&mut self, pos: [i32; 3], persistent: bool) {
+    fn spawn_cat(&mut self, pos: [i32; 3], persistent: bool) { let (pos,persistent,) = match crate::points_generated::P816.get() { Some(__l) => { let mut __a = (pos,persistent,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,persistent,) };
         let at = [
             f64::from(pos[0]) + 0.5,
             f64::from(pos[1]),

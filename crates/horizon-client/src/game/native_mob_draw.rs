@@ -61,7 +61,7 @@ impl Game<'_> {
         camera: DVec3,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) -> bool {
+    ) -> bool { let (partial,light,) = match crate::points_generated::P3965.get() { Some(__l) => { let mut __a = (partial,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,light,) };
         self.mod_entity_draw(mob, partial, camera, light, out, |render, draw| {
             let mut drawn = false;
             self.native_mob_submit(render, draw, &mut drawn);
@@ -79,7 +79,7 @@ impl Game<'_> {
         camera: DVec3,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) -> bool {
+    ) -> bool { let (partial,light,) = match crate::points_generated::P3964.get() { Some(__l) => { let mut __a = (partial,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,light,) };
         // Posing a player for the mods costs, each frame: only when one listens.
         let mut listened = false;
         self.native_player_render_listened(&mut listened);
@@ -102,7 +102,7 @@ impl Game<'_> {
         camera: DVec3,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (partial,light,) = match crate::points_generated::P3963.get() { Some(__l) => { let mut __a = (partial,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,light,) };
         // Every mob in view each frame: only when a mod listens.
         let mut listened = false;
         self.native_player_render_listened(&mut listened);

@@ -9,7 +9,7 @@ use horizon_client::{
 use horizon_core::random::RandomSource;
 
 impl Game<'_> {
-    fn item_tagged(&self, tag: &str, item: &str) -> bool {
+    fn item_tagged(&self, tag: &str, item: &str) -> bool { if let Some(__l) = crate::points_generated::P4268.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res
             .items()
             .item_tags
@@ -17,7 +17,7 @@ impl Game<'_> {
             .is_some_and(|t| t.contains(item))
     }
     /// `AbstractNautilus.usePlayerItem`: bucketed fish leave a water bucket.
-    fn use_nautilus_food(&mut self, item: &str) {
+    fn use_nautilus_food(&mut self, item: &str) { if let Some(__l) = crate::points_generated::P4267.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let bucket = self.item_tagged("minecraft:nautilus_bucket_food", item);
         self.consume_held();
         if bucket && !self.creative {
@@ -30,13 +30,13 @@ impl Game<'_> {
             }
         }
     }
-    fn nautilus_sound(&mut self, index: usize, sound: &str) {
+    fn nautilus_sound(&mut self, index: usize, sound: &str) { let (index,) = match crate::points_generated::P4266.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let at = self.mobs[index].center();
         self.audio
             .play(&format!("minecraft:{sound}"), Some(at), 1.0, 1.0);
     }
     /// `AbstractNautilus.mobInteract`. Returns whether the click was used.
-    pub(super) fn interact_nautilus(&mut self, index: usize, item: &str) -> bool {
+    pub(super) fn interact_nautilus(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P4265.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         if !m.alive() || Some(m.id) == self.riding {
             return false;

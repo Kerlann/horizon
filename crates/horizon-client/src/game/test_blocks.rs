@@ -11,7 +11,7 @@ use horizon_protocol::packets::play;
 type Pos = (i32, i32, i32);
 
 impl Game<'_> {
-    fn test_block_mut(&mut self, pos: Pos) -> Option<&mut TestBlock> {
+    fn test_block_mut(&mut self, pos: Pos) -> Option<&mut TestBlock> { if let Some(__l) = crate::points_generated::P5598.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.world.block_entities.get_mut(&pos)? {
             BlockEntity::TestBlock(b) => Some(b),
             _ => None,
@@ -19,7 +19,7 @@ impl Game<'_> {
     }
 
     /// The `mode` of the block state at `pos`.
-    pub(super) fn test_block_state_mode(&self, pos: Pos) -> Option<TestBlockMode> {
+    pub(super) fn test_block_state_mode(&self, pos: Pos) -> Option<TestBlockMode> { if let Some(__l) = crate::points_generated::P5597.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let state = self.world.block(pos.0, pos.1, pos.2);
         let mode = self
             .pack
@@ -32,7 +32,7 @@ impl Game<'_> {
     }
 
     /// `new TestBlockEntity(pos, state)`: the mode is the state's.
-    pub(super) fn test_block_placed(&mut self, pos: Pos) {
+    pub(super) fn test_block_placed(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5596.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mode) = self.test_block_state_mode(pos) else {
             return;
         };
@@ -41,7 +41,7 @@ impl Game<'_> {
         }
     }
 
-    fn test_block_at(&self, pos: Pos) -> Option<&TestBlock> {
+    fn test_block_at(&self, pos: Pos) -> Option<&TestBlock> { if let Some(__l) = crate::points_generated::P5595.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.world.block_entities.get(&pos)? {
             BlockEntity::TestBlock(b) => Some(b),
             _ => None,
@@ -49,19 +49,19 @@ impl Game<'_> {
     }
 
     /// `TestBlockEntity.hasTriggered`.
-    pub(super) fn test_block_triggered(&self, pos: Pos) -> bool {
+    pub(super) fn test_block_triggered(&self, pos: Pos) -> bool { if let Some(__l) = crate::points_generated::P5594.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.test_block_at(pos).is_some_and(|b| b.triggered)
     }
 
     /// `TestBlockEntity.getMessage`.
-    pub(super) fn test_block_message(&self, pos: Pos) -> String {
+    pub(super) fn test_block_message(&self, pos: Pos) -> String { if let Some(__l) = crate::points_generated::P5593.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.test_block_at(pos)
             .map_or_else(String::new, |b| b.message.clone())
     }
 
     /// What a `TestBlockEntity` call asked of the level: its neighbours
     /// update (`level.updateNeighborsAt`) and the log line.
-    fn apply_test_block_effects(&mut self, pos: Pos, effects: Effects) {
+    fn apply_test_block_effects(&mut self, pos: Pos, effects: Effects) { if let Some(__l) = crate::points_generated::P5592.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if effects.update_neighbors {
             let at = BlockPos::new(pos.0, pos.1, pos.2);
             let state = self.world.block(pos.0, pos.1, pos.2);
@@ -86,7 +86,7 @@ impl Game<'_> {
     }
 
     /// `TestBlockEntity.trigger`.
-    pub(super) fn trigger_test_block(&mut self, pos: Pos) {
+    pub(super) fn trigger_test_block(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5591.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(effects) = self.test_block_mut(pos).map(TestBlock::trigger) else {
             return;
         };
@@ -94,7 +94,7 @@ impl Game<'_> {
     }
 
     /// `TestBlockEntity.reset`, which `TestBlock.tick` runs.
-    pub(super) fn reset_test_block(&mut self, pos: Pos) {
+    pub(super) fn reset_test_block(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5590.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(effects) = self.test_block_mut(pos).map(TestBlock::reset) else {
             return;
         };
@@ -102,7 +102,7 @@ impl Game<'_> {
     }
 
     /// `TestBlock.neighborChanged`: a rising signal triggers the block.
-    pub(super) fn test_block_neighbor_changed(&mut self, pos: Pos) {
+    pub(super) fn test_block_neighbor_changed(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5589.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.test_block_at(pos).is_none() {
             return;
         }
@@ -119,7 +119,7 @@ impl Game<'_> {
 
     /// `handleSetTestBlock` for a guest: only a creative player with game
     /// master commands edits the block.
-    pub(super) fn lan_set_test_block(&mut self, conn: u32, p: play::SetTestBlock) {
+    pub(super) fn lan_set_test_block(&mut self, conn: u32, p: play::SetTestBlock) { let (conn,) = match crate::points_generated::P5588.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
@@ -131,7 +131,7 @@ impl Game<'_> {
         });
     }
 
-    fn apply_set_test_block(&mut self, p: &play::SetTestBlock) {
+    fn apply_set_test_block(&mut self, p: &play::SetTestBlock) { if let Some(__l) = crate::points_generated::P5587.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = (p.pos[0], p.pos[1], p.pos[2]);
         if self.test_block_mut(pos).is_none() {
             return;

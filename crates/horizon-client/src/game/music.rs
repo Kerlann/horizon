@@ -10,7 +10,7 @@ use horizon_client::{
 
 impl Game<'_> {
     /// `Minecraft.tick` -> `MusicManager.tick`, once per client tick.
-    pub(super) fn tick_music(&mut self) {
+    pub(super) fn tick_music(&mut self) { if let Some(__l) = crate::points_generated::P2850.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Splitscreen: one music, P1's.
         if self.options.split_guest {
             return;
@@ -58,21 +58,21 @@ impl Game<'_> {
     }
     /// The Music page's groups: every track the loaded `sounds.json` can play,
     /// by situation (see `music::track_groups`).
-    pub(super) fn music_groups(&self) -> Vec<MusicGroup> {
+    pub(super) fn music_groups(&self) -> Vec<MusicGroup> { if let Some(__l) = crate::points_generated::P2849.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         horizon_client::music::track_groups(&self.audio.engine.registry)
     }
     /// A Music page row: play this track of `event` now.
-    pub(super) fn play_music_track(&mut self, event: &str, track: &str) {
+    pub(super) fn play_music_track(&mut self, event: &str, track: &str) { if let Some(__l) = crate::points_generated::P2848.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.music.play_track(event, track, &mut self.audio);
     }
     /// `Options.getFinalSoundSourceVolume(SoundSource.MUSIC)`.
-    fn final_music_volume(&self) -> f32 {
+    fn final_music_volume(&self) -> f32 { if let Some(__l) = crate::points_generated::P2847.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.settings.master_volume * self.settings.volumes[1]
     }
     /// `ToastManager.setMusicToastDisplayState`: Pause and Pause and Toast make
     /// the toast (the second one shows it at once while music is audible),
     /// Never drops it.
-    fn set_music_toast_state(&mut self, state: u8) {
+    fn set_music_toast_state(&mut self, state: u8) { let (state,) = match crate::points_generated::P2846.get() { Some(__l) => { let mut __a = (state,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (state,) };
         self.now_playing = match state {
             0 => None,
             _ => {
@@ -86,7 +86,7 @@ impl Game<'_> {
     }
     /// `NowPlayingToast.getNowPlayingString` of the song the music manager
     /// plays: its file's short language key, slashes as dots.
-    fn now_playing_song(&self) -> Option<String> {
+    fn now_playing_song(&self) -> Option<String> { if let Some(__l) = crate::points_generated::P2845.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let id = self.music.current_instance()?;
         let location = self
             .audio
@@ -117,7 +117,7 @@ impl Game<'_> {
         &mut self,
         batch: &mut horizon_client::hud::HudBatch,
         hidden: bool,
-    ) {
+    ) { let (hidden,) = match crate::points_generated::P2844.get() { Some(__l) => { let mut __a = (hidden,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (hidden,) };
         let song = self.now_playing_song();
         let Some(toast) = self.now_playing.as_mut() else {
             return;
@@ -147,7 +147,7 @@ impl Game<'_> {
     /// `Minecraft.tick` -> `SoundManager.tick(pause)`, after the music, with
     /// `pauseAllExcept(MUSIC, UI)` when the game pauses and `resume` when it
     /// carries on.
-    pub(super) fn tick_sound_engine(&mut self) {
+    pub(super) fn tick_sound_engine(&mut self) { if let Some(__l) = crate::points_generated::P2843.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.pause != self.sound_paused {
             if self.pause {
                 self.audio.pause();
@@ -194,12 +194,12 @@ impl Game<'_> {
     /// `Minecraft.setLevel` -> `updateLevelInEngines`: `SoundManager.stop()`.
     /// The music manager keeps its stopped track and, on its next tick, waits
     /// the level's music delay before the next one.
-    pub(super) fn stop_sounds_for_new_level(&mut self) {
+    pub(super) fn stop_sounds_for_new_level(&mut self) { if let Some(__l) = crate::points_generated::P2842.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.ambience.clear(&mut self.audio);
         self.audio.stop_all();
     }
     /// `getSituationalMusic` and `getMusicVolume`.
-    pub(super) fn situational_music(&self) -> (Option<Music>, f32) {
+    pub(super) fn situational_music(&self) -> (Option<Music>, f32) { if let Some(__l) = crate::points_generated::P2841.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let empty = BackgroundMusic::default();
         // The title screen has no player (and no level for the camera probe).
         // A server's client has its player from handleLogin on, before the
@@ -239,7 +239,7 @@ impl Game<'_> {
         (situation.music(), situation.volume())
     }
     /// `BiomeManager.getNoiseBiomeAtPosition`: the quart cell holding a position.
-    fn biome_at(&self, p: [f64; 3]) -> &str {
+    fn biome_at(&self, p: [f64; 3]) -> &str { let (p,) = match crate::points_generated::P2840.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let (x, y, z) = (
             p[0].floor() as i32,
             p[1].floor() as i32,
@@ -255,7 +255,7 @@ impl Game<'_> {
             })
     }
     /// `isEyeInFluid(WATER)`: the eye inside the water of its block column.
-    pub(super) fn eye_in_water(&self, x: f64, eye_y: f64, z: f64) -> bool {
+    pub(super) fn eye_in_water(&self, x: f64, eye_y: f64, z: f64) -> bool { let (x,eye_y,z,) = match crate::points_generated::P2839.get() { Some(__l) => { let mut __a = (x,eye_y,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,eye_y,z,) };
         let (bx, by, bz) = (x.floor() as i32, eye_y.floor() as i32, z.floor() as i32);
         let f = self.res.facts().get(self.world.block(bx, by, bz));
         if f.fluid != Fluid::Water {
@@ -273,7 +273,7 @@ impl Game<'_> {
 
 impl Game<'_> {
     /// The local player's ambient sound handlers (LocalPlayer.tick).
-    pub(super) fn tick_ambience(&mut self) {
+    pub(super) fn tick_ambience(&mut self) { if let Some(__l) = crate::points_generated::P2838.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return;
         };

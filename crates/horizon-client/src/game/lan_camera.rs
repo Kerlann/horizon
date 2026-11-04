@@ -34,7 +34,7 @@ impl Game<'_> {
     /// `ServerPlayer.isAlive` of the camera, with where it is and how it
     /// looks (`absSnapTo`'s arguments): a player, the host or any other
     /// entity of the level, by network id.
-    fn camera_state(&self, id: i32) -> Option<([f64; 3], [f32; 2])> {
+    fn camera_state(&self, id: i32) -> Option<([f64; 3], [f32; 2])> { let (id,) = match crate::points_generated::P2326.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let host = self.lan.as_ref()?;
         if let Some(g) = host
             .hub
@@ -60,7 +60,7 @@ impl Game<'_> {
     /// blocks (`isPickable` is `!isRemoved`) and `EnderDragonPart`s
     /// (`ServerLevel.getEntityOrPart`; `isPickable` is `true`, and a part
     /// never turns).
-    pub(super) fn camera_extra(&self, id: i32) -> Option<CameraExtra> {
+    pub(super) fn camera_extra(&self, id: i32) -> Option<CameraExtra> { let (id,) = match crate::points_generated::P2325.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let id = u32::try_from(id).ok().filter(|&id| id != 0)?;
         let at = |v: Vec3| [v.x, v.y, v.z];
         if let Some(t) = self.tnts.iter().find(|t| t.id == id) {
@@ -91,7 +91,7 @@ impl Game<'_> {
     }
 
     /// `Entity.isPickable` of the entity with that id.
-    fn camera_pickable(&self, id: i32) -> bool {
+    fn camera_pickable(&self, id: i32) -> bool { let (id,) = match crate::points_generated::P2324.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let Some(host) = self.lan.as_ref() else {
             return false;
         };
@@ -125,7 +125,7 @@ impl Game<'_> {
     }
 
     /// `ServerGamePacketListenerImpl.handleSpectatorAction`.
-    pub(super) fn guest_spectator_action(&mut self, gi: usize, target: Option<i32>) {
+    pub(super) fn guest_spectator_action(&mut self, gi: usize, target: Option<i32>) { let (gi,) = match crate::points_generated::P2323.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -164,7 +164,7 @@ impl Game<'_> {
 
     /// `ServerPlayer.setCamera`: the view moves to the new camera, which
     /// the client is told, or back to the player (`None`).
-    pub(super) fn guest_set_camera(&mut self, gi: usize, camera: Option<i32>) {
+    pub(super) fn guest_set_camera(&mut self, gi: usize, camera: Option<i32>) { let (gi,) = match crate::points_generated::P2322.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -215,7 +215,7 @@ impl Game<'_> {
 
     /// The camera part of `ServerPlayer.tick` for every guest, after the
     /// `/spectate` requests commands queued.
-    pub(super) fn tick_guest_cameras(&mut self) {
+    pub(super) fn tick_guest_cameras(&mut self) { if let Some(__l) = crate::points_generated::P2321.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (conn, id) in std::mem::take(&mut self.cmds.camera_requests) {
             if let Some(gi) = self
                 .lan

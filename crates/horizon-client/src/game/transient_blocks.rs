@@ -76,12 +76,12 @@ fn shows_block(created: u64, compile_start: Option<u64>, upload_pending: bool) -
 }
 impl Game<'_> {
     /// `ClientPacketListener.handleAddTransientBlockPacket`.
-    pub(super) fn add_transient_block(&mut self, pos: [i32; 3], state: i32) {
+    pub(super) fn add_transient_block(&mut self, pos: [i32; 3], state: i32) { let (pos,state,) = match crate::points_generated::P5703.get() { Some(__l) => { let mut __a = (pos,state,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,state,) };
         self.transient_blocks.queue(pos, BlockStateId(state as u32));
     }
 
     /// `LevelExtractor.drainTransientBlockQueue`, once a frame.
-    pub(super) fn drain_transient_block_queue(&mut self) {
+    pub(super) fn drain_transient_block_queue(&mut self) { if let Some(__l) = crate::points_generated::P5702.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.transient_blocks
             .drain(Instant::now(), self.streaming.sequence());
     }
@@ -90,7 +90,7 @@ impl Game<'_> {
     /// run out, drawn as a moving block at its position, camera-relative.
     /// One whose section mesh has been rebuilt since it came is dropped
     /// (`performTransientBlockRemovals`).
-    pub(super) fn transient_block_geometry(&mut self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
+    pub(super) fn transient_block_geometry(&mut self, camera: glam::DVec3, out: &mut Vec<Vertex>) { if let Some(__l) = crate::points_generated::P5701.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.transient_blocks.shown.is_empty() {
             return;
         }

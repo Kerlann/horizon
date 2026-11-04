@@ -39,7 +39,7 @@ impl Game<'_> {
     /// `PotionContents.is`: the potion of `stack` is in the potion tag `tag`
     /// (`minecraft:douses_fire` and the others, read from the data pack's
     /// `tags/potion`). A stack with no potion is in no tag.
-    pub(super) fn potion_in_tag(&self, stack: &ItemStack, tag: &str) -> bool {
+    pub(super) fn potion_in_tag(&self, stack: &ItemStack, tag: &str) -> bool { if let Some(__l) = crate::points_generated::P5429.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         stack.potion().is_some_and(|potion| {
             self.res
                 .stations()
@@ -55,7 +55,7 @@ impl Game<'_> {
     /// face it hit, the cell behind that (the block it hit) and the four
     /// horizontal neighbours of the cell in front. `hit` is the block and
     /// `face` the face it was hit on.
-    pub(super) fn potion_hit_block(&mut self, stack: &ItemStack, hit: [i32; 3], face: Direction) {
+    pub(super) fn potion_hit_block(&mut self, stack: &ItemStack, hit: [i32; 3], face: Direction) { let (hit,) = match crate::points_generated::P5428.get() { Some(__l) => { let mut __a = (hit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (hit,) };
         // `PotionContents.is(PotionTags.DOUSES_FIRE)` on the stack's `potion_contents`.
         if !self.potion_in_tag(stack, "minecraft:douses_fire") {
             return;
@@ -81,7 +81,7 @@ impl Game<'_> {
     /// `AbstractThrownPotion.douseFire`: a fire block is destroyed without
     /// drops, a lit candle or candle cake goes out, and a lit campfire goes
     /// out after level event 1009 and its block-change game event.
-    fn douse_fire(&mut self, pos: [i32; 3]) {
+    fn douse_fire(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P5427.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let at = BlockPos::new(pos[0], pos[1], pos[2]);
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let name = self.res.facts().get(state).name.clone();
@@ -110,7 +110,7 @@ impl Game<'_> {
 
     /// `CampfireBlock.isLitCampfire`: the state of a lit block in
     /// `#minecraft:campfires`.
-    fn lit_campfire(&self, state: BlockStateId, name: &str) -> Option<BlockState> {
+    fn lit_campfire(&self, state: BlockStateId, name: &str) -> Option<BlockState> { if let Some(__l) = crate::points_generated::P5426.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.block_in_tag("minecraft:campfires", name) {
             return None;
         }
@@ -130,7 +130,7 @@ impl Game<'_> {
     /// (`Enderman.hurtServer`); one in `#extinguishes_entities` puts out
     /// those that burn; one in `#rehydrates_axolotls` refills the air of
     /// the axolotls in the box.
-    pub(super) fn affect_entities_around(&mut self, stack: &ItemStack, at: Vec3, by_player: bool) {
+    pub(super) fn affect_entities_around(&mut self, stack: &ItemStack, at: Vec3, by_player: bool) { let (by_player,) = match crate::points_generated::P5425.get() { Some(__l) => { let mut __a = (by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (by_player,) };
         let hurts = self.potion_in_tag(stack, "minecraft:hurts_water_sensitive_entities");
         let extinguishes = self.potion_in_tag(stack, "minecraft:extinguishes_entities");
         // The potion's box is 0.25 wide and high.
@@ -224,7 +224,7 @@ impl Game<'_> {
     /// `Entity.extinguishFire` for the player in place (the host's or a
     /// guest's) when it burns, is alive and is in a splash's reach: the
     /// extinguish sound, then the fire out.
-    fn extinguish_player_in_splash(&mut self, reach: Aabb, at: Vec3) {
+    fn extinguish_player_in_splash(&mut self, reach: Aabb, at: Vec3) { if let Some(__l) = crate::points_generated::P5424.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return;
         };

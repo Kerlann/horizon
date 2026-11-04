@@ -19,7 +19,7 @@ impl Game<'_> {
     /// not exist.
     fn dedicated_lists(
         &self,
-    ) -> R<std::sync::Arc<std::sync::Mutex<super::super::dedicated::Lists>>> {
+    ) -> R<std::sync::Arc<std::sync::Mutex<super::super::dedicated::Lists>>> { if let Some(__l) = crate::points_generated::P1204.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match (&self.server_lists, self.options.dedicated.is_some()) {
             (Some(lists), true) => Ok(lists.clone()),
             _ => Err(err("command.unknown.command", &[])),
@@ -27,7 +27,7 @@ impl Game<'_> {
     }
 
     /// StopCommand: the server loop (game/dedicated.rs) ends after this tick.
-    pub(super) fn cmd_stop(&mut self) -> R<i32> {
+    pub(super) fn cmd_stop(&mut self) -> R<i32> { if let Some(__l) = crate::points_generated::P1203.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let lists = self.dedicated_lists()?;
         self.feedback(Text::translate("commands.stop.stopping", &[]));
         lists.lock().unwrap().stop = true;
@@ -36,7 +36,7 @@ impl Game<'_> {
 
     /// SaveAllCommand. Every save waits for the chunks to be written, so
     /// `flush` changes nothing.
-    pub(super) fn cmd_save_all(&mut self) -> R<i32> {
+    pub(super) fn cmd_save_all(&mut self) -> R<i32> { if let Some(__l) = crate::points_generated::P1202.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.dedicated_lists()?;
         self.feedback(Text::translate("commands.save.saving", &[]));
         if self.lan_acting.is_some() {
@@ -52,7 +52,7 @@ impl Game<'_> {
     }
 
     /// Save everything; `commands.save.success`, or `commands.save.failed` in red.
-    pub(in crate::game) fn save_all_reply(&mut self) -> Text {
+    pub(in crate::game) fn save_all_reply(&mut self) -> Text { if let Some(__l) = crate::points_generated::P1201.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.save_game() {
             Ok(()) => Text::translate("commands.save.success", &[]),
             Err(e) => {
@@ -63,7 +63,7 @@ impl Game<'_> {
     }
 
     /// SaveOffCommand and SaveOnCommand.
-    pub(super) fn cmd_auto_save(&mut self, enabled: bool) -> R<i32> {
+    pub(super) fn cmd_auto_save(&mut self, enabled: bool) -> R<i32> { let (enabled,) = match crate::points_generated::P1200.get() { Some(__l) => { let mut __a = (enabled,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (enabled,) };
         let lists = self.dedicated_lists()?;
         if !super::super::dedicated::set_auto_save(&lists, enabled) {
             let already = if enabled {
@@ -83,7 +83,7 @@ impl Game<'_> {
     }
 
     /// `NameAndId` of a player target.
-    fn target_profile(&self, t: Target) -> Option<NameAndId> {
+    fn target_profile(&self, t: Target) -> Option<NameAndId> { if let Some(__l) = crate::points_generated::P1199.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match t {
             Target::Player => Some(NameAndId {
                 id: self.lan_acting_uuid?,
@@ -100,7 +100,7 @@ impl Game<'_> {
     /// `GameProfileArgument.getGameProfiles`: a selector's players
     /// (`SelectorResult.getNames`, no players is an error), else the name in
     /// the user cache.
-    fn game_profiles(&mut self, ctx: &Context, name: &str) -> R<Vec<NameAndId>> {
+    fn game_profiles(&mut self, ctx: &Context, name: &str) -> R<Vec<NameAndId>> { if let Some(__l) = crate::points_generated::P1198.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match ctx.get(name).cloned() {
             Some(Arg::Entity(s)) => {
                 let players: Vec<Target> = self
@@ -125,7 +125,7 @@ impl Game<'_> {
     }
 
     /// `CommandSourceStack.getTextName`.
-    fn source_text_name(&self) -> String {
+    fn source_text_name(&self) -> String { if let Some(__l) = crate::points_generated::P1197.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.console_broadcast.is_some() {
             "Server".to_owned()
         } else {
@@ -135,7 +135,7 @@ impl Game<'_> {
 
     /// `OpCommand.opPlayers`, `DeOpCommands.deopPlayers`,
     /// `BanPlayerCommands.banPlayers` and `PardonCommand.pardonPlayers`.
-    pub(super) fn cmd_profiles(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_profiles(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1196.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let lists = self.dedicated_lists()?;
         let players = self.game_profiles(ctx, "targets")?;
         let lit = |s: &str| Text::literal(s.to_owned());
@@ -257,7 +257,7 @@ impl Game<'_> {
 
     /// `BanIpCommands.banIpOrName` and `PardonIpCommand.unban`: an address,
     /// or for `/ban-ip` an online player's.
-    pub(super) fn cmd_ip_bans(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_ip_bans(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1195.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let lists = self.dedicated_lists()?;
         let lit = |s: &str| Text::literal(s.to_owned());
         let target = match ctx.get("target") {
@@ -346,7 +346,7 @@ impl Game<'_> {
     /// after which a player is kicked (`multiplayer.disconnect.idling`), 0 for
     /// never. The reply names the minutes, or says the timeout is off, and the
     /// command's result is the number of minutes.
-    pub(super) fn cmd_setidle_timeout(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_setidle_timeout(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1194.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let lists = self.dedicated_lists()?;
         let Some(Arg::Int(minutes)) = ctx.get("minutes") else {
             return Ok(0);
@@ -364,7 +364,7 @@ impl Game<'_> {
     /// the source is told who went — the player's name for one, the count for
     /// several. Without a players argument the source's own player is the
     /// target, as `getPlayerOrException` asks.
-    pub(super) fn cmd_transfer(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_transfer(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1193.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Arg::Str(hostname)) = ctx.get("hostname").cloned() else {
             return Ok(0);
         };
@@ -417,7 +417,7 @@ impl Game<'_> {
 
     /// `BanListCommands.showList`: the players' bans then the addresses'
     /// (`banlist`), or one of them; told to the source only.
-    pub(super) fn cmd_banlist(&mut self, id: &str) -> R<i32> {
+    pub(super) fn cmd_banlist(&mut self, id: &str) -> R<i32> { if let Some(__l) = crate::points_generated::P1192.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let lists = self.dedicated_lists()?;
         let lit = |s: &str| Text::literal(s.to_owned());
         let entries: Vec<(String, String, Option<String>)> = {
@@ -468,7 +468,7 @@ impl Game<'_> {
     }
 
     /// `WhitelistCommand`: `on`, `off`, `list`, `reload`, `add` and `remove`.
-    pub(super) fn cmd_whitelist(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_whitelist(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1191.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let lists = self.dedicated_lists()?;
         let lit = |s: &str| Text::literal(s.to_owned());
         match id {

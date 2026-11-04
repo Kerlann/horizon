@@ -539,7 +539,7 @@ impl Restrictions {
 }
 
 impl Game<'_> {
-    pub(super) fn remote_world_options_permission(&mut self, permission: bool) {
+    pub(super) fn remote_world_options_permission(&mut self, permission: bool) { let (permission,) = match crate::points_generated::P2434.get() { Some(__l) => { let mut __a = (permission,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (permission,) };
         if let Some(o) = self.world_options.as_mut() {
             let lost = o.gamemaster && !permission;
             o.gamemaster = permission;
@@ -548,12 +548,12 @@ impl Game<'_> {
             }
         }
     }
-    pub(super) fn remote_world_options_difficulty(&mut self, difficulty: u8, locked: bool) {
+    pub(super) fn remote_world_options_difficulty(&mut self, difficulty: u8, locked: bool) { let (difficulty,locked,) = match crate::points_generated::P2433.get() { Some(__l) => { let mut __a = (difficulty,locked,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (difficulty,locked,) };
         if let Some(o) = self.world_options.as_mut() {
             o.server_difficulty(difficulty, locked);
         }
     }
-    pub(super) fn remote_world_options_rules(&mut self, entries: Vec<play::GameRuleEntry>) {
+    pub(super) fn remote_world_options_rules(&mut self, entries: Vec<play::GameRuleEntry>) { if let Some(__l) = crate::points_generated::P2432.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(o) = self
             .world_options
             .as_mut()
@@ -577,7 +577,7 @@ impl Game<'_> {
         }
         o.rules = Some(RulesScreen::new(&rules));
     }
-    pub(super) fn open_world_options(&mut self) {
+    pub(super) fn open_world_options(&mut self) { if let Some(__l) = crate::points_generated::P2431.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let hint = horizon_client::lan::available_port();
         let mut port = EditBox::new(0.0, 0.0, 150.0, 20.0);
         port.message = super::screen_info::tr("lanServer.port", &[]);
@@ -630,14 +630,14 @@ impl Game<'_> {
         self.set_screen(Screen::WorldOptions);
     }
 
-    pub(super) fn close_world_options(&mut self) {
+    pub(super) fn close_world_options(&mut self) { if let Some(__l) = crate::points_generated::P2430.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.world_options = None;
         self.set_screen(Screen::Paused);
     }
 
     /// Escape: the question and RestrictionsScreen return to the options
     /// (their onClose), which close; the game rules ask first.
-    pub(super) fn world_options_escape(&mut self) {
+    pub(super) fn world_options_escape(&mut self) { if let Some(__l) = crate::points_generated::P2429.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.world_options.as_mut() {
             Some(o) if o.view == View::GameRules => {
                 if o.rules.is_none() {
@@ -655,7 +655,7 @@ impl Game<'_> {
     /// InWorldGameRulesScreen's exit, back to the options. Done sends the
     /// changed rules (ServerboundSetGameRulePacket), which the server's
     /// handleSetGameRule sets for a gamemaster and tells its operators.
-    fn close_game_rules(&mut self, exit: Exit) {
+    fn close_game_rules(&mut self, exit: Exit) { if let Some(__l) = crate::points_generated::P2428.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(o) = self.world_options.as_mut() {
             o.view = View::Options;
             o.rules = None;
@@ -689,7 +689,7 @@ impl Game<'_> {
         self.sync_rules();
     }
 
-    pub(super) fn draw_world_options(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_world_options(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P2427.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut o) = self.world_options.take() else {
             return;
         };
@@ -720,7 +720,7 @@ impl Game<'_> {
         self.world_options = Some(o);
     }
 
-    fn draw_lock_question(&self, o: &WorldOptions, batch: &mut HudBatch) {
+    fn draw_lock_question(&self, o: &WorldOptions, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P2426.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // PopupScreen over WorldOptionsScreen: its title and message.
         horizon_client::widgets::begin_screen(|| {
             let name = Text::translate(
@@ -778,7 +778,7 @@ impl Game<'_> {
         }
     }
 
-    fn draw_restrictions(&self, batch: &mut HudBatch) {
+    fn draw_restrictions(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P2425.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         horizon_client::widgets::begin_screen(|| {
             horizon_client::widgets::ScreenInfo::new(
                 "restrictions",
@@ -819,7 +819,7 @@ impl Game<'_> {
         ui::button(batch, atlas, dx, dy, 200.0, 20.0, &label, true, hover);
     }
 
-    fn draw_options_view(&self, o: &mut WorldOptions, batch: &mut HudBatch, cursor: (f32, f32)) {
+    fn draw_options_view(&self, o: &mut WorldOptions, batch: &mut HudBatch, cursor: (f32, f32)) { if let Some(__l) = crate::points_generated::P2424.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         horizon_client::widgets::begin_screen(|| {
             horizon_client::widgets::ScreenInfo::new(
                 "world_options",
@@ -974,7 +974,7 @@ impl Game<'_> {
     }
 
     /// The mouse wheel over the screen (ScrollableLayout, 10 pixels a step).
-    pub(super) fn world_options_scroll(&mut self, delta: f32) {
+    pub(super) fn world_options_scroll(&mut self, delta: f32) { let (delta,) = match crate::points_generated::P2423.get() { Some(__l) => { let mut __a = (delta,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (delta,) };
         let (w, h) = self.gui_size();
         match self.world_options.as_mut() {
             Some(o) if o.view == View::Options => {
@@ -1038,7 +1038,7 @@ impl Game<'_> {
 
     /// The pointer moved while a list's scrollbar is held: the game rules'
     /// list follows it (AbstractSelectionList.mouseDragged).
-    pub(super) fn world_options_drag(&mut self) {
+    pub(super) fn world_options_drag(&mut self) { if let Some(__l) = crate::points_generated::P2422.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let h = self.gui_size().1;
         if let Some(o) = self.world_options.as_mut()
             && o.view == View::GameRules
@@ -1049,7 +1049,7 @@ impl Game<'_> {
     }
 
     /// The button came up: a held scrollbar lets go (onRelease).
-    pub(super) fn world_options_release(&mut self) {
+    pub(super) fn world_options_release(&mut self) { if let Some(__l) = crate::points_generated::P2421.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(o) = self.world_options.as_mut()
             && let Some(rules) = o.rules.as_mut()
         {
@@ -1057,7 +1057,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn world_options_click(&mut self) {
+    pub(super) fn world_options_click(&mut self) { if let Some(__l) = crate::points_generated::P2420.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut o) = self.world_options.take() else {
             return;
         };
@@ -1178,7 +1178,7 @@ impl Game<'_> {
         self.world_options = Some(o);
     }
 
-    fn apply_and_close_world_options(&mut self, o: WorldOptions) {
+    fn apply_and_close_world_options(&mut self, o: WorldOptions) { if let Some(__l) = crate::points_generated::P2419.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let wanted = o.snapshot();
         let before = o.initial;
         self.world_options = Some(o);
@@ -1188,12 +1188,12 @@ impl Game<'_> {
 
     /// `WorldOptionsScreen.sendPublishMessage`: a client system message the
     /// narrator says.
-    fn send_publish_message(&mut self, message: Text) {
+    fn send_publish_message(&mut self, message: Text) { if let Some(__l) = crate::points_generated::P2418.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.say_system_queued(&message);
         self.system_message(message);
     }
 
-    pub(super) fn world_options_key(&mut self, event: &KeyEvent) {
+    pub(super) fn world_options_key(&mut self, event: &KeyEvent) { if let Some(__l) = crate::points_generated::P2417.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if event.state != winit::event::ElementState::Pressed {
             return;
         }
@@ -1494,7 +1494,7 @@ impl Game<'_> {
         }
     }
     /// Whether a World Options text box has focus (the port or a game rule box).
-    pub(super) fn world_options_typing(&self) -> bool {
+    pub(super) fn world_options_typing(&self) -> bool { if let Some(__l) = crate::points_generated::P2416.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world_options.as_ref().is_some_and(|o| {
             o.rules.as_ref().is_some_and(|r| r.typing())
                 || (o.port.focused && o.view == View::Options)
@@ -1502,7 +1502,7 @@ impl Game<'_> {
     }
     /// Digits typed into the port field (the keyboard, or a controller's
     /// on-screen keyboard), and its backspace.
-    pub(super) fn world_options_text(&mut self, text: Option<&str>) {
+    pub(super) fn world_options_text(&mut self, text: Option<&str>) { if let Some(__l) = crate::points_generated::P2415.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(rules) = self
             .world_options
             .as_mut()
@@ -1540,7 +1540,7 @@ impl Game<'_> {
     }
 
     /// The world options of a world run in the frame.
-    fn local_server_options(&self) -> ServerOptions {
+    fn local_server_options(&self) -> ServerOptions { if let Some(__l) = crate::points_generated::P2414.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (guest_commands, force) = self.lan.as_ref().map_or((false, true), |h| {
             (h.settings.guest_commands, h.settings.force_game_mode)
         });
@@ -1557,7 +1557,7 @@ impl Game<'_> {
         }
     }
 
-    fn apply_world_options(&mut self, before: &Snapshot, wanted: &Snapshot) {
+    fn apply_world_options(&mut self, before: &Snapshot, wanted: &Snapshot) { if let Some(__l) = crate::points_generated::P2413.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.external_server() {
             if self.ui.registries.permission >= 2 {
                 if wanted.difficulty != before.difficulty {

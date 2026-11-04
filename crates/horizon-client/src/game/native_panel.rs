@@ -161,13 +161,13 @@ pub(super) fn inside(p: (f32, f32), [x, y, w, h]: [f32; 4]) -> bool {
 }
 
 impl Game<'_> {
-    fn browser_batch(&self) -> Option<HudBatch> {
+    fn browser_batch(&self) -> Option<HudBatch> { if let Some(__l) = crate::points_generated::P4034.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.renderer.as_ref()?;
         Some(HudBatch::new([r.config.width, r.config.height]))
     }
     /// The mod showing a panel, with its items made into stacks once per
     /// change; none while no mod shows one or no container screen is up.
-    fn browser_sync(&mut self) -> Option<Owner> {
+    fn browser_sync(&mut self) -> Option<Owner> { if let Some(__l) = crate::points_generated::P4033.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.screen != Screen::Inventory || self.title.is_some() {
             return None;
         }
@@ -197,18 +197,18 @@ impl Game<'_> {
         Some(of.0)
     }
     /// What the panel shows now.
-    fn panel_shown(&self) -> Option<&Shown> {
+    fn panel_shown(&self) -> Option<&Shown> { if let Some(__l) = crate::points_generated::P4032.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let disabled = &self.settings.mods.disabled;
         self.panel.shown(|id| !disabled.contains(id))
     }
     /// The player did `event` on `owner`'s panel.
-    pub(super) fn panel_event(&mut self, owner: &Owner, event: BrowserEvent) {
+    pub(super) fn panel_event(&mut self, owner: &Owner, event: BrowserEvent) { if let Some(__l) = crate::points_generated::P4031.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Owner::Native(id) = owner;
         self.native_panel_event(id, &event);
     }
     /// The panel's parts: right of the window, from the top of the screen to
     /// the search box at its foot. None when the screen has no room for it.
-    fn browser_layout(&self, batch: &HudBatch) -> Option<Layout> {
+    fn browser_layout(&self, batch: &HudBatch) -> Option<Layout> { if let Some(__l) = crate::points_generated::P4030.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let image = self.container_image(batch);
         let left = (image.left + image.width) as f32 + MARGIN;
         let right = batch.width - MARGIN;
@@ -230,12 +230,12 @@ impl Game<'_> {
             search,
         })
     }
-    fn browser_pages(&self, layout: &Layout) -> usize {
+    fn browser_pages(&self, layout: &Layout) -> usize { if let Some(__l) = crate::points_generated::P4029.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.panel.stacks.len().div_ceil(layout.per_page()).max(1)
     }
     /// The stack under the pointer on the panel, an item's or a recipe's,
     /// as the mod sent it and as a stack.
-    fn browser_pointed_stack(&self, layout: &Layout) -> Option<(BrowserStack, ItemStack)> {
+    fn browser_pointed_stack(&self, layout: &Layout) -> Option<(BrowserStack, ItemStack)> { if let Some(__l) = crate::points_generated::P4028.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.panel.recipes.is_some() {
             if let Some((_, sent, stack)) = self.recipe_tab_hovered(layout) {
                 return Some((sent, stack));
@@ -248,7 +248,7 @@ impl Game<'_> {
         Some((items.get(index)?.clone(), stack))
     }
     /// The panel's item under the pointer: its index and stack.
-    fn browser_hovered(&self, layout: &Layout) -> Option<(usize, ItemStack)> {
+    fn browser_hovered(&self, layout: &Layout) -> Option<(usize, ItemStack)> { if let Some(__l) = crate::points_generated::P4027.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.panel.recipes.is_some() {
             return None;
         }
@@ -262,7 +262,7 @@ impl Game<'_> {
             Some((first + n, stack))
         })
     }
-    fn browser_search(&mut self, layout: &Layout) -> &mut EditBox {
+    fn browser_search(&mut self, layout: &Layout) -> &mut EditBox { if let Some(__l) = crate::points_generated::P4026.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let search = self.panel.search.get_or_insert_with(|| {
             let mut edit = EditBox::new(0.0, 0.0, 0.0, 0.0);
             edit.max_length = 50;
@@ -274,7 +274,7 @@ impl Game<'_> {
     }
 
     /// The items' page arrows and grid.
-    fn draw_browser_items(&mut self, batch: &mut HudBatch, layout: &Layout) {
+    fn draw_browser_items(&mut self, batch: &mut HudBatch, layout: &Layout) { if let Some(__l) = crate::points_generated::P4025.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pages = self.browser_pages(layout);
         self.panel.page = self.panel.page.min(pages - 1);
         let page = self.panel.page;
@@ -342,7 +342,7 @@ impl Game<'_> {
     }
     /// Draws the panel over the open container screen, then the carried
     /// stack or the tooltip again so they stay on top of it.
-    pub(super) fn draw_mod_browser(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_mod_browser(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P4024.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.browser_sync().is_none() {
             return;
         }
@@ -374,7 +374,7 @@ impl Game<'_> {
     /// A mouse press on a container screen: true when the panel took it
     /// (its search box, page arrows, items or empty space; a click there
     /// never throws the carried stack).
-    pub(super) fn mod_browser_press(&mut self, right: bool) -> bool {
+    pub(super) fn mod_browser_press(&mut self, right: bool) -> bool { let (right,) = match crate::points_generated::P4023.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         let Some(owner) = self.browser_sync() else {
             return false;
         };
@@ -435,13 +435,13 @@ impl Game<'_> {
     }
 
     /// Whether keys go to the panel's search box.
-    pub(super) fn mod_browser_typing(&self) -> bool {
+    pub(super) fn mod_browser_typing(&self) -> bool { if let Some(__l) = crate::points_generated::P4022.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.screen == Screen::Inventory
             && self.panel.of.is_some()
             && self.panel.search.as_ref().is_some_and(|s| s.focused)
     }
     /// A key press while the search box has focus.
-    pub(super) fn mod_browser_key(&mut self, event: &winit::event::KeyEvent) {
+    pub(super) fn mod_browser_key(&mut self, event: &winit::event::KeyEvent) { if let Some(__l) = crate::points_generated::P4021.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use winit::keyboard::PhysicalKey;
         let shortcut = self.edit_shortcut(event);
         let ctrl = self.has_control_down();
@@ -469,7 +469,7 @@ impl Game<'_> {
         self.browser_searched();
     }
     /// Text typed (or one backspace) into the search box (`horizon-ctl type`).
-    pub(super) fn mod_browser_text(&mut self, text: Option<&str>, backspace: bool) {
+    pub(super) fn mod_browser_text(&mut self, text: Option<&str>, backspace: bool) { let (backspace,) = match crate::points_generated::P4020.get() { Some(__l) => { let mut __a = (backspace,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (backspace,) };
         let Some(search) = self.panel.search.as_mut() else {
             return;
         };
@@ -481,7 +481,7 @@ impl Game<'_> {
         self.browser_searched();
     }
     /// The mod hears the search text when it changed.
-    fn browser_searched(&mut self) {
+    fn browser_searched(&mut self) { if let Some(__l) = crate::points_generated::P4019.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (Some((owner, _)), Some(search)) = (&self.panel.of, &self.panel.search) else {
             return;
         };
@@ -493,14 +493,14 @@ impl Game<'_> {
         }
     }
     /// The container screen closed: the search box lets go of the keys.
-    pub(super) fn mod_browser_closed(&mut self) {
+    pub(super) fn mod_browser_closed(&mut self) { if let Some(__l) = crate::points_generated::P4018.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(search) = self.panel.search.as_mut() {
             search.focused = false;
         }
     }
     /// The item under the pointer on a container screen, for the mods' keys
     /// (the `Key` event): the panel's, else a slot's.
-    pub(super) fn mod_browser_pointed(&mut self) -> Option<BrowserStack> {
+    pub(super) fn mod_browser_pointed(&mut self) -> Option<BrowserStack> { if let Some(__l) = crate::points_generated::P4017.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let batch = self.browser_batch()?;
         let stack = match self
             .browser_sync()
@@ -523,7 +523,7 @@ impl Game<'_> {
     }
     /// A key `key` (`key.keyboard.r`) went down: over an item on a container
     /// screen, a native mod's panel hears it as a `Key` event.
-    pub(super) fn native_panel_key(&mut self, key: &str) {
+    pub(super) fn native_panel_key(&mut self, key: &str) { if let Some(__l) = crate::points_generated::P4016.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.screen != Screen::Inventory || self.title.is_some() || self.mod_browser_typing() {
             return;
         }

@@ -11,7 +11,7 @@ use mod_api::{EntityRef, ItemStack, LevelRef};
 impl Game<'_> {
     /// Whether vanilla could make an item entity of `stack`: not empty
     /// (`ItemStack.isEmpty`) and of an item the registry has.
-    fn stack_spawns(&self, stack: &ItemStack) -> bool {
+    fn stack_spawns(&self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P3817.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         stack.count > 0
             && &*stack.item != "minecraft:air"
             && self.res.items().get(&stack.item).is_some()
@@ -26,7 +26,7 @@ impl Game<'_> {
         at: [f64; 3],
         motion: [f64; 3],
         pickup_delay: u32,
-    ) -> Option<EntityRef> {
+    ) -> Option<EntityRef> { let (at,motion,pickup_delay,) = match crate::points_generated::P3816.get() { Some(__l) => { let mut __a = (at,motion,pickup_delay,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,motion,pickup_delay,) };
         // `spawn_item` takes the next id.
         let id = self.next_entity + 1;
         self.spawn_item(stack, at, motion, pickup_delay);
@@ -49,7 +49,7 @@ impl Game<'_> {
         level: LevelRef,
         pos: [i32; 3],
         stack: ItemStack,
-    ) -> Option<EntityRef> {
+    ) -> Option<EntityRef> { let (pos,) = match crate::points_generated::P3815.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if !self.native_level_in_place(level) {
             return None;
         }
@@ -73,7 +73,7 @@ impl Game<'_> {
         y: f64,
         z: f64,
         stack: ItemStack,
-    ) -> Option<EntityRef> {
+    ) -> Option<EntityRef> { let (x,y,z,) = match crate::points_generated::P3814.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,y,z,) };
         self.spawn_item_at(level, x, y, z, stack, None)
     }
     /// `spawn_item` with the item entity's motion set to
@@ -88,7 +88,7 @@ impl Game<'_> {
         z: f64,
         stack: ItemStack,
         motion: [f64; 3],
-    ) -> Option<EntityRef> {
+    ) -> Option<EntityRef> { let (x,y,z,motion,) = match crate::points_generated::P3813.get() { Some(__l) => { let mut __a = (x,y,z,motion,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,y,z,motion,) };
         self.spawn_item_at(level, x, y, z, stack, Some(motion))
     }
     fn spawn_item_at(
@@ -99,7 +99,7 @@ impl Game<'_> {
         z: f64,
         stack: ItemStack,
         motion: Option<[f64; 3]>,
-    ) -> Option<EntityRef> {
+    ) -> Option<EntityRef> { let (x,y,z,) = match crate::points_generated::P3812.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,y,z,) };
         let finite = [x, y, z]
             .into_iter()
             .chain(motion.into_iter().flatten())
@@ -127,7 +127,7 @@ impl Game<'_> {
         y: f64,
         z: f64,
         amount: u32,
-    ) -> bool {
+    ) -> bool { let (x,y,z,amount,) = match crate::points_generated::P3811.get() { Some(__l) => { let mut __a = (x,y,z,amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,y,z,amount,) };
         if amount == 0
             || ![x, y, z].iter().all(|v| v.is_finite())
             || !self.native_level_in_place(level)

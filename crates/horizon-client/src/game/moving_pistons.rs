@@ -12,7 +12,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         alpha: f64,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P2837.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let partial = alpha as f32;
         let live = self
             .world
@@ -56,13 +56,13 @@ impl Game<'_> {
         }
     }
     /// The section holding the block at `p` (`SectionPos.blockToSection`).
-    pub(super) fn section_of(&self, p: [i32; 3]) -> Option<(i32, i32, i32)> {
+    pub(super) fn section_of(&self, p: [i32; 3]) -> Option<(i32, i32, i32)> { let (p,) = match crate::points_generated::P2836.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let y = p[1].checked_sub(self.world.layout().min_y())?;
         Some((p[0] >> 4, y.div_euclid(16), p[2] >> 4))
     }
     /// Whether the chunk mesh doesn't show the blocks at `p` yet (edited,
     /// meshing, or waiting for its upload).
-    pub(super) fn section_mesh_pending(&self, p: [i32; 3]) -> bool {
+    pub(super) fn section_mesh_pending(&self, p: [i32; 3]) -> bool { let (p,) = match crate::points_generated::P2835.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let Some(section) = self.section_of(p) else {
             return false;
         };
@@ -71,7 +71,7 @@ impl Game<'_> {
             || self.section_upload_pending(section)
     }
     /// Whether a mesh of the section waits for its upload.
-    pub(super) fn section_upload_pending(&self, section: (i32, i32, i32)) -> bool {
+    pub(super) fn section_upload_pending(&self, section: (i32, i32, i32)) -> bool { if let Some(__l) = crate::points_generated::P2834.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pending_uploads.iter().any(|(key, _)| *key == section)
     }
     /// The moved block and, for a retracting piston, its extended base.
@@ -79,7 +79,7 @@ impl Game<'_> {
         &self,
         piston: MovingPistonState,
         partial: f32,
-    ) -> Option<(BlockStateId, Option<BlockStateId>)> {
+    ) -> Option<(BlockStateId, Option<BlockStateId>)> { let (partial,) = match crate::points_generated::P2833.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         let facts = self.res.facts();
         if facts.is_air(piston.moved_state) {
             return None;
@@ -128,7 +128,7 @@ impl Game<'_> {
         seed: horizon_core::position::BlockPos,
         at: glam::DVec3,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P2832.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let chunks = &self.world.chunks;
         let (cx, cz) = (seed.x >> 4, seed.z >> 4);
         let region: [[Option<&horizon_client::chunk::Chunk>; 3]; 3] = std::array::from_fn(|dz| {

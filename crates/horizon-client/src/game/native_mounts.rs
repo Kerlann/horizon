@@ -6,13 +6,13 @@ use super::{Game, native_hooks::mob_kind};
 impl Game<'_> {
     /// Whether this game is a server whose mounts the mods hear: the server thread or a
     /// dedicated server, never a client.
-    fn native_hears_mounts(&self) -> bool {
+    fn native_hears_mounts(&self) -> bool { if let Some(__l) = crate::points_generated::P4007.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.serving.is_some() || self.options.dedicated.is_some()
     }
 
     /// The entity id of the acting player: a guest's while their action runs (kept with the
     /// action, as the hub is often out of `lan` then), else none (0).
-    pub(super) fn native_acting_entity(&self) -> u32 {
+    pub(super) fn native_acting_entity(&self) -> u32 { if let Some(__l) = crate::points_generated::P4006.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.lan_acting {
             Some(conn) => self.lan_acting_entity.unwrap_or_else(|| {
                 let guests = self.lan_guest_entities();
@@ -23,7 +23,7 @@ impl Game<'_> {
     }
 
     /// The type of the vehicle with entity id `id`.
-    fn native_vehicle_kind(&self, id: u32) -> String {
+    fn native_vehicle_kind(&self, id: u32) -> String { let (id,) = match crate::points_generated::P4005.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         if let Some(b) = self.boats.iter().find(|b| b.id == id) {
             b.entity_type()
         } else if let Some(c) = self.carts.iter().find(|c| c.id == id) {
@@ -39,7 +39,7 @@ impl Game<'_> {
 
     /// `native_entity_mount` for `rider` (the acting player when `None`) and `vehicle`: whether
     /// the mounting or dismounting goes ahead.
-    fn native_mount_allowed(&mut self, rider: Option<u32>, vehicle: u32, mounting: bool) -> bool {
+    fn native_mount_allowed(&mut self, rider: Option<u32>, vehicle: u32, mounting: bool) -> bool { let (vehicle,mounting,) = match crate::points_generated::P4004.get() { Some(__l) => { let mut __a = (vehicle,mounting,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (vehicle,mounting,) };
         if !self.native_hears_mounts() {
             return true;
         }
@@ -68,18 +68,18 @@ impl Game<'_> {
     }
 
     /// The acting player is about to board `vehicle`: false when a mod canceled it.
-    pub(super) fn native_may_board(&mut self, vehicle: u32) -> bool {
+    pub(super) fn native_may_board(&mut self, vehicle: u32) -> bool { let (vehicle,) = match crate::points_generated::P4003.get() { Some(__l) => { let mut __a = (vehicle,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (vehicle,) };
         self.native_mount_allowed(None, vehicle, true)
     }
 
     /// The acting player is about to get off `vehicle`: false when a mod canceled it.
-    pub(super) fn native_may_leave(&mut self, vehicle: u32) -> bool {
+    pub(super) fn native_may_leave(&mut self, vehicle: u32) -> bool { let (vehicle,) = match crate::points_generated::P4002.get() { Some(__l) => { let mut __a = (vehicle,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (vehicle,) };
         self.native_mount_allowed(None, vehicle, false)
     }
 
     /// The mob `rider` is about to board (`mounting`) or leave `vehicle`: false when a mod
     /// canceled it.
-    pub(super) fn native_mob_may_ride(&mut self, rider: u32, vehicle: u32, mounting: bool) -> bool {
+    pub(super) fn native_mob_may_ride(&mut self, rider: u32, vehicle: u32, mounting: bool) -> bool { let (rider,vehicle,mounting,) = match crate::points_generated::P4001.get() { Some(__l) => { let mut __a = (rider,vehicle,mounting,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (rider,vehicle,mounting,) };
         self.native_mount_allowed(Some(rider), vehicle, mounting)
     }
 }

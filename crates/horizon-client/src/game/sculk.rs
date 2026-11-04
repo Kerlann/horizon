@@ -185,7 +185,7 @@ impl Game<'_> {
 
     /// The `sculk` control command: listeners and their vibrations, or a
     /// test charge for the nearest catalyst.
-    pub(super) fn sculk_command(&mut self, words: &[&str]) -> Result<serde_json::Value> {
+    pub(super) fn sculk_command(&mut self, words: &[&str]) -> Result<serde_json::Value> { if let Some(__l) = crate::points_generated::P5238.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match words.get(1).copied() {
             Some("charge") => {
                 let num = |i: usize| -> Result<f64> {
@@ -216,7 +216,7 @@ impl Game<'_> {
         }
     }
     /// The `sculk` control command's listing.
-    pub(super) fn sculk_status(&self) -> serde_json::Value {
+    pub(super) fn sculk_status(&self) -> serde_json::Value { if let Some(__l) = crate::points_generated::P5237.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let listeners: Vec<serde_json::Value> = self
             .sculk
             .index
@@ -244,7 +244,7 @@ impl Game<'_> {
     }
     /// `WardenSpawnTrackerCommand`: clear the player's tracker or set its
     /// warning level.
-    pub(super) fn cmd_warden_spawn_tracker(&mut self, level: Option<i32>) {
+    pub(super) fn cmd_warden_spawn_tracker(&mut self, level: Option<i32>) { if let Some(__l) = crate::points_generated::P5236.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::text::Text;
         let key = match level {
             Some(level) => {
@@ -264,7 +264,7 @@ impl Game<'_> {
         }
     }
     /// `ServerPlayer`'s `warden_spawn_tracker` from the player data.
-    fn load_warden_tracker(&mut self) {
+    fn load_warden_tracker(&mut self) { if let Some(__l) = crate::points_generated::P5235.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.sculk.tracker_loaded {
             return;
         }
@@ -279,7 +279,7 @@ impl Game<'_> {
         }
     }
     /// Write the tracker into the player data being saved.
-    pub(super) fn save_warden_tracker(&mut self) {
+    pub(super) fn save_warden_tracker(&mut self) { if let Some(__l) = crate::points_generated::P5234.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.sculk.tracker_loaded {
             return;
         }
@@ -293,13 +293,13 @@ impl Game<'_> {
         }
     }
     /// Who is causing the block changes being processed.
-    pub(super) fn sculk_actor(&self) -> Option<Who> {
+    pub(super) fn sculk_actor(&self) -> Option<Who> { if let Some(__l) = crate::points_generated::P5233.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.sculk.actor
     }
 
     // ---- setup and the block entity index ----
 
-    pub(super) fn sculk_prepare(&mut self) {
+    pub(super) fn sculk_prepare(&mut self) { if let Some(__l) = crate::points_generated::P5232.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.sculk.tables.built {
             return;
         }
@@ -350,7 +350,7 @@ impl Game<'_> {
         self.world.watched = t.kinds.iter().map(|k| *k != 0).collect();
         self.sculk.tables = t;
     }
-    fn kind_of_state(&self, state: u32) -> u8 {
+    fn kind_of_state(&self, state: u32) -> u8 { let (state,) = match crate::points_generated::P5231.get() { Some(__l) => { let mut __a = (state,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (state,) };
         self.sculk
             .tables
             .kinds
@@ -358,7 +358,7 @@ impl Game<'_> {
             .copied()
             .unwrap_or(0)
     }
-    fn state_is(&self, table: &[bool], state: BlockStateId) -> bool {
+    fn state_is(&self, table: &[bool], state: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P5230.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         table.get(state.0 as usize).copied().unwrap_or(false)
     }
     fn entity_for_kind(kind: u8) -> Option<SculkEntity> {
@@ -372,7 +372,7 @@ impl Game<'_> {
     }
     /// Find the sculk blocks of chunks that just became resident, and apply
     /// the block writes recorded since the last tick.
-    pub(super) fn sculk_sync_index(&mut self) {
+    pub(super) fn sculk_sync_index(&mut self) { if let Some(__l) = crate::points_generated::P5229.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Chunks that arrived or left (every half second is plenty).
         // Nothing to do while no chunk came or went.
         let revision = self.world.chunks.membership_revision();
@@ -422,7 +422,7 @@ impl Game<'_> {
             }
         }
     }
-    fn sculk_scan_chunk(&mut self, key: (i32, i32)) {
+    fn sculk_scan_chunk(&mut self, key: (i32, i32)) { if let Some(__l) = crate::points_generated::P5228.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(chunk) = self.world.chunks.get(&key).cloned() else {
             return;
         };
@@ -466,7 +466,7 @@ impl Game<'_> {
             self.sculk.index.insert(pos);
         }
     }
-    fn sculk_entity(&mut self, key: (i32, i32, i32)) -> Option<&mut SculkEntity> {
+    fn sculk_entity(&mut self, key: (i32, i32, i32)) -> Option<&mut SculkEntity> { if let Some(__l) = crate::points_generated::P5227.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.world.block_entities.get_mut(&key) {
             Some(BlockEntity::Sculk(e)) => Some(e),
             _ => None,
@@ -475,11 +475,11 @@ impl Game<'_> {
 
     // ---- contexts ----
 
-    fn state_dampens(&self, state: Option<BlockStateId>) -> bool {
+    fn state_dampens(&self, state: Option<BlockStateId>) -> bool { if let Some(__l) = crate::points_generated::P5226.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         state.is_some_and(|s| self.state_is(&self.sculk.tables.dampens, s))
     }
     /// `GameEvent.Context.of(player, state)`.
-    pub(super) fn player_context(&self, state: Option<BlockStateId>) -> Context {
+    pub(super) fn player_context(&self, state: Option<BlockStateId>) -> Context { if let Some(__l) = crate::points_generated::P5225.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (dead, creative) = self
             .player
             .as_ref()
@@ -497,10 +497,10 @@ impl Game<'_> {
         }
     }
     /// `GameEvent.Context.of(mob, state)`.
-    pub(super) fn mob_context(&self, id: u32, state: Option<BlockStateId>) -> Context {
+    pub(super) fn mob_context(&self, id: u32, state: Option<BlockStateId>) -> Context { let (id,) = match crate::points_generated::P5224.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.context_of_mob(self.mobs.iter().find(|m| m.id == id), id, state)
     }
-    fn context_of_mob(&self, mob: Option<&Mob>, id: u32, state: Option<BlockStateId>) -> Context {
+    fn context_of_mob(&self, mob: Option<&Mob>, id: u32, state: Option<BlockStateId>) -> Context { let (id,) = match crate::points_generated::P5223.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         Context {
             source: Some(Who::Mob(id)),
             owner: None,
@@ -513,7 +513,7 @@ impl Game<'_> {
             player: mob.is_some_and(|m| m.rider.is_some()),
         }
     }
-    pub(super) fn who_context(&self, who: Option<Who>, state: Option<BlockStateId>) -> Context {
+    pub(super) fn who_context(&self, who: Option<Who>, state: Option<BlockStateId>) -> Context { if let Some(__l) = crate::points_generated::P5222.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match who {
             Some(Who::Player) => self.player_context(state),
             Some(Who::Mob(id)) => self.mob_context(id, state),
@@ -527,7 +527,7 @@ impl Game<'_> {
     // ---- posting ----
 
     /// `Level.gameEvent`: tell the listeners within reach.
-    pub(super) fn post_game_event(&mut self, event: &'static str, pos: [f64; 3], ctx: Context) {
+    pub(super) fn post_game_event(&mut self, event: &'static str, pos: [f64; 3], ctx: Context) { let (pos,) = match crate::points_generated::P5221.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         super::dispense_fixture::record(|| {
             format!(
                 "G {},{},{} {event}",
@@ -578,13 +578,13 @@ impl Game<'_> {
         pos: [i32; 3],
         who: Option<Who>,
         state: Option<BlockStateId>,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P5220.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let ctx = self.who_context(who, state);
         self.post_game_event(event, center((pos[0], pos[1], pos[2])), ctx);
     }
     /// `LivingEntity.actuallyHurt`'s damage vibration, heard as the hit lands;
     /// the end-of-tick scan then knows this damage.
-    pub(super) fn mob_damage_event(&mut self, id: u32) {
+    pub(super) fn mob_damage_event(&mut self, id: u32) { let (id,) = match crate::points_generated::P5219.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Some(t) = self
             .mobs
             .iter()
@@ -596,7 +596,7 @@ impl Game<'_> {
         self.post_entity_event("minecraft:entity_damage", Who::Mob(id));
     }
     /// A game event of an entity at its position.
-    pub(super) fn post_entity_event(&mut self, event: &'static str, who: Who) {
+    pub(super) fn post_entity_event(&mut self, event: &'static str, who: Who) { if let Some(__l) = crate::points_generated::P5218.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = match who {
             Who::Player => self
                 .player
@@ -619,12 +619,12 @@ impl Game<'_> {
         pos: BlockPos,
         event: &'static str,
         state: Option<BlockStateId>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P5217.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let who = self.sculk.actor;
         self.post_block_game_event(event, [pos.x, pos.y, pos.z], who, state);
     }
 
-    fn occluded(&self, origin: [f64; 3], dest: [f64; 3]) -> bool {
+    fn occluded(&self, origin: [f64; 3], dest: [f64; 3]) -> bool { let (origin,dest,) = match crate::points_generated::P5216.get() { Some(__l) => { let mut __a = (origin,dest,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (origin,dest,) };
         sculk::is_occluded(origin, dest, |p| {
             self.state_is(&self.sculk.tables.occludes, self.world.block(p.x, p.y, p.z))
         })
@@ -636,7 +636,7 @@ impl Game<'_> {
         event: &'static str,
         pos: [f64; 3],
         ctx: &Context,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P5215.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let Some(entity) = self.sculk_entity(key) else {
             self.sculk.index.remove(&key);
             return;
@@ -715,7 +715,7 @@ impl Game<'_> {
             );
         }
     }
-    fn calibrated_signal(&mut self, key: (i32, i32, i32)) -> i32 {
+    fn calibrated_signal(&mut self, key: (i32, i32, i32)) -> i32 { if let Some(__l) = crate::points_generated::P5214.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = BlockPos::new(key.0, key.1, key.2);
         let mut value = 0;
         self.with_level(|b, level, ticks| {
@@ -723,10 +723,10 @@ impl Game<'_> {
         });
         value
     }
-    fn shrieker_shrieking(&self, state: BlockStateId) -> bool {
+    fn shrieker_shrieking(&self, state: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P5213.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.state_property(state, "shrieking") == Some("true")
     }
-    fn state_property(&self, state: BlockStateId, key: &str) -> Option<&str> {
+    fn state_property(&self, state: BlockStateId, key: &str) -> Option<&str> { if let Some(__l) = crate::points_generated::P5212.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pack
             .assets
             .registry
@@ -736,7 +736,7 @@ impl Game<'_> {
     }
 
     /// `Warden.VibrationUser`: accept a vibration for the warden at `index`.
-    fn warden_listen(&mut self, index: usize, event: &'static str, pos: [f64; 3], ctx: &Context) {
+    fn warden_listen(&mut self, index: usize, event: &'static str, pos: [f64; 3], ctx: &Context) { let (index,pos,) = match crate::points_generated::P5211.get() { Some(__l) => { let mut __a = (index,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,pos,) };
         let now = self.world.game_time;
         let (occludes, world) = (&self.sculk.tables.occludes, &self.world);
         let avoided = warden::listen(&mut self.mobs[index], now, event, pos, ctx, |a, b| {
@@ -752,7 +752,7 @@ impl Game<'_> {
 
     /// `VibrationSystem.Listener.handleGameEvent` for the allay at `index`
     /// (`Allay.VibrationUser`).
-    fn allay_listen(&mut self, index: usize, event: &'static str, pos: [f64; 3], ctx: &Context) {
+    fn allay_listen(&mut self, index: usize, event: &'static str, pos: [f64; 3], ctx: &Context) { let (index,pos,) = match crate::points_generated::P5210.get() { Some(__l) => { let mut __a = (index,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,pos,) };
         let now = self.world.game_time;
         let (occludes, world) = (&self.sculk.tables.occludes, &self.world);
         let dimension = self.dim.id();
@@ -777,7 +777,7 @@ impl Game<'_> {
     /// The entity phase of a tick for sculk: the player's warden spawn
     /// tracker (`ServerPlayer.tick`), and the events of entities standing on
     /// and moving over blocks.
-    pub(super) fn tick_sculk_entities(&mut self) {
+    pub(super) fn tick_sculk_entities(&mut self) { if let Some(__l) = crate::points_generated::P5209.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.sculk.ticks = self.sculk.ticks.wrapping_add(1);
         self.sculk_prepare();
         self.load_warden_tracker();
@@ -788,7 +788,7 @@ impl Game<'_> {
     }
     /// The block entity phase for sculk: vibration tickers and catalysts, in
     /// the order the block entities were added (`Level.tickBlockEntities`).
-    pub(super) fn tick_sculk_blocks(&mut self) -> Result<()> {
+    pub(super) fn tick_sculk_blocks(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P5208.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.sculk_prepare();
         self.sculk_sync_index();
         // `ServerLevel.shouldTickBlocksAt` in a block-ticking chunk, from
@@ -829,7 +829,7 @@ impl Game<'_> {
         }
         Ok(())
     }
-    fn tick_sculk_block(&mut self, key: (i32, i32, i32), adjacent: bool) -> Result<()> {
+    fn tick_sculk_block(&mut self, key: (i32, i32, i32), adjacent: bool) -> Result<()> { let (adjacent,) = match crate::points_generated::P5207.get() { Some(__l) => { let mut __a = (adjacent,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (adjacent,) };
         let time = self.world.game_time;
         let Some(entity) = self.sculk_entity(key) else {
             self.sculk.index.remove(&key);
@@ -873,7 +873,7 @@ impl Game<'_> {
     // ---- sensors ----
 
     /// `onReceiveVibration` of a sensor or a shrieker.
-    fn sculk_receive(&mut self, key: (i32, i32, i32), info: Info) -> Result<()> {
+    fn sculk_receive(&mut self, key: (i32, i32, i32), info: Info) -> Result<()> { if let Some(__l) = crate::points_generated::P5206.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(entity) = self.sculk_entity(key) else {
             return Ok(());
         };
@@ -920,7 +920,7 @@ impl Game<'_> {
         }
         Ok(())
     }
-    fn rides_player(&self, who: Option<Who>) -> bool {
+    fn rides_player(&self, who: Option<Who>) -> bool { if let Some(__l) = crate::points_generated::P5205.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         matches!(who, Some(Who::Mob(id)) if self.mobs.iter().any(|m| m.id == id && m.rider.is_some()))
     }
     /// `SculkSensorBlock.activate`.
@@ -930,7 +930,7 @@ impl Game<'_> {
         source: Option<Who>,
         power: i32,
         frequency: i32,
-    ) -> Result<()> {
+    ) -> Result<()> { let (power,frequency,) = match crate::points_generated::P5204.get() { Some(__l) => { let mut __a = (power,frequency,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (power,frequency,) };
         let pos = BlockPos::new(key.0, key.1, key.2);
         self.with_level(|b, level, ticks| b.sculk_sensor_activate(level, ticks, pos, power));
         self.process_level_events()?;
@@ -963,7 +963,7 @@ impl Game<'_> {
     }
     /// `SculkSensorBlock.stepOn` and `SculkShriekerBlock.stepOn`: standing on
     /// them is heard (or seen) every tick.
-    fn sculk_step_on(&mut self) {
+    fn sculk_step_on(&mut self) { if let Some(__l) = crate::points_generated::P5203.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.sculk_step_on_player();
         let mut standing: Vec<(Who, [f64; 3])> = Vec::new();
         for m in &self.mobs {
@@ -975,7 +975,7 @@ impl Game<'_> {
     }
     /// `stepOn` for the player in place: the host, or a guest swapped in
     /// (`guest_server_tick`), as a server has no player of its own.
-    pub(super) fn sculk_step_on_player(&mut self) {
+    pub(super) fn sculk_step_on_player(&mut self) { if let Some(__l) = crate::points_generated::P5202.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(p) = self.player.as_ref()
             && p.ground.on_ground
         {
@@ -983,7 +983,7 @@ impl Game<'_> {
             self.sculk_stand_on(vec![(Who::Player, at)]);
         }
     }
-    fn sculk_stand_on(&mut self, standing: Vec<(Who, [f64; 3])>) {
+    fn sculk_stand_on(&mut self, standing: Vec<(Who, [f64; 3])>) { if let Some(__l) = crate::points_generated::P5201.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (who, at) in standing {
             // getOnPosLegacy: 0.2 below the feet.
             let key = (
@@ -1039,14 +1039,14 @@ impl Game<'_> {
 
     // ---- shriekers ----
 
-    fn can_respond(&self, state: BlockStateId) -> bool {
+    fn can_respond(&self, state: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P5200.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_world::food::Difficulty;
         self.state_property(state, "can_summon") == Some("true")
             && self.world.health_rules.difficulty != Difficulty::Peaceful
             && self.ui.rules.bool("spawn_wardens")
     }
     /// `SculkShriekerBlockEntity.tryShriek`.
-    fn try_shriek(&mut self, key: (i32, i32, i32), by_player: bool) -> Result<()> {
+    fn try_shriek(&mut self, key: (i32, i32, i32), by_player: bool) -> Result<()> { let (by_player,) = match crate::points_generated::P5199.get() { Some(__l) => { let mut __a = (by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (by_player,) };
         if !by_player {
             return Ok(());
         }
@@ -1063,7 +1063,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `WardenSpawnTracker.tryWarn` for the one player.
-    fn try_to_warn(&mut self, key: (i32, i32, i32)) -> bool {
+    fn try_to_warn(&mut self, key: (i32, i32, i32)) -> bool { if let Some(__l) = crate::points_generated::P5198.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let c = center(key);
         let warden_nearby = self.mobs.iter().any(|m| {
             m.species() == Species::Warden
@@ -1087,7 +1087,7 @@ impl Game<'_> {
         }
     }
     /// `SculkShriekerBlockEntity.shriek`.
-    fn shriek(&mut self, key: (i32, i32, i32)) -> Result<()> {
+    fn shriek(&mut self, key: (i32, i32, i32)) -> Result<()> { if let Some(__l) = crate::points_generated::P5197.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = BlockPos::new(key.0, key.1, key.2);
         self.with_level(|b, level, ticks| b.sculk_shrieker_shriek(level, ticks, pos));
         self.process_level_events()?;
@@ -1101,7 +1101,7 @@ impl Game<'_> {
         key: (i32, i32, i32),
         state: BlockStateId,
         warning: i32,
-    ) {
+    ) { let (warning,) = match crate::points_generated::P5196.get() { Some(__l) => { let mut __a = (warning,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (warning,) };
         if !(self.can_respond(state) && warning > 0) {
             return;
         }
@@ -1111,12 +1111,12 @@ impl Game<'_> {
         self.apply_darkness(center(key), 40.0);
     }
     /// A `shrieker_respond` block event.
-    pub(super) fn shrieker_block_event(&mut self, pos: BlockPos, state: BlockStateId) {
+    pub(super) fn shrieker_block_event(&mut self, pos: BlockPos, state: BlockStateId) { if let Some(__l) = crate::points_generated::P5195.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let key = (pos.x, pos.y, pos.z);
         let warning = self.sculk_entity(key).map_or(0, |e| e.warning_level);
         self.shrieker_respond(key, state, warning);
     }
-    fn warden_reply_sound(&mut self, key: (i32, i32, i32), warning: i32) {
+    fn warden_reply_sound(&mut self, key: (i32, i32, i32), warning: i32) { let (warning,) = match crate::points_generated::P5194.get() { Some(__l) => { let mut __a = (warning,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (warning,) };
         let sound = match warning {
             1 => "minecraft:entity.warden.nearby_close",
             2 => "minecraft:entity.warden.nearby_closer",
@@ -1138,7 +1138,7 @@ impl Game<'_> {
     /// (`EntityType.create` draws its yaw from the level random and
     /// `finalizeSpawn` plays its agitated sound), which is discarded when
     /// `checkSpawnObstruction` fails.
-    fn try_summon_warden(&mut self, key: (i32, i32, i32), warning: i32) -> bool {
+    fn try_summon_warden(&mut self, key: (i32, i32, i32), warning: i32) -> bool { let (warning,) = match crate::points_generated::P5193.get() { Some(__l) => { let mut __a = (warning,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (warning,) };
         if warning < 4 {
             return false;
         }
@@ -1185,7 +1185,7 @@ impl Game<'_> {
         false
     }
     /// `SpawnUtil.moveToPossibleSpawnPosition` with `ON_TOP_OF_COLLIDER`.
-    fn spawn_position(&self, x: i32, y: i32, z: i32, range: i32) -> Option<(i32, i32, i32)> {
+    fn spawn_position(&self, x: i32, y: i32, z: i32, range: i32) -> Option<(i32, i32, i32)> { let (x,y,z,range,) = match crate::points_generated::P5192.get() { Some(__l) => { let mut __a = (x,y,z,range,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,z,range,) };
         use horizon_client::mobs::data;
         let flags = |b: BlockStateId| self.res.mob_data().state(b);
         let mut search = y;
@@ -1204,7 +1204,7 @@ impl Game<'_> {
     }
     /// `Warden.checkSpawnObstruction`: no liquid in its box, no living entity
     /// in the way (`isUnobstructed`), and no block collision.
-    fn warden_fits(&self, mob: &Mob) -> bool {
+    fn warden_fits(&self, mob: &Mob) -> bool { if let Some(__l) = crate::points_generated::P5191.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let bounds = mob.bounds();
         let player_blocks = self
             .level_players()
@@ -1239,16 +1239,16 @@ impl Game<'_> {
 
     /// The darkness effect's blend, where this game ticks the player in its
     /// own level (a server's client ticks it in `tick_client_effects`).
-    fn tick_darkness_blend(&mut self) {
+    fn tick_darkness_blend(&mut self) { if let Some(__l) = crate::points_generated::P5190.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.sculk.darkness = darkness_blend_tick(&self.potions.effects, self.sculk.darkness);
     }
     /// The darkness effect's blend factor at the partial tick.
-    fn darkness_blend(&self, partial: f32) -> f32 {
+    fn darkness_blend(&self, partial: f32) -> f32 { let (partial,) = match crate::points_generated::P5189.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         let (previous, current) = self.sculk.darkness;
         previous + (current - previous) * partial
     }
     /// The fog's view of the darkness effect, while it is on.
-    pub(super) fn darkness_fog(&self) -> Option<f32> {
+    pub(super) fn darkness_fog(&self) -> Option<f32> { if let Some(__l) = crate::points_generated::P5188.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.potions
             .effects
             .get("darkness")
@@ -1256,7 +1256,7 @@ impl Game<'_> {
     }
     /// `LightmapRenderStateExtractor`: (brightness taken off the gamma
     /// option, the pulsing light scale).
-    pub(super) fn darkness_lighting(&self, partial: f32) -> (f32, f32) {
+    pub(super) fn darkness_lighting(&self, partial: f32) -> (f32, f32) { let (partial,) = match crate::points_generated::P5187.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         let scale = self.settings.file.double("darknessEffectScale") as f32;
         let modifier = self.darkness_blend(partial) * scale;
         let pulse =
@@ -1266,7 +1266,7 @@ impl Game<'_> {
 
     /// `LightmapRenderStateExtractor`: the night vision effect's intensity
     /// (`GameRenderer.nightVisionScale`), or conduit power's water vision.
-    pub(super) fn night_vision_intensity(&self, partial: f32) -> f32 {
+    pub(super) fn night_vision_intensity(&self, partial: f32) -> f32 { let (partial,) = match crate::points_generated::P5186.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         use mod_api::fog::FogType;
         if let Some(e) = self.potions.effects.get("night_vision") {
             // MobEffectInstance.endsWithin(200); -1 is infinite.
@@ -1291,10 +1291,10 @@ impl Game<'_> {
     }
 
     /// `Warden.applyDarknessAround` / `MobEffectUtil.addEffectToPlayersAround`.
-    pub(super) fn apply_darkness(&mut self, at: [f64; 3], radius: f64) {
+    pub(super) fn apply_darkness(&mut self, at: [f64; 3], radius: f64) { let (at,radius,) = match crate::points_generated::P5185.get() { Some(__l) => { let mut __a = (at,radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,radius,) };
         self.for_each_player(|g| g.darkness_on_player(at, radius));
     }
-    fn darkness_on_player(&mut self, at: [f64; 3], radius: f64) {
+    fn darkness_on_player(&mut self, at: [f64; 3], radius: f64) { let (at,radius,) = match crate::points_generated::P5184.get() { Some(__l) => { let mut __a = (at,radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,radius,) };
         if self.creative || self.spectator() {
             return;
         }
@@ -1366,7 +1366,7 @@ impl Game<'_> {
         self.catalyst_bloom(key);
         true
     }
-    fn catalyst_bloom(&mut self, key: (i32, i32, i32)) {
+    fn catalyst_bloom(&mut self, key: (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P5183.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = BlockPos::new(key.0, key.1, key.2);
         self.with_level(|b, level, ticks| b.sculk_catalyst_bloom(level, ticks, pos));
         self.native_sculk_bloom(self.dim.id(), [key.0, key.1, key.2]);
@@ -1391,7 +1391,7 @@ impl Game<'_> {
     // ---- particles ----
 
     /// `LevelEvent` 3006: charge cursors moving over sculk, or popping.
-    pub(super) fn sculk_charge_event(&mut self, pos: BlockPos, data: i32) {
+    pub(super) fn sculk_charge_event(&mut self, pos: BlockPos, data: i32) { let (data,) = match crate::points_generated::P5182.get() { Some(__l) => { let mut __a = (data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (data,) };
         let c = center((pos.x, pos.y, pos.z));
         let count = data >> 6;
         if count > 0 {
@@ -1477,7 +1477,7 @@ impl Game<'_> {
         }
     }
     /// `ParticleUtils.spawnParticleOnFace` for a sculk charge.
-    fn spawn_particle_on_face(&mut self, pos: BlockPos, face: Direction, roll: f32, factor: f64) {
+    fn spawn_particle_on_face(&mut self, pos: BlockPos, face: Direction, roll: f32, factor: f64) { let (roll,factor,) = match crate::points_generated::P5181.get() { Some(__l) => { let mut __a = (roll,factor,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (roll,factor,) };
         let c = center((pos.x, pos.y, pos.z));
         let step = face.normal();
         // Client-side (LevelEventHandler / particles): the client random.
@@ -1501,7 +1501,7 @@ impl Game<'_> {
             .add(&ParticleOptions::sculk_charge(roll), at, speed);
     }
     /// `LevelEvent` 3007: ten shrieks rising from the shrieker, and the shriek.
-    pub(super) fn shriek_event(&mut self, pos: BlockPos) {
+    pub(super) fn shriek_event(&mut self, pos: BlockPos) { if let Some(__l) = crate::points_generated::P5180.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let top = f64::from(pos.y) + 0.5;
         for i in 0..10 {
             self.particles.add(
@@ -1522,15 +1522,15 @@ impl Game<'_> {
         }
     }
 
-    fn vibration_particle(&mut self, from: [f64; 3], to: [f64; 3], ticks: i32) {
+    fn vibration_particle(&mut self, from: [f64; 3], to: [f64; 3], ticks: i32) { let (from,to,ticks,) = match crate::points_generated::P5179.get() { Some(__l) => { let mut __a = (from,to,ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,to,ticks,) };
         self.particles.vibration(from, to, ticks);
     }
     /// A vibration travelling to a warden (`MobEvent::Vibration`).
-    pub(super) fn mob_vibration_particle(&mut self, from: [f64; 3], to: [f64; 3], ticks: i32) {
+    pub(super) fn mob_vibration_particle(&mut self, from: [f64; 3], to: [f64; 3], ticks: i32) { let (from,to,ticks,) = match crate::points_generated::P5178.get() { Some(__l) => { let mut __a = (from,to,ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,to,ticks,) };
         self.vibration_particle(from, to, ticks);
     }
     /// `Warden.clientDiggingParticles`: thirty crumbs of the block underfoot.
-    pub(super) fn warden_dig_particles(&mut self, at: [f64; 3]) {
+    pub(super) fn warden_dig_particles(&mut self, at: [f64; 3]) { let (at,) = match crate::points_generated::P5177.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let below = (
             at[0].floor() as i32,
             (at[1] - 0.2).floor() as i32,
@@ -1563,7 +1563,7 @@ impl Game<'_> {
         event: &'static str,
         owner: Option<Who>,
         at: [f64; 3],
-    ) {
+    ) { let (at,) = match crate::points_generated::P5176.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let mut ctx = Context::default();
         if event == "minecraft:projectile_shoot" {
             // The shooter is the source of the shot.
@@ -1575,7 +1575,7 @@ impl Game<'_> {
         self.post_game_event(event, at, ctx);
     }
     /// The player shot or threw something.
-    pub(super) fn player_projectile_shot(&mut self) {
+    pub(super) fn player_projectile_shot(&mut self) { if let Some(__l) = crate::points_generated::P5175.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(p) = self.player.as_ref() {
             let at = [
                 p.position.x,
@@ -1588,7 +1588,7 @@ impl Game<'_> {
 
     /// Events from entities moving, getting hurt and dying, derived from what
     /// changed this tick.
-    fn tick_entity_events(&mut self) {
+    fn tick_entity_events(&mut self) { if let Some(__l) = crate::points_generated::P5174.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.tick_player_sculk_events();
         self.tick_mob_sculk_events();
         // Dropped items are entities too: Entity.applyEffectsFromBlocks.
@@ -1604,7 +1604,7 @@ impl Game<'_> {
     }
 
     /// Entity.move emits on the authoritative server too, for each ServerPlayer.
-    pub(super) fn tick_player_sculk_events(&mut self) {
+    pub(super) fn tick_player_sculk_events(&mut self) { if let Some(__l) = crate::points_generated::P5173.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The player.
         let player = self.player.as_ref().map(|p| {
             (
@@ -1643,7 +1643,7 @@ impl Game<'_> {
     /// ore that is not against a solid block. Non-axis coordinates draw from
     /// the client level random, x then y then z. It is `level.addParticle`, so
     /// only the local player's own click or step draws it, not a guest's turn.
-    pub(super) fn redstone_ore_particles(&mut self, pos: [i32; 3]) {
+    pub(super) fn redstone_ore_particles(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P5172.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if self.lan_acting.is_some()
             || !matches!(
                 &*self.block_name(pos),
@@ -1689,7 +1689,7 @@ impl Game<'_> {
 
     /// `RedStoneOreBlock.stepOn`: standing on the ore lights it, unless the
     /// entity is stepping carefully (`attack_block` only lights an unlit ore).
-    fn step_on_redstone_ore(&mut self, at: [f64; 3], carefully: bool, burst: bool) {
+    fn step_on_redstone_ore(&mut self, at: [f64; 3], carefully: bool, burst: bool) { let (at,carefully,burst,) = match crate::points_generated::P5171.get() { Some(__l) => { let mut __a = (at,carefully,burst,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,carefully,burst,) };
         if carefully {
             return;
         }
@@ -1717,7 +1717,7 @@ impl Game<'_> {
         &mut self,
         pos: [i32; 3],
         held: Option<&horizon_client::items::ItemStack>,
-    ) -> Result<Option<mod_api::NativeInteractionResult>> {
+    ) -> Result<Option<mod_api::NativeInteractionResult>> { let (pos,) = match crate::points_generated::P5170.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         use mod_api::NativeInteractionResult as Answer;
         if !matches!(
             &*self.block_name(pos),
@@ -1740,7 +1740,7 @@ impl Game<'_> {
         }))
     }
 
-    fn tick_mob_sculk_events(&mut self) {
+    fn tick_mob_sculk_events(&mut self) { if let Some(__l) = crate::points_generated::P5169.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let snapshot: Vec<(
             u32,
             [f64; 3],
@@ -1821,7 +1821,7 @@ impl Game<'_> {
         });
     }
     /// Where the vehicle `id` stands: a mob, boat, minecart or cushion.
-    fn vehicle_position(&self, id: u32) -> Option<[f64; 3]> {
+    fn vehicle_position(&self, id: u32) -> Option<[f64; 3]> { let (id,) = match crate::points_generated::P5168.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let p = if let Some(m) = self.mobs.iter().find(|m| m.id == id) {
             m.position
         } else if let Some(b) = self.boats.iter().find(|b| b.id == id) {
@@ -1837,7 +1837,7 @@ impl Game<'_> {
     /// vehicle and `entity_dismount` at the old one, derived from the vehicle
     /// the rider has now and the one it had last tick. `announce` is false
     /// for a rider first seen riding.
-    fn mount_events(&mut self, who: Who, vehicle: Option<u32>, announce: bool) {
+    fn mount_events(&mut self, who: Who, vehicle: Option<u32>, announce: bool) { let (announce,) = match crate::points_generated::P5167.get() { Some(__l) => { let mut __a = (announce,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (announce,) };
         let last = self.sculk.mounts.get(&who).copied();
         let now = vehicle.and_then(|id| self.vehicle_position(id));
         if last.map(|l| l.0) != vehicle {
@@ -1861,7 +1861,7 @@ impl Game<'_> {
             }
         }
     }
-    fn in_water_at(&self, at: [f64; 3]) -> bool {
+    fn in_water_at(&self, at: [f64; 3]) -> bool { let (at,) = match crate::points_generated::P5166.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,) };
         let (x, y, z) = (
             at[0].floor() as i32,
             at[1].floor() as i32,
@@ -1880,7 +1880,7 @@ impl Game<'_> {
         discrete: bool,
         flying: bool,
         warden: bool,
-    ) {
+    ) { let (at,on_ground,in_water,discrete,flying,warden,) = match crate::points_generated::P5165.get() { Some(__l) => { let mut __a = (at,on_ground,in_water,discrete,flying,warden,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,on_ground,in_water,discrete,flying,warden,) };
         self.sculk_prepare();
         let entry = self.sculk.steps.entry(who).or_insert(Steps {
             move_dist: 0.0,
@@ -1948,7 +1948,7 @@ impl Game<'_> {
     }
     /// `LivingEntity.die` with the catalyst's reach: a death event at the
     /// mob's position.
-    pub(super) fn sculk_mob_died(&mut self, m: &Mob) {
+    pub(super) fn sculk_mob_died(&mut self, m: &Mob) { if let Some(__l) = crate::points_generated::P5164.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ctx = self.context_of_mob(Some(m), m.id, None);
         self.post_game_event(
             "minecraft:entity_die",

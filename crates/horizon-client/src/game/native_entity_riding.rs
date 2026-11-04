@@ -8,7 +8,7 @@ use mod_api::EntityRef;
 
 impl Game<'_> {
     /// The id of the entity `t` rides, if it rides one.
-    fn native_vehicle_id(&self, t: Target) -> Option<u32> {
+    fn native_vehicle_id(&self, t: Target) -> Option<u32> { if let Some(__l) = crate::points_generated::P3121.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match t {
             Target::Player => self.riding,
             Target::Guest(conn) => self.command_guest(conn)?.vehicle,
@@ -23,7 +23,7 @@ impl Game<'_> {
         }
     }
     /// The entity's vehicle as a handle, if it rides one in this level.
-    fn native_vehicle(&self, entity: EntityRef) -> Option<Option<EntityRef>> {
+    fn native_vehicle(&self, entity: EntityRef) -> Option<Option<EntityRef>> { if let Some(__l) = crate::points_generated::P3120.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let t = self.native_entity_target(entity)?;
         Some(
             self.native_vehicle_id(t)
@@ -32,16 +32,16 @@ impl Game<'_> {
     }
     /// What the entity rides (`Entity.getVehicle`): `None` when it rides
     /// nothing, or for a stale handle.
-    pub(super) fn native_entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
+    pub(super) fn native_entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef> { if let Some(__l) = crate::points_generated::P3119.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_vehicle(entity).flatten()
     }
     /// Whether the entity rides another (`Entity.isPassenger`).
-    pub(super) fn native_entity_is_passenger(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_is_passenger(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3118.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_vehicle(entity)?.is_some())
     }
     /// The lowest vehicle under the entity (`Entity.getRootVehicle`): the
     /// entity itself when it rides nothing.
-    pub(super) fn native_entity_root_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
+    pub(super) fn native_entity_root_vehicle(&self, entity: EntityRef) -> Option<EntityRef> { if let Some(__l) = crate::points_generated::P3117.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut root = entity;
         // A chain of riders is short; the bound only guards against a loop.
         for _ in 0..64 {
@@ -54,7 +54,7 @@ impl Game<'_> {
     }
     /// The entities riding this one (`Entity.getPassengers`): its players
     /// in the order they got in, then its mobs.
-    pub(super) fn native_entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
+    pub(super) fn native_entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> { if let Some(__l) = crate::points_generated::P3116.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_entity_target(entity)?;
         let id = entity.id();
         let acting = self.lan_acting.filter(|_| self.player.is_some());
@@ -95,7 +95,7 @@ impl Game<'_> {
         Some(ids.filter_map(|id| self.native_entity(id)).collect())
     }
     /// Whether anything rides the entity (`Entity.isVehicle`).
-    pub(super) fn native_entity_is_vehicle(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_is_vehicle(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3115.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(!self.native_entity_passengers(entity)?.is_empty())
     }
     /// Attempts one mount, shared by handle writes and the ride command.
@@ -104,7 +104,7 @@ impl Game<'_> {
         rider: Target,
         vehicle: Target,
         force: bool,
-    ) -> bool {
+    ) -> bool { let (force,) = match crate::points_generated::P3114.get() { Some(__l) => { let mut __a = (force,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (force,) };
         if let Target::Guest(conn) = rider {
             if self
                 .command_guest(conn)
@@ -259,7 +259,7 @@ impl Game<'_> {
         entity: EntityRef,
         vehicle: EntityRef,
         force: bool,
-    ) -> bool {
+    ) -> bool { let (force,) = match crate::points_generated::P3113.get() { Some(__l) => { let mut __a = (force,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (force,) };
         let Some(rider) = self.native_entity_target(entity) else {
             return false;
         };
@@ -272,7 +272,7 @@ impl Game<'_> {
     /// Gets the entity off its vehicle (`Entity.stopRiding`), where the
     /// vehicle lets it out, as `/ride ... dismount` does. False when it rode
     /// nothing, a mod's `mob_ride` hook kept it on, or for a stale handle.
-    pub(super) fn native_entity_stop_riding(&mut self, entity: EntityRef) -> bool {
+    pub(super) fn native_entity_stop_riding(&mut self, entity: EntityRef) -> bool { if let Some(__l) = crate::points_generated::P3112.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };
@@ -291,7 +291,7 @@ impl Game<'_> {
     /// Gets every passenger off the entity (`Entity.ejectPassengers`), last
     /// first as vanilla walks the list, so `mob_ride` hears them in its
     /// order. False when nothing rode it, or for a stale handle.
-    pub(super) fn native_entity_eject_passengers(&mut self, entity: EntityRef) -> bool {
+    pub(super) fn native_entity_eject_passengers(&mut self, entity: EntityRef) -> bool { if let Some(__l) = crate::points_generated::P3111.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(passengers) = self.native_entity_passengers(entity) else {
             return false;
         };

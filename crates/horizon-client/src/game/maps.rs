@@ -802,18 +802,18 @@ fn decoration_rotation(nether: bool, game_time: i64, y_rot: f64) -> u8 {
     }
 }
 impl Game<'_> {
-    fn dimension_id(&self) -> &'static str {
+    fn dimension_id(&self) -> &'static str { if let Some(__l) = crate::points_generated::P2698.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.dim {
             super::Dim::Nether => "minecraft:the_nether",
             super::Dim::End => "minecraft:the_end",
             _ => "minecraft:overworld",
         }
     }
-    fn map_path(&self, name: &str) -> std::path::PathBuf {
+    fn map_path(&self, name: &str) -> std::path::PathBuf { if let Some(__l) = crate::points_generated::P2697.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world_root.join("data/minecraft/maps").join(name)
     }
     /// The map's data, loaded from `data/minecraft/maps/<id>.dat` on first use.
-    pub(super) fn map(&mut self, id: i32) -> Option<&mut MapData> {
+    pub(super) fn map(&mut self, id: i32) -> Option<&mut MapData> { let (id,) = match crate::points_generated::P2696.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if !self.maps.data.contains_key(&id) && !self.maps.missing.contains(&id) {
             let loaded = horizon_client::save::read_dat(&self.map_path(&format!("{id}.dat")))
                 .and_then(|t| MapData::from_nbt(&t));
@@ -833,7 +833,7 @@ impl Game<'_> {
     pub(super) fn remote_map_item_data(
         &mut self,
         p: &horizon_protocol::packets::play::MapItemData,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P2695.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let decorations = p.decorations.as_ref().map(|list| {
             let types = self
                 .remote
@@ -883,7 +883,7 @@ impl Game<'_> {
         // The server owns a remote map: only the texture has to change.
         map.dirty = false;
     }
-    fn next_map_id(&mut self) -> i32 {
+    fn next_map_id(&mut self) -> i32 { if let Some(__l) = crate::points_generated::P2694.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let last = *self.maps.last_id.get_or_insert_with(|| {
             horizon_client::save::read_dat(&self.world_root.join("data/minecraft/maps/last_id.dat"))
                 .and_then(|t| match t.get("data")?.get("map")? {
@@ -896,13 +896,13 @@ impl Game<'_> {
         last + 1
     }
     /// The id the next new map gets, without taking it.
-    pub(super) fn peek_map_id(&mut self) -> i32 {
+    pub(super) fn peek_map_id(&mut self) -> i32 { if let Some(__l) = crate::points_generated::P2693.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = self.next_map_id();
         self.maps.last_id = Some(id - 1);
         id
     }
     /// Maps made by exploration map trades: (id, target, zoom, decoration).
-    pub(super) fn register_exploration_maps(&mut self, made: Vec<(i32, [i32; 3], u8, String)>) {
+    pub(super) fn register_exploration_maps(&mut self, made: Vec<(i32, [i32; 3], u8, String)>) { if let Some(__l) = crate::points_generated::P2692.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let dimension = self.dimension_id().to_owned();
         for (id, at, zoom, _) in made {
             // MapItem.applyNewSavedData: tracking, unlimited tracking.
@@ -919,7 +919,7 @@ impl Game<'_> {
     /// structure of the tag around `origin`, a new map centred on it with its
     /// biome preview and target decoration. False when nothing is found: the
     /// loot table's `filtered` map_id check would have discarded the item.
-    pub(super) fn resolve_pending_map(&mut self, item: &mut ItemStack, origin: [f64; 3]) -> bool {
+    pub(super) fn resolve_pending_map(&mut self, item: &mut ItemStack, origin: [f64; 3]) -> bool { let (origin,) = match crate::points_generated::P2691.get() { Some(__l) => { let mut __a = (origin,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,) };
         let Some(map) = horizon_client::structure_blocks::take_pending_map(item) else {
             return true;
         };
@@ -955,7 +955,7 @@ impl Game<'_> {
     }
     /// The unsearched exploration maps of a container being opened
     /// (`RandomizableContainer.unpackLootTable` runs the function then).
-    pub(super) fn resolve_container_maps(&mut self, key: (i32, i32, i32), origin: [f64; 3]) {
+    pub(super) fn resolve_container_maps(&mut self, key: (i32, i32, i32), origin: [f64; 3]) { let (origin,) = match crate::points_generated::P2690.get() { Some(__l) => { let mut __a = (origin,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,) };
         use horizon_client::containers::BlockEntity;
         let Some(BlockEntity::Chest(slots)) = self.world.block_entities.get(&key) else {
             return;
@@ -984,7 +984,7 @@ impl Game<'_> {
     }
     /// `MapItem.renderBiomePreviewMap`: the map's biomes at sea level, water
     /// outlines (`#water_on_map_outlines`) drawn in orange and brown.
-    pub(super) fn render_biome_preview(&mut self, id: i32) {
+    pub(super) fn render_biome_preview(&mut self, id: i32) { let (id,) = match crate::points_generated::P2689.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(terrain) = self.end.locator() else {
             return;
         };
@@ -1071,13 +1071,13 @@ impl Game<'_> {
         }
     }
     /// Registers `data` under a free map id.
-    pub(super) fn new_map_id(&mut self, data: MapData) -> i32 {
+    pub(super) fn new_map_id(&mut self, data: MapData) -> i32 { if let Some(__l) = crate::points_generated::P2688.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = self.next_map_id();
         self.maps.data.insert(id, data);
         id
     }
     /// `EmptyMapItem.use`: a new map centred around the player.
-    pub(super) fn use_empty_map(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn use_empty_map(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P2687.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:map" {
             return false;
         }
@@ -1111,7 +1111,7 @@ impl Game<'_> {
         true
     }
     /// `ItemFrame.removeFramedMap`: the map `frame` holds forgets the frame.
-    pub(super) fn remove_framed_map(&mut self, frame: &horizon_client::entities::ItemFrame) {
+    pub(super) fn remove_framed_map(&mut self, frame: &horizon_client::entities::ItemFrame) { if let Some(__l) = crate::points_generated::P2686.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(id) = frame.item.as_ref().and_then(map_id) else {
             return;
         };
@@ -1122,7 +1122,7 @@ impl Game<'_> {
     /// `MapItem.useOn`: a map used on a banner toggles that banner's marker
     /// on the map; when the map's data says no (`toggleBanner` fails) the use
     /// ends without a swing, and nothing else is done with the map either way.
-    pub(super) fn use_map_on_banner(&mut self, hit: &super::Hit, stack: &ItemStack) -> bool {
+    pub(super) fn use_map_on_banner(&mut self, hit: &super::Hit, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P2685.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(id) = map_id(stack) else {
             return false;
         };
@@ -1151,7 +1151,7 @@ impl Game<'_> {
     }
     /// `CompassItem.useOn`: a compass used on a lodestone locks onto it (a
     /// single one in survival changes in place, else one is split off).
-    pub(super) fn use_lodestone_compass(&mut self, hit: &super::Hit, stack: &ItemStack) -> bool {
+    pub(super) fn use_lodestone_compass(&mut self, hit: &super::Hit, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P2684.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:compass" {
             return false;
         }
@@ -1197,7 +1197,7 @@ impl Game<'_> {
     }
     /// `CompassItem.inventoryTick` / `LodestoneTracker.tick`: a compass whose
     /// lodestone is gone loses its target. A target in an unloaded chunk waits.
-    pub(super) fn tick_lodestone_compasses(&mut self) {
+    pub(super) fn tick_lodestone_compasses(&mut self) { if let Some(__l) = crate::points_generated::P2683.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let dim = self.dimension_id();
         let gone = |game: &Self, stack: &ItemStack| -> bool {
             let Some(tracker) = stack
@@ -1237,7 +1237,7 @@ impl Game<'_> {
             }
         }
     }
-    fn give_or_drop_stack(&mut self, stack: ItemStack) {
+    fn give_or_drop_stack(&mut self, stack: ItemStack) { if let Some(__l) = crate::points_generated::P2682.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(rest) = self.give(stack)
             && let Some(eye) = self.eye_position()
         {
@@ -1247,7 +1247,7 @@ impl Game<'_> {
     /// `MapItemSavedData.hasMapInvisibilityItemEquipped`: a piece of
     /// `#map_invisibility_equipment` (a carved pumpkin) in an armor slot; the
     /// hands do not count.
-    fn map_invisibility_worn(&self, worn: &[Option<ItemStack>]) -> bool {
+    fn map_invisibility_worn(&self, worn: &[Option<ItemStack>]) -> bool { if let Some(__l) = crate::points_generated::P2681.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let tag = self
             .res
             .items()
@@ -1258,7 +1258,7 @@ impl Game<'_> {
             .any(|s| tag.is_some_and(|t| t.contains(&*s.item)))
     }
     /// Held maps update; every carried map tracks the player marker.
-    pub(super) fn tick_maps(&mut self) {
+    pub(super) fn tick_maps(&mut self) { if let Some(__l) = crate::points_generated::P2680.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref().map(|p| p.position) else {
             return;
         };
@@ -1352,7 +1352,7 @@ impl Game<'_> {
     }
     /// The maps the player carries, for `status`: how many of their pixels
     /// are drawn, and their decorations.
-    pub(super) fn maps_status(&self) -> Vec<serde_json::Value> {
+    pub(super) fn maps_status(&self) -> Vec<serde_json::Value> { if let Some(__l) = crate::points_generated::P2679.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.inventory
             .iter()
             .chain(std::iter::once(&self.offhand))
@@ -1372,7 +1372,7 @@ impl Game<'_> {
     /// carries, and every 10 ticks (`ServerEntity.sendChanges`) for each map
     /// framed in the level: a `ClientboundMapItemDataPacket` when something
     /// changed since the guest's last one.
-    pub(super) fn lan_map_updates(&mut self, conn: u32) {
+    pub(super) fn lan_map_updates(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2678.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -1450,7 +1450,7 @@ impl Game<'_> {
     }
     /// `MapItemSavedData.checkBanners` on map `id` for the column `x`, `z`
     /// that `MapItem.update` is reading.
-    fn check_banners(&mut self, id: i32, x: i32, z: i32) {
+    fn check_banners(&mut self, id: i32, x: i32, z: i32) { let (id,x,z,) = match crate::points_generated::P2677.get() { Some(__l) => { let mut __a = (id,x,z,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,x,z,) };
         let (world, res) = (&self.world, &self.res);
         let Some(m) = self.maps.data.get_mut(&id) else {
             return;
@@ -1468,7 +1468,7 @@ impl Game<'_> {
         });
     }
     /// `MapItem.update` for the player holding map `id`.
-    fn update_map(&mut self, id: i32) {
+    fn update_map(&mut self, id: i32) { let (id,) = match crate::points_generated::P2676.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let dim = self.dimension_id();
         let Some(p) = self.player.as_ref().map(|p| p.position) else {
             return;
@@ -1616,7 +1616,7 @@ impl Game<'_> {
         }
     }
     /// Writes changed maps and the id counter (`MapItemSavedData`, `MapIndex`).
-    pub(super) fn save_maps(&mut self) {
+    pub(super) fn save_maps(&mut self) { if let Some(__l) = crate::points_generated::P2675.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (id, m) in &mut self.maps.data {
             if m.dirty {
                 let path = self
@@ -1642,7 +1642,7 @@ impl Game<'_> {
         }
     }
     /// The atlas slot showing map `id`, its texture uploaded when it changed.
-    pub(super) fn map_texture(&mut self, id: i32) -> Option<Rect> {
+    pub(super) fn map_texture(&mut self, id: i32) -> Option<Rect> { let (id,) = match crate::points_generated::P2674.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.map(id)?;
         let slot = match self.maps.slots.show(&id) {
             Some(slot) => slot,
@@ -1686,7 +1686,7 @@ impl Game<'_> {
         m: glam::Mat4,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (id,show_only_frame,light,) = match crate::points_generated::P2673.get() { Some(__l) => { let mut __a = (id,show_only_frame,light,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,show_only_frame,light,) };
         let Some(rect) = self.map_texture(id) else {
             return;
         };
@@ -1777,7 +1777,7 @@ impl Game<'_> {
     /// The icons `native_map_decorations` adds to map `id`, as it is drawn
     /// (`frame`: in an item frame or on a screen, which show only what
     /// `shown_on_frame` allows).
-    pub(super) fn mod_map_decorations(&self, id: i32, frame: bool) -> Vec<NativeMapDecoration> {
+    pub(super) fn mod_map_decorations(&self, id: i32, frame: bool) -> Vec<NativeMapDecoration> { let (id,frame,) = match crate::points_generated::P2672.get() { Some(__l) => { let mut __a = (id,frame,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,frame,) };
         let Some(map) = self.maps.data.get(&id) else {
             return Vec::new();
         };
@@ -1810,7 +1810,7 @@ impl Game<'_> {
         id: i32,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (attack,inverse_height,id,light,) = match crate::points_generated::P2671.get() { Some(__l) => { let mut __a = (attack,inverse_height,id,light,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (attack,inverse_height,id,light,) };
         use horizon_core::geometry::trig::Mth;
         let deg = |d: f32| d.to_radians();
         let base = to_world
@@ -1823,7 +1823,7 @@ impl Game<'_> {
     }
     /// `renderMap`: map `id` at pose `m`, its background (with a 7-pixel
     /// border) then the map.
-    pub(super) fn held_map(&mut self, m: glam::Mat4, id: i32, light: u32, out: &mut Vec<Vertex>) {
+    pub(super) fn held_map(&mut self, m: glam::Mat4, id: i32, light: u32, out: &mut Vec<Vertex>) { let (id,light,) = match crate::points_generated::P2670.get() { Some(__l) => { let mut __a = (id,light,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,light,) };
         let deg = |d: f32| d.to_radians();
         let m = m
             * glam::Mat4::from_rotation_y(deg(180.0))

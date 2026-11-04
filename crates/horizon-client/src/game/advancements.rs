@@ -238,7 +238,7 @@ fn now_text() -> String {
 }
 impl Game<'_> {
     /// `ItemPredicate.test` (the `item_filter` of a filtered item modifier).
-    pub(super) fn loot_item_filter(&self, predicate: &Value, s: &ItemStack) -> bool {
+    pub(super) fn loot_item_filter(&self, predicate: &Value, s: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P457.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         adv::item(predicate, &item_view(s), &View(self))
     }
     /// `BaseContainerBlockEntity.canOpen`: whether the `lock` of the block
@@ -248,7 +248,7 @@ impl Game<'_> {
         key: (i32, i32, i32),
         spectator: bool,
         hand: Option<&ItemStack>,
-    ) -> bool {
+    ) -> bool { let (spectator,) = match crate::points_generated::P456.get() { Some(__l) => { let mut __a = (spectator,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (spectator,) };
         let Some(lock) = self.world.block_lock(key) else {
             return false;
         };
@@ -272,7 +272,7 @@ pub(super) fn item_view(s: &ItemStack) -> ItemView {
     }
 }
 impl Game<'_> {
-    fn adv_path(&self) -> Option<std::path::PathBuf> {
+    fn adv_path(&self) -> Option<std::path::PathBuf> { if let Some(__l) = crate::points_generated::P455.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(super::stats::player_json(
             &self.world_root,
             "advancements",
@@ -281,11 +281,11 @@ impl Game<'_> {
     }
     /// A server with no player of its own and nobody it acts for: there is
     /// no player for advancements and statistics.
-    pub(super) fn no_player_here(&self) -> bool {
+    pub(super) fn no_player_here(&self) -> bool { if let Some(__l) = crate::points_generated::P454.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.options.dedicated.is_some() && self.lan_acting.is_none()
     }
     /// The advancement tree, loaded once.
-    pub(super) fn advancement_tree(&mut self) -> Arc<Tree> {
+    pub(super) fn advancement_tree(&mut self) -> Arc<Tree> { if let Some(__l) = crate::points_generated::P453.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.adv.tree.list.is_empty() {
             let tree = match self.adv.pending_tree.take().map(|h| h.join()) {
                 Some(Ok(tree)) => tree,
@@ -302,7 +302,7 @@ impl Game<'_> {
         self.adv.tree.clone()
     }
     /// `inventory_changed`'s criteria by item, for the tree in place.
-    fn inventory_index(&mut self) -> Arc<adv::InventoryIndex> {
+    fn inventory_index(&mut self) -> Arc<adv::InventoryIndex> { if let Some(__l) = crate::points_generated::P452.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let tree = self.adv.tree.clone();
         if let Some((built, index)) = &self.adv.inventory_index
             && Arc::ptr_eq(built, &tree)
@@ -323,7 +323,7 @@ impl Game<'_> {
     /// Start reading the advancement files on another thread while the world
     /// loads. The first tick's first criterion trigger used to read and parse
     /// all of them on the game thread (about 60 ms).
-    pub(super) fn prefetch_advancement_tree(&mut self, stack: &super::functions::PackStack) {
+    pub(super) fn prefetch_advancement_tree(&mut self, stack: &super::functions::PackStack) { if let Some(__l) = crate::points_generated::P451.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.adv.tree.list.is_empty() || self.adv.pending_tree.is_some() {
             return;
         }
@@ -341,7 +341,7 @@ impl Game<'_> {
             .spawn(move || Tree::shared(&data, &horizon_world::loot::PackOverlay { files: &files }))
             .ok();
     }
-    pub(super) fn load_advancements(&mut self) {
+    pub(super) fn load_advancements(&mut self) { if let Some(__l) = crate::points_generated::P450.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.adv.loaded || self.remote.is_some() || self.no_player_here() {
             return;
         }
@@ -359,7 +359,7 @@ impl Game<'_> {
         self.adv.progress = progress;
         self.ui.registries.advancements = tree.list.iter().map(|a| a.id.clone()).collect();
     }
-    pub(super) fn save_advancements(&self) {
+    pub(super) fn save_advancements(&self) { if let Some(__l) = crate::points_generated::P449.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.adv.loaded || self.remote.is_some() || self.no_player_here() {
             return;
         }
@@ -379,7 +379,7 @@ impl Game<'_> {
     }
     /// The player as predicates see it.
     /// The predicate view of a command target.
-    pub(super) fn entity_view_of(&self, t: super::commands::Target) -> EntityView {
+    pub(super) fn entity_view_of(&self, t: super::commands::Target) -> EntityView { if let Some(__l) = crate::points_generated::P448.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use super::commands::Target;
         match t {
             Target::Player => self.player_entity(),
@@ -423,7 +423,7 @@ impl Game<'_> {
         v: &Value,
         this: Option<&EntityView>,
         origin: [f64; 3],
-    ) -> bool {
+    ) -> bool { let (origin,) = match crate::points_generated::P447.get() { Some(__l) => { let mut __a = (origin,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (origin,) };
         adv::conditions(
             v,
             &adv::Entities {
@@ -435,7 +435,7 @@ impl Game<'_> {
             &View(self),
         )
     }
-    pub(super) fn player_entity(&self) -> EntityView {
+    pub(super) fn player_entity(&self) -> EntityView { if let Some(__l) = crate::points_generated::P446.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return EntityView::default();
         };
@@ -486,7 +486,7 @@ impl Game<'_> {
         }
     }
     /// The player as a passenger of the vehicle `id` (`Entity.getPassengers`).
-    fn rider_entity(&self, id: u32) -> Option<EntityView> {
+    fn rider_entity(&self, id: u32) -> Option<EntityView> { let (id,) = match crate::points_generated::P445.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let p = self.player.as_ref().filter(|_| self.riding == Some(id))?;
         Some(EntityView {
             kind: "minecraft:player".into(),
@@ -497,7 +497,7 @@ impl Game<'_> {
     }
     /// A boat as the predicates see it: its type, and its passengers (the
     /// mobs seated on it, then the player riding it).
-    pub(super) fn boat_entity(&self, b: &super::boats::Boat) -> EntityView {
+    pub(super) fn boat_entity(&self, b: &super::boats::Boat) -> EntityView { if let Some(__l) = crate::points_generated::P444.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         EntityView {
             kind: b.entity_type(),
             position: [b.position.x, b.position.y, b.position.z],
@@ -513,7 +513,7 @@ impl Game<'_> {
         }
     }
     /// A dropped item as the predicates see it.
-    pub(super) fn item_entity_view(&self, e: &horizon_client::entities::ItemEntity) -> EntityView {
+    pub(super) fn item_entity_view(&self, e: &horizon_client::entities::ItemEntity) -> EntityView { if let Some(__l) = crate::points_generated::P443.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         EntityView {
             kind: "minecraft:item".into(),
             position: [e.position.x, e.position.y, e.position.z],
@@ -522,7 +522,7 @@ impl Game<'_> {
             ..Default::default()
         }
     }
-    pub(super) fn mob_entity(&self, m: &horizon_client::mobs::Mob) -> EntityView {
+    pub(super) fn mob_entity(&self, m: &horizon_client::mobs::Mob) -> EntityView { if let Some(__l) = crate::points_generated::P442.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // mainhand, offhand, head, chest, legs, feet.
         let slot = |i: Option<&str>| i.map(|id| item_view(&ItemStack::new(id, 1)));
         let mut equipment: [Option<ItemView>; 7] = Default::default();
@@ -615,7 +615,7 @@ impl Game<'_> {
         advancement: &str,
         criterion: &str,
         progress_type: NativeProgressType,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P441.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !mod_api::__private::listened(mod_api::HookId::PlayerAdvancementProgress) {
             return;
         }
@@ -636,7 +636,7 @@ impl Game<'_> {
     }
     /// The criteria `CriteriaTriggers.TICK` granted network players in the hub
     /// (their first tick and a reload), told to the mods.
-    pub(super) fn run_native_advancement_grants(&mut self) {
+    pub(super) fn run_native_advancement_grants(&mut self) { if let Some(__l) = crate::points_generated::P440.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -654,7 +654,7 @@ impl Game<'_> {
         }
     }
     /// `PlayerAdvancements.progressChanged`, kept for a network player's client.
-    fn progress_changed(&mut self, index: usize) {
+    fn progress_changed(&mut self, index: usize) { let (index,) = match crate::points_generated::P439.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         if self.lan_acting.is_some() {
             self.adv.changed.insert(index);
         }
@@ -663,7 +663,7 @@ impl Game<'_> {
     /// `recipe_unlocked` trigger of each recipe now known. Returns the
     /// number of recipe displays taken back out because a mod refused their
     /// discovery.
-    pub(super) fn recipe_unlocked(&mut self, unlocked: &[String]) -> usize {
+    pub(super) fn recipe_unlocked(&mut self, unlocked: &[String]) -> usize { if let Some(__l) = crate::points_generated::P438.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut allowed = Vec::with_capacity(unlocked.len());
         let mut refused = Vec::new();
         let mut taken_back = 0;
@@ -712,7 +712,7 @@ impl Game<'_> {
         taken_back
     }
     /// `ServerPlayer.awardRecipes`: fake players learn no recipes.
-    pub(super) fn award_recipes(&mut self, recipes: &[String]) -> usize {
+    pub(super) fn award_recipes(&mut self, recipes: &[String]) -> usize { if let Some(__l) = crate::points_generated::P437.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.lan_acting_fake {
             return 0;
         }
@@ -726,7 +726,7 @@ impl Game<'_> {
     /// vanilla's `Invalid recipe: {}` and knows nothing. Whether the click
     /// ends here: `InteractionResult.SUCCESS` does and swings, `FAIL` leaves
     /// the other hand its turn (`Minecraft.startUseItem`).
-    pub(super) fn use_knowledge_book(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn use_knowledge_book(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P436.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:knowledge_book" {
             return false;
         }
@@ -754,7 +754,7 @@ impl Game<'_> {
         }
     }
     /// `PlayerAdvancements.award` once done: rewards, toast, announcement.
-    fn award(&mut self, index: usize) {
+    fn award(&mut self, index: usize) { let (index,) = match crate::points_generated::P435.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         if self.lan_acting_fake {
             return;
         }
@@ -834,7 +834,7 @@ impl Game<'_> {
         self.award_recipes(&rewards);
     }
     /// `InventoryChangeTrigger`, checked when the inventory changes.
-    pub(super) fn check_inventory_trigger(&mut self) {
+    pub(super) fn check_inventory_trigger(&mut self) { if let Some(__l) = crate::points_generated::P434.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use std::hash::{Hash, Hasher};
         let mut h = std::collections::hash_map::DefaultHasher::new();
         for s in self
@@ -909,7 +909,7 @@ impl Game<'_> {
         });
     }
     /// `PlayerTrigger.LOCATION` every second, and the other per-tick checks.
-    pub(super) fn tick_advancements(&mut self) {
+    pub(super) fn tick_advancements(&mut self) { if let Some(__l) = crate::points_generated::P433.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player.is_none() || self.remote.is_some() {
             return;
         }
@@ -962,7 +962,7 @@ impl Game<'_> {
         }
     }
     /// A player condition plus one entity (`player`, `entity` keys).
-    pub(super) fn trigger_entity(&mut self, name: &str, key: &str, target: &EntityView) {
+    pub(super) fn trigger_entity(&mut self, name: &str, key: &str, target: &EntityView) { if let Some(__l) = crate::points_generated::P432.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let target = target.clone();
         let key = key.to_owned();
@@ -984,7 +984,7 @@ impl Game<'_> {
     }
     /// `KilledTrigger` (`player_killed_entity`): the entity killed and the
     /// killing blow's damage source (none: any `killing_blow` fails).
-    pub(super) fn trigger_killed(&mut self, target: &EntityView, blow: Option<&adv::DamageView>) {
+    pub(super) fn trigger_killed(&mut self, target: &EntityView, blow: Option<&adv::DamageView>) { if let Some(__l) = crate::points_generated::P431.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.trigger_killed_as("minecraft:player_killed_entity", target, blow);
     }
     /// `KilledTrigger.trigger` for any of its three instances
@@ -995,7 +995,7 @@ impl Game<'_> {
         name: &str,
         target: &EntityView,
         blow: Option<&adv::DamageView>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P430.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let target = target.clone();
         let blow = blow.cloned();
@@ -1024,7 +1024,7 @@ impl Game<'_> {
         &mut self,
         victims: &[EntityView],
         weapon: Option<&ItemStack>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P429.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let victims = victims.to_vec();
         let weapon = weapon.map(item_view);
@@ -1034,7 +1034,7 @@ impl Game<'_> {
     }
     /// `LevitationTrigger`: how far the player rose from where it started
     /// levitating, and for how long.
-    fn trigger_levitation(&mut self, start: [f64; 3], duration: i64) {
+    fn trigger_levitation(&mut self, start: [f64; 3], duration: i64) { let (start,duration,) = match crate::points_generated::P428.get() { Some(__l) => { let mut __a = (start,duration,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (start,duration,) };
         let me = self.player_entity();
         self.trigger("minecraft:levitation", move |c, w| {
             let pctx = adv::Entities {
@@ -1052,7 +1052,7 @@ impl Game<'_> {
     /// (`resetFallDistance`), `trackEnteredOrExitedLavaOnVehicle`, the way back
     /// from the Nether, and `onEffectAdded`, `onEffectUpdated` and
     /// `onEffectsRemoved`, which are seen as each tick ends.
-    fn tick_marks(&mut self) {
+    fn tick_marks(&mut self) { if let Some(__l) = crate::points_generated::P427.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -1108,7 +1108,7 @@ impl Game<'_> {
         }
     }
     /// The (effect, amplifier) pairs `marks.effects` compares.
-    fn effects_seen(&self) -> Vec<(&'static str, i32)> {
+    fn effects_seen(&self) -> Vec<(&'static str, i32)> { if let Some(__l) = crate::points_generated::P426.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.potions
             .effects
             .list
@@ -1118,14 +1118,14 @@ impl Game<'_> {
     }
     /// `EffectsChangedTrigger` for a change the caller knows the source of;
     /// the end-of-tick check then does not fire it a second time.
-    pub(super) fn trigger_effects_changed_by(&mut self, source: Option<EntityView>) {
+    pub(super) fn trigger_effects_changed_by(&mut self, source: Option<EntityView>) { if let Some(__l) = crate::points_generated::P425.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.adv.marks.effects = self.effects_seen();
         self.adv.marks.effect_changes = self.potions.effects.changes;
         self.trigger_effects_changed(source);
     }
     /// `DistanceTrigger`: the player's `player` condition, `start_position`
     /// at `start`, and the `distance` from `start` to the player.
-    fn trigger_distance(&mut self, name: &str, start: [f64; 3]) {
+    fn trigger_distance(&mut self, name: &str, start: [f64; 3]) { let (start,) = match crate::points_generated::P424.get() { Some(__l) => { let mut __a = (start,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (start,) };
         let me = self.player_entity();
         self.trigger(name, move |c, w| {
             let pctx = adv::Entities {
@@ -1143,7 +1143,7 @@ impl Game<'_> {
     /// `impact` (made by `cause`, or by nothing), measured to where the
     /// player is now. `matches` tests `cause` only when the instance has one,
     /// and a missing cause fails it.
-    fn trigger_fall_after_explosion(&mut self, impact: [f64; 3], cause: Option<EntityView>) {
+    fn trigger_fall_after_explosion(&mut self, impact: [f64; 3], cause: Option<EntityView>) { let (impact,) = match crate::points_generated::P423.get() { Some(__l) => { let mut __a = (impact,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (impact,) };
         let me = self.player_entity();
         self.trigger("minecraft:fall_after_explosion", move |c, w| {
             let pctx = adv::Entities {
@@ -1169,7 +1169,7 @@ impl Game<'_> {
     }
     /// `EffectsChangedTrigger`: the player's `effects`, and for an effect that
     /// `source` gave, that entity (`source`).
-    fn trigger_effects_changed(&mut self, source: Option<EntityView>) {
+    fn trigger_effects_changed(&mut self, source: Option<EntityView>) { if let Some(__l) = crate::points_generated::P422.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         self.trigger("minecraft:effects_changed", move |c, w| {
             let pctx = adv::Entities {
@@ -1203,7 +1203,7 @@ impl Game<'_> {
     /// damage and `new_damage` the unclamped damage value it is about to get.
     /// `durability` tests `maxDamage - newDamage`, `delta` tests
     /// `damageValue - newDamage`.
-    pub(super) fn trigger_item_durability(&mut self, stack: &ItemStack, new_damage: u32) {
+    pub(super) fn trigger_item_durability(&mut self, stack: &ItemStack, new_damage: u32) { let (new_damage,) = match crate::points_generated::P421.get() { Some(__l) => { let mut __a = (new_damage,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (new_damage,) };
         if self.remote.is_some() || self.no_player_here() {
             return;
         }
@@ -1232,7 +1232,7 @@ impl Game<'_> {
     }
     /// `ServerPlayer.updateUsingItem`: USING_ITEM for the item in use, with
     /// what the player looks at (`PlayerPredicate.lookingAt`).
-    pub(super) fn trigger_using_item(&mut self, stack: &ItemStack) {
+    pub(super) fn trigger_using_item(&mut self, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P420.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() || self.no_player_here() {
             return;
         }
@@ -1251,7 +1251,7 @@ impl Game<'_> {
     }
     /// The mob a 100 block ray from the eyes meets first, if no block is in
     /// the way (`ProjectileUtil.getEntityHitResult` and `hasLineOfSight`).
-    fn looking_at_entity(&self) -> Option<EntityView> {
+    fn looking_at_entity(&self) -> Option<EntityView> { if let Some(__l) = crate::points_generated::P419.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let eye = self.eye_position()?;
         let dir = super::view_vector(self.yaw, self.pitch);
         let (m, _) = self
@@ -1273,7 +1273,7 @@ impl Game<'_> {
         &mut self,
         victim: &EntityView,
         damage: &adv::DamageView,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P418.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let (victim, damage) = (victim.clone(), damage.clone());
         self.trigger("minecraft:player_hurt_entity", move |c, w| {
@@ -1301,7 +1301,7 @@ impl Game<'_> {
         kind: &str,
         direct: Option<EntityView>,
         amount: f32,
-    ) {
+    ) { let (amount,) = match crate::points_generated::P417.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let me = self.player_entity();
         self.trigger_player_hurt_entity(
             victim,
@@ -1317,7 +1317,7 @@ impl Game<'_> {
         );
     }
     /// `EntityHurtPlayerTrigger`: the player and the damage it took.
-    pub(super) fn trigger_entity_hurt_player(&mut self, damage: &adv::DamageView) {
+    pub(super) fn trigger_entity_hurt_player(&mut self, damage: &adv::DamageView) { if let Some(__l) = crate::points_generated::P416.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let damage = damage.clone();
         self.trigger("minecraft:entity_hurt_player", move |c, w| {
@@ -1332,7 +1332,7 @@ impl Game<'_> {
         });
     }
     /// A player condition plus one item (`item` key).
-    pub(super) fn trigger_item(&mut self, name: &str, stack: &ItemStack) {
+    pub(super) fn trigger_item(&mut self, name: &str, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P415.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let it = item_view(stack);
         self.trigger(name, move |c, w| {
@@ -1350,7 +1350,7 @@ impl Game<'_> {
         name: &str,
         stack: &ItemStack,
         target: &EntityView,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P414.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let it = item_view(stack);
         self.trigger(name, |c, w| adv::item_entity(c, &me, target, &it, w));
@@ -1365,7 +1365,7 @@ impl Game<'_> {
         &mut self,
         stack: &ItemStack,
         thrower: [i32; 4],
-    ) {
+    ) { let (thrower,) = match crate::points_generated::P413.get() { Some(__l) => { let mut __a = (thrower,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (thrower,) };
         let target = if thrower == self.acting_uuid() {
             let me = self.player_entity();
             self.trigger_item_entity("minecraft:thrown_item_picked_up_by_entity", stack, &me);
@@ -1381,7 +1381,7 @@ impl Game<'_> {
         self.trigger_item_entity("minecraft:thrown_item_picked_up_by_player", stack, &target);
     }
     /// `ConstructBeaconTrigger`: the pyramid levels of the new beacon.
-    pub(super) fn trigger_construct_beacon(&mut self, levels: i32) {
+    pub(super) fn trigger_construct_beacon(&mut self, levels: i32) { let (levels,) = match crate::points_generated::P412.get() { Some(__l) => { let mut __a = (levels,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (levels,) };
         let me = self.player_entity();
         self.trigger("minecraft:construct_beacon", move |c, w| {
             let pctx = adv::Entities {
@@ -1394,7 +1394,7 @@ impl Game<'_> {
         });
     }
     /// `EnchantedItemTrigger`: the enchanted item and the levels it cost.
-    pub(super) fn trigger_enchanted_item(&mut self, stack: &ItemStack, levels: i32) {
+    pub(super) fn trigger_enchanted_item(&mut self, stack: &ItemStack, levels: i32) { let (levels,) = match crate::points_generated::P411.get() { Some(__l) => { let mut __a = (levels,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (levels,) };
         let me = self.player_entity();
         let it = item_view(stack);
         self.trigger("minecraft:enchanted_item", move |c, w| {
@@ -1411,7 +1411,7 @@ impl Game<'_> {
     }
     /// `BrewedPotionTrigger`: the potion contents of a stack taken from a
     /// brewing stand.
-    pub(super) fn trigger_brewed_potion(&mut self, stack: &ItemStack) {
+    pub(super) fn trigger_brewed_potion(&mut self, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P410.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let potion = stack.potion().map(str::to_owned);
         self.trigger("minecraft:brewed_potion", move |c, w| {
@@ -1426,7 +1426,7 @@ impl Game<'_> {
         });
     }
     /// `TradeTrigger`: the villager and the item the trade gave.
-    pub(super) fn trigger_trade(&mut self, villager: &EntityView, stack: &ItemStack) {
+    pub(super) fn trigger_trade(&mut self, villager: &EntityView, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P409.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let villager = villager.clone();
         let it = item_view(stack);
@@ -1453,7 +1453,7 @@ impl Game<'_> {
         rod: &ItemStack,
         hooked: &EntityView,
         items: &[ItemStack],
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P408.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let rod = item_view(rod);
         let hooked = hooked.clone();
@@ -1476,7 +1476,7 @@ impl Game<'_> {
         });
     }
     /// `EnterBlockTrigger`: the block, its state properties and the player.
-    pub(super) fn trigger_enter_block(&mut self, state: horizon_world::registry::BlockStateId) {
+    pub(super) fn trigger_enter_block(&mut self, state: horizon_world::registry::BlockStateId) { if let Some(__l) = crate::points_generated::P407.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(definition) = self.pack.assets.registry.state(state).cloned() else {
             return;
         };
@@ -1498,7 +1498,7 @@ impl Game<'_> {
         });
     }
     /// `SlideDownBlockTrigger`: match the actual block and its state.
-    pub(super) fn trigger_honey_slide(&mut self, pos: [i32; 3]) {
+    pub(super) fn trigger_honey_slide(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P406.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let me = self.player_entity();
         self.trigger("minecraft:slide_down_block", move |c, w| {
             let ctx = adv::Entities {
@@ -1513,7 +1513,7 @@ impl Game<'_> {
 
     /// `TargetBlockTrigger`: signal and projectile conditions are evaluated in
     /// the shooter's context, including distance from the shooter.
-    pub(super) fn trigger_target_hit(&mut self, projectile: &EntityView, strength: i32) {
+    pub(super) fn trigger_target_hit(&mut self, projectile: &EntityView, strength: i32) { let (strength,) = match crate::points_generated::P405.get() { Some(__l) => { let mut __a = (strength,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (strength,) };
         let me = self.player_entity();
         let projectile = projectile.clone();
         self.trigger("minecraft:target_hit", move |c, w| {
@@ -1534,7 +1534,7 @@ impl Game<'_> {
     }
 
     /// `ItemUsedOnLocationTrigger` (placed_block, item_used_on_block).
-    pub(super) fn trigger_block(&mut self, name: &str, pos: [i32; 3], stack: &ItemStack) {
+    pub(super) fn trigger_block(&mut self, name: &str, pos: [i32; 3], stack: &ItemStack) { let (pos,) = match crate::points_generated::P404.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let me = self.player_entity();
         let it = item_view(stack);
         self.trigger(name, move |c, w| {
@@ -1549,16 +1549,16 @@ impl Game<'_> {
     }
     /// `DefaultBlockInteractionTrigger` (default_block_use): the player, and
     /// the block's `BLOCK_USE` context at its centre, with no tool.
-    pub(super) fn trigger_default_block_use(&mut self, pos: [i32; 3]) {
+    pub(super) fn trigger_default_block_use(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P403.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.trigger_block_use("minecraft:default_block_use", pos, None);
     }
     /// `AnyBlockInteractionTrigger` (any_block_use): the player, and the
     /// block's `ADVANCEMENT_LOCATION` context at its centre with the stack in
     /// hand as the use left it.
-    pub(super) fn trigger_any_block_use(&mut self, pos: [i32; 3], stack: &ItemStack) {
+    pub(super) fn trigger_any_block_use(&mut self, pos: [i32; 3], stack: &ItemStack) { let (pos,) = match crate::points_generated::P402.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.trigger_block_use("minecraft:any_block_use", pos, Some(stack));
     }
-    fn trigger_block_use(&mut self, name: &str, pos: [i32; 3], stack: Option<&ItemStack>) {
+    fn trigger_block_use(&mut self, name: &str, pos: [i32; 3], stack: Option<&ItemStack>) { let (pos,) = match crate::points_generated::P401.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let me = self.player_entity();
         let it = stack.map(item_view);
         let centre = pos.map(|c| f64::from(c) + 0.5);
@@ -1581,7 +1581,7 @@ impl Game<'_> {
     }
     /// `LightningStrikeTrigger`: the bolt, and the mobs around it that it did
     /// not hit (`bystander`), each tested from this player's position.
-    pub(super) fn trigger_lightning_strike(&mut self, bolt: &EntityView, viewers: &[EntityView]) {
+    pub(super) fn trigger_lightning_strike(&mut self, bolt: &EntityView, viewers: &[EntityView]) { if let Some(__l) = crate::points_generated::P400.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let (bolt, viewers) = (bolt.clone(), viewers.to_vec());
         self.trigger("minecraft:lightning_strike", move |c, w| {
@@ -1612,7 +1612,7 @@ impl Game<'_> {
     }
     /// `ChanneledLightningTrigger`: each victim condition matched by some
     /// mob the bolt hit, from the player who channelled it.
-    pub(super) fn trigger_channeled_lightning(&mut self, victims: &[EntityView]) {
+    pub(super) fn trigger_channeled_lightning(&mut self, victims: &[EntityView]) { if let Some(__l) = crate::points_generated::P399.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let victims = victims.to_vec();
         self.trigger("minecraft:channeled_lightning", move |c, w| {
@@ -1638,7 +1638,7 @@ impl Game<'_> {
         });
     }
     /// `SpearMobsTrigger`: the living entities the spear stabbed in this use.
-    pub(super) fn trigger_spear_mobs(&mut self, stabbed: usize) {
+    pub(super) fn trigger_spear_mobs(&mut self, stabbed: usize) { let (stabbed,) = match crate::points_generated::P398.get() { Some(__l) => { let mut __a = (stabbed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (stabbed,) };
         let me = self.player_entity();
         self.trigger("minecraft:spear_mobs", move |c, w| {
             let pctx = adv::Entities {
@@ -1658,7 +1658,7 @@ impl Game<'_> {
         state: horizon_world::registry::BlockStateId,
         tool: Option<&ItemStack>,
         bees: i64,
-    ) {
+    ) { let (bees,) = match crate::points_generated::P397.get() { Some(__l) => { let mut __a = (bees,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (bees,) };
         let Some(definition) = self.pack.assets.registry.state(state).cloned() else {
             return;
         };
@@ -1684,7 +1684,7 @@ impl Game<'_> {
         });
     }
     /// A trigger with only the player condition (slept_in_bed, started_riding).
-    pub(super) fn trigger_player(&mut self, name: &str) {
+    pub(super) fn trigger_player(&mut self, name: &str) { if let Some(__l) = crate::points_generated::P396.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         self.trigger(name, move |c, w| {
             let pctx = adv::Entities {
@@ -1702,7 +1702,7 @@ impl Game<'_> {
         &mut self,
         recipe: &str,
         ingredients: &[Option<ItemStack>],
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P395.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let used: Vec<ItemView> = ingredients
             .iter()
@@ -1731,7 +1731,7 @@ impl Game<'_> {
     }
     /// `LootTableTrigger`: a container's loot table unpacked for this player
     /// (`RandomizableContainer.unpackLootTable`).
-    pub(super) fn trigger_loot_table(&mut self, table: &str) {
+    pub(super) fn trigger_loot_table(&mut self, table: &str) { if let Some(__l) = crate::points_generated::P394.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let table = table.to_owned();
         self.trigger("minecraft:player_generates_container_loot", move |c, w| {
@@ -1751,7 +1751,7 @@ impl Game<'_> {
         parent: &EntityView,
         partner: &EntityView,
         child: Option<&EntityView>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P393.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let me = self.player_entity();
         let (parent, partner, child) = (parent.clone(), partner.clone(), child.cloned());
         self.trigger("minecraft:bred_animals", move |c, w| {
@@ -1790,7 +1790,7 @@ impl Game<'_> {
     /// `ChangeDimensionTrigger`, and `ServerPlayer.enteredNetherPosition`: the
     /// Overworld position the player went into the Nether from (`at`) is kept
     /// for the way back, and any other trip drops it.
-    pub(super) fn trigger_dimension(&mut self, from: Dim, to: Dim, at: [f64; 3]) {
+    pub(super) fn trigger_dimension(&mut self, from: Dim, to: Dim, at: [f64; 3]) { let (at,) = match crate::points_generated::P392.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let (from_id, to_id) = (from.id().to_owned(), to.id().to_owned());
         self.trigger("minecraft:changed_dimension", move |c, _| {
             c["from"].as_str().is_none_or(|f| f == from_id)
@@ -1807,7 +1807,7 @@ impl Game<'_> {
     /// `ToastManager.update` and `extractRenderState` for the `AdvancementToast`s and
     /// `RecipeToast`s: up to five stack in 32-pixel slots, the rest queue. `hidden` (F1)
     /// keeps them timing out without drawing them.
-    pub(super) fn draw_toasts(&mut self, batch: &mut HudBatch, hidden: bool) {
+    pub(super) fn draw_toasts(&mut self, batch: &mut HudBatch, hidden: bool) { let (hidden,) = match crate::points_generated::P391.get() { Some(__l) => { let mut __a = (hidden,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (hidden,) };
         let multiplier = f64::from(self.settings.notification_display_time);
         let mut sound_played = false;
         let mut i = 0;
@@ -1866,7 +1866,7 @@ impl Game<'_> {
     }
     /// The slots held by shown advancement, recipe, pack and narrator toasts,
     /// as bits.
-    pub(super) fn toast_slots_used(&self) -> u32 {
+    pub(super) fn toast_slots_used(&self) -> u32 { if let Some(__l) = crate::points_generated::P390.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let packs = self.server_packs.toast_slots();
         self.adv
             .toasts
@@ -1877,7 +1877,7 @@ impl Game<'_> {
             .fold(self.tutorial_toast_slots(), |used, slot| used | 1 << slot)
     }
     /// The `AdvancementToast` or `RecipeToast` at `index` in its slot at `y`.
-    fn draw_toast(&mut self, batch: &mut HudBatch, index: usize, y: f32, multiplier: f64) {
+    fn draw_toast(&mut self, batch: &mut HudBatch, index: usize, y: f32, multiplier: f64) { let (index,y,multiplier,) = match crate::points_generated::P389.get() { Some(__l) => { let mut __a = (index,y,multiplier,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,y,multiplier,) };
         let t = &self.adv.toasts[index];
         let x = batch.width - 160.0 * t.slide.portion;
         let fully_for = t.slide.fully_for;
@@ -1992,7 +1992,7 @@ fn decorate_name(d: &adv::Display) -> Text {
 impl Game<'_> {
     /// `AdvancementCommands.Action.GRANT` on one advancement (or one of
     /// its criteria): false when nothing changed.
-    pub(super) fn grant_advancement(&mut self, index: usize, criterion: Option<&str>) -> bool {
+    pub(super) fn grant_advancement(&mut self, index: usize, criterion: Option<&str>) -> bool { let (index,) = match crate::points_generated::P388.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         if self.lan_acting_fake {
             return false;
         }
@@ -2021,7 +2021,7 @@ impl Game<'_> {
         changed || criterion.is_none()
     }
     /// `AdvancementCommands.Action.REVOKE`.
-    pub(super) fn revoke_advancement(&mut self, index: usize, criterion: Option<&str>) -> bool {
+    pub(super) fn revoke_advancement(&mut self, index: usize, criterion: Option<&str>) -> bool { let (index,) = match crate::points_generated::P387.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         if self.lan_acting_fake {
             return false;
         }
@@ -2041,7 +2041,7 @@ impl Game<'_> {
     }
     /// `PlayerAdvancements.revoke(holder, criterion)`: the progress change and
     /// the hook for it.
-    fn revoke_criterion(&mut self, advancement: &str, criterion: &str) -> bool {
+    fn revoke_criterion(&mut self, advancement: &str, criterion: &str) -> bool { if let Some(__l) = crate::points_generated::P386.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let revoked = self.adv.progress.revoke(advancement, criterion);
         if revoked {
             self.advancement_progress(advancement, criterion, NativeProgressType::Revoke);
@@ -2058,7 +2058,7 @@ impl Game<'_> {
         &mut self,
         p: horizon_protocol::packets::play::UpdateAdvancements,
         icons: Vec<String>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P385.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::scoreboard::tag_to_json;
         let mut list: Vec<adv::Advancement> = Vec::new();
         let mut positions: Vec<(f32, f32)> = Vec::new();

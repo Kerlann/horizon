@@ -13,7 +13,7 @@ impl Game<'_> {
     /// `LivingEntity.createWitherRose`: a mob a wither killed leaves a wither
     /// rose where it stood (with mobGriefing, on air that can hold it), else
     /// drops one.
-    pub(super) fn create_wither_rose(&mut self, m: &horizon_client::mobs::Mob) {
+    pub(super) fn create_wither_rose(&mut self, m: &horizon_client::mobs::Mob) { if let Some(__l) = crate::points_generated::P5835.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // getKillCredit: the player who last hurt it, else the last mob (kept
         // for 100 ticks).
         let by_wither = m.ai.last_hurt_by_player <= 0
@@ -50,7 +50,7 @@ impl Game<'_> {
             0,
         );
     }
-    fn is_wither_skull(&self, p: [i32; 3]) -> bool {
+    fn is_wither_skull(&self, p: [i32; 3]) -> bool { let (p,) = match crate::points_generated::P5834.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let name = &*self
             .res
             .facts()
@@ -62,7 +62,7 @@ impl Game<'_> {
         )
     }
     /// `#minecraft:wither_summon_base_blocks` (soul sand and soul soil).
-    pub(super) fn is_soul_base(&self, p: [i32; 3]) -> bool {
+    pub(super) fn is_soul_base(&self, p: [i32; 3]) -> bool { let (p,) = match crate::points_generated::P5833.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let name = &*self
             .res
             .facts()
@@ -80,7 +80,7 @@ impl Game<'_> {
         &self,
         pattern: BlockPattern,
         pos: [i32; 3],
-    ) -> Option<PatternMatch> {
+    ) -> Option<PatternMatch> { let (pos,) = match crate::points_generated::P5832.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         pattern.find(pos, |key, p| match key {
             '^' => self.is_wither_skull(p),
             '#' => self.is_soul_base(p),
@@ -90,7 +90,7 @@ impl Game<'_> {
     /// `WitherSkullBlock.checkSpawn`, after a wither skeleton skull is
     /// placed: the T of three skulls on four soul sand or soul soil, built in
     /// any orientation, becomes a wither.
-    pub(super) fn check_wither_spawn(&mut self, placed: [i32; 3]) -> horizon_client::Result<()> {
+    pub(super) fn check_wither_spawn(&mut self, placed: [i32; 3]) -> horizon_client::Result<()> { let (placed,) = match crate::points_generated::P5831.get() { Some(__l) => { let mut __a = (placed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (placed,) };
         // Nothing is built in Peaceful (`level.getDifficulty() != PEACEFUL`).
         if self.ui.difficulty == 0 || !self.is_wither_skull(placed) {
             return Ok(());
@@ -131,7 +131,7 @@ impl Game<'_> {
         p: &Projectile,
         who: Option<Who>,
         at: [f64; 3],
-    ) -> horizon_client::Result<()> {
+    ) -> horizon_client::Result<()> { let (at,) = match crate::points_generated::P5830.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         // Projectile.getOwner: none once the owner is gone.
         let live_owner = match p.owner {
             Some(Who::Mob(id)) if self.mobs.iter().any(|m| m.id == id && !m.removed) => {
@@ -246,7 +246,7 @@ impl Game<'_> {
     }
     /// `livingOwner.heal(5.0F)` after the skull killed: `LivingEntity.heal`
     /// does nothing to an owner at no health.
-    fn heal_skull_owner(&mut self, p: &Projectile, owner: Option<Who>) {
+    fn heal_skull_owner(&mut self, p: &Projectile, owner: Option<Who>) { if let Some(__l) = crate::points_generated::P5829.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match owner {
             Some(Who::Mob(id)) => {
                 if let Some(w) = self.mobs.iter_mut().find(|m| m.id == id && m.alive()) {

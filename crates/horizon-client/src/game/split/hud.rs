@@ -89,7 +89,7 @@ pub(super) fn lost_prompt(name: &str) -> Prompt {
 
 impl Game<'_> {
     /// P1 opens Setup; another player opens profiles to switch identity.
-    pub(in crate::game) fn open_split_settings(&mut self) {
+    pub(in crate::game) fn open_split_settings(&mut self) { if let Some(__l) = crate::points_generated::P5432.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let page = if self.options.split_guest {
             horizon_client::options_ui::Page::SplitProfiles
         } else {
@@ -99,7 +99,7 @@ impl Game<'_> {
     }
 
     /// Splitscreen over this player's view, above the other toasts (`ToastManager`'s slots).
-    pub(in crate::game) fn draw_split_hud(&mut self, batch: &mut HudBatch, hidden: bool) {
+    pub(in crate::game) fn draw_split_hud(&mut self, batch: &mut HudBatch, hidden: bool) { let (hidden,) = match crate::points_generated::P5431.get() { Some(__l) => { let mut __a = (hidden,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (hidden,) };
         let atlas = &self.gui.atlas;
         let (w, h) = (batch.width, batch.height);
         let width = |text: &str| HudBatch::text_width(atlas, text).ceil();

@@ -35,14 +35,14 @@ fn size_limit_text() -> String {
 impl Game<'_> {
     // ---- /forceload ----------------------------------------------------------
 
-    pub(super) fn column_arg(&self, ctx: &Context, name: &str) -> R<[i32; 2]> {
+    pub(super) fn column_arg(&self, ctx: &Context, name: &str) -> R<[i32; 2]> { if let Some(__l) = crate::points_generated::P1215.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let c = self
             .coords(ctx, name)
             .ok_or_else(|| err("argument.pos2d.incomplete", &[]))?;
         let p = self.resolve_coords(&c);
         Ok([p[0].floor() as i32, p[2].floor() as i32])
     }
-    pub(super) fn cmd_forceload(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_forceload(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1214.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let dim = Text::literal(self.dim.id());
         match id {
             "forceload.query" if ctx.get("pos").is_none() => {
@@ -147,7 +147,7 @@ impl Game<'_> {
 
     // ---- /fillbiome ----------------------------------------------------------------
 
-    pub(super) fn cmd_fillbiome(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_fillbiome(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1213.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Arg::Resource(biome)) = ctx.get("biome").cloned() else {
             return Ok(0);
         };
@@ -266,7 +266,7 @@ impl Game<'_> {
     /// damage outside the border.
     /// `BorderChangeListener.DelegateBorderChangeListener`'s packets: what
     /// changed on the border since the guests were last told of it.
-    pub(in crate::game) fn lan_sync_border(&mut self) {
+    pub(in crate::game) fn lan_sync_border(&mut self) { if let Some(__l) = crate::points_generated::P1212.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -277,7 +277,7 @@ impl Game<'_> {
             }
         }
     }
-    pub(in crate::game) fn tick_worldborder(&mut self) {
+    pub(in crate::game) fn tick_worldborder(&mut self) { if let Some(__l) = crate::points_generated::P1211.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let remaining = self.border.remaining_ticks();
         self.border.tick();
         if remaining > 0
@@ -291,7 +291,7 @@ impl Game<'_> {
     }
     /// The player's movement collides with the border as it is now
     /// (`CollisionGetter.borderCollision`): from inside, its walls stop it.
-    pub(in crate::game) fn player_border(&mut self) {
+    pub(in crate::game) fn player_border(&mut self) { if let Some(__l) = crate::points_generated::P1210.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(p) = self.player.as_mut() {
             p.border = Some(self.border.geometry().clone());
         }
@@ -299,7 +299,7 @@ impl Game<'_> {
     /// `LivingEntity.baseTick`: a player outside the border, further than
     /// its safe zone, is hurt by the blocks beyond it. The game's player, or
     /// a guest's in their turn (`as_guest`).
-    pub(in crate::game) fn border_damage(&mut self) {
+    pub(in crate::game) fn border_damage(&mut self) { if let Some(__l) = crate::points_generated::P1209.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((px, pz, half)) = self.player.as_ref().map(|p| {
             (
                 p.position.x,
@@ -320,7 +320,7 @@ impl Game<'_> {
             self.hurt_player_by("minecraft:outside_border", amount);
         }
     }
-    pub(super) fn cmd_worldborder(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_worldborder(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1208.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let float2 = |v: f64| super::percent_f(v, 2);
         let double = match ctx.get("distance") {
             Some(Arg::Double(d)) => *d,
@@ -469,7 +469,7 @@ impl Game<'_> {
 
     // ---- /loot ---------------------------------------------------------------------------------
 
-    fn tool_stack(&mut self, ctx: &Context) -> R<Option<ItemStack>> {
+    fn tool_stack(&mut self, ctx: &Context) -> R<Option<ItemStack>> { if let Some(__l) = crate::points_generated::P1207.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(Arg::Item(p)) = ctx.get("tool") {
             let (damage, extra) = match p
                 .components
@@ -501,7 +501,7 @@ impl Game<'_> {
             .first()
             .and_then(|s| self.slot_get(s)))
     }
-    pub(super) fn cmd_loot(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_loot(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1206.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The drops.
         let (drops, table): (Vec<ItemStack>, Option<String>) = match id {
             "loot.loot" | "loot.fish" => {

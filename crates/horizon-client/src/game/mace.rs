@@ -93,24 +93,24 @@ fn smash_push(center: Vec3, heavy: f64, at: Vec3, velocity: &mut Vec3, resistanc
 }
 
 impl Game<'_> {
-    fn holds_mace(&self) -> bool {
+    fn holds_mace(&self) -> bool { if let Some(__l) = crate::points_generated::P2592.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.inventory[self.selected]
             .as_ref()
             .is_some_and(|s| &*s.item == "minecraft:mace")
     }
     /// `MaceItem.canSmashAttack` for the player: falling and not gliding.
-    fn can_smash_attack(&self) -> bool {
+    fn can_smash_attack(&self) -> bool { if let Some(__l) = crate::points_generated::P2591.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player
             .as_ref()
             .is_some_and(|p| p.fall_distance > FALL_THRESHOLD && !p.fall_flying)
     }
     /// A held mace about to smash (`MaceItem.getItemDamageSource`: the attack
     /// is `mace_smash` damage).
-    pub(super) fn smash_attack(&self) -> bool {
+    pub(super) fn smash_attack(&self) -> bool { if let Some(__l) = crate::points_generated::P2590.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.holds_mace() && self.can_smash_attack()
     }
     /// The damage source of the player's hit from `from` with the held item.
-    pub(super) fn attack_source(&self, from: [f64; 3]) -> Damage {
+    pub(super) fn attack_source(&self, from: [f64; 3]) -> Damage { let (from,) = match crate::points_generated::P2589.get() { Some(__l) => { let mut __a = (from,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from,) };
         if self.smash_attack() {
             Damage::mace(from)
         } else {
@@ -120,7 +120,7 @@ impl Game<'_> {
     /// `MaceItem.getAttackDamageBonus` against `victim`: 4 per block for the
     /// first three blocks fallen, 2 for the next five, 1 after that, plus
     /// `smash_damage_per_fallen_block` (Density) for every block.
-    pub(super) fn smash_damage_bonus(&mut self, victim: &str) -> f32 {
+    pub(super) fn smash_damage_bonus(&mut self, victim: &str) -> f32 { if let Some(__l) = crate::points_generated::P2588.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.smash_attack() {
             return 0.0;
         }
@@ -158,7 +158,7 @@ impl Game<'_> {
     pub(super) fn attacker_aim(
         &self,
         who: Option<horizon_client::mobs::Who>,
-    ) -> Option<horizon_client::mobs::Aim> {
+    ) -> Option<horizon_client::mobs::Aim> { if let Some(__l) = crate::points_generated::P2587.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match who? {
             horizon_client::mobs::Who::Player => {
                 let p = self.player.as_ref()?;
@@ -181,7 +181,7 @@ impl Game<'_> {
     }
     /// `LivingEntity.hurtServer` of the mob at `index` by the player's hit:
     /// the weapon's `armor_effectiveness` enchantments (Breach) thin its armor.
-    pub(super) fn hurt_by_player(&mut self, index: usize, amount: f32, source: Damage) -> bool {
+    pub(super) fn hurt_by_player(&mut self, index: usize, amount: f32, source: Damage) -> bool { let (index,amount,) = match crate::points_generated::P2586.get() { Some(__l) => { let mut __a = (index,amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,amount,) };
         let _attacker = self.knockback_scope(self.player.as_ref().map_or(0, |p| p.entity_id));
         let held = self.held().cloned();
         let aim = self.attacker_aim(source.attacker);
@@ -230,7 +230,7 @@ impl Game<'_> {
     /// at `index`: the item's `hurtEnemy` (the "used" statistic of a weapon),
     /// the post-attack enchantments, then `postHurtEnemy` with the weapon's
     /// wear.
-    pub(super) fn weapon_hit(&mut self, index: usize) {
+    pub(super) fn weapon_hit(&mut self, index: usize) { let (index,) = match crate::points_generated::P2585.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let Some(stack) = self.held().cloned() else {
             return;
         };
@@ -256,7 +256,7 @@ impl Game<'_> {
     }
     /// `ItemStack.postHurtEnemy`: `hurtAndBreak(weapon.itemDamagePerAttack)` of
     /// the weapon in the acting hand.
-    pub(super) fn weapon_wear(&mut self, stack: &ItemStack) {
+    pub(super) fn weapon_wear(&mut self, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P2584.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let weapon = self
             .res
             .items()
@@ -272,7 +272,7 @@ impl Game<'_> {
     /// `MaceItem.hurtEnemy` for a smash: the fall stops and its damage is
     /// waived from where the hit landed, the ground or air smash sounds, and
     /// the knockback around the target.
-    fn mace_hurt_enemy(&mut self, index: usize) {
+    fn mace_hurt_enemy(&mut self, index: usize) { let (index,) = match crate::points_generated::P2583.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let target_on_ground = self.mobs[index].on_ground;
         if let Some(fall) = self.mace_smash_self(target_on_ground) {
             let target = &self.mobs[index];
@@ -283,7 +283,7 @@ impl Game<'_> {
     /// stops, its damage is waived from where the hit landed, and the ground
     /// or air smash sound plays. The fall distance it was, if there is a
     /// player.
-    fn mace_smash_self(&mut self, target_on_ground: bool) -> Option<f64> {
+    fn mace_smash_self(&mut self, target_on_ground: bool) -> Option<f64> { let (target_on_ground,) = match crate::points_generated::P2582.get() { Some(__l) => { let mut __a = (target_on_ground,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (target_on_ground,) };
         let p = self.player.as_mut()?;
         p.velocity = Vec3::new(p.velocity.x, f64::from(0.01f32), p.velocity.z);
         // A server player's client is told (ClientboundSetEntityMotionPacket): it moves by
@@ -314,7 +314,7 @@ impl Game<'_> {
     /// player: the weapon's side of it, as `weapon_hit` does for a mob. A
     /// smash stops the fall and its Wind Burst (a `post_attack` explosion on
     /// the attacker) launches the attacker.
-    pub(super) fn weapon_hit_player(&mut self, victim_on_ground: bool) {
+    pub(super) fn weapon_hit_player(&mut self, victim_on_ground: bool) { let (victim_on_ground,) = match crate::points_generated::P2581.get() { Some(__l) => { let mut __a = (victim_on_ground,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (victim_on_ground,) };
         let Some(stack) = self.held().cloned() else {
             return;
         };
@@ -342,7 +342,7 @@ impl Game<'_> {
     /// mob, a smash stops the fall and knocks the creatures around the stand
     /// away, and the Wind Burst (a `post_attack` explosion on the attacker)
     /// launches the attacker.
-    pub(super) fn weapon_hit_stand(&mut self, id: u32, center: Vec3, on_ground: bool) {
+    pub(super) fn weapon_hit_stand(&mut self, id: u32, center: Vec3, on_ground: bool) { let (id,on_ground,) = match crate::points_generated::P2580.get() { Some(__l) => { let mut __a = (id,on_ground,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,on_ground,) };
         let Some(stack) = self.held().cloned() else {
             return;
         };
@@ -375,7 +375,7 @@ impl Game<'_> {
     /// pets and the allays that like it), marker armor stands and creative
     /// flyers are spared; the predicate's own tamed-animal test asks whether
     /// the target owns the animal, which a mob never does.
-    fn smash_knockback(&mut self, center: Vec3, target: Spared, fall: f64) {
+    fn smash_knockback(&mut self, center: Vec3, target: Spared, fall: f64) { let (fall,) = match crate::points_generated::P2579.get() { Some(__l) => { let mut __a = (fall,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (fall,) };
         // Entity.getOnPos without a supporting block.
         let on_pos = [
             center.x.floor() as i32,
@@ -414,14 +414,14 @@ impl Game<'_> {
     }
     /// `MaceItem.knockback` on the players but the attacker: the host unless
     /// it attacked, and every guest but the attacker.
-    fn smash_push_players(&mut self, push: &SmashPush) {
+    fn smash_push_players(&mut self, push: &SmashPush) { if let Some(__l) = crate::points_generated::P2578.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if push.attacker.is_some() {
             self.smash_push_player(push);
         }
         self.each_guest_hit_except(push.attacker, |g| g.smash_push_player(push));
     }
     /// The pushes guests' smashes put off.
-    pub(super) fn flush_smash_pushes(&mut self) {
+    pub(super) fn flush_smash_pushes(&mut self) { if let Some(__l) = crate::points_generated::P2577.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for push in std::mem::take(&mut self.creatures.smash_pushes) {
             self.smash_push_players(&push);
         }
@@ -429,7 +429,7 @@ impl Game<'_> {
     /// `MaceItem.knockback` on the player here (the host, or the guest swapped
     /// in): not a spectator, an ally of the attacker (`isAlliedTo`: the same
     /// team) or a creative player flying.
-    fn smash_push_player(&mut self, push: &SmashPush) {
+    fn smash_push_player(&mut self, push: &SmashPush) { if let Some(__l) = crate::points_generated::P2576.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.spectator()
             || horizon_client::scoreboard::teams_allied(push.team.as_ref(), self.player_team())
         {
@@ -457,7 +457,7 @@ impl Game<'_> {
     /// `getEnchantedDamage(1 + sweeping ratio * attack damage) * strength`,
     /// knocked back 0.4 along the player's yaw. The player's allies and the
     /// target (`spared`) are spared.
-    pub(super) fn sweep_damage(&mut self, target: Aabb, spared: Spared, scale: f32) {
+    pub(super) fn sweep_damage(&mut self, target: Aabb, spared: Spared, scale: f32) { let (scale,) = match crate::points_generated::P2575.get() { Some(__l) => { let mut __a = (scale,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (scale,) };
         let Some(player) = self.player.as_ref() else {
             return;
         };
@@ -605,7 +605,7 @@ impl Game<'_> {
     }
     /// Level event 2013 (`ParticleUtils.spawnSmashAttackParticles`): dust
     /// pillars of the block at `pos`, a cluster over it and a ring 3.5 out.
-    pub(super) fn smash_dust(&mut self, pos: BlockPos, count: i32) {
+    pub(super) fn smash_dust(&mut self, pos: BlockPos, count: i32) { let (count,) = match crate::points_generated::P2574.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         let state = self.world.block(pos.x, pos.y, pos.z);
         let Some((sprite, tint)) = self.particle_sprite(state, [pos.x, pos.y, pos.z]) else {
             return;

@@ -13,13 +13,13 @@ use horizon_world::registry::BlockStateId;
 
 impl Game<'_> {
     /// `BedRule.canSleep` of the Overworld's bed rule: at night or in a thunderstorm.
-    pub(super) fn bed_can_sleep_now(&self) -> bool {
+    pub(super) fn bed_can_sleep_now(&self) -> bool { if let Some(__l) = crate::points_generated::P577.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.dim == Dim::Overworld && self.sky_darken() >= 4
     }
     /// What `CanContinueSleepingEvent.getProblem` holds for a sleeper: its bed gone
     /// (`checkBedExists`), or for a player (`Player.tick`) a bed rule that no longer lets
     /// them sleep.
-    pub(super) fn sleep_problem(&self, bed_exists: bool, player: bool) -> Option<SleepProblem> {
+    pub(super) fn sleep_problem(&self, bed_exists: bool, player: bool) -> Option<SleepProblem> { let (bed_exists,player,) = match crate::points_generated::P576.get() { Some(__l) => { let mut __a = (bed_exists,player,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (bed_exists,player,) };
         if !bed_exists {
             Some(SleepProblem::NotPossibleHere)
         } else if player && !self.bed_can_sleep_now() {
@@ -30,7 +30,7 @@ impl Game<'_> {
     }
     /// `setBlockAndUpdate(head, state.setValue(OCCUPIED, occupied))`, when
     /// the block at `head` is still a bed and not already so.
-    pub(super) fn set_bed_occupied(&mut self, head: [i32; 3], occupied: bool) {
+    pub(super) fn set_bed_occupied(&mut self, head: [i32; 3], occupied: bool) { let (head,occupied,) = match crate::points_generated::P575.get() { Some(__l) => { let mut __a = (head,occupied,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (head,occupied,) };
         let registry = &self.pack.assets.registry;
         let Some(mut state) = registry
             .state(self.world.block(head[0], head[1], head[2]))
@@ -53,7 +53,7 @@ impl Game<'_> {
 
     /// `LivingEntity.startSleeping` for the player in place (the host, or
     /// a guest during its turn): the bed it lies in is occupied.
-    pub(super) fn occupy_bed(&mut self, head: [i32; 3]) {
+    pub(super) fn occupy_bed(&mut self, head: [i32; 3]) { let (head,) = match crate::points_generated::P574.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (head,) };
         self.set_bed_occupied(head, true);
         if !self.player_beds.contains(&(self.dim, head)) {
             self.player_beds.push((self.dim, head));
@@ -61,7 +61,7 @@ impl Game<'_> {
     }
 
     /// Whether a player in the level in place still sleeps in `head`.
-    fn player_in_bed(&self, head: [i32; 3]) -> bool {
+    fn player_in_bed(&self, head: [i32; 3]) -> bool { let (head,) = match crate::points_generated::P573.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (head,) };
         self.sleeping == Some(head)
             || self.lan.as_ref().is_some_and(|h| {
                 h.hub
@@ -75,7 +75,7 @@ impl Game<'_> {
     /// this level nobody sleeps in any more are free again. Runs in each
     /// level's tick, after the players' packets and sleep ticks, never inside
     /// a guest's turn.
-    pub(super) fn free_left_beds(&mut self) {
+    pub(super) fn free_left_beds(&mut self) { if let Some(__l) = crate::points_generated::P572.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let dim = self.dim;
         let left: Vec<[i32; 3]> = self
             .player_beds
@@ -101,7 +101,7 @@ impl Game<'_> {
 
     /// The levels with a bed a player marked occupied: they tick until the
     /// bed is freed.
-    pub(super) fn player_bed_levels(&self) -> impl Iterator<Item = Dim> + '_ {
+    pub(super) fn player_bed_levels(&self) -> impl Iterator<Item = Dim> + '_ { if let Some(__l) = crate::points_generated::P571.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player_beds.iter().map(|(d, _)| *d)
     }
 
@@ -109,7 +109,7 @@ impl Game<'_> {
     /// leaves (`ServerPlayer.disconnect` stops its sleep), so no bed is
     /// saved occupied by a player who is not in it when the world opens
     /// again. Each bed is freed in its own level.
-    pub(super) fn free_player_beds(&mut self) -> Result<()> {
+    pub(super) fn free_player_beds(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P570.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player_beds.is_empty() {
             return Ok(());
         }
@@ -178,7 +178,7 @@ fn pos_to_bed(head: [i32; 3], height: f64) -> Vec3 {
 
 impl Game<'_> {
     /// The bed's `part`: head or foot.
-    fn bed_part(&self, state: BlockStateId) -> Option<String> {
+    fn bed_part(&self, state: BlockStateId) -> Option<String> { if let Some(__l) = crate::points_generated::P569.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pack
             .assets
             .registry
@@ -189,7 +189,7 @@ impl Game<'_> {
     /// lies on, measured from the head's own y - a straw bed's head from its
     /// foot's - or `None` when there is no such shape, in which case the
     /// player does not lie down at all.
-    pub(super) fn sleep_height(&self, head: [i32; 3]) -> Option<f64> {
+    pub(super) fn sleep_height(&self, head: [i32; 3]) -> Option<f64> { let (head,) = match crate::points_generated::P568.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (head,) };
         let state = self.world.block(head[0], head[1], head[2]);
         let name = self.res.facts().get(state).name.to_owned();
         let part = self.bed_part(state);
@@ -210,7 +210,7 @@ impl Game<'_> {
         shape_top(&self.outline_boxes(at), f64::from(at[1]))
     }
     /// Where the sleeper lies (`setPosToBed`), when the bed gives it a shape.
-    pub(super) fn sleeping_position(&self, head: [i32; 3]) -> Option<Vec3> {
+    pub(super) fn sleeping_position(&self, head: [i32; 3]) -> Option<Vec3> { let (head,) = match crate::points_generated::P567.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (head,) };
         self.sleep_height(head)
             .map(|height| pos_to_bed(head, height))
     }

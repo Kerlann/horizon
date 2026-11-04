@@ -13,18 +13,18 @@ fn block_of(p: Vec3) -> [i32; 3] {
     [p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32]
 }
 impl Game<'_> {
-    fn villager_index(&self, id: u32) -> Option<usize> {
+    fn villager_index(&self, id: u32) -> Option<usize> { let (id,) = match crate::points_generated::P5801.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.mobs
             .iter()
             .position(|m| m.id == id && m.species() == Species::Villager)
     }
-    fn item_max_stack(&self, item: &str) -> u32 {
+    fn item_max_stack(&self, item: &str) -> u32 { if let Some(__l) = crate::points_generated::P5800.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.items().get(item).map_or(64, |i| i.max_stack)
     }
     /// `UseBonemeal.tick`'s `BoneMealItem.growCrop`: villager `id`'s first
     /// bone meal on `pos`, with level event 1505 and the next crop to work
     /// on when it grew.
-    pub(super) fn villager_bonemeal(&mut self, id: u32, pos: BlockPos) {
+    pub(super) fn villager_bonemeal(&mut self, id: u32, pos: BlockPos) { let (id,) = match crate::points_generated::P5799.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(i) = self.villager_index(id) else {
             return;
         };
@@ -70,7 +70,7 @@ impl Game<'_> {
     }
     /// `WorkAtComposter.useWorkstation`: at a composter the farmer makes
     /// bread, then composts seeds.
-    pub(super) fn villager_work_at_composter(&mut self, id: u32, pos: [i32; 3]) {
+    pub(super) fn villager_work_at_composter(&mut self, id: u32, pos: [i32; 3]) { let (id,pos,) = match crate::points_generated::P5798.get() { Some(__l) => { let mut __a = (id,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,pos,) };
         let Some(i) = self.villager_index(id) else {
             return;
         };
@@ -82,7 +82,7 @@ impl Game<'_> {
     }
     /// `WorkAtComposter.makeBread`: up to three loaves from nine wheat while
     /// the villager holds at most 36 bread; what does not fit drops.
-    fn villager_make_bread(&mut self, i: usize) {
+    fn villager_make_bread(&mut self, i: usize) { let (i,) = match crate::points_generated::P5797.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let max_stack = self.item_max_stack("minecraft:bread");
         let e = villager::ext_mut(&mut self.mobs[i]);
         if e.count_item("minecraft:bread") > 36 {
@@ -102,7 +102,7 @@ impl Game<'_> {
     }
     /// `BehaviorUtils.throwItem`: toss a stack from a villager's hand toward
     /// a point.
-    fn villager_throw(&mut self, from: Vec3, eye: f64, to: Vec3, stack: ItemStack) {
+    fn villager_throw(&mut self, from: Vec3, eye: f64, to: Vec3, stack: ItemStack) { let (eye,) = match crate::points_generated::P5796.get() { Some(__l) => { let mut __a = (eye,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (eye,) };
         let at = [from.x, eye - 0.3, from.z];
         let d = Vec3::new(to.x - from.x, to.y - from.y, to.z - from.z).normalize();
         self.spawn_item(stack, at, [d.x * 0.3, d.y * 0.3, d.z * 0.3], 10);
@@ -110,7 +110,7 @@ impl Game<'_> {
 
     /// `TradeWithVillager.tick` for one pair: gossip (at most once in 1200
     /// ticks for both), then surplus food and wanted wares tossed over.
-    pub(super) fn villager_meet(&mut self, a: u32, b: u32) {
+    pub(super) fn villager_meet(&mut self, a: u32, b: u32) { let (a,b,) = match crate::points_generated::P5795.get() { Some(__l) => { let mut __a = (a,b,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (a,b,) };
         let (Some(ia), Some(ib)) = (self.villager_index(a), self.villager_index(b)) else {
             return;
         };
@@ -129,7 +129,7 @@ impl Game<'_> {
 
     /// `Villager.spawnGolemIfNeeded`: when enough villagers nearby that
     /// slept recently and saw no golem agree, an iron golem appears.
-    pub(super) fn villager_golem_check(&mut self, id: u32, needed: usize) {
+    pub(super) fn villager_golem_check(&mut self, id: u32, needed: usize) { let (id,needed,) = match crate::points_generated::P5794.get() { Some(__l) => { let mut __a = (id,needed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,needed,) };
         let Some(i) = self.villager_index(id) else {
             return;
         };
@@ -145,7 +145,7 @@ impl Game<'_> {
     }
     /// `SpawnUtil.trySpawnMob(IRON_GOLEM, ...)`: a golem near `start`, with
     /// the ambient sound `trySpawnMob` plays.
-    fn try_spawn_iron_golem(&mut self, start: [i32; 3]) -> bool {
+    fn try_spawn_iron_golem(&mut self, start: [i32; 3]) -> bool { let (start,) = match crate::points_generated::P5793.get() { Some(__l) => { let mut __a = (start,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (start,) };
         let Some(kind) = self.res.mob_types().get("minecraft:iron_golem").cloned() else {
             return false;
         };
@@ -185,7 +185,7 @@ impl Game<'_> {
         parent: u32,
         partner: u32,
         child: Option<([i32; 3], Option<u8>)>,
-    ) {
+    ) { let (parent,partner,) = match crate::points_generated::P5792.get() { Some(__l) => { let mut __a = (parent,partner,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (parent,partner,) };
         let (Some(ia), Some(ib)) = (self.villager_index(parent), self.villager_index(partner))
         else {
             return;
@@ -227,7 +227,7 @@ impl Game<'_> {
     /// draws particles about the mob (villager 12, 13 and 14, taming 6 and 7,
     /// love 18): the guests get the byte, and this game draws it as its own
     /// client would.
-    pub(super) fn mob_event_particles(&mut self, id: u32, event: i8) {
+    pub(super) fn mob_event_particles(&mut self, id: u32, event: i8) { let (id,event,) = match crate::points_generated::P5791.get() { Some(__l) => { let mut __a = (id,event,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,event,) };
         let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
             return;
         };
@@ -237,7 +237,7 @@ impl Game<'_> {
     }
     /// `handleEntityEvent(event)`'s particles about mob `id`
     /// (`Villager`, `TamableAnimal`, `AbstractHorse`, `Animal`, `Allay`).
-    pub(super) fn entity_event_particles(&mut self, id: u32, event: i8) {
+    pub(super) fn entity_event_particles(&mut self, id: u32, event: i8) { let (id,event,) = match crate::points_generated::P5790.get() { Some(__l) => { let mut __a = (id,event,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,event,) };
         let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
             return;
         };
@@ -253,7 +253,7 @@ impl Game<'_> {
         id: u32,
         kind: &'static str,
         burst: horizon_client::particles::Burst,
-    ) {
+    ) { let (id,) = match crate::points_generated::P5789.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
             return;
         };
@@ -269,7 +269,7 @@ impl Game<'_> {
         feet: [f64; 3],
         size: [f64; 2],
         burst: horizon_client::particles::Burst,
-    ) {
+    ) { let (feet,size,) = match crate::points_generated::P5788.get() { Some(__l) => { let mut __a = (feet,size,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (feet,size,) };
         let Some(ty) = horizon_client::particles::ParticleType::from_name(kind) else {
             return;
         };
@@ -291,7 +291,7 @@ impl Game<'_> {
     /// `NearestItemSensor.doTick` for the villagers whose sensor is due: the
     /// nearest dropped item within 32 blocks that `Villager.wantsToPickUp`
     /// accepts and the villager sees, or none.
-    pub(super) fn villager_item_sense(&mut self) {
+    pub(super) fn villager_item_sense(&mut self) { if let Some(__l) = crate::points_generated::P5787.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.dropped.is_empty() {
             for m in &mut self.mobs {
                 if m.species() == Species::Villager && villager_brain::take_item_scan(m) {
@@ -351,7 +351,7 @@ impl Game<'_> {
     }
     /// `Mob.aiStep` item pickup for villagers (`InventoryCarrier`): food,
     /// seeds and what their profession wants, from within a block.
-    pub(super) fn villager_pickups(&mut self) {
+    pub(super) fn villager_pickups(&mut self) { if let Some(__l) = crate::points_generated::P5786.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.dropped.is_empty() || !self.ui.rules.bool("mob_griefing") {
             return;
         }
@@ -413,7 +413,7 @@ impl Game<'_> {
     }
 
     /// The UUID of a player by connection (None for the host).
-    pub(super) fn player_uuid_of(&self, who: Option<u32>) -> Option<[i32; 4]> {
+    pub(super) fn player_uuid_of(&self, who: Option<u32>) -> Option<[i32; 4]> { if let Some(__l) = crate::points_generated::P5785.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let uuid = match who {
             None => return self.level.player_uuid,
             // While that guest acts its own UUID is swapped in.
@@ -424,7 +424,7 @@ impl Game<'_> {
     }
     /// `Villager.setLastHurtByMob` and `ServerLevel.onReputationEvent`: a hit
     /// from a player counts against that player with the villager that was hit.
-    pub(super) fn villager_reputation_tick(&mut self) {
+    pub(super) fn villager_reputation_tick(&mut self) { if let Some(__l) = crate::points_generated::P5784.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut angry = Vec::new();
         for i in 0..self.mobs.len() {
             let m = &self.mobs[i];
@@ -464,7 +464,7 @@ impl Game<'_> {
     /// `Villager.tellWitnessesThatIWasMurdered`: the villagers that saw a
     /// player kill one remember it as a major wrong.
     /// `killer` is the guest connection that last hurt it (None: the host).
-    pub(super) fn villager_murdered(&mut self, victim: &Mob, by_player: bool, killer: Option<u32>) {
+    pub(super) fn villager_murdered(&mut self, victim: &Mob, by_player: bool, killer: Option<u32>) { let (by_player,) = match crate::points_generated::P5783.get() { Some(__l) => { let mut __a = (by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (by_player,) };
         if victim.species() != Species::Villager || !by_player {
             return;
         }
@@ -498,13 +498,13 @@ impl Game<'_> {
         }
     }
     /// `ReputationEventType.TRADE`: each trade earns a little trust.
-    pub(super) fn villager_traded(&mut self, id: u32) {
+    pub(super) fn villager_traded(&mut self, id: u32) { let (id,) = match crate::points_generated::P5782.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Some(uuid) = self.level.player_uuid {
             self.villager_traded_by(id, uuid);
         }
     }
     /// The TRADE reputation event from the player `uuid` (a guest's too).
-    pub(super) fn villager_traded_by(&mut self, id: u32, uuid: [i32; 4]) {
+    pub(super) fn villager_traded_by(&mut self, id: u32, uuid: [i32; 4]) { let (id,uuid,) = match crate::points_generated::P5781.get() { Some(__l) => { let mut __a = (id,uuid,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,uuid,) };
         let Some(i) = self.villager_index(id) else {
             return;
         };
@@ -517,26 +517,26 @@ impl Game<'_> {
         self.mob_event_particles(id, 14);
     }
     /// `Villager.getPlayerReputation` of the local player.
-    pub(super) fn villager_reputation(&self, id: u32) -> i32 {
+    pub(super) fn villager_reputation(&self, id: u32) -> i32 { let (id,) = match crate::points_generated::P5780.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let Some(uuid) = self.level.player_uuid else {
             return 0;
         };
         self.villager_reputation_of(id, uuid)
     }
     /// `Villager.getPlayerReputation` of the player `uuid`.
-    pub(super) fn villager_reputation_of(&self, id: u32, uuid: [i32; 4]) -> i32 {
+    pub(super) fn villager_reputation_of(&self, id: u32, uuid: [i32; 4]) -> i32 { let (id,uuid,) = match crate::points_generated::P5779.get() { Some(__l) => { let mut __a = (id,uuid,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,uuid,) };
         self.villager_index(id)
             .and_then(|i| villager::ext(&self.mobs[i]))
             .map_or(0, |e| e.gossips.reputation(uuid))
     }
     /// The Hero of the Village amplifier of the player, if any.
-    pub(super) fn hero_amplifier(&self) -> Option<i32> {
+    pub(super) fn hero_amplifier(&self) -> Option<i32> { if let Some(__l) = crate::points_generated::P5778.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.potions.effects.amplifier("hero_of_the_village")
     }
     /// `AbstractBedBlock.kickVillagerOutOfBed`: the first sleeping villager
     /// whose box touches the bed's head block wakes up
     /// (`Villager.stopSleeping`). Whether one did.
-    pub(super) fn kick_villager_out_of_bed(&mut self, head: [i32; 3]) -> bool {
+    pub(super) fn kick_villager_out_of_bed(&mut self, head: [i32; 3]) -> bool { let (head,) = match crate::points_generated::P5777.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (head,) };
         let min = Vec3::new(f64::from(head[0]), f64::from(head[1]), f64::from(head[2]));
         let max = Vec3::new(min.x + 1.0, min.y + 1.0, min.z + 1.0);
         let Some(i) = self.mobs.iter().position(|m| {
@@ -551,7 +551,7 @@ impl Game<'_> {
         true
     }
     /// Ask after this mob's tick Pre; its living tick applies the answer.
-    pub(super) fn sync_sleeping_mob(&mut self, index: usize) {
+    pub(super) fn sync_sleeping_mob(&mut self, index: usize) { let (index,) = match crate::points_generated::P5776.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         if self.remote.is_some()
             || !mod_api::__private::listened(mod_api::HookId::CanContinueSleeping)
         {
@@ -576,7 +576,7 @@ impl Game<'_> {
     }
     /// `LivingEntity.stopSleeping` for the villager `id`, outside its own
     /// tick: it stands up and its bed is no longer occupied.
-    pub(super) fn wake_villager(&mut self, id: u32) {
+    pub(super) fn wake_villager(&mut self, id: u32) { let (id,) = match crate::points_generated::P5775.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(i) = self.mobs.iter().position(|m| m.id == id) else {
             return;
         };

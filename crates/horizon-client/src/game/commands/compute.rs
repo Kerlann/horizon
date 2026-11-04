@@ -28,7 +28,7 @@ impl Game<'_> {
         &self,
         ctx: &Context,
         registry: &str,
-    ) -> R<(Option<String>, Value)> {
+    ) -> R<(Option<String>, Value)> { if let Some(__l) = crate::points_generated::P1052.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let raw = match ctx.get("provider") {
             Some(Arg::Resource(s) | Arg::Str(s)) => s.clone(),
             _ => return Err(err("command.failed", &[])),
@@ -50,7 +50,7 @@ impl Game<'_> {
         Ok((Some(id), value))
     }
     /// A registered provider's definition.
-    fn provider_file(&self, registry: &str, id: &str) -> Option<Value> {
+    fn provider_file(&self, registry: &str, id: &str) -> Option<Value> { if let Some(__l) = crate::points_generated::P1051.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (ns, path) = id.split_once(':').unwrap_or(("minecraft", id));
         let dir = registry.trim_start_matches("minecraft:");
         let file = self
@@ -60,7 +60,7 @@ impl Game<'_> {
         serde_json::from_slice(&std::fs::read(file).ok()?).ok()
     }
     /// The compute context the command's source literal selects.
-    pub(in crate::game) fn compute_context(&mut self, ctx: &Context) -> R<ComputeContext> {
+    pub(in crate::game) fn compute_context(&mut self, ctx: &Context) -> R<ComputeContext> { if let Some(__l) = crate::points_generated::P1050.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut c = ComputeContext::default();
         if ctx.literals.iter().any(|l| l == "block") && ctx.get("computePos").is_some() {
             c.block = Some(self.block_pos_arg(ctx, "computePos")?);
@@ -75,7 +75,7 @@ impl Game<'_> {
         Ok(c)
     }
     /// `ComputeCommand.computeAsInt` / `computeAsFloat`.
-    pub(super) fn cmd_compute(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_compute(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1049.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let integer = ctx.literals.iter().any(|l| l == "integer");
         let registry = if integer {
             "minecraft:context_int_provider"
@@ -152,7 +152,7 @@ impl Game<'_> {
         v: &Value,
         c: &ComputeContext,
         depth: u32,
-    ) -> Result<i32, Arith> {
+    ) -> Result<i32, Arith> { let (depth,) = match crate::points_generated::P1048.get() { Some(__l) => { let mut __a = (depth,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (depth,) };
         if depth > 64 {
             return Ok(0);
         }
@@ -297,7 +297,7 @@ impl Game<'_> {
         v: &Value,
         c: &ComputeContext,
         depth: u32,
-    ) -> Result<f32, Arith> {
+    ) -> Result<f32, Arith> { let (depth,) = match crate::points_generated::P1047.get() { Some(__l) => { let mut __a = (depth,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (depth,) };
         if depth > 64 {
             return Ok(0.0);
         }
@@ -397,7 +397,7 @@ impl Game<'_> {
         &mut self,
         o: &serde_json::Map<String, Value>,
         c: &ComputeContext,
-    ) -> Result<Option<Value>, Arith> {
+    ) -> Result<Option<Value>, Arith> { if let Some(__l) = crate::points_generated::P1046.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match o
             .get("type")
             .and_then(Value::as_str)
@@ -460,7 +460,7 @@ impl Game<'_> {
     }
     /// A loot condition in the compute context: references, the logical
     /// combinators and `match_block` on the context's block state.
-    fn compute_condition(&mut self, cond: &Value, c: &ComputeContext) -> bool {
+    fn compute_condition(&mut self, cond: &Value, c: &ComputeContext) -> bool { if let Some(__l) = crate::points_generated::P1045.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match cond {
             Value::String(id) => match self.provider_file("minecraft:predicate", id) {
                 Some(def) => self.compute_condition(&def, c),

@@ -44,7 +44,7 @@ impl Game<'_> {
         base: glam::Mat4,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,light,) = match crate::points_generated::P5582.get() { Some(__l) => { let mut __a = (alpha,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,light,) };
         let Some(item) = mob.extra.body_id() else {
             return;
         };
@@ -77,13 +77,13 @@ impl Game<'_> {
         }
     }
 
-    fn sulfur_sound(&mut self, index: usize, sound: &str) {
+    fn sulfur_sound(&mut self, index: usize, sound: &str) { let (index,) = match crate::points_generated::P5581.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let at = self.mobs[index].center();
         self.audio
             .play(&format!("minecraft:{sound}"), Some(at), 1.0, 1.0);
     }
     /// Spit the swallowed block out on top (`EntityAttachment.PASSENGER`).
-    fn eject_sulfur_block(&mut self, index: usize) {
+    fn eject_sulfur_block(&mut self, index: usize) { let (index,) = match crate::points_generated::P5580.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &mut self.mobs[index];
         let Some(item) = m.take_body_equipment() else {
             return;
@@ -96,7 +96,7 @@ impl Game<'_> {
         self.spawn_item(item, at, [0.0, 0.2, 0.0], 10);
     }
     /// `SulfurCube.mobInteract`. Returns whether the click was used.
-    pub(super) fn interact_sulfur_cube(&mut self, index: usize, item: &str) -> bool {
+    pub(super) fn interact_sulfur_cube(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P5579.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         if m.species() != Species::SulfurCube || !m.alive() {
             return false;
@@ -168,7 +168,7 @@ impl Game<'_> {
     /// `SulfurCube.primeWhenOnPoweredPosition`: an explosive cube standing in
     /// or next to redstone power lights its fuse (`getBestOwnOrNeighbourSignal`;
     /// no block has an own signal, so the neighbour signal is all there is).
-    pub(super) fn sulfur_cube_power_priming(&mut self) {
+    pub(super) fn sulfur_cube_power_priming(&mut self) { if let Some(__l) = crate::points_generated::P5578.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.ui.rules.bool("tnt_explodes") {
             return;
         }
@@ -197,7 +197,7 @@ impl Game<'_> {
     /// explosive cube with a block lights its fuse (with `tnt_explodes`, as
     /// `primeTime` asks), called after the hit's hurt, which the priming
     /// leaves as it is, so its knock and the fuse both go ahead.
-    pub(super) fn burning_arrow_primes(&mut self, p: &Projectile, who: Who) {
+    pub(super) fn burning_arrow_primes(&mut self, p: &Projectile, who: Who) { if let Some(__l) = crate::points_generated::P5577.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !p.arrow.as_ref().is_some_and(|a| a.on_fire()) || !self.ui.rules.bool("tnt_explodes") {
             return;
         }
@@ -210,7 +210,7 @@ impl Game<'_> {
     }
     /// `SulfurCubeSearchForItemsGoal` and `pickUpItem`: an adult with nothing
     /// inside hops to a block it can swallow within 8 and takes it in.
-    pub(super) fn sulfur_cube_pickups(&mut self) {
+    pub(super) fn sulfur_cube_pickups(&mut self) { if let Some(__l) = crate::points_generated::P5576.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let griefing = self.ui.rules.bool("mob_griefing");
         for i in 0..self.mobs.len() {
             let m = &self.mobs[i];

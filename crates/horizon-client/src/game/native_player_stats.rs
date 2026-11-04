@@ -17,7 +17,7 @@ fn qualified(id: &str) -> String {
 
 impl Game<'_> {
     /// Whether `player` still names the same player on this server.
-    fn native_player_current(&self, player: PlayerRef) -> bool {
+    fn native_player_current(&self, player: PlayerRef) -> bool { if let Some(__l) = crate::points_generated::P4081.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player_handle_read(player).is_some()
     }
     /// The guest record `player` reads from outside their turn, or None
@@ -25,14 +25,14 @@ impl Game<'_> {
     fn native_player_resting(
         &self,
         player: PlayerRef,
-    ) -> Option<&horizon_client::lan::guest::Guest> {
+    ) -> Option<&horizon_client::lan::guest::Guest> { if let Some(__l) = crate::points_generated::P4080.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.player_handle_read(player)? {
             super::native_server::PlayerRead::Guest(guest) => Some(guest),
             super::native_server::PlayerRead::Acting { .. } => None,
         }
     }
     /// The player's statistics, where they are kept now.
-    fn native_player_stats(&self, player: PlayerRef) -> Option<Option<&Stats>> {
+    fn native_player_stats(&self, player: PlayerRef) -> Option<Option<&Stats>> { if let Some(__l) = crate::points_generated::P4079.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_player_current(player) {
             return None;
         }
@@ -50,7 +50,7 @@ impl Game<'_> {
         player: PlayerRef,
         stat_type: NativeStatType,
         key: &str,
-    ) -> Option<i32> {
+    ) -> Option<i32> { if let Some(__l) = crate::points_generated::P4078.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let ty = stat_type.path();
         let stats = self.native_player_stats(player)?;
         Some(stats.map_or(0, |s| s.get(ty, &qualified(key))))
@@ -65,7 +65,7 @@ impl Game<'_> {
         stat_type: NativeStatType,
         key: &str,
         amount: i32,
-    ) -> bool {
+    ) -> bool { let (amount,) = match crate::points_generated::P4077.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let ty = stat_type.path();
         let key = qualified(key);
         self.native_player_current(player)
@@ -78,7 +78,7 @@ impl Game<'_> {
         player: PlayerRef,
         stat_type: NativeStatType,
         key: &str,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4076.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ty = stat_type.path();
         let key = qualified(key);
         self.native_player_current(player)
@@ -91,7 +91,7 @@ impl Game<'_> {
         &self,
         player: PlayerRef,
         recipe: &str,
-    ) -> Option<bool> {
+    ) -> Option<bool> { if let Some(__l) = crate::points_generated::P4075.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_player_current(player) {
             return None;
         }
@@ -110,7 +110,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         recipes: &[&str],
-    ) -> Option<i32> {
+    ) -> Option<i32> { if let Some(__l) = crate::points_generated::P4074.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_player_change_recipes(player, true, recipes)
     }
     /// `ServerPlayer.resetRecipes`, as `/recipe take` does. The number of
@@ -119,7 +119,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         recipes: &[&str],
-    ) -> Option<i32> {
+    ) -> Option<i32> { if let Some(__l) = crate::points_generated::P4073.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_player_change_recipes(player, false, recipes)
     }
     fn native_player_change_recipes(
@@ -127,7 +127,7 @@ impl Game<'_> {
         player: PlayerRef,
         give: bool,
         recipes: &[&str],
-    ) -> Option<i32> {
+    ) -> Option<i32> { let (give,) = match crate::points_generated::P4072.get() { Some(__l) => { let mut __a = (give,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (give,) };
         if !self.native_player_current(player) {
             return None;
         }

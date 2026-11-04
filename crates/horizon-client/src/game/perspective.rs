@@ -255,7 +255,7 @@ fn wrap(d: f32) -> f32 {
 }
 impl Game<'_> {
     /// `key.togglePerspective`.
-    pub(super) fn cycle_camera(&mut self) {
+    pub(super) fn cycle_camera(&mut self) { if let Some(__l) = crate::points_generated::P4549.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let previous = self.camera_type;
         self.camera_type = self.camera_type.cycle();
         // Minecraft.handleKeybinds: the chain follows the first-person view.
@@ -267,7 +267,7 @@ impl Game<'_> {
     /// interpolated eye, or a point up to the camera distance behind (or in
     /// front of) it, pulled in where visual shapes are in the way. Returns the
     /// position, yaw and pitch to render from.
-    pub(super) fn camera_view(&mut self, partial: f32) -> Option<(glam::DVec3, f32, f32)> {
+    pub(super) fn camera_view(&mut self, partial: f32) -> Option<(glam::DVec3, f32, f32)> { let (partial,) = match crate::points_generated::P4548.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (partial,) };
         // Minecraft.cameraEntity: a server's spectator camera on a mob or
         // another player.
         let (entity, descending) = match self.camera_mob() {
@@ -340,7 +340,7 @@ impl Game<'_> {
         ))
     }
     /// The player as `Camera.alignWithEntity` sees it.
-    fn player_camera_entity(&mut self) -> Option<CameraEntity> {
+    fn player_camera_entity(&mut self) -> Option<CameraEntity> { if let Some(__l) = crate::points_generated::P4547.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (scale, distance) = {
             let p = self.player.as_mut()?;
             (
@@ -421,7 +421,7 @@ impl Game<'_> {
     }
     /// Keep the player's model in step with the player (`LivingEntity.tick`
     /// body turning, `WalkAnimationState`, the swing and the pose).
-    pub(super) fn tick_player_model(&mut self) {
+    pub(super) fn tick_player_model(&mut self) { if let Some(__l) = crate::points_generated::P4546.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let scale = self
             .player
             .as_mut()
@@ -582,7 +582,7 @@ impl Game<'_> {
     /// agent's `turn`.
     /// The model's old pitch is the player's `xRotO`, which the turn moves
     /// with `xRot` (`turn_rotation`).
-    pub(super) fn turn_player(&mut self, xo: f64, yo: f64) {
+    pub(super) fn turn_player(&mut self, xo: f64, yo: f64) { let (xo,yo,) = match crate::points_generated::P4545.get() { Some(__l) => { let mut __a = (xo,yo,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (xo,yo,) };
         let pitch_o = self.player_model.as_ref().map(|m| m.previous_head_pitch);
         let rotation = turn_rotation(self.yaw, self.pitch, pitch_o, xo, yo);
         self.yaw = rotation.y_rot;
@@ -605,7 +605,7 @@ impl Game<'_> {
     /// `Entity.setOldRot` after a server sets the player's rotation
     /// (`handleRotatePlayer`): the model's head snaps to it instead of easing
     /// in over the next tick.
-    pub(super) fn snap_player_model_pitch(&mut self) {
+    pub(super) fn snap_player_model_pitch(&mut self) { if let Some(__l) = crate::points_generated::P4544.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pitch = self.pitch;
         if let Some(m) = self.player_model.as_mut() {
             m.previous_head_pitch = pitch;
@@ -614,12 +614,12 @@ impl Game<'_> {
     }
     /// `LevelExtractor`'s skip of the camera entity: the player's own body
     /// is drawn unless the camera is in first person, or while it sleeps.
-    pub(super) fn own_body_in_view(&self) -> bool {
+    pub(super) fn own_body_in_view(&self) -> bool { if let Some(__l) = crate::points_generated::P4543.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         !self.camera_type.first_person() || self.sleeping.is_some()
     }
     /// Whether the player's own model shows in the world view (its body or,
     /// while invisible, only its armour and held items).
-    pub(super) fn player_model_shown(&self) -> bool {
+    pub(super) fn player_model_shown(&self) -> bool { if let Some(__l) = crate::points_generated::P4542.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // A shader pack's shadow pass draws the player in first person too (shadowPlayer).
         (self.own_body_in_view() || self.pack_shadow_casters.1)
             && self
@@ -628,21 +628,21 @@ impl Game<'_> {
                 .is_some_and(|p| !p.health.dead_or_dying())
     }
     /// The player's own team: a server's client is in it by its profile name.
-    fn own_team(&self) -> Option<&horizon_client::scoreboard::Team> {
+    fn own_team(&self) -> Option<&horizon_client::scoreboard::Team> { if let Some(__l) = crate::points_generated::P4541.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match &self.remote {
             Some(r) => self.score.board.players_team(&r.profile_name),
             None => self.player_team(),
         }
     }
     /// `Entity.isInvisible` for the player itself (`own_invisible`).
-    pub(super) fn own_invisible(&self) -> bool {
+    pub(super) fn own_invisible(&self) -> bool { if let Some(__l) = crate::points_generated::P4540.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         own_invisible(
             &self.potions.effects,
             self.remote.as_ref().is_some_and(|r| r.own_invisible),
         )
     }
     /// Whether the player's own body is drawn (`body_visible`).
-    pub(super) fn own_body_visible(&self) -> bool {
+    pub(super) fn own_body_visible(&self) -> bool { if let Some(__l) = crate::points_generated::P4539.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         body_visible(self.own_invisible(), self.own_team())
     }
     /// The player's model for the entity pass in third person.
@@ -651,7 +651,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         alpha: f64,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P4538.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         if !self.player_model_shown() {
             return;
         }
@@ -762,7 +762,7 @@ impl Game<'_> {
         y1: f32,
         size: f32,
         offset_y: f32,
-    ) {
+    ) { let (x0,y0,x1,y1,size,offset_y,) = match crate::points_generated::P4537.get() { Some(__l) => { let mut __a = (x0,y0,x1,y1,size,offset_y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x0,y0,x1,y1,size,offset_y,) };
         let Some(m) = self.player_model.as_ref() else {
             return;
         };
@@ -860,7 +860,7 @@ impl Game<'_> {
         batch.depth_since(start, [x0, y0, x1, y1]);
     }
     /// The survival inventory's player box (`InventoryScreen`).
-    pub(super) fn draw_inventory_player(&self, batch: &mut HudBatch, ox: f32, oy: f32) {
+    pub(super) fn draw_inventory_player(&self, batch: &mut HudBatch, ox: f32, oy: f32) { let (ox,oy,) = match crate::points_generated::P4536.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ox,oy,) };
         if self.screen == Screen::Inventory {
             self.draw_player_preview(
                 batch,
@@ -885,7 +885,7 @@ impl Game<'_> {
         partial: f32,
         light: u32,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { let (partial,light,) = match crate::points_generated::P4535.get() { Some(__l) => { let mut __a = (partial,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,light,) };
         let stack = m
             .extra
             .slot_stack(horizon_items::equipment::CHEST)
@@ -905,7 +905,7 @@ impl Game<'_> {
     }
     /// `WingsLayer` draws through `EquipmentLayerRenderer.renderLayers`: the
     /// armour glint when the worn elytra `hasFoil()`.
-    pub(super) fn wings_overlay(&self, stack: Option<&horizon_client::items::ItemStack>) -> u32 {
+    pub(super) fn wings_overlay(&self, stack: Option<&horizon_client::items::ItemStack>) -> u32 { if let Some(__l) = crate::points_generated::P4534.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let item_glint = |item: &str| {
             let props = &self.res.items().enchantments.props;
             props.get(item).is_some_and(|p| p.glint)
@@ -934,7 +934,7 @@ impl Game<'_> {
         light: u32,
         overlay: u32,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { let (baby,angles,crouching,light,overlay,) = match crate::points_generated::P4533.get() { Some(__l) => { let mut __a = (baby,angles,crouching,light,overlay,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (baby,angles,crouching,light,overlay,) };
         let Some(asset) = chest
             .and_then(|item| self.items().get(item))
             .and_then(|i| i.equip_asset.as_ref())
@@ -1021,7 +1021,7 @@ impl Game<'_> {
         partial: f32,
         light: u32,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { let (partial,light,) = match crate::points_generated::P4532.get() { Some(__l) => { let mut __a = (partial,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,light,) };
         let Some(rect) = m
             .cape
             .as_deref()
@@ -1063,7 +1063,7 @@ impl Game<'_> {
         partial: f32,
         light: u32,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { let (partial,light,) = match crate::points_generated::P4531.get() { Some(__l) => { let mut __a = (partial,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,light,) };
         if name != "deadmau5" {
             return;
         }
@@ -1089,7 +1089,7 @@ impl Game<'_> {
     }
     /// The entity id the local player has on its server: the one it was
     /// given at login on a client, else the acting player's own.
-    pub(super) fn own_entity_id(&self) -> i32 {
+    pub(super) fn own_entity_id(&self) -> i32 { if let Some(__l) = crate::points_generated::P4530.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote.as_ref().map_or_else(
             || self.player.as_ref().map_or(0, |p| p.entity_id),
             |r| r.entity_id,
@@ -1106,7 +1106,7 @@ impl Game<'_> {
         partial: f32,
         light: u32,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { let (id,partial,light,) = match crate::points_generated::P4529.get() { Some(__l) => { let mut __a = (id,partial,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,partial,light,) };
         let sprites = &self.gui.atlas.sprites;
         let layers = [
             (
@@ -1150,7 +1150,7 @@ impl Game<'_> {
         partial: f32,
         light: u32,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { let (partial,light,) = match crate::points_generated::P4528.get() { Some(__l) => { let mut __a = (partial,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,light,) };
         let Some(parrot) = self.res.mob_types().get("minecraft:parrot") else {
             return;
         };
@@ -1174,7 +1174,7 @@ impl Game<'_> {
         partial: f32,
         light: u32,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { let (partial,light,) = match crate::points_generated::P4527.get() { Some(__l) => { let mut __a = (partial,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,light,) };
         if !m.extra.auto_spin_attack {
             return;
         }

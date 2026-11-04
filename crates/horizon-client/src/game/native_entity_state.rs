@@ -62,7 +62,7 @@ enum Body<'a> {
 
 impl Game<'_> {
     /// The player's body or the mob a handle names, or its target.
-    fn native_entity_body(&self, entity: EntityRef) -> Option<Body<'_>> {
+    fn native_entity_body(&self, entity: EntityRef) -> Option<Body<'_>> { if let Some(__l) = crate::points_generated::P3151.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(match self.native_entity_target(entity)? {
             Target::Player => Body::Player(self.player.as_ref()?),
             Target::Guest(conn) => Body::Player(self.command_guest(conn)?.motion.as_deref()?),
@@ -72,7 +72,7 @@ impl Game<'_> {
     }
     /// Whether the player holds the sneak key (`Entity.isShiftKeyDown`);
     /// false for the other kinds.
-    pub(super) fn native_entity_is_shift_key_down(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_is_shift_key_down(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3150.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(match self.native_entity_body(entity)? {
             Body::Player(p) => p.shift_key_down,
             _ => false,
@@ -80,13 +80,13 @@ impl Game<'_> {
     }
     /// Whether the entity crouches (`Entity.isCrouching`: the crouching
     /// pose).
-    pub(super) fn native_entity_is_crouching(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_is_crouching(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3149.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_entity_pose(entity)? == "crouching")
     }
     /// Whether the entity sprints (`Entity.isSprinting`): a player, or a
     /// cat or ocelot dashing after its target (their shared sprinting flag);
     /// false for the other kinds.
-    pub(super) fn native_entity_is_sprinting(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_is_sprinting(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3148.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(match self.native_entity_body(entity)? {
             Body::Player(p) => p.sprinting,
             Body::Mob(m) => m.extra.sprinting,
@@ -95,7 +95,7 @@ impl Game<'_> {
     }
     /// Whether the entity touched water at its last fluid update
     /// (`Entity.isInWater`): players and mobs.
-    pub(super) fn native_entity_is_in_water(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_is_in_water(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3147.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.fluids.was_touching_water),
             Body::Mob(m) => Some(m.fluids.in_water),
@@ -103,7 +103,7 @@ impl Game<'_> {
         }
     }
     /// Whether the entity is in lava (`Entity.isInLava`): players and mobs.
-    pub(super) fn native_entity_is_in_lava(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_is_in_lava(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3146.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.is_in_lava()),
             Body::Mob(m) => Some(m.fluids.in_lava),
@@ -112,7 +112,7 @@ impl Game<'_> {
     }
     /// Whether the entity's type never burns (`EntityType.fireImmune`):
     /// players and mobs.
-    pub(super) fn native_entity_fire_immune(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_fire_immune(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3145.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_body(entity)? {
             Body::Player(_) => Some(false),
             Body::Mob(m) => Some(horizon_client::mobs::spawn_rules::fire_immune(m.species())),
@@ -121,7 +121,7 @@ impl Game<'_> {
     }
     /// The ticks the entity burns for (`Entity.getRemainingFireTicks`):
     /// players, mobs, armor stands and items.
-    pub(super) fn native_entity_fire_ticks(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn native_entity_fire_ticks(&self, entity: EntityRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3144.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.fire_ticks),
             Body::Mob(m) => Some(m.fire_ticks),
@@ -139,7 +139,7 @@ impl Game<'_> {
         &mut self,
         entity: EntityRef,
         ticks: i32,
-    ) -> bool {
+    ) -> bool { let (ticks,) = match crate::points_generated::P3143.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         match self.native_entity_target(entity) {
             Some(Target::Player) => self.player.as_mut().is_some_and(|p| {
                 p.fire_ticks = ticks;
@@ -180,14 +180,14 @@ impl Game<'_> {
         }
     }
     /// Clears positive fire ticks while retaining fire immunity (`Entity.clearFire`).
-    pub(super) fn native_entity_clear_fire(&mut self, entity: EntityRef) -> bool {
+    pub(super) fn native_entity_clear_fire(&mut self, entity: EntityRef) -> bool { if let Some(__l) = crate::points_generated::P3142.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(ticks) = self.native_entity_fire_ticks(entity) else {
             return false;
         };
         self.native_entity_set_remaining_fire_ticks(entity, ticks.min(0))
     }
     /// The entity's air (`Entity.getAirSupply`): players and mobs.
-    pub(super) fn native_entity_air_supply(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn native_entity_air_supply(&self, entity: EntityRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3141.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.air),
             Body::Mob(m) => Some(m.air),
@@ -195,7 +195,7 @@ impl Game<'_> {
         }
     }
     /// Sets the entity's air (`Entity.setAirSupply`).
-    pub(super) fn native_entity_set_air_supply(&mut self, entity: EntityRef, air: i32) -> bool {
+    pub(super) fn native_entity_set_air_supply(&mut self, entity: EntityRef, air: i32) -> bool { let (air,) = match crate::points_generated::P3140.get() { Some(__l) => { let mut __a = (air,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (air,) };
         match self.native_entity_target(entity) {
             Some(Target::Player) => match self.player.as_mut() {
                 Some(player) => {
@@ -229,7 +229,7 @@ impl Game<'_> {
     }
     /// The most air the entity holds (`Entity.getMaxAirSupply`): 300, a
     /// dolphin's 4800, an axolotl's 6000.
-    pub(super) fn native_entity_max_air_supply(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn native_entity_max_air_supply(&self, entity: EntityRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3139.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_body(entity)? {
             Body::Mob(m) => Some(max_air(Some(m.species()))),
             _ => Some(max_air(None)),
@@ -237,7 +237,7 @@ impl Game<'_> {
     }
     /// Whether the mob makes no sounds (`Entity.isSilent`, its `Silent`
     /// tag); false for a player.
-    pub(super) fn native_entity_is_silent(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_is_silent(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3138.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_body(entity)? {
             Body::Player(_) => Some(false),
             Body::Mob(m) => Some(m.silent),
@@ -246,7 +246,7 @@ impl Game<'_> {
     }
     /// Silences the mob or lets it make sounds again (`Entity.setSilent`).
     /// False for the other kinds.
-    pub(super) fn native_entity_set_silent(&mut self, entity: EntityRef, silent: bool) -> bool {
+    pub(super) fn native_entity_set_silent(&mut self, entity: EntityRef, silent: bool) -> bool { let (silent,) = match crate::points_generated::P3137.get() { Some(__l) => { let mut __a = (silent,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (silent,) };
         let Some(Target::Mob(id)) = self.native_entity_target(entity) else {
             return false;
         };
@@ -261,7 +261,7 @@ impl Game<'_> {
     /// Whether the entity's model is hidden (`Entity.isInvisible`): the
     /// invisibility effect on a player or a mob, a mob's or an armor stand's
     /// flag.
-    pub(super) fn native_entity_is_invisible(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_is_invisible(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3136.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_target(entity)? {
             Target::Player => Some(self.potions.effects.get("invisibility").is_some()),
             Target::Guest(conn) => Some(
@@ -279,7 +279,7 @@ impl Game<'_> {
         }
     }
     /// Sets the entity's frozen ticks (`Entity.setTicksFrozen`).
-    pub(super) fn native_entity_set_ticks_frozen(&mut self, entity: EntityRef, ticks: i32) -> bool {
+    pub(super) fn native_entity_set_ticks_frozen(&mut self, entity: EntityRef, ticks: i32) -> bool { let (ticks,) = match crate::points_generated::P3135.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         match self.native_entity_target(entity) {
             Some(Target::Player) => self.player.as_mut().is_some_and(|p| {
                 p.ticks_frozen = ticks;
@@ -303,21 +303,21 @@ impl Game<'_> {
         }
     }
     /// Returns the mob's persistent glowing tag (`Entity.hasGlowingTag`).
-    pub(super) fn native_entity_glowing(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_glowing(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3134.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_body(entity)? {
             Body::Mob(m) => Some(m.glowing),
             _ => None,
         }
     }
     /// Returns the mob's no-gravity flag (`Entity.isNoGravity`).
-    pub(super) fn native_entity_no_gravity(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_no_gravity(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3133.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_body(entity)? {
             Body::Mob(m) => Some(m.no_gravity),
             _ => None,
         }
     }
     /// Returns the entity's frozen ticks (`Entity.getTicksFrozen`).
-    pub(super) fn native_entity_ticks_frozen(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn native_entity_ticks_frozen(&self, entity: EntityRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3132.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.ticks_frozen),
             Body::Mob(m) => Some(m.ticks_frozen),
@@ -325,7 +325,7 @@ impl Game<'_> {
         }
     }
     /// Sets the mob's persistent glowing tag (`Entity.setGlowingTag`). Returns false for players and guests.
-    pub(super) fn native_entity_set_glowing(&mut self, entity: EntityRef, glowing: bool) -> bool {
+    pub(super) fn native_entity_set_glowing(&mut self, entity: EntityRef, glowing: bool) -> bool { let (glowing,) = match crate::points_generated::P3131.get() { Some(__l) => { let mut __a = (glowing,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (glowing,) };
         let Some(Target::Mob(id)) = self.native_entity_target(entity) else {
             return false;
         };
@@ -340,7 +340,7 @@ impl Game<'_> {
         &mut self,
         entity: EntityRef,
         no_gravity: bool,
-    ) -> bool {
+    ) -> bool { let (no_gravity,) = match crate::points_generated::P3130.get() { Some(__l) => { let mut __a = (no_gravity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (no_gravity,) };
         let Some(Target::Mob(id)) = self.native_entity_target(entity) else {
             return false;
         };
@@ -355,7 +355,7 @@ impl Game<'_> {
         &mut self,
         entity: EntityRef,
         invisible: bool,
-    ) -> bool {
+    ) -> bool { let (invisible,) = match crate::points_generated::P3129.get() { Some(__l) => { let mut __a = (invisible,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (invisible,) };
         match self.native_entity_target(entity) {
             Some(Target::Mob(id)) => self.mobs.iter_mut().find(|m| m.id == id).is_some_and(|m| {
                 m.invisible = invisible;
@@ -376,7 +376,7 @@ impl Game<'_> {
     /// The entity's pose (`Entity.getPose`) as `Pose` names it: `standing`,
     /// `crouching`, `swimming`, `sleeping`, a warden's `roaring`... Kinds
     /// with no pose stand.
-    pub(super) fn native_entity_pose(&self, entity: EntityRef) -> Option<&'static str> {
+    pub(super) fn native_entity_pose(&self, entity: EntityRef) -> Option<&'static str> { if let Some(__l) = crate::points_generated::P3128.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(match self.native_entity_body(entity)? {
             Body::Player(p) => player_pose(p.pose),
             Body::Mob(m) => POSES.get(usize::from(sync::pose_id(m))).copied()?,

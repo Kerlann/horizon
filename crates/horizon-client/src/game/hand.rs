@@ -109,7 +109,7 @@ impl Game<'_> {
         attribute: &str,
         survival: f64,
         creative: f64,
-    ) -> f64 {
+    ) -> f64 { let (survival,creative,) = match crate::points_generated::P2071.get() { Some(__l) => { let mut __a = (survival,creative,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (survival,creative,) };
         let otherwise = if self.creative { creative } else { survival };
         self.player
             .as_mut()
@@ -122,7 +122,7 @@ impl Game<'_> {
     /// place: the held item's `attack_range`, else `AttackRange.defaultFor`
     /// (0 to the entity interaction range, no margin). Out of range, vanilla
     /// drops the attack without a word.
-    pub(super) fn within_attack_range(&mut self, target: &Aabb) -> bool {
+    pub(super) fn within_attack_range(&mut self, target: &Aabb) -> bool { if let Some(__l) = crate::points_generated::P2070.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(eye) = self.eye_position() else {
             return false;
         };
@@ -147,7 +147,7 @@ impl Game<'_> {
 
     /// `Player.isWithinEntityInteractionRange(box, buffer)` for the player in
     /// place (ServerGamePacketListenerImpl.handleInteract, with 3).
-    pub(super) fn within_entity_interaction_range(&mut self, target: &Aabb, buffer: f64) -> bool {
+    pub(super) fn within_entity_interaction_range(&mut self, target: &Aabb, buffer: f64) -> bool { let (buffer,) = match crate::points_generated::P2069.get() { Some(__l) => { let mut __a = (buffer,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (buffer,) };
         let Some(eye) = self.eye_position() else {
             return false;
         };
@@ -158,7 +158,7 @@ impl Game<'_> {
     /// A slot of the inventory (`OFFHAND_SLOT` for the off hand) was set to
     /// a new stack: the hand holding it compares it as another `ItemStack`
     /// (`shows_held_stack`) until the hand shows the held stack again.
-    pub(super) fn hand_stack_replaced(&mut self, slot: usize) {
+    pub(super) fn hand_stack_replaced(&mut self, slot: usize) { let (slot,) = match crate::points_generated::P2068.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         if slot == self.selected {
             self.hands_replaced[0] = true;
         }
@@ -167,7 +167,7 @@ impl Game<'_> {
         }
     }
     /// Opening a screen stops breaking before the next game tick (which may pause).
-    pub(super) fn stop_mining(&mut self) {
+    pub(super) fn stop_mining(&mut self) { if let Some(__l) = crate::points_generated::P2067.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.clicks.destroying.active {
             let pos = self.clicks.destroying.pos;
             let state = self.world.block(pos[0], pos[1], pos[2]);
@@ -185,7 +185,7 @@ impl Game<'_> {
         self.mining = None;
     }
     /// `LivingEntity.swing` with `getModifiedSwingDuration`.
-    pub(super) fn swing_hand(&mut self, hand: Hand, animation: SwingAnimation) {
+    pub(super) fn swing_hand(&mut self, hand: Hand, animation: SwingAnimation) { if let Some(__l) = crate::points_generated::P2066.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let effects = &self.potions.effects;
         let dig_speed = effects
             .amplifier("haste")
@@ -197,11 +197,11 @@ impl Game<'_> {
         }
     }
     /// `swing(hand)` for the hand that acts, with the default animation.
-    pub(super) fn swing_arm(&mut self) {
+    pub(super) fn swing_arm(&mut self) { if let Some(__l) = crate::points_generated::P2065.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.swing_hand(self.hand, SwingAnimation::DEFAULT);
     }
     /// `Player.resetAttackStrengthTicker`.
-    pub(super) fn reset_attack_strength(&mut self) {
+    pub(super) fn reset_attack_strength(&mut self) { if let Some(__l) = crate::points_generated::P2064.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.attack_ticks = 0;
         self.hand_strength.reset();
     }
@@ -209,7 +209,7 @@ impl Game<'_> {
     /// tick's clicks act on what the item held before the keys picked (a
     /// spear's 4.5 blocks), with the item the keys select (attribute
     /// swapping a spear's reach onto a mace).
-    pub(super) fn pick_tick_targets(&mut self) {
+    pub(super) fn pick_tick_targets(&mut self) { if let Some(__l) = crate::points_generated::P2063.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.tick_hit = Some(self.pick());
         self.tick_mob = None;
         let mob = match self.active_attack_range() {
@@ -220,19 +220,19 @@ impl Game<'_> {
         self.select_queued_hotbar();
     }
     /// `handleKeybinds`' number keys (`keyHotbarSlots[i].consumeClick`).
-    pub(super) fn select_queued_hotbar(&mut self) {
+    pub(super) fn select_queued_hotbar(&mut self) { if let Some(__l) = crate::points_generated::P2062.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for slot in std::mem::take(&mut self.hotbar_presses) {
             self.selected = slot;
         }
     }
     /// The tick's clicks are done: later picks follow the crosshair again.
-    pub(super) fn release_tick_targets(&mut self) {
+    pub(super) fn release_tick_targets(&mut self) { if let Some(__l) = crate::points_generated::P2061.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.tick_hit = None;
         self.tick_mob = None;
     }
     /// `Minecraft.startAttack` on an entity: a main-hand item with an
     /// `attack_range` attacks only a hit inside it.
-    pub(super) fn held_range_allows(&self, distance: f64) -> bool {
+    pub(super) fn held_range_allows(&self, distance: f64) -> bool { let (distance,) = match crate::points_generated::P2060.get() { Some(__l) => { let mut __a = (distance,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (distance,) };
         let range = self.held().and_then(|stack| {
             self.pack
                 .item_renderer
@@ -245,7 +245,7 @@ impl Game<'_> {
     }
     /// `LocalPlayer.raycastHitResult`'s item (`getActiveItem`: the one in
     /// use, else the main hand's) `attack_range` component.
-    fn active_attack_range(&self) -> Option<serde_json::Value> {
+    fn active_attack_range(&self) -> Option<serde_json::Value> { if let Some(__l) = crate::points_generated::P2059.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let active = self
             .using
             .and_then(|(slot, _)| self.inventory.get(slot).and_then(Option::as_ref))
@@ -263,7 +263,7 @@ impl Game<'_> {
     /// block within the block reach (`getHitEntitiesAlong`'s block result,
     /// kept by `filterHitResult`); `None` on a miss, where the plain pick
     /// decides.
-    fn attack_range_pick(&self, range: &serde_json::Value) -> Option<Option<(usize, f64)>> {
+    fn attack_range_pick(&self, range: &serde_json::Value) -> Option<Option<(usize, f64)>> { if let Some(__l) = crate::points_generated::P2058.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let eye = v3(self.eye_position()?);
         let look = v3(super::view_vector(self.yaw, self.pitch));
         let reach = attack_reach(range, self.creative);
@@ -295,7 +295,7 @@ impl Game<'_> {
     }
     /// The attack and use part of `Minecraft.tick` for the local player:
     /// attack clicks since the last tick and the held attack button.
-    pub(super) fn tick_local_hand(&mut self) -> Result<()> {
+    pub(super) fn tick_local_hand(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P2057.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let attack_clicks = std::mem::take(&mut self.attack_clicks);
         let use_clicks = std::mem::take(&mut self.use_clicks);
         if self.screen == Screen::Playing && self.title.is_none() && self.sleeping.is_none() {
@@ -374,7 +374,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `BlockBehaviour.getDestroyProgress` with `Player.getDestroySpeed`.
-    pub(super) fn destroy_progress(&mut self, pos: [i32; 3]) -> f32 {
+    pub(super) fn destroy_progress(&mut self, pos: [i32; 3]) -> f32 { let (pos,) = match crate::points_generated::P2056.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let facts = self.res.facts().get(state);
         if facts.hardness == -1.0 {
@@ -430,13 +430,13 @@ impl Game<'_> {
         speed / hardness / if harvest { 30.0 } else { 100.0 }
     }
     /// A key for the main-hand stack (`destroyingItem`): its item and components.
-    pub(super) fn main_hand_key(&self) -> String {
+    pub(super) fn main_hand_key(&self) -> String { if let Some(__l) = crate::points_generated::P2055.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.held()
             .map_or(String::new(), |s| format!("{} {:?}", s.item, s.extra))
     }
     /// Whether an attack would hit an entity rather than the block behind
     /// it: the crosshair's `EntityHitResult`.
-    pub(super) fn entity_targeted(&self) -> bool {
+    pub(super) fn entity_targeted(&self) -> bool { if let Some(__l) = crate::points_generated::P2054.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let before = |d: Option<f64>| d.is_some_and(|d| self.before_block(d));
         before(self.painting_hit().map(|h| h.1))
             || before(self.frame_hit().map(|h| h.1))
@@ -451,7 +451,7 @@ impl Game<'_> {
     }
     /// `LocalPlayer.isHandsBusy`: paddling a boat this player controls
     /// (`getControlledVehicle`: its first passenger, on a server's client).
-    pub(super) fn hands_busy(&self) -> bool {
+    pub(super) fn hands_busy(&self) -> bool { if let Some(__l) = crate::points_generated::P2053.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.riding
             .is_some_and(|id| self.boats.iter().any(|b| b.id == id))
             && self.remote.as_ref().is_none_or(|r| r.first_passenger)
@@ -469,7 +469,7 @@ impl Game<'_> {
     /// busy, and `LocalPlayer.itemUsed` drops the hand after a use that
     /// swung and spent (or, with infinite materials, kept) the item, or that
     /// started using it.
-    pub(super) fn use_with_hand(&mut self) -> Result<()> {
+    pub(super) fn use_with_hand(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P2052.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.clicks.destroying.active || self.hands_busy() {
             return Ok(());
         }
@@ -496,7 +496,7 @@ impl Game<'_> {
     /// `LocalPlayer.tick`: the swing (`LivingEntity.baseTick`), the attack
     /// strength and item swap tickers (`Player.tick`), then
     /// `FirstPersonHandsAndItems.tick`.
-    pub(super) fn tick_hand(&mut self) {
+    pub(super) fn tick_hand(&mut self) { if let Some(__l) = crate::points_generated::P2051.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // LocalPlayer.applyInput (the camera is the player's own).
         if self.player.is_some() {
             self.sway.tick_wrapped(self.pitch, self.yaw);
@@ -539,7 +539,7 @@ impl Game<'_> {
     }
     /// `Minecraft.crosshairPickEntity` when it is a `LivingEntity`: whether
     /// it is alive (the nearest entity under the crosshair, before any block).
-    pub(super) fn crosshair_living(&self) -> Option<bool> {
+    pub(super) fn crosshair_living(&self) -> Option<bool> { if let Some(__l) = crate::points_generated::P2050.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let nearest = |hits: &[Option<f64>]| hits.iter().flatten().copied().reduce(f64::min);
         let other = nearest(&[
             self.painting_hit().map(|h| h.1),
@@ -598,7 +598,7 @@ impl Game<'_> {
     /// `Hud.canRenderCrosshairForSpectator` for the nearest hit in reach: an
     /// entity that is a `MenuProvider` (a chest or hopper minecart, a chest
     /// boat), or a block whose `showAsInteractableInSpectatorMode` holds.
-    pub(super) fn spectator_crosshair(&self) -> bool {
+    pub(super) fn spectator_crosshair(&self) -> bool { if let Some(__l) = crate::points_generated::P2049.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let cart = self.cart_hit().map(|(i, d)| {
             let kind = &self.carts[i].kind;
             (d, matches!(kind, CartKind::Chest | CartKind::Hopper))
@@ -657,7 +657,7 @@ impl Game<'_> {
     /// `Attributes.ATTACK_SPEED` with the main-hand item's modifier and the
     /// Haste and Mining Fatigue modifiers (`ADD_MULTIPLIED_TOTAL`), clamped to
     /// the attribute's range.
-    pub(super) fn main_hand_attack_speed(&self) -> f64 {
+    pub(super) fn main_hand_attack_speed(&self) -> f64 { if let Some(__l) = crate::points_generated::P2048.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // The base comes from the player's attribute map so `/attribute ... base set` applies.
         let base = self
             .player
@@ -685,13 +685,13 @@ impl Game<'_> {
             .clamp(0.0, 1024.0)
     }
     /// The item whose attack damage and speed modifiers the player has (`attack_item`).
-    pub(super) fn attack_item_info(&self) -> Option<&horizon_client::items::ItemInfo> {
+    pub(super) fn attack_item_info(&self) -> Option<&horizon_client::items::ItemInfo> { if let Some(__l) = crate::points_generated::P2047.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.items().get(self.attack_item.as_deref()?)
     }
 
     /// `Player.attack`: the attack damage attribute, with the held weapon's
     /// and the effects' modifiers on it.
-    pub(super) fn attack_damage(&mut self) -> f32 {
+    pub(super) fn attack_damage(&mut self) -> f32 { if let Some(__l) = crate::points_generated::P2046.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.player
             .as_mut()
             .and_then(|p| p.attribute("minecraft:attack_damage").ok())
@@ -699,7 +699,7 @@ impl Game<'_> {
     }
 
     /// `evaluateWhichHandsToRender`: which of the main and off hand show.
-    pub(super) fn hands_to_render(&self) -> [bool; 2] {
+    pub(super) fn hands_to_render(&self) -> [bool; 2] { if let Some(__l) = crate::points_generated::P2045.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let held = |slot| {
             self.stack_in(slot)
                 .map(|s: &ItemStack| (&*s.item, s.data().is_some_and(|d| !d.charged.is_empty())))
@@ -715,7 +715,7 @@ impl Game<'_> {
         )
     }
     /// The visible main- and off-hand items.
-    pub(super) fn visible_hand_items(&self) -> [Option<ItemStack>; 2] {
+    pub(super) fn visible_hand_items(&self) -> [Option<ItemStack>; 2] { if let Some(__l) = crate::points_generated::P2044.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         [
             self.visible_hands[0].1.clone(),
             self.visible_hands[1].1.clone(),

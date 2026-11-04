@@ -84,7 +84,7 @@ impl HeartHost for Host<'_> {
 }
 
 impl Game<'_> {
-    fn heart_state_name(&self, state: BlockStateId) -> String {
+    fn heart_state_name(&self, state: BlockStateId) -> String { if let Some(__l) = crate::points_generated::P1322.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pack
             .assets
             .registry
@@ -167,7 +167,7 @@ impl Game<'_> {
         Ok(())
     }
     /// A creaking bound to the heart at `home` was hurt (`creakingHurt`).
-    pub(super) fn creaking_hurt(&mut self, home: [i32; 3], _id: u32, by_player: bool) {
+    pub(super) fn creaking_hurt(&mut self, home: [i32; 3], _id: u32, by_player: bool) { let (home,_id,by_player,) = match crate::points_generated::P1321.get() { Some(__l) => { let mut __a = (home,_id,by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (home,_id,by_player,) };
         if !by_player {
             return;
         }
@@ -184,7 +184,7 @@ impl Game<'_> {
             .put(key, BlockEntity::CreakingHeart(heart));
     }
     /// `Creaking.tearDown`: the crumble particles.
-    pub(super) fn creaking_tear_down(&mut self, center: [f64; 3], spread: [f64; 3]) {
+    pub(super) fn creaking_tear_down(&mut self, center: [f64; 3], spread: [f64; 3]) { let (center,spread,) = match crate::points_generated::P1320.get() { Some(__l) => { let mut __a = (center,spread,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,spread,) };
         let registry = self.pack.assets.registry;
         let crumble = |this: &mut Self, name: &str, props: &[(&str, &str)], count: i32| {
             let Some(mut state) = registry
@@ -228,7 +228,7 @@ impl Game<'_> {
     /// `CreakingHeartBlock.playerWillDestroy`: the heart's creaking twitches to
     /// death and a natural heart drops experience. `onExplosionHit` does the
     /// same for the creaking (`by_player` false), without the experience.
-    pub(super) fn creaking_heart_broken(&mut self, pos: [i32; 3], by_player: bool) {
+    pub(super) fn creaking_heart_broken(&mut self, pos: [i32; 3], by_player: bool) { let (pos,by_player,) = match crate::points_generated::P1319.get() { Some(__l) => { let mut __a = (pos,by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,by_player,) };
         let key = (pos[0], pos[1], pos[2]);
         if !matches!(
             self.world.block_entities.get(&key),
@@ -269,7 +269,7 @@ impl Game<'_> {
     /// `CreakingHeartBlockEntity.serverTick` of the heart at `key`. Its slot
     /// stays while uprooted, so that a heart whose block went away is still
     /// found here and lets go of its protector.
-    pub(super) fn tick_creaking_heart(&mut self, key: Pos) -> Result<()> {
+    pub(super) fn tick_creaking_heart(&mut self, key: Pos) -> Result<()> { if let Some(__l) = crate::points_generated::P1318.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BlockEntity::CreakingHeart(mut heart)) = self.world.block_entities.take(&key)
         else {
             return Ok(());
@@ -297,7 +297,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `ServerLevel.isSpawningMonsters`.
-    fn spawning_monsters(&self) -> bool {
+    fn spawning_monsters(&self) -> bool { if let Some(__l) = crate::points_generated::P1317.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.ui.difficulty != 0
             && self.ui.rules.bool("spawn_mobs")
             && self.ui.rules.bool("spawn_monsters")
@@ -306,7 +306,7 @@ impl Game<'_> {
     /// entity (`newBlockEntity`) the first time their chunk is seen lit.
     /// Only the chunks that arrived since are looked at: a server holds tens
     /// of thousands, and reading each one every tick cost milliseconds.
-    pub(super) fn scan_for_hearts(&mut self) {
+    pub(super) fn scan_for_hearts(&mut self) { if let Some(__l) = crate::points_generated::P1316.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .pack
             .assets

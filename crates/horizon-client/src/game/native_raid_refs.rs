@@ -10,7 +10,7 @@ use mod_api::{EntityRef, LevelRef, MobRef, NativeRaidStatus, RaidRef};
 
 impl Game<'_> {
     /// The raid a handle names now, or None for a stale or foreign one.
-    fn native_raid_data(&self, raid: RaidRef) -> Option<&Raid> {
+    fn native_raid_data(&self, raid: RaidRef) -> Option<&Raid> { if let Some(__l) = crate::points_generated::P4128.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_level_in_place(raid.level()) {
             return None;
         }
@@ -19,14 +19,14 @@ impl Game<'_> {
 
     /// `Raids.get(id)`: the raid saved under `id` in the level in place, if
     /// `Raids` still holds it (a stopped raid goes at its next tick).
-    pub(super) fn native_level_raid(&self, level: LevelRef, id: i32) -> Option<RaidRef> {
+    pub(super) fn native_level_raid(&self, level: LevelRef, id: i32) -> Option<RaidRef> { let (id,) = match crate::points_generated::P4127.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let raid = RaidRef::new(level, id);
         self.native_raid_data(raid).map(|_| raid)
     }
 
     /// `ServerLevel.getRaidAt(pos)`: the closest active raid whose centre is
     /// less than 96 blocks away (`Raids.getNearbyRaid`, 9216 squared).
-    pub(super) fn native_level_raid_at(&self, level: LevelRef, pos: [i32; 3]) -> Option<RaidRef> {
+    pub(super) fn native_level_raid_at(&self, level: LevelRef, pos: [i32; 3]) -> Option<RaidRef> { let (pos,) = match crate::points_generated::P4126.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         if !self.native_level_in_place(level) {
             return None;
         }
@@ -36,7 +36,7 @@ impl Game<'_> {
 
     /// Every raid `Raids` holds, in its iteration order, stopped ones
     /// included until their next tick. None for a level that is not in place.
-    pub(super) fn native_level_raids(&self, level: LevelRef) -> Option<Vec<RaidRef>> {
+    pub(super) fn native_level_raids(&self, level: LevelRef) -> Option<Vec<RaidRef>> { if let Some(__l) = crate::points_generated::P4125.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_level_in_place(level) {
             return None;
         }
@@ -51,7 +51,7 @@ impl Game<'_> {
 
     /// `Raider.getCurrentRaid`: the raid a raider belongs to, even a stopped
     /// one. None for a mob that is no raider or in no raid.
-    pub(super) fn native_mob_raid(&self, mob: MobRef) -> Option<RaidRef> {
+    pub(super) fn native_mob_raid(&self, mob: MobRef) -> Option<RaidRef> { if let Some(__l) = crate::points_generated::P4124.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -62,18 +62,18 @@ impl Game<'_> {
     }
 
     /// `Raid.getCenter`.
-    pub(super) fn native_raid_center(&self, raid: RaidRef) -> Option<[i32; 3]> {
+    pub(super) fn native_raid_center(&self, raid: RaidRef) -> Option<[i32; 3]> { if let Some(__l) = crate::points_generated::P4123.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_raid_data(raid)?.center)
     }
 
     /// `Raid.getRaidOmenLevel`: 0 to 5 in play, any value a mod set.
-    pub(super) fn native_raid_omen_level(&self, raid: RaidRef) -> Option<i32> {
+    pub(super) fn native_raid_omen_level(&self, raid: RaidRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P4122.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_raid_data(raid)?.omen_level)
     }
 
     /// `Raid.setRaidOmenLevel`: any value, as vanilla assigns it (only
     /// `absorbRaidOmen` clamps, to 0 to 5). The raid is saved with it.
-    pub(super) fn native_raid_set_omen_level(&mut self, raid: RaidRef, level: i32) -> bool {
+    pub(super) fn native_raid_set_omen_level(&mut self, raid: RaidRef, level: i32) -> bool { let (level,) = match crate::points_generated::P4121.get() { Some(__l) => { let mut __a = (level,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (level,) };
         if self.native_raid_data(raid).is_none() {
             return false;
         }
@@ -82,35 +82,35 @@ impl Game<'_> {
     }
 
     /// `Raid.getGroupsSpawned`: the waves spawned so far.
-    pub(super) fn native_raid_groups_spawned(&self, raid: RaidRef) -> Option<i32> {
+    pub(super) fn native_raid_groups_spawned(&self, raid: RaidRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P4120.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_raid_data(raid)?.groups_spawned)
     }
 
     /// `Raid.numGroups`, set from `getNumGroups(difficulty)` when the raid
     /// began: 0, 3, 5 or 7. A raid of omen level 2 or more adds a bonus wave
     /// (`hasBonusWave`).
-    pub(super) fn native_raid_num_groups(&self, raid: RaidRef) -> Option<i32> {
+    pub(super) fn native_raid_num_groups(&self, raid: RaidRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P4119.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_raid_data(raid)?.num_groups)
     }
 
     /// Whether the omen level is above 1, which adds a wave after the last
     /// (`Raid.hasBonusWave`).
-    pub(super) fn native_raid_has_bonus_wave(&self, raid: RaidRef) -> Option<bool> {
+    pub(super) fn native_raid_has_bonus_wave(&self, raid: RaidRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P4118.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_raid_data(raid)?.omen_level > 1)
     }
 
     /// `Raid.isStarted`.
-    pub(super) fn native_raid_is_started(&self, raid: RaidRef) -> bool {
+    pub(super) fn native_raid_is_started(&self, raid: RaidRef) -> bool { if let Some(__l) = crate::points_generated::P4117.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_raid_data(raid).is_some_and(|r| r.started)
     }
 
     /// `Raid.isActive`: false once stopped.
-    pub(super) fn native_raid_is_active(&self, raid: RaidRef) -> bool {
+    pub(super) fn native_raid_is_active(&self, raid: RaidRef) -> bool { if let Some(__l) = crate::points_generated::P4116.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_raid_data(raid).is_some_and(|r| r.active)
     }
 
     /// `Raid.RaidStatus`.
-    pub(super) fn native_raid_status(&self, raid: RaidRef) -> Option<NativeRaidStatus> {
+    pub(super) fn native_raid_status(&self, raid: RaidRef) -> Option<NativeRaidStatus> { if let Some(__l) = crate::points_generated::P4115.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(match self.native_raid_data(raid)?.status {
             Status::Ongoing => NativeRaidStatus::Ongoing,
             Status::Victory => NativeRaidStatus::Victory,
@@ -121,24 +121,24 @@ impl Game<'_> {
 
     /// `Raid.getTotalHealth`: the health of every raider that joined, which
     /// the boss bar divides by.
-    pub(super) fn native_raid_total_health(&self, raid: RaidRef) -> Option<f32> {
+    pub(super) fn native_raid_total_health(&self, raid: RaidRef) -> Option<f32> { if let Some(__l) = crate::points_generated::P4114.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_raid_data(raid)?.total_health)
     }
 
     /// `Raid.getHealthOfLivingRaiders`.
-    pub(super) fn native_raid_living_health(&self, raid: RaidRef) -> Option<f32> {
+    pub(super) fn native_raid_living_health(&self, raid: RaidRef) -> Option<f32> { if let Some(__l) = crate::points_generated::P4113.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_raid_data(raid)?;
         Some(self.raid_members(raid.id()).fold(0.0, |a, m| a + m.health))
     }
 
     /// The boss bar's progress, 0 to 1 (`Raid.raidEvent.getProgress`).
-    pub(super) fn native_raid_bar_progress(&self, raid: RaidRef) -> Option<f32> {
+    pub(super) fn native_raid_bar_progress(&self, raid: RaidRef) -> Option<f32> { if let Some(__l) = crate::points_generated::P4112.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_raid_data(raid)?.bar.progress)
     }
 
     /// `Raid.getAllRaiders`: the living raiders that joined, in mob-list
     /// order, as entity handles.
-    pub(super) fn native_raid_raiders(&self, raid: RaidRef) -> Option<Vec<EntityRef>> {
+    pub(super) fn native_raid_raiders(&self, raid: RaidRef) -> Option<Vec<EntityRef>> { if let Some(__l) = crate::points_generated::P4111.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_raid_data(raid)?;
         Some(
             self.raid_members(raid.id())
@@ -152,7 +152,7 @@ impl Game<'_> {
         &self,
         raid: RaidRef,
         wave: i32,
-    ) -> Option<Vec<EntityRef>> {
+    ) -> Option<Vec<EntityRef>> { let (wave,) = match crate::points_generated::P4110.get() { Some(__l) => { let mut __a = (wave,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (wave,) };
         self.native_raid_data(raid)?;
         Some(
             self.raid_members(raid.id())
@@ -164,7 +164,7 @@ impl Game<'_> {
 
     /// `Raid.heroesOfTheVillage`: the UUIDs of the players who got Hero of
     /// the Village, online or not, in the order vanilla's set iterates them.
-    pub(super) fn native_raid_heroes(&self, raid: RaidRef) -> Option<Vec<u128>> {
+    pub(super) fn native_raid_heroes(&self, raid: RaidRef) -> Option<Vec<u128>> { if let Some(__l) = crate::points_generated::P4109.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(
             self.native_raid_data(raid)?
                 .heroes()
@@ -177,7 +177,7 @@ impl Game<'_> {
     /// `Raid.stop`: the raid ends as `stopped` and its boss bar leaves the
     /// players; the `raid_state_change` hook fires. False if the raid is
     /// already stopped.
-    pub(super) fn native_raid_stop(&mut self, raid: RaidRef) -> bool {
+    pub(super) fn native_raid_stop(&mut self, raid: RaidRef) -> bool { if let Some(__l) = crate::points_generated::P4108.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.native_raid_data(raid).is_none_or(|r| r.is_stopped()) {
             return false;
         }

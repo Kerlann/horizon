@@ -63,11 +63,11 @@ impl Game<'_> {
 
     /// `NbtPredicate.getEntityTagToCompare`: the entity as saved. An entity
     /// in another level is read in the level that holds it.
-    pub(in crate::game) fn entity_nbt(&mut self, t: Target) -> Option<Tag> {
+    pub(in crate::game) fn entity_nbt(&mut self, t: Target) -> Option<Tag> { if let Some(__l) = crate::points_generated::P1076.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.in_target_level(t, |g| g.entity_nbt_in_level(t))
             .flatten()
     }
-    fn entity_nbt_in_level(&mut self, t: Target) -> Option<Tag> {
+    fn entity_nbt_in_level(&mut self, t: Target) -> Option<Tag> { if let Some(__l) = crate::points_generated::P1075.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The acting player's own UUID: a guest's turn (the window's player on
         // the server thread) keeps the world owner's in `level`.
         let player_uuid = self
@@ -279,7 +279,7 @@ impl Game<'_> {
     /// `Entity.load` of new data (`EntityDataAccessor.setData`): the entity is
     /// rebuilt from its compound, keeping its id and UUID. Also what
     /// `TypedEntityData.loadInto` is: a spawn egg's data on the mob it spawned.
-    pub(in crate::game) fn apply_entity_nbt(&mut self, t: Target, mut tag: Tag) -> R<()> {
+    pub(in crate::game) fn apply_entity_nbt(&mut self, t: Target, mut tag: Tag) -> R<()> { if let Some(__l) = crate::points_generated::P1074.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let stale = || err("commands.data.merge.failed", &[]);
         match t {
             Target::Player => return Err(err("commands.data.entity.invalid", &[])),
@@ -371,7 +371,7 @@ impl Game<'_> {
         }
         Ok(())
     }
-    pub(in crate::game) fn data_block_name(&self, p: [i32; 3]) -> String {
+    pub(in crate::game) fn data_block_name(&self, p: [i32; 3]) -> String { let (p,) = match crate::points_generated::P1073.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let state = self.world.block(p[0], p[1], p[2]);
         self.pack
             .assets
@@ -379,7 +379,7 @@ impl Game<'_> {
             .state(state)
             .map_or_else(|| "minecraft:air".into(), |s| s.name.to_string())
     }
-    fn raw_mut(&mut self, t: Target) -> Option<&mut Tag> {
+    fn raw_mut(&mut self, t: Target) -> Option<&mut Tag> { if let Some(__l) = crate::points_generated::P1072.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match t {
             Target::Player => Some(self.level.player_extra.get_or_insert_with(empty)),
             Target::Guest(conn) => self
@@ -423,7 +423,7 @@ impl Game<'_> {
     }
     /// Writes `t`'s `Tags`; false when its kind keeps no saved compound to
     /// write them to.
-    pub(in crate::game) fn set_entity_tags(&mut self, t: Target, tags: &[String]) -> bool {
+    pub(in crate::game) fn set_entity_tags(&mut self, t: Target, tags: &[String]) -> bool { if let Some(__l) = crate::points_generated::P1071.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(raw) = self.raw_mut(t) else {
             return false;
         };
@@ -438,7 +438,7 @@ impl Game<'_> {
     // ---- accessors -----------------------------------------------------
 
     /// The `role`th provider of the command (`entity`, `block` or `storage`).
-    pub(in crate::game) fn data_ref(&mut self, ctx: &Context, role: usize) -> R<DataRef> {
+    pub(in crate::game) fn data_ref(&mut self, ctx: &Context, role: usize) -> R<DataRef> { let (role,) = match crate::points_generated::P1070.get() { Some(__l) => { let mut __a = (role,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (role,) };
         let prefix = if role == 0 { "target" } else { "source" };
         self.data_ref_named(ctx, role, prefix)
     }
@@ -447,7 +447,7 @@ impl Game<'_> {
         ctx: &Context,
         role: usize,
         prefix: &str,
-    ) -> R<DataRef> {
+    ) -> R<DataRef> { let (role,) = match crate::points_generated::P1069.get() { Some(__l) => { let mut __a = (role,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (role,) };
         let kind = ctx
             .literals
             .iter()
@@ -479,7 +479,7 @@ impl Game<'_> {
             },
         }
     }
-    pub(in crate::game) fn data_of(&mut self, r: &DataRef) -> R<Tag> {
+    pub(in crate::game) fn data_of(&mut self, r: &DataRef) -> R<Tag> { if let Some(__l) = crate::points_generated::P1068.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match r {
             // EntityDataAccessor.getData: Entity.saveWithoutId.
             DataRef::Entity(t) => {
@@ -514,7 +514,7 @@ impl Game<'_> {
             DataRef::Storage(id) => Ok(self.score.storage.get(id)),
         }
     }
-    pub(in crate::game) fn set_data_of(&mut self, r: &DataRef, tag: Tag) -> R<()> {
+    pub(in crate::game) fn set_data_of(&mut self, r: &DataRef, tag: Tag) -> R<()> { if let Some(__l) = crate::points_generated::P1067.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match r {
             DataRef::Entity(t) => self.apply_entity_nbt(*t, tag),
             DataRef::Block(p) => {
@@ -536,7 +536,7 @@ impl Game<'_> {
         &mut self,
         key: (i32, i32, i32),
         tag: &Tag,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P1066.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let state = self.world.block(key.0, key.1, key.2);
         let name = &self.res.facts().get(state).name;
         let Some((_, mut new)) = save::decode_block_entity_for_block(tag, name) else {
@@ -551,20 +551,20 @@ impl Game<'_> {
     }
     /// What `BlockDataAccessor.setData` tells the world after a load: `setChanged` and
     /// `sendBlockUpdated(3)`, even when the block state stays the same.
-    pub(in crate::game) fn block_entity_updated(&mut self, key: (i32, i32, i32)) {
+    pub(in crate::game) fn block_entity_updated(&mut self, key: (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P1065.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.mark_block_entity_updated(key);
         let state = self.world.block(key.0, key.1, key.2);
         // Redraw what shows the block entity (signs, banners).
         let _ = self.world.set(key.0, key.1, key.2, state);
     }
-    fn data_name(&self, r: &DataRef) -> Text {
+    fn data_name(&self, r: &DataRef) -> Text { if let Some(__l) = crate::points_generated::P1064.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match r {
             DataRef::Entity(t) => self.target_name(*t),
             DataRef::Block(p) => Text::literal(format!("{}, {}, {}", p[0], p[1], p[2])),
             DataRef::Storage(id) => Text::literal(id.clone()),
         }
     }
-    fn modified_text(&self, r: &DataRef) -> Text {
+    fn modified_text(&self, r: &DataRef) -> Text { if let Some(__l) = crate::points_generated::P1063.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match r {
             DataRef::Entity(_) => {
                 Text::translate("commands.data.entity.modified", &[self.data_name(r)])
@@ -583,7 +583,7 @@ impl Game<'_> {
             ),
         }
     }
-    fn query_text(&self, r: &DataRef, data: &Tag) -> Text {
+    fn query_text(&self, r: &DataRef, data: &Tag) -> Text { if let Some(__l) = crate::points_generated::P1062.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let pretty = snbt::pretty(data);
         match r {
             DataRef::Entity(_) => {
@@ -604,7 +604,7 @@ impl Game<'_> {
             ),
         }
     }
-    fn get_text(&self, r: &DataRef, path: &NbtPath, scale: f64, value: i32) -> Text {
+    fn get_text(&self, r: &DataRef, path: &NbtPath, scale: f64, value: i32) -> Text { let (scale,value,) = match crate::points_generated::P1061.get() { Some(__l) => { let mut __a = (scale,value,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (scale,value,) };
         let p = Text::literal(path.as_str());
         let (s, v) = (
             data_cmd::scale_text(scale),
@@ -634,13 +634,13 @@ impl Game<'_> {
 
     // ---- /data -----------------------------------------------------------
 
-    fn path_arg(&self, ctx: &Context, name: &str) -> R<NbtPath> {
+    fn path_arg(&self, ctx: &Context, name: &str) -> R<NbtPath> { if let Some(__l) = crate::points_generated::P1060.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(Arg::Str(text)) = ctx.get(name) else {
             return Err(err("command.failed", &[]));
         };
         NbtPath::parse(text).map_err(path_error)
     }
-    pub(super) fn cmd_data(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_data(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1059.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = self.data_ref(ctx, 0)?;
         // An entity in another level is read and written in the level that
         // holds it.
@@ -654,7 +654,7 @@ impl Game<'_> {
         }
         self.cmd_data_in(id, ctx, target)
     }
-    fn cmd_data_in(&mut self, id: &str, ctx: &Context, target: DataRef) -> R<i32> {
+    fn cmd_data_in(&mut self, id: &str, ctx: &Context, target: DataRef) -> R<i32> { if let Some(__l) = crate::points_generated::P1058.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match id {
             "data.merge" => {
                 let Some(Arg::Str(nbt)) = ctx.get("nbt") else {
@@ -711,10 +711,10 @@ impl Game<'_> {
         }
     }
     /// A message sent without the feedback gamerule check (`sendSuccess(.., false)`).
-    fn system_feedback(&mut self, message: Text) {
+    fn system_feedback(&mut self, message: Text) { if let Some(__l) = crate::points_generated::P1057.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.feedback(message);
     }
-    fn cmd_data_modify(&mut self, ctx: &Context, target: DataRef) -> R<i32> {
+    fn cmd_data_modify(&mut self, ctx: &Context, target: DataRef) -> R<i32> { if let Some(__l) = crate::points_generated::P1056.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target_path = self.path_arg(ctx, "targetPath")?;
         let after_modify: Vec<&String> = ctx
             .literals
@@ -790,7 +790,7 @@ impl Game<'_> {
 
     // ---- /tag ------------------------------------------------------------
 
-    pub(super) fn cmd_tag(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_tag(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1055.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = self.entities(ctx, "targets", false)?;
         let name = match ctx.get("name") {
             Some(Arg::Str(n)) => n.clone(),
@@ -927,7 +927,7 @@ impl Game<'_> {
 
     /// Spawn an entity from its compound (`EntityType.loadEntityRecursive`);
     /// returns what was created.
-    pub(in crate::game) fn spawn_entity_from_nbt(&mut self, tag: Tag) -> Option<Target> {
+    pub(in crate::game) fn spawn_entity_from_nbt(&mut self, tag: Tag) -> Option<Target> { if let Some(__l) = crate::points_generated::P1054.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let key = {
             let p = entity_nbt::position(&tag)?;
             ((p.x.floor() as i32) >> 4, (p.z.floor() as i32) >> 4)
@@ -985,7 +985,7 @@ impl Game<'_> {
         kind: &str,
         pos: [f64; 3],
         nbt: &str,
-    ) -> R<Option<Target>> {
+    ) -> R<Option<Target>> { let (pos,) = match crate::points_generated::P1053.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let (mut tag, _) = parse_snbt(nbt).map_err(|e| err("argument.nbt.invalid", &[&e]))?;
         if !matches!(tag, Tag::Compound(_)) {
             return Err(err("argument.nbt.expected.compound", &[]));

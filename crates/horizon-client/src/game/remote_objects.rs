@@ -44,7 +44,7 @@ impl Game<'_> {
         position: [f64; 3],
         rotation: (f32, f32),
         data: i32,
-    ) -> bool {
+    ) -> bool { let (id,position,data,) = match crate::points_generated::P5003.get() { Some(__l) => { let mut __a = (id,position,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,position,data,) };
         let (yaw, pitch) = rotation;
         let id = id as u32;
         let at = Vec3::new(position[0], position[1], position[2]);
@@ -159,14 +159,14 @@ impl Game<'_> {
     }
 
     /// A `painting_variant` by its network id, from the server's registry.
-    fn remote_painting_variant(&self, id: i32) -> Option<super::paintings::Variant> {
+    fn remote_painting_variant(&self, id: i32) -> Option<super::paintings::Variant> { let (id,) = match crate::points_generated::P5002.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let r = self.remote.as_ref()?;
         let name = r.registries.name("minecraft:painting_variant", id)?;
         self.painting_variants.get(name).cloned()
     }
 
     /// `handleSetEntityData` for an object: what changes how it looks.
-    pub(super) fn remote_object_data(&mut self, id: i32, values: &[(u8, i32, Value)]) {
+    pub(super) fn remote_object_data(&mut self, id: i32, values: &[(u8, i32, Value)]) { let (id,) = match crate::points_generated::P5001.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if self.text_displays.contains_key(&id) {
             // ItemDisplay.DATA_ITEM_STACK, read with the server's registries.
             let item = values
@@ -301,7 +301,7 @@ impl Game<'_> {
         &mut self,
         id: i32,
         slots: &[(u8, Option<horizon_protocol::item::Stack>)],
-    ) {
+    ) { let (id,) = match crate::points_generated::P5000.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if !self.armor_stands.iter().any(|a| a.id == id as u32) {
             return;
         }
@@ -317,7 +317,7 @@ impl Game<'_> {
     }
 
     /// A move's rotation and ground state for an object.
-    pub(super) fn turn_remote_object(&mut self, id: i32, yaw: Option<f32>, on_ground: bool) {
+    pub(super) fn turn_remote_object(&mut self, id: i32, yaw: Option<f32>, on_ground: bool) { let (id,on_ground,) = match crate::points_generated::P4999.get() { Some(__l) => { let mut __a = (id,on_ground,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,on_ground,) };
         let id = id as u32;
         // The boat the player drives turns here (isLocalInstanceAuthoritative).
         let driven = self.riding;
@@ -338,7 +338,7 @@ impl Game<'_> {
     }
 
     /// `MinecartTNT.handleEntityEvent(70)`: the client's fuse starts at 80.
-    pub(super) fn remote_cart_primed(&mut self, id: u32) {
+    pub(super) fn remote_cart_primed(&mut self, id: u32) { let (id,) = match crate::points_generated::P4998.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Some(c) = self
             .carts
             .iter_mut()
@@ -407,7 +407,7 @@ impl Game<'_> {
 
     /// The boats, minecarts, armor stands, item frames and paintings in the
     /// level (a server's client: the ones it was sent), for `status`.
-    pub(super) fn objects_status(&self) -> Vec<serde_json::Value> {
+    pub(super) fn objects_status(&self) -> Vec<serde_json::Value> { if let Some(__l) = crate::points_generated::P4997.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use serde_json::json;
         let at = |p: Vec3| [p.x, p.y, p.z];
         let mut out = Vec::new();
@@ -453,7 +453,7 @@ impl Game<'_> {
     }
 
     /// Every object a server sent (a new connection, level or dimension).
-    pub(super) fn clear_remote_objects(&mut self) {
+    pub(super) fn clear_remote_objects(&mut self) { if let Some(__l) = crate::points_generated::P4996.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.text_displays.clear();
         self.interactions.clear();
         self.ominous_spawners.clear();
@@ -466,7 +466,7 @@ impl Game<'_> {
         self.paintings.clear();
     }
 
-    pub(super) fn remove_remote_object(&mut self, id: u32) {
+    pub(super) fn remove_remote_object(&mut self, id: u32) { let (id,) = match crate::points_generated::P4995.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.text_displays.remove(&(id as i32));
         self.interactions.remove(&(id as i32));
         self.ominous_spawners.retain(|s| s.id != id);

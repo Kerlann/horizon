@@ -34,7 +34,7 @@ impl Game<'_> {
     /// The messages that give a player `holder`'s synced attachments whole: its
     /// own, and for a chunk those of its block entities. A player holder with
     /// none still gives one, to drop what the client holds.
-    fn attachment_snapshot(&mut self, holder: Holder) -> Vec<Message> {
+    fn attachment_snapshot(&mut self, holder: Holder) -> Vec<Message> { if let Some(__l) = crate::points_generated::P545.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let changes = match holder {
             // Read in place: a chunk lent to a mod is copied and saved.
             Holder::Chunk([x, z]) => self
@@ -81,7 +81,7 @@ impl Game<'_> {
     /// of the level they are in (another's stay queued), then the synced
     /// changes of the holders lent to mods since the last pass to the players
     /// who see them.
-    pub(super) fn flush_attachment_sync(&mut self) {
+    pub(super) fn flush_attachment_sync(&mut self) { if let Some(__l) = crate::points_generated::P544.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -146,7 +146,7 @@ impl Game<'_> {
 
 impl Game<'_> {
     /// A `horizon:attachment_sync` payload the server sent the window.
-    pub(super) fn remote_attachment_sync(&mut self, data: &[u8]) {
+    pub(super) fn remote_attachment_sync(&mut self, data: &[u8]) { if let Some(__l) = crate::points_generated::P543.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let message = match attachment_sync::decode(data) {
             Ok(message) => message,
             Err(e) => return log::debug!("Horizon: a bad attachment sync: {e}"),

@@ -30,7 +30,7 @@ impl Game<'_> {
     /// distance and position. Its box is wider than the post inside it, so the crosshair meets it
     /// first and LeashFenceKnotEntity.interact takes the click. The fence block behind only ties
     /// the player's own mobs (LeadItem.useOn), it never takes one back.
-    fn remote_knot_hit(&self) -> Option<(i32, f64, [f64; 3])> {
+    fn remote_knot_hit(&self) -> Option<(i32, f64, [f64; 3])> { if let Some(__l) = crate::points_generated::P5037.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (eye, dir) = self.aim()?;
         self.remote_knots
             .iter()
@@ -50,7 +50,7 @@ impl Game<'_> {
 
     /// Whether a use starts on an entity: the crosshair's `EntityHitResult`, or a fence knot.
     /// Only a use: Horizon's attacks still go to the fence behind a knot.
-    pub(super) fn remote_use_targets_entity(&self) -> bool {
+    pub(super) fn remote_use_targets_entity(&self) -> bool { if let Some(__l) = crate::points_generated::P5036.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.entity_targeted()
             || self
                 .remote_knot_hit()
@@ -59,7 +59,7 @@ impl Game<'_> {
 
     /// The nearest boat, minecart, item frame, armor stand or painting the
     /// view hits within reach; also End crystals when attacking, and fence knots when using.
-    pub(super) fn remote_object_hit(&self, attacking: bool) -> Option<ObjectHit> {
+    pub(super) fn remote_object_hit(&self, attacking: bool) -> Option<ObjectHit> { let (attacking,) = match crate::points_generated::P5035.get() { Some(__l) => { let mut __a = (attacking,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (attacking,) };
         let (eye, dir) = self.aim()?;
         let at = |d: f64| {
             [
@@ -148,7 +148,7 @@ impl Game<'_> {
     /// `ClientPacketListener.handleSetEntityPassengersPacket`: who rides
     /// `vehicle` now. The local player gets in or out; mobs and other
     /// players sit where the server keeps them.
-    pub(super) fn remote_set_passengers(&mut self, vehicle: i32, passengers: &[i32]) {
+    pub(super) fn remote_set_passengers(&mut self, vehicle: i32, passengers: &[i32]) { let (vehicle,) = match crate::points_generated::P5034.get() { Some(__l) => { let mut __a = (vehicle,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (vehicle,) };
         let Some(me) = self.remote.as_ref().map(|r| r.entity_id) else {
             return;
         };
@@ -227,7 +227,7 @@ impl Game<'_> {
     /// Camera.alignWithEntity's NewMinecartBehavior branch: sample the
     /// vehicle's curved path at this frame, then apply the player's seat
     /// attachment. Camera's own eye-height interpolation still runs afterwards.
-    pub(super) fn remote_minecart_rider_position(&self, partial: f32) -> Option<[f64; 3]> {
+    pub(super) fn remote_minecart_rider_position(&self, partial: f32) -> Option<[f64; 3]> { let (partial,) = match crate::points_generated::P5033.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         if !self.minecart_improvements() {
             return None;
         }
@@ -242,7 +242,7 @@ impl Game<'_> {
 
     /// The local player's tick in its vehicle, in place of its own movement:
     /// false when it rides nothing.
-    pub(super) fn remote_ride(&mut self, keys: Keys) -> bool {
+    pub(super) fn remote_ride(&mut self, keys: Keys) -> bool { if let Some(__l) = crate::points_generated::P5032.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(id) = self.riding else {
             return false;
         };
@@ -321,7 +321,7 @@ impl Game<'_> {
 
     /// `LocalPlayer.tick` for a passenger: the boat it controls goes to the
     /// server every tick with its paddles (the rider's own position does not).
-    pub(super) fn remote_vehicle_packets(&self) -> Vec<S> {
+    pub(super) fn remote_vehicle_packets(&self) -> Vec<S> { if let Some(__l) = crate::points_generated::P5031.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(m) = self.driven_mount() {
             return vec![mount_move(m)];
         }
@@ -347,7 +347,7 @@ impl Game<'_> {
 
     /// `ClientPacketListener.handleMoveVehicle`: the server put the boat or
     /// the mount the player drives back.
-    pub(super) fn remote_move_vehicle(&mut self, position: [f64; 3], yaw: f32) {
+    pub(super) fn remote_move_vehicle(&mut self, position: [f64; 3], yaw: f32) { let (position,yaw,) = match crate::points_generated::P5030.get() { Some(__l) => { let mut __a = (position,yaw,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (position,yaw,) };
         let at = Vec3::new(position[0], position[1], position[2]);
         if let Some(id) = self.driven_mount().map(|m| m.id)
             && let Some(m) = self.mob_index.get_mut(&mut self.mobs, id)
@@ -375,7 +375,7 @@ impl Game<'_> {
     /// `AbstractBoat.handleEntityEvent`: 71 and 72, a bubble column dragging
     /// the boat down or throwing it up (`handleBubbleColumnEffect`, which the
     /// client applies to the boat it drives).
-    pub(super) fn remote_boat_event(&mut self, id: i32, event: i8) {
+    pub(super) fn remote_boat_event(&mut self, id: i32, event: i8) { let (id,event,) = match crate::points_generated::P5029.get() { Some(__l) => { let mut __a = (id,event,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,event,) };
         let drag_down = event == super::boats::BUBBLE_DOWN_EVENT;
         if !drag_down && event != super::boats::BUBBLE_UP_EVENT {
             return;
@@ -390,7 +390,7 @@ impl Game<'_> {
     /// above a column may splash; the boat the player drives is lifted or
     /// dragged by a column it is inside) and `tickBubbleColumn`'s wobble from
     /// the synched bubble time.
-    pub(super) fn tick_remote_boat_bubbles(&mut self) {
+    pub(super) fn tick_remote_boat_bubbles(&mut self) { if let Some(__l) = crate::points_generated::P5028.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for i in 0..self.boats.len() {
             let driven = self.riding == Some(self.boats[i].id);
             if !driven {
@@ -419,13 +419,13 @@ impl Game<'_> {
     /// Whether this client moves `m`, the mount the player rides: as its
     /// first passenger (`AbstractHorse.getControllingPassenger`), on its
     /// saddle (`isLocalInstanceAuthoritative`).
-    fn drives(&self, m: &Mob) -> bool {
+    fn drives(&self, m: &Mob) -> bool { if let Some(__l) = crate::points_generated::P5027.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.riding == Some(m.id)
             && client_moves(m, self.remote.as_ref().is_some_and(|r| r.first_passenger))
     }
 
     /// The mount this client moves, if the player rides one.
-    pub(super) fn driven_mount(&self) -> Option<&Mob> {
+    pub(super) fn driven_mount(&self) -> Option<&Mob> { if let Some(__l) = crate::points_generated::P5026.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let id = self.riding?;
         self.mobs.iter().find(|m| m.id == id && self.drives(m))
     }
@@ -434,7 +434,7 @@ impl Game<'_> {
     /// controlling client: a released jump goes to the server
     /// (`sendRidingJump`), and the mount takes the rider's input and moves
     /// here (`tickRidden`, then `travel`).
-    fn drive_mount(&mut self, i: usize, keys: Keys, jump: f32) {
+    fn drive_mount(&mut self, i: usize, keys: Keys, jump: f32) { let (i,jump,) = match crate::points_generated::P5025.get() { Some(__l) => { let mut __a = (i,jump,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,jump,) };
         if jump > 0.0
             && let Some(id) = self.remote.as_ref().map(|r| r.entity_id)
         {

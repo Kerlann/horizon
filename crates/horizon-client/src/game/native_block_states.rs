@@ -15,7 +15,7 @@ impl Game<'_> {
     /// a property it doesn't have or a value it can't take, or block NBT
     /// (`{...}`); and, as `/setblock`'s argument, for anything after the
     /// block.
-    pub(super) fn native_block_state_id(&self, name: &str) -> Option<BlockStateId> {
+    pub(super) fn native_block_state_id(&self, name: &str) -> Option<BlockStateId> { if let Some(__l) = crate::points_generated::P2915.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let registry = self.pack.assets.registry;
         parse(&block_registries(registry), registry, name)
     }
@@ -24,18 +24,18 @@ impl Game<'_> {
     /// name order, `minecraft:oak_stairs[facing=east,half=bottom,...]`, or
     /// the block alone for one with no properties. None for an id no state
     /// has (`Block.stateById` gives air for one).
-    pub(super) fn native_block_state_string(&self, state: BlockStateId) -> Option<String> {
+    pub(super) fn native_block_state_string(&self, state: BlockStateId) -> Option<String> { if let Some(__l) = crate::points_generated::P2914.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pack.assets.registry.state(state).map(serialize)
     }
     /// The default state of `block` (`minecraft:oak_stairs`, or `oak_stairs`):
     /// `Block.defaultBlockState`, the one a block takes when nothing else
     /// says. None for an unknown block.
-    pub(super) fn native_block_state_default(&self, block: &str) -> Option<BlockStateId> {
+    pub(super) fn native_block_state_default(&self, block: &str) -> Option<BlockStateId> { if let Some(__l) = crate::points_generated::P2913.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         default_state(self.pack.assets.registry, block)
     }
     /// `Item.getCraftingRemainder`: Horizon currently stores the remainder's
     /// item id, so the result is a single plain stack.
-    pub(super) fn native_item_crafting_remainder(&self, stack: &ItemStack) -> Option<ItemStack> {
+    pub(super) fn native_item_crafting_remainder(&self, stack: &ItemStack) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P2912.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let item = self.res.items().get(&stack.item)?;
         let remainder = item.crafting_remainder.as_deref()?;
         Some(ItemStack::new(remainder, 1))
@@ -43,7 +43,7 @@ impl Game<'_> {
 
     /// `Block.asItem`: the block's item name, including air for a block with
     /// no item; None if the block name is unknown.
-    pub(super) fn native_block_item(&self, block: &str) -> Option<String> {
+    pub(super) fn native_block_item(&self, block: &str) -> Option<String> { if let Some(__l) = crate::points_generated::P2911.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let behaviours = self.res.behaviours();
         let id = behaviours.table.block_by_name(block)?;
         Some(behaviours.block_data(id).item.to_string())
@@ -55,7 +55,7 @@ impl Game<'_> {
     /// and content mods included. An empty stack tests `minecraft:air`, an
     /// unknown tag is false. None on a server's client or before the world
     /// has loaded its tags.
-    pub(super) fn native_item_stack_in_tag(&self, stack: &ItemStack, tag: &str) -> Option<bool> {
+    pub(super) fn native_item_stack_in_tag(&self, stack: &ItemStack, tag: &str) -> Option<bool> { if let Some(__l) = crate::points_generated::P2910.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(super::native_world_read::stack_in_tag(
             self.native_tag_items()?,
             stack,

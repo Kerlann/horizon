@@ -40,7 +40,7 @@ pub(super) type Brushing = HashMap<[i32; 3], BrushState>;
 impl Game<'_> {
     /// `BrushItem.onUseTick` for a brush used `ticks` ticks so far, the
     /// hand of `slot` acting.
-    pub(super) fn tick_brush(&mut self, slot: usize, ticks: u32) {
+    pub(super) fn tick_brush(&mut self, slot: usize, ticks: u32) { let (slot,ticks,) = match crate::points_generated::P799.get() { Some(__l) => { let mut __a = (slot,ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,ticks,) };
         // No block under the crosshair: releaseUsingItem.
         let Some(hit) = self.pick() else {
             self.using = None;
@@ -58,7 +58,7 @@ impl Game<'_> {
     /// One stroke on the block aimed at: dust (this window only), the brush
     /// sound, and the block entity's count. The brush wears when the block
     /// changed state.
-    fn brush_stroke(&mut self, hit: &Hit, slot: usize) {
+    fn brush_stroke(&mut self, hit: &Hit, slot: usize) { let (slot,) = match crate::points_generated::P798.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let state = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
         let name = self.res.facts().get(state).name.clone();
         let (sound, brushable) = match &*name {
@@ -77,7 +77,7 @@ impl Game<'_> {
     }
 
     /// `BrushItem.spawnDustParticles`.
-    pub(super) fn brush_dust(&mut self, hit: &Hit, off_hand: bool) {
+    pub(super) fn brush_dust(&mut self, hit: &Hit, off_hand: bool) { let (off_hand,) = match crate::points_generated::P797.get() { Some(__l) => { let mut __a = (off_hand,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (off_hand,) };
         let state = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
         let Some((sprite, tint)) = self.particle_sprite(state, hit.pos) else {
             return;
@@ -113,7 +113,7 @@ impl Game<'_> {
     }
 
     /// `BrushableBlockEntity.brush`: whether the block changed (the brush wears).
-    fn brush_block(&mut self, pos: [i32; 3], face: [i32; 3], slot: usize) -> bool {
+    fn brush_block(&mut self, pos: [i32; 3], face: [i32; 3], slot: usize) -> bool { let (pos,face,slot,) = match crate::points_generated::P796.get() { Some(__l) => { let mut __a = (pos,face,slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,face,slot,) };
         let time = self.world.game_time;
         let mut brush = self.brushing.remove(&pos).unwrap_or_default();
         brush.hit_face.get_or_insert(face);
@@ -155,7 +155,7 @@ impl Game<'_> {
 
     /// `BrushableBlockEntity.unpackLootTable`: the table's roll becomes the
     /// block entity's item.
-    fn unpack_brush_loot(&mut self, pos: [i32; 3]) {
+    fn unpack_brush_loot(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P795.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let key = (pos[0], pos[1], pos[2]);
         let Some(BlockEntity::Brushable(b)) = self.world.block_entities.get(&key) else {
             return;
@@ -188,7 +188,7 @@ impl Game<'_> {
 
     /// `BrushableBlockEntity.brushingCompleted`: the item drops out of the
     /// brushed face and the block turns into its sand or gravel.
-    fn brushing_completed(&mut self, pos: [i32; 3], face: Option<[i32; 3]>, slot: usize) {
+    fn brushing_completed(&mut self, pos: [i32; 3], face: Option<[i32; 3]>, slot: usize) { let (pos,slot,) = match crate::points_generated::P794.get() { Some(__l) => { let mut __a = (pos,slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,slot,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let turns_into = match &*self.res.facts().get(state).name {
             "minecraft:suspicious_sand" => "minecraft:sand",
@@ -233,7 +233,7 @@ impl Game<'_> {
         }
     }
 
-    fn set_dusted(&mut self, pos: [i32; 3], dusted: i32) {
+    fn set_dusted(&mut self, pos: [i32; 3], dusted: i32) { let (pos,dusted,) = match crate::points_generated::P793.get() { Some(__l) => { let mut __a = (pos,dusted,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,dusted,) };
         let registry = self.pack.assets.registry;
         let Some(mut state) = registry
             .state(self.world.block(pos[0], pos[1], pos[2]))
@@ -247,14 +247,14 @@ impl Game<'_> {
         }
     }
 
-    fn schedule_brushable_tick(&mut self, pos: [i32; 3]) {
+    fn schedule_brushable_tick(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P792.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let at = horizon_core::position::BlockPos::new(pos[0], pos[1], pos[2]);
         self.with_level(|b, level, ticks| b.schedule_tick(level, ticks, at, 2));
     }
 
     /// `BrushableBlockEntity.checkReset`, from `BrushableBlock.tick`: a block
     /// left alone loses two counts, again every four ticks.
-    pub(super) fn brushable_tick(&mut self, pos: [i32; 3]) {
+    pub(super) fn brushable_tick(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P791.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let time = self.world.game_time;
         let Some(mut brush) = self.brushing.remove(&pos) else {
             return;
@@ -279,7 +279,7 @@ impl Game<'_> {
     }
 
     /// `BrushableBlockRenderer`: reveal the item from the first brushed face.
-    pub(super) fn brushable_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
+    pub(super) fn brushable_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) { if let Some(__l) = crate::points_generated::P790.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_assets::item_model::DisplayContext;
         for (key, entity) in &self.world.block_entities {
             let BlockEntity::Brushable(b) = entity else {
@@ -334,7 +334,7 @@ impl Game<'_> {
 
     /// Level event 3008 (`LevelEventHandler`): the finished block's sound
     /// and break particles.
-    pub(super) fn brush_complete_event(&mut self, pos: [i32; 3], data: i32) {
+    pub(super) fn brush_complete_event(&mut self, pos: [i32; 3], data: i32) { let (pos,data,) = match crate::points_generated::P789.get() { Some(__l) => { let mut __a = (pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,data,) };
         let state = horizon_world::registry::BlockStateId(data as u32);
         let sound = match &*self.res.facts().get(state).name {
             "minecraft:suspicious_sand" => "minecraft:item.brush.brushing.sand.complete",

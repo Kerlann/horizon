@@ -200,7 +200,7 @@ impl Game<'_> {
         player: bool,
         bearer: Option<u32>,
         mut random: Option<&mut LegacyRandom>,
-    ) {
+    ) { let (player,) = match crate::points_generated::P4656.get() { Some(__l) => { let mut __a = (player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player,) };
         let feet = bounds.bottom_center();
         if effects.contains(&"oozing") {
             // OozingMobEffect.numberOfSlimesToSpawn: two, fewer when the
@@ -265,7 +265,7 @@ impl Game<'_> {
     /// `WeavingMobEffect.spawnCobwebsRandomlyAround`: two or three cobwebs in
     /// free spaces with a solid floor, picked among 15 random blocks within one
     /// block of `pos`.
-    fn spawn_cobwebs_around(&mut self, pos: [i32; 3], mut random: Option<&mut LegacyRandom>) {
+    fn spawn_cobwebs_around(&mut self, pos: [i32; 3], mut random: Option<&mut LegacyRandom>) { let (pos,) = match crate::points_generated::P4655.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let r = random.as_deref_mut().unwrap_or(&mut self.world.random);
         let wanted = 2 + r.next_int_bound(2).unwrap_or(0) as usize;
         let mut chosen: Vec<[i32; 3]> = Vec::new();
@@ -297,7 +297,7 @@ impl Game<'_> {
     }
     /// `InfestedMobEffect.onMobHurt` for the player: from half its height up,
     /// along where it looks.
-    pub(super) fn player_infested(&mut self) {
+    pub(super) fn player_infested(&mut self) { if let Some(__l) = crate::points_generated::P4654.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(p) = self.player.as_ref() {
             let at = [
                 p.position.x,
@@ -309,7 +309,7 @@ impl Game<'_> {
         }
     }
     /// A living mob's own random (`Entity.random`), else the world's.
-    fn bearer_random(&mut self, bearer: Option<u32>) -> &mut LegacyRandom {
+    fn bearer_random(&mut self, bearer: Option<u32>) -> &mut LegacyRandom { if let Some(__l) = crate::points_generated::P4653.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match bearer.and_then(|id| self.mobs.iter().position(|m| m.id == id)) {
             Some(i) => &mut self.mobs[i].random,
             None => &mut self.world.random,
@@ -319,7 +319,7 @@ impl Game<'_> {
     /// `at` (half the bearer's height up), thrown along its look direction.
     /// The draws are the bearer's (`mob.getRandom()`): `bearer` is the mob,
     /// none for the player (the world's random).
-    pub(super) fn infested_hurt(&mut self, at: [f64; 3], look: [f64; 3], bearer: Option<u32>) {
+    pub(super) fn infested_hurt(&mut self, at: [f64; 3], look: [f64; 3], bearer: Option<u32>) { let (at,look,) = match crate::points_generated::P4652.get() { Some(__l) => { let mut __a = (at,look,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,look,) };
         if self.bearer_random(bearer).next_float() > 0.1 {
             return;
         }
@@ -353,7 +353,7 @@ impl Game<'_> {
         position: Vec3,
         velocity: Vec3,
         owner: Option<Text>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4651.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = self.take_entity_id();
         self.potions.thrown.push(ThrownPotion {
             id,
@@ -520,7 +520,7 @@ pub(super) fn collect_dragon_breath(
 
 impl Game<'_> {
     /// Right-click with a potion, splash/lingering potion or glass bottle.
-    pub(super) fn use_potion_item(&mut self, stack: &ItemStack) -> horizon_client::Result<bool> {
+    pub(super) fn use_potion_item(&mut self, stack: &ItemStack) -> horizon_client::Result<bool> { if let Some(__l) = crate::points_generated::P4650.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match &*stack.item {
             "minecraft:potion" | "minecraft:ominous_bottle" => {
                 self.start_using_item();
@@ -631,7 +631,7 @@ impl Game<'_> {
         pos: [i32; 3],
         face: [i32; 3],
         stack: &ItemStack,
-    ) -> horizon_client::Result<bool> {
+    ) -> horizon_client::Result<bool> { let (pos,face,) = match crate::points_generated::P4649.get() { Some(__l) => { let mut __a = (pos,face,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,face,) };
         if &*stack.item != "minecraft:potion"
             || stack.potion() != Some("minecraft:water")
             || face == [0, -1, 0]
@@ -665,7 +665,7 @@ impl Game<'_> {
         Ok(true)
     }
     /// `ItemUtils.createFilledResult`: replace one of the held stack.
-    fn fill_held(&mut self, filled: ItemStack) {
+    fn fill_held(&mut self, filled: ItemStack) { if let Some(__l) = crate::points_generated::P4648.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.creative {
             let _ = self.give(filled);
             return;
@@ -681,7 +681,7 @@ impl Game<'_> {
         }
     }
     /// Drinking a potion while right-click is held; true when handled.
-    pub(super) fn tick_drinking(&mut self, slot: usize, ticks: u32, stack: &ItemStack) -> bool {
+    pub(super) fn tick_drinking(&mut self, slot: usize, ticks: u32, stack: &ItemStack) -> bool { let (slot,ticks,) = match crate::points_generated::P4647.get() { Some(__l) => { let mut __a = (slot,ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,ticks,) };
         let ominous = &*stack.item == "minecraft:ominous_bottle";
         if &*stack.item != "minecraft:potion" && !ominous {
             return false;
@@ -708,7 +708,7 @@ impl Game<'_> {
     }
     /// `PotionItem.finishUsingItem` (and `OminousBottleItem`'s) of `stack` in
     /// `slot`, the use complete: false for anything else.
-    pub(super) fn finish_drinking(&mut self, slot: usize, stack: &ItemStack) -> bool {
+    pub(super) fn finish_drinking(&mut self, slot: usize, stack: &ItemStack) -> bool { let (slot,) = match crate::points_generated::P4646.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let ominous = &*stack.item == "minecraft:ominous_bottle";
         if &*stack.item != "minecraft:potion" && !ominous {
             return false;
@@ -755,7 +755,7 @@ impl Game<'_> {
     /// a mob's arrow without such an item (a stray's) carries its own effect.
     /// Instant effects act at once: harming hurts and healing heals, the
     /// other way round for the undead.
-    pub(super) fn arrow_post_hurt_effects(&mut self, p: &Projectile, who: Who) {
+    pub(super) fn arrow_post_hurt_effects(&mut self, p: &Projectile, who: Who) { if let Some(__l) = crate::points_generated::P4645.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let from_item = p.arrow.as_ref().map(|a| &a.pickup_item);
         let mut effects: Vec<(&'static str, i32, i32)> = match from_item {
             Some(s) if &*s.item == "minecraft:spectral_arrow" => vec![("glowing", 200, 0)],
@@ -839,7 +839,7 @@ impl Game<'_> {
             }
         }
     }
-    pub(super) fn apply_effect_action(&mut self, action: EffectAction) {
+    pub(super) fn apply_effect_action(&mut self, action: EffectAction) { if let Some(__l) = crate::points_generated::P4644.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let action = match action {
             EffectAction::Heal(mut amount) => {
                 if let Some(player) = self.player.as_ref() {
@@ -917,7 +917,7 @@ impl Game<'_> {
     /// in flight, which a server without a local player still has. A frozen
     /// tick (`/tick freeze`) leaves the potions where they are
     /// (`TickRateManager.isEntityFrozen`); players' effects still run.
-    pub(super) fn tick_effects(&mut self, running: bool) {
+    pub(super) fn tick_effects(&mut self, running: bool) { let (running,) = match crate::points_generated::P4643.get() { Some(__l) => { let mut __a = (running,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (running,) };
         self.tick_mob_effects();
         if running {
             self.tick_thrown_potions();
@@ -927,7 +927,7 @@ impl Game<'_> {
     /// `LivingEntity.tickEffects` (server side) for `self.player`, the local
     /// player or a guest acting (`as_guest`), then its attribute modifiers
     /// and status flags.
-    pub(super) fn tick_mob_effects(&mut self) {
+    pub(super) fn tick_mob_effects(&mut self) { if let Some(__l) = crate::points_generated::P4642.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(player) = self.player.as_ref() else {
             return;
         };
@@ -1034,7 +1034,7 @@ impl Game<'_> {
     /// `Player.tick` -> `turtleHelmetTick`: with a turtle helmet on the head
     /// and the eyes out of the water, Water Breathing for 200 ticks (no
     /// particles, an icon).
-    fn turtle_helmet_tick(&mut self) {
+    fn turtle_helmet_tick(&mut self) { if let Some(__l) = crate::points_generated::P4641.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -1054,12 +1054,12 @@ impl Game<'_> {
     /// `MobEffectInstance.tickClient`): they count down and blend, and the
     /// server removes them. Their modifiers and flags move the predicted
     /// player.
-    pub(super) fn tick_client_effects(&mut self) {
+    pub(super) fn tick_client_effects(&mut self) { if let Some(__l) = crate::points_generated::P4640.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         client_tick_effects(&mut self.potions.effects, &mut self.sculk.darkness);
         self.apply_effect_status();
     }
     /// Add an active effect to the player and update attributes / absorption.
-    pub(super) fn add_player_effect(&mut self, effect: EffectInstance) -> bool {
+    pub(super) fn add_player_effect(&mut self, effect: EffectInstance) -> bool { if let Some(__l) = crate::points_generated::P4639.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = effect.id;
         let amp = effect.amplifier;
         let new = self.potions.effects.get(id).is_none();
@@ -1076,7 +1076,7 @@ impl Game<'_> {
         changed
     }
     /// Removes one effect, or all effects, and refreshes the player's derived state.
-    pub(super) fn remove_player_effects(&mut self, effect: Option<&str>) -> bool {
+    pub(super) fn remove_player_effects(&mut self, effect: Option<&str>) -> bool { if let Some(__l) = crate::points_generated::P4638.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let before = self.potions.effects.list.len();
         self.potions
             .effects
@@ -1097,7 +1097,7 @@ impl Game<'_> {
         entity: Option<i32>,
         amplifier: i32,
         new: bool,
-    ) {
+    ) { let (amplifier,new,) = match crate::points_generated::P4637.get() { Some(__l) => { let mut __a = (amplifier,new,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amplifier,new,) };
         if self.remote.is_none() && brewing::is_mod_effect(effect) {
             if new {
                 self.native_on_effect_added(effect, entity, amplifier);
@@ -1118,7 +1118,7 @@ impl Game<'_> {
         health: f32,
         max_health: f32,
         food: Option<NativePlayerFood>,
-    ) -> (bool, Vec<EffectTickChange>) {
+    ) -> (bool, Vec<EffectTickChange>) { let (tick_count,amplifier,health,max_health,) = match crate::points_generated::P4636.get() { Some(__l) => { let mut __a = (tick_count,amplifier,health,max_health,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (tick_count,amplifier,health,max_health,) };
         let mut apply = false;
         self.native_should_apply_effect_tick_this_tick(effect, tick_count, amplifier, &mut apply);
         let mut keep = true;
@@ -1141,7 +1141,7 @@ impl Game<'_> {
     }
     /// The effects' attribute modifiers, armor protection and status flags
     /// on `self.player`.
-    pub(super) fn apply_effect_status(&mut self) {
+    pub(super) fn apply_effect_status(&mut self) { if let Some(__l) = crate::points_generated::P4635.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let modifiers = self.potions.effects.modifiers();
         if modifiers != self.potions.applied
             && let Some(p) = self.player.as_mut()
@@ -1203,7 +1203,7 @@ impl Game<'_> {
     }
     /// The players a thrown potion can hit (`Projectile.canHitEntity`): the
     /// host and the guests, but not a spectator or a dead one.
-    fn thrown_player_targets(&self) -> Vec<(Who, Aabb)> {
+    fn thrown_player_targets(&self) -> Vec<(Who, Aabb)> { if let Some(__l) = crate::points_generated::P4634.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut targets = Vec::new();
         if let Some(p) = self.player_view()
             && p.alive
@@ -1224,7 +1224,7 @@ impl Game<'_> {
         &self,
         owner: Option<Who>,
         players: &[(Who, Aabb)],
-    ) -> (Vec<Who>, Option<u32>, Vec<Aabb>) {
+    ) -> (Vec<Who>, Option<u32>, Vec<Aabb>) { if let Some(__l) = crate::points_generated::P4633.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(owner) = owner else {
             return (Vec::new(), None, Vec::new());
         };
@@ -1263,7 +1263,7 @@ impl Game<'_> {
     /// (`Projectile.onHit`). Its thrower is not met until it has left them
     /// (`Projectile.leftOwner`, checked before the move like `Projectile.tick`),
     /// nor anything else in their vehicle tree.
-    fn tick_thrown_potions(&mut self) {
+    fn tick_thrown_potions(&mut self) { if let Some(__l) = crate::points_generated::P4632.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut thrown = std::mem::take(&mut self.potions.thrown);
         let players = if thrown.is_empty() {
             Vec::new()
@@ -1367,7 +1367,7 @@ impl Game<'_> {
     }
     /// `AreaEffectCloud.tick` for the lingering potions' clouds: the client
     /// tick's particles, then the server tick.
-    fn tick_potion_clouds(&mut self) {
+    fn tick_potion_clouds(&mut self) { if let Some(__l) = crate::points_generated::P4631.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.breath_clouds.iter().all(|c| c.potion.is_none()) {
             return;
         }
@@ -1384,7 +1384,7 @@ impl Game<'_> {
     /// wait it shrinks, and every 5 ticks it affects the living entities in
     /// its box and radius that were not affected in the last 20 ticks, each
     /// taking some of its radius. False once it is gone.
-    fn tick_potion_cloud(&mut self, c: &mut Breath, players: &[FightPlayer]) -> bool {
+    fn tick_potion_cloud(&mut self, c: &mut Breath, players: &[FightPlayer]) -> bool { if let Some(__l) = crate::points_generated::P4630.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         c.age += 1;
         let Some(potion) = c.potion.as_mut() else {
             return true;
@@ -1467,7 +1467,7 @@ impl Game<'_> {
         hidden: Vec<&'static str>,
         ambient: Vec<&'static str>,
         color: u32,
-    ) {
+    ) { let (at,color,) = match crate::points_generated::P4629.get() { Some(__l) => { let mut __a = (at,color,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,color,) };
         let id = self.take_entity_id();
         self.breath_clouds.push(Breath {
             id,
@@ -1498,7 +1498,7 @@ impl Game<'_> {
         (hidden, ambient): (&[&'static str], &[&'static str]),
         at: [f64; 3],
         source: &Text,
-    ) {
+    ) { let (at,) = match crate::points_generated::P4628.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         // `indirectMagic(cloud, owner)` names the cloud in the death message
         // (it gives no kill credit).
         let cloud_owner = PotionOwner {
@@ -1583,7 +1583,7 @@ impl Game<'_> {
     /// `ThrowableProjectile.tick`'s `applyGravity` and `applyInertia`, which
     /// come before the move: gravity 0.05 (0.07 for an experience bottle),
     /// then drag 0.99 (0.8 in water).
-    fn thrown_potion_motion(&self, t: &mut ThrownPotion) {
+    fn thrown_potion_motion(&self, t: &mut ThrownPotion) { if let Some(__l) = crate::points_generated::P4627.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let gravity = if &*t.stack.item == "minecraft:experience_bottle" {
             0.07
         } else {
@@ -1610,7 +1610,7 @@ impl Game<'_> {
     /// `ThrowableProjectile.tick` on a server's client: it falls and moves
     /// by itself between the server's updates and stops at a block; only
     /// the server breaks it.
-    pub(super) fn step_remote_thrown(&mut self) {
+    pub(super) fn step_remote_thrown(&mut self) { if let Some(__l) = crate::points_generated::P4626.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut thrown = std::mem::take(&mut self.potions.thrown);
         for t in &mut thrown {
             t.previous = t.position;
@@ -1642,7 +1642,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         alpha: f64,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P4625.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let orientation = glam::Mat4::from_quat(self.camera_orientation());
         for t in &self.potions.thrown {
             let previous = glam::DVec3::new(t.previous.x, t.previous.y, t.previous.z);
@@ -1682,7 +1682,7 @@ impl Game<'_> {
     /// `HealOrHarmMobEffect.applyInstantaneousEffect` with a source (a
     /// potion or a cloud): indirectMagic, not plain magic, credited to the
     /// mob that threw it when there is one.
-    fn apply_indirect_effect_action(&mut self, a: EffectAction, owner: &PotionOwner) {
+    fn apply_indirect_effect_action(&mut self, a: EffectAction, owner: &PotionOwner) { if let Some(__l) = crate::points_generated::P4624.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let a = match a {
             EffectAction::Hurt("minecraft:magic", amount) => {
                 match (owner.attacker, &owner.name) {
@@ -1709,7 +1709,7 @@ impl Game<'_> {
         at: Vec3,
         age: u32,
         owner: &PotionOwner,
-    ) {
+    ) { let (age,) = match crate::points_generated::P4623.get() { Some(__l) => { let mut __a = (age,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (age,) };
         if let Some(p) = self.player.as_ref() {
             let w = f64::from(p.dimensions.width) / 2.0;
             let bounds = Aabb::new(
@@ -1743,7 +1743,7 @@ impl Game<'_> {
     /// `Projectile.getOwner` of a thrown potion, as [`splash`](Self::splash)
     /// names it: a player's, a mob's (a witch keeps the kill credit), or
     /// nobody's (a dispenser's, a summoned potion's).
-    pub(super) fn potion_owner(&self, owner: Option<Who>) -> PotionOwner {
+    pub(super) fn potion_owner(&self, owner: Option<Who>) -> PotionOwner { if let Some(__l) = crate::points_generated::P4622.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match owner {
             Some(Who::Player) => PotionOwner {
                 name: Some(self.player_display_text()),
@@ -1770,7 +1770,7 @@ impl Game<'_> {
         hit: Option<([i32; 3], Direction)>,
         age: u32,
         owner: &PotionOwner,
-    ) {
+    ) { let (age,) = match crate::points_generated::P4621.get() { Some(__l) => { let mut __a = (age,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (age,) };
         let block = [at.x, at.y, at.z].map(|v| v.floor() as i32);
         if &*stack.item == "minecraft:experience_bottle" {
             // ThrownExperienceBottle.onHit: the water-coloured splash (level
@@ -1911,7 +1911,7 @@ impl Game<'_> {
     /// `Screen.showsActiveEffects`: the survival and creative inventories
     /// draw their own effect list when `EffectsInInventory.canSeeEffects`
     /// (32 or more pixels right of the screen).
-    fn screen_shows_active_effects(&self, batch: &HudBatch) -> bool {
+    fn screen_shows_active_effects(&self, batch: &HudBatch) -> bool { if let Some(__l) = crate::points_generated::P4620.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (ox, image_width) = match self.screen {
             Screen::Inventory
                 if self.container.is_none() && self.craft_size == 2 && !self.mount_active() =>
@@ -1928,7 +1928,7 @@ impl Game<'_> {
     }
     /// `Hud.extractEffects`: icons top-right, beneficial row then harmful row;
     /// every screen but the inventories keeps them.
-    pub(super) fn draw_effect_icons(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_effect_icons(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P4619.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.potions.effects.list.is_empty() || self.screen_shows_active_effects(batch) {
             return;
         }
@@ -1949,7 +1949,7 @@ impl Game<'_> {
         batch: &mut HudBatch,
         origin: (f32, f32),
         image_width: i32,
-    ) -> Option<[(String, u32); 2]> {
+    ) -> Option<[(String, u32); 2]> { let (image_width,) = match crate::points_generated::P4618.get() { Some(__l) => { let mut __a = (image_width,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (image_width,) };
         let panels = inventory_effects::panels(
             batch.width as i32,
             [origin.0 as i32, origin.1 as i32],
@@ -1973,7 +1973,7 @@ impl Game<'_> {
         batch: &HudBatch,
         origin: [f32; 2],
         image_width: f32,
-    ) -> Option<[f32; 4]> {
+    ) -> Option<[f32; 4]> { let (origin,image_width,) = match crate::points_generated::P4617.get() { Some(__l) => { let mut __a = (origin,image_width,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (origin,image_width,) };
         let panels = inventory_effects::panels(
             batch.width as i32,
             [origin[0] as i32, origin[1] as i32],
@@ -1989,11 +1989,11 @@ impl Game<'_> {
         Some([first.x as f32, first.y as f32, width as f32, height as f32])
     }
     /// Effects saved in level.dat (`Player.active_effects`).
-    pub(super) fn restore_effects(&mut self) {
+    pub(super) fn restore_effects(&mut self) { if let Some(__l) = crate::points_generated::P4616.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.potions = PotionState::default();
         self.potions.effects = PlayerEffects::from_saved(&self.level.active_effects);
     }
-    pub(super) fn effects_json(&self) -> serde_json::Value {
+    pub(super) fn effects_json(&self) -> serde_json::Value { if let Some(__l) = crate::points_generated::P4615.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         serde_json::json!({
             "active": self.potions.effects.list.iter().map(|e| serde_json::json!({ "id": e.id, "duration": e.duration, "amplifier": e.amplifier })).collect::<Vec<_>>(),
             "thrown": self.potions.thrown.iter().map(|t| [t.position.x, t.position.y, t.position.z]).collect::<Vec<_>>(),
@@ -2010,7 +2010,7 @@ impl horizon_client::mobs::ModEffectTicks for Game<'_> {
         mob: &mut Mob,
         tick_count: i32,
         amplifier: i32,
-    ) -> bool {
+    ) -> bool { let (tick_count,amplifier,) = match crate::points_generated::P4614.get() { Some(__l) => { let mut __a = (tick_count,amplifier,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (tick_count,amplifier,) };
         let Some(epoch) = self.native_lifecycle.epoch() else {
             return true;
         };

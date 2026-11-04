@@ -12,27 +12,27 @@ use horizon_world::level::LevelEvent;
 use horizon_world::registry::BlockStateId;
 
 impl Game<'_> {
-    pub(super) fn dragon_egg_particles(&mut self, pos: [i32; 3], data: i32) {
+    pub(super) fn dragon_egg_particles(&mut self, pos: [i32; 3], data: i32) { let (pos,data,) = match crate::points_generated::P2519.get() { Some(__l) => { let mut __a = (pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,data,) };
         self.particles.block_teleportation(pos, data, [16, 8, 16]);
     }
     /// Event 2016: `Shulker.teleportSomewhere`'s particles between the
     /// shell's old and new cells.
-    pub(super) fn shulker_teleport_particles(&mut self, pos: [i32; 3], data: i32) {
+    pub(super) fn shulker_teleport_particles(&mut self, pos: [i32; 3], data: i32) { let (pos,data,) = match crate::points_generated::P2518.get() { Some(__l) => { let mut __a = (pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,data,) };
         self.particles.block_teleportation(pos, data, [8, 8, 8]);
     }
     /// Event 2017: `TeleportRandomlyConsumeEffect`'s directional particles.
-    pub(super) fn consume_teleport_particles(&mut self, pos: [i32; 3], data: i32) {
+    pub(super) fn consume_teleport_particles(&mut self, pos: [i32; 3], data: i32) { let (pos,data,) = match crate::points_generated::P2517.get() { Some(__l) => { let mut __a = (pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,data,) };
         self.particles
             .block_teleportation(pos, data, [127, 127, 127]);
     }
     /// Event 2018: an enderman's portal trail.
-    pub(super) fn enderman_teleport_particles(&mut self, pos: [i32; 3], data: i32) {
+    pub(super) fn enderman_teleport_particles(&mut self, pos: [i32; 3], data: i32) { let (pos,data,) = match crate::points_generated::P2516.get() { Some(__l) => { let mut __a = (pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,data,) };
         self.particles
             .enderman_teleportation(pos, data, self.settings.particles);
     }
     /// `LevelEventHandler.levelEvent` 3002 to 3005, drawing from the client
     /// level's random.
-    pub(super) fn block_particle_event(&mut self, id: i32, pos: BlockPos, data: i32) {
+    pub(super) fn block_particle_event(&mut self, id: i32, pos: BlockPos, data: i32) { let (id,data,) = match crate::points_generated::P2515.get() { Some(__l) => { let mut __a = (id,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,data,) };
         let ty = match id {
             3002 => ParticleType::ElectricSpark,
             3003 => ParticleType::WaxOn,
@@ -58,7 +58,7 @@ impl Game<'_> {
     /// `BoneMealItem.addGrowthParticles` (event 1505, `count` the data):
     /// happy villager sparks over a spreading block's neighbourhood (grass,
     /// nylium, netherrack, moss) or water, or inside a growing block.
-    pub(super) fn growth_particles(&mut self, pos: BlockPos, count: i32) {
+    pub(super) fn growth_particles(&mut self, pos: BlockPos, count: i32) { let (count,) = match crate::points_generated::P2514.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         let p = [pos.x, pos.y, pos.z];
         let state = self.world.block(p[0], p[1], p[2]);
         let facts = self.res.facts();
@@ -94,7 +94,7 @@ impl Game<'_> {
         self.spawn_particles(at, count, xz, height, floating, ParticleType::HappyVillager);
     }
     /// `BlockState.getShape(..).max(Y)` of the block at `at`, 1.0 for air.
-    fn block_shape_top(&self, at: [i32; 3]) -> f64 {
+    fn block_shape_top(&self, at: [i32; 3]) -> f64 { let (at,) = match crate::points_generated::P2513.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,) };
         let facts = self.res.facts();
         let inside = self.world.block(at[0], at[1], at[2]);
         if facts.is_air(inside) {
@@ -119,7 +119,7 @@ impl Game<'_> {
         height: f64,
         floating: bool,
         ty: ParticleType,
-    ) {
+    ) { let (at,count,xz,height,floating,) = match crate::points_generated::P2512.get() { Some(__l) => { let mut __a = (at,count,xz,height,floating,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,count,xz,height,floating,) };
         let options = ParticleOptions::simple(ty);
         for _ in 0..count.max(0) {
             let r = self.particles.level_random();
@@ -141,14 +141,14 @@ impl Game<'_> {
     }
     /// `LevelEventHandler` 2012 (a turtle egg laid on sand):
     /// `ParticleUtils.spawnParticleInBlock` with happy villager sparks.
-    pub(super) fn turtle_egg_particles(&mut self, pos: BlockPos, count: i32) {
+    pub(super) fn turtle_egg_particles(&mut self, pos: BlockPos, count: i32) { let (count,) = match crate::points_generated::P2511.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         let at = [pos.x, pos.y, pos.z];
         let height = self.block_shape_top(at);
         self.spawn_particles(at, count, 0.5, height, true, ParticleType::HappyVillager);
     }
     /// `LevelEventHandler` 3009 (a sniffer egg cracking on moss):
     /// `spawnParticlesOnBlockFaces(.., EGG_CRACK, UniformInt.of(3, 6))`.
-    pub(super) fn sniffer_egg_crack_particles(&mut self, pos: BlockPos) {
+    pub(super) fn sniffer_egg_crack_particles(&mut self, pos: BlockPos) { if let Some(__l) = crate::points_generated::P2510.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut spawned = Vec::new();
         particles::on_block_faces_between(
             self.particles.level_random(),
@@ -164,7 +164,7 @@ impl Game<'_> {
     }
     /// `LevelEventHandler` 1501 (lava put out) and 2009 (a wet sponge dried):
     /// eight puffs just above the block, drawn after the sound.
-    pub(super) fn puffs_above_block(&mut self, pos: BlockPos, ty: ParticleType) {
+    pub(super) fn puffs_above_block(&mut self, pos: BlockPos, ty: ParticleType) { if let Some(__l) = crate::points_generated::P2509.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let options = ParticleOptions::simple(ty);
         for _ in 0..8 {
             let r = self.particles.level_random();
@@ -176,7 +176,7 @@ impl Game<'_> {
     }
     /// `LevelEventHandler` 1502 (a redstone torch burning out): five smoke
     /// puffs inside the block, drawn after the sound.
-    pub(super) fn torch_burnout_smoke(&mut self, pos: BlockPos) {
+    pub(super) fn torch_burnout_smoke(&mut self, pos: BlockPos) { if let Some(__l) = crate::points_generated::P2508.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let options = ParticleOptions::simple(ParticleType::Smoke);
         for _ in 0..5 {
             let r = self.particles.level_random();
@@ -187,7 +187,7 @@ impl Game<'_> {
         }
     }
     /// `LevelEventHandler` 1503: smoke on the inserted eye.
-    pub(super) fn end_portal_frame_smoke(&mut self, pos: BlockPos) {
+    pub(super) fn end_portal_frame_smoke(&mut self, pos: BlockPos) { if let Some(__l) = crate::points_generated::P2507.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let options = ParticleOptions::simple(ParticleType::Smoke);
         for _ in 0..16 {
             let r = self.particles.level_random();
@@ -199,7 +199,7 @@ impl Game<'_> {
     }
     /// `LevelEventHandler` 2006 (`DragonFireball.onHit`): 200 dragon breath
     /// particles thrown outwards, then the explosion sound when `data` is 1.
-    pub(super) fn dragon_fireball_burst(&mut self, pos: BlockPos, data: i32) {
+    pub(super) fn dragon_fireball_burst(&mut self, pos: BlockPos, data: i32) { let (data,) = match crate::points_generated::P2506.get() { Some(__l) => { let mut __a = (data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (data,) };
         for _ in 0..200 {
             let r = self.particles.level_random();
             let dist = r.next_float() * 4.0;
@@ -233,7 +233,7 @@ impl Game<'_> {
         }
     }
     /// `SpeleothemBlock.isStalactite`: a speleothem whose tip points down.
-    fn is_stalactite(&self, state: BlockStateId) -> bool {
+    fn is_stalactite(&self, state: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P2505.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res.facts().get(state).has_class("SpeleothemBlock")
             && self
                 .pack
@@ -246,7 +246,7 @@ impl Game<'_> {
     /// `LevelEventHandler` 1504: `PointedDripstoneBlock.spawnDripParticle` at
     /// the tip `pos`. The fluid above the stalactite's root picks the drip;
     /// with none, the dimension's default (lava in the Nether).
-    pub(super) fn dripstone_drip_particle(&mut self, pos: BlockPos) {
+    pub(super) fn dripstone_drip_particle(&mut self, pos: BlockPos) { if let Some(__l) = crate::points_generated::P2504.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let tip_state = self.world.block(pos.x, pos.y, pos.z);
         if !self.is_stalactite(tip_state) {
             return;
@@ -305,7 +305,7 @@ impl Game<'_> {
     /// `ServerLevel.globalLevelEvent`: heard by every player on the server
     /// (an end portal opening, the dragon's death roar): here, and sent to
     /// every guest whatever their dimension.
-    pub(super) fn global_level_event(&mut self, id: i32, pos: [i32; 3], data: i32) {
+    pub(super) fn global_level_event(&mut self, id: i32, pos: [i32; 3], data: i32) { let (id,pos,data,) = match crate::points_generated::P2503.get() { Some(__l) => { let mut __a = (id,pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,pos,data,) };
         // ServerLevel.globalLevelEvent: without global_sound_events it is a
         // plain level event, which the client has no sound for (1023, 1028
         // and 1038 are only in `LevelEventHandler.globalLevelEvent`).
@@ -319,7 +319,7 @@ impl Game<'_> {
     }
     /// `LevelEventHandler.globalLevelEvent`: the sound two blocks from the
     /// camera towards the event, so it is heard from anywhere.
-    pub(super) fn global_level_event_sound(&mut self, id: i32, pos: [i32; 3]) {
+    pub(super) fn global_level_event_sound(&mut self, id: i32, pos: [i32; 3]) { let (id,pos,) = match crate::points_generated::P2502.get() { Some(__l) => { let mut __a = (id,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,pos,) };
         let (sound, volume) = match id {
             1023 => ("minecraft:entity.wither.spawn", 1.0),
             1028 => ("minecraft:entity.ender_dragon.death", 5.0),
@@ -348,7 +348,7 @@ impl Game<'_> {
         pos: [i32; 3],
         face: [i32; 3],
         play_sound: bool,
-    ) {
+    ) { let (pos,face,play_sound,) = match crate::points_generated::P2501.get() { Some(__l) => { let mut __a = (pos,face,play_sound,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,face,play_sound,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         if self.res.facts().is_air(state) {
             return;
@@ -368,7 +368,7 @@ impl Game<'_> {
     /// `LevelEventHandler.potionSplashParticles` (2002 with `Effect`, 2007
     /// with `InstantEffect`): eight splash potion crumbs, and a hundred
     /// spell particles in the potion's colour `data`, flung out in a disc.
-    pub(super) fn potion_splash_particles(&mut self, pos: BlockPos, data: i32, instant: bool) {
+    pub(super) fn potion_splash_particles(&mut self, pos: BlockPos, data: i32, instant: bool) { let (data,instant,) = match crate::points_generated::P2500.get() { Some(__l) => { let mut __a = (data,instant,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (data,instant,) };
         let ty = if instant {
             ParticleType::InstantEffect
         } else {
@@ -428,7 +428,7 @@ impl Game<'_> {
         }
     }
     /// Queue and play level event `id` at `pos` (`Level.levelEvent`).
-    pub(super) fn level_event_at(&mut self, id: i32, pos: [i32; 3], data: i32) {
+    pub(super) fn level_event_at(&mut self, id: i32, pos: [i32; 3], data: i32) { let (id,pos,data,) = match crate::points_generated::P2499.get() { Some(__l) => { let mut __a = (id,pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,pos,data,) };
         self.level_event_from(None, id, pos, data);
     }
 
@@ -438,7 +438,7 @@ impl Game<'_> {
         id: i32,
         pos: [i32; 3],
         data: i32,
-    ) {
+    ) { let (id,pos,data,) = match crate::points_generated::P2498.get() { Some(__l) => { let mut __a = (id,pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,pos,data,) };
         self.level_events.push(LevelEvent::LevelEvent {
             id,
             pos: BlockPos::new(pos[0], pos[1], pos[2]),

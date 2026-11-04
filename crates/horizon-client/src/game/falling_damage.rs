@@ -7,7 +7,7 @@ use horizon_world::level::LevelEvent;
 impl Game<'_> {
     /// `FallingBlockEntity.causeFallDamage`: impact damage and anvil wear,
     /// before block effects and portal handling can transfer the entity.
-    pub(super) fn falling_block_impact(&mut self, block: &mut FallingBlock) {
+    pub(super) fn falling_block_impact(&mut self, block: &mut FallingBlock) { if let Some(__l) = crate::points_generated::P1880.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let name = self.res.facts().get(block.state).name.clone();
         let anvil = name.ends_with("anvil");
         let stalactite = matches!(
@@ -80,7 +80,7 @@ impl Game<'_> {
 
     /// `FallingBlockEntity.tick`: finish a landing, including the placed block
     /// entity and the carried `TileEntityData` applied through loadWithComponents.
-    pub(super) fn finish_falling_block(&mut self, block: FallingBlock, pos: [i32; 3]) {
+    pub(super) fn finish_falling_block(&mut self, block: FallingBlock, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P1879.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let name = self.res.facts().get(block.state).name.clone();
         let anvil = name.ends_with("anvil");
         // Fallable.onBrokenAfterFall: the anvil's, the pointed dripstone's and
@@ -185,7 +185,7 @@ impl Game<'_> {
             self.drop_falling_block(block.state, block.position);
         }
     }
-    fn falling_hurt_player(&mut self, position: Vec3, amount: f32, kind: &str) {
+    fn falling_hurt_player(&mut self, position: Vec3, amount: f32, kind: &str) { let (amount,) = match crate::points_generated::P1878.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         if self.creative || self.spectator() {
             return;
         }

@@ -268,7 +268,7 @@ fn arrival_from_tag(a: &Tag) -> Option<Arrival> {
 
 impl Game<'_> {
     /// The world border's extent.
-    pub(super) fn border_bounds(&self) -> BorderBounds {
+    pub(super) fn border_bounds(&self) -> BorderBounds { if let Some(__l) = crate::points_generated::P4308.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let [min_x, min_z, max_x, max_z] = self.border.bounds();
         BorderBounds {
             min_x,
@@ -278,7 +278,7 @@ impl Game<'_> {
         }
     }
     /// `ServerLevel.isAllowedToEnterPortal`.
-    pub(super) fn may_enter(&self, target: Dim) -> bool {
+    pub(super) fn may_enter(&self, target: Dim) -> bool { if let Some(__l) = crate::points_generated::P4307.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         target != Dim::Nether || self.ui.rules.bool("allow_entering_nether_using_portals")
     }
     /// The plan of an entity of `width` by `height` at `at` going through the
@@ -291,7 +291,7 @@ impl Game<'_> {
         width: f32,
         height: f32,
         reset_forward: bool,
-    ) -> Plan {
+    ) -> Plan { let (width,height,reset_forward,) = match crate::points_generated::P4306.get() { Some(__l) => { let mut __a = (width,height,reset_forward,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (width,height,reset_forward,) };
         let target = if self.dim == Dim::Nether {
             Dim::Overworld
         } else {
@@ -342,7 +342,7 @@ impl Game<'_> {
         width: f32,
         height: f32,
         reset_forward: bool,
-    ) -> Plan {
+    ) -> Plan { let (width,height,reset_forward,) = match crate::points_generated::P4305.get() { Some(__l) => { let mut __a = (width,height,reset_forward,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (width,height,reset_forward,) };
         if !self.is_end_portal(self.world.block(entry.x, entry.y, entry.z)) {
             return self.portal_plan(entry, at, width, height, reset_forward);
         }
@@ -358,7 +358,7 @@ impl Game<'_> {
             height,
         )
     }
-    fn is_end_portal(&self, state: horizon_world::registry::BlockStateId) -> bool {
+    fn is_end_portal(&self, state: horizon_world::registry::BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P4304.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         &*self.res.facts().get(state).name == "minecraft:end_portal"
     }
     /// Where an item or mob through an End portal lands once `plan`'s level
@@ -366,7 +366,7 @@ impl Game<'_> {
     /// above the platform built below it (`EndPlatformFeature.createEndPlatform`);
     /// out of the End, the top of the shared spawn's column
     /// (`Entity.adjustSpawnLocation`).
-    fn end_portal_exit(&mut self, plan: &Plan) -> Vec3 {
+    fn end_portal_exit(&mut self, plan: &Plan) -> Vec3 { if let Some(__l) = crate::points_generated::P4303.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let p = plan.approximate;
         let centre = Vec3::new(f64::from(p.x) + 0.5, f64::from(p.y), f64::from(p.z) + 0.5);
         if plan.dim == Dim::End {
@@ -382,7 +382,7 @@ impl Game<'_> {
     /// The nether portal blocks of the chunks within `radius` of `center`
     /// (the points of interest `PortalForcer` searches): loaded chunks as
     /// they are, the others as saved; chunks never generated have none.
-    fn portal_blocks(&self, center: BlockPos, radius: i32) -> Vec<BlockPos> {
+    fn portal_blocks(&self, center: BlockPos, radius: i32) -> Vec<BlockPos> { let (radius,) = match crate::points_generated::P4302.get() { Some(__l) => { let mut __a = (radius,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (radius,) };
         let b = self.res.behaviours();
         let chunk_radius = radius.div_euclid(16) + 1;
         let (cx, cz) = (center.x >> 4, center.z >> 4);
@@ -430,7 +430,7 @@ impl Game<'_> {
     }
     /// The exit portal of `plan` in the loaded dimension: the closest one
     /// within reach, else one built by `PortalForcer.createPortal`.
-    pub(super) fn nether_exit_portal(&mut self, plan: &Plan) -> Option<FoundRectangle> {
+    pub(super) fn nether_exit_portal(&mut self, plan: &Plan) -> Option<FoundRectangle> { if let Some(__l) = crate::points_generated::P4301.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let to_nether = plan.dim == Dim::Nether;
         let radius = if to_nether { 16 } else { 128 };
         let border = self.border_bounds();
@@ -489,14 +489,14 @@ impl Game<'_> {
     /// ticks with no player in it (the entity that just came through ticks
     /// there, and goes back through the portal when its cooldown ends).
     /// Only a server holds levels with tickets of their own.
-    pub(super) fn place_portal_ticket(&mut self, chunk: (i32, i32)) {
+    pub(super) fn place_portal_ticket(&mut self, chunk: (i32, i32)) { if let Some(__l) = crate::points_generated::P4300.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.options.execution_role.is_client() {
             self.tickets.add_portal(chunk);
         }
     }
     /// `NetherPortalBlock.createDimensionTransition`: the arrival position
     /// and the yaw turned by.
-    pub(super) fn arrival(&self, plan: &Plan, exit: FoundRectangle) -> (Vec3, f32) {
+    pub(super) fn arrival(&self, plan: &Plan, exit: FoundRectangle) -> (Vec3, f32) { if let Some(__l) = crate::points_generated::P4299.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let b = self.res.behaviours();
         let corner = exit.min_corner;
         let exit_x_axis = b
@@ -524,7 +524,7 @@ impl Game<'_> {
     /// passenger), then only the client's `setAsInsidePortal`, which drives
     /// the confusion effect (`client_portal_effect`). On a server's client
     /// `portals.player` holds only the LocalPlayer's `portalCooldown`.
-    pub(super) fn client_inside_nether_portal(&mut self) {
+    pub(super) fn client_inside_nether_portal(&mut self) { if let Some(__l) = crate::points_generated::P4298.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let alive = self
             .player
             .as_ref()
@@ -541,7 +541,7 @@ impl Game<'_> {
     /// Where to wait for the destination of `plan` to load, once its level
     /// is open: the portal its points of interest lead to, or the
     /// approximate exit.
-    pub(super) fn arrival_centre(&self, plan: &Plan) -> Vec3 {
+    pub(super) fn arrival_centre(&self, plan: &Plan) -> Vec3 { if let Some(__l) = crate::points_generated::P4297.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let to_nether = plan.dim == Dim::Nether;
         let portals = self.portal_blocks(plan.approximate, if to_nether { 16 } else { 128 });
         let (min_section, max_section) = if to_nether { (0, 15) } else { (-4, 19) };
@@ -565,7 +565,7 @@ impl Game<'_> {
     /// effect grows this tick. Entering a portal closes screens other than
     /// the chat and death screens and plays `block.portal.trigger` when the
     /// effect starts from nothing.
-    pub(super) fn client_portal_effect(&mut self) -> bool {
+    pub(super) fn client_portal_effect(&mut self) -> bool { if let Some(__l) = crate::points_generated::P4296.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !std::mem::take(&mut self.portals.client_inside) {
             return false;
         }
@@ -595,16 +595,16 @@ impl Game<'_> {
     /// Positions before the entities move this tick, and `Entity.handlePortal`
     /// at the start of their tick: an item or mob that stayed in a portal
     /// goes through (transition time 0) and waits for its dimension.
-    pub(super) fn handle_entity_portals(&mut self) {
+    pub(super) fn handle_entity_portals(&mut self) { if let Some(__l) = crate::points_generated::P4295.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.handle_portals(false);
     }
     /// `Entity.handlePortal` of the boats and minecarts, which `tick_boats`
     /// and `tick_carts` move: it runs before them, from the position they
     /// ended the last tick at, as the start of a vehicle's own tick does.
-    pub(super) fn handle_vehicle_portals(&mut self) {
+    pub(super) fn handle_vehicle_portals(&mut self) { if let Some(__l) = crate::points_generated::P4294.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.handle_portals(true);
     }
-    fn handle_portals(&mut self, vehicles: bool) {
+    fn handle_portals(&mut self, vehicles: bool) { let (vehicles,) = match crate::points_generated::P4293.get() { Some(__l) => { let mut __a = (vehicles,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (vehicles,) };
         if self.remote.is_some() {
             return;
         }
@@ -670,7 +670,7 @@ impl Game<'_> {
     }
     /// `Entity.load`: the saved `PortalCooldown` (an entity that just came
     /// through stands in its exit portal for 300 ticks without going back).
-    pub(super) fn restore_portal_cooldown(&mut self, id: u32, tag: &Tag) {
+    pub(super) fn restore_portal_cooldown(&mut self, id: u32, tag: &Tag) { let (id,) = match crate::points_generated::P4292.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Some(Tag::Int(cooldown)) = tag.get("PortalCooldown")
             && *cooldown > 0
         {
@@ -685,7 +685,7 @@ impl Game<'_> {
     }
     /// `Entity.setAsInsidePortal` on an entity that is still on its portal
     /// cooldown, whatever the portal: the cooldown restarts and it stays.
-    pub(super) fn restart_portal_cooldown(&mut self, id: u32) -> bool {
+    pub(super) fn restart_portal_cooldown(&mut self, id: u32) -> bool { let (id,) = match crate::points_generated::P4291.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         match self.portals.entities.get_mut(&id) {
             Some(state) if state.cooldown > 0 => {
                 state.cooldown = ENTITY_DELAY;
@@ -696,7 +696,7 @@ impl Game<'_> {
     }
     /// `Entity.setPortalCooldown` on an entity that has just spawned in a
     /// portal: it stands in the portal for 300 ticks without going through.
-    pub(super) fn set_portal_cooldown(&mut self, id: u32) {
+    pub(super) fn set_portal_cooldown(&mut self, id: u32) { let (id,) = match crate::points_generated::P4290.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.portals.entities.insert(
             id,
             PortalState {
@@ -708,20 +708,20 @@ impl Game<'_> {
     /// `canUsePortal(false)` of a mob: what the mob itself decides
     /// (`mobs::mob_can_use_portal`), riding nothing, not asleep, and not
     /// carrying the players this side does.
-    pub(super) fn mob_can_use_portal(&self, m: &horizon_client::mobs::Mob) -> bool {
+    pub(super) fn mob_can_use_portal(&self, m: &horizon_client::mobs::Mob) -> bool { if let Some(__l) = crate::points_generated::P4289.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         horizon_client::mobs::mob_can_use_portal(m)
             && m.extra.mount.is_none()
             && self.riding != Some(m.id)
             && (!self.guest_rides(m.id) || self.carries_riders())
     }
     /// `Entity.canUsePortal(false)` for a primed TNT: it carries no mob.
-    pub(super) fn tnt_can_use_portal(&self, id: u32) -> bool {
+    pub(super) fn tnt_can_use_portal(&self, id: u32) -> bool { let (id,) = match crate::points_generated::P4288.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         // Id 0: not tracked yet, nothing to key its portal state by.
         id != 0 && !self.mobs.iter().any(|m| m.extra.mount == Some(id))
     }
     /// `canUsePortal(false)` of a boat or minecart: it is nobody's passenger;
     /// the mobs riding it, and on a server the players, cross with it.
-    pub(super) fn vehicle_can_use_portal(&self, id: u32) -> bool {
+    pub(super) fn vehicle_can_use_portal(&self, id: u32) -> bool { let (id,) = match crate::points_generated::P4287.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         // The window's player is moved by its own trip, not by the vehicle's.
         if self.riding == Some(id) {
             return false;
@@ -732,12 +732,12 @@ impl Game<'_> {
     /// Whether a vehicle can take the server players riding it through a
     /// portal: only a server moves players between its levels. Elsewhere a
     /// ridden vehicle stays, rather than leave its rider behind.
-    fn carries_riders(&self) -> bool {
+    fn carries_riders(&self) -> bool { if let Some(__l) = crate::points_generated::P4286.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.options.dedicated.is_some()
     }
     /// The vehicles that went through a portal in `dim` with server players
     /// on them.
-    pub(super) fn take_carrying(&mut self, dim: Dim) -> Vec<(u32, BlockPos)> {
+    pub(super) fn take_carrying(&mut self, dim: Dim) -> Vec<(u32, BlockPos)> { if let Some(__l) = crate::points_generated::P4285.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (here, other) = std::mem::take(&mut self.portals.carrying)
             .into_iter()
             .partition(|(d, ..)| *d == dim);
@@ -748,7 +748,7 @@ impl Game<'_> {
     /// position and size (`getPortalDestination(level, vehicle)`). A boat or
     /// minecart, like a mob, lands in the middle of the exit portal's depth
     /// (`AbstractBoat` and `AbstractMinecart.getRelativePortalPosition`).
-    pub(super) fn vehicle_plan(&self, id: u32, entry: BlockPos) -> Option<Plan> {
+    pub(super) fn vehicle_plan(&self, id: u32, entry: BlockPos) -> Option<Plan> { let (id,) = match crate::points_generated::P4284.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let at = |own: Vec3| self.portals.carried_at.get(&id).copied().unwrap_or(own);
         if let Some(m) = self.mobs.iter().find(|m| m.id == id) {
             return Some(self.entity_plan(entry, at(m.position), m.width(), m.height(), true));
@@ -768,19 +768,19 @@ impl Game<'_> {
     /// for the items, mobs, empty boats and minecarts, and arrows that moved
     /// this tick: the portal blocks their box swept through (an End portal's
     /// transition time is 0 too).
-    pub(super) fn find_entity_portals(&mut self) {
+    pub(super) fn find_entity_portals(&mut self) { if let Some(__l) = crate::points_generated::P4283.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.find_portals(None);
     }
     /// The same for the vehicles server players ride, once `tick_guests` has
     /// moved them: a ridden vehicle moves with its rider, after the other
     /// entities were swept, so without this pass its portal is found a tick
     /// late, from where it has already moved on to.
-    pub(super) fn find_ridden_vehicle_portals(&mut self, ridden: &[u32]) {
+    pub(super) fn find_ridden_vehicle_portals(&mut self, ridden: &[u32]) { if let Some(__l) = crate::points_generated::P4282.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !ridden.is_empty() {
             self.find_portals(Some(ridden));
         }
     }
-    fn find_portals(&mut self, only: Option<&[u32]>) {
+    fn find_portals(&mut self, only: Option<&[u32]>) { if let Some(__l) = crate::points_generated::P4281.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return;
         }
@@ -848,7 +848,7 @@ impl Game<'_> {
         width: f32,
         height: f32,
         portal_sections: &mut horizon_client::portal_sections::PortalSections,
-    ) -> Option<BlockPos> {
+    ) -> Option<BlockPos> { let (width,height,) = match crate::points_generated::P4280.get() { Some(__l) => { let mut __a = (width,height,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (width,height,) };
         let half = f64::from(width) / 2.0;
         let bounds = horizon_core::geometry::Aabb::new(
             Vec3::new(to.x - half, to.y, to.z - half),
@@ -893,7 +893,7 @@ impl Game<'_> {
         &self,
         reach: horizon_core::geometry::Aabb,
         sections: &mut horizon_client::portal_sections::PortalSections,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4279.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::section_mask::SectionMask;
         let (min, max) = (reach.min_position(), reach.max_position());
         if !min.is_finite() || !max.is_finite() {
@@ -930,7 +930,7 @@ impl Game<'_> {
     }
     /// `Entity.teleportCrossDimension` away from the loaded dimension: the
     /// entity is saved and removed, and waits for its dimension to load.
-    fn send_through_portal(&mut self, id: u32, entry: BlockPos) {
+    fn send_through_portal(&mut self, id: u32, entry: BlockPos) { let (id,) = match crate::points_generated::P4278.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let arrivals = self.portals.arrivals.len();
         if let Some(i) = self.dropped.iter().position(|e| e.id == id) {
             let e = &self.dropped[i];
@@ -1123,7 +1123,7 @@ impl Game<'_> {
     /// Removes the mobs riding `vehicle`, and those riding them, from the
     /// level: `Entity.teleportCrossDimension` takes the whole tree with its
     /// root. Their ids.
-    fn remove_mob_riders(&mut self, vehicle: u32) -> Vec<u32> {
+    fn remove_mob_riders(&mut self, vehicle: u32) -> Vec<u32> { let (vehicle,) = match crate::points_generated::P4277.get() { Some(__l) => { let mut __a = (vehicle,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (vehicle,) };
         let mut tree = vec![vehicle];
         let mut k = 0;
         while k < tree.len() {
@@ -1144,7 +1144,7 @@ impl Game<'_> {
     /// streaming `extra` areas that light them: vanilla's portal ticket
     /// (`Entity.teleport` adds `TicketType.PORTAL` at the destination) keeps
     /// the area loaded without a player.
-    pub(super) fn arrival_chunks(&self, dim: Dim) -> Vec<(i32, i32)> {
+    pub(super) fn arrival_chunks(&self, dim: Dim) -> Vec<(i32, i32)> { if let Some(__l) = crate::points_generated::P4276.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.portals
             .arrivals
             .iter()
@@ -1157,7 +1157,7 @@ impl Game<'_> {
     /// from an earlier level this server tick moves in its new level the same
     /// tick, and one that crossed from a later level stands there until the
     /// next. Only the portal arrivals join; the chunks' entities wait.
-    pub(super) fn land_portal_arrivals(&mut self) {
+    pub(super) fn land_portal_arrivals(&mut self) { if let Some(__l) = crate::points_generated::P4275.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() || self.portals.arrivals.is_empty() {
             return;
         }
@@ -1169,7 +1169,7 @@ impl Game<'_> {
     /// Entities waiting for the loaded dimension whose exit area is loaded:
     /// their exit portal (found or built) or End destination, position,
     /// turned yaw and motion, and portal cooldown; they join the world with the chunk entities.
-    pub(super) fn resolve_arrivals(&mut self) {
+    pub(super) fn resolve_arrivals(&mut self) { if let Some(__l) = crate::points_generated::P4274.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return;
         }
@@ -1235,7 +1235,7 @@ impl Game<'_> {
 
     /// `FallingBlockEntity.tick`: block effects mark its portal, then
     /// `Entity.handlePortal` transfers it before the landing branch runs.
-    pub(super) fn falling_through_portal(&mut self, f: &mut super::FallingBlock) -> Option<Dim> {
+    pub(super) fn falling_through_portal(&mut self, f: &mut super::FallingBlock) -> Option<Dim> { if let Some(__l) = crate::points_generated::P4273.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return None;
         }
@@ -1289,13 +1289,13 @@ impl Game<'_> {
 
     // ---- persistence ----
 
-    fn arrivals_path(&self) -> std::path::PathBuf {
+    fn arrivals_path(&self) -> std::path::PathBuf { if let Some(__l) = crate::points_generated::P4272.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world_root
             .join("data")
             .join("horizon_portal_arrivals.dat")
     }
     /// The waiting entities of the open world (read once).
-    pub(super) fn load_portal_arrivals(&mut self) {
+    pub(super) fn load_portal_arrivals(&mut self) { if let Some(__l) = crate::points_generated::P4271.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.portals.loaded || self.remote.is_some() {
             return;
         }
@@ -1311,7 +1311,7 @@ impl Game<'_> {
             .extend(list.iter().filter_map(arrival_from_tag));
     }
     /// Write the waiting entities when they changed.
-    pub(super) fn save_portal_arrivals(&mut self) {
+    pub(super) fn save_portal_arrivals(&mut self) { if let Some(__l) = crate::points_generated::P4270.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.portals.dirty || self.remote.is_some() {
             return;
         }

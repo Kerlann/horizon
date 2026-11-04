@@ -34,7 +34,7 @@ pub(super) fn shoulder_variants(extra: Option<&Tag>) -> [Option<i32>; 2] {
 impl Game<'_> {
     /// `ServerPlayer.setEntityOnShoulder` for a parrot that touched its
     /// owner: stored in the first free slot, the parrot gone from the world.
-    pub(super) fn parrot_to_shoulder(&mut self, mob: u32) {
+    pub(super) fn parrot_to_shoulder(&mut self, mob: u32) { let (mob,) = match crate::points_generated::P5328.get() { Some(__l) => { let mut __a = (mob,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,) };
         let Some(i) = self
             .mobs
             .iter()
@@ -76,7 +76,7 @@ impl Game<'_> {
     /// `ServerPlayer.handleShoulderEntities`: the parrots leave the shoulder
     /// of a player who falls, swims, flies, sleeps, is hurt, dying, a
     /// spectator or spinning with a riptide.
-    pub(super) fn handle_shoulder_entities(&mut self) {
+    pub(super) fn handle_shoulder_entities(&mut self) { if let Some(__l) = crate::points_generated::P5327.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for key in KEYS {
             self.play_shoulder_entity_ambient_sound(key);
         }
@@ -106,7 +106,7 @@ impl Game<'_> {
     /// `ServerPlayer.playShoulderEntityAmbientSound`: a parrot that is not
     /// `Silent` chirps or imitates a mob within 20 blocks, one tick in 200
     /// (drawn from the level's random; the player's own is not kept).
-    fn play_shoulder_entity_ambient_sound(&mut self, key: &str) {
+    fn play_shoulder_entity_ambient_sound(&mut self, key: &str) { if let Some(__l) = crate::points_generated::P5326.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Tag::Compound(tag)) = self.level.player_extra.as_ref().and_then(|e| e.get(key))
         else {
             return;
@@ -150,7 +150,7 @@ impl Game<'_> {
     /// `ServerPlayer.removeEntitiesOnShoulder` (not within a second of the
     /// landing) and `respawnEntityOnShoulder`: the parrots come back at the
     /// player, still owned by them.
-    fn remove_entities_on_shoulder(&mut self) {
+    fn remove_entities_on_shoulder(&mut self) { if let Some(__l) = crate::points_generated::P5325.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (uuid, now) = (self.acting_uuid(), self.world.game_time);
         if self
             .creatures

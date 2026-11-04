@@ -92,7 +92,7 @@ impl Prompt {
 
 impl Game<'_> {
     /// The server list entry of the joined address, if it has one.
-    fn accepted_code_of_conduct(&self) -> Option<i32> {
+    fn accepted_code_of_conduct(&self) -> Option<i32> { if let Some(__l) = crate::points_generated::P892.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let address = self.server_packs.address.as_deref()?;
         servers::load(&multiplayer::servers_file(&saves()))
             .into_iter()
@@ -101,7 +101,7 @@ impl Game<'_> {
     }
 
     /// `ServerList.saveSingleServer`: the joined address's entry keeps `accepted`.
-    fn store_code_of_conduct(&self, accepted: i32) {
+    fn store_code_of_conduct(&self, accepted: i32) { let (accepted,) = match crate::points_generated::P891.get() { Some(__l) => { let mut __a = (accepted,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (accepted,) };
         let Some(address) = &self.server_packs.address else {
             return;
         };
@@ -119,7 +119,7 @@ impl Game<'_> {
 
     /// `handleCodeOfConduct`: text accepted before for this server is
     /// accepted at once; otherwise the screen opens over the connecting one.
-    pub(super) fn handle_code_of_conduct(&mut self, text: String) {
+    pub(super) fn handle_code_of_conduct(&mut self, text: String) { if let Some(__l) = crate::points_generated::P890.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(r) = &self.remote else {
             return;
         };
@@ -142,7 +142,7 @@ impl Game<'_> {
     /// `CodeOfConductScreen.onResult`: accepting tells the server, declining
     /// ends the connection. The entry keeps the text only when it was
     /// accepted with the box ticked, else the stored text is cleared.
-    fn answer_code_of_conduct(&mut self, accepted: bool) -> Result<()> {
+    fn answer_code_of_conduct(&mut self, accepted: bool) -> Result<()> { let (accepted,) = match crate::points_generated::P889.get() { Some(__l) => { let mut __a = (accepted,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (accepted,) };
         let Some(prompt) = self.code_of_conduct.take() else {
             return Ok(());
         };
@@ -167,7 +167,7 @@ impl Game<'_> {
         self.leave_server(Some(reason.plain()))
     }
 
-    pub(super) fn draw_code_of_conduct(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_code_of_conduct(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P888.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(prompt) = &self.code_of_conduct else {
             return;
         };
@@ -258,7 +258,7 @@ impl Game<'_> {
     }
 
     /// A left click: the box toggles, a button answers.
-    pub(super) fn code_of_conduct_click(&mut self) -> Result<()> {
+    pub(super) fn code_of_conduct_click(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P887.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let size = self.gui_size();
         let cursor = self.cursor;
         let Some(prompt) = self.code_of_conduct.as_mut() else {
@@ -286,7 +286,7 @@ impl Game<'_> {
     }
 
     /// The mouse wheel over the screen: the text scrolls 10 a step.
-    pub(super) fn code_of_conduct_scroll(&mut self, delta: f32) {
+    pub(super) fn code_of_conduct_scroll(&mut self, delta: f32) { let (delta,) = match crate::points_generated::P886.get() { Some(__l) => { let mut __a = (delta,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (delta,) };
         let size = self.gui_size();
         let Some(prompt) = self.code_of_conduct.as_mut() else {
             return;

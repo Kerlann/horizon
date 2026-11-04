@@ -58,10 +58,10 @@ fn distance(a: Vec3, b: Vec3) -> f64 {
 impl Game<'_> {
     /// The player whose lead this is: the lead's `leash_player`, else the
     /// local player.
-    fn boat_leash_player(&self, b: &Boat) -> Option<[i32; 4]> {
+    fn boat_leash_player(&self, b: &Boat) -> Option<[i32; 4]> { if let Some(__l) = crate::points_generated::P668.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         b.leash_player.or(self.level.player_uuid)
     }
-    fn boat_holder(&self, holder: Holder, player: Option<[i32; 4]>) -> Held {
+    fn boat_holder(&self, holder: Holder, player: Option<[i32; 4]>) -> Held { if let Some(__l) = crate::points_generated::P667.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match holder {
             Holder::Player => {
                 let want = player.or(self.level.player_uuid);
@@ -176,20 +176,20 @@ impl Game<'_> {
         drop.then_some([b.position.x, b.position.y, b.position.z])
     }
 
-    fn release_boat_leash(&mut self, b: &mut Boat, drop: bool) {
+    fn release_boat_leash(&mut self, b: &mut Boat, drop: bool) { let (drop,) = match crate::points_generated::P666.get() { Some(__l) => { let mut __a = (drop,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (drop,) };
         if let Some(at) = Self::take_boat_leash(b, drop) {
             self.drop_lead_item(at);
         }
     }
 
-    fn release_stored_boat_leash(&mut self, i: usize, drop: bool) {
+    fn release_stored_boat_leash(&mut self, i: usize, drop: bool) { let (i,drop,) = match crate::points_generated::P665.get() { Some(__l) => { let mut __a = (i,drop,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,drop,) };
         if let Some(at) = Self::take_boat_leash(&mut self.boats[i], drop) {
             self.drop_lead_item(at);
         }
     }
 
     /// `AbstractBoat.remove`: a boat that is destroyed drops its lead.
-    pub(super) fn boat_removed(&mut self, b: &Boat) {
+    pub(super) fn boat_removed(&mut self, b: &Boat) { if let Some(__l) = crate::points_generated::P664.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut b = b.clone();
         let pending = b.leash_pending.take().is_some();
         if b.leash.is_some() || pending {
@@ -200,7 +200,7 @@ impl Game<'_> {
     }
 
     /// `Leashable.tickLeash` for a boat, at the end of `Entity.baseTick`.
-    pub(super) fn tick_boat_leash(&mut self, b: &mut Boat) {
+    pub(super) fn tick_boat_leash(&mut self, b: &mut Boat) { if let Some(__l) = crate::points_generated::P663.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         b.age += 1;
         if let Some(pending) = b.leash_pending {
             self.restore_boat_leash(b, pending);
@@ -260,7 +260,7 @@ impl Game<'_> {
     }
 
     /// `Leashable.angularFriction`.
-    fn boat_angular_friction(&self, b: &Boat) -> f32 {
+    fn boat_angular_friction(&self, b: &Boat) -> f32 { if let Some(__l) = crate::points_generated::P662.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if b.on_ground {
             let (x, z) = (b.position.x.floor() as i32, b.position.z.floor() as i32);
             let y = (b.position.y - 0.500_001).floor() as i32;
@@ -275,7 +275,7 @@ impl Game<'_> {
     /// `Leashable.restoreLeashFromSave`: a holder read from a save becomes
     /// real once its entity is found; one that never shows up in 100 ticks
     /// drops the lead.
-    fn restore_boat_leash(&mut self, b: &mut Boat, pending: Pending) {
+    fn restore_boat_leash(&mut self, b: &mut Boat, pending: Pending) { if let Some(__l) = crate::points_generated::P661.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let found = match pending {
             Pending::Knot(p) => Some((Holder::Knot(p), None)),
             Pending::Uuid(u) => {
@@ -305,7 +305,7 @@ impl Game<'_> {
     }
 
     /// The `leash` tag of a boat about to be saved.
-    pub(super) fn write_boat_leash(&mut self, tag: &mut Tag, index: usize) {
+    pub(super) fn write_boat_leash(&mut self, tag: &mut Tag, index: usize) { let (index,) = match crate::points_generated::P660.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let Tag::Compound(map) = tag else { return };
         map.remove(&"leash".into());
         let b = &self.boats[index];
@@ -330,14 +330,14 @@ impl Game<'_> {
     }
 
     /// Whether the player acting holds this boat's lead.
-    fn boat_led_by_player(&mut self, i: usize) -> bool {
+    fn boat_led_by_player(&mut self, i: usize) -> bool { let (i,) = match crate::points_generated::P659.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let me = self.acting_player_uuid();
         let b = &self.boats[i];
         b.leash == Some(Holder::Player) && self.boat_leash_player(b) == Some(me)
     }
 
     /// The boat with this UUID (`ServerLevel.getEntity`).
-    pub(super) fn boat_by_uuid(&self, uuid: [i32; 4]) -> Option<u32> {
+    pub(super) fn boat_by_uuid(&self, uuid: [i32; 4]) -> Option<u32> { let (uuid,) = match crate::points_generated::P658.get() { Some(__l) => { let mut __a = (uuid,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (uuid,) };
         self.persist
             .uuids
             .iter()
@@ -347,7 +347,7 @@ impl Game<'_> {
 
     /// The boats on the acting player's lead within 32 blocks of a point
     /// (`Leashable.leashableInArea`).
-    pub(super) fn player_led_boats(&mut self, around: glam::DVec3) -> Vec<usize> {
+    pub(super) fn player_led_boats(&mut self, around: glam::DVec3) -> Vec<usize> { if let Some(__l) = crate::points_generated::P657.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         (0..self.boats.len())
             .filter(|&i| {
                 let c = center(&self.boats[i]);
@@ -360,7 +360,7 @@ impl Game<'_> {
     }
 
     /// The boats whose lead hangs on `holder`.
-    pub(super) fn boats_on(&self, holder: Holder) -> Vec<usize> {
+    pub(super) fn boats_on(&self, holder: Holder) -> Vec<usize> { if let Some(__l) = crate::points_generated::P656.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (0..self.boats.len())
             .filter(|&i| self.boats[i].leash == Some(holder))
             .collect()
@@ -368,7 +368,7 @@ impl Game<'_> {
 
     /// `Leashable.canHaveALeashAttachedTo` for the boat at `i` and an entity
     /// whose box centre is `at`.
-    fn boat_can_attach(&self, i: usize, at: glam::DVec3) -> bool {
+    fn boat_can_attach(&self, i: usize, at: glam::DVec3) -> bool { let (i,) = match crate::points_generated::P655.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         let c = center(&self.boats[i]);
         distance(Vec3::new(at.x, at.y, at.z), c) <= leash::SNAP
     }
@@ -376,7 +376,7 @@ impl Game<'_> {
     /// The acting player's boats on a lead go to `to` (`Entity.interact` of a
     /// sneak click on a mob, `LeadItem.bindPlayerMobs`, the knot's
     /// `interact`), the ones in reach of `at`. Whether any did.
-    pub(super) fn tie_player_boats(&mut self, at: glam::DVec3, to: Holder) -> bool {
+    pub(super) fn tie_player_boats(&mut self, at: glam::DVec3, to: Holder) -> bool { if let Some(__l) = crate::points_generated::P654.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut any = false;
         for i in self.player_led_boats(at) {
             // Leashable.setLeashedTo: `this != holder`.
@@ -394,7 +394,7 @@ impl Game<'_> {
 
     /// `LeashFenceKnotEntity.interact`: the boats on the knot go back on the
     /// acting player's lead. Whether any did.
-    pub(super) fn take_knot_boats(&mut self, knot: [i32; 3]) -> bool {
+    pub(super) fn take_knot_boats(&mut self, knot: [i32; 3]) -> bool { let (knot,) = match crate::points_generated::P653.get() { Some(__l) => { let mut __a = (knot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (knot,) };
         let me = self.acting_player_uuid();
         let player = self.player_center();
         let mut any = false;
@@ -409,7 +409,7 @@ impl Game<'_> {
     }
 
     /// `Leashable.dropLeash` for each boat in `list`.
-    pub(super) fn drop_boat_leashes(&mut self, list: &[usize]) {
+    pub(super) fn drop_boat_leashes(&mut self, list: &[usize]) { if let Some(__l) = crate::points_generated::P652.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ids: Vec<_> = list.iter().map(|&i| self.boats[i].id).collect();
         for id in ids {
             if let Some(i) = self.boats.iter().position(|boat| boat.id == id) {
@@ -420,7 +420,7 @@ impl Game<'_> {
 
     /// `Entity.interact`'s lead part for the boat at `i`; whether it took
     /// the click.
-    pub(super) fn interact_boat_leash(&mut self, i: usize) -> bool {
+    pub(super) fn interact_boat_leash(&mut self, i: usize) -> bool { let (i,) = match crate::points_generated::P651.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let item = self.held().map(|s| s.item.to_string());
         let c = center(&self.boats[i]);
         let at = [c.x, c.y, c.z];
@@ -494,7 +494,7 @@ impl Game<'_> {
 
     /// The leads on boats that hang on a player or a mob, for the entity
     /// tracker: the holder's entity id (`ClientboundSetEntityLinkPacket`).
-    pub(super) fn boat_leash_link(&self, b: &Boat, guests: &[(u128, i32)]) -> Option<i32> {
+    pub(super) fn boat_leash_link(&self, b: &Boat, guests: &[(u128, i32)]) -> Option<i32> { if let Some(__l) = crate::points_generated::P650.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match b.leash? {
             Holder::Player => {
                 let uuid = self.boat_leash_player(b);

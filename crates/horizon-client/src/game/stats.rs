@@ -182,7 +182,7 @@ pub(super) fn player_json(world: &Path, dir: &str, uuid: [i32; 4]) -> PathBuf {
     world.join("players").join(dir).join(format!("{text}.json"))
 }
 impl Game<'_> {
-    fn stats_path(&self) -> Option<PathBuf> {
+    fn stats_path(&self) -> Option<PathBuf> { if let Some(__l) = crate::points_generated::P5509.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(player_json(
             &self.world_root,
             "stats",
@@ -190,7 +190,7 @@ impl Game<'_> {
         ))
     }
     /// `ServerStatsCounter.parseLocal`.
-    pub(super) fn load_stats(&mut self) {
+    pub(super) fn load_stats(&mut self) { if let Some(__l) = crate::points_generated::P5508.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.stats.loaded || self.remote.is_some() || self.no_player_here() {
             return;
         }
@@ -200,7 +200,7 @@ impl Game<'_> {
         }
     }
     /// `ServerStatsCounter.save`.
-    pub(super) fn save_stats(&self) {
+    pub(super) fn save_stats(&self) { if let Some(__l) = crate::points_generated::P5507.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.stats.loaded || self.remote.is_some() || self.no_player_here() {
             return;
         }
@@ -210,7 +210,7 @@ impl Game<'_> {
     }
     /// `ServerPlayer.awardStat`: `n` more of the statistic `ty` (a bare type
     /// such as `used`) and `key`, unless a native mod cancels the award.
-    pub(super) fn award_stat(&mut self, ty: &str, key: &str, n: i32) {
+    pub(super) fn award_stat(&mut self, ty: &str, key: &str, n: i32) { let (n,) = match crate::points_generated::P5506.get() { Some(__l) => { let mut __a = (n,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (n,) };
         if self.lan_acting_fake {
             return;
         }
@@ -232,17 +232,17 @@ impl Game<'_> {
         self.stats.add(ty, key, n);
     }
     /// `Player.awardStat(Identifier)`: `n` more of the custom statistic `key`.
-    pub(super) fn award_custom_stat(&mut self, key: &str, n: i32) {
+    pub(super) fn award_custom_stat(&mut self, key: &str, n: i32) { let (n,) = match crate::points_generated::P5505.get() { Some(__l) => { let mut __a = (n,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (n,) };
         namespaced(key, |key| self.award_stat("custom", key, n));
     }
     /// The per-tick counters (`Player.tick`/`ServerPlayer.tick` awardStat).
-    pub(super) fn tick_stats(&mut self) {
+    pub(super) fn tick_stats(&mut self) { if let Some(__l) = crate::points_generated::P5504.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.load_stats();
         self.count_tick_stats(self.sleeping.is_some());
         self.tick_movement_stats();
     }
     /// `Player.tick`'s counters for the player in `self.player`.
-    pub(super) fn count_tick_stats(&mut self, sleeping: bool) {
+    pub(super) fn count_tick_stats(&mut self, sleeping: bool) { let (sleeping,) = match crate::points_generated::P5503.get() { Some(__l) => { let mut __a = (sleeping,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (sleeping,) };
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -260,7 +260,7 @@ impl Game<'_> {
             self.award_custom_stat("sneak_time", 1);
         }
     }
-    fn tick_movement_stats(&mut self) {
+    fn tick_movement_stats(&mut self) { if let Some(__l) = crate::points_generated::P5502.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -268,7 +268,7 @@ impl Game<'_> {
         self.movement_stats(d);
     }
     /// `Player.checkMovementStatistics` / `checkRidingStatistics` for one move.
-    pub(super) fn movement_stats(&mut self, d: Vec3) {
+    pub(super) fn movement_stats(&mut self, d: Vec3) { if let Some(__l) = crate::points_generated::P5501.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -370,7 +370,7 @@ impl Game<'_> {
     /// (`ServerLevel.isSpawningMonsters`: `spawn_monsters` too). Every
     /// player of the level counts: the game's own and the hosted ones (a
     /// server thread's players are all hosted).
-    pub(super) fn spawn_phantoms(&mut self) {
+    pub(super) fn spawn_phantoms(&mut self) { if let Some(__l) = crate::points_generated::P5500.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let rules = &self.ui.rules;
         if !rules.bool("spawn_mobs")
             || !rules.bool("spawn_monsters")
@@ -421,7 +421,7 @@ impl Game<'_> {
         }
     }
     /// One player's turn of `PhantomSpawner.tick`.
-    fn spawn_phantoms_near(&mut self, target: PhantomTarget) {
+    fn spawn_phantoms_near(&mut self, target: PhantomTarget) { if let Some(__l) = crate::points_generated::P5499.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let PhantomTarget {
             position,
             since_rest,
@@ -484,7 +484,7 @@ impl Game<'_> {
             );
         }
     }
-    fn can_see_sky(&self, pos: [i32; 3]) -> bool {
+    fn can_see_sky(&self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P5498.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         (pos[1] + 1..pos[1] + 256).all(|y| {
             let f = self.res.facts().get(self.world.block(pos[0], y, pos[2]));
             !f.full_collision && f.fluid == horizon_client::blocks::Fluid::None

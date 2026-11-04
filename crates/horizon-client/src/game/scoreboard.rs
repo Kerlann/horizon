@@ -98,15 +98,15 @@ fn root_owner(mut owner: [i32; 4], pet_owner: impl Fn([i32; 4]) -> Option<[i32; 
 }
 
 impl Game<'_> {
-    fn scoreboard_path(&self) -> std::path::PathBuf {
+    fn scoreboard_path(&self) -> std::path::PathBuf { if let Some(__l) = crate::points_generated::P5151.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world_root.join("data/minecraft/scoreboard.dat")
     }
-    fn border_path(&self) -> std::path::PathBuf {
+    fn border_path(&self) -> std::path::PathBuf { if let Some(__l) = crate::points_generated::P5150.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         save::dimension_dir(&self.world_root, "minecraft:overworld")
             .join("data/minecraft/world_border.dat")
     }
     /// `ScoreboardSaveData` read from `data/minecraft/scoreboard.dat`.
-    pub(super) fn load_scoreboard(&mut self) {
+    pub(super) fn load_scoreboard(&mut self) { if let Some(__l) = crate::points_generated::P5149.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.score.loaded || self.remote.is_some() {
             return;
         }
@@ -131,7 +131,7 @@ impl Game<'_> {
         self.score.stopwatches = horizon_client::stopwatches::Stopwatches::load(&self.world_root);
         self.sync_score_registries();
     }
-    pub(super) fn save_scoreboard(&mut self) {
+    pub(super) fn save_scoreboard(&mut self) { if let Some(__l) = crate::points_generated::P5148.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.score.loaded || self.remote.is_some() {
             return;
         }
@@ -164,7 +164,7 @@ impl Game<'_> {
         }
     }
     /// The names commands complete: objectives, teams and tracked holders.
-    pub(super) fn sync_score_registries(&mut self) {
+    pub(super) fn sync_score_registries(&mut self) { if let Some(__l) = crate::points_generated::P5147.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let board = &self.score.board;
         let reg = &mut self.ui.registries;
         reg.objectives = board.objectives.iter().map(|o| o.name.clone()).collect();
@@ -193,7 +193,7 @@ impl Game<'_> {
     // ---- score holders ---------------------------------------------------
 
     /// `ScoreHolder.getScoreboardName`: the player's name, an entity's UUID.
-    pub(super) fn holder_name(&mut self, t: Target) -> Option<String> {
+    pub(super) fn holder_name(&mut self, t: Target) -> Option<String> { if let Some(__l) = crate::points_generated::P5146.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match t {
             Target::Player => Some(self.acting_player_name().to_owned()),
             Target::Guest(conn) => self.command_guest(conn).map(|g| g.name.clone()),
@@ -223,7 +223,7 @@ impl Game<'_> {
             Target::Orb(_) | Target::Projectile(_) => None,
         }
     }
-    fn holder_for(&mut self, t: Target) -> Option<Holder> {
+    fn holder_for(&mut self, t: Target) -> Option<Holder> { if let Some(__l) = crate::points_generated::P5145.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let name = self.holder_name(t)?;
         let shown = self.target_name(t);
         Some(Holder {
@@ -233,7 +233,7 @@ impl Game<'_> {
         })
     }
     /// The entity with the given scoreboard name.
-    fn target_of_holder(&self, name: &str) -> Option<Target> {
+    fn target_of_holder(&self, name: &str) -> Option<Target> { if let Some(__l) = crate::points_generated::P5144.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if name == self.acting_player_name() {
             return Some(Target::Player);
         }
@@ -241,7 +241,7 @@ impl Game<'_> {
         self.target_with_uuid(uuid)
     }
     /// `Entity.getTags` (the `Tags` list of the saved entity).
-    pub(super) fn tags_of(&self, t: Target) -> Vec<String> {
+    pub(super) fn tags_of(&self, t: Target) -> Vec<String> { if let Some(__l) = crate::points_generated::P5143.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let raw = match t {
             Target::Mob(id)
             | Target::Item(id)
@@ -291,7 +291,7 @@ impl Game<'_> {
         &mut self,
         candidates: &[Target],
         s: &Selector,
-    ) -> HashSet<Target> {
+    ) -> HashSet<Target> { if let Some(__l) = crate::points_generated::P5142.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut pass = HashSet::new();
         let needs_holder = !s.scores.is_empty() || !s.teams.is_empty();
         for &t in candidates {
@@ -379,7 +379,7 @@ impl Game<'_> {
     fn advancements_match(
         &self,
         wanted: &[(String, horizon_client::command::args::AdvCondition)],
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P5141.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::command::args::AdvCondition;
         wanted.iter().all(|(id, cond)| {
             let Some(a) = self.adv.tree.get(id) else {
@@ -402,7 +402,7 @@ impl Game<'_> {
         &mut self,
         name: &str,
         events: Vec<(String, String, Option<i32>)>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P5140.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let board = &mut self.score.board;
         if board.objectives.is_empty() {
             return;
@@ -419,7 +419,7 @@ impl Game<'_> {
     /// `ServerScoreboard`'s packets: each placed player's client is sent
     /// what changed on the board since it was last sent it (all of it on
     /// joining), lan/scoreboard.rs.
-    pub(super) fn lan_sync_scoreboard(&mut self) {
+    pub(super) fn lan_sync_scoreboard(&mut self) { if let Some(__l) = crate::points_generated::P5139.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .lan
             .as_ref()
@@ -441,7 +441,7 @@ impl Game<'_> {
         }
     }
     /// `ServerPlayer.doTick` score updates and the statistic criteria.
-    pub(super) fn tick_scoreboard(&mut self) {
+    pub(super) fn tick_scoreboard(&mut self) { if let Some(__l) = crate::points_generated::P5138.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.load_scoreboard();
         let events = std::mem::take(&mut self.stats.events);
         self.stat_criteria_changed(PLAYER_NAME, events);
@@ -455,7 +455,7 @@ impl Game<'_> {
     /// `ServerPlayer.doTick`'s `updateScoreForCriteria` calls for the acting
     /// player (the host's own, or a guest swapped in): the health, food, air,
     /// armor, experience and level objectives follow what changed since `rec`.
-    pub(super) fn record_player_scores(&mut self, rec: &mut Recorded) {
+    pub(super) fn record_player_scores(&mut self, rec: &mut Recorded) { if let Some(__l) = crate::points_generated::P5137.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.load_scoreboard();
         if self.score.board.objectives.is_empty() {
             return;
@@ -486,7 +486,7 @@ impl Game<'_> {
         }
     }
     /// `ServerPlayer.die`: the acting player's `deathCount` objectives go up by one.
-    pub(super) fn score_player_died(&mut self) {
+    pub(super) fn score_player_died(&mut self) { if let Some(__l) = crate::points_generated::P5136.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let display = self.player_display_comp();
         let me = self.acting_player_name().to_owned();
         self.score.board.for_all_objectives_with(
@@ -497,7 +497,7 @@ impl Game<'_> {
         );
     }
     /// `ServerPlayer.awardKillScore`: total kills and the team kill counts.
-    pub(super) fn score_player_killed(&mut self, victim: Target) {
+    pub(super) fn score_player_killed(&mut self, victim: Target) { if let Some(__l) = crate::points_generated::P5135.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let victim_name = self.holder_name(victim);
         let display = self.player_display_comp();
         let me = self.acting_player_name().to_owned();
@@ -521,7 +521,7 @@ impl Game<'_> {
         }
     }
     /// `Scoreboard.entityRemoved`: a dead non-player entity leaves the board.
-    pub(super) fn score_entity_removed(&mut self, id: u32) {
+    pub(super) fn score_entity_removed(&mut self, id: u32) { let (id,) = match crate::points_generated::P5134.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(uuid) = self.persist.uuids.get(&id).copied() else {
             return;
         };
@@ -532,13 +532,13 @@ impl Game<'_> {
 
     /// `Entity.getScoreboardName`: another player's profile name
     /// (`Player.getScoreboardName`), any other entity's UUID.
-    fn scoreboard_name(&self, id: u32, uuid: [i32; 4]) -> String {
+    fn scoreboard_name(&self, id: u32, uuid: [i32; 4]) -> String { let (id,uuid,) = match crate::points_generated::P5133.get() { Some(__l) => { let mut __a = (id,uuid,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,uuid,) };
         self.remote_player_name(id)
             .map_or_else(|| uuid_text(uuid), str::to_owned)
     }
     /// `TamableAnimal.getTeam` of a mob or another player: its own team, else,
     /// when it is a tamed pet, its root owner's.
-    pub(super) fn mob_team(&self, id: u32) -> Option<&sb::Team> {
+    pub(super) fn mob_team(&self, id: u32) -> Option<&sb::Team> { let (id,) = match crate::points_generated::P5132.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         if self.score.board.teams.is_empty() {
             return None;
         }
@@ -549,7 +549,7 @@ impl Game<'_> {
         })
     }
     /// [`mob_team`](Self::mob_team) of a mob at hand, without looking it up.
-    pub(super) fn mob_team_of(&self, m: &horizon_client::mobs::Mob) -> Option<&sb::Team> {
+    pub(super) fn mob_team_of(&self, m: &horizon_client::mobs::Mob) -> Option<&sb::Team> { if let Some(__l) = crate::points_generated::P5131.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.score.board.teams.is_empty() {
             return None;
         }
@@ -571,7 +571,7 @@ impl Game<'_> {
     }
     /// `TamableAnimal.getRootOwner().getScoreboardName`: a pet's owner, through
     /// owners that are tamed pets themselves.
-    fn root_owner_name(&self, owner: [i32; 4]) -> Option<String> {
+    fn root_owner_name(&self, owner: [i32; 4]) -> Option<String> { let (owner,) = match crate::points_generated::P5130.get() { Some(__l) => { let mut __a = (owner,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (owner,) };
         let pet_owner = |uuid: [i32; 4]| {
             let Target::Mob(pet) = self.target_by_uuid(ints_uuid(uuid))? else {
                 return None;
@@ -590,11 +590,11 @@ impl Game<'_> {
             _ => uuid_text(root),
         })
     }
-    pub(super) fn player_team(&self) -> Option<&sb::Team> {
+    pub(super) fn player_team(&self) -> Option<&sb::Team> { if let Some(__l) = crate::points_generated::P5129.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.score.board.players_team(self.acting_player_name())
     }
     /// The teams of the player and of the mobs on one (empty without teams).
-    pub(super) fn mob_teams(&self) -> horizon_client::mobs::Teams<'_> {
+    pub(super) fn mob_teams(&self) -> horizon_client::mobs::Teams<'_> { if let Some(__l) = crate::points_generated::P5128.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.score.board.teams.is_empty() {
             return Default::default();
         }
@@ -618,7 +618,7 @@ impl Game<'_> {
         }
     }
     /// The mobs on the player's team (`isAlliedTo`).
-    pub(super) fn player_allies(&self) -> HashSet<u32> {
+    pub(super) fn player_allies(&self) -> HashSet<u32> { if let Some(__l) = crate::points_generated::P5127.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(team) = self.player_team() else {
             return HashSet::new();
         };
@@ -630,14 +630,14 @@ impl Game<'_> {
             .collect()
     }
     /// `Player.getDisplayName`: the name with the team's prefix, suffix and colour.
-    pub(super) fn player_display_comp(&self) -> Comp {
+    pub(super) fn player_display_comp(&self) -> Comp { if let Some(__l) = crate::points_generated::P5126.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let name = literal(self.acting_player_name());
         match self.player_team() {
             Some(t) => t.formatted_name_comp(&name),
             None => name,
         }
     }
-    pub(super) fn player_display_text(&self) -> Text {
+    pub(super) fn player_display_text(&self) -> Text { if let Some(__l) = crate::points_generated::P5125.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let name = Text::literal(self.acting_player_name());
         match self.player_team() {
             Some(t) => t.formatted_name(name),
@@ -653,7 +653,7 @@ impl Game<'_> {
         ctx: &Context,
         name: &str,
         default_wildcard: bool,
-    ) -> super::commands::R<Vec<String>> {
+    ) -> super::commands::R<Vec<String>> { let (default_wildcard,) = match crate::points_generated::P5124.get() { Some(__l) => { let mut __a = (default_wildcard,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (default_wildcard,) };
         let mut env = GameEnv { g: self };
         Ok(
             scoreboard_cmd::holders(ctx, name, &mut env, default_wildcard)?
@@ -662,7 +662,7 @@ impl Game<'_> {
                 .collect(),
         )
     }
-    pub(super) fn cmd_scoreboard(&mut self, id: &str, ctx: &Context) -> super::commands::R<i32> {
+    pub(super) fn cmd_scoreboard(&mut self, id: &str, ctx: &Context) -> super::commands::R<i32> { if let Some(__l) = crate::points_generated::P5123.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut env = GameEnv { g: self };
         let result = scoreboard_cmd::execute(id, ctx, &mut env).unwrap_or_else(|| {
             Err(horizon_client::command::CommandError::tr(
@@ -675,7 +675,7 @@ impl Game<'_> {
     }
     /// ComponentUtils.updateForEntity for the pieces scoreboards store:
     /// `selector` and `score` components become their text.
-    pub(super) fn resolve_component(&mut self, c: Comp) -> Comp {
+    pub(super) fn resolve_component(&mut self, c: Comp) -> Comp { if let Some(__l) = crate::points_generated::P5122.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match c {
             Comp::Object(mut o) => {
                 if let Some(sel) = o.get("selector").and_then(Comp::as_str).map(str::to_owned) {
@@ -713,7 +713,7 @@ impl Game<'_> {
             other => other,
         }
     }
-    fn resolve_selector_text(&mut self, raw: &str) -> String {
+    fn resolve_selector_text(&mut self, raw: &str) -> String { if let Some(__l) = crate::points_generated::P5121.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut reader = horizon_client::command::Reader::new(raw);
         let ty = horizon_client::command::args::ArgType::Entity {
             single: false,
@@ -735,7 +735,7 @@ impl Game<'_> {
     // ---- the sidebar -----------------------------------------------------------
 
     /// The objective in the player's team's sidebar slot, else the sidebar's.
-    fn sidebar_objective(&self) -> Option<&sb::Objective> {
+    fn sidebar_objective(&self) -> Option<&sb::Objective> { if let Some(__l) = crate::points_generated::P5120.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let board = &self.score.board;
         if board.display.is_empty() {
             return None;
@@ -753,7 +753,7 @@ impl Game<'_> {
         team_slot.or_else(|| board.display_objective(sb::SLOT_SIDEBAR))
     }
     /// The sidebar the HUD shows: its objective and its lines, for `status`.
-    pub(super) fn sidebar_status(&self) -> serde_json::Value {
+    pub(super) fn sidebar_status(&self) -> serde_json::Value { if let Some(__l) = crate::points_generated::P5119.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let board = &self.score.board;
         let Some(objective) = self.sidebar_objective() else {
             return serde_json::Value::Null;
@@ -767,7 +767,7 @@ impl Game<'_> {
     }
 
     /// `Hud.extractScoreboardSidebar` / `displayScoreboardSidebar`.
-    pub(super) fn draw_scoreboard(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_scoreboard(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5118.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let board = &self.score.board;
         let Some(objective) = self.sidebar_objective() else {
             return;
@@ -788,7 +788,7 @@ impl Game<'_> {
 impl Game<'_> {
     /// Advance the skin slots to a new frame with what the last one drew, and
     /// store any finished skin downloads into the atlas.
-    pub(super) fn flush_skin_slots(&mut self) {
+    pub(super) fn flush_skin_slots(&mut self) { if let Some(__l) = crate::points_generated::P5117.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (ready, drawn) = {
             let mut downloads = self.skin_downloads.borrow_mut();
             (downloads.take_ready(), downloads.take_drawn())
@@ -802,7 +802,7 @@ impl Game<'_> {
     /// `Hud.extractTabList`: the player list while the player-list key is
     /// held. A local world shows it with a joined LAN guest or a `list`
     /// objective.
-    pub(super) fn draw_tab_list(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_tab_list(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5116.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::tab_list::{self, TabInputs};
         // Player heads and the player list both draw from the same skin
         // slots: a new frame, with what the last one drew.

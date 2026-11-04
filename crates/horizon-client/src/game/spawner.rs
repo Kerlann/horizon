@@ -41,13 +41,13 @@ pub(super) struct SpawnerState {
 
 impl Game<'_> {
     /// `EntityType.byString`: the type is in the registry.
-    pub(super) fn entity_type_exists(&self, id: &str) -> bool {
+    pub(super) fn entity_type_exists(&self, id: &str) -> bool { if let Some(__l) = crate::points_generated::P5389.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.spawners
             .entity_types
             .as_ref()
             .is_some_and(|t| t.contains(id))
     }
-    pub(super) fn load_entity_types(&mut self) {
+    pub(super) fn load_entity_types(&mut self) { if let Some(__l) = crate::points_generated::P5388.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.spawners.entity_types.is_some() {
             return;
         }
@@ -71,7 +71,7 @@ impl Game<'_> {
     /// The caller only reaches this for a `BlockEntity::Spawner`, and changing
     /// the block removes or replaces that entity, so the block is not read
     /// again here.
-    pub(super) fn tick_spawner(&mut self, key: Pos) -> Result<()> {
+    pub(super) fn tick_spawner(&mut self, key: Pos) -> Result<()> { if let Some(__l) = crate::points_generated::P5387.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BlockEntity::Spawner(mut spawner)) = self.world.block_entities.take(&key) else {
             return Ok(());
         };
@@ -83,7 +83,7 @@ impl Game<'_> {
     }
     /// The client ticks of these spawners, then the shown mobs of spawners
     /// that are gone go.
-    pub(super) fn client_tick_spawners(&mut self, keys: &[Pos]) {
+    pub(super) fn client_tick_spawners(&mut self, keys: &[Pos]) { if let Some(__l) = crate::points_generated::P5386.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for &key in keys {
             self.client_tick_spawner(key);
         }
@@ -95,7 +95,7 @@ impl Game<'_> {
             )
         });
     }
-    fn server_tick_spawner(&mut self, key: Pos, spawner: &mut Spawner) -> Result<()> {
+    fn server_tick_spawner(&mut self, key: Pos, spawner: &mut Spawner) -> Result<()> { if let Some(__l) = crate::points_generated::P5385.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.server_tick_spawner_of(key, spawner, None)
     }
     /// `BaseSpawner.serverTick` at `key`: a spawner block's, or the spawner minecart
@@ -105,7 +105,7 @@ impl Game<'_> {
         key: Pos,
         spawner: &mut Spawner,
         cart: Option<u32>,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P5384.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // `BaseSpawner.serverTick` does nothing without an alive player in
         // range (`isNearPlayer`) or with the rule off: no level to build for it.
         let at = [key.0, key.1, key.2].map(|c| f64::from(c) + 0.5);
@@ -135,7 +135,7 @@ impl Game<'_> {
     }
     /// Creates the mobs a spawner tick planned; their provisional ids
     /// (counting down from u32::MAX) map to the mobs' ids.
-    pub(super) fn add_planned(&mut self, planned: Vec<Planned>) -> HashMap<u32, u32> {
+    pub(super) fn add_planned(&mut self, planned: Vec<Planned>) -> HashMap<u32, u32> { if let Some(__l) = crate::points_generated::P5383.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut ids = HashMap::new();
         for (i, plan) in planned.into_iter().enumerate() {
             let provisional = u32::MAX - i as u32;
@@ -172,7 +172,7 @@ impl Game<'_> {
         l: &super::natural_spawning::GameLevel,
         r: &SpawnerSpawn,
         planned: &mut Vec<Planned>,
-    ) -> Option<SpawnerAdded> {
+    ) -> Option<SpawnerAdded> { if let Some(__l) = crate::points_generated::P5382.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let kind = self.res.mob_types().get(r.id)?.clone();
         let [x, y, z] = r.position;
         let at = Vec3::new(x, y, z);
@@ -251,7 +251,7 @@ impl Game<'_> {
         events: Vec<SpawnerEvent>,
         ids: &HashMap<u32, u32>,
         cart: Option<u32>,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P5381.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = [key.0, key.1, key.2];
         for event in events {
             match event {
@@ -286,7 +286,7 @@ impl Game<'_> {
     }
     /// `sendBlockUpdated`: the clients load the new update tag (the client
     /// copy's delay follows it, its display mob is made again).
-    fn spawner_block_updated(&mut self, key: Pos) {
+    fn spawner_block_updated(&mut self, key: Pos) { if let Some(__l) = crate::points_generated::P5380.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(BlockEntity::Spawner(s)) = self.world.block_entities.get_mut(&key) {
             s.client_loaded();
         }
@@ -297,7 +297,7 @@ impl Game<'_> {
         self.world.modified.insert((key.0 >> 4, key.2 >> 4));
     }
     /// `LivingEntity.makePoofParticles` (entity event 20) for a mob.
-    pub(super) fn mob_poof(&mut self, id: u32) {
+    pub(super) fn mob_poof(&mut self, id: u32) { let (id,) = match crate::points_generated::P5379.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
             return;
         };
@@ -307,7 +307,7 @@ impl Game<'_> {
     }
     /// `Mob.handleEntityEvent` 20 (`spawnAnim` on a client): the poof about
     /// mob `id`.
-    pub(super) fn poof_particles(&mut self, id: u32) {
+    pub(super) fn poof_particles(&mut self, id: u32) { let (id,) = match crate::points_generated::P5378.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
             return;
         };
@@ -325,7 +325,7 @@ impl Game<'_> {
         }
     }
     /// `LevelEventHandler` 2004: twenty smoke and flame pairs around the spawner.
-    pub(super) fn spawner_burst(&mut self, pos: [i32; 3]) {
+    pub(super) fn spawner_burst(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P5377.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let (smoke, flame) = (
             ParticleOptions::simple(ParticleType::Smoke),
             ParticleOptions::simple(ParticleType::Flame),
@@ -340,7 +340,7 @@ impl Game<'_> {
         }
     }
     /// The client copy's tick: particles and the spin while a player is near.
-    fn client_tick_spawner(&mut self, key: Pos) {
+    fn client_tick_spawner(&mut self, key: Pos) { if let Some(__l) = crate::points_generated::P5376.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let near = {
             let Some(BlockEntity::Spawner(s)) = self.world.block_entities.get(&key) else {
                 return;
@@ -373,7 +373,7 @@ impl Game<'_> {
     }
     /// `getOrCreateDisplayEntity`: the mob shown in the spawner, made again
     /// when its type changes. False when there is none.
-    pub(super) fn update_spawner_display(&mut self, key: Pos) -> bool {
+    pub(super) fn update_spawner_display(&mut self, key: Pos) -> bool { if let Some(__l) = crate::points_generated::P5375.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(kind) = self.spawner_display_kind(key) else {
             self.spawners.displays.remove(&key);
             return false;
@@ -395,7 +395,7 @@ impl Game<'_> {
     /// The type of the mob a spawner shows: its next data's id, when the game
     /// knows the mob.
     /// A trial spawner shows one only in the states with a spinning mob.
-    fn spawner_display_kind(&self, key: Pos) -> Option<String> {
+    fn spawner_display_kind(&self, key: Pos) -> Option<String> { if let Some(__l) = crate::points_generated::P5374.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let id = match self.world.block_entities.get(&key)? {
             BlockEntity::Spawner(s) => s.next_data()?.id()?,
             BlockEntity::TrialSpawner(s) => {
@@ -414,7 +414,7 @@ impl Game<'_> {
         pos: [i32; 3],
         kind: &str,
         data: Option<&horizon_world::nbt::Compound>,
-    ) -> Option<bool> {
+    ) -> Option<bool> { let (pos,) = match crate::points_generated::P5373.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let key = (pos[0], pos[1], pos[2]);
         let trial = match self.world.block_entities.get(&key) {
             Some(BlockEntity::Spawner(_)) => false,
@@ -462,14 +462,14 @@ impl Game<'_> {
     }
     /// `PlayerList.isOp` for the player acting now: a server's guest by their
     /// own level, else the window's player.
-    pub(super) fn acting_player_is_op(&self) -> bool {
+    pub(super) fn acting_player_is_op(&self) -> bool { if let Some(__l) = crate::points_generated::P5372.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.lan_acting_permission
             .unwrap_or(self.ui.registries.permission)
             > 0
     }
     /// Ticks spawners, trial spawners and vaults near the player on a remote
     /// client (`tick_remote`).
-    pub(super) fn tick_remote_spawners(&mut self) {
+    pub(super) fn tick_remote_spawners(&mut self) { if let Some(__l) = crate::points_generated::P5371.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -496,7 +496,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         alpha: f64,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P5370.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let atlas = &self.gui.atlas;
         let lookup = |name: &str| atlas.sprites.get(name).map(|r| [r.u0, r.v0, r.u1, r.v1]);
         for (key, (_, mob)) in &self.spawners.displays {

@@ -58,7 +58,7 @@ fn target_id(t: Target) -> Option<u32> {
 #[allow(dead_code)]
 impl Game<'_> {
     /// Whether this game simulates the level `dimension`.
-    fn native_simulates_level(&self, dimension: &str) -> bool {
+    fn native_simulates_level(&self, dimension: &str) -> bool { if let Some(__l) = crate::points_generated::P3055.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (self.serving.is_some() || self.options.dedicated.is_some()) && dimension == self.dim.id()
     }
     /// Spawns an entity of `kind` (`minecraft:item_display`) at `pos` in the
@@ -73,7 +73,7 @@ impl Game<'_> {
         kind: &str,
         pos: [f64; 3],
         nbt: Compound,
-    ) -> Option<u32> {
+    ) -> Option<u32> { let (pos,) = match crate::points_generated::P3054.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if !self.native_simulates_level(dimension) || !position_ok(pos) {
             return None;
         }
@@ -138,7 +138,7 @@ enum Slot {
 impl Game<'_> {
     /// Whether an entity may have joined since the last announcement. A join
     /// in another level may cause one harmless walk of this level.
-    fn joins_pending(&self) -> bool {
+    fn joins_pending(&self) -> bool { if let Some(__l) = crate::points_generated::P3053.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         horizon_client::join_seq::JoinSeq::latest() > self.persist.joined_seq
     }
     /// Tells `native_entity_join_level` once for every entity added since the
@@ -150,7 +150,7 @@ impl Game<'_> {
     /// with static dispatch and allocates nothing but the kind name of an
     /// entity it announces; nothing runs when no mod is loaded, on a client
     /// of a server (which tells nothing), or when nothing is new.
-    pub(super) fn native_joins_flush(&mut self, loaded_from_disk: bool, watch: u32) -> bool {
+    pub(super) fn native_joins_flush(&mut self, loaded_from_disk: bool, watch: u32) -> bool { let (loaded_from_disk,watch,) = match crate::points_generated::P3052.get() { Some(__l) => { let mut __a = (loaded_from_disk,watch,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (loaded_from_disk,watch,) };
         if self.remote.is_some() || mod_api::mods().is_empty() || !self.joins_pending() {
             return true;
         }
@@ -185,7 +185,7 @@ impl Game<'_> {
         kept
     }
 
-    fn assign_pending_join_ids(&mut self) {
+    fn assign_pending_join_ids(&mut self) { if let Some(__l) = crate::points_generated::P3051.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.assign_dragon_and_crystal_ids();
         for t in &mut self.tnts {
             super::lan_entities::assign_entity_id(&mut self.next_entity, &mut t.id);
@@ -204,7 +204,7 @@ impl Game<'_> {
         }
     }
     /// The entity inserted earliest after the last one announced.
-    fn next_unannounced(&self) -> Option<(Slot, u32, horizon_client::join_seq::JoinSeq)> {
+    fn next_unannounced(&self) -> Option<(Slot, u32, horizon_client::join_seq::JoinSeq)> { if let Some(__l) = crate::points_generated::P3050.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use super::entity::Entity;
         use horizon_client::join_seq::{JoinSeq, Joined};
         let mark = self.persist.joined_seq;
@@ -236,7 +236,7 @@ impl Game<'_> {
         best
     }
 
-    fn remember_join(&mut self, id: u32, kind: String) {
+    fn remember_join(&mut self, id: u32, kind: String) { let (id,) = match crate::points_generated::P3049.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let index = self
             .persist
             .live
@@ -245,7 +245,7 @@ impl Game<'_> {
         self.persist.live.insert(index, (id, kind, true));
     }
     /// The type id and position a mod is told of.
-    fn slot_kind_and_position(&self, slot: Slot) -> (std::borrow::Cow<'static, str>, Vec3) {
+    fn slot_kind_and_position(&self, slot: Slot) -> (std::borrow::Cow<'static, str>, Vec3) { if let Some(__l) = crate::points_generated::P3048.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use super::entity::Entity;
         let block = |p: [i32; 3]| {
             Vec3::new(
@@ -283,7 +283,7 @@ impl Game<'_> {
         }
     }
     /// Takes the entity out of the level, before it ever ticked.
-    fn discard_slot(&mut self, slot: Slot) {
+    fn discard_slot(&mut self, slot: Slot) { if let Some(__l) = crate::points_generated::P3047.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match slot {
             Slot::Walk(h) => self.discard_entity(h),
             Slot::Apart(Apart::Crystal(i)) => drop(self.crystals.remove(i)),
@@ -296,7 +296,7 @@ impl Game<'_> {
     /// Entities that were moved, not added (a portal's arrival keeps being
     /// silent): everything now in the level counts as announced, and will
     /// be told when it leaves.
-    pub(super) fn native_joins_skip(&mut self) {
+    pub(super) fn native_joins_skip(&mut self) { if let Some(__l) = crate::points_generated::P3046.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let observed = horizon_client::join_seq::JoinSeq::latest();
         if self.remote.is_none() && !mod_api::mods().is_empty() {
             self.assign_pending_join_ids();
@@ -310,13 +310,13 @@ impl Game<'_> {
     }
     /// An entity taken out of the level without leaving it (an item through
     /// an End gateway): forgotten, not told of.
-    pub(super) fn native_leave_skip(&mut self, id: u32) {
+    pub(super) fn native_leave_skip(&mut self, id: u32) { let (id,) = match crate::points_generated::P3045.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Ok(i) = self.persist.live.binary_search_by_key(&id, |l| l.0) {
             self.persist.live.remove(i);
         }
     }
     /// Entity `id` has left the level: told once, if mods were told it joined.
-    pub(super) fn native_entity_left(&mut self, id: u32) {
+    pub(super) fn native_entity_left(&mut self, id: u32) { let (id,) = match crate::points_generated::P3044.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if self.remote.is_some() {
             return;
         }
@@ -331,7 +331,7 @@ impl Game<'_> {
     /// through a portal, unloaded), lowest id first. Marks the entities still
     /// there in the registry and tells the rest: no allocation, and nothing
     /// runs when no mod is loaded or none was announced.
-    pub(super) fn native_leaves_flush(&mut self) {
+    pub(super) fn native_leaves_flush(&mut self) { if let Some(__l) = crate::points_generated::P3043.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use super::entity::Entity;
         self.native_removals_flush();
         if self.persist.live.is_empty() || self.remote.is_some() {

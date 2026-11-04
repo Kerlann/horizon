@@ -89,14 +89,14 @@ fn body_armor_fits(species: Species, item: &str) -> bool {
 
 impl Game<'_> {
     /// Whether the mount menu is the open screen.
-    pub(super) fn mount_active(&self) -> bool {
+    pub(super) fn mount_active(&self) -> bool { if let Some(__l) = crate::points_generated::P2812.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.screen == Screen::Inventory && self.mount_menu.open.is_some()
     }
-    fn mount_mob_index(&self, id: u32) -> Option<usize> {
+    fn mount_mob_index(&self, id: u32) -> Option<usize> { let (id,) = match crate::points_generated::P2811.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.mobs.iter().position(|m| m.id == id)
     }
     /// `AbstractHorse.openCustomInventoryScreen` for a tamed adult mount.
-    pub(super) fn open_mount_menu(&mut self, index: usize) {
+    pub(super) fn open_mount_menu(&mut self, index: usize) { let (index,) = match crate::points_generated::P2810.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         let species = m.species();
         if !has_mount_menu(species) {
@@ -121,7 +121,7 @@ impl Game<'_> {
     }
     /// `ClientPacketListener.handleMountScreenOpen`: a server's horse
     /// inventory over mount `entity`, its slots to come in the menu's content.
-    pub(super) fn open_remote_mount_menu(&mut self, entity: u32, columns: usize) -> bool {
+    pub(super) fn open_remote_mount_menu(&mut self, entity: u32, columns: usize) -> bool { let (entity,columns,) = match crate::points_generated::P2809.get() { Some(__l) => { let mut __a = (entity,columns,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,columns,) };
         let Some(species) = self
             .mobs
             .iter()
@@ -144,7 +144,7 @@ impl Game<'_> {
         self.show_mount_menu();
         true
     }
-    fn show_mount_menu(&mut self) {
+    fn show_mount_menu(&mut self) { if let Some(__l) = crate::points_generated::P2808.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_none() && self.lan_acting.is_none() {
             self.carried = None;
         }
@@ -155,7 +155,7 @@ impl Game<'_> {
         self.capture(false);
     }
     /// E while riding a tamed mount opens its inventory instead of the player's.
-    pub(super) fn open_ridden_mount_menu(&mut self) -> bool {
+    pub(super) fn open_ridden_mount_menu(&mut self) -> bool { if let Some(__l) = crate::points_generated::P2807.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(id) = self.riding else {
             return false;
         };
@@ -170,28 +170,28 @@ impl Game<'_> {
         true
     }
     /// Riding a mount that has a horse inventory (`HasCustomInventoryScreen`).
-    pub(super) fn riding_mount_with_menu(&self) -> bool {
+    pub(super) fn riding_mount_with_menu(&self) -> bool { if let Some(__l) = crate::points_generated::P2806.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.riding
             .and_then(|id| self.mount_mob_index(id))
             .is_some_and(|i| has_mount_menu(self.mobs[i].species()))
     }
     /// A server closed its window: the screen's copy goes.
-    pub(super) fn mount_menu_reset(&mut self) {
+    pub(super) fn mount_menu_reset(&mut self) { if let Some(__l) = crate::points_generated::P2805.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.mount_menu.open = None;
     }
     /// The entity type of the open mount menu's mount (`minecraft:horse`).
-    pub(super) fn mount_menu_entity(&self) -> Option<String> {
+    pub(super) fn mount_menu_entity(&self) -> Option<String> { if let Some(__l) = crate::points_generated::P2804.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let open = self.mount_menu.open.as_ref()?;
         let m = self.mobs.iter().find(|m| m.id == open.mob)?;
         Some(m.kind.id.to_string())
     }
     /// The chest columns of the open mount menu (the server's window's).
-    pub(super) fn mount_menu_columns(&self) -> Option<usize> {
+    pub(super) fn mount_menu_columns(&self) -> Option<usize> { if let Some(__l) = crate::points_generated::P2803.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.mount_menu.open.as_ref().map(|o| o.columns)
     }
     /// The menu ends when the mount dies or is more than 4 blocks away
     /// (`AbstractMountInventoryMenu.stillValid`).
-    pub(super) fn tick_mount_menu(&mut self) {
+    pub(super) fn tick_mount_menu(&mut self) { if let Some(__l) = crate::points_generated::P2802.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A server's menu ends when the server closes it.
         if self.remote.is_some() {
             return;
@@ -215,13 +215,13 @@ impl Game<'_> {
         }
     }
     /// Closing the screen keeps what is in the slots on the mount.
-    pub(super) fn mount_closed(&mut self) {
+    pub(super) fn mount_closed(&mut self) { if let Some(__l) = crate::points_generated::P2801.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.mount_sync();
         self.mount_menu.open = None;
     }
     /// Writes the menu slots to the mount, with the equip sounds. A
     /// server's menu is the server's to write.
-    fn mount_sync(&mut self) {
+    fn mount_sync(&mut self) { if let Some(__l) = crate::points_generated::P2800.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return;
         }
@@ -245,7 +245,7 @@ impl Game<'_> {
         Option<ItemStack>,
         Option<Option<ItemStack>>,
         Vec<Option<ItemStack>>,
-    ) {
+    ) { let (index,) = match crate::points_generated::P2799.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         let species = m.species();
         let body = shows_body(species).then(|| m.equipment_stacks()[6].clone());
@@ -261,7 +261,7 @@ impl Game<'_> {
         saddle: Option<ItemStack>,
         body: Option<Option<ItemStack>>,
         items: Vec<Option<ItemStack>>,
-    ) {
+    ) { let (index,) = match crate::points_generated::P2798.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         let at = m.center();
         let saddle_put_on = saddle.is_some() && !m.extra.saddled();
@@ -299,7 +299,7 @@ impl Game<'_> {
             self.audio.play(&sound, Some(at), 0.5, 1.0);
         }
     }
-    pub(super) fn mount_slots(&self) -> Option<Vec<usize>> {
+    pub(super) fn mount_slots(&self) -> Option<Vec<usize>> { if let Some(__l) = crate::points_generated::P2797.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let open = self
             .mount_menu
             .open
@@ -317,7 +317,7 @@ impl Game<'_> {
     }
     /// How many slots `mount_slots` lists, counted without building it
     /// (`Game::slot_count` asks every frame).
-    pub(super) fn mount_slot_count(&self) -> Option<usize> {
+    pub(super) fn mount_slot_count(&self) -> Option<usize> { if let Some(__l) = crate::points_generated::P2796.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let open = self
             .mount_menu
             .open
@@ -325,7 +325,7 @@ impl Game<'_> {
             .filter(|_| self.mount_active())?;
         Some(36 + usize::from(open.show_saddle) + usize::from(open.show_armor) + open.columns * 3)
     }
-    pub(super) fn mount_slot_position(&self, i: usize) -> Option<(f32, f32)> {
+    pub(super) fn mount_slot_position(&self, i: usize) -> Option<(f32, f32)> { let (i,) = match crate::points_generated::P2795.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         let open = self
             .mount_menu
             .open
@@ -346,7 +346,7 @@ impl Game<'_> {
             _ => None,
         }
     }
-    pub(super) fn mount_slot(&self, i: usize) -> &Option<ItemStack> {
+    pub(super) fn mount_slot(&self, i: usize) -> &Option<ItemStack> { let (i,) = match crate::points_generated::P2794.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         match self.mount_menu.open.as_ref() {
             Some(open) if i == SADDLE => &open.saddle,
             Some(open) if i == ARMOR => &open.armor,
@@ -354,7 +354,7 @@ impl Game<'_> {
             _ => &self.scratch_slot,
         }
     }
-    pub(super) fn mount_slot_mut(&mut self, i: usize) -> &mut Option<ItemStack> {
+    pub(super) fn mount_slot_mut(&mut self, i: usize) -> &mut Option<ItemStack> { let (i,) = match crate::points_generated::P2793.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         match self.mount_menu.open.as_mut() {
             Some(open) if i == SADDLE => &mut open.saddle,
             Some(open) if i == ARMOR => &mut open.armor,
@@ -363,7 +363,7 @@ impl Game<'_> {
         }
     }
     /// `ArmorSlot.mayPlace` and the stack limits of the mount's slots.
-    pub(super) fn mount_slot_rules(&self, slot: usize, stack: &ItemStack) -> (bool, u32) {
+    pub(super) fn mount_slot_rules(&self, slot: usize, stack: &ItemStack) -> (bool, u32) { let (slot,) = match crate::points_generated::P2792.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let Some(open) = self.mount_menu.open.as_ref() else {
             return (false, 64);
         };
@@ -374,7 +374,7 @@ impl Game<'_> {
         }
     }
     /// A click in the mount menu before the generic handling.
-    pub(super) fn mount_click(&mut self, right: bool) -> bool {
+    pub(super) fn mount_click(&mut self, right: bool) -> bool { let (right,) = match crate::points_generated::P2791.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         // A server's menu: the click goes out like any container click.
         if !self.mount_active() || self.remote.is_some() {
             return false;
@@ -402,7 +402,7 @@ impl Game<'_> {
         (9..36).chain(0..9).collect()
     }
     /// `AbstractMountInventoryMenu.quickMoveStack`.
-    fn mount_quick_move(&mut self, slot: usize) {
+    fn mount_quick_move(&mut self, slot: usize) { let (slot,) = match crate::points_generated::P2790.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let Some(open) = self.mount_menu.open.as_ref() else {
             return;
         };
@@ -441,7 +441,7 @@ impl Game<'_> {
         }
     }
     /// `HorseInventoryScreen`'s background, slot frames and the mount.
-    pub(super) fn draw_mount_background(&self, batch: &mut HudBatch, ox: f32, oy: f32) {
+    pub(super) fn draw_mount_background(&self, batch: &mut HudBatch, ox: f32, oy: f32) { let (ox,oy,) = match crate::points_generated::P2789.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ox,oy,) };
         let Some(open) = self.mount_menu.open.as_ref() else {
             return;
         };
@@ -527,7 +527,7 @@ impl Game<'_> {
         y1: f32,
         size: f32,
         offset_y: f32,
-    ) {
+    ) { let (x0,y0,x1,y1,size,offset_y,) = match crate::points_generated::P2788.get() { Some(__l) => { let mut __a = (x0,y0,x1,y1,size,offset_y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x0,y0,x1,y1,size,offset_y,) };
         let (cx, cy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
         let x_angle = ((cx - self.cursor.0) / 40.0).atan();
         let y_angle = ((cy - self.cursor.1) / 40.0).atan();

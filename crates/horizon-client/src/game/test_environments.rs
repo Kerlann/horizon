@@ -135,7 +135,7 @@ pub(super) fn parse(
 
 impl Game<'_> {
     /// The data pack entry `data/<ns>/test_environment/<path>.json`.
-    fn read_test_environment_json(&self, id: &str) -> Option<Json> {
+    fn read_test_environment_json(&self, id: &str) -> Option<Json> { if let Some(__l) = crate::points_generated::P5610.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (ns, path) = id.split_once(':').unwrap_or(("minecraft", id));
         let file = self
             .options
@@ -148,7 +148,7 @@ impl Game<'_> {
     }
 
     /// The definition of a batch's environment (`batch()` of its tests).
-    pub(super) fn test_environment(&self, id: &str) -> Option<Environment> {
+    pub(super) fn test_environment(&self, id: &str) -> Option<Environment> { if let Some(__l) = crate::points_generated::P5609.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         parse(
             &Json::String(id.to_owned()),
             &|i| self.read_test_environment_json(i),
@@ -157,17 +157,17 @@ impl Game<'_> {
     }
 
     /// `TestEnvironmentDefinition.activate`.
-    pub(super) fn activate_test_environment(&mut self, environment: Environment) -> Activation {
+    pub(super) fn activate_test_environment(&mut self, environment: Environment) -> Activation { if let Some(__l) = crate::points_generated::P5608.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let saved = self.set_up_environment(&environment);
         Activation { environment, saved }
     }
 
     /// `Activation.teardown`.
-    pub(super) fn tear_down_test_environment(&mut self, activation: Activation) {
+    pub(super) fn tear_down_test_environment(&mut self, activation: Activation) { if let Some(__l) = crate::points_generated::P5607.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.tear_down_environment(&activation.environment, activation.saved);
     }
 
-    fn set_up_environment(&mut self, environment: &Environment) -> Saved {
+    fn set_up_environment(&mut self, environment: &Environment) -> Saved { if let Some(__l) = crate::points_generated::P5606.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match environment {
             Environment::AllOf(all) => Saved::AllOf(
                 all.iter()
@@ -224,7 +224,7 @@ impl Game<'_> {
         }
     }
 
-    fn tear_down_environment(&mut self, environment: &Environment, saved: Saved) {
+    fn tear_down_environment(&mut self, environment: &Environment, saved: Saved) { if let Some(__l) = crate::points_generated::P5605.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match (environment, saved) {
             (Environment::AllOf(_), Saved::AllOf(all)) => {
                 for (e, s) in all.into_iter().rev() {
@@ -259,7 +259,7 @@ impl Game<'_> {
     }
 
     /// `GameRules.setAll`.
-    fn set_environment_rules(&mut self, rules: &[(String, Value)]) {
+    fn set_environment_rules(&mut self, rules: &[(String, Value)]) { if let Some(__l) = crate::points_generated::P5604.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (name, value) in rules {
             if let Some(rule) = gamerules::rule(name)
                 && self.ui.rules.set(rule.name, *value)
@@ -271,7 +271,7 @@ impl Game<'_> {
     }
 
     /// `Weather.Type.apply`: `ServerLevel.setWeatherParameters`.
-    fn set_weather_type(&mut self, kind: WeatherType) {
+    fn set_weather_type(&mut self, kind: WeatherType) { if let Some(__l) = crate::points_generated::P5603.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (clear, rain, raining, thundering) = kind.parameters();
         let w = &mut self.world.weather;
         w.clear_time = clear;
@@ -283,7 +283,7 @@ impl Game<'_> {
 
     /// `Functions.run`: the function with game master permission and
     /// suppressed output; a missing one is logged.
-    fn run_environment_function(&mut self, id: &str) {
+    fn run_environment_function(&mut self, id: &str) { if let Some(__l) = crate::points_generated::P5602.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = if id.contains(':') {
             id.to_owned()
         } else {

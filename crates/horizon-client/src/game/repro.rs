@@ -366,7 +366,7 @@ impl Game<'_> {
         words: &[&str],
         _line: &str,
         reply: &Sender<String>,
-    ) -> Result<Option<Option<Value>>> {
+    ) -> Result<Option<Option<Value>>> { if let Some(__l) = crate::points_generated::P5079.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match words[0] {
             "record-start" => self.record_start_command(&words[1..], Some(reply.clone())),
             "record-stop" => self.record_stop_command(&words[1..], Some(reply.clone())),
@@ -379,14 +379,14 @@ impl Game<'_> {
     }
 
     /// Once per loop turn: a waiting replay, the inputs due, and finished exports.
-    pub(super) fn poll_repro(&mut self, event_loop: &dyn EventLoopCtl) {
+    pub(super) fn poll_repro(&mut self, event_loop: &dyn EventLoopCtl) { if let Some(__l) = crate::points_generated::P5078.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.poll_pending_replay();
         self.advance_replay(event_loop);
         self.poll_exports();
     }
 
     /// Once per tick: the state keyframes. Stops a recording that outgrew its caps.
-    pub(super) fn repro_tick(&mut self) {
+    pub(super) fn repro_tick(&mut self) { if let Some(__l) = crate::points_generated::P5077.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((start_tick, started, start_inputs, inputs)) =
             self.repro.recording.as_ref().map(|rec| {
                 (
@@ -421,7 +421,7 @@ impl Game<'_> {
 
     /// A native exit: finish the recording and write its bundle, so a crash or a
     /// quit still leaves a repro.
-    pub(super) fn repro_on_exit(&mut self) {
+    pub(super) fn repro_on_exit(&mut self) { if let Some(__l) = crate::points_generated::P5076.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.repro.recording.is_none() {
             return;
         }
@@ -433,7 +433,7 @@ impl Game<'_> {
 
     /// The world is closing (quit to title, another world): a recording cannot
     /// cross it, and a replay feeding the title screen is nonsense.
-    pub(super) fn repro_world_closed(&mut self) {
+    pub(super) fn repro_world_closed(&mut self) { if let Some(__l) = crate::points_generated::P5075.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.repro.recording.is_some()
             && let Err(e) = self.stop_recording(false, None)
         {
@@ -445,7 +445,7 @@ impl Game<'_> {
     }
 
     /// F3+R: start a recording, or stop the running one and write its bundle.
-    pub(super) fn toggle_recording_key(&mut self) {
+    pub(super) fn toggle_recording_key(&mut self) { if let Some(__l) = crate::points_generated::P5074.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.repro.replay.is_some() || self.repro.pending_replay.is_some() {
             return;
         }
@@ -462,7 +462,7 @@ impl Game<'_> {
     }
 
     /// F3+E: write a bundle now, from the running or the newest recording.
-    pub(super) fn export_repro_key(&mut self) {
+    pub(super) fn export_repro_key(&mut self) { if let Some(__l) = crate::points_generated::P5073.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.repro.recording.is_some() {
             if let Err(e) = self.stop_recording(true, None) {
                 self.repro_say(
@@ -485,7 +485,7 @@ impl Game<'_> {
         }
     }
 
-    fn repro_say(&mut self, key: &str, args: &[Text]) {
+    fn repro_say(&mut self, key: &str, args: &[Text]) { if let Some(__l) = crate::points_generated::P5072.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.system_message(Text::translate(key, args));
     }
 
@@ -495,7 +495,7 @@ impl Game<'_> {
         &mut self,
         args: &[&str],
         reply: Option<Sender<String>>,
-    ) -> Result<Option<Option<Value>>> {
+    ) -> Result<Option<Option<Value>>> { if let Some(__l) = crate::points_generated::P5071.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut name = None;
         let mut no_world = false;
         for arg in args {
@@ -519,7 +519,7 @@ impl Game<'_> {
         name: Option<String>,
         no_world: bool,
         key: bool,
-    ) -> Result<Value> {
+    ) -> Result<Value> { let (no_world,key,) = match crate::points_generated::P5070.get() { Some(__l) => { let mut __a = (no_world,key,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (no_world,key,) };
         if self.repro.recording.is_some() {
             return Err("a recording is already running; record-stop first".into());
         }
@@ -651,7 +651,7 @@ impl Game<'_> {
         &mut self,
         args: &[&str],
         reply: Option<Sender<String>>,
-    ) -> Result<Option<Option<Value>>> {
+    ) -> Result<Option<Option<Value>>> { if let Some(__l) = crate::points_generated::P5069.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut export = false;
         for arg in args {
             match *arg {
@@ -671,7 +671,7 @@ impl Game<'_> {
         &mut self,
         export: bool,
         reply: Option<Sender<String>>,
-    ) -> Result<Option<Value>> {
+    ) -> Result<Option<Value>> { let (export,) = match crate::points_generated::P5068.get() { Some(__l) => { let mut __a = (export,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (export,) };
         let Some(mut rec) = self.repro.recording.take() else {
             return Err("no recording is running".into());
         };
@@ -740,7 +740,7 @@ impl Game<'_> {
 
     // ---- status / list -----------------------------------------------------
 
-    fn record_status(&self, inputs: u64) -> Value {
+    fn record_status(&self, inputs: u64) -> Value { let (inputs,) = match crate::points_generated::P5067.get() { Some(__l) => { let mut __a = (inputs,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (inputs,) };
         json!({
             "recording": self.repro.recording.as_ref().map(|r| json!({
                 "name": r.name,
@@ -763,7 +763,7 @@ impl Game<'_> {
         })
     }
 
-    fn record_list(&self) -> Value {
+    fn record_list(&self) -> Value { if let Some(__l) = crate::points_generated::P5066.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut recordings = Vec::new();
         if let Ok(entries) = fs::read_dir(recordings_dir()) {
             for entry in entries.flatten() {
@@ -810,7 +810,7 @@ impl Game<'_> {
         &mut self,
         args: &[&str],
         reply: Option<Sender<String>>,
-    ) -> Result<Option<Option<Value>>> {
+    ) -> Result<Option<Option<Value>>> { if let Some(__l) = crate::points_generated::P5065.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut name = None;
         let mut path = None;
         let mut no_world = false;
@@ -850,7 +850,7 @@ impl Game<'_> {
         no_world: bool,
         reply: Option<Sender<String>>,
         key: bool,
-    ) -> Result<()> {
+    ) -> Result<()> { let (no_world,key,) = match crate::points_generated::P5064.get() { Some(__l) => { let mut __a = (no_world,key,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (no_world,key,) };
         let status = self.control_status();
         let home = home();
         let dest = dest.unwrap_or_else(|| {
@@ -888,7 +888,7 @@ impl Game<'_> {
         Ok(())
     }
 
-    fn poll_exports(&mut self) {
+    fn poll_exports(&mut self) { if let Some(__l) = crate::points_generated::P5063.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut done = Vec::new();
         for (i, export) in self.repro.exports.iter().enumerate() {
             match export.rx.try_recv() {
@@ -921,7 +921,7 @@ impl Game<'_> {
         }
     }
 
-    fn drain_exports(&mut self, timeout: Duration) {
+    fn drain_exports(&mut self, timeout: Duration) { if let Some(__l) = crate::points_generated::P5062.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let deadline = Instant::now() + timeout;
         while !self.repro.exports.is_empty() && Instant::now() < deadline {
             self.poll_exports();
@@ -938,7 +938,7 @@ impl Game<'_> {
         &mut self,
         args: &[&str],
         reply: Option<Sender<String>>,
-    ) -> Result<Option<Option<Value>>> {
+    ) -> Result<Option<Option<Value>>> { if let Some(__l) = crate::points_generated::P5061.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut name = None;
         let mut stop = false;
         let mut in_place = false;
@@ -1044,7 +1044,7 @@ impl Game<'_> {
         Ok(Some(None))
     }
 
-    fn poll_pending_replay(&mut self) {
+    fn poll_pending_replay(&mut self) { if let Some(__l) = crate::points_generated::P5060.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((in_place, opened, folder, deadline)) = self
             .repro
             .pending_replay
@@ -1085,7 +1085,7 @@ impl Game<'_> {
         self.begin_replay(pending);
     }
 
-    fn begin_replay(&mut self, pending: PendingReplay) {
+    fn begin_replay(&mut self, pending: PendingReplay) { if let Some(__l) = crate::points_generated::P5059.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let total = pending.events.len();
         let name = pending.name.clone();
         // The world copy's player data can be older than the recording: put the
@@ -1161,7 +1161,7 @@ impl Game<'_> {
         }
     }
 
-    fn advance_replay(&mut self, event_loop: &dyn EventLoopCtl) {
+    fn advance_replay(&mut self, event_loop: &dyn EventLoopCtl) { if let Some(__l) = crate::points_generated::P5058.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut due = Vec::new();
         let mut timed_out = false;
         {
@@ -1222,7 +1222,7 @@ impl Game<'_> {
     }
 
     /// One recorded event, fed back. False when it is not replayed.
-    fn replay_event(&mut self, event: TraceEvent, event_loop: &dyn EventLoopCtl) -> bool {
+    fn replay_event(&mut self, event: TraceEvent, event_loop: &dyn EventLoopCtl) -> bool { if let Some(__l) = crate::points_generated::P5057.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = match &self.window {
             Some(window) => window.id(),
             None => WindowId::dummy(),
@@ -1312,7 +1312,7 @@ impl Game<'_> {
     }
 
     /// Let go of everything a replay (or a person) held.
-    fn release_replay_inputs(&mut self) {
+    fn release_replay_inputs(&mut self) { if let Some(__l) = crate::points_generated::P5056.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.keys.clear();
         self.physical_keys.clear();
         self.physical_buttons.clear();
@@ -1323,7 +1323,7 @@ impl Game<'_> {
         self.pad.clear_injected();
     }
 
-    fn finish_replay(&mut self, timed_out: bool) {
+    fn finish_replay(&mut self, timed_out: bool) { let (timed_out,) = match crate::points_generated::P5055.get() { Some(__l) => { let mut __a = (timed_out,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (timed_out,) };
         let Some(replay) = self.repro.replay.take() else {
             return;
         };
@@ -1353,7 +1353,7 @@ impl Game<'_> {
     }
 
     /// Stop a running or waiting replay; whether there was one.
-    fn stop_replay(&mut self) -> bool {
+    fn stop_replay(&mut self) -> bool { if let Some(__l) = crate::points_generated::P5054.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut stopped = false;
         if let Some(pending) = self.repro.pending_replay.take() {
             self.discard_replay_world(&pending);
@@ -1369,13 +1369,13 @@ impl Game<'_> {
         stopped
     }
 
-    fn discard_replay_world(&self, pending: &PendingReplay) {
+    fn discard_replay_world(&self, pending: &PendingReplay) { if let Some(__l) = crate::points_generated::P5053.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !pending.in_place && !pending.keep_world {
             let _ = fs::remove_dir_all(saves_dir().join(&pending.folder));
         }
     }
 
-    fn reply_error(&mut self, reply: Option<Sender<String>>, error: &str) {
+    fn reply_error(&mut self, reply: Option<Sender<String>>, error: &str) { if let Some(__l) = crate::points_generated::P5052.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match reply {
             Some(reply) => {
                 let _ = reply.send(json!({ "error": error }).to_string());

@@ -28,7 +28,7 @@ fn hostile_species(species: Species) -> bool {
 impl Game<'_> {
     /// The level in place holds the entity: events and game events are
     /// queued in it.
-    fn native_entity_here(&self, entity: EntityRef) -> bool {
+    fn native_entity_here(&self, entity: EntityRef) -> bool { if let Some(__l) = crate::points_generated::P3127.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_entity_level(entity)
             .is_some_and(|level| level.dimension() == self.dim.id())
     }
@@ -39,7 +39,7 @@ impl Game<'_> {
     pub(super) fn native_entity_sound_source(
         &self,
         entity: EntityRef,
-    ) -> Option<NativeSoundSource> {
+    ) -> Option<NativeSoundSource> { if let Some(__l) = crate::points_generated::P3126.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(match self.native_entity_target(entity)? {
             Target::Player | Target::Guest(_) => NativeSoundSource::Players,
             Target::Mob(id) => {
@@ -73,7 +73,7 @@ impl Game<'_> {
         sound: &str,
         volume: f32,
         pitch: f32,
-    ) -> bool {
+    ) -> bool { let (volume,pitch,) = match crate::points_generated::P3125.get() { Some(__l) => { let mut __a = (volume,pitch,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (volume,pitch,) };
         let Some(target) = self.native_entity_target(entity) else {
             return false;
         };
@@ -103,7 +103,7 @@ impl Game<'_> {
     /// is the event's source entity; for another kind the event has none.
     /// False for an event vanilla doesn't have, a dead guest and a guest while
     /// another one acts.
-    pub(super) fn native_entity_game_event(&mut self, entity: EntityRef, event: &str) -> bool {
+    pub(super) fn native_entity_game_event(&mut self, entity: EntityRef, event: &str) -> bool { if let Some(__l) = crate::points_generated::P3124.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(event) = horizon_client::sculk::intern(event) else {
             return false;
         };
@@ -150,7 +150,7 @@ impl Game<'_> {
     /// byte `Entity.handleEntityEvent` reads: `2` is a hurt flash, `3` a
     /// death, `35` a totem...) to the players near the entity. True means
     /// queued; false for an entity outside the level in place.
-    pub(super) fn native_entity_broadcast_event(&mut self, entity: EntityRef, id: u8) -> bool {
+    pub(super) fn native_entity_broadcast_event(&mut self, entity: EntityRef, id: u8) -> bool { let (id,) = match crate::points_generated::P3123.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(target) = self.native_entity_target(entity) else {
             return false;
         };
@@ -168,7 +168,7 @@ impl Game<'_> {
     }
     /// `Entity.isSpectator`: true for a player in spectator mode, false for
     /// every other entity.
-    pub(super) fn native_entity_spectator(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_spectator(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3122.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(match self.native_entity_target(entity)? {
             Target::Player => self.spectator(),
             Target::Guest(conn) => self.command_guest(conn)?.game_mode == 3,

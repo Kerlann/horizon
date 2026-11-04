@@ -19,7 +19,7 @@ type Signed = Vec<(String, ChatMessage)>;
 
 impl Game<'_> {
     /// CommandDispatcher.parse with the guest's permission level.
-    fn parse_as(&mut self, permission: u8, command: &str) -> ParseResults {
+    fn parse_as(&mut self, permission: u8, command: &str) -> ParseResults { let (permission,) = match crate::points_generated::P2332.get() { Some(__l) => { let mut __a = (permission,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (permission,) };
         let level = std::mem::replace(&mut self.ui.registries.permission, permission);
         let parse = vanilla::game_dispatcher_with_features(&self.level.enabled_features)
             .parse(command, &self.ui.registries);
@@ -33,7 +33,7 @@ impl Game<'_> {
         &mut self,
         permission: u8,
         command: &str,
-    ) -> Vec<(String, String)> {
+    ) -> Vec<(String, String)> { let (permission,) = match crate::points_generated::P2331.get() { Some(__l) => { let mut __a = (permission,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (permission,) };
         self.parse_as(permission, command).signable_arguments(
             vanilla::game_dispatcher_with_features(&self.level.enabled_features),
         )
@@ -41,7 +41,7 @@ impl Game<'_> {
 
     /// ServerGamePacketListenerImpl.detectRateSpam: a chat message or command adds 20 to the
     /// guest's throttler; over the threshold, a guest who is not an operator is kicked.
-    pub(super) fn detect_rate_spam(&mut self, conn: u32, command: bool) {
+    pub(super) fn detect_rate_spam(&mut self, conn: u32, command: bool) { let (conn,command,) = match crate::points_generated::P2330.get() { Some(__l) => { let mut __a = (conn,command,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,command,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -73,7 +73,7 @@ impl Game<'_> {
 
     /// handleChatCommand (performUnsignedChatCommand): refused when the
     /// server enforces secure chat and the command has a message to sign.
-    pub(super) fn guest_chat_command(&mut self, conn: u32, command: &str) {
+    pub(super) fn guest_chat_command(&mut self, conn: u32, command: &str) { let (conn,) = match crate::points_generated::P2329.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -112,7 +112,7 @@ impl Game<'_> {
 
     /// handleSignedChatCommand: the acknowledgements, then each message
     /// argument through the sender's chain, then the command with them.
-    pub(super) fn guest_signed_command(&mut self, conn: u32, p: play::ChatCommandSigned) {
+    pub(super) fn guest_signed_command(&mut self, conn: u32, p: play::ChatCommandSigned) { let (conn,) = match crate::points_generated::P2328.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -163,7 +163,7 @@ impl Game<'_> {
         conn: u32,
         command: &str,
         signed: Option<&Signed>,
-    ) -> bool {
+    ) -> bool { let (conn,) = match crate::points_generated::P2327.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return false;
         };

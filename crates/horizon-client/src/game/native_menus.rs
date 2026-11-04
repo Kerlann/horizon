@@ -66,7 +66,7 @@ pub(super) fn fit(
 /// `native_perform_command`, the menus can be opened and filled).
 #[allow(dead_code)]
 impl Game<'_> {
-    fn native_conn(&self, uuid: u128) -> Option<u32> {
+    fn native_conn(&self, uuid: u128) -> Option<u32> { if let Some(__l) = crate::points_generated::P3926.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let host = self.lan.as_ref()?;
         let g = host
             .hub
@@ -84,7 +84,7 @@ impl Game<'_> {
         rows: u8,
         title: Text,
         items: Vec<Option<ItemStack>>,
-    ) -> Option<i32> {
+    ) -> Option<i32> { let (rows,) = match crate::points_generated::P3925.get() { Some(__l) => { let mut __a = (rows,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (rows,) };
         let conn = self.native_conn(uuid)?;
         // ServerPlayer.openMenu closes the menu that was open.
         self.guest_close_all(conn);
@@ -96,7 +96,7 @@ impl Game<'_> {
         )
     }
     /// Closes the player's native menu (a `native_menu_closed` follows).
-    pub(super) fn native_close_menu(&mut self, uuid: u128) {
+    pub(super) fn native_close_menu(&mut self, uuid: u128) { if let Some(__l) = crate::points_generated::P3924.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(conn) = self.native_conn(uuid)
             && let Some(host) = self.lan.as_mut()
             && host
@@ -172,7 +172,7 @@ impl Game<'_> {
     /// last tick (`PlayerContainerEvent`), in that order for a menu another
     /// replaced: what each player has open is compared with what the mods last
     /// heard. A menu opened and closed again inside one tick is not heard.
-    pub(super) fn tick_player_menus(&mut self) {
+    pub(super) fn tick_player_menus(&mut self) { if let Some(__l) = crate::points_generated::P3923.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -228,7 +228,7 @@ impl Game<'_> {
     /// `conn`'s menu closes with the guest in the level in place
     /// (`ServerPlayer.doCloseContainer`): the mods hear it, if they heard it
     /// open.
-    pub(super) fn player_menu_closing(&mut self, conn: u32) {
+    pub(super) fn player_menu_closing(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P3922.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let heard = self
             .lan
             .as_mut()
@@ -239,7 +239,7 @@ impl Game<'_> {
         }
     }
 
-    fn player_menu_opened(&mut self, conn: u32, menu: HeardMenu) {
+    fn player_menu_opened(&mut self, conn: u32, menu: HeardMenu) { let (conn,) = match crate::points_generated::P3921.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some((uuid, name)) = self
             .lan
             .as_ref()
@@ -254,7 +254,7 @@ impl Game<'_> {
         });
     }
 
-    fn player_menu_closed(&mut self, conn: u32, menu: HeardMenu) {
+    fn player_menu_closed(&mut self, conn: u32, menu: HeardMenu) { let (conn,) = match crate::points_generated::P3920.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some((uuid, name)) = self
             .lan
             .as_ref()
@@ -288,7 +288,7 @@ impl Game<'_> {
     /// The clicks on and closings of native menus the hub collected, each
     /// told to the mods with the hub in `self.lan`, no player's state
     /// swapped in.
-    pub(super) fn run_native_menu_events(&mut self) {
+    pub(super) fn run_native_menu_events(&mut self) { if let Some(__l) = crate::points_generated::P3919.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         loop {
             let Some(host) = self.lan.as_mut() else {
                 return;

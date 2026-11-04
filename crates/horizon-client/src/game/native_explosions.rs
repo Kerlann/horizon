@@ -52,7 +52,7 @@ impl Game<'_> {
         radius: f32,
         fire: bool,
         blast: NativeBlast,
-    ) -> bool {
+    ) -> bool { let (center,radius,fire,) = match crate::points_generated::P3154.get() { Some(__l) => { let mut __a = (center,radius,fire,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,fire,) };
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
             || !blast_ok(center, radius)
@@ -83,7 +83,7 @@ impl Game<'_> {
     }
 
     /// The blast going off now, cleared to a sourceless one.
-    fn take_blast_state(&mut self) -> BlastState {
+    fn take_blast_state(&mut self) -> BlastState { if let Some(__l) = crate::points_generated::P3153.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let c = &mut self.combat;
         BlastState {
             source: c.explosion_source.take(),
@@ -97,7 +97,7 @@ impl Game<'_> {
     }
 
     /// Puts back what `take_blast_state` cleared.
-    fn restore_blast_state(&mut self, s: BlastState) {
+    fn restore_blast_state(&mut self, s: BlastState) { if let Some(__l) = crate::points_generated::P3152.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let c = &mut self.combat;
         c.explosion_source = s.source;
         c.explosion_cause = s.cause;

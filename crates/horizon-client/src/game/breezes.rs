@@ -7,7 +7,7 @@ use horizon_client::{
 };
 
 impl Game<'_> {
-    pub(super) fn tick_breeze_effects(&mut self) {
+    pub(super) fn tick_breeze_effects(&mut self) { if let Some(__l) = crate::points_generated::P788.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(camera) = self.player.as_ref().map(|p| p.position) else {
             return;
         };

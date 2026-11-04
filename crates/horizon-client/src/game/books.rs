@@ -100,20 +100,20 @@ fn view_pages(data: Option<&StackData>) -> Vec<Text> {
         .collect()
 }
 impl Game<'_> {
-    fn book_lines(&self, page: &str) -> Vec<Text> {
+    fn book_lines(&self, page: &str) -> Vec<Text> { if let Some(__l) = crate::points_generated::P767.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.page_lines(&Text::literal(page))
     }
-    fn page_lines(&self, page: &Text) -> Vec<Text> {
+    fn page_lines(&self, page: &Text) -> Vec<Text> { if let Some(__l) = crate::points_generated::P766.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.gui.atlas.font.split(page, 114.0)
     }
     /// `BookViewScreen.mouseClicked`: the click event of the text under the
     /// cursor on the page.
-    fn book_link_at(&self, page: &Text, left: f32) -> Option<horizon_client::text::ClickEvent> {
+    fn book_link_at(&self, page: &Text, left: f32) -> Option<horizon_client::text::ClickEvent> { let (left,) = match crate::points_generated::P765.get() { Some(__l) => { let mut __a = (left,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (left,) };
         self.book_style_at(page, left)?.click
     }
     /// `ActiveTextCollector` over the page: the style of the character
     /// under the cursor, for its click and hover events.
-    fn book_style_at(&self, page: &Text, left: f32) -> Option<horizon_client::text::Style> {
+    fn book_style_at(&self, page: &Text, left: f32) -> Option<horizon_client::text::Style> { let (left,) = match crate::points_generated::P764.get() { Some(__l) => { let mut __a = (left,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (left,) };
         let (mx, my) = self.cursor;
         let row = ((my - 32.0) / 9.0).floor();
         if row < 0.0 || row >= LINES as f32 {
@@ -140,7 +140,7 @@ impl Game<'_> {
         link: horizon_client::text::ClickEvent,
         count: usize,
         lectern: Option<(i32, i32, i32)>,
-    ) {
+    ) { let (count,) = match crate::points_generated::P763.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         use horizon_client::text::ClickEvent;
         match link {
             ClickEvent::ChangePage(target) => {
@@ -198,7 +198,7 @@ impl Game<'_> {
     /// A server's player writes in its own client's editor
     /// (`LocalPlayer.openItemGui`), and reads on its own client once told to
     /// (`ServerPlayer.openItemGui`'s ClientboundOpenBookPacket).
-    pub(super) fn use_book(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn use_book(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P762.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let written = match &*stack.item {
             "minecraft:writable_book" => false,
             "minecraft:written_book" => true,
@@ -218,7 +218,7 @@ impl Game<'_> {
     }
     /// The screen a book in hand opens: `BookEditScreen` for a book and
     /// quill, `BookViewScreen` for a written book.
-    fn book_screen(&self, stack: &ItemStack) -> Option<BookScreen> {
+    fn book_screen(&self, stack: &ItemStack) -> Option<BookScreen> { if let Some(__l) = crate::points_generated::P761.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(match &*stack.item {
             "minecraft:writable_book" => {
                 let mut pages = stack
@@ -250,7 +250,7 @@ impl Game<'_> {
     }
     /// `MultiPlayerGameMode.useItem`'s own use of a book and quill on a
     /// server's client: its editor opens here at once.
-    pub(super) fn remote_use_book(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn remote_use_book(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P760.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:writable_book" {
             return false;
         }
@@ -260,7 +260,7 @@ impl Game<'_> {
         true
     }
     /// `ClientPacketListener.handleOpenBook`: the written book in that hand.
-    pub(super) fn remote_open_book(&mut self, hand: i32) {
+    pub(super) fn remote_open_book(&mut self, hand: i32) { let (hand,) = match crate::points_generated::P759.get() { Some(__l) => { let mut __a = (hand,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (hand,) };
         let hand = if hand == 1 { Hand::Off } else { Hand::Main };
         let screen = self.with_hand(hand, |g| {
             let stack = g.held().filter(|s| &*s.item == "minecraft:written_book")?;
@@ -271,7 +271,7 @@ impl Game<'_> {
         }
     }
     /// Opens `screen` (through `open_screen_overlay`: a mod may keep it shut).
-    pub(super) fn open_book(&mut self, screen: BookScreen) {
+    pub(super) fn open_book(&mut self, screen: BookScreen) { if let Some(__l) = crate::points_generated::P758.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.open_screen_overlay(screen.id(), |game| {
             game.book = Some(screen);
             game.keys.clear();
@@ -281,7 +281,7 @@ impl Game<'_> {
     }
     /// `BookEditScreen` to `BookSignScreen` and back, each a
     /// `Minecraft.setScreen` (through `open_screen_overlay`).
-    fn set_book_signing(&mut self, on: bool) {
+    fn set_book_signing(&mut self, on: bool) { let (on,) = match crate::points_generated::P757.get() { Some(__l) => { let mut __a = (on,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (on,) };
         let id = if on { "book_sign" } else { "book_edit" };
         self.open_screen_overlay(id, |game| {
             if let Some(BookScreen::Edit { signing, .. }) = game.book.as_mut() {
@@ -289,7 +289,7 @@ impl Game<'_> {
             }
         });
     }
-    pub(super) fn close_book(&mut self) {
+    pub(super) fn close_book(&mut self) { if let Some(__l) = crate::points_generated::P756.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A server's lectern: LecternScreen's menu closes (closeContainer).
         if matches!(
             self.book,
@@ -307,7 +307,7 @@ impl Game<'_> {
     /// `BookEditScreen.saveChanges` and `BookSignScreen`'s Sign and Close:
     /// trailing empty pages dropped, the book in hand updated here and, on a
     /// server's client, sent (ServerboundEditBookPacket).
-    fn save_book(&mut self, sign: bool) {
+    fn save_book(&mut self, sign: bool) { let (sign,) = match crate::points_generated::P755.get() { Some(__l) => { let mut __a = (sign,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (sign,) };
         let Some(BookScreen::Edit {
             slot, pages, title, ..
         }) = self.book.take()
@@ -331,7 +331,7 @@ impl Game<'_> {
     }
     /// The book and quill at `slot` takes the pages, or with a title becomes
     /// the written book its writer signed.
-    fn write_book(&mut self, slot: usize, pages: Vec<String>, title: Option<String>) {
+    fn write_book(&mut self, slot: usize, pages: Vec<String>, title: Option<String>) { let (slot,) = match crate::points_generated::P754.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let author = self
             .lan_acting_name
             .clone()
@@ -364,7 +364,7 @@ impl Game<'_> {
     }
     /// `ServerGamePacketListenerImpl.handleEditBook`: a guest's book in a
     /// hotbar slot or its off hand (`updateBookContents`, `signBook`).
-    pub(super) fn lan_edit_book(&mut self, conn: u32, p: play::EditBook) {
+    pub(super) fn lan_edit_book(&mut self, conn: u32, p: play::EditBook) { let (conn,) = match crate::points_generated::P753.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         if !((0..9).contains(&p.slot) || p.slot == super::shield::OFFHAND_SLOT as i32) {
             return;
         }
@@ -415,7 +415,7 @@ impl Game<'_> {
             g.menu_sent[menu_slot] = None;
         }
     }
-    pub(super) fn book_key(&mut self, event: &KeyEvent) {
+    pub(super) fn book_key(&mut self, event: &KeyEvent) { if let Some(__l) = crate::points_generated::P752.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if event.state != ElementState::Pressed {
             return;
         }
@@ -431,7 +431,7 @@ impl Game<'_> {
     }
     /// A key and the text it typed in the open book (the keyboard, or a
     /// controller's on-screen keyboard).
-    pub(super) fn book_input(&mut self, key: Option<KeyCode>, text: Option<&str>) {
+    pub(super) fn book_input(&mut self, key: Option<KeyCode>, text: Option<&str>) { if let Some(__l) = crate::points_generated::P751.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.book.as_mut() {
             Some(BookScreen::View { .. }) => match key {
                 Some(KeyCode::Escape) => self.close_book(),
@@ -481,7 +481,7 @@ impl Game<'_> {
         }
     }
     /// Typing for `horizon-ctl type` (`\n` is a line break).
-    pub(super) fn book_type(&mut self, text: &str) {
+    pub(super) fn book_type(&mut self, text: &str) { if let Some(__l) = crate::points_generated::P750.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let text = text.replace("\\n", "\n");
         match self.book.as_mut() {
             Some(BookScreen::Edit { signing: true, .. }) => self.book_title_insert(&text),
@@ -490,7 +490,7 @@ impl Game<'_> {
         }
     }
     /// `BookSignScreen.keyPressed` on the title box.
-    fn book_title_key(&mut self, key: KeyCode) -> bool {
+    fn book_title_key(&mut self, key: KeyCode) -> bool { if let Some(__l) = crate::points_generated::P749.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (ctrl, shift) = (self.has_control_down(), self.has_shift_down());
         let Some(BookScreen::Edit {
             title, title_edit, ..
@@ -504,7 +504,7 @@ impl Game<'_> {
         title.clone_from(&title_edit.value);
         true
     }
-    fn book_title_insert(&mut self, text: &str) {
+    fn book_title_insert(&mut self, text: &str) { if let Some(__l) = crate::points_generated::P748.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BookScreen::Edit {
             title, title_edit, ..
         }) = self.book.as_mut()
@@ -515,7 +515,7 @@ impl Game<'_> {
         title.clone_from(&title_edit.value);
     }
     /// `BookEditScreen.keyPressed` on the page, apart from the line moves.
-    fn book_page_key(&mut self, key: KeyCode) -> bool {
+    fn book_page_key(&mut self, key: KeyCode) -> bool { if let Some(__l) = crate::points_generated::P747.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (ctrl, shift) = (self.has_control_down(), self.has_shift_down());
         let before = match self.book.as_ref() {
             Some(BookScreen::Edit { page_edit, .. }) => Some((
@@ -536,13 +536,13 @@ impl Game<'_> {
         handled
     }
     /// One character at a time, so a page stops at the last character that fits.
-    fn page_insert(&mut self, text: &str) {
+    fn page_insert(&mut self, text: &str) { if let Some(__l) = crate::points_generated::P746.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for c in text.chars() {
             self.page_change(|edit| edit.insert_text(&c.to_string()));
         }
     }
     /// Ctrl+A/C/V/X: the title box while signing, else the page.
-    pub(super) fn book_shortcut(&mut self, shortcut: horizon_client::clipboard::EditShortcut) {
+    pub(super) fn book_shortcut(&mut self, shortcut: horizon_client::clipboard::EditShortcut) { if let Some(__l) = crate::points_generated::P745.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let signing = matches!(self.book, Some(BookScreen::Edit { signing: true, .. }));
         if signing {
             if let Some(BookScreen::Edit {
@@ -586,7 +586,7 @@ impl Game<'_> {
         ran && self.page_keep(before)
     }
     /// Write the page, or put the previous text back when it no longer fits.
-    fn page_keep(&mut self, before: Option<(String, usize, usize)>) -> bool {
+    fn page_keep(&mut self, before: Option<(String, usize, usize)>) -> bool { if let Some(__l) = crate::points_generated::P744.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let next = match self.book.as_ref() {
             Some(BookScreen::Edit { page_edit, .. }) => page_edit.value.clone(),
             _ => return false,
@@ -611,7 +611,7 @@ impl Game<'_> {
         ok
     }
     /// ArrowUp and ArrowDown move a visual line, keeping the column.
-    fn book_move_line(&mut self, dir: isize) {
+    fn book_move_line(&mut self, dir: isize) { let (dir,) = match crate::points_generated::P743.get() { Some(__l) => { let mut __a = (dir,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (dir,) };
         let shift = self.has_shift_down();
         let (text, cursor) = match self.book.as_ref() {
             Some(BookScreen::Edit {
@@ -636,7 +636,7 @@ impl Game<'_> {
     }
     /// Home and End: the start or end of the visual line holding the caret
     /// (`getCursorLineView`'s beginIndex and endIndex).
-    fn book_line_edge(&mut self, end: bool) {
+    fn book_line_edge(&mut self, end: bool) { let (end,) = match crate::points_generated::P742.get() { Some(__l) => { let mut __a = (end,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (end,) };
         let shift = self.has_shift_down();
         let (text, cursor) = match self.book.as_ref() {
             Some(BookScreen::Edit {
@@ -655,7 +655,7 @@ impl Game<'_> {
         }
     }
     /// Wrapped rows of a page as character ranges, the same breaks as `font.split`.
-    fn page_rows(&self, page: &str) -> Vec<(usize, usize)> {
+    fn page_rows(&self, page: &str) -> Vec<(usize, usize)> { if let Some(__l) = crate::points_generated::P741.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let font = &self.gui.atlas.font;
         let chars: Vec<char> = page.chars().collect();
         let mut rows = Vec::new();
@@ -700,7 +700,7 @@ impl Game<'_> {
         rows
     }
     /// GUI x of the caret and the row it sits on.
-    fn caret_on(&self, page: &str, rows: &[(usize, usize)], cursor: usize) -> (f32, usize) {
+    fn caret_on(&self, page: &str, rows: &[(usize, usize)], cursor: usize) -> (f32, usize) { let (cursor,) = match crate::points_generated::P740.get() { Some(__l) => { let mut __a = (cursor,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (cursor,) };
         let chars: Vec<char> = page.chars().collect();
         for (i, &(start, end)) in rows.iter().enumerate() {
             if cursor <= end || i + 1 == rows.len() {
@@ -711,7 +711,7 @@ impl Game<'_> {
         }
         (0.0, 0)
     }
-    fn page_index_at(&self, page: &str, local_x: f32, local_y: f32) -> usize {
+    fn page_index_at(&self, page: &str, local_x: f32, local_y: f32) -> usize { let (local_x,local_y,) = match crate::points_generated::P739.get() { Some(__l) => { let mut __a = (local_x,local_y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (local_x,local_y,) };
         let rows = self.page_rows(page);
         let line = (local_y / 9.0).floor().max(0.0) as usize;
         let line = line.min(rows.len().saturating_sub(1));
@@ -721,7 +721,7 @@ impl Game<'_> {
         start + self.gui.atlas.font.fit(&slice, local_x.max(0.0))
     }
     /// A click on the centred title (`EditBox.onClick`).
-    fn book_title_click(&mut self, field_x: f32, mx: f32) {
+    fn book_title_click(&mut self, field_x: f32, mx: f32) { let (field_x,mx,) = match crate::points_generated::P738.get() { Some(__l) => { let mut __a = (field_x,mx,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (field_x,mx,) };
         let shift = self.has_shift_down();
         let Some(BookScreen::Edit {
             title, title_edit, ..
@@ -736,7 +736,7 @@ impl Game<'_> {
     }
     /// A click on the open page (`MultiLineEditBox.onClick`): a double click
     /// selects the word before the cursor and leaves the cursor where it is.
-    fn book_page_click(&mut self, origin_x: f32, origin_y: f32, mx: f32, my: f32, double: bool) {
+    fn book_page_click(&mut self, origin_x: f32, origin_y: f32, mx: f32, my: f32, double: bool) { let (origin_x,origin_y,mx,my,double,) = match crate::points_generated::P737.get() { Some(__l) => { let mut __a = (origin_x,origin_y,mx,my,double,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin_x,origin_y,mx,my,double,) };
         if double {
             if let Some(BookScreen::Edit { page_edit, .. }) = self.book.as_mut() {
                 page_edit.select_word_at_cursor();
@@ -754,7 +754,7 @@ impl Game<'_> {
         }
     }
     /// The page buttons (`pageForward` adds a page while editing).
-    fn turn_page(&mut self, forward: bool) {
+    fn turn_page(&mut self, forward: bool) { let (forward,) = match crate::points_generated::P736.get() { Some(__l) => { let mut __a = (forward,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (forward,) };
         let mut lectern_page = None;
         match self.book.as_mut() {
             Some(BookScreen::Edit {
@@ -800,7 +800,7 @@ impl Game<'_> {
         self.audio
             .play("minecraft:item.book.page_turn", None, 1.0, 1.0);
     }
-    fn set_lectern_powered(&mut self, key: (i32, i32, i32), powered: bool) {
+    fn set_lectern_powered(&mut self, key: (i32, i32, i32), powered: bool) { let (powered,) = match crate::points_generated::P735.get() { Some(__l) => { let mut __a = (powered,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (powered,) };
         self.set_lectern_property(key, "powered", powered);
         let p = BlockPos::new(key.0, key.1, key.2);
         let state = self.world.block(key.0, key.1, key.2);
@@ -808,7 +808,7 @@ impl Game<'_> {
             b.lectern_update_below(level, ticks, p, state);
         });
     }
-    fn set_lectern_property(&mut self, key: (i32, i32, i32), name: &str, value: bool) {
+    fn set_lectern_property(&mut self, key: (i32, i32, i32), name: &str, value: bool) { let (value,) = match crate::points_generated::P734.get() { Some(__l) => { let mut __a = (value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (value,) };
         let state = self.world.block(key.0, key.1, key.2);
         let registry = self.pack.assets.registry;
         let Some(mut s) = registry.state(state).cloned() else {
@@ -826,7 +826,7 @@ impl Game<'_> {
         }
     }
     /// The 2-tick pulses of turned lecterns.
-    pub(super) fn tick_lecterns(&mut self) {
+    pub(super) fn tick_lecterns(&mut self) { if let Some(__l) = crate::points_generated::P733.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.follow_lectern();
         let mut done = Vec::new();
         for (key, left) in &mut self.lectern_pulses {
@@ -841,7 +841,7 @@ impl Game<'_> {
         }
     }
     /// `LecternBlock.useItemOn`: a book goes onto an empty lectern.
-    pub(super) fn use_lectern(&mut self, pos: [i32; 3], held: Option<&ItemStack>) -> bool {
+    pub(super) fn use_lectern(&mut self, pos: [i32; 3], held: Option<&ItemStack>) -> bool { let (pos,) = match crate::points_generated::P732.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let key = (pos[0], pos[1], pos[2]);
         if &*self
             .res
@@ -891,7 +891,7 @@ impl Game<'_> {
         true
     }
     /// `LecternBlock.openScreen`: reading the lectern's book.
-    pub(super) fn open_lectern(&mut self, pos: [i32; 3]) -> bool {
+    pub(super) fn open_lectern(&mut self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P731.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let key = (pos[0], pos[1], pos[2]);
         let Some(BlockEntity::Lectern(l)) = self.world.block_entities.get(&key) else {
             return false;
@@ -910,7 +910,7 @@ impl Game<'_> {
     /// A `LecternMenu` button of the open lectern screen: on a server it is
     /// sent (`handleInventoryButtonClick`); here the lectern's menu takes it
     /// with the player's inventory, and the screen follows the block entity.
-    fn lectern_button(&mut self, key: (i32, i32, i32), id: i32) {
+    fn lectern_button(&mut self, key: (i32, i32, i32), id: i32) { let (id,) = match crate::points_generated::P730.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if self.remote.is_some() {
             let _ = self.native_click_menu_button(id);
             return;
@@ -941,7 +941,7 @@ impl Game<'_> {
     /// LecternScreen's Take Book: the menu's button 3. The book leaves the
     /// lectern, so the screen closes (the server closes the menu once the
     /// book is gone; a server's client closes at once rather than wait).
-    fn take_lectern_book(&mut self, key: (i32, i32, i32)) {
+    fn take_lectern_book(&mut self, key: (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P729.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let before = match self.world.block_entities.get(&key) {
             Some(BlockEntity::Lectern(l)) => l.book.clone(),
             _ => None,
@@ -974,7 +974,7 @@ impl Game<'_> {
     pub(super) fn book_control(
         &mut self,
         action: Option<&str>,
-    ) -> horizon_client::Result<serde_json::Value> {
+    ) -> horizon_client::Result<serde_json::Value> { if let Some(__l) = crate::points_generated::P728.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let lectern = match &self.book {
             Some(BookScreen::View { lectern, .. }) => *lectern,
             Some(BookScreen::Edit { .. }) => None,
@@ -1024,7 +1024,7 @@ impl Game<'_> {
     }
     /// A server's `minecraft:lectern` menu: LecternScreen, its book and
     /// page to come (`remote_lectern_book`, `remote_lectern_page`).
-    pub(super) fn remote_open_lectern(&mut self, key: (i32, i32, i32)) {
+    pub(super) fn remote_open_lectern(&mut self, key: (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P727.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.open_book(BookScreen::View {
             pages: Vec::new(),
             page: 0,
@@ -1032,7 +1032,7 @@ impl Game<'_> {
         });
     }
     /// `LecternScreen.bookChanged`: the menu's book slot.
-    pub(super) fn remote_lectern_book(&mut self, book: Option<ItemStack>) {
+    pub(super) fn remote_lectern_book(&mut self, book: Option<ItemStack>) { if let Some(__l) = crate::points_generated::P726.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(BookScreen::View {
             lectern: Some(_),
             pages,
@@ -1044,7 +1044,7 @@ impl Game<'_> {
         }
     }
     /// `LecternScreen.pageChanged`: the menu's page data slot.
-    pub(super) fn remote_lectern_page(&mut self, value: i32) {
+    pub(super) fn remote_lectern_page(&mut self, value: i32) { let (value,) = match crate::points_generated::P725.get() { Some(__l) => { let mut __a = (value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (value,) };
         if let Some(BookScreen::View {
             lectern: Some(_),
             pages,
@@ -1055,7 +1055,7 @@ impl Game<'_> {
         }
     }
     /// The server closed its lectern menu; false when none is open.
-    pub(super) fn remote_lectern_closed(&mut self) -> bool {
+    pub(super) fn remote_lectern_closed(&mut self) -> bool { if let Some(__l) = crate::points_generated::P724.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !matches!(
             self.book,
             Some(BookScreen::View {
@@ -1075,7 +1075,7 @@ impl Game<'_> {
     }
     /// `LecternMenu` over the lectern at `key` (the menu engine, for the
     /// local player and LAN guests alike): its book and page.
-    pub(super) fn lectern_menu(&self, key: (i32, i32, i32)) -> Option<Menu> {
+    pub(super) fn lectern_menu(&self, key: (i32, i32, i32)) -> Option<Menu> { if let Some(__l) = crate::points_generated::P723.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(BlockEntity::Lectern(l)) = self.world.block_entities.get(&key) else {
             return None;
         };
@@ -1087,7 +1087,7 @@ impl Game<'_> {
     /// The lectern menu's book and page back in the block entity: a new page
     /// is `LecternBlock.signalPageChange` (the 2-tick pulse, level event
     /// 1043), a book gone `onBookItemRemove` (`resetBookState`).
-    pub(super) fn lectern_menu_done(&mut self, key: (i32, i32, i32), menu: &Menu) {
+    pub(super) fn lectern_menu_done(&mut self, key: (i32, i32, i32), menu: &Menu) { if let Some(__l) = crate::points_generated::P722.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BlockEntity::Lectern(l)) = self.world.block_entities.get_mut(&key) else {
             return;
         };
@@ -1116,7 +1116,7 @@ impl Game<'_> {
     }
     /// The open lectern screen follows its block entity (`LecternScreen`'s
     /// menu listener): the page, and closing once the book is gone.
-    pub(super) fn follow_lectern(&mut self) {
+    pub(super) fn follow_lectern(&mut self) { if let Some(__l) = crate::points_generated::P721.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BookScreen::View {
             lectern: Some(key),
             page,
@@ -1135,7 +1135,7 @@ impl Game<'_> {
             _ => self.close_book(),
         }
     }
-    pub(super) fn book_click(&mut self, size: [u32; 2]) {
+    pub(super) fn book_click(&mut self, size: [u32; 2]) { let (size,) = match crate::points_generated::P720.get() { Some(__l) => { let mut __a = (size,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (size,) };
         let b = HudBatch::new(size);
         let (w, left) = (b.width, ((b.width - 192.0) / 2.0).floor());
         let (mx, my) = self.cursor;
@@ -1213,7 +1213,7 @@ impl Game<'_> {
             None => {}
         }
     }
-    pub(super) fn draw_book(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_book(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P719.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(book) = &self.book else { return };
         let atlas = &self.gui.atlas;
         let (w, h) = (batch.width, batch.height);

@@ -15,7 +15,7 @@ impl Game<'_> {
     /// does). Call it when your colours change (a new season, a new day of a
     /// slow fade) and once when the player joins, not every frame: a rebuild
     /// takes the workers a few seconds.
-    pub(super) fn native_refresh_biome_colors(&mut self) {
+    pub(super) fn native_refresh_biome_colors(&mut self) { if let Some(__l) = crate::points_generated::P2873.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A world's own table is asked from the biome files' colours each
         // time, so a mod's colours do not stack; a plain world's is the pack's.
         if let (Some(base), Some(current)) = (&self.world_biomes_base, &self.world_biomes) {

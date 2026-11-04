@@ -136,14 +136,14 @@ fn back_button(w: f32, h: f32) -> (f32, f32) {
 impl Game<'_> {
     /// `connection.serverLinks()`: the links the open server sent (empty for
     /// a world without a connection or one that sent none).
-    pub(super) fn server_links(&self) -> &[ServerLink] {
+    pub(super) fn server_links(&self) -> &[ServerLink] { if let Some(__l) = crate::points_generated::P5258.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote
             .as_ref()
             .map_or(&[], |r| r.server_links.as_slice())
     }
     /// DialogScreen over the pause menu: `menu.server_links.title`, the
     /// scrollable link buttons and `gui.back` in the footer.
-    pub(super) fn draw_server_links(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_server_links(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5257.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // ServerLinksDialogScreen: the dialog's title.
         horizon_client::widgets::begin_screen(|| {
             horizon_client::widgets::ScreenInfo::new(
@@ -248,7 +248,7 @@ impl Game<'_> {
         }
     }
     /// A click on `Screen::ServerLinks`: a link, the warning button or Back.
-    pub(super) fn server_links_click(&mut self) -> Result<()> {
+    pub(super) fn server_links_click(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P5256.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (w, h) = self.gui_size();
         let links = self.server_links().to_vec();
         let top = list_top(h, links.len()) - self.links_ui.scroll.trunc();
@@ -279,7 +279,7 @@ impl Game<'_> {
     }
     /// `Screen.clickUrlAction`: "Web Links" off ignores the click; "Prompt on
     /// Links" asks with ConfirmLinkScreen, else the browser opens directly.
-    fn click_link(&mut self, url: &str) {
+    fn click_link(&mut self, url: &str) { if let Some(__l) = crate::points_generated::P5255.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.settings.chat_links {
             return;
         }
@@ -294,18 +294,18 @@ impl Game<'_> {
     }
     /// `ConfirmLinkScreen.confirmLinkNow(parent, uri, true)`: ask about a link
     /// Mojang's own button names, whatever the "Web Links" options say.
-    pub(super) fn confirm_trusted_link(&mut self, url: &str, parent: Screen) {
+    pub(super) fn confirm_trusted_link(&mut self, url: &str, parent: Screen) { if let Some(__l) = crate::points_generated::P5254.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.links_ui.confirm = Some(url.to_owned());
         self.links_ui.trusted = true;
         self.links_ui.back = Some(parent);
         self.set_screen(Screen::ConfirmLink);
     }
     /// The screen `ConfirmLinkScreen`'s callback returns to (`setScreen(parent)`).
-    pub(super) fn confirm_link_back(&self) -> Screen {
+    pub(super) fn confirm_link_back(&self) -> Screen { if let Some(__l) = crate::points_generated::P5253.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.links_ui.back.unwrap_or(Screen::ServerLinks)
     }
     /// `ScrollableLayout`'s mouse wheel over the links.
-    pub(super) fn server_links_scroll(&mut self, delta: f32) {
+    pub(super) fn server_links_scroll(&mut self, delta: f32) { let (delta,) = match crate::points_generated::P5252.get() { Some(__l) => { let mut __a = (delta,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (delta,) };
         let (_, h) = self.gui_size();
         self.links_ui.scroll = (self.links_ui.scroll - delta * 10.0)
             .clamp(0.0, scroll_limit(h, self.server_links().len()));
@@ -313,7 +313,7 @@ impl Game<'_> {
     /// `ConfirmLinkScreen` (untrusted): "Are you sure you want to open the
     /// following website?", the link, the red warning, and Yes / Copy Link to
     /// Clipboard / No.
-    pub(super) fn draw_confirm_link(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_confirm_link(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5251.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let atlas = &self.gui.atlas;
         let (w, h) = (batch.width, batch.height);
         ui::menu_background(batch, atlas, 0.0, 0.0, w, h, true);
@@ -353,7 +353,7 @@ impl Game<'_> {
     }
     /// ConfirmLinkScreen's answer: yes opens the browser, the middle button
     /// copies the link, no closes; all return to Server Links.
-    pub(super) fn confirm_link_click(&mut self) {
+    pub(super) fn confirm_link_click(&mut self) { if let Some(__l) = crate::points_generated::P5250.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (w, h) = self.gui_size();
         let url = self.links_ui.confirm.clone().unwrap_or_default();
         let layout = confirm_link_layout(&self.gui.atlas, (w, h), &url, self.links_ui.trusted);
@@ -375,7 +375,7 @@ impl Game<'_> {
     }
     /// `DialogScreen.WarningScreen`: the custom-screens note, a disconnect
     /// button ("Custom screen rejected" is the shown reason) and Back.
-    pub(super) fn draw_dialog_warning(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_dialog_warning(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5249.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         horizon_client::widgets::begin_screen(|| {
             super::screen_info::confirm(
                 "dialog_warning",
@@ -411,7 +411,7 @@ impl Game<'_> {
         }
     }
     /// WarningScreen's answer: disconnect, or back to Server Links.
-    pub(super) fn dialog_warning_click(&mut self) -> Result<()> {
+    pub(super) fn dialog_warning_click(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P5248.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (w, h) = self.gui_size();
         let layout = dialog_warning_layout(&self.gui.atlas, (w, h));
         for (i, (x, y)) in layout.buttons.iter().enumerate() {

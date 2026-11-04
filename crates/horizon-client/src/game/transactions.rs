@@ -111,7 +111,7 @@ impl Level {
 impl Game<'_> {
     /// Opens a transaction, nested in the open one if any (`Transaction.open`). Only
     /// `host.transaction` reaches it, through its seal.
-    pub(in crate::game) fn native_transaction_open(&mut self, seal: TransactionSeal) {
+    pub(in crate::game) fn native_transaction_open(&mut self, seal: TransactionSeal) { if let Some(__l) = crate::points_generated::P5700.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let _ = seal;
         self.transaction_open();
     }
@@ -120,11 +120,11 @@ impl Game<'_> {
         &mut self,
         seal: TransactionSeal,
         commit: bool,
-    ) {
+    ) { let (commit,) = match crate::points_generated::P5699.get() { Some(__l) => { let mut __a = (commit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (commit,) };
         let _ = seal;
         self.transaction_close(commit);
     }
-    fn transaction_open(&mut self) {
+    fn transaction_open(&mut self) { if let Some(__l) = crate::points_generated::P5698.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.transactions.push(Level {
             dimension: Some(self.dim),
             ..Level::default()
@@ -133,7 +133,7 @@ impl Game<'_> {
     /// Closes the innermost transaction: `commit` hands its changes to the one around it, or
     /// at the root makes them final and tells the world; otherwise every storage it wrote goes
     /// back to how it was. Nothing happens with none open.
-    fn transaction_close(&mut self, commit: bool) {
+    fn transaction_close(&mut self, commit: bool) { let (commit,) = match crate::points_generated::P5697.get() { Some(__l) => { let mut __a = (commit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (commit,) };
         let Some(level) = self.transactions.pop() else {
             return;
         };
@@ -177,14 +177,14 @@ impl Game<'_> {
     /// Closes every transaction left open, as aborted. Run before each tick, as a backstop:
     /// `host.transaction` is the only way in, and its drop guard closes each one it opens, so
     /// none is left open by a mod.
-    pub(super) fn abort_open_transactions(&mut self) {
+    pub(super) fn abort_open_transactions(&mut self) { if let Some(__l) = crate::points_generated::P5696.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         while !self.transactions.is_empty() {
             self.transaction_close(false);
         }
     }
     /// Keeps the block entity at `pos` as it is, with its attachments and a hopper's
     /// cooldown, if a transaction is open and hasn't yet.
-    pub(super) fn journal_block_entity(&mut self, pos: Pos) {
+    pub(super) fn journal_block_entity(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5695.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(level) = self.transactions.last_mut() else {
             return;
         };
@@ -198,7 +198,7 @@ impl Game<'_> {
     }
     /// Keeps `holder`'s attachment map as it is, if a transaction is open and hasn't yet: a
     /// block entity's with the rest of it, any other's alone.
-    pub(super) fn journal_attachments(&mut self, holder: Holder) {
+    pub(super) fn journal_attachments(&mut self, holder: Holder) { if let Some(__l) = crate::points_generated::P5694.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Holder::BlockEntity([x, y, z]) = holder {
             return self.journal_block_entity((x, y, z));
         }
@@ -217,7 +217,7 @@ impl Game<'_> {
     }
     /// Keeps the inventory of the player whose state is in `Game` now, `uuid`, as it is, if a
     /// transaction is open and hasn't yet. Called inside `native_as_player`.
-    pub(super) fn journal_player(&mut self, uuid: u128) {
+    pub(super) fn journal_player(&mut self, uuid: u128) { if let Some(__l) = crate::points_generated::P5693.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(level) = self.transactions.last_mut() else {
             return;
         };
@@ -230,7 +230,7 @@ impl Game<'_> {
         });
     }
     /// Keeps `player`'s menu storage as it is, if a transaction is open and hasn't yet.
-    pub(super) fn journal_menus(&mut self, player: mod_api::PlayerRef) {
+    pub(super) fn journal_menus(&mut self, player: mod_api::PlayerRef) { if let Some(__l) = crate::points_generated::P5692.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(level) = self.transactions.last() else {
             return;
         };
@@ -252,7 +252,7 @@ impl Game<'_> {
         }
     }
     /// Keeps entity `id`'s inventory as it is, if a transaction is open and hasn't yet.
-    pub(super) fn journal_entity(&mut self, id: u32) {
+    pub(super) fn journal_entity(&mut self, id: u32) { let (id,) = match crate::points_generated::P5691.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if self.transactions.is_empty() {
             return;
         }
@@ -267,7 +267,7 @@ impl Game<'_> {
     /// Sets item entity `id`'s stack, keeping it as it was if a transaction is open and hasn't
     /// yet. Emptied in one, it stays, empty, until the root commit removes it, so an abort can
     /// put its stack back. False where no such item entity is.
-    pub(super) fn journal_set_item_entity(&mut self, id: u32, stack: ItemStack) -> bool {
+    pub(super) fn journal_set_item_entity(&mut self, id: u32, stack: ItemStack) -> bool { let (id,) = match crate::points_generated::P5690.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(level) = self.transactions.last_mut() else {
             let dimension = self.dim.id();
             return self.native_set_item_entity(dimension, id, stack);
@@ -287,7 +287,7 @@ impl Game<'_> {
     }
     /// `drop_plain` by the player whose state is in `Game` now, `uuid`: at once, or at the root
     /// commit inside a transaction.
-    pub(super) fn drop_after_commit(&mut self, uuid: u128, stack: ItemStack) {
+    pub(super) fn drop_after_commit(&mut self, uuid: u128, stack: ItemStack) { if let Some(__l) = crate::points_generated::P5689.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.transactions.last_mut() {
             Some(level) => level.after.push(After::PlayerDrop(uuid, stack)),
             None => {
@@ -298,7 +298,7 @@ impl Game<'_> {
     /// Sets the block at `pos` to `state`. In a transaction, stored only, keeping the old
     /// state, and set with its updates at the root commit; otherwise at once
     /// (`Level.setBlock`).
-    pub(super) fn journal_set_block(&mut self, pos: [i32; 3], state: BlockStateId) -> bool {
+    pub(super) fn journal_set_block(&mut self, pos: [i32; 3], state: BlockStateId) -> bool { let (pos,) = match crate::points_generated::P5688.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let Some(level) = self.transactions.last_mut() else {
             return self.level_set(pos, state).is_ok();
         };
@@ -309,13 +309,13 @@ impl Game<'_> {
         self.world.set_stored(pos[0], pos[1], pos[2], state)
     }
     /// Runs `after` at once, or at the root commit inside a transaction.
-    pub(super) fn after_commit(&mut self, after: After) {
+    pub(super) fn after_commit(&mut self, after: After) { if let Some(__l) = crate::points_generated::P5687.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.transactions.last_mut() {
             Some(level) => level.after.push(after),
             None => self.run_after(after),
         }
     }
-    fn run_after(&mut self, after: After) {
+    fn run_after(&mut self, after: After) { if let Some(__l) = crate::points_generated::P5686.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match after {
             After::Changed(pos) => self.container_changed(pos),
             After::Updated(pos) => self.block_entity_updated(pos),
@@ -342,7 +342,7 @@ impl Game<'_> {
             }
         }
     }
-    fn root_commit(&mut self, level: Level) {
+    fn root_commit(&mut self, level: Level) { if let Some(__l) = crate::points_generated::P5685.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut told = std::collections::HashSet::new();
         for after in level.after {
             match after {
@@ -393,7 +393,7 @@ impl Game<'_> {
             }
         }
     }
-    fn roll_back(&mut self, level: Level) {
+    fn roll_back(&mut self, level: Level) { if let Some(__l) = crate::points_generated::P5684.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (pos, kept) in level.block_entities {
             if let (Some(entity), Some(now)) =
                 (kept.entity, self.world.block_entities.get_mut(&pos))

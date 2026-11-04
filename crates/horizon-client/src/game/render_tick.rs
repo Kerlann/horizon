@@ -75,7 +75,7 @@ fn rains_at(world: &World, biomes: &Biomes, x: i32, y: i32, z: i32) -> bool {
 }
 
 impl Game<'_> {
-    pub(super) fn forward(&self) -> [f64; 3] {
+    pub(super) fn forward(&self) -> [f64; 3] { if let Some(__l) = crate::points_generated::P5051.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (yaw, pitch) = (
             f64::from(self.yaw).to_radians(),
             f64::from(self.pitch).to_radians(),
@@ -87,7 +87,7 @@ impl Game<'_> {
         ]
     }
     /// `Camera.getNearPlane` at the FOV option, as `getFluidInCamera` asks for it.
-    pub(super) fn near_plane(&self) -> NearPlane {
+    pub(super) fn near_plane(&self) -> NearPlane { if let Some(__l) = crate::points_generated::P5050.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let [width, height] = self
             .renderer
             .as_ref()
@@ -105,7 +105,7 @@ impl Game<'_> {
         sky: &horizon_client::environment::Sky,
         biome: u16,
         water_fog_color: [f32; 3],
-    ) -> FogData {
+    ) -> FogData { let (biome,water_fog_color,) = match crate::points_generated::P5049.get() { Some(__l) => { let mut __a = (biome,water_fog_color,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (biome,water_fog_color,) };
         let forward = self.forward();
         let at = [camera.x, camera.y, camera.z];
         let fog_type = fog_type(&self.world, self.res.facts(), at, &self.near_plane());
@@ -162,7 +162,7 @@ impl Game<'_> {
         camera: [f64; 3],
         fog_type: FogType,
         color: [f32; 4],
-    ) -> [f32; 4] {
+    ) -> [f32; 4] { let (partial,camera,color,) = match crate::points_generated::P5048.get() { Some(__l) => { let mut __a = (partial,camera,color,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,camera,color,) };
         let mut rgb = [color[0], color[1], color[2]];
         self.native_compute_fog_color(partial, camera, fog_type, &mut rgb);
         if rgb.iter().all(|v| v.is_finite() && (0.0..=1.0).contains(v)) {
@@ -177,7 +177,7 @@ impl Game<'_> {
         camera: [f64; 3],
         fog_type: FogType,
         original: FogData,
-    ) -> FogData {
+    ) -> FogData { let (partial,camera,) = match crate::points_generated::P5047.get() { Some(__l) => { let mut __a = (partial,camera,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,camera,) };
         let mut fog = original;
         self.native_render_fog(partial, camera, fog_type, &mut fog);
         let distances = [
@@ -205,7 +205,7 @@ impl Game<'_> {
     }
     /// `FogRenderer.computeFogColor`'s night vision brightenFactor:
     /// `GameRenderer.nightVisionScale`, but not while Darkness is on.
-    fn fog_night_vision(&self) -> f32 {
+    fn fog_night_vision(&self) -> f32 { if let Some(__l) = crate::points_generated::P5046.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let partial = self.clock.fraction() as f32;
         match self.potions.effects.get("night_vision") {
             Some(e) if self.potions.effects.get("darkness").is_none() => {
@@ -220,14 +220,14 @@ impl Game<'_> {
         }
     }
     /// `ClientLevelData.isFlat`: on the server thread, the world-wide flag.
-    fn level_flat(&self) -> bool {
+    fn level_flat(&self) -> bool { if let Some(__l) = crate::points_generated::P5045.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.remote.as_ref() {
             Some(r) => r.flat,
             None => self.world_flat,
         }
     }
     /// `Level.getMinY`: the current dimension type's minimum y.
-    fn level_min_y(&self) -> i32 {
+    fn level_min_y(&self) -> i32 { if let Some(__l) = crate::points_generated::P5044.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.remote.as_ref() {
             Some(r) => r.dimension.min_y,
             None => self.world.shape.min_y,
@@ -236,7 +236,7 @@ impl Game<'_> {
     /// `SkyRenderer.shouldRenderDarkDisc`: eye below the horizon and not under
     /// water. `ClientLevelData.getHorizonHeight`: the bottom of a flat world,
     /// otherwise y 63.
-    pub(super) fn dark_disc(&self, camera: glam::DVec3) -> bool {
+    pub(super) fn dark_disc(&self, camera: glam::DVec3) -> bool { if let Some(__l) = crate::points_generated::P5043.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let horizon = if self.level_flat() {
             f64::from(self.level_min_y())
         } else {
@@ -253,7 +253,7 @@ impl Game<'_> {
     }
     /// `ScreenEffectRenderer` + `Hud` camera overlays for this frame.
     /// `scale` is the player's `LivingEntity.getScale`.
-    pub(super) fn screen_quads(&self, partial: f32, size: [u32; 2], scale: f32) -> Vec<ScreenQuad> {
+    pub(super) fn screen_quads(&self, partial: f32, size: [u32; 2], scale: f32) -> Vec<ScreenQuad> { let (partial,size,scale,) = match crate::points_generated::P5042.get() { Some(__l) => { let mut __a = (partial,size,scale,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,size,scale,) };
         let Some(p) = self.player.as_ref() else {
             return Vec::new();
         };
@@ -365,7 +365,7 @@ impl Game<'_> {
         })
     }
     /// `Lightmap.getBrightness(getMaxLocalRawBrightness(eye))`.
-    fn eye_brightness(&self, eye: [f64; 3]) -> f32 {
+    fn eye_brightness(&self, eye: [f64; 3]) -> f32 { let (eye,) = match crate::points_generated::P5041.get() { Some(__l) => { let mut __a = (eye,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (eye,) };
         let b = [
             eye[0].floor() as i32,
             eye[1].floor() as i32,
@@ -376,7 +376,7 @@ impl Game<'_> {
         let raw = sky.max(i32::from(packed & 15)).clamp(0, 15) as u8;
         lightmap_brightness(if self.dim == Dim::Nether { 0.1 } else { 0.0 }, raw)
     }
-    pub(super) fn tick_particles(&mut self) {
+    pub(super) fn tick_particles(&mut self) { if let Some(__l) = crate::points_generated::P5040.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.fog.tick_flicker();
         let eye = self.eye_position();
         if let Some(e) = eye {

@@ -8,6 +8,9 @@ extern crate self as mod_api;
 // hidden: a module of game-side types; mods use their re-exports
 #[doc(hidden)]
 pub mod biome;
+// prototype: injection points (design note, not for merge)
+#[doc(hidden)]
+pub mod point;
 // hidden: a module of game-side types; mods use their re-exports
 #[doc(hidden)]
 pub mod block_sprites;

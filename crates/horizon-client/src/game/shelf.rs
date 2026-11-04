@@ -10,7 +10,7 @@ use horizon_world::level::hit_slot;
 
 impl Game<'_> {
     /// Slot and facing for a click on a shelf's front face.
-    pub(super) fn shelf_hit(&self, hit: &Hit) -> Option<(usize, Direction, bool)> {
+    pub(super) fn shelf_hit(&self, hit: &Hit) -> Option<(usize, Direction, bool)> { if let Some(__l) = crate::points_generated::P5317.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let p = hit.pos;
         if !matches!(
             self.world.block_entities.get(&(p[0], p[1], p[2])),
@@ -43,7 +43,7 @@ impl Game<'_> {
     }
 
     /// `SideChainPartBlock.getAllBlocksConnectedTo`: left to right, at most three.
-    fn shelf_chain(&self, pos: [i32; 3], facing: Direction) -> Vec<[i32; 3]> {
+    fn shelf_chain(&self, pos: [i32; 3], facing: Direction) -> Vec<[i32; 3]> { let (pos,) = match crate::points_generated::P5316.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let left = match facing {
             Direction::North => Direction::East,
             Direction::East => Direction::South,
@@ -98,7 +98,7 @@ impl Game<'_> {
     }
 
     /// `ShelfBlock.useItemOn`: a single swap, or a connected hotbar swap while powered.
-    pub(super) fn use_shelf(&mut self, hit: &Hit) -> Option<bool> {
+    pub(super) fn use_shelf(&mut self, hit: &Hit) -> Option<bool> { if let Some(__l) = crate::points_generated::P5315.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use mod_api::first_person::Hand;
         if self.hand != Hand::Main {
             return None;
@@ -197,7 +197,7 @@ impl Game<'_> {
     }
 
     /// `ShelfRenderer`: three items face out, aligned to the bottom or centre.
-    pub(super) fn shelf_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
+    pub(super) fn shelf_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) { if let Some(__l) = crate::points_generated::P5314.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         for (key, entity) in &self.world.block_entities {
             let BlockEntity::Shelf(shelf) = entity else {
                 continue;

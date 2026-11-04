@@ -93,7 +93,7 @@ enum Target {
 
 impl Game<'_> {
     /// Run every case of `spec` ("CASES,OUTPUT") and write the results.
-    pub(super) fn dispense_fixture(&mut self, spec: &str) -> Result<()> {
+    pub(super) fn dispense_fixture(&mut self, spec: &str) -> Result<()> { if let Some(__l) = crate::points_generated::P1611.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         assert!(
             !self.options.execution_role.is_client(),
             "fixture requires a server Game"
@@ -121,7 +121,7 @@ impl Game<'_> {
         Ok(())
     }
 
-    fn fixture_reset(&mut self, seed: i64) {
+    fn fixture_reset(&mut self, seed: i64) { let (seed,) = match crate::points_generated::P1610.get() { Some(__l) => { let mut __a = (seed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (seed,) };
         self.world = World::new(self.res.facts().air, seed);
         // The oracle level is plains everywhere (bone meal's flowers, freezing).
         let plains = u32::from(world_biomes!(self).id("minecraft:plains"));
@@ -164,7 +164,7 @@ impl Game<'_> {
         self.rand_sequences = Default::default();
     }
 
-    fn dispense_case(&mut self, case: &Value) -> Result<Vec<String>> {
+    fn dispense_case(&mut self, case: &Value) -> Result<Vec<String>> { if let Some(__l) = crate::points_generated::P1609.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let seed = case["seed"].as_i64().unwrap_or(0);
         self.fixture_reset(seed);
         // The oracle level answers one sky and one block light everywhere.
@@ -454,7 +454,7 @@ impl Game<'_> {
     /// A player holding the case's item right-clicks the block at `pos`
     /// (`use_item_as_player`'s block steps): the statistics, the result
     /// and the held stack, as `VanillaDispenserOracle.use` prints them.
-    fn fixture_use(&mut self, pos: BlockPos, op: &Value) -> Result<Vec<String>> {
+    fn fixture_use(&mut self, pos: BlockPos, op: &Value) -> Result<Vec<String>> { if let Some(__l) = crate::points_generated::P1608.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let stack = parse_stack(op["item"].as_str().unwrap_or("-"))?;
         self.creative = op["creative"].as_bool().unwrap_or(false);
         self.inventory[self.selected] = stack.clone();
@@ -514,7 +514,7 @@ impl Game<'_> {
     /// the case's item (`use_item_as_player` on that hit): the statistics,
     /// the held stack and the item it started using, as
     /// `VanillaDispenserOracle.useItem` prints them.
-    fn fixture_use_item(&mut self, pos: BlockPos, op: &Value) -> Result<Vec<String>> {
+    fn fixture_use_item(&mut self, pos: BlockPos, op: &Value) -> Result<Vec<String>> { if let Some(__l) = crate::points_generated::P1607.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let stack = parse_stack(op["item"].as_str().unwrap_or("-"))?;
         self.mode = if op["creative"].as_bool().unwrap_or(false) {
             GameMode::Creative
@@ -631,7 +631,7 @@ impl Game<'_> {
     /// source, the hurt with the weapon's armor effects, then `weapon_hit`
     /// (the mace's smash, post-attack enchantments, the wear), as
     /// `VanillaDispenserOracle.attack` prints them.
-    fn fixture_attack(&mut self, op: &Value, targets: &[Target]) -> Result<Vec<String>> {
+    fn fixture_attack(&mut self, op: &Value, targets: &[Target]) -> Result<Vec<String>> { if let Some(__l) = crate::points_generated::P1606.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let stack = parse_stack(op["item"].as_str().unwrap_or("-"))?;
         self.mode = if op["creative"].as_bool().unwrap_or(false) {
             GameMode::Creative
@@ -758,7 +758,7 @@ impl Game<'_> {
 
     /// A stack in a block entity's slot: a container's, a jukebox's record, a
     /// lectern's book, or the items of a block entity Horizon keeps as saved.
-    fn fixture_fill(&mut self, p: (i32, i32, i32), slot: usize, stack: Option<ItemStack>) {
+    fn fixture_fill(&mut self, p: (i32, i32, i32), slot: usize, stack: Option<ItemStack>) { let (slot,) = match crate::points_generated::P1605.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let jukebox =
             &*self.res.facts().get(self.world.block(p.0, p.1, p.2)).name == "minecraft:jukebox";
         match self.world.block_entities.get_mut(&p) {
@@ -790,7 +790,7 @@ impl Game<'_> {
     }
     /// The saved block entity of a campfire, decorated pot, chiseled
     /// bookshelf or shelf, as a loaded world keeps it.
-    fn fixture_fill_saved(&mut self, p: (i32, i32, i32), slot: usize, stack: Option<ItemStack>) {
+    fn fixture_fill_saved(&mut self, p: (i32, i32, i32), slot: usize, stack: Option<ItemStack>) { let (slot,) = match crate::points_generated::P1604.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         use horizon_world::nbt::Tag;
         let name = self
             .res
@@ -849,7 +849,7 @@ impl Game<'_> {
     }
     /// `Level.setBlock`, `destroyBlock` or `removeBlock` on the case's block, or
     /// a player mining it (`fixture_mine`).
-    fn fixture_remove(&mut self, origin: BlockPos, op: &Value) -> Result<Vec<String>> {
+    fn fixture_remove(&mut self, origin: BlockPos, op: &Value) -> Result<Vec<String>> { if let Some(__l) = crate::points_generated::P1603.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match op["op"].as_str().unwrap_or("") {
             "set" => {
                 let state = BlockStateId(op["state"].as_u64().unwrap_or(0) as u32);
@@ -874,7 +874,7 @@ impl Game<'_> {
     /// case's item (`break_block`, which every player's mining goes through):
     /// the statistics and the held stack, as `VanillaDispenserOracle.mine`
     /// prints them.
-    fn fixture_mine(&mut self, pos: BlockPos, op: &Value) -> Result<Vec<String>> {
+    fn fixture_mine(&mut self, pos: BlockPos, op: &Value) -> Result<Vec<String>> { if let Some(__l) = crate::points_generated::P1602.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let stack = parse_stack(op["item"].as_str().unwrap_or("-"))?;
         self.mode = GameMode::Survival;
         self.creative = false;
@@ -921,7 +921,7 @@ impl Game<'_> {
     }
 
     /// `EntityType.create` and `snapTo` for one target: no spawn finalization.
-    fn fixture_target(&mut self, e: &Value) -> Result<Target> {
+    fn fixture_target(&mut self, e: &Value) -> Result<Target> { if let Some(__l) = crate::points_generated::P1601.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let kind = e["type"].as_str().unwrap_or("minecraft:pig");
         let p = &e["pos"];
         let at = horizon_core::geometry::Vec3::new(
@@ -1015,7 +1015,7 @@ impl Game<'_> {
     }
 
     /// `T` lines: removal, equipment by `EquipmentSlot`, shearing readiness, chests.
-    fn fixture_describe(&self, index: usize, target: &Target) -> String {
+    fn fixture_describe(&self, index: usize, target: &Target) -> String { let (index,) = match crate::points_generated::P1600.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (index,) };
         let mut line = format!("T {index} ");
         match *target {
             Target::Cart(id) => {
@@ -1107,7 +1107,7 @@ impl Game<'_> {
         old_stands: &[u32],
         old_carts: &[u32],
         out: &mut Vec<String>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P1599.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let line = |kind: &str, p: [f64; 3], v: [f64; 3], extra: &str| {
             let mut l = format!(
                 "N {kind} {} {} {} {} {} {}",

@@ -17,7 +17,7 @@ pub(super) struct SubtitleState {
 impl Game<'_> {
     /// Feed the sounds the engine reported since the last tick
     /// (`SoundEventListener.onPlaySound`) while the overlay listens.
-    pub(super) fn tick_subtitles(&mut self) {
+    pub(super) fn tick_subtitles(&mut self) { if let Some(__l) = crate::points_generated::P5575.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut overlay = self.subtitles.overlay.borrow_mut();
         let listening = overlay.listening();
         self.audio.record_heard = listening;
@@ -31,7 +31,7 @@ impl Game<'_> {
             overlay.on_play(Some(&h.subtitle), at, h.range, h.looping, now);
         }
     }
-    pub(super) fn draw_subtitles(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_subtitles(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5574.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // Hud.extractRenderState: hidden with the rest of the HUD (F1).
         if self.ui.hide_gui {
             return;

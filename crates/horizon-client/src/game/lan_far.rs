@@ -28,7 +28,7 @@ fn send(sender: &PlayerSender, data: Vec<u8>) {
 
 impl Game<'_> {
     /// A `horizon:lod` payload from `conn`.
-    pub(super) fn guest_far_terrain(&mut self, conn: u32, data: &[u8]) {
+    pub(super) fn guest_far_terrain(&mut self, conn: u32, data: &[u8]) { let (conn,) = match crate::points_generated::P2358.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -75,7 +75,7 @@ impl Game<'_> {
 
     /// The tiles the far terrain thread finished go to their players, once
     /// their connections have room.
-    pub(super) fn flush_far_terrain(&mut self) {
+    pub(super) fn flush_far_terrain(&mut self) { if let Some(__l) = crate::points_generated::P2357.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };

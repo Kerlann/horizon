@@ -15,7 +15,7 @@ fn corners(b: Aabb) -> [[f64; 3]; 2] {
 
 impl Game<'_> {
     /// The simulated entity (one of the shared entity walk's lists) with `id`.
-    pub(super) fn native_walk_entity(&self, id: u32) -> Option<EntityHandle> {
+    pub(super) fn native_walk_entity(&self, id: u32) -> Option<EntityHandle> { let (id,) = match crate::points_generated::P3080.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.entity_handles()
             .find(|h| with_entity!(self, *h, e => e.id() == id))
     }
@@ -23,7 +23,7 @@ impl Game<'_> {
     pub(super) fn native_target_guest(
         &self,
         t: Target,
-    ) -> Option<&horizon_client::lan::guest::Guest> {
+    ) -> Option<&horizon_client::lan::guest::Guest> { if let Some(__l) = crate::points_generated::P3079.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match t {
             Target::Player => self.command_guest(self.lan_acting?),
             Target::Guest(conn) => self.command_guest(conn),
@@ -34,7 +34,7 @@ impl Game<'_> {
     /// player's is the move its client last reported (`getKnownMovement`); an
     /// entity Horizon doesn't simulate (a display, a painting) has none, so
     /// zero.
-    pub(super) fn native_entity_velocity(&self, entity: EntityRef) -> Option<[f64; 3]> {
+    pub(super) fn native_entity_velocity(&self, entity: EntityRef) -> Option<[f64; 3]> { if let Some(__l) = crate::points_generated::P3078.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let t = self.native_entity_read_target(entity)?;
         if !self.is_logical_server() {
             // The client's copy: its own player's motion, and the motion the
@@ -65,7 +65,7 @@ impl Game<'_> {
     /// previous tick's). Every list the walk keeps has a previous position.
     /// A frame, painting, crystal, spawner, cloud, fangs or marker never
     /// moves, so zero; the dragon uses its own previous position.
-    pub(super) fn native_entity_known_speed(&self, entity: EntityRef) -> Option<Vec3> {
+    pub(super) fn native_entity_known_speed(&self, entity: EntityRef) -> Option<Vec3> { if let Some(__l) = crate::points_generated::P3077.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let t = self.native_entity_target(entity)?;
         if let Some(g) = self.native_target_guest(t) {
             let [x, y, z] = g.known_movement;
@@ -90,7 +90,7 @@ impl Game<'_> {
     /// first passenger, or a mount's rider as `equine::controlled` decides
     /// (saddled; a pig or strider's rider holding the stick; a harnessed
     /// happy ghast), the rule the mount code steers by.
-    fn native_steered(&self, t: Target) -> bool {
+    fn native_steered(&self, t: Target) -> bool { if let Some(__l) = crate::points_generated::P3076.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match t {
             Target::Boat(_) => true,
             Target::Mob(id) => self
@@ -101,7 +101,7 @@ impl Game<'_> {
         }
     }
     /// `Entity.getControllingPassenger` when it is a player.
-    fn native_controlling_player(&self, t: Target, entity: EntityRef) -> Option<EntityRef> {
+    fn native_controlling_player(&self, t: Target, entity: EntityRef) -> Option<EntityRef> { if let Some(__l) = crate::points_generated::P3075.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let steered = self.native_steered(t);
         let first = *self
             .native_entity_passengers(entity)
@@ -121,7 +121,7 @@ impl Game<'_> {
         &mut self,
         entity: EntityRef,
         velocity: [f64; 3],
-    ) -> bool {
+    ) -> bool { let (velocity,) = match crate::points_generated::P3074.get() { Some(__l) => { let mut __a = (velocity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (velocity,) };
         if !velocity.iter().all(|v| v.is_finite()) || self.native_entity_target(entity).is_none() {
             return false;
         }
@@ -136,7 +136,7 @@ impl Game<'_> {
         true
     }
     /// Whether the entity stands on a block (`Entity.onGround`).
-    pub(super) fn native_entity_on_ground(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_on_ground(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3073.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let t = self.native_entity_target(entity)?;
         if let Some(g) = self.native_target_guest(t) {
             return Some(g.on_ground);
@@ -149,7 +149,7 @@ impl Game<'_> {
     /// The entity's box (`Entity.getBoundingBox`): its lowest and highest
     /// corner. None for the kinds whose box Horizon doesn't keep (displays,
     /// markers, End crystals, the dragon).
-    pub(super) fn native_entity_bounding_box(&self, entity: EntityRef) -> Option<[[f64; 3]; 2]> {
+    pub(super) fn native_entity_bounding_box(&self, entity: EntityRef) -> Option<[[f64; 3]; 2]> { if let Some(__l) = crate::points_generated::P3072.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let t = self.native_entity_target(entity)?;
         if let Some(g) = self.native_target_guest(t) {
             return Some(corners(g.bounds()));
@@ -165,17 +165,17 @@ impl Game<'_> {
         Some([lo, hi])
     }
     /// The height of the entity's eyes above its feet (`Entity.getEyeHeight`).
-    pub(super) fn native_entity_eye_height(&self, entity: EntityRef) -> Option<f64> {
+    pub(super) fn native_entity_eye_height(&self, entity: EntityRef) -> Option<f64> { if let Some(__l) = crate::points_generated::P3071.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.target_eye_height(self.native_entity_target(entity)?))
     }
     /// Where the entity's eyes are (`Entity.getEyePosition`).
-    pub(super) fn native_entity_eye_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
+    pub(super) fn native_entity_eye_position(&self, entity: EntityRef) -> Option<[f64; 3]> { if let Some(__l) = crate::points_generated::P3070.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let [x, y, z] = self.native_entity_position(entity)?;
         Some([x, y + self.native_entity_eye_height(entity)?, z])
     }
     /// The unit vector the entity looks along (`Entity.getViewVector`, from
     /// its pitch and yaw).
-    pub(super) fn native_entity_view_vector(&self, entity: EntityRef) -> Option<[f64; 3]> {
+    pub(super) fn native_entity_view_vector(&self, entity: EntityRef) -> Option<[f64; 3]> { if let Some(__l) = crate::points_generated::P3069.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let [yaw, pitch] = self.native_entity_rotation(entity)?;
         let v = horizon_world::view_direction::view_vector(pitch, yaw);
         Some([v.x, v.y, v.z])
@@ -186,7 +186,7 @@ impl Game<'_> {
         &self,
         entity: EntityRef,
         pos: [f64; 3],
-    ) -> Option<f64> {
+    ) -> Option<f64> { let (pos,) = match crate::points_generated::P3068.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let p = self.native_entity_position(entity)?;
         let [dx, dy, dz] = std::array::from_fn(|i| p[i] - pos[i]);
         Some(dx * dx + dy * dy + dz * dz)

@@ -31,14 +31,14 @@ const SNAPSHOT_BUDGET: Duration = Duration::from_millis(2);
 impl Game<'_> {
     /// Save the level's chunk tickets: `/forceload`'s in vanilla's `chunk_tickets.dat`, the
     /// mods' in Horizon's own `mod_chunk_tickets.dat`.
-    pub(super) fn save_chunk_tickets(&self) -> Result<()> {
+    pub(super) fn save_chunk_tickets(&self) -> Result<()> { if let Some(__l) = crate::points_generated::P5115.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.save.save_forced_chunks(self.streaming.commanded())?;
         self.save
             .save_mod_tickets(self.streaming.mod_tickets(), |slot| {
                 mod_api::TicketController::from_slot(slot).map(|c| c.id())
             })
     }
-    pub(super) fn begin_closing_save(&mut self, quit: bool) -> Result<()> {
+    pub(super) fn begin_closing_save(&mut self, quit: bool) -> Result<()> { let (quit,) = match crate::points_generated::P5114.get() { Some(__l) => { let mut __a = (quit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (quit,) };
         if let Some(save) = &mut self.pending_save {
             save.quit |= quit;
             return Ok(());
@@ -110,7 +110,7 @@ impl Game<'_> {
         &mut self,
         all: bool,
         reply: std::sync::mpsc::Sender<String>,
-    ) -> Result<()> {
+    ) -> Result<()> { let (all,) = match crate::points_generated::P5113.get() { Some(__l) => { let mut __a = (all,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (all,) };
         if self.pending_save.is_some() {
             return Err("a world save is already in progress".into());
         }
@@ -135,7 +135,7 @@ impl Game<'_> {
 
     /// `true` means the window can exit. The session lock stays in Game until
     /// every snapshot has been queued and every writer has synced its files.
-    pub(super) fn poll_closing_save(&mut self) -> Result<bool> {
+    pub(super) fn poll_closing_save(&mut self) -> Result<bool> { if let Some(__l) = crate::points_generated::P5112.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut save) = self.pending_save.take() else {
             return Ok(false);
         };
@@ -273,7 +273,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn render_closing_save(&mut self) -> Result<()> {
+    pub(super) fn render_closing_save(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P5111.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if matches!(
             self.pending_save.as_ref().map(|save| &save.stage),
             Some(Stage::Quit)

@@ -62,7 +62,7 @@ pub(super) fn boat_pushes(boat: Aabb, other: Aabb, other_is_boat: bool) -> bool 
 impl Game<'_> {
     /// The players in boat `id`: the window's player (or the server player
     /// acting as it) and the server's other players.
-    pub(super) fn boat_players(&self, id: u32) -> usize {
+    pub(super) fn boat_players(&self, id: u32) -> usize { let (id,) = match crate::points_generated::P682.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let guests = self.lan.as_ref().map_or(0, |h| {
             h.hub
                 .guests
@@ -74,7 +74,7 @@ impl Game<'_> {
     }
     /// The mobs in boat `id`, in their seat order after the players
     /// (`Entity.addPassenger` puts a player first).
-    pub(super) fn boat_mobs(&self, id: u32) -> Vec<usize> {
+    pub(super) fn boat_mobs(&self, id: u32) -> Vec<usize> { let (id,) = match crate::points_generated::P681.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         (0..self.mobs.len())
             .filter(|&j| {
                 let m = &self.mobs[j];
@@ -83,25 +83,25 @@ impl Game<'_> {
             .collect()
     }
     /// `getPassengers().size()` of boat `id`.
-    pub(super) fn boat_passengers(&self, id: u32) -> usize {
+    pub(super) fn boat_passengers(&self, id: u32) -> usize { let (id,) = match crate::points_generated::P680.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.boat_players(id) + self.boat_mobs(id).len()
     }
     /// `AbstractBoat.canAddPassenger`: a seat is free and the boat is not
     /// under water.
-    pub(super) fn boat_has_room(&self, i: usize) -> bool {
+    pub(super) fn boat_has_room(&self, i: usize) -> bool { let (i,) = match crate::points_generated::P679.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         let b = &self.boats[i];
         self.boat_passengers(b.id) < b.max_passengers() && !b.under_water()
     }
     /// Where the player in boat `i` sits: in the middle alone, in front of a
     /// mob.
-    pub(super) fn player_boat_seat(&self, i: usize) -> Vec3 {
+    pub(super) fn player_boat_seat(&self, i: usize) -> Vec3 { let (i,) = match crate::points_generated::P678.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         let b = &self.boats[i];
         let count = self.boat_players(b.id).max(1) + self.boat_mobs(b.id).len();
         b.seat(0, count, false, PLAYER_RIDING_OFFSET, false)
     }
     /// `getRootVehicle` of mob `j`: the mob or boat at the bottom of what it
     /// rides, None when it rides nothing.
-    fn mob_root_vehicle(&self, mut j: usize) -> Option<u32> {
+    fn mob_root_vehicle(&self, mut j: usize) -> Option<u32> { let (mut j,) = match crate::points_generated::P677.get() { Some(__l) => { let mut __a = (j,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (j,) };
         let mut root = None;
         for _ in 0..8 {
             let Some(v) = self.mobs[j].extra.mount else {
@@ -117,7 +117,7 @@ impl Game<'_> {
     }
     /// The players outside boat `id` that push and block it (living, not
     /// spectators), with the window player's team.
-    fn players_outside(&self, id: u32) -> Vec<(Aabb, bool)> {
+    fn players_outside(&self, id: u32) -> Vec<(Aabb, bool)> { let (id,) = match crate::points_generated::P676.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let mut out = Vec::new();
         if let Some(p) = self.player.as_ref()
             && self.riding != Some(id)
@@ -143,7 +143,7 @@ impl Game<'_> {
     /// `getEntityCollisions` of boat `id` within `area`, with
     /// `AbstractBoat.canVehicleCollide`: the other boats, minecarts,
     /// shulkers and pushable mobs and players, but not its own passengers.
-    pub(super) fn boat_obstacles(&self, id: u32, area: Aabb) -> Vec<Aabb> {
+    pub(super) fn boat_obstacles(&self, id: u32, area: Aabb) -> Vec<Aabb> { let (id,) = match crate::points_generated::P675.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let mut out: Vec<Aabb> = (0..self.mobs.len())
             .filter(|&j| {
                 let m = &self.mobs[j];
@@ -165,12 +165,12 @@ impl Game<'_> {
         out
     }
     /// What boat `b` may run into this tick.
-    pub(super) fn boat_move_obstacles(&self, b: &Boat) -> Vec<Aabb> {
+    pub(super) fn boat_move_obstacles(&self, b: &Boat) -> Vec<Aabb> { if let Some(__l) = crate::points_generated::P674.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let reach = b.velocity.length() + 1.0;
         self.boat_obstacles(b.id, b.bounds().inflate(Vec3::new(reach, reach, reach)))
     }
     /// `noEntityCollision(boat, box)` for a new boat (`BoatItem.use`).
-    pub(super) fn boat_entity_collision(&self, bb: Aabb) -> bool {
+    pub(super) fn boat_entity_collision(&self, bb: Aabb) -> bool { if let Some(__l) = crate::points_generated::P673.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // EntityGetter.getEntityCollisions: the box grown by 1e-7.
         let area = bb.inflate(Vec3::new(1.0e-7, 1.0e-7, 1.0e-7));
         !self.boat_obstacles(u32::MAX, area).is_empty()
@@ -182,7 +182,7 @@ impl Game<'_> {
     /// player touching it pushes the two apart once more. Only the window's
     /// own player is moved here: a server's players are pushed by their
     /// clients, which tick the boats near them (`remote_pushes`).
-    pub(super) fn boat_contacts(&mut self, i: usize) {
+    pub(super) fn boat_contacts(&mut self, i: usize) { let (i,) = match crate::points_generated::P672.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let (id, bb, max) = {
             let b = &self.boats[i];
             (b.id, b.bounds(), b.max_passengers())
@@ -325,7 +325,7 @@ impl Game<'_> {
         }
     }
     /// `AbstractBoat.push(mob)` from boat `i`, which has `count` passengers.
-    fn boat_push_mob(&mut self, i: usize, j: usize, count: usize) {
+    fn boat_push_mob(&mut self, i: usize, j: usize, count: usize) { let (i,j,count,) = match crate::points_generated::P671.get() { Some(__l) => { let mut __a = (i,j,count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,j,count,) };
         let (b, m) = (&self.boats[i], &self.mobs[j]);
         if !boat_pushes(b.bounds(), m.bounds(), false) {
             return;
@@ -347,7 +347,7 @@ impl Game<'_> {
     /// `positionRider` and `clampRotation` for the mobs in boats: each sits
     /// in its seat facing the way the boat does, an animal in a full boat
     /// sideways, its head kept within its reach of its body.
-    pub(super) fn seat_boat_mobs(&mut self) {
+    pub(super) fn seat_boat_mobs(&mut self) { if let Some(__l) = crate::points_generated::P670.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for i in 0..self.boats.len() {
             let id = self.boats[i].id;
             let mobs = self.boat_mobs(id);
@@ -414,7 +414,7 @@ impl Game<'_> {
     /// `ejectPassengers` for the mobs in boat `i`: each gets out where
     /// `getDismountLocationForPassenger` puts it (beside the boat when it
     /// broke: `LivingEntity.dismountVehicle`) and can't board for a while.
-    pub(super) fn eject_boat_mobs(&mut self, i: usize, broken: bool) {
+    pub(super) fn eject_boat_mobs(&mut self, i: usize, broken: bool) { let (i,broken,) = match crate::points_generated::P669.get() { Some(__l) => { let mut __a = (i,broken,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,broken,) };
         let b = &self.boats[i];
         let (id, y) = (b.id, b.position.y);
         for j in self.boat_mobs(id) {

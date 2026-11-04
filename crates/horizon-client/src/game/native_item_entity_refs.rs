@@ -7,7 +7,7 @@ use horizon_client::{
 use mod_api::{EntityRef, ItemEntityRef};
 
 impl Game<'_> {
-    fn native_item_entity_index(&self, item: ItemEntityRef) -> Option<usize> {
+    fn native_item_entity_index(&self, item: ItemEntityRef) -> Option<usize> { if let Some(__l) = crate::points_generated::P3790.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Target::Item(id) = self.native_entity_target(item.entity())? else {
             return None;
         };
@@ -16,13 +16,13 @@ impl Game<'_> {
 
     /// Narrows an entity to a dropped item, or None for another kind, a
     /// stale handle, a client, or an item temporarily taken out for ticking.
-    pub(super) fn native_item_entity_ref(&self, entity: EntityRef) -> Option<ItemEntityRef> {
+    pub(super) fn native_item_entity_ref(&self, entity: EntityRef) -> Option<ItemEntityRef> { if let Some(__l) = crate::points_generated::P3789.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let item = ItemEntityRef::new(entity);
         self.native_item_entity_index(item).map(|_| item)
     }
 
     /// `ItemEntity.getItem`: the complete stack, or None if unavailable.
-    pub(super) fn native_item_entity_stack(&self, item: ItemEntityRef) -> Option<ItemStack> {
+    pub(super) fn native_item_entity_stack(&self, item: ItemEntityRef) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P3788.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(
             self.dropped
                 .get(self.native_item_entity_index(item)?)?
@@ -39,7 +39,7 @@ impl Game<'_> {
         &mut self,
         item: ItemEntityRef,
         stack: ItemStack,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3787.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if stack.count == 0
             || &*stack.item == "minecraft:air"
             || self.native_item_entity_index(item).is_none()
@@ -51,7 +51,7 @@ impl Game<'_> {
 
     /// The signed pickup delay; the legacy infinite sentinel reads as vanilla's
     /// 32767. None also covers a stored value outside i32.
-    pub(super) fn native_item_entity_pickup_delay(&self, item: ItemEntityRef) -> Option<i32> {
+    pub(super) fn native_item_entity_pickup_delay(&self, item: ItemEntityRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3786.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let delay = self
             .dropped
             .get(self.native_item_entity_index(item)?)?
@@ -68,7 +68,7 @@ impl Game<'_> {
         &mut self,
         item: ItemEntityRef,
         ticks: i32,
-    ) -> bool {
+    ) -> bool { let (ticks,) = match crate::points_generated::P3785.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         let Some(index) = self.native_item_entity_index(item) else {
             return false;
         };
@@ -80,28 +80,28 @@ impl Game<'_> {
     pub(super) fn native_item_entity_set_default_pickup_delay(
         &mut self,
         item: ItemEntityRef,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3784.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_item_entity_set_pickup_delay(item, 10)
     }
 
     /// `ItemEntity.setNoPickUpDelay`.
-    pub(super) fn native_item_entity_set_no_pickup_delay(&mut self, item: ItemEntityRef) -> bool {
+    pub(super) fn native_item_entity_set_no_pickup_delay(&mut self, item: ItemEntityRef) -> bool { if let Some(__l) = crate::points_generated::P3783.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_item_entity_set_pickup_delay(item, 0)
     }
 
     /// `ItemEntity.setNeverPickUp`: the infinite-delay sentinel 32767.
-    pub(super) fn native_item_entity_set_never_pickup(&mut self, item: ItemEntityRef) -> bool {
+    pub(super) fn native_item_entity_set_never_pickup(&mut self, item: ItemEntityRef) -> bool { if let Some(__l) = crate::points_generated::P3782.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_item_entity_set_pickup_delay(item, i32::from(i16::MAX))
     }
 
     /// `ItemEntity.getAge`, including negative lifetime sentinels.
-    pub(super) fn native_item_entity_age(&self, item: ItemEntityRef) -> Option<i32> {
+    pub(super) fn native_item_entity_age(&self, item: ItemEntityRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3781.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.dropped.get(self.native_item_entity_index(item)?)?.age)
     }
 
     /// The UUID set by `ItemEntity.setTarget`, limiting pickup to that player;
     /// None also means an unavailable item. This is not the thrower.
-    pub(super) fn native_item_entity_target(&self, item: ItemEntityRef) -> Option<u128> {
+    pub(super) fn native_item_entity_target(&self, item: ItemEntityRef) -> Option<u128> { if let Some(__l) = crate::points_generated::P3780.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.dropped
             .get(self.native_item_entity_index(item)?)?
             .target
@@ -113,7 +113,7 @@ impl Game<'_> {
         &mut self,
         item: ItemEntityRef,
         target: Option<u128>,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3779.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(index) = self.native_item_entity_index(item) else {
             return false;
         };
@@ -124,7 +124,7 @@ impl Game<'_> {
     /// `ItemEntity.getOwner`: the thrower as a resolved entity, not the pickup
     /// target. None for no thrower, an unloaded or different-level thrower,
     /// an unavailable handle, or one Horizon cannot resolve.
-    pub(super) fn native_item_entity_owner(&self, item: ItemEntityRef) -> Option<EntityRef> {
+    pub(super) fn native_item_entity_owner(&self, item: ItemEntityRef) -> Option<EntityRef> { if let Some(__l) = crate::points_generated::P3778.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let uuid = self
             .dropped
             .get(self.native_item_entity_index(item)?)?

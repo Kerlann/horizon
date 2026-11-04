@@ -79,7 +79,7 @@ fn duration(seconds: f64) -> String {
 }
 
 impl Game<'_> {
-    pub(super) fn cmd_pregen(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_pregen(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1190.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match id {
             "pregen.start" => {
                 if self.cmds.pregen.is_some() {
@@ -175,7 +175,7 @@ impl Game<'_> {
     /// Move the task's band past the rows that are lit and hand it to the
     /// level's streaming, and report the progress now and then. Runs before
     /// each streaming update of the level in place.
-    pub(in crate::game) fn tick_pregen(&mut self) {
+    pub(in crate::game) fn tick_pregen(&mut self) { if let Some(__l) = crate::points_generated::P1189.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(task) = self.cmds.pregen.as_mut() else {
             return;
         };
@@ -228,7 +228,7 @@ impl Game<'_> {
 
     /// Whether the level in place has a running task, which the server pumps
     /// between its ticks (`pump_chunks`).
-    pub(in crate::game) fn pregen_runs_here(&self) -> bool {
+    pub(in crate::game) fn pregen_runs_here(&self) -> bool { if let Some(__l) = crate::points_generated::P1188.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.cmds
             .pregen
             .as_ref()
@@ -236,14 +236,14 @@ impl Game<'_> {
     }
 
     /// The level a running task needs ticked, whoever is in it.
-    pub(in crate::game) fn pregen_level(&self) -> Option<Dim> {
+    pub(in crate::game) fn pregen_level(&self) -> Option<Dim> { if let Some(__l) = crate::points_generated::P1187.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.cmds.pregen.as_ref().map(|t| t.dim)
     }
 
     /// Keep the workers fed until `until`: collect what they finished and
     /// hand them the next jobs as soon as each one is done, rather than once
     /// a tick.
-    pub(in crate::game) fn pump_chunks(&mut self, until: Instant, paused: bool) {
+    pub(in crate::game) fn pump_chunks(&mut self, until: Instant, paused: bool) { let (paused,) = match crate::points_generated::P1186.get() { Some(__l) => { let mut __a = (paused,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (paused,) };
         // Force-loaded chunks too: decorating in vanilla's order, a chunk
         // waits for its neighbours far more often than once a tick allows.
         // And the players' chunks while they load, as vanilla's server runs
@@ -268,7 +268,7 @@ impl Game<'_> {
     }
 
     /// The console and the player who started the task get the progress.
-    fn pregen_report(&mut self, owner: Option<u32>, message: Text) {
+    fn pregen_report(&mut self, owner: Option<u32>, message: Text) { if let Some(__l) = crate::points_generated::P1185.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.options.dedicated.is_some() {
             super::super::dedicated::log("INFO", &message.plain());
         } else {

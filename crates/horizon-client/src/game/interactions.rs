@@ -64,7 +64,7 @@ impl RemoteInteraction {
 impl Game<'_> {
     /// `Interaction` under the crosshair within the entity reach, as its id
     /// and the hit distance along the view.
-    pub(super) fn interaction_hit(&self) -> Option<(i32, f64)> {
+    pub(super) fn interaction_hit(&self) -> Option<(i32, f64)> { if let Some(__l) = crate::points_generated::P2119.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (eye, dir) = self.aim()?;
         let reach = self.entity_reach;
         self.interactions
@@ -74,12 +74,12 @@ impl Game<'_> {
     }
     /// An `Interaction` keeps `Entity`'s no-op interpolation handler: the
     /// server's position replaces its own at once.
-    pub(super) fn move_remote_interaction(&mut self, id: i32, position: [f64; 3]) {
+    pub(super) fn move_remote_interaction(&mut self, id: i32, position: [f64; 3]) { let (id,position,) = match crate::points_generated::P2118.get() { Some(__l) => { let mut __a = (id,position,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,position,) };
         if let Some(i) = self.interactions.get_mut(&id) {
             i.position = Vec3::new(position[0], position[1], position[2]);
         }
     }
-    pub(super) fn remote_interaction_data(&mut self, id: i32, values: &[(u8, i32, Value)]) -> bool {
+    pub(super) fn remote_interaction_data(&mut self, id: i32, values: &[(u8, i32, Value)]) -> bool { let (id,) = match crate::points_generated::P2117.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(i) = self.interactions.get_mut(&id) else {
             return false;
         };

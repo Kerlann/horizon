@@ -225,7 +225,7 @@ impl Game<'_> {
     /// sheds two entity-effect swirls in its colour while flying, one every
     /// fifth tick in a block; a spectral arrow an effect sparkle at its
     /// position while flying.
-    fn arrow_effect_particles(&mut self) {
+    fn arrow_effect_particles(&mut self) { if let Some(__l) = crate::points_generated::P5018.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut puffs: Vec<(Vec3, i32, u32)> = Vec::new();
         for p in &self.creatures.projectiles {
             let Some(a) = p.arrow.as_ref().filter(|_| p.is_arrow()) else {
@@ -253,7 +253,7 @@ impl Game<'_> {
 
     /// `Arrow.makeParticle`: `count` entity-effect swirls in `color` (an ARGB
     /// int, -1 for none) inside the arrow's 0.5 x 0.5 box.
-    fn arrow_makeparticle(&mut self, at: Vec3, color: i32, count: u32) {
+    fn arrow_makeparticle(&mut self, at: Vec3, color: i32, count: u32) { let (color,count,) = match crate::points_generated::P5017.get() { Some(__l) => { let mut __a = (color,count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (color,count,) };
         // `EntityType.ARROW` is 0.5 x 0.5.
         const SIZE: f64 = 0.5;
         if color == -1 {
@@ -278,7 +278,7 @@ impl Game<'_> {
     /// `Arrow.handleEntityEvent(0)`: a tipped arrow stuck for 600 ticks bursts
     /// into twenty particles in its colour. The server turns it into a plain
     /// arrow and does not send the colour again, so it stops here.
-    pub(super) fn remote_arrow_puff(&mut self, id: u32) {
+    pub(super) fn remote_arrow_puff(&mut self, id: u32) { let (id,) = match crate::points_generated::P5016.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(p) = self.creatures.projectiles.iter_mut().find(|p| p.id == id) else {
             return;
         };
@@ -298,7 +298,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn throwable_bubbles(&mut self, at: Vec<([f64; 3], [f64; 3])>) {
+    pub(super) fn throwable_bubbles(&mut self, at: Vec<([f64; 3], [f64; 3])>) { if let Some(__l) = crate::points_generated::P5015.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let bubble = ParticleOptions::simple(ParticleType::Bubble);
         for (position, speed) in at {
             for _ in 0..4 {
@@ -309,7 +309,7 @@ impl Game<'_> {
 
     /// `ShulkerBullet.tick` on a client: two `END_ROD` particles in its
     /// 0.3125 box (`getRandomX(0.5)`, `getRandomY`, `getRandomZ(0.5)`).
-    pub(super) fn shulker_bullet_trails(&mut self) {
+    pub(super) fn shulker_bullet_trails(&mut self) { if let Some(__l) = crate::points_generated::P5014.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let bullets: Vec<Vec3> = self
             .creatures
             .projectiles
@@ -335,7 +335,7 @@ impl Game<'_> {
         rotation: (f32, f32),
         velocity: [f64; 3],
         data: i32,
-    ) -> bool {
+    ) -> bool { let (id,position,velocity,data,) = match crate::points_generated::P5013.get() { Some(__l) => { let mut __a = (id,position,velocity,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,position,velocity,data,) };
         let id = id as u32;
         let at = Vec3::new(position[0], position[1], position[2]);
         let velocity = Vec3::new(velocity[0], velocity[1], velocity[2]);
@@ -446,7 +446,7 @@ impl Game<'_> {
     }
 
     /// `handleSetEntityData` for these types: what changes how they look.
-    pub(super) fn remote_projectile_data(&mut self, id: i32, values: &[(u8, i32, Value)]) {
+    pub(super) fn remote_projectile_data(&mut self, id: i32, values: &[(u8, i32, Value)]) { let (id,) = match crate::points_generated::P5012.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let id = id as u32;
         self.remote_hook_data(id, values);
         if let Some(at) = self
@@ -600,7 +600,7 @@ impl Game<'_> {
     }
 
     /// A move's rotation for a projectile or trident.
-    pub(super) fn turn_remote_projectile(&mut self, id: i32, rotation: Option<(f32, f32)>) {
+    pub(super) fn turn_remote_projectile(&mut self, id: i32, rotation: Option<(f32, f32)>) { let (id,) = match crate::points_generated::P5011.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let (id, Some((yaw, pitch))) = (id as u32, rotation) else {
             return;
         };
@@ -615,7 +615,7 @@ impl Game<'_> {
 
     /// `Entity.getEyePosition` of a projectile's owner: this game's player or
     /// another player the server sent.
-    fn remote_eye(&self, id: u32) -> Option<Vec3> {
+    fn remote_eye(&self, id: u32) -> Option<Vec3> { let (id,) = match crate::points_generated::P5010.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         if self.remote_player_id() == Some(id) {
             let eye = self.eye_position()?;
             return Some(Vec3::new(eye[0], eye[1], eye[2]));
@@ -629,7 +629,7 @@ impl Game<'_> {
     }
 
     /// This client's own player's entity id on the server.
-    fn remote_player_id(&self) -> Option<u32> {
+    fn remote_player_id(&self) -> Option<u32> { if let Some(__l) = crate::points_generated::P5009.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote
             .as_ref()
             .and_then(|r| u32::try_from(r.entity_id).ok())
@@ -638,7 +638,7 @@ impl Game<'_> {
     /// `FireworkRocketEntity.tick` for the rockets attached to this client's
     /// own player, once the player has moved (it ticks before them in
     /// `ClientLevel.tickEntities`), each with its spark.
-    pub(super) fn tick_own_rockets(&mut self) {
+    pub(super) fn tick_own_rockets(&mut self) { if let Some(__l) = crate::points_generated::P5008.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(me) = self.remote_player_id() else {
             return;
         };
@@ -797,13 +797,13 @@ impl Game<'_> {
     }
 
     /// `AreaEffectCloud.clientTick` for each cloud a server tracks.
-    fn tick_remote_clouds(&mut self) {
+    fn tick_remote_clouds(&mut self) { if let Some(__l) = crate::points_generated::P5007.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for c in &self.potions.clouds {
             cloud_client_tick(&mut self.particles, c.at, c.radius, c.waiting, &c.particle);
         }
     }
 
-    pub(super) fn remove_remote_projectile(&mut self, id: u32) {
+    pub(super) fn remove_remote_projectile(&mut self, id: u32) { let (id,) = match crate::points_generated::P5006.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.fangs.list.retain(|f| f.id != id);
         self.tnts.retain(|t| t.id != id);
         self.falling.retain(|f| f.id != id);
@@ -819,7 +819,7 @@ impl Game<'_> {
     }
 
     /// Every one a server sent (a new connection, level or dimension).
-    pub(super) fn clear_remote_projectiles(&mut self) {
+    pub(super) fn clear_remote_projectiles(&mut self) { if let Some(__l) = crate::points_generated::P5005.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.fangs.list.clear();
         self.tnts.clear();
         self.falling.clear();
@@ -837,7 +837,7 @@ impl Game<'_> {
     }
 
     /// Their kind and place, for `status`.
-    pub(super) fn projectiles_status(&self) -> Vec<serde_json::Value> {
+    pub(super) fn projectiles_status(&self) -> Vec<serde_json::Value> { if let Some(__l) = crate::points_generated::P5004.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use serde_json::json;
         let at = |p: Vec3| [p.x, p.y, p.z];
         let mut out = Vec::new();

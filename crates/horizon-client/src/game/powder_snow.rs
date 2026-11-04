@@ -8,7 +8,7 @@ use horizon_core::{position::BlockPos, random::RandomSource};
 
 impl Game<'_> {
     /// Entity.playEntityOnFireExtinguishedSound
-    pub(super) fn extinguish_sound(&mut self, at: [f64; 3]) {
+    pub(super) fn extinguish_sound(&mut self, at: [f64; 3]) { let (at,) = match crate::points_generated::P4661.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let r = self.particles.random();
         let pitch = 1.6 + (r.next_float() - r.next_float()) * 0.4;
         self.audio.play(
@@ -21,7 +21,7 @@ impl Game<'_> {
     /// `Entity.applyEffectsFromBlocks`: a burning player in the rain
     /// (`isInRain`) has the fire put out (`clearFire`), with the extinguish
     /// sound that everyone near hears.
-    pub(super) fn rain_extinguish_player(&mut self) {
+    pub(super) fn rain_extinguish_player(&mut self) { if let Some(__l) = crate::points_generated::P4660.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(player) = self.player.as_ref() else {
             return;
         };
@@ -35,7 +35,7 @@ impl Game<'_> {
         self.extinguish_sound([at.x, at.y, at.z]);
     }
     /// Whether the block at `pos` is powder snow.
-    pub(super) fn is_powder_snow(&self, pos: [i32; 3]) -> bool {
+    pub(super) fn is_powder_snow(&self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P4659.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         &*self
             .res
             .facts()
@@ -47,7 +47,7 @@ impl Game<'_> {
     /// `PowderSnowBlock.pickupBlock` (air, level event 2001), the used
     /// statistic, the fill sound, FLUID_PICKUP, `ItemUtils.createFilledResult`
     /// and the filled_bucket trigger.
-    pub(super) fn pick_up_powder_snow(&mut self, pos: [i32; 3]) -> Result<()> {
+    pub(super) fn pick_up_powder_snow(&mut self, pos: [i32; 3]) -> Result<()> { let (pos,) = match crate::points_generated::P4658.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let at = BlockPos::new(pos[0], pos[1], pos[2]);
         let creative = self.creative;
         let picked = self.with_level(|b, level, ticks| b.bucket_pickup(level, ticks, at, creative));
@@ -77,7 +77,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `ItemUtils.createFilledResult(held, player, filled)` for the held stack.
-    pub(super) fn filled_result(&mut self, filled: ItemStack) {
+    pub(super) fn filled_result(&mut self, filled: ItemStack) { if let Some(__l) = crate::points_generated::P4657.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let slot = self.held_slot();
         let mut held = HeldSlot {
             game: self,

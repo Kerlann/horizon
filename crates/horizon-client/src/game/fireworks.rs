@@ -223,7 +223,7 @@ pub(super) fn fireworks_of(stack: &ItemStack) -> (u8, Vec<FireworkExplosion>) {
         .unwrap_or((1, Vec::new()))
 }
 impl Game<'_> {
-    pub(super) fn new_rocket(&mut self, at: Vec3, stack: &ItemStack, attached: bool) -> Rocket {
+    pub(super) fn new_rocket(&mut self, at: Vec3, stack: &ItemStack, attached: bool) -> Rocket { let (attached,) = match crate::points_generated::P1907.get() { Some(__l) => { let mut __a = (attached,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (attached,) };
         let (flight, explosions) = fireworks_of(stack);
         // FireworkRocketEntity: motion and lifetime come from the rocket's own random.
         let mut random = super::dispenser::entity_random();
@@ -255,7 +255,7 @@ impl Game<'_> {
         }
     }
     /// `FireworkRocketItem.useOn`: launch from the clicked point.
-    pub(super) fn launch_firework(&mut self, hit: &Hit, stack: &ItemStack) -> bool {
+    pub(super) fn launch_firework(&mut self, hit: &Hit, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P1906.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:firework_rocket"
             || use_on_passes(self.player.as_ref().is_some_and(|p| p.fall_flying))
         {
@@ -284,7 +284,7 @@ impl Game<'_> {
         velocity: Vec3,
         stack: &ItemStack,
         owner: Option<Who>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P1905.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut rocket = self.new_rocket(at, stack, false);
         rocket.velocity = velocity;
         rocket.angled = true;
@@ -296,7 +296,7 @@ impl Game<'_> {
     /// player: half a block out towards the hand holding the rocket while
     /// gliding, zero otherwise. A rocket only in the offhand is in the arm
     /// opposite the main one.
-    fn rocket_hand_angle(&self) -> [f64; 3] {
+    fn rocket_hand_angle(&self) -> [f64; 3] { if let Some(__l) = crate::points_generated::P1904.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.player.as_ref().is_some_and(|p| p.fall_flying) {
             return [0.0; 3];
         }
@@ -312,7 +312,7 @@ impl Game<'_> {
     /// `FireworkRocketEntity.tick` for a rocket attached to the local player:
     /// a glide is boosted towards the look, and the rocket sits at the rocket
     /// hand with the player's motion.
-    pub(super) fn follow_own_player(&mut self, r: &mut Rocket) {
+    pub(super) fn follow_own_player(&mut self, r: &mut Rocket) { if let Some(__l) = crate::points_generated::P1903.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let hand = self.rocket_hand_angle();
         let look = view_vector(self.yaw, self.pitch);
         let Some(p) = self.player.as_mut() else {
@@ -331,7 +331,7 @@ impl Game<'_> {
     }
     /// The trail (`FireworkRocketEntity.tick` on a client): a spark each tick
     /// at the rocket, drifting against its motion.
-    pub(super) fn rocket_spark(&mut self, r: &Rocket) {
+    pub(super) fn rocket_spark(&mut self, r: &Rocket) { if let Some(__l) = crate::points_generated::P1902.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let g = |g: &mut horizon_core::random::LegacyRandom| g.next_gaussian() * 0.05;
         let v = [
             g(&mut self.world.random),
@@ -343,7 +343,7 @@ impl Game<'_> {
             .add(&ParticleOptions::simple(ParticleType::Firework), at, v);
     }
     /// `FireworkRocketItem.use` while gliding: a rocket attached to the player.
-    pub(super) fn boost_firework(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn boost_firework(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P1901.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:firework_rocket"
             || !self.player.as_ref().is_some_and(|p| p.fall_flying)
         {
@@ -363,7 +363,7 @@ impl Game<'_> {
         }
         true
     }
-    pub(super) fn tick_rockets(&mut self) {
+    pub(super) fn tick_rockets(&mut self) { if let Some(__l) = crate::points_generated::P1900.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = if self.rockets.is_empty() {
             Vec::new()
         } else {
@@ -459,7 +459,7 @@ impl Game<'_> {
         }
     }
     /// `FireworkRocketEntity.explode` and `dealExplosionDamage`.
-    fn explode_rocket(&mut self, r: &Rocket) {
+    fn explode_rocket(&mut self, r: &Rocket) { if let Some(__l) = crate::points_generated::P1899.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = [r.position.x, r.position.y, r.position.z];
         // FireworkRocketEntity.explode broadcasts before discard. Send now:
         // tick_lan removes missing tracked entities before flushing effects.
@@ -542,7 +542,7 @@ impl Game<'_> {
             .fireworks(at, v, r.explosions.clone(), camera);
         self.native_firework_explode(r.id, at, r.explosions.len());
     }
-    fn rocket_hurt_mobs(&mut self, hits: &[(u32, f32)], attacker: Option<Who>, at: [f64; 3]) {
+    fn rocket_hurt_mobs(&mut self, hits: &[(u32, f32)], attacker: Option<Who>, at: [f64; 3]) { let (at,) = match crate::points_generated::P1898.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let _attacker = self.knockback_scope(if attacker == Some(Who::Player) {
             self.player.as_ref().map_or(0, |p| p.entity_id)
         } else {
@@ -565,12 +565,12 @@ impl Game<'_> {
         }
     }
     /// The owner as `rocket_targets` names it: a guest by their entity id.
-    fn rocket_owner(&self, r: &Rocket) -> Option<Who> {
+    fn rocket_owner(&self, r: &Rocket) -> Option<Who> { if let Some(__l) = crate::points_generated::P1897.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.shooter_who(r.owner, r.guest)
     }
     /// `Projectile.getOwner` as a target's `Who`: a guest's `Who::Player`
     /// (kept with the connection that shot it) is their entity, not the host.
-    pub(super) fn shooter_who(&self, owner: Option<Who>, guest: Option<u32>) -> Option<Who> {
+    pub(super) fn shooter_who(&self, owner: Option<Who>, guest: Option<u32>) -> Option<Who> { if let Some(__l) = crate::points_generated::P1896.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let owner = owner?;
         let Some(conn) = guest.filter(|_| owner == Who::Player) else {
             return Some(owner);
@@ -581,7 +581,7 @@ impl Game<'_> {
     }
     /// What a rocket can hit (`Projectile.canHitEntity`): living mobs, the
     /// dragon's parts and crystals, the player and the guests.
-    fn rocket_targets(&self) -> Vec<(Who, Aabb)> {
+    fn rocket_targets(&self) -> Vec<(Who, Aabb)> { if let Some(__l) = crate::points_generated::P1895.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut targets: Vec<(Who, Aabb)> = self
             .mobs
             .iter()
@@ -612,7 +612,7 @@ impl Game<'_> {
         r: &Rocket,
         motion: Vec3,
         skip: Option<Who>,
-    ) -> Option<RocketHit> {
+    ) -> Option<RocketHit> { if let Some(__l) = crate::points_generated::P1894.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let from = r.position;
         let mut to = from.add_vector(motion);
         let w = self.mob_world_base(&[]);
@@ -640,7 +640,7 @@ impl Game<'_> {
             .or(block.map(|_| RocketHit::Block))
     }
     /// FireworkRocketEntity.handleEntityEvent: use the synchronized item data.
-    pub(super) fn remote_firework_explosion(&mut self, id: i32) {
+    pub(super) fn remote_firework_explosion(&mut self, id: i32) { let (id,) = match crate::points_generated::P1893.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let camera = self.eye_position();
         if let Some(r) = self.rockets.iter().find(|r| r.id == id as u32) {
             let at = [r.position.x, r.position.y, r.position.z];
@@ -652,7 +652,7 @@ impl Game<'_> {
     /// `dealExplosionDamage` on a player that is not the rocket's
     /// `attachedToEntity`: within 5 blocks, when the rocket sees its feet or
     /// its middle (`ClipContext.Block.COLLIDER`, no fluids).
-    fn rocket_blast_player(&mut self, from: Vec3, damage: f32) {
+    fn rocket_blast_player(&mut self, from: Vec3, damage: f32) { let (damage,) = match crate::points_generated::P1892.get() { Some(__l) => { let mut __a = (damage,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (damage,) };
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -677,7 +677,7 @@ impl Game<'_> {
     /// `from`: the rocket is the direct entity, so the player is knocked away
     /// from it and the death message names it; creative and spectator
     /// players are immune.
-    fn rocket_hurt_player(&mut self, from: Vec3, amount: f32) {
+    fn rocket_hurt_player(&mut self, from: Vec3, amount: f32) { let (amount,) = match crate::points_generated::P1891.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         if self.creative
             || self.spectator()
             || self
@@ -697,7 +697,7 @@ impl Game<'_> {
     }
     /// `FireworkEntityRenderer.submit`: the item (GROUND) facing the camera,
     /// lit at the rocket's light probe.
-    pub(super) fn rocket_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
+    pub(super) fn rocket_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) { let (alpha,) = match crate::points_generated::P1890.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let orientation = glam::Mat4::from_quat(self.camera_orientation());
         // shouldRender: not while attached to an entity (`isAttachedToEntity`).
         for r in self

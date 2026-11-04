@@ -47,7 +47,7 @@ impl Game<'_> {
     /// Pump the real client's connection, without predicting movement: the
     /// oracle's player stays where commands put it. Errors cross the server
     /// boundary through Integrated::stop, including script and save failures.
-    pub(super) fn wait_command_harness(&mut self) -> Result<()> {
+    pub(super) fn wait_command_harness(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P949.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let server = self.integrated.take().ok_or("command harness: no server")?;
         while !server.stopped() {
             self.poll_stationary_client()?;
@@ -87,7 +87,7 @@ impl Game<'_> {
 
     /// The player's portal process finished in the nether portal it stands
     /// in (the oracle's player is not ticked, so neither is the wait).
-    fn harness_portal(&mut self) -> Result<()> {
+    fn harness_portal(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P948.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (conn, plan) = self.harness_owner(|g| {
             let p = g
                 .player
@@ -121,7 +121,7 @@ impl Game<'_> {
         })
     }
     /// Load terrain until the player stands in lit chunks.
-    fn harness_settle(&mut self, deadline: Instant) -> Result<()> {
+    fn harness_settle(&mut self, deadline: Instant) -> Result<()> { if let Some(__l) = crate::points_generated::P947.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         loop {
             self.update_world();
             if let Some(p) = &self.player {
@@ -156,7 +156,7 @@ impl Game<'_> {
             std::thread::sleep(Duration::from_millis(2));
         }
     }
-    pub(super) fn run_command_harness(&mut self, script: &Path, output: &Path) -> Result<()> {
+    pub(super) fn run_command_harness(&mut self, script: &Path, output: &Path) -> Result<()> { if let Some(__l) = crate::points_generated::P946.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let deadline = Instant::now()
             + Duration::from_secs(
                 std::env::var("HORIZON_HARNESS_TIMEOUT")

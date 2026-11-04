@@ -60,7 +60,7 @@ pub(super) fn unpack_loot(
 impl Game<'_> {
     /// The pot's saved tag at `pos` with its loot unpacked (a new one for a
     /// pot without), or None when no pot is there.
-    fn pot_tag(&mut self, pos: [i32; 3]) -> Option<Tag> {
+    fn pot_tag(&mut self, pos: [i32; 3]) -> Option<Tag> { let (pos,) = match crate::points_generated::P1524.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         if &*self.res.facts().get(state).name != "minecraft:decorated_pot" {
             return None;
@@ -90,7 +90,7 @@ impl Game<'_> {
         state: horizon_world::registry::BlockStateId,
         held: Option<&ItemStack>,
         branch: horizon_world::level::UseBranch,
-    ) -> Option<mod_api::NativeInteractionResult> {
+    ) -> Option<mod_api::NativeInteractionResult> { let (pos,) = match crate::points_generated::P1523.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         use mod_api::NativeInteractionResult as Answer;
         if &*self.res.facts().get(state).name != "minecraft:decorated_pot" {
             return None;

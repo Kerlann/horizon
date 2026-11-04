@@ -10,13 +10,13 @@ impl Game<'_> {
     /// layer, as `WorldDrawn::block_sprites` cuts them), where it lies on the side, how its texture runs across it,
     /// its tint source and whether it is cut out, translucent or animated; its particle sprite; whether it is a plain
     /// cube. None for a block the game does not know. The model is the state's first random variant.
-    pub(super) fn native_block_sprites(&self, blocks: &[&str]) -> Vec<Option<BlockSprites>> {
+    pub(super) fn native_block_sprites(&self, blocks: &[&str]) -> Vec<Option<BlockSprites>> { if let Some(__l) = crate::points_generated::P2909.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let lookup = self.native_sprite_lookup();
         blocks.iter().map(|block| lookup.block(block)).collect()
     }
     /// For a client mod: each texture's sprite by name (`minecraft:block/stone`, `block/stone`), none for one no
     /// model uses.
-    pub(super) fn native_texture_sprites(&self, textures: &[&str]) -> Vec<Option<SpriteRef>> {
+    pub(super) fn native_texture_sprites(&self, textures: &[&str]) -> Vec<Option<SpriteRef>> { if let Some(__l) = crate::points_generated::P2908.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let lookup = self.native_sprite_lookup();
         textures
             .iter()
@@ -25,10 +25,10 @@ impl Game<'_> {
     }
     /// For a client mod: changes each time the resources load (a resource pack turned on or off can move every
     /// sprite): ask `native_block_sprites` again then.
-    pub(super) fn native_block_sprites_version(&self) -> u64 {
+    pub(super) fn native_block_sprites_version(&self) -> u64 { if let Some(__l) = crate::points_generated::P2907.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pack.context.render.generation
     }
-    fn native_sprite_lookup(&self) -> Lookup<'_> {
+    fn native_sprite_lookup(&self) -> Lookup<'_> { if let Some(__l) = crate::points_generated::P2906.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // (no renderer, no arrays: every layer counts as array 0's)
         let split = self
             .renderer

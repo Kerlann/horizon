@@ -67,7 +67,7 @@ pub(super) fn entity_post_effect(kind: &str) -> Option<&'static str> {
 
 impl Game<'_> {
     /// `ClientPacketListener.handleSetCamera`.
-    pub(super) fn remote_set_camera(&mut self, camera_id: i32) {
+    pub(super) fn remote_set_camera(&mut self, camera_id: i32) { let (camera_id,) = match crate::points_generated::P4970.get() { Some(__l) => { let mut __a = (camera_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (camera_id,) };
         let in_level = self.mobs.iter().any(|m| m.id == camera_id as u32);
         let player = self
             .remote
@@ -83,28 +83,28 @@ impl Game<'_> {
     }
     /// `GameRenderer.checkEntityPostEffect` for the camera entity, or for none
     /// (`first_person` false: the third-person view clears it).
-    pub(super) fn check_entity_post_effect(&mut self, first_person: bool) {
+    pub(super) fn check_entity_post_effect(&mut self, first_person: bool) { let (first_person,) = match crate::points_generated::P4969.get() { Some(__l) => { let mut __a = (first_person,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (first_person,) };
         self.spectated_post_effect = self
             .camera_mob()
             .filter(|_| first_person)
             .and_then(|m| entity_post_effect(&m.kind.id));
     }
     /// The entity a server attached the view to, when it is not the player.
-    pub(super) fn remote_camera_id(&self) -> Option<u32> {
+    pub(super) fn remote_camera_id(&self) -> Option<u32> { if let Some(__l) = crate::points_generated::P4968.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote.as_ref()?.camera.map(|id| id as u32)
     }
     /// `LocalPlayer.isControlledCamera`: the view is the player's own.
-    pub(super) fn controls_camera(&self) -> bool {
+    pub(super) fn controls_camera(&self) -> bool { if let Some(__l) = crate::points_generated::P4967.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote_camera_id().is_none()
     }
     /// The mob the view follows, while the level still holds it.
-    pub(super) fn camera_mob(&self) -> Option<&Mob> {
+    pub(super) fn camera_mob(&self) -> Option<&Mob> { if let Some(__l) = crate::points_generated::P4966.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let id = self.remote_camera_id()?;
         self.mobs.iter().find(|m| m.id == id)
     }
     /// The entity under a spectator's crosshair (`Minecraft.hitResult` as an
     /// `EntityHitResult`): the nearest mob or object before any block.
-    pub(super) fn spectator_click_target(&self) -> Option<i32> {
+    pub(super) fn spectator_click_target(&self) -> Option<i32> { if let Some(__l) = crate::points_generated::P4965.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mob = self.mob_hit().map(|(i, d)| (self.mobs[i].id as i32, d));
         let object = self.remote_object_hit(false).map(|h| (h.id, h.distance));
         [mob, object]
@@ -115,7 +115,7 @@ impl Game<'_> {
             .map(|(id, _)| id)
     }
     /// `LevelRenderer`: the camera entity is not drawn from its own eyes.
-    pub(super) fn hides_as_camera(&self, id: u32) -> bool {
+    pub(super) fn hides_as_camera(&self, id: u32) -> bool { let (id,) = match crate::points_generated::P4964.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.camera_type.first_person() && self.remote_camera_id() == Some(id)
     }
 }

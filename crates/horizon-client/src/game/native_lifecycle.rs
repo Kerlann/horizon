@@ -181,7 +181,7 @@ impl NativeLifecycle {
 
 impl Game<'_> {
     /// The role is fixed at construction; a mirror `Game` is remote whatever it is.
-    fn native_lifecycle_authority(&self) -> NativeAuthority {
+    fn native_lifecycle_authority(&self) -> NativeAuthority { if let Some(__l) = crate::points_generated::P3856.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.remote.is_some() {
             return NativeAuthority::RemoteClient;
         }
@@ -192,19 +192,19 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn native_lifecycle_open_started(&mut self) {
+    pub(super) fn native_lifecycle_open_started(&mut self) { if let Some(__l) = crate::points_generated::P3855.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_lifecycle
             .begin_open(self.native_lifecycle_authority());
     }
 
-    pub(super) fn native_lifecycle_world_ready(&mut self) {
+    pub(super) fn native_lifecycle_world_ready(&mut self) { if let Some(__l) = crate::points_generated::P3854.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(context) = self.native_lifecycle.world_open_ready() {
             self.native_world_lifecycle(&context, WorldPhase::WorldOpenReady, "");
         }
     }
 
     /// `error_text` is the engine's own error text, unchanged.
-    pub(super) fn native_lifecycle_world_failed(&mut self, error_text: &str) {
+    pub(super) fn native_lifecycle_world_failed(&mut self, error_text: &str) { if let Some(__l) = crate::points_generated::P3853.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The server levels that opened before the failure close first.
         if self.remote.is_none() {
             self.native_levels_closing();
@@ -215,7 +215,7 @@ impl Game<'_> {
     }
 
     /// Report a server-loop or shutdown failure once and retire its epoch.
-    pub(super) fn native_lifecycle_close_failed(&mut self, error_text: &str) {
+    pub(super) fn native_lifecycle_close_failed(&mut self, error_text: &str) { if let Some(__l) = crate::points_generated::P3852.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_none() {
             self.native_levels_closing();
         }
@@ -226,7 +226,7 @@ impl Game<'_> {
 
     /// After the final save, before the lock release. Client epochs retire
     /// without dispatching server lifecycle hooks.
-    pub(super) fn native_lifecycle_world_closed(&mut self) {
+    pub(super) fn native_lifecycle_world_closed(&mut self) { if let Some(__l) = crate::points_generated::P3851.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Each server level closes after the final save (`LevelEvent.Unload`).
         if self.remote.is_none() {
             self.native_levels_closing();
@@ -236,7 +236,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn native_lifecycle_server_tick_start(&mut self, world_running: bool) {
+    pub(super) fn native_lifecycle_server_tick_start(&mut self, world_running: bool) { let (world_running,) = match crate::points_generated::P3850.get() { Some(__l) => { let mut __a = (world_running,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (world_running,) };
         if let Some((context, phase)) = self.native_lifecycle.server_tick_start(world_running) {
             self.native_lifecycle.read_scope = true;
             self.native_server_tick(&context, phase);
@@ -245,7 +245,7 @@ impl Game<'_> {
     }
 
     /// An errored tick returned at `result?` before this site.
-    pub(super) fn native_lifecycle_server_tick_end(&mut self, paused: bool) {
+    pub(super) fn native_lifecycle_server_tick_end(&mut self, paused: bool) { let (paused,) = match crate::points_generated::P3849.get() { Some(__l) => { let mut __a = (paused,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (paused,) };
         if let Some((context, phase)) = self.native_lifecycle.server_tick_end(paused) {
             self.native_lifecycle.read_scope = true;
             self.native_server_tick(&context, phase);

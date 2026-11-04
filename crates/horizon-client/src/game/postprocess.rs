@@ -12,7 +12,7 @@ use std::sync::Arc;
 const POSTPROCESS_FLAGS: i32 = 276;
 
 impl Game<'_> {
-    pub(super) fn postprocess_chunks(&mut self) -> Result<()> {
+    pub(super) fn postprocess_chunks(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P4600.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ready: Vec<(i32, i32)> = self
             .world
             .chunks

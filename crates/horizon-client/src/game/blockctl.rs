@@ -35,7 +35,7 @@ fn parse_state(text: &str) -> Result<BlockState> {
 }
 
 impl Game<'_> {
-    fn state_text(&self, state: BlockStateId) -> String {
+    fn state_text(&self, state: BlockStateId) -> String { if let Some(__l) = crate::points_generated::P648.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(s) = self.pack.assets.registry.state(state) else {
             return "?".into();
         };
@@ -49,7 +49,7 @@ impl Game<'_> {
             .collect();
         format!("{}[{}]", s.name, props.join(","))
     }
-    fn put_block(&mut self, pos: [i32; 3], state: BlockStateId) -> Result<()> {
+    fn put_block(&mut self, pos: [i32; 3], state: BlockStateId) -> Result<()> { let (pos,) = match crate::points_generated::P647.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let name = self.res.facts().get(state).name.clone();
         self.world.block_entities.remove(&(pos[0], pos[1], pos[2]));
         self.level_set(pos, state)?;
@@ -61,7 +61,7 @@ impl Game<'_> {
         Ok(())
     }
     /// Block commands; None when `words[0]` is not one of them.
-    pub(super) fn block_command(&mut self, words: &[&str]) -> Result<Option<Value>> {
+    pub(super) fn block_command(&mut self, words: &[&str]) -> Result<Option<Value>> { if let Some(__l) = crate::points_generated::P646.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ours = matches!(
             words.first(),
             Some(&("setblock" | "fill" | "getblock" | "container"))

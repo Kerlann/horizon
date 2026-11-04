@@ -60,7 +60,7 @@ impl Game<'_> {
     pub(super) fn chat_tree_for(
         &mut self,
         base: Option<&horizon_client::command::Dispatcher>,
-    ) -> horizon_client::command::Dispatcher {
+    ) -> horizon_client::command::Dispatcher { if let Some(__l) = crate::points_generated::P861.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut names = Vec::new();
         self.native_commands(&mut names);
         // The window answers this one itself, as it does a client mod's.
@@ -456,7 +456,7 @@ impl Game<'_> {
     /// thread while the title screen is up: the first world opened or server joined
     /// built them in its frame (20 ms of the Join click on an M4 Pro). Whoever needs one
     /// before it is done waits for it, as before.
-    pub(super) fn preload_registries(&self) {
+    pub(super) fn preload_registries(&self) { if let Some(__l) = crate::points_generated::P860.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.options.dedicated.is_some() {
             return;
         }
@@ -480,11 +480,11 @@ impl Game<'_> {
         }
     }
     /// `PlayerList.isOp` for the single-player owner: the world's Allow Commands.
-    pub(super) fn allow_commands(&self) -> bool {
+    pub(super) fn allow_commands(&self) -> bool { if let Some(__l) = crate::points_generated::P859.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.level.allow_commands == Some(true)
     }
     /// `IntegratedServer.setWorldAllowCommands`, then `updatePermissions`.
-    pub(super) fn set_allow_commands(&mut self, allow: bool) {
+    pub(super) fn set_allow_commands(&mut self, allow: bool) { let (allow,) = match crate::points_generated::P858.get() { Some(__l) => { let mut __a = (allow,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (allow,) };
         self.level.allow_commands = Some(allow);
         self.ui.registries.permission = owner_permission(allow);
     }
@@ -497,7 +497,7 @@ impl Game<'_> {
         out
     }
     /// Registry contents for argument parsing (built when a world opens).
-    pub(super) fn build_registries(&mut self) {
+    pub(super) fn build_registries(&mut self) { if let Some(__l) = crate::points_generated::P857.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let permission = owner_permission(self.allow_commands());
         let reg = &mut self.ui.registries;
         reg.permission = permission;
@@ -654,7 +654,7 @@ impl Game<'_> {
     /// `ClientSuggestionProvider.getRelevantCoordinates` and
     /// `getAbsoluteCoordinates` read `Minecraft.hitResult` only when it is a
     /// block: an entity in front of the block leaves the `~` defaults.
-    fn refresh_dynamic_registries(&mut self) {
+    fn refresh_dynamic_registries(&mut self) { if let Some(__l) = crate::points_generated::P856.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let hit = if self.pick_entity_hit().is_some() {
             None
         } else {
@@ -673,7 +673,7 @@ impl Game<'_> {
     /// `ChatComponent.createScreen`: T or / opens the chat with the draft kept
     /// last time, when this method can restore it (a command draft only for
     /// /), else with its prefix.
-    pub(super) fn open_chat_method(&mut self, prefix: &str) {
+    pub(super) fn open_chat_method(&mut self, prefix: &str) { if let Some(__l) = crate::points_generated::P855.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // handleKeybinds: the number keys select before key.chat and key.command.
         self.select_queued_hotbar();
         let command = prefix == "/";
@@ -686,7 +686,7 @@ impl Game<'_> {
         self.open_chat(draft.as_deref().unwrap_or(prefix));
         self.ui.chat_draft_shown = draft.is_some() && self.ui.chat_screen.is_some();
     }
-    pub(super) fn open_chat(&mut self, initial: &str) {
+    pub(super) fn open_chat(&mut self, initial: &str) { if let Some(__l) = crate::points_generated::P854.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player.is_none() {
             return;
         }
@@ -720,7 +720,7 @@ impl Game<'_> {
         self.right = false;
         self.capture(false);
     }
-    pub(super) fn close_chat(&mut self, reason: ChatExit) {
+    pub(super) fn close_chat(&mut self, reason: ChatExit) { if let Some(__l) = crate::points_generated::P853.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // InBedChatScreen.onClose: leaving the screen means getting up; the
         // screen goes once the player has woken (`tick_in_bed_chat`).
         if self.ui.in_bed_chat && self.sleeping.is_some() {
@@ -745,7 +745,7 @@ impl Game<'_> {
     /// `shouldDiscardDraft` (closed on purpose without Save Chat Drafts, or
     /// sent); blank text discards the draft. A draft still shown unchanged
     /// stays as it is.
-    fn keep_chat_draft(&mut self, text: &str, reason: ChatExit) {
+    fn keep_chat_draft(&mut self, text: &str, reason: ChatExit) { if let Some(__l) = crate::points_generated::P852.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let unchanged =
             self.ui.chat_draft_shown && self.ui.chat_draft.as_ref().is_some_and(|d| d.text == text);
         if should_discard_draft(reason, self.settings.file.bool("saveChatDrafts"))
@@ -762,7 +762,7 @@ impl Game<'_> {
     /// `Gui.tick`: a sleeper gets `InBedChatScreen`; when the player has
     /// woken (`onPlayerWokeUp`) it closes, or turns into the plain chat
     /// screen if something was typed.
-    pub(super) fn tick_in_bed_chat(&mut self) {
+    pub(super) fn tick_in_bed_chat(&mut self) { if let Some(__l) = crate::points_generated::P851.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Another screen took over the open chat (death, a container the
         // server opened): `ChatScreen.removed` runs with the INTERRUPTED reason.
         if self.screen != Screen::Chat && self.ui.chat_screen.is_some() {
@@ -802,11 +802,11 @@ impl Game<'_> {
         (width as i32 / 2 - 100, height as i32 - 40, 200, 20)
     }
     /// `Minecraft.computeChatAbilities` from the Chat option.
-    pub(super) fn chat_abilities(&self) -> ChatAbilities {
+    pub(super) fn chat_abilities(&self) -> ChatAbilities { if let Some(__l) = crate::points_generated::P850.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         ChatAbilities::new(ChatVisibility::from_option(self.settings.chat_visibility))
     }
     /// A chat message from the game (ChatComponent.addServerSystemMessage).
-    pub(super) fn system_message(&mut self, text: Text) {
+    pub(super) fn system_message(&mut self, text: Text) { if let Some(__l) = crate::points_generated::P849.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(capture) = self.chat_capture.as_mut() {
             capture.push(text);
             return;
@@ -825,7 +825,7 @@ impl Game<'_> {
     /// checks `canReceivePlayerMessages` for these, so Commands Only and
     /// Hidden drop them; command feedback (`/list`, `/tp`) is a system
     /// message and takes the system-message permission instead.
-    pub(super) fn player_message(&mut self, text: Text) {
+    pub(super) fn player_message(&mut self, text: Text) { if let Some(__l) = crate::points_generated::P848.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(capture) = self.chat_capture.as_mut() {
             capture.push(text);
             return;
@@ -838,7 +838,7 @@ impl Game<'_> {
     }
     /// A line on the window's own chat when the Chat option lets `source`
     /// through.
-    fn local_chat_line(&mut self, text: Text, indicator: Option<u32>, source: ChatSource) {
+    fn local_chat_line(&mut self, text: Text, indicator: Option<u32>, source: ChatSource) { if let Some(__l) = crate::points_generated::P847.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.ui.chat.shows(source) {
             return;
         }
@@ -853,7 +853,7 @@ impl Game<'_> {
         );
     }
     /// Keys while the chat screen is open.
-    pub(super) fn chat_key(&mut self, event: &KeyEvent) {
+    pub(super) fn chat_key(&mut self, event: &KeyEvent) { if let Some(__l) = crate::points_generated::P846.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(shortcut) = self.edit_shortcut(event) {
             let m = Measure(&self.gui.atlas.font);
             let c = Commands {
@@ -871,7 +871,7 @@ impl Game<'_> {
         self.chat_key_code(key, event.text.as_deref());
     }
     /// A key (and the text it typed) while the chat screen is open.
-    pub(super) fn chat_key_code(&mut self, key: KeyCode, typed_text: Option<&str>) {
+    pub(super) fn chat_key_code(&mut self, key: KeyCode, typed_text: Option<&str>) { if let Some(__l) = crate::points_generated::P845.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The live modifiers, not `self.keys`: every ModifiersChanged runs
         // sync_toggle, which drops ShiftLeft and ControlLeft from `self.keys`
         // while a screen is open.
@@ -942,7 +942,7 @@ impl Game<'_> {
         id: i32,
         range: (usize, usize),
         list: Vec<(String, Option<String>)>,
-    ) {
+    ) { let (id,) = match crate::points_generated::P844.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {
             dispatcher: chat_tree(&self.remote),
@@ -953,7 +953,7 @@ impl Game<'_> {
         }
     }
     /// Text typed into the chat box (control socket `chat`).
-    pub(super) fn chat_type(&mut self, text: &str) {
+    pub(super) fn chat_type(&mut self, text: &str) { if let Some(__l) = crate::points_generated::P843.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {
             dispatcher: chat_tree(&self.remote),
@@ -968,7 +968,7 @@ impl Game<'_> {
     /// 256 UTF-16 units the packet holds), into history, then as a command or
     /// a chat line. The Chat option's restrictions stop the message here too,
     /// so a control-socket `chat` cannot send what the player's setting hides.
-    pub(super) fn handle_chat_input(&mut self, message: &str) {
+    pub(super) fn handle_chat_input(&mut self, message: &str) { if let Some(__l) = crate::points_generated::P842.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let message = normalize_chat_message(message);
         if message.is_empty() || !self.chat_abilities().allows(&message) {
             return;
@@ -1006,7 +1006,7 @@ impl Game<'_> {
             );
         }
     }
-    pub(super) fn chat_scroll(&mut self, amount: f32) {
+    pub(super) fn chat_scroll(&mut self, amount: f32) { let (amount,) = match crate::points_generated::P841.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let cursor = self.cursor;
         let height = self.renderer.as_ref().map_or(720.0, |r| {
             HudBatch::new([r.config.width, r.config.height]).height
@@ -1023,7 +1023,7 @@ impl Game<'_> {
         let amount = amount.clamp(-1.0, 1.0) * if shift { 1.0 } else { 7.0 };
         self.ui.chat.scroll_by(amount as i32, true);
     }
-    pub(super) fn chat_click(&mut self) {
+    pub(super) fn chat_click(&mut self) { if let Some(__l) = crate::points_generated::P840.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let cursor = self.cursor;
         let height = self.renderer.as_ref().map_or(720.0, |r| {
             HudBatch::new([r.config.width, r.config.height]).height
@@ -1098,7 +1098,7 @@ impl Game<'_> {
     }
     /// `Screen.clickUrlAction`: nothing with Web Links off, else the link
     /// opens, after the confirmation unless Prompt on Links is off.
-    pub(super) fn click_url(&mut self, url: String) {
+    pub(super) fn click_url(&mut self, url: String) { if let Some(__l) = crate::points_generated::P839.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.settings.chat_links {
             return;
         }
@@ -1114,7 +1114,7 @@ impl Game<'_> {
         &self,
         url: &str,
         size: (f32, f32),
-    ) -> horizon_client::confirm_screen::Choice {
+    ) -> horizon_client::confirm_screen::Choice { if let Some(__l) = crate::points_generated::P838.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let warning = Text::translate("chat.link.warning", &[]).with_color(0xFF_CCCC);
         let message = Text::literal(url)
             .append(Text::literal("\n"))
@@ -1129,7 +1129,7 @@ impl Game<'_> {
             100.0,
         )
     }
-    pub(super) fn draw_link_prompt(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_link_prompt(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P837.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(url) = &self.link_prompt else {
             return;
         };
@@ -1154,14 +1154,14 @@ impl Game<'_> {
             .draw(batch, atlas, self.cursor, &labels);
     }
     /// The prompt's answer: the link opens on yes; either way the chat is back.
-    pub(super) fn answer_link_prompt(&mut self, yes: bool) {
+    pub(super) fn answer_link_prompt(&mut self, yes: bool) { let (yes,) = match crate::points_generated::P836.get() { Some(__l) => { let mut __a = (yes,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (yes,) };
         if let Some(url) = self.link_prompt.take()
             && yes
         {
             super::packs::open_uri(&url);
         }
     }
-    pub(super) fn link_prompt_click(&mut self) {
+    pub(super) fn link_prompt_click(&mut self) { if let Some(__l) = crate::points_generated::P835.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(url) = self.link_prompt.clone() else {
             return;
         };
@@ -1182,7 +1182,7 @@ impl Game<'_> {
     /// without adding it to the chat history. A client mod's command goes
     /// first, as `ClientPacketListener.sendUnattendedCommand` lets client
     /// commands take it.
-    pub(super) fn click_command(&mut self, command: &str) {
+    pub(super) fn click_command(&mut self, command: &str) { if let Some(__l) = crate::points_generated::P834.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let command = command.strip_prefix('/').unwrap_or(command);
         if self.client_mod_command(command) {
             return;
@@ -1194,7 +1194,7 @@ impl Game<'_> {
         }
     }
     /// Chat lines over the HUD (focused while the chat screen is open).
-    pub(super) fn draw_chat(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_chat(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P833.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let focused = self.screen == Screen::Chat;
         if self.ui.hide_gui && !focused {
             return;
@@ -1241,7 +1241,7 @@ impl Game<'_> {
         }
         Some(horizon_protocol::crypto::uuid_string(bits))
     }
-    pub(super) fn draw_chat_screen(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_chat_screen(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P832.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut screen) = self.ui.chat_screen.take() else {
             return;
         };
@@ -1342,7 +1342,7 @@ impl Game<'_> {
         }
     }
     /// `Font.split`: a tooltip text wrapped at `width`, one white row per line.
-    pub(super) fn wrapped_rows(&self, text: &Text, width: i32) -> Vec<(Text, u32)> {
+    pub(super) fn wrapped_rows(&self, text: &Text, width: i32) -> Vec<(Text, u32)> { let (width,) = match crate::points_generated::P831.get() { Some(__l) => { let mut __a = (width,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (width,) };
         let split = self
             .gui
             .atlas
@@ -1352,7 +1352,7 @@ impl Game<'_> {
     }
     /// Advance the overworld clock (ServerClockManager.tick) when
     /// `advance_time` allows it.
-    pub(super) fn advance_clock(&mut self) {
+    pub(super) fn advance_clock(&mut self) { if let Some(__l) = crate::points_generated::P830.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.ui.rules.bool("advance_time") || self.ui.clock.paused {
             return;
         }
@@ -1365,7 +1365,7 @@ impl Game<'_> {
     /// `ServerClockInstance.packNetworkState`: the rate players' clients
     /// advance the overworld clock at, 0 while it is paused (`/time pause`)
     /// or `advance_time` is off.
-    pub(super) fn network_clock_rate(&self) -> f32 {
+    pub(super) fn network_clock_rate(&self) -> f32 { if let Some(__l) = crate::points_generated::P829.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.ui.rules.bool("advance_time") && !self.ui.clock.paused {
             self.ui.clock.rate
         } else {
@@ -1373,7 +1373,7 @@ impl Game<'_> {
         }
     }
     /// The engine-side rule values (block behaviour and health).
-    pub(super) fn level_rules(&self) -> horizon_world::level::GameRules {
+    pub(super) fn level_rules(&self) -> horizon_world::level::GameRules { if let Some(__l) = crate::points_generated::P828.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = &self.ui.rules;
         horizon_world::level::GameRules {
             water_source_conversion: r.bool("water_source_conversion"),
@@ -1389,7 +1389,7 @@ impl Game<'_> {
         }
     }
     /// Apply rules mirrored in other state (natural regeneration, difficulty).
-    pub(super) fn sync_rules(&mut self) {
+    pub(super) fn sync_rules(&mut self) { if let Some(__l) = crate::points_generated::P827.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.world.health_rules.natural_regeneration =
             self.ui.rules.bool("natural_health_regeneration");
         // Player.isInvulnerableTo: the damage-type rules.
@@ -1407,7 +1407,7 @@ impl Game<'_> {
         };
     }
     /// Load per-world command state when a world opens.
-    pub(super) fn load_world_state(&mut self) {
+    pub(super) fn load_world_state(&mut self) { if let Some(__l) = crate::points_generated::P826.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.ui.rules =
             GameRules::load_with_features(&self.world_root, &self.level.enabled_features);
         self.ui.clock = WorldClock::default();
@@ -1440,7 +1440,7 @@ impl Game<'_> {
     /// Save the clock beside level.dat (Level.write saves the game rules: a
     /// second writer of game_rules.dat could leave it with the rules loaded
     /// when the world opened).
-    pub(super) fn save_world_state(&mut self) {
+    pub(super) fn save_world_state(&mut self) { if let Some(__l) = crate::points_generated::P825.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.world_root.as_os_str().is_empty() {
             return;
         }
@@ -1489,11 +1489,11 @@ impl Game<'_> {
         }
     }
     /// F1 hides the HUD (see `hud`); the screenshot key still works.
-    pub(super) fn toggle_hide_gui(&mut self) {
+    pub(super) fn toggle_hide_gui(&mut self) { if let Some(__l) = crate::points_generated::P824.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.ui.hide_gui = !self.ui.hide_gui;
     }
     /// F2: ScreenShot.grab into `screenshots/` with vanilla's file name.
-    pub(super) fn take_screenshot(&mut self) {
+    pub(super) fn take_screenshot(&mut self) { if let Some(__l) = crate::points_generated::P823.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let dir = horizon_client::logging::player_dir().join("screenshots");
         if std::fs::create_dir_all(&dir).is_err() {
             return;
@@ -1513,7 +1513,7 @@ impl Game<'_> {
     /// `Minecraft.handleGlobalKeyPress`'s screenshot branch: the
     /// `key.screenshot` mapping (F2 by default) takes the picture before a
     /// screen or a text box sees the key, and the debug modifier suppresses it.
-    pub(super) fn screenshot_shortcut(&mut self, key: KeyCode, repeat: bool) -> bool {
+    pub(super) fn screenshot_shortcut(&mut self, key: KeyCode, repeat: bool) -> bool { let (repeat,) = match crate::points_generated::P822.get() { Some(__l) => { let mut __a = (repeat,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (repeat,) };
         if repeat || self.debug_keys.modifier_down {
             return false;
         }
@@ -1525,7 +1525,7 @@ impl Game<'_> {
         true
     }
     /// After a frame: report a finished F2 screenshot in chat.
-    pub(super) fn finish_screenshot(&mut self, result: &std::result::Result<[u32; 2], String>) {
+    pub(super) fn finish_screenshot(&mut self, result: &std::result::Result<[u32; 2], String>) { if let Some(__l) = crate::points_generated::P821.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(path) = self.ui.screenshot_message.take() else {
             return;
         };

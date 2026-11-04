@@ -112,13 +112,13 @@ fn warning_texts() -> (Text, Text, [Text; 2]) {
 
 impl Game<'_> {
     /// Whether a dialog screen takes the input.
-    pub(super) fn dialog_open(&self) -> bool {
+    pub(super) fn dialog_open(&self) -> bool { if let Some(__l) = crate::points_generated::P1596.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let d = &self.dialogs;
         d.open.is_some() || d.waiting.is_some() || d.warning
     }
     /// Whether the dialog's focus is one of its text inputs, which takes the
     /// keys.
-    pub(super) fn dialog_typing(&self) -> bool {
+    pub(super) fn dialog_typing(&self) -> bool { if let Some(__l) = crate::points_generated::P1595.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let d = &self.dialogs;
         !d.warning
             && d.waiting.is_none()
@@ -131,7 +131,7 @@ impl Game<'_> {
 
     /// `showDialog`: the dialog replaces an open one (and a waiting screen);
     /// under the warning screen, it is what Back returns to.
-    pub(super) fn show_dialog(&mut self, tag: &Tag) {
+    pub(super) fn show_dialog(&mut self, tag: &Tag) { if let Some(__l) = crate::points_generated::P1594.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut dialog) = Dialog::parse(tag) else {
             log::warn!("Horizon: failed to show dialog for data {tag:?}");
             return;
@@ -165,7 +165,7 @@ impl Game<'_> {
     }
 
     /// The parsed dialog's screen, its inputs at their initial values.
-    fn open_dialog(&mut self, dialog: Dialog) {
+    fn open_dialog(&mut self, dialog: Dialog) { if let Some(__l) = crate::points_generated::P1593.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let values = dialog.inputs.iter().map(|i| i.control.initial()).collect();
         let font = &self.gui.atlas.font;
         let fields = dialog
@@ -232,18 +232,18 @@ impl Game<'_> {
 
     /// `clearDialog`: the dialog closes (under the warning screen, Back then
     /// returns to what was open before it).
-    pub(super) fn clear_dialog(&mut self) {
+    pub(super) fn clear_dialog(&mut self) { if let Some(__l) = crate::points_generated::P1592.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.dialogs.open.take().is_some() && !self.dialog_open() {
             self.dialog_closed();
         }
     }
 
     /// Every dialog screen goes (a disconnect, or the level loading screen).
-    pub(super) fn close_dialogs(&mut self) {
+    pub(super) fn close_dialogs(&mut self) { if let Some(__l) = crate::points_generated::P1591.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.dialogs = DialogState::default();
     }
 
-    fn dialog_closed(&mut self) {
+    fn dialog_closed(&mut self) { if let Some(__l) = crate::points_generated::P1590.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player.is_some() && self.screen == super::Screen::Playing && self.title.is_none() {
             self.capture(true);
         }
@@ -259,7 +259,7 @@ impl Game<'_> {
     }
 
     /// The confirmation's no: the dialog again, with what was typed in it.
-    pub(super) fn reopen_dialog(&mut self, dialog: ClosedDialog) {
+    pub(super) fn reopen_dialog(&mut self, dialog: ClosedDialog) { if let Some(__l) = crate::points_generated::P1589.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.open_screen_overlay("dialog", |game| {
             game.dialogs.open = Some(*dialog.0);
             game.dialogs.waiting = None;
@@ -268,7 +268,7 @@ impl Game<'_> {
 
     /// `DialogScreen.runAction`: the click event, then the screen the dialog's
     /// `after_action` leaves.
-    fn run_dialog_action(&mut self, click: Option<Click>, after: AfterAction) -> Result<()> {
+    fn run_dialog_action(&mut self, click: Option<Click>, after: AfterAction) -> Result<()> { if let Some(__l) = crate::points_generated::P1588.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // defaultHandleClickEvent: an open_url never sets the screen itself, so
         // the dialog stays unless the confirmation takes over (Web Links off,
         // or Prompt on Links off, opens nothing or the browser behind it).
@@ -348,7 +348,7 @@ impl Game<'_> {
     }
 
     /// A `show_dialog` click event's dialog: a registry id or the dialog itself.
-    pub(super) fn show_dialog_ref(&mut self, dialog: &Tag) {
+    pub(super) fn show_dialog_ref(&mut self, dialog: &Tag) { if let Some(__l) = crate::points_generated::P1587.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match dialog {
             Tag::String(id) => {
                 let id = id.to_string_lossy();
@@ -374,7 +374,7 @@ impl Game<'_> {
     pub(super) fn show_play_dialog(
         &mut self,
         dialog: &horizon_protocol::packets::play::DialogHolder,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P1586.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_protocol::packets::play::DialogHolder;
         match dialog {
             DialogHolder::Direct(tag) => self.show_dialog(tag),
@@ -391,7 +391,7 @@ impl Game<'_> {
         }
     }
 
-    fn dialog_layout(&self) -> Option<Layout> {
+    fn dialog_layout(&self) -> Option<Layout> { if let Some(__l) = crate::points_generated::P1585.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let open = self.dialogs.open.as_ref()?;
         Some(Layout::new(
             &open.dialog,
@@ -400,7 +400,7 @@ impl Game<'_> {
         ))
     }
 
-    pub(super) fn draw_dialog(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_dialog(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P1584.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.dialog_open() {
             return;
         }
@@ -719,7 +719,7 @@ impl Game<'_> {
     }
 
     /// A left click on a dialog screen.
-    pub(super) fn dialog_click(&mut self) -> Result<()> {
+    pub(super) fn dialog_click(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P1583.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let cursor = self.cursor;
         if self.dialogs.warning {
             let (title, message, _) = warning_texts();
@@ -891,7 +891,7 @@ impl Game<'_> {
 
     /// The mouse wheel over a dialog: a cycle button under it takes the
     /// step, else the body scrolls 10 a step.
-    pub(super) fn dialog_scroll(&mut self, delta: f32) {
+    pub(super) fn dialog_scroll(&mut self, delta: f32) { let (delta,) = match crate::points_generated::P1582.get() { Some(__l) => { let mut __a = (delta,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (delta,) };
         let Some(layout) = self.dialog_layout() else {
             return;
         };
@@ -944,7 +944,7 @@ impl Game<'_> {
     }
 
     /// The pointer moved with a slider held (`AbstractSliderButton.onDrag`).
-    pub(super) fn dialog_drag(&mut self) {
+    pub(super) fn dialog_drag(&mut self) { if let Some(__l) = crate::points_generated::P1581.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (cursor, shift) = (self.cursor, self.modifiers.shift_key());
         if let Some(open) = self.dialogs.open.as_mut()
             && let Some(Some(Field::Multi(edit))) =
@@ -973,7 +973,7 @@ impl Game<'_> {
     }
 
     /// The left button released: a held slider lets go and clicks.
-    pub(super) fn dialog_release(&mut self) {
+    pub(super) fn dialog_release(&mut self) { if let Some(__l) = crate::points_generated::P1580.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(open) = self.dialogs.open.as_mut() {
             if let Some(Some(Field::Multi(edit))) =
                 open.selecting.take().and_then(|i| open.fields.get_mut(i))
@@ -994,7 +994,7 @@ impl Game<'_> {
         key: KeyCode,
         shortcut: Option<EditShortcut>,
         text: Option<&str>,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P1579.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let escape = key == KeyCode::Escape;
         if self.dialogs.warning {
             if escape {
@@ -1093,7 +1093,7 @@ impl Game<'_> {
     }
 
     /// Whether the open dialog has a text input.
-    pub(super) fn dialog_has_text_field(&self) -> bool {
+    pub(super) fn dialog_has_text_field(&self) -> bool { if let Some(__l) = crate::points_generated::P1578.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.dialogs
             .open
             .as_ref()
@@ -1102,7 +1102,7 @@ impl Game<'_> {
 
     /// `type TEXT` with a dialog open: into the focused text input, or the
     /// first one.
-    pub(super) fn dialog_type(&mut self, text: &str) -> bool {
+    pub(super) fn dialog_type(&mut self, text: &str) -> bool { if let Some(__l) = crate::points_generated::P1577.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(open) = self.dialogs.open.as_mut() else {
             return false;
         };
@@ -1119,7 +1119,7 @@ impl Game<'_> {
 
     /// What `state` reports: the open dialog and its values, or the waiting
     /// and warning screens.
-    pub(super) fn dialog_status(&self) -> serde_json::Value {
+    pub(super) fn dialog_status(&self) -> serde_json::Value { if let Some(__l) = crate::points_generated::P1576.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let d = &self.dialogs;
         let screen = if d.warning {
             Some("warning")

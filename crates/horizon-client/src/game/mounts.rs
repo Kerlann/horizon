@@ -76,12 +76,12 @@ pub(super) fn dismounts_underwater(species: Species) -> bool {
 }
 
 impl Game<'_> {
-    pub(super) fn mount_index(&self) -> Option<usize> {
+    pub(super) fn mount_index(&self) -> Option<usize> { if let Some(__l) = crate::points_generated::P2831.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let id = self.riding?;
         self.mobs.iter().position(|m| m.id == id)
     }
     /// `Pig` / `Strider.mobInteract`: saddle an adult, or ride a saddled one.
-    fn interact_steerable(&mut self, index: usize, item: &str) -> bool {
+    fn interact_steerable(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P2830.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let held = self.inventory[self.selected].clone();
         let m = &mut self.mobs[index];
         if m.is_baby() || !m.alive() || Some(m.id) == self.riding {
@@ -116,7 +116,7 @@ impl Game<'_> {
         true
     }
     /// `FoodOnAStickItem.use` while riding: boost the mount, wear the stick.
-    pub(super) fn use_steering_stick(&mut self, item: &str) -> bool {
+    pub(super) fn use_steering_stick(&mut self, item: &str) -> bool { if let Some(__l) = crate::points_generated::P2829.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (species, wear) = match item {
             "minecraft:carrot_on_a_stick" => (Species::Pig, 7),
             "minecraft:warped_fungus_on_a_stick" => (Species::Strider, 1),
@@ -155,7 +155,7 @@ impl Game<'_> {
         true
     }
     /// `AbstractHorse.mobInteract`. Returns whether the click was used.
-    pub(super) fn interact_mount(&mut self, index: usize, item: &str) -> bool {
+    pub(super) fn interact_mount(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P2828.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let held = self.held().cloned();
         let m = &self.mobs[index];
         let species = m.species();
@@ -284,7 +284,7 @@ impl Game<'_> {
         true
     }
     /// `AbstractHorse.handleEating`.
-    fn feed_mount(&mut self, index: usize, item: &str) -> bool {
+    fn feed_mount(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P2827.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let species = self.mobs[index].species();
         let camel = species == Species::Camel;
         // CamelHusk.isFood: rabbit's feet (and it never falls in love).
@@ -361,7 +361,7 @@ impl Game<'_> {
     }
     /// `LocalPlayer.aiStep`'s riding jump: the bar charges while jump is
     /// held; on release, the jump's strength (0 when there is none).
-    pub(super) fn charge_mount_jump(&mut self, i: usize, keys: Keys) -> f32 {
+    pub(super) fn charge_mount_jump(&mut self, i: usize, keys: Keys) -> f32 { let (i,) = match crate::points_generated::P2826.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let saddled = self.mobs[i].extra.saddled() && Self::jumps(self.mobs[i].species());
         let mut jump = 0.0;
         if saddled {
@@ -395,7 +395,7 @@ impl Game<'_> {
     }
     /// Whether the rider's eyes are in water (`Entity.updateFluidOnEyes` then `isEyeInFluid(WATER)`),
     /// and not in a bubble column, as `LivingEntity.baseTick` asks before it lets a rider stay.
-    fn rider_eyes_in_water(&self) -> bool {
+    fn rider_eyes_in_water(&self) -> bool { if let Some(__l) = crate::points_generated::P2825.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some([x, y, z]) = self.eye_position() else {
             return false;
         };
@@ -407,7 +407,7 @@ impl Game<'_> {
             .is_some_and(|(height, _)| f64::from(by) + f64::from(height) > y)
     }
     /// The rider's input for this tick; returns false when not on a mount.
-    pub(super) fn tick_mount_riding(&mut self, keys: Keys) -> bool {
+    pub(super) fn tick_mount_riding(&mut self, keys: Keys) -> bool { if let Some(__l) = crate::points_generated::P2824.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(i) = self.mount_index() else {
             return false;
         };
@@ -464,7 +464,7 @@ impl Game<'_> {
     }
     /// `LivingEntity.baseTick` for the mobs that ride a mount of the `dismounts_underwater` tag (a baby
     /// zombie on a chicken): with their eyes in water they get off it.
-    pub(super) fn dismount_underwater_mob_riders(&mut self) {
+    pub(super) fn dismount_underwater_mob_riders(&mut self) { if let Some(__l) = crate::points_generated::P2823.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let swimmers: Vec<u32> = self
             .mobs
             .iter()
@@ -480,7 +480,7 @@ impl Game<'_> {
         }
     }
     /// `positionRider`: the player sits on the mount after it moves.
-    pub(super) fn position_rider(&mut self) {
+    pub(super) fn position_rider(&mut self) { if let Some(__l) = crate::points_generated::P2822.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(i) = self.mount_index() else {
             return;
         };
@@ -542,7 +542,7 @@ impl Game<'_> {
         }
     }
     /// `removePassenger` + `getDismountLocationForPassenger`: beside the mount.
-    pub(super) fn dismount_mount(&mut self) {
+    pub(super) fn dismount_mount(&mut self) { if let Some(__l) = crate::points_generated::P2821.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(id) = self.riding else {
             return;
         };
@@ -589,7 +589,7 @@ impl Game<'_> {
     }
     /// `AbstractHorse.tameWithName`: the acting player owns `mob`, then gets
     /// the `tame_animal` trigger.
-    fn tame_mount(&mut self, mob: u32) {
+    fn tame_mount(&mut self, mob: u32) { let (mob,) = match crate::points_generated::P2820.get() { Some(__l) => { let mut __a = (mob,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,) };
         // RunAroundLikeCrazyGoal.tick: tameWithName by the player on its
         // back, unless AnimalTameEvent is cancelled, which fails the roll
         // instead. Inside a guest's turn the acting ids are the guest's.
@@ -633,7 +633,7 @@ impl Game<'_> {
             self.native_entity_tame(mob, &kind, Some(owner));
         }
     }
-    pub(super) fn mount_event(&mut self, e: &MobEvent) {
+    pub(super) fn mount_event(&mut self, e: &MobEvent) { if let Some(__l) = crate::points_generated::P2819.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match *e {
             MobEvent::Tamed { mob } => {
                 // tameWithName(player): the rider, a server's player in its turn.
@@ -682,7 +682,7 @@ impl Game<'_> {
     /// `causeFallDamage` of its fall, as the mount's own damage does. The local
     /// player, the server players and the mob on its back each get it, with
     /// their own safe distance and armour.
-    pub(super) fn fall_to_passengers(&mut self, mob: u32, distance: f64, modifier: f32) {
+    pub(super) fn fall_to_passengers(&mut self, mob: u32, distance: f64, modifier: f32) { let (mob,distance,modifier,) = match crate::points_generated::P2818.get() { Some(__l) => { let mut __a = (mob,distance,modifier,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,distance,modifier,) };
         if self.riding == Some(mob) {
             self.rider_fall_damage(distance, modifier);
         }
@@ -720,7 +720,7 @@ impl Game<'_> {
     /// landing code's own fall damage for the player: creative flight is
     /// exempt, and the statistic, the sounds and the damage records wait in the
     /// player's events for its next tick, as a landing of its own leaves them.
-    fn rider_fall_damage(&mut self, distance: f64, modifier: f32) {
+    fn rider_fall_damage(&mut self, distance: f64, modifier: f32) { let (distance,modifier,) = match crate::points_generated::P2817.get() { Some(__l) => { let mut __a = (distance,modifier,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (distance,modifier,) };
         let Some(player) = self.player.as_mut() else {
             return;
         };
@@ -740,18 +740,18 @@ impl Game<'_> {
     }
     /// `Player.jumpableVehicle`: a saddled mount that jumps (not a pig or a
     /// strider, which a saddle only steers).
-    pub(super) fn jumpable_mount(&self) -> bool {
+    pub(super) fn jumpable_mount(&self) -> bool { if let Some(__l) = crate::points_generated::P2816.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.mount_index()
             .is_some_and(|i| self.mobs[i].extra.saddled() && Self::jumps(self.mobs[i].species()))
     }
     /// `willPrioritizeJumpInfo`: charging a jump or recharging.
-    pub(super) fn mount_jumping(&self) -> bool {
+    pub(super) fn mount_jumping(&self) -> bool { if let Some(__l) = crate::points_generated::P2815.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.mount.jump_scale > 0.0 || self.mount.jump_ticks < 0
     }
     /// `Hud.extractVehicleHealth` (a native mod's `minecraft:vehicle_health`
     /// layer, only while riding a mount). Returns the mount's heart count
     /// (`getVehicleMaxHearts`).
-    pub(super) fn draw_mount_hud(&mut self, batch: &mut HudBatch, w: i32, h: i32) -> i32 {
+    pub(super) fn draw_mount_hud(&mut self, batch: &mut HudBatch, w: i32, h: i32) -> i32 { let (w,h,) = match crate::points_generated::P2814.get() { Some(__l) => { let mut __a = (w,h,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (w,h,) };
         let Some(i) = self.mount_index() else {
             return 0;
         };
@@ -764,7 +764,7 @@ impl Game<'_> {
         hearts
     }
     /// The jump bar when it is the contextual bar.
-    pub(super) fn draw_jump_bar(&self, batch: &mut HudBatch, w: i32, h: i32) {
+    pub(super) fn draw_jump_bar(&self, batch: &mut HudBatch, w: i32, h: i32) { let (w,h,) = match crate::points_generated::P2813.get() { Some(__l) => { let mut __a = (w,h,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (w,h,) };
         let Some(i) = self.mount_index() else {
             return;
         };

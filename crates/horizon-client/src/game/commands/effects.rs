@@ -36,7 +36,7 @@ impl Game<'_> {
         })
     }
     /// The executing entity for argument-less forms (the player).
-    fn living_targets(&mut self, ctx: &Context) -> R<Vec<Target>> {
+    fn living_targets(&mut self, ctx: &Context) -> R<Vec<Target>> { if let Some(__l) = crate::points_generated::P1080.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if ctx.get("targets").is_some() {
             self.entities(ctx, "targets", false)
         } else {
@@ -44,7 +44,7 @@ impl Game<'_> {
         }
     }
     /// `EffectCommands.giveEffect`.
-    pub(super) fn cmd_effect_give(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_effect_give(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1079.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let effect = Self::effect_arg(ctx)?;
         let seconds = if ctx.has("infinite") {
             Some(-1)
@@ -108,7 +108,7 @@ impl Game<'_> {
         Ok(tracker.total)
     }
     /// `EffectCommands.clearEffects` / `clearEffect`.
-    pub(super) fn cmd_effect_clear(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_effect_clear(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1078.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let effect = if ctx.get("effect").is_some() {
             Some(Self::effect_arg(ctx)?)
         } else {
@@ -156,7 +156,7 @@ impl Game<'_> {
     }
     /// `EnchantCommand.enchant` (mobs hold bare item ids, so only the player's
     /// main hand item can carry the enchantment).
-    pub(super) fn cmd_enchant(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_enchant(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1077.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Arg::Resource(id)) = ctx.get("enchantment").cloned() else {
             return Ok(0);
         };

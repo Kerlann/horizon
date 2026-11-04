@@ -248,7 +248,7 @@ pub(super) fn client_float() -> f32 {
 
 impl Game<'_> {
     /// `blast_cause` for the blast going off now.
-    pub(super) fn blast_attacker(&self) -> Option<(u32, Text)> {
+    pub(super) fn blast_attacker(&self) -> Option<(u32, Text)> { if let Some(__l) = crate::points_generated::P1856.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // `Explosion.getIndirectSourceEntity`: a primed TNT's owner names the
         // blast before any mob does, which makes the damage type
         // `minecraft:player_explosion` (`server_explode` asks this).
@@ -262,7 +262,7 @@ impl Game<'_> {
         })
     }
     /// `ServerExplosion.getSeenPercent` for an entity box.
-    pub(super) fn seen_percent(&self, center: [f64; 3], min: [f64; 3], max: [f64; 3]) -> f32 {
+    pub(super) fn seen_percent(&self, center: [f64; 3], min: [f64; 3], max: [f64; 3]) -> f32 { let (center,min,max,) = match crate::points_generated::P1855.get() { Some(__l) => { let mut __a = (center,min,max,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (center,min,max,) };
         let xs = 1.0 / ((max[0] - min[0]) * 2.0 + 1.0);
         let ys = 1.0 / ((max[1] - min[1]) * 2.0 + 1.0);
         let zs = 1.0 / ((max[2] - min[2]) * 2.0 + 1.0);
@@ -329,7 +329,7 @@ impl Game<'_> {
         center: [f64; 3],
         radius: f32,
         resists: Option<([i32; 3], f32)>,
-    ) -> Vec<[i32; 3]> {
+    ) -> Vec<[i32; 3]> { let (center,radius,) = match crate::points_generated::P1854.get() { Some(__l) => { let mut __a = (center,radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,) };
         let (min_y, max_y) = self.with_level(|_, level, _| {
             use horizon_world::level::LevelAccess;
             (level.min_y(), level.max_y())
@@ -432,7 +432,7 @@ impl Game<'_> {
         exploding: Option<u32>,
         attacker: Option<&(u32, Text)>,
         cause: Option<&horizon_client::advancements::EntityView>,
-    ) -> Option<[f64; 3]> {
+    ) -> Option<[f64; 3]> { let (radius,) = match crate::points_generated::P1853.get() { Some(__l) => { let mut __a = (radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (radius,) };
         let ExplosionHookContext { center, blocks } = *context;
         let diameter = f64::from(radius * 2.0);
         // Blast protection: `EXPLOSION_KNOCKBACK_RESISTANCE` (0.15 per level and
@@ -591,7 +591,7 @@ impl Game<'_> {
         damage_type: &str,
         interaction: BlockInteraction,
         blocks: &[[i32; 3]],
-    ) -> Vec<(u32, [f64; 3])> {
+    ) -> Vec<(u32, [f64; 3])> { let (center,radius,) = match crate::points_generated::P1852.get() { Some(__l) => { let mut __a = (center,radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,) };
         if radius < 1.0e-5 {
             return Vec::new();
         }
@@ -791,7 +791,7 @@ impl Game<'_> {
     }
     /// `blast_spares_decorations` for the blast going off now: its causing
     /// mob (`blast_attacker`) is the source's entity.
-    pub(super) fn blast_spares_decorations(&self, interaction: BlockInteraction) -> bool {
+    pub(super) fn blast_spares_decorations(&self, interaction: BlockInteraction) -> bool { if let Some(__l) = crate::points_generated::P1851.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let by_mob = self.blast_attacker().is_some();
         blast_spares_decorations(
             self.ui.rules.bool("mob_griefing"),
@@ -801,7 +801,7 @@ impl Game<'_> {
         )
     }
     /// `Entity.isInWater` for an entity box: `updateFluidInteraction` over the box.
-    pub(super) fn bounds_in_water(&self, bounds: horizon_core::geometry::Aabb) -> bool {
+    pub(super) fn bounds_in_water(&self, bounds: horizon_core::geometry::Aabb) -> bool { if let Some(__l) = crate::points_generated::P1850.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.mob_world_base(&[])
             .fluids(bounds, bounds.max_position().y)
             .in_water
@@ -818,7 +818,7 @@ impl Game<'_> {
         center: [f64; 3],
         diameter: f64,
         interaction: BlockInteraction,
-    ) {
+    ) { let (center,diameter,) = match crate::points_generated::P1849.get() { Some(__l) => { let mut __a = (center,diameter,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,diameter,) };
         // An armour stand is no `BlockAttachedEntity`: a source in water does not spare it.
         let by_mob = self.blast_attacker().is_some();
         let spares_stands = blast_spares_decorations(
@@ -855,7 +855,7 @@ impl Game<'_> {
     }
     /// `ExplosionEvent.Start` for the explosion `start`: true when a mod
     /// cancels it, and nothing of it happens.
-    pub(super) fn explosion_start_cancelled(&mut self, start: &NativeExplosionStart<'_>) -> bool {
+    pub(super) fn explosion_start_cancelled(&mut self, start: &NativeExplosionStart<'_>) -> bool { if let Some(__l) = crate::points_generated::P1848.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !mod_api::__private::listened(mod_api::HookId::ExplosionStart) {
             return false;
         }
@@ -864,7 +864,7 @@ impl Game<'_> {
         cancel
     }
     /// Paintings and cushions in reach (`BlockAttachedEntity.hurtServer`).
-    fn explosion_breaks_hanging(&mut self, center: [f64; 3], diameter: f64) {
+    fn explosion_breaks_hanging(&mut self, center: [f64; 3], diameter: f64) { let (center,diameter,) = match crate::points_generated::P1847.get() { Some(__l) => { let mut __a = (center,diameter,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,diameter,) };
         let mut i = 0;
         while i < self.paintings.len() {
             // HangingEntity.recalculateBoundingBox: a painting stands at the
@@ -888,7 +888,7 @@ impl Game<'_> {
     }
     /// `ServerLevel.getDestroyType`: a drop decay rule picks between decaying
     /// and plain destruction.
-    pub(super) fn destroy_type(&self, rule: &str) -> BlockInteraction {
+    pub(super) fn destroy_type(&self, rule: &str) -> BlockInteraction { if let Some(__l) = crate::points_generated::P1846.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.ui.rules.bool(rule) {
             BlockInteraction::DestroyWithDecay
         } else {
@@ -912,7 +912,7 @@ impl Game<'_> {
         radius: f32,
         interaction: BlockInteraction,
         fire: bool,
-    ) -> Result<()> {
+    ) -> Result<()> { let (center,radius,fire,) = match crate::points_generated::P1845.get() { Some(__l) => { let mut __a = (center,radius,fire,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,fire,) };
         let damage_type = super::creatures::damage_type(
             horizon_client::mobs::DamageKind::Explosion,
             self.blast_attacker().is_some(),
@@ -929,7 +929,7 @@ impl Game<'_> {
         fire: bool,
         damage_type: &str,
         resists: Option<([i32; 3], f32)>,
-    ) -> Result<()> {
+    ) -> Result<()> { let (center,radius,fire,) = match crate::points_generated::P1844.get() { Some(__l) => { let mut __a = (center,radius,fire,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,fire,) };
         if self.serving.is_some() || self.options.dedicated.is_some() {
             let start =
                 NativeExplosionStart::from(mod_api::__private::built::NativeExplosionStart {
@@ -1029,7 +1029,7 @@ impl Game<'_> {
         radius: f32,
         interaction: BlockInteraction,
         stacks: &mut Vec<([i32; 3], ItemStack)>,
-    ) -> Result<()> {
+    ) -> Result<()> { let (pos,radius,) = match crate::points_generated::P1843.get() { Some(__l) => { let mut __a = (pos,radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,radius,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         if self.res.facts().is_air(state) {
             return Ok(());

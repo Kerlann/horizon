@@ -54,7 +54,7 @@ impl UiWait {
 impl Game<'_> {
     /// The open screen's widgets: those the last frame drew, then the slots
     /// of an open inventory or menu (`slot-ID`, the ids of `click-slot`).
-    pub(super) fn ui_nodes(&self) -> Vec<Node> {
+    pub(super) fn ui_nodes(&self) -> Vec<Node> { if let Some(__l) = crate::points_generated::P5767.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let size = self.gui_scale().map(|b| [b.width, b.height]);
         let mut nodes = widgets::tree(&widgets::last_labelled(), &widgets::last_targets(), size);
         if matches!(self.screen, Screen::Inventory | Screen::Creative)
@@ -76,7 +76,7 @@ impl Game<'_> {
         nodes
     }
 
-    fn node_value(&mut self, node: &Node) -> Value {
+    fn node_value(&mut self, node: &Node) -> Value { if let Some(__l) = crate::points_generated::P5766.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut v = json!({
             "id": node.id,
             "kind": node.kind.name(),
@@ -109,7 +109,7 @@ impl Game<'_> {
         v
     }
 
-    fn find_node(&self, id: &str) -> Result<Node> {
+    fn find_node(&self, id: &str) -> Result<Node> { if let Some(__l) = crate::points_generated::P5765.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let nodes = self.ui_nodes();
         nodes.iter().find(|n| n.id == id).cloned().ok_or_else(|| {
             let ids: Vec<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
@@ -128,7 +128,7 @@ impl Game<'_> {
         line: &str,
         reply: &Sender<String>,
         event_loop: &dyn EventLoopCtl,
-    ) -> Result<Handled> {
+    ) -> Result<Handled> { if let Some(__l) = crate::points_generated::P5764.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !matches!(words[0], "ui" | "click" | "set") {
             return Ok(Handled::No);
         }

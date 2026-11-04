@@ -15,7 +15,7 @@ impl Game<'_> {
         dimension: &str,
         columns: &[(i32, i32)],
         heightmap: NativeHeightmap,
-    ) -> Result<Vec<Option<i32>>, String> {
+    ) -> Result<Vec<Option<i32>>, String> { if let Some(__l) = crate::points_generated::P4201.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_level_open(dimension) {
             return Err(format!("{dimension} is not the level being ticked"));
         }
@@ -42,7 +42,7 @@ impl Game<'_> {
         columns: &[(i32, i32)],
         heightmap: NativeHeightmap,
         range: (u32, u32),
-    ) -> Result<NativeColumnBlocks, String> {
+    ) -> Result<NativeColumnBlocks, String> { if let Some(__l) = crate::points_generated::P4200.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (below, above) = range;
         if !self.native_level_open(dimension) {
             return Err(format!("{dimension} is not the level being ticked"));
@@ -53,7 +53,7 @@ impl Game<'_> {
         Ok(out)
     }
     /// A read's time logged with `HORIZON_SPIKES`, as an edit's is.
-    fn native_read_logged(&self, started: std::time::Instant, what: &str, columns: usize) {
+    fn native_read_logged(&self, started: std::time::Instant, what: &str, columns: usize) { let (columns,) = match crate::points_generated::P4199.get() { Some(__l) => { let mut __a = (columns,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (columns,) };
         let ms = started.elapsed().as_secs_f32() * 1000.0;
         if self.options.spikes.is_some_and(|threshold| ms > threshold) {
             log::info!("Horizon: slow mod {what} {ms:.1} ms ({columns} columns)");

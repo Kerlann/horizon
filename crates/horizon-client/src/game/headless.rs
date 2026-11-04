@@ -48,7 +48,7 @@ impl HeadlessLoop {
 impl Game<'_> {
     /// Runs the game until it asks to stop (`horizon-ctl quit`, a signal, an error), then
     /// saves as a window's game does when its loop ends.
-    pub(super) fn run_headless(&mut self) {
+    pub(super) fn run_headless(&mut self) { if let Some(__l) = crate::points_generated::P2072.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ctl = HeadlessLoop {
             exit: Cell::new(false),
             flow: Cell::new(ControlFlow::Poll),

@@ -38,7 +38,7 @@ impl Game<'_> {
     /// The buffer of the mod block at `at` in the level in place and the energy it holds (its
     /// block entity's, and not the placeholder standing in while it ticks), if `at`'s side
     /// reaches a fill or a drain (none: every side does).
-    fn energy_buffer(&self, at: BlockSide) -> Option<(Arc<ModEnergyBuffer>, i32)> {
+    fn energy_buffer(&self, at: BlockSide) -> Option<(Arc<ModEnergyBuffer>, i32)> { if let Some(__l) = crate::points_generated::P2648.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_level_in_place(at.level) {
             return None;
         }
@@ -60,7 +60,7 @@ impl Game<'_> {
     }
     /// What the buffer at `at` takes (`insert`) or gives of up to `amount` through its side,
     /// written into its block entity, saved with its chunk and kept by the transaction.
-    fn energy_moved(&mut self, at: BlockSide, amount: u32, insert: bool) -> u32 {
+    fn energy_moved(&mut self, at: BlockSide, amount: u32, insert: bool) -> u32 { let (amount,insert,) = match crate::points_generated::P2647.get() { Some(__l) => { let mut __a = (amount,insert,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,insert,) };
         let Some((buffer, energy)) = self.energy_buffer(at) else {
             return 0;
         };
@@ -96,11 +96,11 @@ impl Game<'_> {
     /// game's own energy capability: none where no buffer is, in another level, a chunk that
     /// isn't loaded, or the block entity ticking now, or where `at`'s side reaches neither a
     /// fill nor a drain.
-    pub(in crate::game) fn native_energy_amount(&self, at: BlockSide) -> Option<u32> {
+    pub(in crate::game) fn native_energy_amount(&self, at: BlockSide) -> Option<u32> { if let Some(__l) = crate::points_generated::P2646.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.energy_buffer(at)?.1.unsigned_abs())
     }
     /// The capacity of the buffer at `at` (`native_energy_amount`), 0 where none is.
-    pub(in crate::game) fn native_energy_capacity(&self, at: BlockSide) -> u32 {
+    pub(in crate::game) fn native_energy_capacity(&self, at: BlockSide) -> u32 { if let Some(__l) = crate::points_generated::P2645.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.energy_buffer(at)
             .map_or(0, |(buffer, _)| buffer.capacity.max(0).unsigned_abs())
     }
@@ -112,7 +112,7 @@ impl Game<'_> {
         at: BlockSide,
         amount: u32,
         tx: &Transaction,
-    ) -> u32 {
+    ) -> u32 { let (amount,) = match crate::points_generated::P2644.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let _ = tx;
         self.energy_moved(at, amount, true)
     }
@@ -124,7 +124,7 @@ impl Game<'_> {
         at: BlockSide,
         amount: u32,
         tx: &Transaction,
-    ) -> u32 {
+    ) -> u32 { let (amount,) = match crate::points_generated::P2643.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let _ = tx;
         self.energy_moved(at, amount, false)
     }

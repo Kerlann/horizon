@@ -75,7 +75,7 @@ fn add_ban(
 
 impl Game<'_> {
     /// A guest's `/tempban`: operators of level 3 (`/ban`'s); vanilla's unknown command for the others.
-    pub(super) fn guest_tempban_command(&mut self, host: &mut LanHost, conn: u32, words: &[&str]) {
+    pub(super) fn guest_tempban_command(&mut self, host: &mut LanHost, conn: u32, words: &[&str]) { let (conn,) = match crate::points_generated::P5585.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = host.hub.guest(conn) else {
             return;
         };
@@ -106,7 +106,7 @@ impl Game<'_> {
         host: &mut LanHost,
         words: &[&str],
         by: &str,
-    ) -> Vec<Reply> {
+    ) -> Vec<Reply> { if let Some(__l) = crate::points_generated::P5584.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match parse(words) {
             Ok(r) => vec![self.tempban(host, r.name, r.millis, r.reason, by)],
             Err(line) => vec![line.into()],
@@ -121,7 +121,7 @@ impl Game<'_> {
         millis: i64,
         reason: Option<String>,
         by: &str,
-    ) -> Reply {
+    ) -> Reply { let (millis,) = match crate::points_generated::P5583.get() { Some(__l) => { let mut __a = (millis,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (millis,) };
         let Some(lists) = self.server_lists.clone() else {
             return "Temporary bans need a dedicated server".into();
         };

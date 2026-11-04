@@ -118,14 +118,14 @@ fn write_mob_leash_tag(
 }
 
 impl Game<'_> {
-    pub(super) fn lead_sound(&mut self, sound: &str, at: [f64; 3]) {
+    pub(super) fn lead_sound(&mut self, sound: &str, at: [f64; 3]) { let (at,) = match crate::points_generated::P2497.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         self.audio
             .play(&format!("minecraft:item.lead.{sound}"), Some(at), 1.0, 1.0);
     }
     /// `Leashable.canHaveALeashAttachedTo` for the mob at `index` and a
     /// holder whose box centre is `center`: within snapping range and
     /// leashable.
-    pub(super) fn can_attach_lead(&self, index: usize, center: glam::DVec3) -> bool {
+    pub(super) fn can_attach_lead(&self, index: usize, center: glam::DVec3) -> bool { let (index,) = match crate::points_generated::P2496.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         if !leash::can_be_leashed(m) || !m.alive() {
             return false;
@@ -140,7 +140,7 @@ impl Game<'_> {
         mine.distance(center) <= leash::SNAP
     }
     /// `Entity.gameEvent(event, player)` for a lead: the acting player is the source.
-    pub(super) fn lead_game_event(&mut self, event: &'static str, at: [f64; 3]) {
+    pub(super) fn lead_game_event(&mut self, event: &'static str, at: [f64; 3]) { let (at,) = match crate::points_generated::P2495.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let ctx = self.player_context(None);
         self.post_game_event(event, at, ctx);
     }
@@ -153,7 +153,7 @@ impl Game<'_> {
         center: glam::DVec3,
         to: Holder,
         skip: Option<usize>,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2494.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut any = false;
         for j in self.player_leashed(center) {
             if Some(j) != skip && self.can_attach_lead(j, center) {
@@ -164,7 +164,7 @@ impl Game<'_> {
         // The boats on the player's lead too (game/boat_leads.rs).
         any | self.tie_player_boats(center, to)
     }
-    pub(super) fn player_center(&self) -> glam::DVec3 {
+    pub(super) fn player_center(&self) -> glam::DVec3 { if let Some(__l) = crate::points_generated::P2493.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player.as_ref().map_or(glam::DVec3::ZERO, |p| {
             glam::DVec3::new(
                 p.position.x,
@@ -175,7 +175,7 @@ impl Game<'_> {
     }
     /// The mobs on the acting player's lead within 32 blocks of a point
     /// (`Leashable.leashableInArea` with `getLeashHolder() == player`).
-    pub(super) fn player_leashed(&self, around: glam::DVec3) -> Vec<usize> {
+    pub(super) fn player_leashed(&self, around: glam::DVec3) -> Vec<usize> { if let Some(__l) = crate::points_generated::P2492.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let acting = self.acting_uuid();
         (0..self.mobs.len())
             .filter(|&i| {
@@ -189,19 +189,19 @@ impl Game<'_> {
     }
     /// `Entity.spawnAtLocation(level, Items.LEAD)`: the item entity draws its
     /// motion from its own random, not the level's.
-    pub(super) fn drop_lead_item(&mut self, at: [f64; 3]) {
+    pub(super) fn drop_lead_item(&mut self, at: [f64; 3]) { let (at,) = match crate::points_generated::P2491.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let v = super::dispenser::new_item_motion();
         self.spawn_item(ItemStack::new("minecraft:lead", 1), at, v, 10);
     }
     /// `Leashable.dropLeash` / `removeLeash`: the lead falls as an item.
-    pub(super) fn break_leash(&mut self, id: u32, drop: bool, sound: bool) {
+    pub(super) fn break_leash(&mut self, id: u32, drop: bool, sound: bool) { let (id,drop,sound,) = match crate::points_generated::P2490.get() { Some(__l) => { let mut __a = (id,drop,sound,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,drop,sound,) };
         self.drop_leash(id, drop, sound, false);
     }
     /// `break_leash` by the acting player's use (untying it, shears).
-    fn break_leash_used(&mut self, id: u32, drop: bool) {
+    fn break_leash_used(&mut self, id: u32, drop: bool) { let (id,drop,) = match crate::points_generated::P2489.get() { Some(__l) => { let mut __a = (id,drop,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,drop,) };
         self.drop_leash(id, drop, false, true);
     }
-    fn drop_leash(&mut self, id: u32, drop: bool, sound: bool, used: bool) {
+    fn drop_leash(&mut self, id: u32, drop: bool, sound: bool, used: bool) { let (id,drop,sound,used,) = match crate::points_generated::P2488.get() { Some(__l) => { let mut __a = (id,drop,sound,used,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,drop,sound,used,) };
         let killer = self.lead_killers.remove(&id).map(|(killer, _)| killer);
         let Some((alive, at, kind)) = self.mobs.iter_mut().find(|m| m.id == id).and_then(|m| {
             horizon_client::mobs::leash::remove(m)?;
@@ -260,7 +260,7 @@ impl Game<'_> {
     }
     /// Holders read from a save become real once the entity is found; a
     /// holder that never shows up drops the lead after 100 ticks.
-    pub(super) fn tick_leads(&mut self) {
+    pub(super) fn tick_leads(&mut self) { if let Some(__l) = crate::points_generated::P2487.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A corpse gone without dropping its lead takes its killer along.
         // Only this level's: the others' mobs aren't in place.
         if !self.lead_killers.is_empty() {
@@ -309,7 +309,7 @@ impl Game<'_> {
         }
     }
     /// The `leash` tag of a mob about to be saved.
-    pub(super) fn write_leash(&mut self, tag: &mut Tag, index: usize) {
+    pub(super) fn write_leash(&mut self, tag: &mut Tag, index: usize) { let (index,) = match crate::points_generated::P2486.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         let (holder, pending, leash_player) =
             (m.extra.leash, m.extra.leash_pending, m.extra.leash_player);
@@ -324,7 +324,7 @@ impl Game<'_> {
         );
     }
     /// `Entity.interact`'s leash part for a mob. Returns whether it was used.
-    pub(super) fn interact_leash(&mut self, index: usize, item: &str) -> bool {
+    pub(super) fn interact_leash(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P2485.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let sneaking = self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft);
         let id = self.mobs[index].id;
         let at = self.mobs[index].center();
@@ -410,7 +410,7 @@ impl Game<'_> {
         false
     }
     /// `LeadItem.useOn` on the fence the crosshair hits.
-    pub(super) fn interact_knot(&mut self) -> bool {
+    pub(super) fn interact_knot(&mut self) -> bool { if let Some(__l) = crate::points_generated::P2484.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(hit) = self.pick() else {
             return false;
         };
@@ -435,7 +435,7 @@ impl Game<'_> {
     }
     /// A click at the fence at `knot_pos`: `knot_hit` for `LeashFenceKnotEntity.interact`,
     /// otherwise `LeadItem.useOn`. Returns whether it was used.
-    pub(super) fn use_knot(&mut self, knot_pos: [i32; 3], knot_hit: bool) -> bool {
+    pub(super) fn use_knot(&mut self, knot_pos: [i32; 3], knot_hit: bool) -> bool { let (knot_pos,knot_hit,) = match crate::points_generated::P2483.get() { Some(__l) => { let mut __a = (knot_pos,knot_hit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (knot_pos,knot_hit,) };
         let knot = leash::knot_state(knot_pos).center;
         let center = glam::DVec3::new(knot.x, knot.y, knot.z);
         let at = [center.x, center.y, center.z];
@@ -502,7 +502,7 @@ impl Game<'_> {
         attached
     }
     /// `LeashFeatureRenderer` for every lead and `LeashKnotRenderer` for the knots.
-    pub(super) fn leash_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
+    pub(super) fn leash_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) { let (alpha,) = match crate::points_generated::P2482.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let atlas = &self.gui.atlas;
         let white = atlas.font.white();
         let uv = [
@@ -705,7 +705,7 @@ impl Game<'_> {
         &self,
         p: &horizon_client::motion::PlayerMotion,
         alpha: f64,
-    ) -> glam::DVec3 {
+    ) -> glam::DVec3 { let (alpha,) = match crate::points_generated::P2481.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let pos = glam::DVec3::new(p.position.x, p.position.y, p.position.z);
         // Player.getRopeHoldPosition: `0.22 * (RIGHT ? -1 : 1)`.
         let hand_dir = if self.settings.main_hand_left {

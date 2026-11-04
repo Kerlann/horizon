@@ -71,22 +71,22 @@ fn shared<'a>(
 }
 
 impl Game<'_> {
-    fn all_worlds(&self) -> impl Iterator<Item = &World> {
+    fn all_worlds(&self) -> impl Iterator<Item = &World> { if let Some(__l) = crate::points_generated::P2702.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         std::iter::once(&self.world).chain(self.levels.parked_worlds())
     }
     /// The census of this game's levels: the one in place and the parked ones.
-    fn level_census(&self) -> ColumnCensus {
+    fn level_census(&self) -> ColumnCensus { if let Some(__l) = crate::points_generated::P2701.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         census(self.all_worlds())
     }
     /// The addresses of this game's sections.
-    fn section_addresses(&self) -> FxHashSet<usize> {
+    fn section_addresses(&self) -> FxHashSet<usize> { if let Some(__l) = crate::points_generated::P2700.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.all_worlds()
             .flat_map(|w| w.chunks.values())
             .flat_map(|c| c.sections.iter().map(|s| Arc::as_ptr(s) as usize))
             .collect()
     }
 
-    pub(super) fn memory_report(&self) -> Value {
+    pub(super) fn memory_report(&self) -> Value { if let Some(__l) = crate::points_generated::P2699.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (commit, peak_commit) = horizon_threads::allocator_commit();
         let client = self.level_census();
         // The single-player server thread's own levels: a second copy of the

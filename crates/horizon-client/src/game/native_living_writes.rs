@@ -11,7 +11,7 @@ use mod_api::LivingRef;
 
 impl Game<'_> {
     /// The UUID of the player a living handle names.
-    fn native_living_player(&mut self, living: LivingRef) -> Option<u128> {
+    fn native_living_player(&mut self, living: LivingRef) -> Option<u128> { if let Some(__l) = crate::points_generated::P3904.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.native_living_target(living)? {
             Target::Player => Some(self.native_acting_id()),
             Target::Guest(conn) => self.command_guest(conn).map(|g| g.uuid),
@@ -19,7 +19,7 @@ impl Game<'_> {
         }
     }
     /// What is stuck in the player a handle names.
-    fn native_living_stuck(&mut self, living: LivingRef) -> Option<&mut Stuck> {
+    fn native_living_stuck(&mut self, living: LivingRef) -> Option<&mut Stuck> { if let Some(__l) = crate::points_generated::P3903.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.native_living_target(living)? {
             Target::Player => Some(&mut self.combat.stuck),
             Target::Guest(conn) => Some(&mut self.guest_combat.entry(conn).or_default().stuck),
@@ -27,7 +27,7 @@ impl Game<'_> {
         }
     }
     /// The mob a living handle names.
-    fn native_living_mob(&mut self, living: LivingRef) -> Option<&mut horizon_client::mobs::Mob> {
+    fn native_living_mob(&mut self, living: LivingRef) -> Option<&mut horizon_client::mobs::Mob> { if let Some(__l) = crate::points_generated::P3902.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Target::Mob(id) = self.native_living_target(living)? else {
             return None;
         };
@@ -46,7 +46,7 @@ impl Game<'_> {
         living: LivingRef,
         hand: Hand,
         send_to_self: bool,
-    ) -> bool {
+    ) -> bool { let (send_to_self,) = match crate::points_generated::P3901.get() { Some(__l) => { let mut __a = (send_to_self,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (send_to_self,) };
         match self.native_living_target(living) {
             Some(Target::Mob(id)) => {
                 self.mobs.iter_mut().find(|m| m.id == id).is_some_and(|m| {
@@ -81,19 +81,19 @@ impl Game<'_> {
 
     /// `LivingEntity.getArrowCount`: the arrows stuck in a player. None for
     /// the other kinds, which Horizon keeps no count for.
-    pub(super) fn native_living_arrow_count(&mut self, living: LivingRef) -> Option<i32> {
+    pub(super) fn native_living_arrow_count(&mut self, living: LivingRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3900.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         Some(self.native_living_stuck(living)?.arrows)
     }
     /// `LivingEntity.setArrowCount`: players around see the arrows (vanilla
     /// does not limit the count). False for the other kinds.
-    pub(super) fn native_living_set_arrow_count(&mut self, living: LivingRef, count: i32) -> bool {
+    pub(super) fn native_living_set_arrow_count(&mut self, living: LivingRef, count: i32) -> bool { let (count,) = match crate::points_generated::P3899.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         self.native_living_stuck(living)
             .map(|s| s.arrows = count)
             .is_some()
     }
     /// `LivingEntity.getStingerCount`: the bee stingers stuck in a player.
     /// None for the other kinds.
-    pub(super) fn native_living_stinger_count(&mut self, living: LivingRef) -> Option<i32> {
+    pub(super) fn native_living_stinger_count(&mut self, living: LivingRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3898.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         Some(self.native_living_stuck(living)?.stingers)
     }
     /// `LivingEntity.setStingerCount`: players around see the stingers. False
@@ -102,7 +102,7 @@ impl Game<'_> {
         &mut self,
         living: LivingRef,
         count: i32,
-    ) -> bool {
+    ) -> bool { let (count,) = match crate::points_generated::P3897.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         self.native_living_stuck(living)
             .map(|s| s.stingers = count)
             .is_some()
@@ -114,7 +114,7 @@ impl Game<'_> {
         &mut self,
         living: LivingRef,
         ticks: i32,
-    ) -> bool {
+    ) -> bool { let (ticks,) = match crate::points_generated::P3896.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         self.native_living_stuck(living)
             .map(|s| s.remove_arrow_time = ticks)
             .is_some()
@@ -125,7 +125,7 @@ impl Game<'_> {
         &mut self,
         living: LivingRef,
         ticks: i32,
-    ) -> bool {
+    ) -> bool { let (ticks,) = match crate::points_generated::P3895.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         self.native_living_stuck(living)
             .map(|s| s.remove_stinger_time = ticks)
             .is_some()
@@ -133,7 +133,7 @@ impl Game<'_> {
 
     /// `Mob.isLeftHanded`: whether the mob holds things in its left hand (the
     /// mob flags in its entity data). None for players and the other kinds.
-    pub(super) fn native_living_left_handed(&mut self, living: LivingRef) -> Option<bool> {
+    pub(super) fn native_living_left_handed(&mut self, living: LivingRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3894.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         Some(self.native_living_mob(living)?.extra.left_handed)
     }
     /// `Mob.setLeftHanded`: sets bit 2 of the mob flags, which the players
@@ -143,7 +143,7 @@ impl Game<'_> {
         &mut self,
         living: LivingRef,
         left_handed: bool,
-    ) -> bool {
+    ) -> bool { let (left_handed,) = match crate::points_generated::P3893.get() { Some(__l) => { let mut __a = (left_handed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (left_handed,) };
         self.native_living_mob(living)
             .map(|m| m.extra.left_handed = left_handed)
             .is_some()
@@ -151,7 +151,7 @@ impl Game<'_> {
     /// `Mob.canPickUpLoot`, with the overrides of an allay (holding
     /// something) and a sulfur cube (with no block). None for players and
     /// the other kinds.
-    pub(super) fn native_living_can_pick_up_loot(&mut self, living: LivingRef) -> Option<bool> {
+    pub(super) fn native_living_can_pick_up_loot(&mut self, living: LivingRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3892.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         Some(self.native_living_mob(living)?.can_pick_up_loot())
     }
     /// `Mob.setCanPickUpLoot`: whether the mob picks up the items it sees
@@ -162,7 +162,7 @@ impl Game<'_> {
         &mut self,
         living: LivingRef,
         can_pick_up: bool,
-    ) -> bool {
+    ) -> bool { let (can_pick_up,) = match crate::points_generated::P3891.get() { Some(__l) => { let mut __a = (can_pick_up,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (can_pick_up,) };
         self.native_living_mob(living)
             .map(|m| m.extra.pick_up_loot = can_pick_up)
             .is_some()
@@ -171,7 +171,7 @@ impl Game<'_> {
     /// `LivingEntity.getUseItemRemainingTicks`: the ticks left of the item a
     /// player uses, 0 when they use none. None for the other kinds (a mob's
     /// item use is a counter of its goal, not this timer).
-    pub(super) fn native_living_item_use_remaining(&self, living: LivingRef) -> Option<i32> {
+    pub(super) fn native_living_item_use_remaining(&self, living: LivingRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3890.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_living_target(living)? {
             Target::Player => Some(super::item_use::remaining_of(self.using, self.use_duration)),
             Target::Guest(conn) => Some(self.lan.as_ref()?.play.get(&conn)?.use_remaining()),
@@ -190,7 +190,7 @@ impl Game<'_> {
         &mut self,
         living: LivingRef,
         ticks: i32,
-    ) -> bool {
+    ) -> bool { let (ticks,) = match crate::points_generated::P3889.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         match self.native_living_target(living) {
             Some(Target::Player) => {
                 super::item_use::set_remaining(self.using, &mut self.use_duration, ticks)

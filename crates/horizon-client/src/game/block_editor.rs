@@ -158,7 +158,7 @@ impl BlockEditScreen {
 impl Game<'_> {
     /// `LocalPlayer.open*Block`: the edit screen for the block entity at
     /// `pos`.
-    pub(super) fn open_block_editor(&mut self, pos: Pos, editor: Box<dyn Editor>) {
+    pub(super) fn open_block_editor(&mut self, pos: Pos, editor: Box<dyn Editor>) { if let Some(__l) = crate::points_generated::P599.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut screen = BlockEditScreen::new(pos, editor);
         let opening = self
             .world
@@ -183,7 +183,7 @@ impl Game<'_> {
     /// A use of a game master block on a server's client, which opens the
     /// screen itself (`BlockEntity.usedBy`) while the server only answers the
     /// click. The block at `pos`, when the player may use it.
-    pub(super) fn open_block_editor_if_editable(&mut self, pos: Pos) {
+    pub(super) fn open_block_editor_if_editable(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P598.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.can_use_game_master_blocks() {
             return;
         }
@@ -196,7 +196,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn close_block_editor(&mut self) {
+    pub(super) fn close_block_editor(&mut self) { if let Some(__l) = crate::points_generated::P597.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.block_editor = None;
         self.set_screen(Screen::Playing);
         self.capture(true);
@@ -223,7 +223,7 @@ impl Game<'_> {
         result
     }
 
-    fn block_editor_outcome(&mut self, outcome: Outcome) {
+    fn block_editor_outcome(&mut self, outcome: Outcome) { if let Some(__l) = crate::points_generated::P596.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match outcome {
             Outcome::Stay => {}
             Outcome::Send(packet) => {
@@ -240,7 +240,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn draw_block_editor(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_block_editor(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P595.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let cursor = self.cursor;
         let Some(items) = self.with_block_editor(|s, e| {
             let items = s.editor.items(e, batch.width, batch.height);
@@ -337,7 +337,7 @@ impl Game<'_> {
         self.block_editor = Some(screen);
     }
 
-    pub(super) fn block_editor_click(&mut self) {
+    pub(super) fn block_editor_click(&mut self) { if let Some(__l) = crate::points_generated::P594.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let size = self
             .renderer
             .as_ref()
@@ -402,7 +402,7 @@ impl Game<'_> {
     }
 
     /// The cursor moved with a slider held (`AbstractSliderButton.onDrag`).
-    pub(super) fn block_editor_drag(&mut self) {
+    pub(super) fn block_editor_drag(&mut self) { if let Some(__l) = crate::points_generated::P593.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let x = self.cursor.0;
         if let Some(screen) = self.block_editor.as_mut()
             && let Some((id, sx, sw)) = screen.dragging
@@ -412,13 +412,13 @@ impl Game<'_> {
     }
 
     /// The left button released: a held slider lets go.
-    pub(super) fn block_editor_release(&mut self) {
+    pub(super) fn block_editor_release(&mut self) { if let Some(__l) = crate::points_generated::P592.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(screen) = self.block_editor.as_mut() {
             screen.dragging = None;
         }
     }
 
-    pub(super) fn block_editor_key(&mut self, event: &KeyEvent) {
+    pub(super) fn block_editor_key(&mut self, event: &KeyEvent) { if let Some(__l) = crate::points_generated::P591.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if event.state != ElementState::Pressed {
             return;
         }
@@ -436,7 +436,7 @@ impl Game<'_> {
         key: KeyCode,
         shortcut: Option<horizon_client::clipboard::EditShortcut>,
         text: Option<&str>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P590.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ctrl = self.has_control_down_with_quirk();
         let shift = self.has_shift_down();
         let types_text = self.types_text();
@@ -517,7 +517,7 @@ impl Game<'_> {
 
     /// What typing changed: the boxes whose text differs from before tell
     /// the editor, which may have packets to send.
-    fn block_editor_after_input(&mut self) {
+    fn block_editor_after_input(&mut self) { if let Some(__l) = crate::points_generated::P589.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut screen) = self.block_editor.take() else {
             return;
         };
@@ -542,7 +542,7 @@ impl Game<'_> {
     }
 
     /// A status for the open screen.
-    pub(super) fn block_editor_status(&mut self, status: Text, size: Option<[i32; 3]>) {
+    pub(super) fn block_editor_status(&mut self, status: Text, size: Option<[i32; 3]>) { if let Some(__l) = crate::points_generated::P588.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut screen) = self.block_editor.take() else {
             return;
         };
@@ -558,7 +558,7 @@ impl Game<'_> {
         self.block_editor = Some(screen);
     }
 
-    fn block_editor_type_into(&mut self, screen: &mut BlockEditScreen, focus: usize, c: char) {
+    fn block_editor_type_into(&mut self, screen: &mut BlockEditScreen, focus: usize, c: char) { let (focus,c,) = match crate::points_generated::P587.get() { Some(__l) => { let mut __a = (focus,c,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (focus,c,) };
         if c.is_control() {
             return;
         }
@@ -576,7 +576,7 @@ impl Game<'_> {
 
     /// Characters typed (`type TEXT` from the agent control): into the box
     /// with the focus.
-    pub(super) fn block_editor_type(&mut self, typed: &str) {
+    pub(super) fn block_editor_type(&mut self, typed: &str) { if let Some(__l) = crate::points_generated::P586.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut screen) = self.block_editor.take() else {
             return;
         };

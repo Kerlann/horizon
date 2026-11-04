@@ -11,7 +11,7 @@ use mod_api::{ItemPlace, Transaction};
 
 impl Game<'_> {
     /// The player a place belongs to, if a player's: a cursor's only while its menu is open.
-    fn place_player(&self, place: &ItemPlace) -> Option<u128> {
+    fn place_player(&self, place: &ItemPlace) -> Option<u128> { if let Some(__l) = crate::points_generated::P3801.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match place {
             ItemPlace::PlayerSlot { player, .. } | ItemPlace::PlayerHand { player, .. } => {
                 Some(*player)
@@ -26,7 +26,7 @@ impl Game<'_> {
     /// minecart's (the open menu's copy while one shows it, as `cart_slots`), a chest boat's, or
     /// a chested donkey's, mule's or llama's (`AbstractHorse.inventory`, `getInventoryColumns`
     /// rows of three). With where it stands, for what a split throws.
-    pub(super) fn entity_slots(&mut self, id: u32) -> Option<(&mut [Option<ItemStack>], [f64; 3])> {
+    pub(super) fn entity_slots(&mut self, id: u32) -> Option<(&mut [Option<ItemStack>], [f64; 3])> { let (id,) = match crate::points_generated::P3800.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let key = (i32::MAX - 15, super::minecarts::CART_KEY_Y, id as i32);
         let at = |p: &horizon_core::geometry::Vec3| [p.x, p.y, p.z];
         let container = |c: &super::minecarts::Minecart| {
@@ -60,11 +60,11 @@ impl Game<'_> {
         Some((&mut b.items, position))
     }
     /// Whether this game simulates a world: a client's copy has no places to write.
-    fn places_simulated(&self) -> bool {
+    fn places_simulated(&self) -> bool { if let Some(__l) = crate::points_generated::P3799.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.is_logical_server()
     }
     /// The slot of the player in place that `place` names.
-    fn player_place(&mut self, place: &ItemPlace) -> Option<&mut Option<ItemStack>> {
+    fn player_place(&mut self, place: &ItemPlace) -> Option<&mut Option<ItemStack>> { if let Some(__l) = crate::points_generated::P3798.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match place {
             ItemPlace::PlayerSlot { slot, .. } => self.native_carried_slot(*slot),
             ItemPlace::PlayerHand {
@@ -79,7 +79,7 @@ impl Game<'_> {
     }
     /// How many slots the inventory of entity `entity` in the level in place has, as
     /// `entity_slots` reaches them: none for an entity without one, and on a client.
-    pub(super) fn native_entity_container_size(&self, entity: u32) -> Option<usize> {
+    pub(super) fn native_entity_container_size(&self, entity: u32) -> Option<usize> { let (entity,) = match crate::points_generated::P3797.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (entity,) };
         self.native_entity_automation_size(entity).or_else(|| {
             let m = self
                 .mobs
@@ -91,7 +91,7 @@ impl Game<'_> {
     /// How many slots the container entity `entity` of the level in place shows automation
     /// (`EntitySelector.CONTAINER_ENTITY_SELECTOR`: chest and hopper minecarts, chest boats; a
     /// chested mount is not one): none for any other entity, and on a client.
-    pub(super) fn native_entity_automation_size(&self, entity: u32) -> Option<usize> {
+    pub(super) fn native_entity_automation_size(&self, entity: u32) -> Option<usize> { let (entity,) = match crate::points_generated::P3796.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (entity,) };
         if self.remote.is_some() {
             return None;
         }
@@ -104,14 +104,14 @@ impl Game<'_> {
     }
     /// `EntityType.is(TagKey)`: whether `entity_type` (`minecraft:player`) is in the entity
     /// type tag `tag` (`minecraft:cannot_be_pushed_onto_boats`).
-    pub(super) fn native_entity_type_in_tag(&self, entity_type: &str, tag: &str) -> bool {
+    pub(super) fn native_entity_type_in_tag(&self, entity_type: &str, tag: &str) -> bool { if let Some(__l) = crate::points_generated::P3795.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let tag = horizon_client::command::args::normalize(tag);
         self.res.mob_data().entity_has(&tag, entity_type)
     }
     /// The stack at a player's or an item entity's place; none for an empty one, a player who
     /// isn't here or is dead, an item entity not in the level in place, any other place
     /// (`ItemPlace::stack` reads those), and on a client.
-    pub(super) fn native_game_stack(&mut self, place: &ItemPlace) -> Option<ItemStack> {
+    pub(super) fn native_game_stack(&mut self, place: &ItemPlace) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P3794.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.places_simulated() {
             return None;
         }
@@ -146,7 +146,7 @@ impl Game<'_> {
         place: &ItemPlace,
         stack: ItemStack,
         tx: &Transaction,
-    ) -> u32 {
+    ) -> u32 { if let Some(__l) = crate::points_generated::P3793.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let _ = tx;
         if !self.places_simulated() || stack.count == 0 {
             return 0;
@@ -248,7 +248,7 @@ impl Game<'_> {
         place: &ItemPlace,
         stack: ItemStack,
         tx: &Transaction,
-    ) -> u32 {
+    ) -> u32 { if let Some(__l) = crate::points_generated::P3792.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let _ = tx;
         if !self.places_simulated() {
             return 0;
@@ -326,7 +326,7 @@ impl Game<'_> {
     }
     /// Drops `stack` at the middle of the block at `pos`, as a block entity's handler gives up
     /// what it can't put back.
-    pub(super) fn native_drop_at(&mut self, pos: [i32; 3], stack: ItemStack) {
+    pub(super) fn native_drop_at(&mut self, pos: [i32; 3], stack: ItemStack) { let (pos,) = match crate::points_generated::P3791.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if self.places_simulated() && stack.count > 0 {
             // `Block.popResource`'s default pickup delay, at the root commit.
             self.after_commit(After::Drop(pos, stack));

@@ -43,7 +43,7 @@ fn stack_json(s: &ItemStack) -> Value {
 }
 
 impl Game<'_> {
-    fn click_at(&mut self, x: f32, y: f32, right: bool, shift: bool) {
+    fn click_at(&mut self, x: f32, y: f32, right: bool, shift: bool) { let (x,y,right,shift,) = match crate::points_generated::P5435.get() { Some(__l) => { let mut __a = (x,y,right,shift,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,y,right,shift,) };
         use winit::keyboard::KeyCode;
         let saved = self.cursor;
         self.cursor = (x, y);
@@ -64,7 +64,7 @@ impl Game<'_> {
         }
         self.cursor = saved;
     }
-    pub(super) fn gui_origin(&self) -> Result<(f32, f32)> {
+    pub(super) fn gui_origin(&self) -> Result<(f32, f32)> { if let Some(__l) = crate::points_generated::P5434.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let size = self
             .renderer
             .as_ref()
@@ -73,7 +73,7 @@ impl Game<'_> {
         Ok(self.inventory_origin(&horizon_client::hud::HudBatch::new(size)))
     }
     /// Commands not known to control.rs; None when unknown here too.
-    pub(super) fn station_command(&mut self, words: &[&str]) -> Result<Option<Value>> {
+    pub(super) fn station_command(&mut self, words: &[&str]) -> Result<Option<Value>> { if let Some(__l) = crate::points_generated::P5433.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let arg = |i: usize| {
             words
                 .get(i)

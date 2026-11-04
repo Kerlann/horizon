@@ -304,14 +304,14 @@ impl PadRouter {
 
 impl Game<'_> {
     /// Controllers are turned off: dropping the DualSense's output frees its triggers.
-    pub(super) fn pad_output_off(&mut self) {
+    pub(super) fn pad_output_off(&mut self) { if let Some(__l) = crate::points_generated::P4374.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.pad.devices.output = None;
         self.pad.devices.shown = None;
     }
 
     /// After each poll: the DualSense's output opens once this window has the pad in hand, then
     /// shows what the game is doing; vibrations that are over stop.
-    pub(super) fn pad_output_frame(&mut self) {
+    pub(super) fn pad_output_frame(&mut self) { if let Some(__l) = crate::points_generated::P4373.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.pad.devices.dualsense
             && self.pad.in_use
             && self.focused
@@ -327,14 +327,14 @@ impl Game<'_> {
 
     /// The DualSense's HID output, while it is the active pad, open, and this window has focus
     /// (another game on the same pad keeps it otherwise).
-    fn pad_output(&self) -> Option<&horizon_dualsense::Link> {
+    fn pad_output(&self) -> Option<&horizon_dualsense::Link> { if let Some(__l) = crate::points_generated::P4372.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let output = self.pad.devices.output.as_ref()?;
         (self.pad.devices.dualsense && self.focused && output.open().is_some()).then_some(output)
     }
 
     /// What the DualSense shows: while playing, its triggers feel what their actions do; in
     /// menus, paused, unfocused or with another pad active, they are free.
-    fn pad_show(&mut self) {
+    fn pad_show(&mut self) { if let Some(__l) = crate::points_generated::P4371.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.pad.devices.output.is_none() {
             return;
         }
@@ -376,7 +376,7 @@ impl Game<'_> {
     }
 
     /// What `key.use` and `key.attack` are doing, for the triggers bound to them.
-    fn trigger_feels(&self) -> (TriggerFeel, TriggerFeel) {
+    fn trigger_feels(&self) -> (TriggerFeel, TriggerFeel) { if let Some(__l) = crate::points_generated::P4370.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let using = match self.using {
             Some((slot, ticks)) => match self.stack_in(slot) {
                 Some(s) if &*s.item == "minecraft:bow" => {
@@ -408,7 +408,7 @@ impl Game<'_> {
     /// The use trigger while nothing is in use: a loaded crossbow clicks, an item that boosts (a
     /// rocket while gliding, the stick of the mount being ridden) catches, a shield weighs, and
     /// locks while an axe has disabled it.
-    fn idle_use_feel(&self) -> TriggerFeel {
+    fn idle_use_feel(&self) -> TriggerFeel { if let Some(__l) = crate::points_generated::P4369.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let gliding = self.player.as_ref().is_some_and(|p| p.fall_flying);
         let mount = self
             .riding
@@ -443,7 +443,7 @@ impl Game<'_> {
     /// Open the pad's haptics once its output is open over USB (its audio device is there
     /// only then); close them when it goes. Opt-in with `HORIZON_DUALSENSE_HAPTICS=1` until
     /// they are proven on a pad (docs/controllers.md); never for games without sound (tests).
-    fn pad_haptics(&mut self) {
+    fn pad_haptics(&mut self) { if let Some(__l) = crate::points_generated::P4368.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let usb = self.pad.devices.output.as_ref().and_then(|o| o.open())
             == Some(horizon_dualsense::Transport::Usb);
         if !usb {
@@ -460,14 +460,14 @@ impl Game<'_> {
     }
 
     /// Release the DualSense's output (the game is quitting).
-    pub(in crate::game) fn pad_close_output(&mut self) {
+    pub(in crate::game) fn pad_close_output(&mut self) { if let Some(__l) = crate::points_generated::P4367.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.pad.devices.haptics = None;
         self.pad.devices.output = None;
     }
 
     /// Play a vibration on the active pad: a DualSense through its own report, else gilrs' force
     /// feedback, which platforms without it (gilrs on macOS) skip.
-    pub(super) fn pad_vibrate(&mut self, rumble: Rumble, pulse: gamepad::Pulse) {
+    pub(super) fn pad_vibrate(&mut self, rumble: Rumble, pulse: gamepad::Pulse) { if let Some(__l) = crate::points_generated::P4366.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let level = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
         if let Some(haptics) = self
             .pad
@@ -535,7 +535,7 @@ impl Game<'_> {
     }
 
     /// The hardware part of `pad status`.
-    pub(super) fn pad_devices_status(&self) -> Value {
+    pub(super) fn pad_devices_status(&self) -> Value { if let Some(__l) = crate::points_generated::P4365.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let devices = &self.pad.devices;
         let pads: Vec<Value> = devices.gilrs.as_ref().map_or(Vec::new(), |g| {
             g.gamepads()

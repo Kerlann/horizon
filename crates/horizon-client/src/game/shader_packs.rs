@@ -152,7 +152,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         partial: f32,
         sky: &horizon_client::environment::Sky,
-    ) -> PackInputs {
+    ) -> PackInputs { let (partial,) = match crate::points_generated::P5313.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (partial,) };
         // A `shaders/` pack lights the faces itself unless `oldLighting=true`: sections mesh
         // without the game's face shading (the pack loaded or dropped below shows next frame).
         let pack_lighting = self.pack_ids.as_ref().is_some_and(|ids| !ids.old_lighting);
@@ -381,7 +381,7 @@ impl Game<'_> {
     }
 
     /// The local player's state for Iris's status uniforms, read as the HUD reads it.
-    fn pack_player_status(&mut self) -> PlayerStatus {
+    fn pack_player_status(&mut self) -> PlayerStatus { if let Some(__l) = crate::points_generated::P5312.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let spectator = self.spectator();
         let survival = !self.creative && !spectator;
         let invisible = self.own_invisible();
@@ -412,7 +412,7 @@ impl Game<'_> {
     }
 
     /// The Shader Options page opened: the picked pack's options, screens and names.
-    pub(super) fn open_shader_options(&mut self) {
+    pub(super) fn open_shader_options(&mut self) { if let Some(__l) = crate::points_generated::P5311.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut macros = Macros::standard();
         if let Some(renderer) = &self.renderer {
             renderer.define_pack_macros(&mut macros);
@@ -422,7 +422,7 @@ impl Game<'_> {
     }
 
     /// The Shader Options page closed with changes: they are saved, and the pack loads again.
-    pub(super) fn save_shader_options(&mut self) {
+    pub(super) fn save_shader_options(&mut self) { if let Some(__l) = crate::points_generated::P5310.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(options) = self.settings.shader_options.take() else {
             return;
         };
@@ -435,7 +435,7 @@ impl Game<'_> {
 
     /// Turns off the pack `name` after loading it panicked: nothing runs in its place, it is no
     /// longer the picked pack (so the next start does not load it again), and the chat says so.
-    fn shader_pack_failed(&mut self, name: &str, dimension: i32, error: &str) {
+    fn shader_pack_failed(&mut self, name: &str, dimension: i32, error: &str) { let (dimension,) = match crate::points_generated::P5309.get() { Some(__l) => { let mut __a = (dimension,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (dimension,) };
         log::error!("shader pack {name}: turned off: {error}");
         self.pack_ids = None;
         if let Some(renderer) = &mut self.renderer {
@@ -453,12 +453,12 @@ impl Game<'_> {
     }
 
     /// Whether the game's vignette draws: the option, unless the loaded pack turns it off.
-    pub(super) fn vignette_shown(&self) -> bool {
+    pub(super) fn vignette_shown(&self) -> bool { if let Some(__l) = crate::points_generated::P5308.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.settings.vignette && self.pack_ids.as_ref().is_none_or(|ids| ids.vignette)
     }
 
     /// `heldItemId(2)` and `heldBlockLightValue(2)`: main hand, then off hand (5.2, 5.3).
-    fn held_for_pack(&mut self) -> ([i32; 2], [i32; 2]) {
+    fn held_for_pack(&mut self) -> ([i32; 2], [i32; 2]) { if let Some(__l) = crate::points_generated::P5307.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.pack_ids.is_none() {
             return ([0; 2], [0; 2]);
         }
@@ -486,16 +486,16 @@ impl Game<'_> {
 impl Game<'_> {
     /// Starts a span of the entity geometry at vertex `start` for entity type `name`
     /// (`minecraft:zombie`; "" for one the pack cannot name). Nothing without a pack.
-    pub(super) fn mark_entity(&self, start: usize, name: &str) {
+    pub(super) fn mark_entity(&self, start: usize, name: &str) { let (start,) = match crate::points_generated::P5306.get() { Some(__l) => { let mut __a = (start,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (start,) };
         self.mark_entity_part(start, name, false);
     }
 
     /// Starts a span for entity geometry that blends (name tags, shadows).
-    pub(super) fn mark_translucent_entity(&self, start: usize, name: &str) {
+    pub(super) fn mark_translucent_entity(&self, start: usize, name: &str) { let (start,) = match crate::points_generated::P5305.get() { Some(__l) => { let mut __a = (start,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (start,) };
         self.mark_entity_part(start, name, true);
     }
 
-    fn mark_entity_part(&self, start: usize, name: &str, translucent: bool) {
+    fn mark_entity_part(&self, start: usize, name: &str, translucent: bool) { let (start,translucent,) = match crate::points_generated::P5304.get() { Some(__l) => { let mut __a = (start,translucent,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (start,translucent,) };
         let id = match &self.pack_ids {
             Some(ids) => ids
                 .entities
@@ -515,7 +515,7 @@ impl Game<'_> {
     }
 
     /// Starts a span for the block entity of block state `state`.
-    pub(super) fn mark_block_entity(&self, start: usize, state: u32) {
+    pub(super) fn mark_block_entity(&self, start: usize, state: u32) { let (start,state,) = match crate::points_generated::P5303.get() { Some(__l) => { let mut __a = (start,state,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (start,state,) };
         let Some(ids) = &self.pack_ids else {
             if native_spans() {
                 self.push_span(start, "BLOCK_ENTITIES", state as i32);
@@ -552,7 +552,7 @@ impl Game<'_> {
 
     /// Starts the span of the local player's model; `hidden` in first person, where only a
     /// pack's shadow pass draws it.
-    pub(super) fn mark_player(&self, start: usize, hidden: bool) {
+    pub(super) fn mark_player(&self, start: usize, hidden: bool) { let (start,hidden,) = match crate::points_generated::P5302.get() { Some(__l) => { let mut __a = (start,hidden,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (start,hidden,) };
         self.mark_entity(start, "minecraft:player");
         if (self.pack_ids.is_some() || native_spans())
             && let Some(last) = self.entity_spans.borrow_mut().last_mut()
@@ -568,18 +568,18 @@ impl Game<'_> {
 
     /// Marks vertices `start..end` (one entity) as hidden from the camera, for an entity
     /// Horizon's culling would drop but a pack's shadow pass still draws (`EntitySpan::hide`).
-    pub(super) fn hide_spans_from(&self, start: usize, end: usize) -> bool {
+    pub(super) fn hide_spans_from(&self, start: usize, end: usize) -> bool { let (start,end,) = match crate::points_generated::P5301.get() { Some(__l) => { let mut __a = (start,end,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (start,end,) };
         EntitySpan::hide(&mut self.entity_spans.borrow_mut(), start, end)
     }
 
     /// Starts a span of geometry that is not an entity (`PARTICLES`, `DESTROY`...).
-    pub(super) fn mark_stage(&self, start: usize, stage: &str) {
+    pub(super) fn mark_stage(&self, start: usize, stage: &str) { let (start,) = match crate::points_generated::P5300.get() { Some(__l) => { let mut __a = (start,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (start,) };
         if self.pack_ids.is_some() || native_spans() {
             self.push_span(start, stage, 0);
         }
     }
 
-    fn push_span(&self, start: usize, stage: &str, id: i32) {
+    fn push_span(&self, start: usize, stage: &str, id: i32) { let (start,id,) = match crate::points_generated::P5299.get() { Some(__l) => { let mut __a = (start,id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (start,id,) };
         let mut spans = self.entity_spans.borrow_mut();
         let span = EntitySpan {
             start: start as u32,

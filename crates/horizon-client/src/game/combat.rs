@@ -227,7 +227,7 @@ impl CombatTracker {
 impl Game<'_> {
     /// `LivingEntity.makeDrownParticles`: eight bubbles around the entity,
     /// moving with it.
-    pub(super) fn drown_particles(&mut self, at: [f64; 3], velocity: [f64; 3]) {
+    pub(super) fn drown_particles(&mut self, at: [f64; 3], velocity: [f64; 3]) { let (at,velocity,) = match crate::points_generated::P913.get() { Some(__l) => { let mut __a = (at,velocity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,velocity,) };
         let bubble = ParticleOptions::simple(ParticleType::Bubble);
         for _ in 0..8 {
             let mut triangle = || {
@@ -240,7 +240,7 @@ impl Game<'_> {
     }
     /// Entity event 67 from a server, for this client's own player or an
     /// entity it draws.
-    pub(super) fn remote_drown(&mut self, id: i32) {
+    pub(super) fn remote_drown(&mut self, id: i32) { let (id,) = match crate::points_generated::P912.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let own = self.remote.as_ref().is_some_and(|r| r.entity_id == id);
         let body = if own {
             self.player.as_ref().map(|p| {
@@ -258,7 +258,7 @@ impl Game<'_> {
         }
     }
     /// The display name of a mob: its custom name or its type's name.
-    pub(super) fn mob_display_name(&self, id: u32) -> Option<Text> {
+    pub(super) fn mob_display_name(&self, id: u32) -> Option<Text> { let (id,) = match crate::points_generated::P911.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let m = self.mobs.iter().find(|m| m.id == id)?;
         Some(match &m.custom_name {
             Some(name) => Text::literal(name.clone()),
@@ -266,19 +266,19 @@ impl Game<'_> {
         })
     }
     /// `getLastHurtByMob`: the last mob to hurt the player, for 100 ticks.
-    pub(super) fn player_hurt_by(&self) -> Option<(horizon_client::mobs::Who, i64)> {
+    pub(super) fn player_hurt_by(&self) -> Option<(horizon_client::mobs::Who, i64)> { if let Some(__l) = crate::points_generated::P910.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let ((id, _), at) = self.combat.last_hurt_by.as_ref()?;
         (self.world.game_time - at <= 100).then_some((horizon_client::mobs::Who::Mob(*id), *at))
     }
     /// Remember who deals the next `damage_type` damage to the player.
-    pub(super) fn note_attacker(&mut self, damage_type: &str, mob: u32) {
+    pub(super) fn note_attacker(&mut self, damage_type: &str, mob: u32) { let (mob,) = match crate::points_generated::P909.get() { Some(__l) => { let mut __a = (mob,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,) };
         if let Some(name) = self.mob_display_name(mob) {
             self.note_named_attacker(damage_type, mob, name);
         }
     }
     /// `note_attacker` for an entity that is not one of `self.mobs` (the
     /// ender dragon).
-    pub(super) fn note_named_attacker(&mut self, damage_type: &str, id: u32, name: Text) {
+    pub(super) fn note_named_attacker(&mut self, damage_type: &str, id: u32, name: Text) { let (id,) = match crate::points_generated::P908.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.note_player_attacker(damage_type, id, name, None);
     }
     /// `note_named_attacker` for a player, with their custom-named main-hand
@@ -289,7 +289,7 @@ impl Game<'_> {
         id: u32,
         name: Text,
         item: Option<Text>,
-    ) {
+    ) { let (id,) = match crate::points_generated::P907.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.combat.mark();
         self.combat
             .pending
@@ -298,7 +298,7 @@ impl Game<'_> {
     /// The `DamageSource.directEntity` of the next `damage_type` damage when
     /// nothing caused it (a splash potion nobody threw): the death message
     /// names it instead (`getLocalizedDeathMessage`). It is no kill credit.
-    pub(super) fn note_direct_entity(&mut self, damage_type: &str, name: Text) {
+    pub(super) fn note_direct_entity(&mut self, damage_type: &str, name: Text) { if let Some(__l) = crate::points_generated::P906.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.combat.mark();
         self.combat
             .pending_direct
@@ -308,7 +308,7 @@ impl Game<'_> {
     /// hit by entity `id`, which only a native mod reads: a player's hit names
     /// them, a tame wolf's its owner (no one without one), and other mobs leave
     /// it as it was.
-    fn resolve_player_responsible_for_player(&mut self, id: u32) {
+    fn resolve_player_responsible_for_player(&mut self, id: u32) { let (id,) = match crate::points_generated::P905.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let now = self.world.game_time;
         match self.mobs.iter().find(|m| m.id == id) {
             None => {
@@ -333,7 +333,7 @@ impl Game<'_> {
         }
     }
     /// `CombatTracker.recordDamage` for the motion events of this tick.
-    pub(super) fn record_combat(&mut self, events: &[MotionEvent]) {
+    pub(super) fn record_combat(&mut self, events: &[MotionEvent]) { if let Some(__l) = crate::points_generated::P904.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.recheck_combat();
         // The attacker of the hit whose damage was just recorded, for its criterion.
         let mut recorded: Option<(String, u32)> = None;
@@ -437,7 +437,7 @@ impl Game<'_> {
         self.combat.fall_before = self.player.as_ref().map_or(0.0, |p| p.fall_distance);
     }
     /// `FallLocation.getCurrentFallLocation` and the fall distance so far.
-    fn fall_location(&self) -> (Option<&'static str>, f32) {
+    fn fall_location(&self) -> (Option<&'static str>, f32) { if let Some(__l) = crate::points_generated::P903.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return (None, 0.0);
         };
@@ -468,7 +468,7 @@ impl Game<'_> {
         (location, distance)
     }
     /// `CombatTracker.recheckStatus`: forget old fights.
-    fn recheck_combat(&mut self) {
+    fn recheck_combat(&mut self) { if let Some(__l) = crate::points_generated::P902.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let reset = if self.combat.in_combat { 300 } else { 100 };
         if !self.combat.entries.is_empty() && self.world.game_time - self.combat.last_damage > reset
         {
@@ -476,14 +476,14 @@ impl Game<'_> {
             self.combat.in_combat = false;
         }
     }
-    fn damage_in_tag(&self, name: &str, tag: &str) -> bool {
+    fn damage_in_tag(&self, name: &str, tag: &str) -> bool { if let Some(__l) = crate::points_generated::P901.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let damage = &self.motion.health.damage;
         damage.id(name).is_some_and(|id| {
             damage.in_tag(id, tag) || damage.in_tag(id, &format!("minecraft:{tag}"))
         })
     }
     /// `CombatTracker.getMostSignificantFall`.
-    fn most_significant_fall(&self) -> Option<usize> {
+    fn most_significant_fall(&self) -> Option<usize> { if let Some(__l) = crate::points_generated::P900.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (mut result, mut alternative) = (None, None);
         let (mut best_fall, mut alt_damage) = (0.0f32, 0.0f32);
         for (i, e) in self.combat.entries.iter().enumerate() {
@@ -510,7 +510,7 @@ impl Game<'_> {
         }
     }
     /// The display component of a custom-named held stack.
-    fn mob_main_hand_name(&self, id: u32) -> Option<Text> {
+    fn mob_main_hand_name(&self, id: u32) -> Option<Text> { let (id,) = match crate::points_generated::P899.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let m = self.mobs.iter().find(|m| m.id == id)?;
         let mut stack = m.extra.main_hand_stack()?.clone();
         if !has_custom_name(&stack) {
@@ -523,14 +523,14 @@ impl Game<'_> {
     }
     /// `getMainHandItem().getDisplayName()` of the player in place, when the
     /// stack has a custom name.
-    pub(super) fn main_hand_custom_name(&self) -> Option<Text> {
+    pub(super) fn main_hand_custom_name(&self) -> Option<Text> { if let Some(__l) = crate::points_generated::P898.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let stack = self.inventory.get(self.selected)?.as_ref()?;
         has_custom_name(stack).then(|| self.stack_display_name(stack))
     }
     /// `main_hand_custom_name` of a player who is not in place: the guest
     /// `conn` between turns, or none for the host while a guest acts (their
     /// hotbar slot is kept by the swap).
-    fn player_main_hand_custom_name(&self, player: Option<u32>) -> Option<Text> {
+    fn player_main_hand_custom_name(&self, player: Option<u32>) -> Option<Text> { if let Some(__l) = crate::points_generated::P897.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if player == self.lan_acting {
             return self.main_hand_custom_name();
         }
@@ -540,14 +540,14 @@ impl Game<'_> {
     }
     /// The killer's item for `getLocalizedDeathMessage` and
     /// `getMessageForAssistedFall`: a player's as recorded, a mob's now.
-    fn entry_item(&self, e: &Entry) -> Option<Text> {
+    fn entry_item(&self, e: &Entry) -> Option<Text> { if let Some(__l) = crate::points_generated::P896.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         e.item
             .clone()
             .or_else(|| self.mob_main_hand_name(e.attacker.as_ref()?.0))
     }
     /// `CombatTracker.getDeathMessage` for a player whose display name is
     /// `me`: a server's guest is not `PLAYER_NAME`.
-    pub(super) fn combat_death_message_for(&mut self, me: Text) -> Text {
+    pub(super) fn combat_death_message_for(&mut self, me: Text) -> Text { if let Some(__l) = crate::points_generated::P895.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.recheck_combat();
         let entries = std::mem::take(&mut self.combat.entries);
         self.combat.in_combat = false;
@@ -636,7 +636,7 @@ impl Game<'_> {
     /// (`EntityReference.getEntity` looks through every level), is sent how it
     /// died. `killer` is the player who last hurt it (`None` inside for the
     /// host), from `last_hurt_by_player`.
-    pub(super) fn tell_owner_pet_died(&mut self, m: &Mob, killer: Option<Option<u32>>) {
+    pub(super) fn tell_owner_pet_died(&mut self, m: &Mob, killer: Option<Option<u32>>) { if let Some(__l) = crate::points_generated::P894.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let tamable = matches!(
             m.species(),
             Species::Wolf
@@ -676,7 +676,7 @@ impl Game<'_> {
     }
     /// `CombatTracker.getDeathMessage` for a mob, from the hits it recorded
     /// (`Mob::combat`), told the way the player's own tracker tells them.
-    pub(super) fn mob_death_message(&mut self, m: &Mob, killer: Option<Option<u32>>) -> Text {
+    pub(super) fn mob_death_message(&mut self, m: &Mob, killer: Option<Option<u32>>) -> Text { if let Some(__l) = crate::points_generated::P893.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::mobs::{DamageKind, Who};
         let me = mob_name(m);
         // The player behind a `Who::Player` hit: the last one to hurt it, or

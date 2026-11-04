@@ -172,7 +172,7 @@ fn tabs(w: f32) -> (f32, f32) {
 const TAB_H: f32 = 24.0;
 const FOOTER: f32 = 33.0;
 impl Game<'_> {
-    pub(super) fn open_stats(&mut self) {
+    pub(super) fn open_stats(&mut self) { if let Some(__l) = crate::points_generated::P5523.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.load_stats();
         // StatsScreen.init: a server's client asks for its statistics.
         if self.remote.is_some() {
@@ -188,11 +188,11 @@ impl Game<'_> {
     fn stats_bar(w: f32) -> f32 {
         ((w - 280.0) / 2.0).floor() + 280.0 + 6.0
     }
-    fn stats_content(&self) -> f32 {
+    fn stats_content(&self) -> f32 { if let Some(__l) = crate::points_generated::P5522.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (row_h, rows) = self.stats_rows();
         row_h * rows as f32 + 4.0
     }
-    fn stats_rows(&self) -> (f32, usize) {
+    fn stats_rows(&self) -> (f32, usize) { if let Some(__l) = crate::points_generated::P5521.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.stats_ui.tab {
             0 => (14.0, CUSTOM.len()),
             1 => (22.0, self.stat_items().len() + 1),
@@ -201,7 +201,7 @@ impl Game<'_> {
     }
     /// Whether tab `i` can be chosen: the Items and Mobs tabs are active only
     /// while their list has rows.
-    fn stats_tab_active(&self, i: usize) -> bool {
+    fn stats_tab_active(&self, i: usize) -> bool { let (i,) = match crate::points_generated::P5520.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         match i {
             1 => !self.stat_items().is_empty(),
             2 => !self.stat_mobs().is_empty(),
@@ -209,7 +209,7 @@ impl Game<'_> {
         }
     }
     /// Items (and block items) with any non-zero column.
-    fn stat_items(&self) -> Vec<String> {
+    fn stat_items(&self) -> Vec<String> { if let Some(__l) = crate::points_generated::P5519.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut items: Vec<String> = Vec::new();
         for (ty, _) in COLUMNS {
             if let Some(m) = self.stats.values.get(&format!("minecraft:{ty}")) {
@@ -226,7 +226,7 @@ impl Game<'_> {
         }
         items
     }
-    fn stat_mobs(&self) -> Vec<String> {
+    fn stat_mobs(&self) -> Vec<String> { if let Some(__l) = crate::points_generated::P5518.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut mobs: Vec<String> = Vec::new();
         for ty in ["killed", "killed_by"] {
             if let Some(m) = self.stats.values.get(&format!("minecraft:{ty}")) {
@@ -241,7 +241,7 @@ impl Game<'_> {
     }
     /// `MobRow`: the mob's name, its kills and killed-by lines, and their
     /// colours (grey when none).
-    fn mob_row(&self, mob: &str) -> (Text, Text, Text, (u32, u32)) {
+    fn mob_row(&self, mob: &str) -> (Text, Text, Text, (u32, u32)) { if let Some(__l) = crate::points_generated::P5517.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let name = Text::translate(&format!("entity.{}", mob.replace(':', ".")), &[]);
         let kills = self.stats.get("killed", mob);
         let by = self.stats.get("killed_by", mob);
@@ -273,7 +273,7 @@ impl Game<'_> {
         );
         (name, k, b, colors)
     }
-    pub(super) fn draw_stats(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_stats(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5516.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         horizon_client::widgets::begin_screen(|| {
             horizon_client::widgets::ScreenInfo::new(
                 "stats",
@@ -552,7 +552,7 @@ impl Game<'_> {
             ui::tooltip(batch, atlas, &atlas.font.split(&tip, 170.0), self.cursor);
         }
     }
-    fn draw_stats_footer(&self, batch: &mut HudBatch, w: f32, h: f32) {
+    fn draw_stats_footer(&self, batch: &mut HudBatch, w: f32, h: f32) { let (w,h,) = match crate::points_generated::P5515.get() { Some(__l) => { let mut __a = (w,h,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (w,h,) };
         let atlas = &self.gui.atlas;
         let (bx, by) = ((w / 2.0 - 100.0).floor(), h - FOOTER + 6.0);
         let hover = ui::hovered(self.cursor, bx, by, 200.0, 20.0);
@@ -568,7 +568,7 @@ impl Game<'_> {
             hover,
         );
     }
-    pub(super) fn stats_click(&mut self, size: [u32; 2]) {
+    pub(super) fn stats_click(&mut self, size: [u32; 2]) { let (size,) = match crate::points_generated::P5514.get() { Some(__l) => { let mut __a = (size,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (size,) };
         // A press on the scrollbar holds it and clicks nothing else.
         if self.stats_press_scrollbar(size) {
             return;
@@ -618,7 +618,7 @@ impl Game<'_> {
             }
         }
     }
-    pub(super) fn stats_scroll(&mut self, amount: f32) {
+    pub(super) fn stats_scroll(&mut self, amount: f32) { let (amount,) = match crate::points_generated::P5513.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let (row_h, _) = self.stats_rows();
         let h = self.gui_size().1;
         let content = self.stats_content();
@@ -628,7 +628,7 @@ impl Game<'_> {
     }
     /// A press on the statistics list's scrollbar holds it
     /// (`AbstractSelectionList.updateScrolling`).
-    pub(super) fn stats_press_scrollbar(&mut self, size: [u32; 2]) -> bool {
+    pub(super) fn stats_press_scrollbar(&mut self, size: [u32; 2]) -> bool { let (size,) = match crate::points_generated::P5512.get() { Some(__l) => { let mut __a = (size,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (size,) };
         let b = HudBatch::new(size);
         let (w, h) = (b.width, b.height);
         let content = self.stats_content();
@@ -637,7 +637,7 @@ impl Game<'_> {
             .press(self.cursor, Self::stats_bar(w), TAB_H, h - FOOTER, content)
     }
     /// The pointer moved while the scrollbar is held.
-    pub(super) fn stats_drag(&mut self) {
+    pub(super) fn stats_drag(&mut self) { if let Some(__l) = crate::points_generated::P5511.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.stats_ui.scroll.held() {
             return;
         }
@@ -648,7 +648,7 @@ impl Game<'_> {
             .drag(self.cursor.1, TAB_H, h - FOOTER, content);
     }
     /// The button came up: the scrollbar lets go.
-    pub(super) fn stats_release(&mut self) {
+    pub(super) fn stats_release(&mut self) { if let Some(__l) = crate::points_generated::P5510.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.stats_ui.scroll.release();
     }
 }

@@ -98,11 +98,11 @@ fn num(n: impl std::fmt::Display) -> Text {
 }
 
 impl Game<'_> {
-    pub(super) fn bossbar_path(&self) -> std::path::PathBuf {
+    pub(super) fn bossbar_path(&self) -> std::path::PathBuf { if let Some(__l) = crate::points_generated::P787.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world_root
             .join("data/minecraft/custom_boss_events.dat")
     }
-    pub(super) fn load_bossbars(&mut self) {
+    pub(super) fn load_bossbars(&mut self) { if let Some(__l) = crate::points_generated::P786.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.bosses.loaded || self.remote.is_some() {
             return;
         }
@@ -115,7 +115,7 @@ impl Game<'_> {
         self.bosses.rebuild_listing();
         self.ui.registries.bossbars = self.bosses.bars.ids();
     }
-    pub(super) fn save_bossbars(&self) {
+    pub(super) fn save_bossbars(&self) { if let Some(__l) = crate::points_generated::P785.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.bosses.loaded || self.remote.is_some() {
             return;
         }
@@ -132,13 +132,13 @@ impl Game<'_> {
             log::warn!("boss bars were not written: {e}");
         }
     }
-    pub(in crate::game) fn bossbar_exists(&self, id: &str) -> bool {
+    pub(in crate::game) fn bossbar_exists(&self, id: &str) -> bool { if let Some(__l) = crate::points_generated::P784.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.bosses.bars.get(id).is_some()
     }
     /// `CustomBossEvent.setValue` / `setMax`, as `execute store ... bossbar
     /// <id> value|max` calls them: the integer is stored as given and only
     /// the progress is clamped.
-    pub(in crate::game) fn set_bossbar_value(&mut self, id: &str, value: bool, v: i32) {
+    pub(in crate::game) fn set_bossbar_value(&mut self, id: &str, value: bool, v: i32) { let (value,v,) = match crate::points_generated::P783.get() { Some(__l) => { let mut __a = (value,v,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (value,v,) };
         if let Some(b) = self.bosses.bars.get_mut(id) {
             if value {
                 b.value = v;
@@ -154,27 +154,27 @@ impl Game<'_> {
             _ => String::new(),
         }
     }
-    fn bar_checked(&self, ctx: &Context) -> R<String> {
+    fn bar_checked(&self, ctx: &Context) -> R<String> { if let Some(__l) = crate::points_generated::P782.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let id = Self::bar_id(ctx);
         if self.bosses.bars.get(&id).is_none() {
             return Err(err("commands.bossbar.unknown", &[&id]));
         }
         Ok(id)
     }
-    pub(super) fn cmd_bossbar(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_bossbar(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P781.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.load_bossbars();
         let result = self.bossbar_command(id, ctx);
         self.bossbars_changed();
         result
     }
     /// The bars changed: refresh the command suggestions and tell the viewers.
-    pub(super) fn bossbars_changed(&mut self) {
+    pub(super) fn bossbars_changed(&mut self) { if let Some(__l) = crate::points_generated::P780.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.ui.registries.bossbars = self.bosses.bars.ids();
         self.publish_boss_bars();
     }
     /// `CustomBossEvents.create`: a new bar with a UUID drawn from the level's
     /// random. None if the id is taken.
-    pub(super) fn add_custom_bossbar(&mut self, id: &str, name: Comp) -> Option<u128> {
+    pub(super) fn add_custom_bossbar(&mut self, id: &str, name: Comp) -> Option<u128> { if let Some(__l) = crate::points_generated::P779.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.bosses.add_bar(id, name) {
             return None;
         }
@@ -182,7 +182,7 @@ impl Game<'_> {
         self.bosses.bars.get_mut(id)?.uuid = uuid;
         Some(uuid)
     }
-    fn bossbar_command(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    fn bossbar_command(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P778.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match id {
             "bossbar.add" => {
                 let bar = Self::bar_id(ctx);
@@ -286,7 +286,7 @@ impl Game<'_> {
             _ => self.bossbar_set(id, ctx, &bar, &last),
         }
     }
-    fn bossbar_set(&mut self, id: &str, ctx: &Context, bar: &str, last: &str) -> R<i32> {
+    fn bossbar_set(&mut self, id: &str, ctx: &Context, bar: &str, last: &str) -> R<i32> { if let Some(__l) = crate::points_generated::P777.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let shown = |g: &Self| {
             g.bosses
                 .bars
@@ -433,7 +433,7 @@ impl Game<'_> {
         }
     }
     /// A component argument as JSON with its selectors resolved.
-    fn component_json(&mut self, ctx: &Context, name: &str) -> R<Comp> {
+    fn component_json(&mut self, ctx: &Context, name: &str) -> R<Comp> { if let Some(__l) = crate::points_generated::P776.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Arg::Str(json)) = ctx.get(name) else {
             return Ok(sb::literal(""));
         };
@@ -443,7 +443,7 @@ impl Game<'_> {
     }
 
     /// Names of the online players in a boss bar's set, in join order.
-    fn bossbar_player_names(&self, players: &[[i32; 4]]) -> Vec<Text> {
+    fn bossbar_player_names(&self, players: &[[i32; 4]]) -> Vec<Text> { if let Some(__l) = crate::points_generated::P775.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.known_boss_players()
             .into_iter()
             .filter(|(uuid, _)| players.contains(uuid))
@@ -451,7 +451,7 @@ impl Game<'_> {
             .collect()
     }
     /// The players who can be told about a bar: the one in place, then guests.
-    fn known_boss_players(&self) -> Vec<([i32; 4], Text)> {
+    fn known_boss_players(&self) -> Vec<([i32; 4], Text)> { if let Some(__l) = crate::points_generated::P774.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out = Vec::new();
         if self.player.is_some() && !self.lan_acting_fake {
             out.push((self.acting_uuid(), self.target_name(Target::Player)));
@@ -472,7 +472,7 @@ impl Game<'_> {
         }
         out
     }
-    fn player_target_uuid(&self, target: Target) -> Option<[i32; 4]> {
+    fn player_target_uuid(&self, target: Target) -> Option<[i32; 4]> { if let Some(__l) = crate::points_generated::P773.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match target {
             Target::Player => Some(self.acting_uuid()),
             Target::Guest(conn) => self.lan.as_ref().and_then(|h| {
@@ -491,7 +491,7 @@ impl Game<'_> {
     /// Tell every viewer the boss events they should be seeing. The window
     /// that simulates the world applies them to its own overlay; everyone
     /// else gets `ClientboundBossEventPacket`s.
-    pub(super) fn publish_boss_bars(&mut self) {
+    pub(super) fn publish_boss_bars(&mut self) { if let Some(__l) = crate::points_generated::P772.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return;
         }
@@ -521,7 +521,7 @@ impl Game<'_> {
             host.hub.send_to(*conn, packet);
         }
     }
-    fn boss_viewers(&self) -> Vec<Viewer> {
+    fn boss_viewers(&self) -> Vec<Viewer> { if let Some(__l) = crate::points_generated::P771.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out = Vec::new();
         // While `as_guest` has swapped a guest in, the host's own position
         // is not in place. Their overlay updates once the tick puts it back.
@@ -566,7 +566,7 @@ impl Game<'_> {
     }
     /// Custom bars (`CustomBossEvents.onPlayerConnect` sends them as a player
     /// joins), then the dragon, withers and the raid.
-    fn boss_events_for(&self, viewer: &Viewer) -> Vec<Offer> {
+    fn boss_events_for(&self, viewer: &Viewer) -> Vec<Offer> { if let Some(__l) = crate::points_generated::P770.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out = Vec::new();
         for b in &self.bosses.bars.bars {
             if !b.visible || !b.players.contains(&viewer.ints) {
@@ -654,7 +654,7 @@ impl Game<'_> {
     }
     /// The packets that take `viewer` from what it was last sent to `desired`
     /// (`ServerBossEvent`'s broadcasts).
-    fn diff_boss_events(&mut self, viewer: &Viewer, desired: Vec<Offer>) -> Vec<play::BossEvent> {
+    fn diff_boss_events(&mut self, viewer: &Viewer, desired: Vec<Offer>) -> Vec<play::BossEvent> { if let Some(__l) = crate::points_generated::P769.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let full = viewer.local;
         let dim = self.dim;
         let sent = self.bosses.sent.entry(viewer.uuid).or_default();
@@ -710,7 +710,7 @@ impl Game<'_> {
         out
     }
     /// `ClientPacketListener.handleBossUpdate`.
-    pub(super) fn apply_boss_event(&mut self, packet: &play::BossEvent) {
+    pub(super) fn apply_boss_event(&mut self, packet: &play::BossEvent) { if let Some(__l) = crate::points_generated::P768.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.boss_overlay.apply(packet, boss_overlay::now_millis());
     }
 }

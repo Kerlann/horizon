@@ -98,7 +98,7 @@ fn apply_nausea_effect_to_mob(
 
 impl Game<'_> {
     /// The `potent_sulfur_state` of the block at `pos`, with its block state.
-    fn potent_sulfur_state(&self, pos: Pos) -> Option<(BlockStateId, Geyser)> {
+    fn potent_sulfur_state(&self, pos: Pos) -> Option<(BlockStateId, Geyser)> { if let Some(__l) = crate::points_generated::P4613.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let state = self.world.block(pos.0, pos.1, pos.2);
         let value = self
             .pack
@@ -120,7 +120,7 @@ impl Game<'_> {
 
     /// `PotentSulfurBlockEntity.findNoxiousGasSourceBlock` of the sulfur at
     /// `pos`.
-    fn potent_sulfur_source(&self, pos: Pos) -> Option<[i32; 3]> {
+    fn potent_sulfur_source(&self, pos: Pos) -> Option<[i32; 3]> { if let Some(__l) = crate::points_generated::P4612.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let level = ParticleLevel {
             world: &self.world,
             facts: self.res.facts(),
@@ -134,7 +134,7 @@ impl Game<'_> {
     /// `pos`: a wet block gives nausea; a dormant one counts down, then gives
     /// nausea; an erupting one pushes entities, then counts down; a continuous
     /// one pushes entities. A dry block has no ticker.
-    pub(super) fn tick_potent_sulfur(&mut self, pos: Pos) -> Result<()> {
+    pub(super) fn tick_potent_sulfur(&mut self, pos: Pos) -> Result<()> { if let Some(__l) = crate::points_generated::P4611.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((state, geyser)) = self.potent_sulfur_state(pos) else {
             return Ok(());
         };
@@ -157,7 +157,7 @@ impl Game<'_> {
     /// `PotentSulfurBlockEntity.SERVER_NAUSEA_EFFECT_TICKER`: every 10 ticks,
     /// the living entities near the source block that its gas reaches (at
     /// their eyes) get nausea for 4 seconds.
-    fn server_nausea_effect_ticker(&mut self, pos: Pos) {
+    fn server_nausea_effect_ticker(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P4610.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.world.game_time % EFFECT_APPLICATION_FREQUENCY_TICKS != 0 {
             return;
         }
@@ -194,7 +194,7 @@ impl Game<'_> {
     /// `PotentSulfurBlockEntity.applyNauseaEffect` on the player acting (a
     /// guest is swapped in as the player) when the gas reaches their eyes;
     /// spectators are not affected.
-    fn apply_nausea_effect_to_player(&mut self, source: [i32; 3]) {
+    fn apply_nausea_effect_to_player(&mut self, source: [i32; 3]) { let (source,) = match crate::points_generated::P4609.get() { Some(__l) => { let mut __a = (source,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (source,) };
         if self.spectator() {
             return;
         }
@@ -233,7 +233,7 @@ impl Game<'_> {
         pos: Pos,
         state: BlockStateId,
         geyser: Geyser,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P4608.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.world.game_time % 20 != 0 {
             return Ok(());
         }
@@ -294,7 +294,7 @@ impl Game<'_> {
     /// `0.3 + 0.1 * water` upward speed get 0.2 more, unless they ride
     /// something or are of a type geysers do not move. Players are moved by
     /// their own client.
-    fn launch_entity_ticker(&mut self, pos: Pos) {
+    fn launch_entity_ticker(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P4607.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(source) = self.potent_sulfur_source(pos) else {
             return;
         };
@@ -345,7 +345,7 @@ impl Game<'_> {
 
     /// `PotentSulfurBlockEntity.LAUNCH_ENTITY_TICKER` on the client: the local
     /// player in the column, unless spectating, flying or riding.
-    fn launch_local_player_ticker(&mut self, pos: Pos) {
+    fn launch_local_player_ticker(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P4606.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(source) = self.potent_sulfur_source(pos) else {
             return;
         };
@@ -379,7 +379,7 @@ impl Game<'_> {
 
     /// `PotentSulfurBlockEntity.spawnGeyserParticle`: the eruption particle at
     /// the bottom of the source block, as high as the water column is deep.
-    fn spawn_geyser_particle(&mut self, sulfur: Pos, source: [i32; 3]) {
+    fn spawn_geyser_particle(&mut self, sulfur: Pos, source: [i32; 3]) { let (source,) = match crate::points_generated::P4605.get() { Some(__l) => { let mut __a = (source,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (source,) };
         let water_blocks = source[1] - sulfur.1 - 1;
         self.particles.add(
             &ParticleOptions::geyser(T::Geyser, water_blocks),
@@ -394,7 +394,7 @@ impl Game<'_> {
 
     /// `PotentSulfurBlockEntity.spawnNoxiousGasCloudParticle` at the centre of
     /// the source block.
-    fn spawn_noxious_gas_cloud_particle(&mut self, source: [i32; 3]) {
+    fn spawn_noxious_gas_cloud_particle(&mut self, source: [i32; 3]) { let (source,) = match crate::points_generated::P4604.get() { Some(__l) => { let mut __a = (source,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (source,) };
         self.particles.add(
             &ParticleOptions::simple(T::NoxiousGasCloud),
             source.map(|c| f64::from(c) + 0.5),
@@ -407,7 +407,7 @@ impl Game<'_> {
     /// erupting or continuous one shows its plume every second (from its last
     /// eruption event), plays its sound every two, and pushes the local
     /// player.
-    pub(super) fn client_tick_potent_sulfur(&mut self, pos: Pos) {
+    pub(super) fn client_tick_potent_sulfur(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P4603.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((_, geyser)) = self.potent_sulfur_state(pos) else {
             return;
         };
@@ -457,7 +457,7 @@ impl Game<'_> {
 
     /// `ClientLevel.tickBlockEntities` for the potent sulfur of a server's
     /// level: every one the client knows ticks.
-    pub(super) fn tick_remote_potent_sulfur(&mut self) {
+    pub(super) fn tick_remote_potent_sulfur(&mut self) { if let Some(__l) = crate::points_generated::P4602.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let keys: Vec<Pos> = self
             .world
             .block_entities
@@ -472,7 +472,7 @@ impl Game<'_> {
     /// `PotentSulfurBlock.triggerEvent`: the eruption block event stamps the
     /// game time the plume counts from; false when `pos` holds no potent
     /// sulfur block entity.
-    pub(super) fn potent_sulfur_eruption_event(&mut self, pos: Pos) -> bool {
+    pub(super) fn potent_sulfur_eruption_event(&mut self, pos: Pos) -> bool { if let Some(__l) = crate::points_generated::P4601.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let time = self.world.game_time;
         match self.world.block_entities.get_mut(&pos) {
             Some(BlockEntity::PotentSulfur(sulfur)) => {

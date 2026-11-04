@@ -8,7 +8,7 @@ impl Game<'_> {
     /// and coordinates too large for safe block arithmetic. As in vanilla,
     /// the mob's own goals may replace the path next tick. False for the
     /// dragon, which flies by its phase and keeps no navigation.
-    pub(super) fn native_mob_move_to(&mut self, mob: MobRef, at: [f64; 3], speed: f64) -> bool {
+    pub(super) fn native_mob_move_to(&mut self, mob: MobRef, at: [f64; 3], speed: f64) -> bool { let (at,speed,) = match crate::points_generated::P3978.get() { Some(__l) => { let mut __a = (at,speed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,speed,) };
         if !speed.is_finite()
             || at
                 .iter()
@@ -33,7 +33,7 @@ impl Game<'_> {
 
     /// `PathNavigation.stop`. False for a stale or unavailable mob, or on a
     /// client, and for the dragon (no navigation).
-    pub(super) fn native_mob_stop(&mut self, mob: MobRef) -> bool {
+    pub(super) fn native_mob_stop(&mut self, mob: MobRef) -> bool { if let Some(__l) = crate::points_generated::P3977.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -46,7 +46,7 @@ impl Game<'_> {
 
     /// `PathNavigation.isDone`; None for a stale or unavailable mob, or on a
     /// client, and for the dragon (no navigation).
-    pub(super) fn native_mob_is_done(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn native_mob_is_done(&self, mob: MobRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3976.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };

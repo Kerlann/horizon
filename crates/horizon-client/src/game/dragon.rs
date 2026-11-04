@@ -855,11 +855,11 @@ fn wrap64(d: f64) -> f64 {
     if r >= 180.0 { r - 360.0 } else { r }
 }
 impl Game<'_> {
-    fn fight_path(&self) -> std::path::PathBuf {
+    fn fight_path(&self) -> std::path::PathBuf { if let Some(__l) = crate::points_generated::P1752.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         horizon_client::save::dimension_dir(&self.world_root, "minecraft:the_end").join(FIGHT_FILE)
     }
     /// The saved fight, or `createDefault` with the gateways shuffled by the seed.
-    fn load_fight(&mut self) {
+    fn load_fight(&mut self) { if let Some(__l) = crate::points_generated::P1751.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.fight.loaded {
             return;
         }
@@ -942,7 +942,7 @@ impl Game<'_> {
         }
         self.fight = fight;
     }
-    fn end_portal_active(&self) -> bool {
+    fn end_portal_active(&self) -> bool { if let Some(__l) = crate::points_generated::P1750.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (0..256).any(|y| {
             &*self.res.facts().get(self.world.block(0, y, 0)).name == "minecraft:bedrock"
                 && (-3..=3).any(|d| {
@@ -950,7 +950,7 @@ impl Game<'_> {
                 })
         })
     }
-    pub(super) fn save_fight(&mut self) {
+    pub(super) fn save_fight(&mut self) { if let Some(__l) = crate::points_generated::P1749.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.fight.loaded || !self.fight.dirty {
             return;
         }
@@ -989,12 +989,12 @@ impl Game<'_> {
         }
     }
     /// The island's centre chunks are lit (the arena is "loaded").
-    fn arena_loaded(&self) -> bool {
+    fn arena_loaded(&self) -> bool { if let Some(__l) = crate::points_generated::P1748.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (-2..=1).all(|cz| (-2..=1).all(|cx| self.streaming.is_lit(cx, cz)))
     }
     /// A player's entity id: the acting player's body has it, another
     /// player's comes from the hub (0 when no such player is available).
-    fn fight_entity(&self, who: FightWho) -> i32 {
+    fn fight_entity(&self, who: FightWho) -> i32 { if let Some(__l) = crate::points_generated::P1747.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if who == self.acting_player() {
             return self.player.as_ref().map_or(0, |p| p.entity_id);
         }
@@ -1007,17 +1007,17 @@ impl Game<'_> {
         }
     }
     /// The player acting now: the guest whose turn it is, else the host.
-    fn acting_player(&self) -> FightWho {
+    fn acting_player(&self) -> FightWho { if let Some(__l) = crate::points_generated::P1746.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.lan_acting.map_or(FightWho::Host, FightWho::Guest)
     }
     /// Names the acting player behind the blast about to go off (a large
     /// fireball they shot), or no one, for the dragon's kill credit.
-    pub(super) fn set_blast_by_player(&mut self, by_player: bool) {
+    pub(super) fn set_blast_by_player(&mut self, by_player: bool) { let (by_player,) = match crate::points_generated::P1745.get() { Some(__l) => { let mut __a = (by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (by_player,) };
         self.fight.blast_by = by_player.then(|| self.acting_player());
     }
     /// The players in the level the dragon sees (`level.players()`): the
     /// window's own, then every guest in the level.
-    pub(super) fn fight_players(&self) -> Vec<FightPlayer> {
+    pub(super) fn fight_players(&self) -> Vec<FightPlayer> { if let Some(__l) = crate::points_generated::P1744.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out = Vec::new();
         if let Some(p) = self.player.as_ref() {
             out.push(FightPlayer {
@@ -1056,7 +1056,7 @@ impl Game<'_> {
     }
     /// `EnderDragonFight.validPlayer`: the players alive within 192 blocks of
     /// (0, 128, 0), the host and the guests in the level alike.
-    fn fight_has_players(&self) -> bool {
+    fn fight_has_players(&self) -> bool { if let Some(__l) = crate::points_generated::P1743.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let near =
             |p: [f64; 3]| p[0].powi(2) + (p[1] - 128.0).powi(2) + p[2].powi(2) <= 192.0 * 192.0;
         let host = self.player.as_ref().is_some_and(|p| {
@@ -1071,7 +1071,7 @@ impl Game<'_> {
     }
     /// `EnderDragonFight.tick` and the fight's entities, while the End is
     /// ticked (in place for its player, or on a server with players in it).
-    pub(super) fn tick_fight(&mut self) {
+    pub(super) fn tick_fight(&mut self) { if let Some(__l) = crate::points_generated::P1742.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A dragon outside the End (`/summon`) has no fight: `ServerLevel.getDragonFight` is
         // null there, but `EnderDragon.aiStep` still flies it.
         if self.dim != Dim::End {
@@ -1120,7 +1120,7 @@ impl Game<'_> {
         self.tick_dragon();
     }
 
-    pub(super) fn assign_dragon_and_crystal_ids(&mut self) {
+    pub(super) fn assign_dragon_and_crystal_ids(&mut self) { if let Some(__l) = crate::points_generated::P1741.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // EnderDragon's constructor takes its id and its parts' from the
         // entity counter (a dragon loaded from the save gets them here too).
         if let Some(d) = self.dragon.as_mut()
@@ -1137,7 +1137,7 @@ impl Game<'_> {
         }
     }
     /// EndSpikeFeature's crystals (with fire under them on the bedrock).
-    fn place_spike_crystals(&mut self) {
+    fn place_spike_crystals(&mut self) { if let Some(__l) = crate::points_generated::P1740.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for spike in horizon_world::worldgen::end_spike::spikes_for_seed(self.level.seed) {
             let at = Vec3::new(
                 f64::from(spike.center_x) + 0.5,
@@ -1169,7 +1169,7 @@ impl Game<'_> {
         }
     }
     /// `updateCrystalCount`: crystals on the spike tops.
-    fn count_crystals(&mut self) {
+    fn count_crystals(&mut self) { if let Some(__l) = crate::points_generated::P1739.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.fight.crystal_scan = 0;
         let spikes = horizon_world::worldgen::end_spike::spikes_for_seed(self.level.seed);
         self.fight.alive_crystals = self
@@ -1186,7 +1186,7 @@ impl Game<'_> {
     }
     /// `EndCrystal.tick` in every dimension: the time (the spin and bob),
     /// and fire at its block where there is a dragon fight (the End).
-    pub(super) fn tick_crystals(&mut self) {
+    pub(super) fn tick_crystals(&mut self) { if let Some(__l) = crate::points_generated::P1738.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let fire = (self.dim == Dim::End)
             .then(|| self.pack.assets.registry.default_state("minecraft:fire"))
             .flatten();
@@ -1204,7 +1204,7 @@ impl Game<'_> {
     }
     /// `EndCrystal.hurtServer`: remove it, blast only for non-explosion damage,
     /// then notify the dragon fight even when no blast was created.
-    fn destroy_crystal(&mut self, index: usize, by: Option<FightWho>, damage: CrystalDamage) {
+    fn destroy_crystal(&mut self, index: usize, by: Option<FightWho>, damage: CrystalDamage) { let (index,) = match crate::points_generated::P1737.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         if index >= self.crystals.len() || self.crystals[index].invulnerable {
             return;
         }
@@ -1265,7 +1265,7 @@ impl Game<'_> {
         }
     }
     /// Targets for projectiles: dragon parts and crystals.
-    pub(super) fn special_targets(&self) -> Vec<(u32, Aabb)> {
+    pub(super) fn special_targets(&self) -> Vec<(u32, Aabb)> { if let Some(__l) = crate::points_generated::P1736.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out = Vec::new();
         if let Some(d) = self.dragon.as_ref().filter(|d| d.alive()) {
             for i in 0..8 {
@@ -1286,7 +1286,7 @@ impl Game<'_> {
     }
     /// The box of the dragon part or end crystal guests know as entity `id`
     /// (`EnderDragonPart`s follow the dragon's id).
-    pub(super) fn tracked_special_box(&self, id: i32) -> Option<Aabb> {
+    pub(super) fn tracked_special_box(&self, id: i32) -> Option<Aabb> { let (id,) = match crate::points_generated::P1735.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let id = u32::try_from(id).ok().filter(|&id| id != 0)?;
         if let Some(d) = self.dragon.as_ref().filter(|d| d.alive() && d.id != 0)
             && (d.id + 1..=d.id + 8).contains(&id)
@@ -1301,7 +1301,7 @@ impl Game<'_> {
     }
     /// `ServerLevel.dragonParts`: where the part with that entity id is
     /// and its box.
-    pub(super) fn dragon_part(&self, id: u32) -> Option<(Vec3, Aabb)> {
+    pub(super) fn dragon_part(&self, id: u32) -> Option<(Vec3, Aabb)> { let (id,) = match crate::points_generated::P1734.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let d = self.dragon.as_ref().filter(|d| d.alive() && d.id != 0)?;
         (d.id + 1..=d.id + 8).contains(&id).then(|| {
             let i = (id - d.id - 1) as usize;
@@ -1317,7 +1317,7 @@ impl Game<'_> {
         by_player: bool,
         kind: DamageKind,
         direct: Option<&ProjectileKind>,
-    ) -> Hurt {
+    ) -> Hurt { let (id,amount,by_player,) = match crate::points_generated::P1733.get() { Some(__l) => { let mut __a = (id,amount,by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,amount,by_player,) };
         if id >= CRYSTAL_IDS {
             // EndCrystal.hurtServer: false while invulnerable and for fire
             // (its type is fire immune), else it blows up.
@@ -1344,7 +1344,7 @@ impl Game<'_> {
         counts: bool,
         by: Option<FightWho>,
         kind: DamageKind,
-    ) -> Hurt {
+    ) -> Hurt { let (part,damage,counts,) = match crate::points_generated::P1732.get() { Some(__l) => { let mut __a = (part,damage,counts,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (part,damage,counts,) };
         self.hurt_dragon_part(part, damage, counts, by, kind, None)
     }
     /// `EnderDragonPart.hurtServer` on the dragon in the level. `by` is the
@@ -1357,7 +1357,7 @@ impl Game<'_> {
         by: Option<FightWho>,
         kind: DamageKind,
         direct: Option<&ProjectileKind>,
-    ) -> Hurt {
+    ) -> Hurt { let (part,damage,counts,) = match crate::points_generated::P1731.get() { Some(__l) => { let mut __a = (part,damage,counts,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (part,damage,counts,) };
         let by_id = by.map(|who| self.fight_entity(who));
         let source = counts.then(|| hurt_source(kind, by_id, direct));
         let Some(d) = self.dragon.as_mut() else {
@@ -1405,7 +1405,7 @@ impl Game<'_> {
     /// `LivingEntity.die`: `getKillCredit().awardKillScore`, for the player
     /// who hurt the dragon within the last 100 ticks. A guest's kill is
     /// theirs: their statistics, scores and advancements.
-    fn credit_dragon_kill(&mut self) {
+    fn credit_dragon_kill(&mut self) { if let Some(__l) = crate::points_generated::P1730.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(d) = self.dragon.as_ref() else {
             return;
         };
@@ -1437,7 +1437,7 @@ impl Game<'_> {
         id: u32,
         view: &horizon_client::advancements::EntityView,
         blow: Option<(DamageKind, bool)>,
-    ) {
+    ) { let (id,) = match crate::points_generated::P1729.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.award_stat("killed", "minecraft:ender_dragon", 1);
         self.award_custom_stat("mob_kills", 1);
         self.score_player_killed(super::commands::Target::Mob(id));
@@ -1462,7 +1462,7 @@ impl Game<'_> {
     }
     /// Player melee on the dragon's parts or a crystal under the crosshair.
     /// The dragon part under the crosshair within reach: its id and distance.
-    pub(super) fn dragon_hit(&self) -> Option<(u32, f64)> {
+    pub(super) fn dragon_hit(&self) -> Option<(u32, f64)> { if let Some(__l) = crate::points_generated::P1728.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (eye, dir) = self.aim()?;
         let reach: f64 = self.entity_reach;
         let mut best: Option<(u32, f64)> = None;
@@ -1489,7 +1489,7 @@ impl Game<'_> {
         }
         best
     }
-    pub(super) fn attack_dragon(&mut self) -> bool {
+    pub(super) fn attack_dragon(&mut self) -> bool { if let Some(__l) = crate::points_generated::P1727.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((id, d)) = self.dragon_hit() else {
             return false;
         };
@@ -1515,7 +1515,7 @@ impl Game<'_> {
         true
     }
     /// The 24 nodes (`findClosestNode` builds them on first use).
-    fn dragon_nodes(&mut self) -> [[i32; 3]; 24] {
+    fn dragon_nodes(&mut self) -> [[i32; 3]; 24] { if let Some(__l) = crate::points_generated::P1726.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(n) = self.dragon.as_ref().and_then(|d| d.nodes) {
             return n;
         }
@@ -1539,7 +1539,7 @@ impl Game<'_> {
         nodes
     }
     /// `getHeightmapPos(MOTION_BLOCKING_NO_LEAVES)`.
-    fn motion_blocking_no_leaves(&self, x: i32, z: i32) -> i32 {
+    fn motion_blocking_no_leaves(&self, x: i32, z: i32) -> i32 { let (x,z,) = match crate::points_generated::P1725.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,z,) };
         (0..256)
             .rev()
             .find(|&y| {
@@ -1551,10 +1551,10 @@ impl Game<'_> {
             })
             .map_or(0, |y| y + 1)
     }
-    fn podium_top(&self) -> Vec3 {
+    fn podium_top(&self) -> Vec3 { if let Some(__l) = crate::points_generated::P1724.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Vec3::new(0.5, f64::from(self.motion_blocking_no_leaves(0, 0)), 0.5)
     }
-    fn closest_node(&mut self, x: f64, y: f64, z: f64) -> usize {
+    fn closest_node(&mut self, x: f64, y: f64, z: f64) -> usize { let (x,y,z,) = match crate::points_generated::P1723.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,y,z,) };
         let nodes = self.dragon_nodes();
         let start = if self.fight.alive_crystals == 0 {
             12
@@ -1572,7 +1572,7 @@ impl Game<'_> {
         best.1
     }
     /// `findPath` (A* over the adjacency masks), optionally ending at `last`.
-    fn dragon_path(&mut self, from: usize, to: usize, last: Option<[i32; 3]>) -> Option<Path> {
+    fn dragon_path(&mut self, from: usize, to: usize, last: Option<[i32; 3]>) -> Option<Path> { let (from,to,) = match crate::points_generated::P1722.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,to,) };
         let nodes = self.dragon_nodes();
         let dist = |a: [i32; 3], b: [i32; 3]| {
             (((a[0] - b[0]).pow(2) + (a[1] - b[1]).pow(2) + (a[2] - b[2]).pow(2)) as f32).sqrt()
@@ -1636,7 +1636,7 @@ impl Game<'_> {
             next: 0,
         })
     }
-    fn next_target(&mut self, path: &mut Option<PathBox>) -> Option<Vec3> {
+    fn next_target(&mut self, path: &mut Option<PathBox>) -> Option<Vec3> { if let Some(__l) = crate::points_generated::P1721.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let p = path.as_mut()?;
         if p.0.done() {
             return None;
@@ -1653,7 +1653,7 @@ impl Game<'_> {
         Some(Vec3::new(f64::from(c[0]), y, f64::from(c[2])))
     }
     /// The holding-pattern style path step: around the outer or inner ring.
-    fn ring_path(&mut self, clockwise: &mut bool) -> Option<Path> {
+    fn ring_path(&mut self, clockwise: &mut bool) -> Option<Path> { if let Some(__l) = crate::points_generated::P1720.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let d = self.dragon.as_mut()?;
         let flip = d.random.next_int_bound(8).unwrap_or(1) == 0;
         let current = {
@@ -1676,7 +1676,7 @@ impl Game<'_> {
         Some(path)
     }
     /// `DragonStrafePlayerPhase.setTarget`: a path to the player at `p`.
-    fn strafe_begin(&mut self, p: Vec3) {
+    fn strafe_begin(&mut self, p: Vec3) { if let Some(__l) = crate::points_generated::P1719.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(d) = self.dragon.as_ref() else {
             return;
         };
@@ -1705,7 +1705,7 @@ impl Game<'_> {
         }
     }
     /// One phase server tick (`doServerTick`).
-    fn tick_phase(&mut self) {
+    fn tick_phase(&mut self) { if let Some(__l) = crate::points_generated::P1718.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let players = self.fight_players();
         let peaceful = self.ui.difficulty == 0;
         // A crystal destroyed since: strafe the player it named.
@@ -2080,7 +2080,7 @@ impl Game<'_> {
         }
     }
     /// `getHeadLookVector`.
-    fn dragon_look(&self) -> [f64; 3] {
+    fn dragon_look(&self) -> [f64; 3] { if let Some(__l) = crate::points_generated::P1717.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(d) = self.dragon.as_ref() else {
             return [0.0; 3];
         };
@@ -2101,7 +2101,7 @@ impl Game<'_> {
     }
     /// `getHeadLookVector(1).normalize()`, which the phases' `doClientTick`s
     /// take (a look the dragon has never turned from stays the zero vector).
-    fn dragon_look_normalised(&self) -> [f64; 3] {
+    fn dragon_look_normalised(&self) -> [f64; 3] { if let Some(__l) = crate::points_generated::P1716.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let look = self.dragon_look();
         let norm = (look[0] * look[0] + look[1] * look[1] + look[2] * look[2]).sqrt();
         if norm < 1.0e-5 {
@@ -2111,7 +2111,7 @@ impl Game<'_> {
         }
     }
     /// `EnderDragon.aiStep` (and `tickDeath`) for the dragon.
-    fn tick_dragon(&mut self) {
+    fn tick_dragon(&mut self) { if let Some(__l) = crate::points_generated::P1715.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(d) = self.dragon.as_mut() else {
             return;
         };
@@ -2260,7 +2260,7 @@ impl Game<'_> {
         }
     }
     /// The part positions from the yaw and the flight history.
-    fn place_dragon_parts(&mut self) {
+    fn place_dragon_parts(&mut self) { if let Some(__l) = crate::points_generated::P1714.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(d) = self.dragon.as_mut() else {
             return;
         };
@@ -2310,7 +2310,7 @@ impl Game<'_> {
         }
     }
     /// `Level.getEntity`: revenge goals must resolve the dragon too.
-    pub(super) fn dragon_target(&self) -> Option<(u32, horizon_client::mobs::TargetInfo)> {
+    pub(super) fn dragon_target(&self) -> Option<(u32, horizon_client::mobs::TargetInfo)> { if let Some(__l) = crate::points_generated::P1713.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let d = self.dragon.as_ref().filter(|d| d.alive())?;
         let p = d.position;
         Some((
@@ -2331,7 +2331,7 @@ impl Game<'_> {
         ))
     }
     /// Wing knockback, head and neck damage, and breaking blocks in the way.
-    fn dragon_contacts(&mut self) {
+    fn dragon_contacts(&mut self) { if let Some(__l) = crate::points_generated::P1712.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(d) = self.dragon.as_ref() else {
             return;
         };
@@ -2473,7 +2473,7 @@ impl Game<'_> {
     }
     /// `tickDeath`: rising for 200 ticks, explosions, experience, then the
     /// exit portal, the egg and a gateway.
-    fn tick_dragon_death(&mut self) {
+    fn tick_dragon_death(&mut self) { if let Some(__l) = crate::points_generated::P1711.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(d) = self.dragon.as_mut() else {
             return;
         };
@@ -2523,7 +2523,7 @@ impl Game<'_> {
         }
     }
     /// `EnderDragonFight.setDragonKilled`.
-    fn dragon_killed(&mut self) {
+    fn dragon_killed(&mut self) { if let Some(__l) = crate::points_generated::P1710.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let _ = self.activate_exit_portal();
         if let Some(g) = self.fight.gateways.pop() {
             let a = 2.0 * (-std::f64::consts::PI + std::f64::consts::PI / 20.0 * f64::from(g));
@@ -2566,7 +2566,7 @@ impl Game<'_> {
         self.fight.dirty = true;
         self.save_fight();
     }
-    fn spawn_dragon_fireball(&mut self, at: Vec3, dir: Vec3) {
+    fn spawn_dragon_fireball(&mut self, at: Vec3, dir: Vec3) { if let Some(__l) = crate::points_generated::P1709.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let l = (dir.x * dir.x + dir.y * dir.y + dir.z * dir.z)
             .sqrt()
             .max(1.0e-6);
@@ -2590,7 +2590,7 @@ impl Game<'_> {
     }
     /// `DragonFireball` (an AbstractHurtingProjectile): accelerating by its
     /// power, bursting into dragon's breath on impact.
-    pub(super) fn tick_dragon_fireballs(&mut self) {
+    pub(super) fn tick_dragon_fireballs(&mut self) { if let Some(__l) = crate::points_generated::P1708.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut balls = std::mem::take(&mut self.dragon_fireballs);
         // Projectile.canHitEntity: any player but spectators.
         let players: Vec<Aabb> = self
@@ -2677,7 +2677,7 @@ impl Game<'_> {
     /// a quarter duration scale): shrinking, puffing particles, harming the player.
     /// `DragonSittingFlamingPhase.end`: the flame cloud goes once the
     /// phase is left.
-    pub(super) fn end_dragon_flame(&mut self) {
+    pub(super) fn end_dragon_flame(&mut self) { if let Some(__l) = crate::points_generated::P1707.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .dragon
             .as_mut()
@@ -2686,7 +2686,7 @@ impl Game<'_> {
             self.breath_clouds.retain(|c| !c.from_dragon);
         }
     }
-    pub(super) fn tick_breath(&mut self) {
+    pub(super) fn tick_breath(&mut self) { if let Some(__l) = crate::points_generated::P1706.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // What instant damage reaches: neither creative nor spectator players.
         let players: Vec<FightPlayer> = self
             .fight_players()
@@ -2757,7 +2757,7 @@ impl Game<'_> {
     /// from the body, and hurt for 5 unless the dragon is perched
     /// (`isSitting`) or a mob hurt the player within the last 2 ticks
     /// (`getLastHurtByMobTimestamp() < tickCount - 2`).
-    fn dragon_wing_knock_back(&mut self, push: Vec3, sitting: bool) {
+    fn dragon_wing_knock_back(&mut self, push: Vec3, sitting: bool) { let (sitting,) = match crate::points_generated::P1705.get() { Some(__l) => { let mut __a = (sitting,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (sitting,) };
         let now = self.world.game_time;
         let hurt_lately = self.player_hurt_by().is_some_and(|(_, at)| at >= now - 2);
         let hurts = !sitting && !hurt_lately && !self.creative;
@@ -2788,13 +2788,13 @@ impl Game<'_> {
     /// Damage from the dragon, which is its causing entity
     /// (`DamageSources.mobAttack(dragon)`, `indirectMagic(cloud, dragon)`): the
     /// death message names it, or the cloud once the dragon is gone.
-    fn dragon_hurts_player(&mut self, damage_type: &str, amount: f32) {
+    fn dragon_hurts_player(&mut self, damage_type: &str, amount: f32) { let (amount,) = match crate::points_generated::P1704.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         self.note_dragon_attacker(damage_type);
         self.hurt_player_by(damage_type, amount);
     }
     /// The causing entity of the dragon's next `damage_type` damage, for the
     /// death message.
-    fn note_dragon_attacker(&mut self, damage_type: &str) {
+    fn note_dragon_attacker(&mut self, damage_type: &str) { if let Some(__l) = crate::points_generated::P1703.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(id) = self.dragon.as_ref().map(|d| d.id) {
             let name = Text::translate("entity.minecraft.ender_dragon", &[]);
             self.note_named_attacker(damage_type, id, name);
@@ -2805,7 +2805,7 @@ impl Game<'_> {
     }
     /// `BossHealthOverlay.extractRenderState`: whatever `publish_boss_bars`
     /// (or a server's packets) put on this client's overlay.
-    pub(super) fn draw_boss_bars(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_boss_bars(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P1702.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let bars = self
             .boss_overlay
             .bars(horizon_client::boss_overlay::now_millis());
@@ -2820,7 +2820,7 @@ impl Game<'_> {
     /// The dragon fight's bar for a player at `at`
     /// (`EnderDragonFight.dragonEvent`, visible while the fight is not won
     /// and the player is alive within 192 blocks of (0, 128, 0)).
-    pub(super) fn dragon_boss_progress(&self, at: [f64; 3], alive: bool) -> Option<f32> {
+    pub(super) fn dragon_boss_progress(&self, at: [f64; 3], alive: bool) -> Option<f32> { let (at,alive,) = match crate::points_generated::P1701.get() { Some(__l) => { let mut __a = (at,alive,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,alive,) };
         if self.dim != Dim::End || !alive || !self.fight.loaded || self.fight.killed {
             return None;
         }
@@ -2835,7 +2835,7 @@ impl Game<'_> {
         )
     }
     /// `BossHealthOverlay.shouldPlayMusic`.
-    pub(super) fn boss_music(&self) -> bool {
+    pub(super) fn boss_music(&self) -> bool { if let Some(__l) = crate::points_generated::P1700.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.boss_overlay.should_play_music()
     }
 }
@@ -2980,7 +2980,7 @@ impl Game<'_> {
         alpha: f64,
         out: &mut Vec<Vertex>,
         additive: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P1699.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let (Some(d), Some(model)) = (self.dragon.as_ref(), self.dragon_model.as_ref()) else {
             return;
         };
@@ -3182,7 +3182,7 @@ impl Game<'_> {
         }
     }
     /// `EnderDragonRenderer.submitRays`: untextured, additive death rays.
-    fn dragon_rays(&self, base: glam::Mat4, t: f32, out: &mut Vec<Vertex>) {
+    fn dragon_rays(&self, base: glam::Mat4, t: f32, out: &mut Vec<Vertex>) { let (t,) = match crate::points_generated::P1698.get() { Some(__l) => { let mut __a = (t,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (t,) };
         dragon_rays(base, t, self.gui.atlas.font.white(), out);
     }
     /// `submitCrystalBeams`: an eight-sided tube from `from` (+2 up) along
@@ -3194,7 +3194,7 @@ impl Game<'_> {
         time: f32,
         camera: glam::DVec3,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (time,) = match crate::points_generated::P1697.get() { Some(__l) => { let mut __a = (time,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (time,) };
         let Some(s) = self
             .gui
             .atlas
@@ -3259,7 +3259,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         alpha: f64,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P1696.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let Some(s) = self
             .gui
             .atlas
@@ -3299,16 +3299,16 @@ impl Game<'_> {
             }
         }
     }
-    pub(super) fn fight_ready(&mut self) -> bool {
+    pub(super) fn fight_ready(&mut self) -> bool { if let Some(__l) = crate::points_generated::P1695.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.load_fight();
         // spawnExitPortal runs from scanState and the dragon's death, both
         // only with players in the fight.
         self.fight.loaded && self.fight.players
     }
-    pub(super) fn exit_portal(&self) -> Option<[i32; 3]> {
+    pub(super) fn exit_portal(&self) -> Option<[i32; 3]> { if let Some(__l) = crate::points_generated::P1694.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.fight.exit_portal
     }
-    pub(super) fn set_exit_portal(&mut self, origin: [i32; 3]) {
+    pub(super) fn set_exit_portal(&mut self, origin: [i32; 3]) { let (origin,) = match crate::points_generated::P1693.get() { Some(__l) => { let mut __a = (origin,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,) };
         if self.fight.exit_portal.is_none() {
             self.fight.exit_portal = Some(origin);
             self.fight.dirty = true;
@@ -3413,7 +3413,7 @@ impl Game<'_> {
         center: [f64; 3],
         radius: f32,
         blocks: &[[i32; 3]],
-    ) {
+    ) { let (center,radius,) = match crate::points_generated::P1692.get() { Some(__l) => { let mut __a = (center,radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,) };
         let diameter = f64::from(radius * 2.0);
         let in_reach = |p: Vec3| {
             ((p.x - center[0]).powi(2) + (p.y - center[1]).powi(2) + (p.z - center[2]).powi(2))
@@ -3470,7 +3470,7 @@ impl Game<'_> {
     /// the synched data that differs from the defaults: its health, defined
     /// as 1, and `DATA_PHASE`, defined as hovering). Vanilla pairs it with no
     /// attribute instances.
-    pub(super) fn lan_dragon_state(&self) -> Option<horizon_client::lan::entity::EntityState> {
+    pub(super) fn lan_dragon_state(&self) -> Option<horizon_client::lan::entity::EntityState> { if let Some(__l) = crate::points_generated::P1691.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_protocol::entity_data::{Value, serializer};
         let d = self.dragon.as_ref().filter(|d| d.id != 0)?;
         let mut meta = Vec::new();
@@ -3522,7 +3522,7 @@ impl Game<'_> {
 }
 impl Game<'_> {
     /// The dragon and fight for `horizon-ctl status`.
-    pub(super) fn dragon_status(&self) -> serde_json::Value {
+    pub(super) fn dragon_status(&self) -> serde_json::Value { if let Some(__l) = crate::points_generated::P1690.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         serde_json::json!({
             "dragon": self.dragon.as_ref().map(|d| serde_json::json!({
                 "id": d.id,
@@ -3561,7 +3561,7 @@ impl Game<'_> {
         &mut self,
         hit: &super::Hit,
         stack: &horizon_client::items::ItemStack,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P1689.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:end_crystal" {
             return false;
         }
@@ -3616,7 +3616,7 @@ impl Game<'_> {
     }
     /// `EndCrystal.kill` (`/kill`): the crystal is removed, without a blast
     /// (`Entity.kill` does not hurt it).
-    pub(super) fn kill_crystal(&mut self, id: u32) {
+    pub(super) fn kill_crystal(&mut self, id: u32) { let (id,) = match crate::points_generated::P1688.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Some(i) = self.crystals.iter().position(|c| c.id == id) {
             self.destroy_crystal(i, None, CrystalDamage::Explosion);
         }
@@ -3627,7 +3627,7 @@ impl Game<'_> {
     /// (`dragonFight.setDragonKilled`): the exit portal, a gateway and the
     /// first dragon's egg, and no new dragon. No experience: `tickDeath`
     /// drops it, and a killed dragon never gets there.
-    pub(super) fn kill_dragon(&mut self, id: u32) {
+    pub(super) fn kill_dragon(&mut self, id: u32) { let (id,) = match crate::points_generated::P1687.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if self.dragon.as_ref().is_some_and(|d| d.id == id) {
             self.dragon = None;
             // ServerLevel.getDragonFight: only the End has a fight.
@@ -3637,7 +3637,7 @@ impl Game<'_> {
         }
     }
     /// Any entity touching `room` (`Level.getEntities(null, box)`).
-    fn entity_in(&self, room: Aabb) -> bool {
+    fn entity_in(&self, room: Aabb) -> bool { if let Some(__l) = crate::points_generated::P1686.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let touches = |lo: Vec3, hi: Vec3| {
             let (a, b) = (room.min_position(), room.max_position());
             lo.x < b.x && hi.x > a.x && lo.y < b.y && hi.y > a.y && lo.z < b.z && hi.z > a.z
@@ -3664,7 +3664,7 @@ impl Game<'_> {
             })
     }
     /// `EnderDragonFight.tryRespawn`: a crystal on each side of the portal.
-    fn try_respawn(&mut self) {
+    fn try_respawn(&mut self) { if let Some(__l) = crate::points_generated::P1685.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.load_fight();
         if !self.fight.killed || self.fight.respawn.is_some() {
             return;
@@ -3719,14 +3719,14 @@ impl Game<'_> {
         self.fight.respawn_crystals = found;
         self.fight.dirty = true;
     }
-    fn block_name_at(&self, p: [i32; 3]) -> std::sync::Arc<str> {
+    fn block_name_at(&self, p: [i32; 3]) -> std::sync::Arc<str> { let (p,) = match crate::points_generated::P1684.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         self.res
             .facts()
             .get(self.world.block(p[0], p[1], p[2]))
             .name
             .clone()
     }
-    fn respawn_beams(&mut self, target: Option<[i32; 3]>) {
+    fn respawn_beams(&mut self, target: Option<[i32; 3]>) { if let Some(__l) = crate::points_generated::P1683.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let list = self.fight.respawn_crystals.clone();
         for c in &mut self.crystals {
             if list.iter().any(|p| p.distance_squared(c.position) < 0.01) {
@@ -3735,7 +3735,7 @@ impl Game<'_> {
         }
     }
     /// `LevelEvent 3001`: the dragon's growl over the island.
-    fn respawn_growl(&mut self) {
+    fn respawn_growl(&mut self) { if let Some(__l) = crate::points_generated::P1682.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pitch = 0.8 + self.world.random.next_float() * 0.3;
         self.audio.play(
             "minecraft:entity.ender_dragon.growl",
@@ -3744,12 +3744,12 @@ impl Game<'_> {
             pitch,
         );
     }
-    fn set_respawn(&mut self, stage: Option<Respawn>) {
+    fn set_respawn(&mut self, stage: Option<Respawn>) { if let Some(__l) = crate::points_generated::P1681.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.fight.respawn = stage.map(|s| (s, 0));
         self.fight.dirty = true;
     }
     /// `EnderDragonFight.tick` with a respawn in progress.
-    fn tick_respawn(&mut self) {
+    fn tick_respawn(&mut self) { if let Some(__l) = crate::points_generated::P1680.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((stage, time)) = self.fight.respawn else {
             return;
         };
@@ -3814,7 +3814,7 @@ impl Game<'_> {
     }
     /// SUMMONING_PILLARS at the end of a beam: the spike is cleared, blown up
     /// and grown again with a guarded crystal.
-    fn rebuild_spike(&mut self, spike: &horizon_world::worldgen::end_spike::EndSpike) {
+    fn rebuild_spike(&mut self, spike: &horizon_world::worldgen::end_spike::EndSpike) { if let Some(__l) = crate::points_generated::P1679.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (cx, cz, h) = (spike.center_x, spike.center_z, spike.height);
         let air = self.pack.assets.registry.default_state("minecraft:air");
         let Some(air) = air else {
@@ -3894,7 +3894,7 @@ impl Game<'_> {
         self.world.modified.insert((cx >> 4, cz >> 4));
     }
     /// Iron bars connected north, south, west and east.
-    fn set_bars(&mut self, pos: [i32; 3], sides: [bool; 4]) {
+    fn set_bars(&mut self, pos: [i32; 3], sides: [bool; 4]) { let (pos,sides,) = match crate::points_generated::P1678.get() { Some(__l) => { let mut __a = (pos,sides,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,sides,) };
         let registry = self.pack.assets.registry;
         let Some(mut state) = registry
             .default_state("minecraft:iron_bars")
@@ -3912,7 +3912,7 @@ impl Game<'_> {
         }
     }
     /// `resetSpikeCrystals`: spike crystals lose their beams and protection.
-    fn reset_spike_crystals(&mut self) {
+    fn reset_spike_crystals(&mut self) { if let Some(__l) = crate::points_generated::P1677.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let spikes = horizon_world::worldgen::end_spike::spikes_for_seed(self.level.seed);
         for c in &mut self.crystals {
             let on_spike = spikes.iter().any(|s| {
@@ -3927,7 +3927,7 @@ impl Game<'_> {
         }
     }
     /// `EnderDragonFight.createNewDragon`: over the podium, holding pattern, a random yaw.
-    fn create_new_dragon(&mut self) {
+    fn create_new_dragon(&mut self) { if let Some(__l) = crate::points_generated::P1676.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let yaw = self.world.random.next_float() * 360.0;
         let seed = self.world.random.next_long();
         let mut dragon = Dragon::new(Vec3::new(0.0, 128.0, 0.0), yaw, seed);
@@ -3936,7 +3936,7 @@ impl Game<'_> {
     }
     /// The END stage: the portal crystals blow up (no block damage) and a
     /// new dragon takes over.
-    fn finish_respawn(&mut self) {
+    fn finish_respawn(&mut self) { if let Some(__l) = crate::points_generated::P1675.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Portal crystals are not on spikes; clear their revival beams before
         // the spike reset and before they are removed (vanilla resetEndCrystals).
         self.respawn_beams(None);
@@ -3992,7 +3992,7 @@ impl Game<'_> {
         self.count_crystals();
     }
     /// `abortRespawnSequence`.
-    fn abort_respawn(&mut self) {
+    fn abort_respawn(&mut self) { if let Some(__l) = crate::points_generated::P1674.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.fight.respawn = None;
         self.respawn_beams(None);
         self.fight.respawn_crystals.clear();
@@ -4002,7 +4002,7 @@ impl Game<'_> {
     }
     /// `EnderDragon.checkCrystals`' search: the nearest crystal whose box
     /// meets the dragon's box grown by 32.
-    fn nearest_crystal_to(&self, p: Vec3) -> Option<usize> {
+    fn nearest_crystal_to(&self, p: Vec3) -> Option<usize> { if let Some(__l) = crate::points_generated::P1673.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // The dragon's 16 by 8 box.
         let reach = Aabb::new(
             Vec3::new(p.x - 8.0, p.y, p.z - 8.0),
@@ -4040,7 +4040,7 @@ impl Game<'_> {
     /// `handleAddEntity` for `minecraft:ender_dragon`. Its constructor
     /// sets the full health and the hovering phase until the server's
     /// synched data says otherwise.
-    pub(super) fn spawn_remote_dragon(&mut self, id: i32, position: [f64; 3], yaw: f32) {
+    pub(super) fn spawn_remote_dragon(&mut self, id: i32, position: [f64; 3], yaw: f32) { let (id,position,yaw,) = match crate::points_generated::P1672.get() { Some(__l) => { let mut __a = (id,position,yaw,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,position,yaw,) };
         let at = Vec3::new(position[0], position[1], position[2]);
         let mut d = Dragon::new(at, yaw, i64::from(id));
         d.id = id as u32;
@@ -4055,7 +4055,7 @@ impl Game<'_> {
         }
     }
     /// The remote dragon, if `id` is it or one of its parts.
-    fn remote_dragon_mut(&mut self, id: i32) -> Option<&mut Dragon> {
+    fn remote_dragon_mut(&mut self, id: i32) -> Option<&mut Dragon> { let (id,) = match crate::points_generated::P1671.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Ok(uid) = u32::try_from(id) else {
             return None;
         };
@@ -4065,7 +4065,7 @@ impl Game<'_> {
     }
     /// `handleSetEntityData`: LivingEntity.DATA_HEALTH_ID and
     /// EnderDragon.DATA_PHASE (`onSyncedDataUpdated` sets the phase).
-    pub(super) fn remote_dragon_data(&mut self, id: i32, values: &[(u8, i32, Value)]) {
+    pub(super) fn remote_dragon_data(&mut self, id: i32, values: &[(u8, i32, Value)]) { let (id,) = match crate::points_generated::P1670.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(d) = self.remote_dragon_mut(id) else {
             return;
         };
@@ -4078,13 +4078,13 @@ impl Game<'_> {
         }
     }
     /// `handleSetEntityMotion`: the velocity its wings flap by.
-    pub(super) fn remote_dragon_motion(&mut self, id: i32, velocity: [f64; 3]) {
+    pub(super) fn remote_dragon_motion(&mut self, id: i32, velocity: [f64; 3]) { let (id,velocity,) = match crate::points_generated::P1669.get() { Some(__l) => { let mut __a = (id,velocity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,velocity,) };
         if let Some(d) = self.remote_dragon_mut(id) {
             d.velocity = Vec3::new(velocity[0], velocity[1], velocity[2]);
         }
     }
     /// `handleHurtAnimation` and `handleDamageEvent`: the red flash.
-    pub(super) fn remote_dragon_hurt(&mut self, id: i32) {
+    pub(super) fn remote_dragon_hurt(&mut self, id: i32) { let (id,) = match crate::points_generated::P1668.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Some(d) = self.remote_dragon_mut(id) {
             // `LivingEntity.handleDamageEvent`: the red flash. Its sound is the
             // server's (`playHurtSound`); a client plays one only for its own player.
@@ -4093,7 +4093,7 @@ impl Game<'_> {
     }
     /// `handleRemoveEntities`, or a crystal removed: the healing beam
     /// keeps pointing at the same crystal.
-    pub(super) fn remove_remote_dragon(&mut self, id: i32) {
+    pub(super) fn remove_remote_dragon(&mut self, id: i32) { let (id,) = match crate::points_generated::P1667.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if self.dragon.as_ref().is_some_and(|d| d.id as i32 == id) {
             self.dragon = None;
             return;
@@ -4112,7 +4112,7 @@ impl Game<'_> {
     /// One client tick of the dragon. `lerp`: the step toward its last
     /// sent position and yaw (LivingEntity's interpolation), and the
     /// steps left including this one.
-    pub(super) fn tick_remote_dragon(&mut self, lerp: Option<([f64; 3], Option<f32>, u32)>) {
+    pub(super) fn tick_remote_dragon(&mut self, lerp: Option<([f64; 3], Option<f32>, u32)>) { if let Some(__l) = crate::points_generated::P1666.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(d) = self.dragon.as_mut() else {
             return;
         };
@@ -4203,7 +4203,7 @@ impl Game<'_> {
     /// dragon breath from the head (their `look.yRot(...)` results are thrown
     /// away in vanilla, so every puff leaves along the same line), the third
     /// puffs an explosion every 10 ticks and the last growls on every tick.
-    fn remote_dragon_phase_tick(&mut self) {
+    fn remote_dragon_phase_tick(&mut self) { if let Some(__l) = crate::points_generated::P1665.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let look = self.dragon_look_normalised();
         let Some(d) = self.dragon.as_mut() else {
             return;
@@ -4266,7 +4266,7 @@ impl Game<'_> {
         eye: [f64; 3],
         dir: [f64; 3],
         reach: f64,
-    ) -> Option<(i32, f64, [f64; 3])> {
+    ) -> Option<(i32, f64, [f64; 3])> { let (eye,dir,reach,) = match crate::points_generated::P1664.get() { Some(__l) => { let mut __a = (eye,dir,reach,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (eye,dir,reach,) };
         let d = self.dragon.as_ref().filter(|d| d.alive() && d.id != 0)?;
         (0..8)
             .filter_map(|i| {

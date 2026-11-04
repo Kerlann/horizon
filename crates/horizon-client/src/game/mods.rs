@@ -441,7 +441,7 @@ impl Game<'_> {
     /// Lists the installed mods on the Mods page. Content mods load with the resources
     /// (`content_root`); native ones are built into the game (`native_hooks.rs`). Unsupported
     /// files get the same unreadable-file row as any other invalid package.
-    pub(super) fn start_mods(&mut self) {
+    pub(super) fn start_mods(&mut self) { if let Some(__l) = crate::points_generated::P2787.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let dir = Self::game_dir().join(mod_list::DIR);
         let mut paths = horizon_mods::find(&dir);
         paths.retain(|p| !self.mods.dev.contains(p));

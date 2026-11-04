@@ -184,7 +184,7 @@ fn write_tanks(nbt: &mut Compound, tanks: &[Tank]) {
 impl Game<'_> {
     /// What holds fluids at `pos` in the level in place: a mod block's tanks (its block
     /// entity's, and not the placeholder standing in while it ticks), or a cauldron.
-    fn native_fluid_at(&self, pos: [i32; 3]) -> Option<FluidAt> {
+    fn native_fluid_at(&self, pos: [i32; 3]) -> Option<FluidAt> { let (pos,) = match crate::points_generated::P2658.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         if !self.native_simulates() {
             return None;
         }
@@ -213,7 +213,7 @@ impl Game<'_> {
         }
     }
     /// The cauldron at `pos` set to hold `to`. Whether it changed.
-    fn cauldron_set(&mut self, pos: [i32; 3], to: CauldronFluids) -> bool {
+    fn cauldron_set(&mut self, pos: [i32; 3], to: CauldronFluids) -> bool { let (pos,) = match crate::points_generated::P2657.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let (name, level) = match to {
             CauldronFluids::Empty | CauldronFluids::Water(0) => ("minecraft:cauldron", None),
             CauldronFluids::Water(level) => ("minecraft:water_cauldron", Some(level)),
@@ -233,14 +233,14 @@ impl Game<'_> {
         }
     }
     /// The saved tanks of the mod block entity at `pos`, `n` of them.
-    fn tank_state(&self, pos: [i32; 3], n: usize) -> Option<Vec<Tank>> {
+    fn tank_state(&self, pos: [i32; 3], n: usize) -> Option<Vec<Tank>> { let (pos,n,) = match crate::points_generated::P2656.get() { Some(__l) => { let mut __a = (pos,n,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,n,) };
         match self.world.block_entities.get(&(pos[0], pos[1], pos[2]))? {
             BlockEntity::Mod(m) => Some(read_tanks(&m.nbt, n)),
             _ => None,
         }
     }
     /// `tank_state`'s writer.
-    fn set_tank_state(&mut self, pos: [i32; 3], state: &[Tank]) {
+    fn set_tank_state(&mut self, pos: [i32; 3], state: &[Tank]) { let (pos,) = match crate::points_generated::P2655.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let key = (pos[0], pos[1], pos[2]);
         self.journal_block_entity(key);
         if let Some(BlockEntity::Mod(m)) = self.world.block_entities.get_mut(&key) {
@@ -249,7 +249,7 @@ impl Game<'_> {
         }
     }
     /// The tanks the game's own fluid capability reaches at `at`: in the level in place only.
-    fn capability_tanks(&self, at: BlockSide) -> Option<FluidAt> {
+    fn capability_tanks(&self, at: BlockSide) -> Option<FluidAt> { if let Some(__l) = crate::points_generated::P2654.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_level_in_place(at.level) {
             return None;
         }
@@ -258,7 +258,7 @@ impl Game<'_> {
     /// How many tanks of the block at `at` in the level in place its side reaches
     /// (none: every tank), for the game's own fluid capability: a mod block's by its table, a
     /// cauldron's one. None where no tanks are.
-    pub(in crate::game) fn native_fluid_tank_count(&self, at: BlockSide) -> Option<usize> {
+    pub(in crate::game) fn native_fluid_tank_count(&self, at: BlockSide) -> Option<usize> { if let Some(__l) = crate::points_generated::P2653.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.capability_tanks(at)? {
             FluidAt::Mod(tanks) => Some(side_tanks(&tanks, at.side).len()),
             FluidAt::Cauldron(_) => Some(1),
@@ -269,7 +269,7 @@ impl Game<'_> {
         &self,
         at: BlockSide,
         tank: usize,
-    ) -> Option<FluidStack> {
+    ) -> Option<FluidStack> { let (tank,) = match crate::points_generated::P2652.get() { Some(__l) => { let mut __a = (tank,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (tank,) };
         match self.capability_tanks(at)? {
             FluidAt::Mod(tanks) => {
                 let real = *side_tanks(&tanks, at.side).get(tank)?;
@@ -296,7 +296,7 @@ impl Game<'_> {
         at: BlockSide,
         tank: usize,
         fluid: &FluidStack,
-    ) -> u32 {
+    ) -> u32 { let (tank,) = match crate::points_generated::P2651.get() { Some(__l) => { let mut __a = (tank,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (tank,) };
         match self.capability_tanks(at) {
             Some(at) if !game_holds(fluid, &at) => 0,
             Some(FluidAt::Mod(tanks)) => side_tanks(&tanks, at.side)
@@ -318,7 +318,7 @@ impl Game<'_> {
         tank: usize,
         fluid: FluidStack,
         tx: &Transaction,
-    ) -> Option<FluidStack> {
+    ) -> Option<FluidStack> { let (tank,) = match crate::points_generated::P2650.get() { Some(__l) => { let mut __a = (tank,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (tank,) };
         let _ = tx;
         if fluid.amount == 0 {
             return None;
@@ -365,7 +365,7 @@ impl Game<'_> {
         tank: usize,
         max: u32,
         tx: &Transaction,
-    ) -> Option<FluidStack> {
+    ) -> Option<FluidStack> { let (tank,max,) = match crate::points_generated::P2649.get() { Some(__l) => { let mut __a = (tank,max,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (tank,max,) };
         let _ = tx;
         let max = mb(max);
         match self.capability_tanks(at)? {

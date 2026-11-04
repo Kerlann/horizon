@@ -376,7 +376,7 @@ impl Game<'_> {
     /// game's, which the returned swap keeps until `leave_guest`. The host
     /// stays in `self.lan`, so the guest can reach other players. Guest turns
     /// can nest: the acting guest and their queued packets are restored.
-    pub(super) fn enter_guest(&mut self, conn: u32) -> Option<GuestSwap> {
+    pub(super) fn enter_guest(&mut self, conn: u32) -> Option<GuestSwap> { let (conn,) = match crate::points_generated::P2312.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let host = self.lan.as_mut()?;
         // An active guest's record holds an outer player's state, not theirs.
         if self.lan_guest_swaps.contains(&conn) {
@@ -708,7 +708,7 @@ impl Game<'_> {
 
     /// The second half of `as_guest`: the guest's state back into their
     /// record, the game's back in place, and what the turn changed sent.
-    pub(super) fn leave_guest(&mut self, swap: GuestSwap) {
+    pub(super) fn leave_guest(&mut self, swap: GuestSwap) { if let Some(__l) = crate::points_generated::P2311.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             unreachable!("LanHost dropped inside a guest turn; closes are deferred");
         };
@@ -1204,7 +1204,7 @@ impl Game<'_> {
         &mut self,
         conn: u32,
         source: horizon_world::damage_source::DamageTypeId,
-    ) {
+    ) { let (conn,) = match crate::points_generated::P2310.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -1224,7 +1224,7 @@ impl Game<'_> {
     /// `LivingEntity.playHurtSound` for a guest: the server's `Entity.playSound`
     /// reaches every player around but the hurt one, whose own client plays it
     /// from `handleDamageEvent` (#4149).
-    fn guest_hurt_sound(&mut self, conn: u32, sound: &str) {
+    fn guest_hurt_sound(&mut self, conn: u32, sound: &str) { let (conn,) = match crate::points_generated::P2309.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -1262,7 +1262,7 @@ impl Game<'_> {
     }
 
     /// The game mode fields without `set_mode`'s side effects on the host.
-    fn set_mode_raw(&mut self, id: i32) {
+    fn set_mode_raw(&mut self, id: i32) { let (id,) = match crate::points_generated::P2308.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         use horizon_client::command::args::GameMode;
         self.mode = match id {
             1 => GameMode::Creative,
@@ -1276,7 +1276,7 @@ impl Game<'_> {
     /// Whether the mods let the guest open the menu `kind` (`native_container_opened`),
     /// heard with the guest's state swapped in. Asked before the menu that
     /// was open closes.
-    pub(super) fn guest_may_open(&mut self, conn: u32, kind: &str, pos: Option<[i32; 3]>) -> bool {
+    pub(super) fn guest_may_open(&mut self, conn: u32, kind: &str, pos: Option<[i32; 3]>) -> bool { let (conn,) = match crate::points_generated::P2307.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(guest) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return true;
         };
@@ -1298,14 +1298,14 @@ impl Game<'_> {
 
     /// Hand a container the guest opened over (ServerPlayer.openMenu);
     /// false when it is not one a guest can open.
-    fn lan_open_container(&mut self, conn: u32, pos: (i32, i32, i32)) -> bool {
+    fn lan_open_container(&mut self, conn: u32, pos: (i32, i32, i32)) -> bool { let (conn,) = match crate::points_generated::P2306.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         if pos.1 == super::minecarts::CART_KEY_Y {
             return self.lan_open_vehicle_container(conn, pos);
         }
         !matches!(self.open_block_menu(conn, pos), MenuOpen::Refused)
     }
 
-    pub(super) fn open_block_menu(&mut self, conn: u32, pos: (i32, i32, i32)) -> MenuOpen {
+    pub(super) fn open_block_menu(&mut self, conn: u32, pos: (i32, i32, i32)) -> MenuOpen { let (conn,) = match crate::points_generated::P2305.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let name = &self
             .res
             .facts()
@@ -1502,7 +1502,7 @@ impl Game<'_> {
     /// the vehicle's own `MenuProvider.createMenu` builds - three rows of a
     /// `ChestMenu` for a chest boat or a chest minecart, a `HopperMenu` for a
     /// hopper minecart - titled with the vehicle's name.
-    fn lan_open_vehicle_container(&mut self, conn: u32, pos: (i32, i32, i32)) -> bool {
+    fn lan_open_vehicle_container(&mut self, conn: u32, pos: (i32, i32, i32)) -> bool { let (conn,) = match crate::points_generated::P2304.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let entity_type = if let Some(cart) = self.carts.iter().find(|c| c.id as i32 == pos.2) {
             cart.kind.id().to_owned()
         } else if let Some(boat) = self.boats.iter().find(|b| b.id as i32 == pos.2) {
@@ -1552,7 +1552,7 @@ impl Game<'_> {
     /// sound is played for everyone around (`ChestBlockEntity.onClose`, a
     /// `playSound` with no player), the guest included, once the last opener
     /// has left.
-    pub(super) fn guest_container_closed(&mut self, conn: u32) {
+    pub(super) fn guest_container_closed(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2303.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let pos = self.lan.as_ref().and_then(|host| {
             let guest = host.hub.guest(conn)?;
             (!guest.spectator())
@@ -1574,7 +1574,7 @@ impl Game<'_> {
     /// Nothing is sent to the client: this is for a guest who is leaving or
     /// whose server is closing. The guest must be in `host.hub.guests` and the
     /// level they are in must be the one in place.
-    pub(super) fn guest_close_all(&mut self, conn: u32) {
+    pub(super) fn guest_close_all(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2302.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -1612,7 +1612,7 @@ impl Game<'_> {
     /// the closing player as the source. A hopper minecart keeps
     /// `Container.stopOpen`'s no-op. Called by the close packet and by the
     /// `ServerPlayer.tick` reach/destroyed close.
-    fn close_guest_vehicle_menu(&mut self, conn: u32, key: (i32, i32, i32)) {
+    fn close_guest_vehicle_menu(&mut self, conn: u32, key: (i32, i32, i32)) { let (conn,) = match crate::points_generated::P2301.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         if self.lan.is_none() {
             return;
         }
@@ -1650,7 +1650,7 @@ impl Game<'_> {
     /// `ServerPlayer.tick`'s `stillValid`: a guest's block container closes
     /// once the guest is out of reach of its block (a removed block closes it
     /// in the hub's `sync_containers`).
-    fn lan_containers_tick(&mut self) {
+    fn lan_containers_tick(&mut self) { if let Some(__l) = crate::points_generated::P2300.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -1688,7 +1688,7 @@ impl Game<'_> {
 
     /// `stillValid` of the guest's open container: its blocks are still there
     /// and in reach, or its vehicle exists and is in reach. True with none open.
-    fn container_menu_valid(&self, g: &horizon_client::lan::guest::Guest) -> bool {
+    fn container_menu_valid(&self, g: &horizon_client::lan::guest::Guest) -> bool { if let Some(__l) = crate::points_generated::P2299.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         g.menu.as_ref().is_none_or(|m| {
             !(m.slots.valid(&self.world) && !m.slots.still_valid(&self.world, g, m.pos))
                 && !m.pos.is_some_and(|k| {
@@ -1700,7 +1700,7 @@ impl Game<'_> {
     /// `AbstractContainerMenu.stillValid` of whatever menu the guest has open
     /// (a container or vehicle, a trade, the crafting table, a station, a
     /// lectern, a mount's inventory). True when none is open.
-    fn guest_menu_still_valid(&self, conn: u32) -> bool {
+    fn guest_menu_still_valid(&self, conn: u32) -> bool { let (conn,) = match crate::points_generated::P2298.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return true;
         };
@@ -1737,7 +1737,7 @@ impl Game<'_> {
     /// window with it, so the click lands on nothing
     /// (`ServerGamePacketListenerImpl.handleContainerClick` and the others
     /// ask `stillValid` first).
-    fn guest_validate_menu(&mut self, conn: u32) {
+    fn guest_validate_menu(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2297.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         if self.guest_menu_still_valid(conn) {
             return;
         }
@@ -1770,7 +1770,7 @@ impl Game<'_> {
     /// `ContainerEntity.isChestVehicleStillValid`: the chest minecart or chest
     /// boat is still there and within the guest's entity interaction range
     /// plus 4 of its box.
-    fn chest_vehicle_still_valid(&self, id: i32, g: &horizon_client::lan::guest::Guest) -> bool {
+    fn chest_vehicle_still_valid(&self, id: i32, g: &horizon_client::lan::guest::Guest) -> bool { let (id,) = match crate::points_generated::P2296.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let bounds = self
             .carts
             .iter()
@@ -1788,7 +1788,7 @@ impl Game<'_> {
     /// DedicatedServer.isUnderSpawnProtection: no operators, an operator or a
     /// radius of 0 or less is never under it; else a block within the radius
     /// of the world spawn (square, in the Overworld) is.
-    fn under_spawn_protection(&self, gi: usize, pos: [i32; 3]) -> bool {
+    fn under_spawn_protection(&self, gi: usize, pos: [i32; 3]) -> bool { let (gi,pos,) = match crate::points_generated::P2295.get() { Some(__l) => { let mut __a = (gi,pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (gi,pos,) };
         let Some(host) = self.lan.as_ref() else {
             return false;
         };
@@ -1809,7 +1809,7 @@ impl Game<'_> {
     }
 
     /// ServerPlayer.sendSpawnProtectionMessage.
-    fn spawn_protection_message(&self, conn: u32, pos: [i32; 3]) {
+    fn spawn_protection_message(&self, conn: u32, pos: [i32; 3]) { let (conn,pos,) = match crate::points_generated::P2294.get() { Some(__l) => { let mut __a = (conn,pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,pos,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -1832,7 +1832,7 @@ impl Game<'_> {
 
     /// `ServerGamePacketListenerImpl.wasBlockPlacementAttempt`: a block item,
     /// or a bucket with something in it, that is not cooling down.
-    fn was_block_placement_attempt(&mut self, hand: Hand) -> bool {
+    fn was_block_placement_attempt(&mut self, hand: Hand) -> bool { if let Some(__l) = crate::points_generated::P2293.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(stack) = self.with_hand(hand, |g| g.held().cloned()) else {
             return false;
         };
@@ -1849,7 +1849,7 @@ impl Game<'_> {
     }
 
     /// `ServerPlayer.sendBuildLimitMessage`: the red overlay with the limit.
-    fn build_limit_message(&self, conn: u32, too_high: bool, limit: i32) {
+    fn build_limit_message(&self, conn: u32, too_high: bool, limit: i32) { let (conn,too_high,limit,) = match crate::points_generated::P2292.get() { Some(__l) => { let mut __a = (conn,too_high,limit,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,too_high,limit,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -1875,7 +1875,7 @@ impl Game<'_> {
     /// mods hear it with the guest's state swapped in, and when one cancels,
     /// the guest keeps what they had and is sent their abilities again, as
     /// vanilla answers what it refuses.
-    pub(super) fn lan_flight_toggled(&mut self, conn: u32, flying: bool) {
+    pub(super) fn lan_flight_toggled(&mut self, conn: u32, flying: bool) { let (conn,flying,) = match crate::points_generated::P2291.get() { Some(__l) => { let mut __a = (conn,flying,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,flying,) };
         let Some((uuid, name)) = self
             .lan
             .as_ref()
@@ -1899,7 +1899,7 @@ impl Game<'_> {
     }
 
     /// A packet from a guest that the hub does not handle itself.
-    pub(super) fn lan_guest_packet(&mut self, conn: u32, packet: S) {
+    pub(super) fn lan_guest_packet(&mut self, conn: u32, packet: S) { let (conn,) = match crate::points_generated::P2290.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -3035,7 +3035,7 @@ impl Game<'_> {
 
     /// `ServerLevel.getEntity(id)`'s `Entity.saveWithoutId`: the player or
     /// other entity of the level in place with that network id.
-    fn level_entity_tag(&mut self, id: i32) -> Option<horizon_world::nbt::Tag> {
+    fn level_entity_tag(&mut self, id: i32) -> Option<horizon_world::nbt::Tag> { let (id,) = match crate::points_generated::P2289.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         use super::commands::Target;
         let host = self.lan.as_ref()?;
         let player = host
@@ -3114,7 +3114,7 @@ impl Game<'_> {
         conn: u32,
         slot: i32,
         stack: Option<&ItemStack>,
-    ) -> bool {
+    ) -> bool { let (conn,slot,) = match crate::points_generated::P2288.get() { Some(__l) => { let mut __a = (conn,slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,slot,) };
         let Some((uuid, name)) = self
             .lan
             .as_ref()
@@ -3143,7 +3143,7 @@ impl Game<'_> {
     /// A native mod can raise an item's stack size past 99 (`item_defaults::MAX_STACK_SIZE`), so
     /// the count is held to what the wire carries instead. handleSetCreativeModeSlot's `validData`
     /// then ignores a stack beyond its own stack size.
-    fn creative_stack_valid(&mut self, gi: usize, s: &ItemStack) -> bool {
+    fn creative_stack_valid(&mut self, gi: usize, s: &ItemStack) -> bool { let (gi,) = match crate::points_generated::P2287.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let Some(host) = self.lan.as_mut() else {
             return false;
         };
@@ -3163,7 +3163,7 @@ impl Game<'_> {
     fn item_from_network(
         &self,
         stack: &Option<horizon_protocol::item::Stack>,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P2286.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let s = stack.as_ref()?;
         let mut out = self.lan.as_ref()?.hub.stack_from_network(s);
         out.count = out.count.max(1);
@@ -3176,7 +3176,7 @@ impl Game<'_> {
     /// sooner removes it too.
     /// `ServerGamePacketListenerImpl.handleTeleportToEntityPacket` for a
     /// player: the host's own, or a guest in the world.
-    fn guest_spectate_teleport(&mut self, gi: usize, uuid: u128) {
+    fn guest_spectate_teleport(&mut self, gi: usize, uuid: u128) { let (gi,) = match crate::points_generated::P2285.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -3207,7 +3207,7 @@ impl Game<'_> {
         g.new_body(true);
         host.hub.teleport(gi, Some(at));
     }
-    fn guest_tick_death(&mut self, gi: usize) {
+    fn guest_tick_death(&mut self, gi: usize) { let (gi,) = match crate::points_generated::P2284.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         if self
             .lan
             .as_mut()
@@ -3217,7 +3217,7 @@ impl Game<'_> {
         }
     }
 
-    fn guest_drop_carried(&mut self, gi: usize) {
+    fn guest_drop_carried(&mut self, gi: usize) { let (gi,) = match crate::points_generated::P2283.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let carried = self
             .lan
             .as_mut()
@@ -3231,7 +3231,7 @@ impl Game<'_> {
     /// cursor goes back into their inventory (`placeItemBackInInventory`,
     /// dropped only if it doesn't fit), and their client's cursor empties
     /// with the inventory it is sent.
-    pub(super) fn guest_carried_back(&mut self, gi: usize) {
+    pub(super) fn guest_carried_back(&mut self, gi: usize) { let (gi,) = match crate::points_generated::P2282.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let carried = self
             .lan
             .as_mut()
@@ -3244,7 +3244,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn drop_guest_items(&mut self, gi: usize, stacks: Vec<ItemStack>) {
+    pub(super) fn drop_guest_items(&mut self, gi: usize, stacks: Vec<ItemStack>) { let (gi,) = match crate::points_generated::P2281.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -3269,7 +3269,7 @@ impl Game<'_> {
     }
 
     /// Whether a block outline occludes the straight line from `eye` to `point`.
-    fn block_between(&self, eye: [f64; 3], point: [f64; 3]) -> bool {
+    fn block_between(&self, eye: [f64; 3], point: [f64; 3]) -> bool { let (eye,point,) = match crate::points_generated::P2280.get() { Some(__l) => { let mut __a = (eye,point,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (eye,point,) };
         let d = [point[0] - eye[0], point[1] - eye[1], point[2] - eye[2]];
         let dist = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
         if dist < 1e-9 {
@@ -3296,7 +3296,7 @@ impl Game<'_> {
         gi: usize,
         id: i32,
         location: Option<[f64; 3]>,
-    ) -> Option<([f64; 3], [f64; 3])> {
+    ) -> Option<([f64; 3], [f64; 3])> { let (gi,id,) = match crate::points_generated::P2279.get() { Some(__l) => { let mut __a = (gi,id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,id,) };
         let eye = {
             let g = &self.lan.as_ref()?.hub.guests[gi];
             [g.position[0], g.position[1] + g.eye_height(), g.position[2]]
@@ -3356,7 +3356,7 @@ impl Game<'_> {
     /// `ServerGamePacketListenerImpl.handlePlayerAction` for STAB: the spear in
     /// the guest's main hand jabs once its charge allows it (with five ticks
     /// of tolerance). The guest's client is sent the dash Lunge gave them.
-    fn guest_jab(&mut self, conn: u32) {
+    fn guest_jab(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2278.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -3389,12 +3389,12 @@ impl Game<'_> {
     /// have (the handlers then find nothing either).
     /// `WorldBorder.isWithinBounds(target.blockPosition())` for an entity of this box:
     /// the block its feet are in (the box's bottom centre).
-    fn inside_border(&self, target: &Aabb) -> bool {
+    fn inside_border(&self, target: &Aabb) -> bool { if let Some(__l) = crate::points_generated::P2277.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let feet = target.bottom_center();
         self.border.contains(feet.x.floor(), feet.z.floor())
     }
 
-    pub(super) fn guest_target_box(&self, gi: usize, id: i32) -> Option<Aabb> {
+    pub(super) fn guest_target_box(&self, gi: usize, id: i32) -> Option<Aabb> { let (gi,id,) = match crate::points_generated::P2276.get() { Some(__l) => { let mut __a = (gi,id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (gi,id,) };
         let host = self.lan.as_ref()?;
         let conn = host.hub.guests[gi].conn;
         if let Some(g) = host
@@ -3434,14 +3434,14 @@ impl Game<'_> {
     }
 
     /// The fence of the knot whose entity id is `id` (`lan_assign_ids`).
-    fn knot_at_id(&self, id: i32) -> Option<[i32; 3]> {
+    fn knot_at_id(&self, id: i32) -> Option<[i32; 3]> { let (id,) = match crate::points_generated::P2275.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.knot_ids
             .iter()
             .find(|&(_, &knot)| knot as i32 == id)
             .map(|(&fence, _)| fence)
     }
 
-    fn guest_attack(&mut self, conn: u32, id: i32) {
+    fn guest_attack(&mut self, conn: u32, id: i32) { let (conn,id,) = match crate::points_generated::P2274.get() { Some(__l) => { let mut __a = (conn,id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,id,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -3607,7 +3607,7 @@ impl Game<'_> {
         conn: u32,
         command: &str,
         signed: Option<Vec<(String, horizon_client::lan::hub::chat::ChatMessage)>>,
-    ) {
+    ) { let (conn,) = match crate::points_generated::P2273.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         // The mods hear every command first, and may stop it.
         let mut canceled = false;
         let mut replies = Vec::new();
@@ -3725,7 +3725,7 @@ impl Game<'_> {
 
     /// The guests' queued commands, run with the hub in `self.lan` so that
     /// they reach the other players too (`/give Bob`, `/tp Bob`, `/kick`).
-    pub(super) fn run_guest_commands(&mut self) {
+    pub(super) fn run_guest_commands(&mut self) { if let Some(__l) = crate::points_generated::P2272.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         loop {
             let Some(host) = self.lan.as_mut() else {
                 return;
@@ -3740,7 +3740,7 @@ impl Game<'_> {
 
     /// One guest's command as that guest, its feedback sent to them; false
     /// when it failed (or the guest is gone).
-    pub(super) fn run_guest_command(&mut self, c: GuestCommand) -> bool {
+    pub(super) fn run_guest_command(&mut self, c: GuestCommand) -> bool { if let Some(__l) = crate::points_generated::P2271.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(swap) = self.enter_guest(c.conn) else {
             return false;
         };
@@ -3789,7 +3789,7 @@ impl Game<'_> {
     /// whose it was; none for the host's or the console's): every other
     /// operator gets them, and the console logs them as the server's own
     /// system messages (MinecraftServer.sendSystemMessage).
-    pub(super) fn send_admin_feedback(&mut self, source: Option<u32>) {
+    pub(super) fn send_admin_feedback(&mut self, source: Option<u32>) { if let Some(__l) = crate::points_generated::P2270.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -3821,7 +3821,7 @@ impl Game<'_> {
     /// the nodes the tree marks `ask_server`.
     /// ServerCommandSuggestionsProvider.tryProcessRequest: answer the latest request if this
     /// tick's answer is free. One client asking a hundred times a tick costs one parse.
-    fn guest_try_suggestions(&mut self, conn: u32) {
+    fn guest_try_suggestions(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2269.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -3836,7 +3836,7 @@ impl Game<'_> {
         self.guest_suggestions(conn, &payload);
     }
 
-    fn guest_suggestions(&mut self, conn: u32, payload: &[u8]) {
+    fn guest_suggestions(&mut self, conn: u32, payload: &[u8]) { let (conn,) = match crate::points_generated::P2268.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -3939,7 +3939,7 @@ impl Game<'_> {
         );
     }
 
-    fn guest_respawn(&mut self, conn: u32) {
+    fn guest_respawn(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2267.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -4174,7 +4174,7 @@ impl Game<'_> {
     }
 
     /// Per tick, for every guest: dig, use items, pick up drops, die.
-    pub(super) fn tick_guests(&mut self) {
+    pub(super) fn tick_guests(&mut self) { if let Some(__l) = crate::points_generated::P2266.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.tick_guest_cameras();
         self.lan_merchant_tick();
         self.lan_stations_tick();
@@ -4359,7 +4359,7 @@ impl Game<'_> {
 
     /// `ServerPlayer.die` for a guest whose health has run out: the death
     /// message, the loot and experience, the death screen.
-    pub(super) fn guest_die(&mut self, gi: usize, conn: u32) {
+    pub(super) fn guest_die(&mut self, gi: usize, conn: u32) { let (gi,conn,) = match crate::points_generated::P2265.get() { Some(__l) => { let mut __a = (gi,conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -4540,7 +4540,7 @@ impl Game<'_> {
     /// `SculkCatalystBlockEntity.CatalystListener`'s trigger on a player's
     /// death: for the player the dying guest's combat record credits
     /// (`LivingEntity.getKillCredit`), with the death's `killing_blow`.
-    fn guest_catalyst_trigger(&mut self, gi: usize, conn: u32, at: [f64; 3]) {
+    fn guest_catalyst_trigger(&mut self, gi: usize, conn: u32, at: [f64; 3]) { let (gi,conn,at,) = match crate::points_generated::P2264.get() { Some(__l) => { let mut __a = (gi,conn,at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,conn,at,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -4659,7 +4659,7 @@ impl Game<'_> {
 
     /// The killing blow of a guest as `LivingDeathEvent` names it: the
     /// damage type and the causing entity's id (0 for none).
-    fn guest_damage_source(&self, conn: u32) -> (String, u32) {
+    fn guest_damage_source(&self, conn: u32) -> (String, u32) { let (conn,) = match crate::points_generated::P2263.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,) };
         let (damage_type, attacker) = match self
             .lan
             .as_ref()
@@ -4682,7 +4682,7 @@ impl Game<'_> {
         &mut self,
         conn: u32,
         me: horizon_client::text::Text,
-    ) -> horizon_client::text::Text {
+    ) -> horizon_client::text::Text { let (conn,) = match crate::points_generated::P2262.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let mut tracker = self.guest_combat.remove(&conn).unwrap_or_default();
         std::mem::swap(&mut self.combat, &mut tracker);
         let text = self.combat_death_message_for(me);
@@ -4694,7 +4694,7 @@ impl Game<'_> {
     /// `LivingEntity.stopSleeping` and `ServerPlayer.stopSleepInBed` for a
     /// guest who woke up from `head`: stand beside the bed facing it, and
     /// teleport the client there.
-    fn wake_guest_from(&mut self, gi: usize, head: [i32; 3]) {
+    fn wake_guest_from(&mut self, gi: usize, head: [i32; 3]) { let (gi,head,) = match crate::points_generated::P2261.get() { Some(__l) => { let mut __a = (gi,head,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,head,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -4729,7 +4729,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn wake_woken_guests(&mut self) {
+    pub(super) fn wake_woken_guests(&mut self) { if let Some(__l) = crate::points_generated::P2260.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -4746,7 +4746,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn wake_guest(&mut self, gi: usize) {
+    pub(super) fn wake_guest(&mut self, gi: usize) { let (gi,) = match crate::points_generated::P2259.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -4760,7 +4760,7 @@ impl Game<'_> {
 
     /// `Player.tick`'s sleep counter, and `LivingEntity.tick`'s wake-up of a
     /// sleeper who died or whose bed is gone.
-    fn guest_sleep_tick(&mut self, gi: usize) {
+    fn guest_sleep_tick(&mut self, gi: usize) { let (gi,) = match crate::points_generated::P2258.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -4835,7 +4835,7 @@ impl Game<'_> {
     /// `SleepStatus.update`'s counts over the host's player and the guests:
     /// the players not in spectator mode, how many are in bed, and how many
     /// of those have slept 100 ticks.
-    fn sleep_counts(&self) -> (i64, i64, i64) {
+    fn sleep_counts(&self) -> (i64, i64, i64) { if let Some(__l) = crate::points_generated::P2257.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (mut active, mut sleeping, mut deep) = (0i64, 0i64, 0i64);
         let mut count = |in_bed: bool, timer: u32| {
             active += 1;
@@ -4864,7 +4864,7 @@ impl Game<'_> {
     }
 
     /// `SleepStatus.sleepersNeeded`.
-    fn sleepers_needed(&self, active: i64) -> i64 {
+    fn sleepers_needed(&self, active: i64) -> i64 { let (active,) = match crate::points_generated::P2256.get() { Some(__l) => { let mut __a = (active,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (active,) };
         let percent = i64::from(self.ui.rules.int("players_sleeping_percentage").max(0));
         ((active * percent + 99) / 100).max(1)
     }
@@ -4873,7 +4873,7 @@ impl Game<'_> {
     /// host's player and the guests: of the players not in spectator mode,
     /// players_sleeping_percentage of them (at least one) are in bed, and as
     /// many have slept 100 ticks.
-    pub(super) fn enough_slept(&self) -> bool {
+    pub(super) fn enough_slept(&self) -> bool { if let Some(__l) = crate::points_generated::P2255.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (active, sleeping, deep) = self.sleep_counts();
         let needed = self.sleepers_needed(active);
         sleeping >= needed && deep >= needed
@@ -4883,7 +4883,7 @@ impl Game<'_> {
     /// the players or the sleepers change, a published or dedicated world
     /// shows everyone "n/m players sleeping", or "Sleeping through this
     /// night" once enough are in bed, on the action bar.
-    pub(super) fn announce_sleep_status(&mut self) {
+    pub(super) fn announce_sleep_status(&mut self) { if let Some(__l) = crate::points_generated::P2254.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (active, sleeping, _) = self.sleep_counts();
         let (old_active, old_sleeping) = self.sleep_seen;
         self.sleep_seen = (active, sleeping);
@@ -4919,7 +4919,7 @@ impl Game<'_> {
     }
 
     /// `ServerLevel.wakeUpAllPlayers` for the guests.
-    pub(super) fn wake_guests(&mut self) {
+    pub(super) fn wake_guests(&mut self) { if let Some(__l) = crate::points_generated::P2253.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -4931,7 +4931,7 @@ impl Game<'_> {
 
     /// `PlayerList.broadcastSystemMessage` of the advancements guests made
     /// (their own actions, commands and ticks).
-    pub(super) fn announce_guest_advancements(&mut self) {
+    pub(super) fn announce_guest_advancements(&mut self) { if let Some(__l) = crate::points_generated::P2252.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.lan.is_none() {
             return;
         }
@@ -4952,7 +4952,7 @@ impl Game<'_> {
     /// spin's damage and the spin ends. A `ServerPlayer` is client
     /// authoritative, so its `aiStep` does not travel and both boxes vanilla
     /// passes are the current one: no sweep over the tick's moves.
-    pub(super) fn server_spin_attack(&mut self) {
+    pub(super) fn server_spin_attack(&mut self) { if let Some(__l) = crate::points_generated::P2251.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -4987,7 +4987,7 @@ impl Game<'_> {
     /// hazards (drowning, lava, fire blocks, suffocation, the void), and
     /// regeneration and the food tick (ServerPlayer.doTick). Their hurt
     /// sounds are heard at the guest.
-    fn guest_server_tick(&mut self, conn: u32) {
+    fn guest_server_tick(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2250.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         self.guest_replay(conn);
         self.guest_vehicle_tick(conn);
         // The last move's fall stands in for the server's delta movement.
@@ -5386,7 +5386,7 @@ impl Game<'_> {
     /// and slides on the rider's keys, a camel dashes — and the sound vanilla's
     /// server plays is broadcast to the players near the mount, the rider
     /// included (their own client plays none).
-    fn lan_start_riding_jump(&mut self, conn: u32, data: i32) {
+    fn lan_start_riding_jump(&mut self, conn: u32, data: i32) { let (conn,data,) = match crate::points_generated::P2249.get() { Some(__l) => { let mut __a = (conn,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,data,) };
         let index = self.as_guest(conn, |g| g.mount_index());
         let Some(Some(index)) = index else {
             return;
@@ -5417,7 +5417,7 @@ impl Game<'_> {
     /// ServerGamePacketListenerImpl.handlePlayerCommand START_FALL_FLYING:
     /// `Player.tryToStartFallFlying`, or else `stopFallFlying` (a second
     /// start while gliding ends the glide, as in vanilla).
-    fn lan_start_gliding(&mut self, conn: u32) {
+    fn lan_start_gliding(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2248.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
@@ -5444,7 +5444,7 @@ impl Game<'_> {
 
     /// `Player.canGlide`: not flying, airborne, not riding, no levitation, and
     /// a glider that its next point of wear won't break.
-    fn guest_can_glide(&mut self, conn: u32) -> Option<bool> {
+    fn guest_can_glide(&mut self, conn: u32) -> Option<bool> { let (conn,) = match crate::points_generated::P2247.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let g = self.lan.as_ref()?.hub.guest(conn)?;
         if g.abilities.flying || g.on_ground || g.vehicle.is_some() {
             return Some(false);
@@ -5459,7 +5459,7 @@ impl Game<'_> {
     /// 20th tick wears the glider by one, and every 10th is an
     /// `elytra_glide` game event. Entity.checkFallDistanceAccumulation runs
     /// first: a glide that isn't diving keeps the fall distance at 1.
-    fn guest_glide_tick(&mut self, conn: u32, fell: f64) {
+    fn guest_glide_tick(&mut self, conn: u32, fell: f64) { let (conn,fell,) = match crate::points_generated::P2246.get() { Some(__l) => { let mut __a = (conn,fell,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,fell,) };
         let Some(g) = self.lan.as_mut().and_then(|host| host.hub.guest_mut(conn)) else {
             return;
         };
@@ -5505,7 +5505,7 @@ impl Game<'_> {
     /// is a full collision box that is also a full render cube
     /// (`BlockBehaviour.isSuffocating`'s default; glass and the like opt
     /// out), as the mobs' check has it.
-    fn in_wall(&self, at: [f64; 3], body: Dimensions) -> bool {
+    fn in_wall(&self, at: [f64; 3], body: Dimensions) -> bool { let (at,) = match crate::points_generated::P2245.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,) };
         let y = (at[1] + f64::from(body.eye_height)).floor() as i32;
         let [xs, zs] = eye_columns(at, body);
         xs.into_iter().any(|x| {
@@ -5521,7 +5521,7 @@ impl Game<'_> {
     /// digging since the START that named `pos` is at least 70 % done; otherwise it keeps digging
     /// alone and breaks it when done (`guest_delayed_destroy`), so the client's broken block is
     /// never left standing on the server.
-    fn guest_stop_digging(&mut self, conn: u32, pos: [i32; 3]) {
+    fn guest_stop_digging(&mut self, conn: u32, pos: [i32; 3]) { let (conn,pos,) = match crate::points_generated::P2244.get() { Some(__l) => { let mut __a = (conn,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,pos,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -5565,7 +5565,7 @@ impl Game<'_> {
 
     /// ServerPlayerGameMode.tick's delayed destroy: the block breaks once its progress since
     /// the digging started is complete, unless something else removed it first.
-    fn guest_delayed_destroy(&mut self, conn: u32) {
+    fn guest_delayed_destroy(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2243.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -5595,7 +5595,7 @@ impl Game<'_> {
 
     /// ServerPlayerGameMode.destroyBlock for a guest, its crack cleared for the others
     /// (`destroyBlockProgress(id, pos, -1)`).
-    fn guest_destroy(&mut self, conn: u32, pos: [i32; 3]) {
+    fn guest_destroy(&mut self, conn: u32, pos: [i32; 3]) { let (conn,pos,) = match crate::points_generated::P2242.get() { Some(__l) => { let mut __a = (conn,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,pos,) };
         self.as_guest(conn, |g| {
             let _ = g.break_block(pos);
         });
@@ -5603,7 +5603,7 @@ impl Game<'_> {
     }
 
     /// The crack animation other players see.
-    fn guest_dig_feedback(&mut self, conn: u32) {
+    fn guest_dig_feedback(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2241.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -5663,7 +5663,7 @@ impl Game<'_> {
     /// A player who dies digs and uses nothing any more: the block it was
     /// breaking, or had left to break (`hasDelayedDestroy`), stays, and its
     /// crack goes. Respawning gives it a new ServerPlayerGameMode (#1315).
-    fn guest_forget_digging(&mut self, conn: u32) {
+    fn guest_forget_digging(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2240.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(play) = self.lan.as_mut().and_then(|host| host.play.get_mut(&conn)) else {
             return;
         };
@@ -5679,7 +5679,7 @@ impl Game<'_> {
             self.guest_crack_gone(conn, pos);
         }
     }
-    fn guest_crack_gone(&mut self, conn: u32, pos: [i32; 3]) {
+    fn guest_crack_gone(&mut self, conn: u32, pos: [i32; 3]) { let (conn,pos,) = match crate::points_generated::P2239.get() { Some(__l) => { let mut __a = (conn,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,pos,) };
         let Some(id) = self
             .lan
             .as_ref()
@@ -5706,7 +5706,7 @@ impl Game<'_> {
 
     /// Dropped items touching a guest go into their inventory
     /// (`ItemEntity.playerTouch`, then `ServerPlayer.onItemPickup`).
-    fn guest_pickups(&mut self, gi: usize) {
+    fn guest_pickups(&mut self, gi: usize) { let (gi,) = match crate::points_generated::P2238.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -5791,7 +5791,7 @@ impl Game<'_> {
     /// `AbstractArrow.playerTouch` for a guest, as `touch_arrows` does for the
     /// host's player. The guest's own client plays the pickup sound
     /// (`handleTakeItemEntity`).
-    fn guest_arrows(&mut self, gi: usize) {
+    fn guest_arrows(&mut self, gi: usize) { let (gi,) = match crate::points_generated::P2237.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         use horizon_client::arrows::Touch;
         let Some(host) = self.lan.as_ref() else {
             return;
@@ -5860,7 +5860,7 @@ impl Game<'_> {
     /// experience orbs in the guest's box grown by 1, 0.5, 1: one of them at
     /// random, at most every 2 ticks (`ExperienceOrb.playerTouch`), repairs
     /// with Mending and gives the rest as points. Everyone near hears it.
-    fn guest_orbs(&mut self, gi: usize) {
+    fn guest_orbs(&mut self, gi: usize) { let (gi,) = match crate::points_generated::P2236.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -5972,7 +5972,7 @@ impl Game<'_> {
 
     /// `level.playSound(player, ...)` of a guest's use it predicted (`remote::hand_operated`
     /// blocks only, as the guest decides): the others hear it now, the guest already did.
-    fn guest_use_sounds(&mut self, conn: u32, logged: usize, heard: usize) {
+    fn guest_use_sounds(&mut self, conn: u32, logged: usize, heard: usize) { let (conn,logged,heard,) = match crate::points_generated::P2235.get() { Some(__l) => { let mut __a = (conn,logged,heard,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,logged,heard,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -6028,7 +6028,7 @@ impl Game<'_> {
 
     /// `InstrumentItem.play`'s `level.playSound(player, ...)`: the others hear
     /// a guest's horn now, the guest's own client played it as it used it.
-    fn guest_instrument_sound(&mut self, conn: u32, heard: usize, horn: Option<String>) {
+    fn guest_instrument_sound(&mut self, conn: u32, heard: usize, horn: Option<String>) { let (conn,heard,) = match crate::points_generated::P2234.get() { Some(__l) => { let mut __a = (conn,heard,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,heard,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -6048,7 +6048,7 @@ impl Game<'_> {
     }
 
     /// Positional sounds and level events of the tick, for the guests.
-    pub(super) fn lan_broadcast_effects(&mut self) {
+    pub(super) fn lan_broadcast_effects(&mut self) { if let Some(__l) = crate::points_generated::P2233.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -6071,7 +6071,7 @@ impl Game<'_> {
     /// `LivingEntity.tick`'s arrows and bee stingers falling out of the
     /// players' bodies, and their counts for the players around
     /// (`DATA_ARROW_COUNT_ID`, `DATA_STINGER_COUNT_ID`).
-    pub(super) fn lan_stuck(&mut self, paused: bool) {
+    pub(super) fn lan_stuck(&mut self, paused: bool) { let (paused,) = match crate::points_generated::P2232.get() { Some(__l) => { let mut __a = (paused,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (paused,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -6094,7 +6094,7 @@ impl Game<'_> {
 
     /// The guests' items in use, for the players around (`LivingEntity.startUsingItem`
     /// and `stopUsingItem` set DATA_LIVING_ENTITY_FLAGS).
-    pub(super) fn lan_living_flags(&mut self) {
+    pub(super) fn lan_living_flags(&mut self) { if let Some(__l) = crate::points_generated::P2231.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -6109,7 +6109,7 @@ impl Game<'_> {
     /// client does not run uses itself, so it does not predict the swing; a
     /// client that did (a block placed) is still in the first half of its
     /// swing and ignores it (`SwingState.startIfAble`).
-    fn lan_swing_back(&mut self, conn: u32, swung: Option<bool>) {
+    fn lan_swing_back(&mut self, conn: u32, swung: Option<bool>) { let (conn,) = match crate::points_generated::P2230.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -6127,7 +6127,7 @@ impl Game<'_> {
 
     /// The tick's arm swings for the players around (each guest's to everyone
     /// else), and `LivingEntity.updateSwingTime` for the guests' bodies here.
-    pub(super) fn lan_swings(&mut self) {
+    pub(super) fn lan_swings(&mut self) { if let Some(__l) = crate::points_generated::P2229.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };

@@ -6,7 +6,7 @@ use super::Game;
 impl Game<'_> {
     /// Structures reaching `pos`: (id, inside a piece). `getStructureAt`
     /// tests the start's whole box, `getStructureWithPieceAt` a piece's.
-    pub(super) fn structures_reaching(&self, pos: [i32; 3]) -> Vec<(String, bool)> {
+    pub(super) fn structures_reaching(&self, pos: [i32; 3]) -> Vec<(String, bool)> { let (pos,) = match crate::points_generated::P5573.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.structures_reaching_where(pos, &|_| true)
     }
     /// The same, for the structures whose id `wanted` takes: the others'
@@ -15,7 +15,7 @@ impl Game<'_> {
         &self,
         pos: [i32; 3],
         wanted: &dyn Fn(&str) -> bool,
-    ) -> Vec<(String, bool)> {
+    ) -> Vec<(String, bool)> { let (pos,) = match crate::points_generated::P5572.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let Some(chunk) = self.world.chunks.get(&(pos[0] >> 4, pos[2] >> 4)) else {
             return Vec::new();
         };
@@ -44,7 +44,7 @@ impl Game<'_> {
         out
     }
     /// The structures with a piece containing `pos`.
-    pub(super) fn structures_at(&self, pos: [i32; 3]) -> Vec<String> {
+    pub(super) fn structures_at(&self, pos: [i32; 3]) -> Vec<String> { let (pos,) = match crate::points_generated::P5571.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.structures_reaching(pos)
             .into_iter()
             .filter(|(_, piece)| *piece)

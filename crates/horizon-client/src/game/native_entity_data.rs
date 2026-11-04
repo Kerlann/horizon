@@ -13,7 +13,7 @@ impl Game<'_> {
     /// The entity's data as `/data get entity` shows it
     /// (`Entity.saveWithoutId`): its compound without `id`. An entity with no
     /// UUID yet gets the one it will be saved with.
-    pub(super) fn native_entity_nbt(&mut self, entity: EntityRef) -> Option<Compound> {
+    pub(super) fn native_entity_nbt(&mut self, entity: EntityRef) -> Option<Compound> { if let Some(__l) = crate::points_generated::P3061.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let t = self.native_entity_target(entity)?;
         match self.entity_nbt(t)? {
             Tag::Compound(mut c) => {
@@ -28,7 +28,7 @@ impl Game<'_> {
     /// changed. False for a player (vanilla refuses them too), a kind Horizon
     /// can't reload yet (only mobs, dropped items, armor stands and item
     /// frames), data nested too deep, or data that changes nothing.
-    pub(super) fn native_entity_merge_nbt(&mut self, entity: EntityRef, nbt: Compound) -> bool {
+    pub(super) fn native_entity_merge_nbt(&mut self, entity: EntityRef, nbt: Compound) -> bool { if let Some(__l) = crate::points_generated::P3060.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };
@@ -44,12 +44,12 @@ impl Game<'_> {
     }
     /// The entity's tags (`Entity.getTags`), as `/tag <entity> list` shows
     /// them.
-    pub(super) fn native_entity_tags(&self, entity: EntityRef) -> Option<Vec<String>> {
+    pub(super) fn native_entity_tags(&self, entity: EntityRef) -> Option<Vec<String>> { if let Some(__l) = crate::points_generated::P3059.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.tags_of(self.native_entity_target(entity)?))
     }
     /// Adds tag `tag` (`Entity.addTag`): false when it has it already, holds
     /// 1024, its kind can't store tags yet, or the handle is stale.
-    pub(super) fn native_entity_add_tag(&mut self, entity: EntityRef, tag: &str) -> bool {
+    pub(super) fn native_entity_add_tag(&mut self, entity: EntityRef, tag: &str) -> bool { if let Some(__l) = crate::points_generated::P3058.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };
@@ -63,7 +63,7 @@ impl Game<'_> {
         self.set_entity_tags(t, &tags)
     }
     /// Removes tag `tag` (`Entity.removeTag`): false when it didn't have it.
-    pub(super) fn native_entity_remove_tag(&mut self, entity: EntityRef, tag: &str) -> bool {
+    pub(super) fn native_entity_remove_tag(&mut self, entity: EntityRef, tag: &str) -> bool { if let Some(__l) = crate::points_generated::P3057.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };
@@ -74,7 +74,7 @@ impl Game<'_> {
     }
     /// The entity's name as plain text (`Entity.getName`): its custom name,
     /// a player's name, else its type's name.
-    pub(super) fn native_entity_name(&self, entity: EntityRef) -> Option<String> {
+    pub(super) fn native_entity_name(&self, entity: EntityRef) -> Option<String> { if let Some(__l) = crate::points_generated::P3056.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.target_name(self.native_entity_target(entity)?).plain())
     }
 }

@@ -57,7 +57,7 @@ pub(super) fn recheck_opener_count(
 
 impl Game<'_> {
     /// `BlockEntity.triggerEvent(a, b)` on the client copy of the block entity at `pos`.
-    pub(super) fn block_entity_event(&mut self, pos: [i32; 3], a: i32, b: i32) {
+    pub(super) fn block_entity_event(&mut self, pos: [i32; 3], a: i32, b: i32) { let (pos,a,b,) = match crate::points_generated::P629.get() { Some(__l) => { let mut __a = (pos,a,b,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,a,b,) };
         let state = self.world.block(pos[0], pos[1], pos[2]).0;
         let time = self.world.game_time;
         // PotentSulfurBlock.triggerEvent.
@@ -116,12 +116,12 @@ impl Game<'_> {
     /// on both halves of a double chest (`CompoundContainer`). True when the
     /// count went from 0 to 1 or back to 0: the only moments the container
     /// plays its open or close sound.
-    pub(super) fn container_opener_event(&mut self, key: (i32, i32, i32), open: bool) -> bool {
+    pub(super) fn container_opener_event(&mut self, key: (i32, i32, i32), open: bool) -> bool { let (open,) = match crate::points_generated::P628.get() { Some(__l) => { let mut __a = (open,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (open,) };
         // Spectators never count as openers.
         !self.spectator() && self.container_openers_changed(key, open)
     }
     /// `container_opener_event` for a player who is not a spectator (a guest).
-    pub(super) fn container_openers_changed(&mut self, key: (i32, i32, i32), open: bool) -> bool {
+    pub(super) fn container_openers_changed(&mut self, key: (i32, i32, i32), open: bool) -> bool { let (open,) = match crate::points_generated::P627.get() { Some(__l) => { let mut __a = (open,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (open,) };
         let pos = [key.0, key.1, key.2];
         let state = self.world.block(pos[0], pos[1], pos[2]).0;
         match self.be_anims.ticker(state) {
@@ -160,7 +160,7 @@ impl Game<'_> {
     /// chest at `key` (the host and the guests are counted), then
     /// `ChestBlockEntity.signalOpenCount`: block event 1 with the count, here
     /// and for the guests. True when the count crossed zero.
-    fn lid_openers_changed(&mut self, key: (i32, i32, i32), open: bool) -> bool {
+    fn lid_openers_changed(&mut self, key: (i32, i32, i32), open: bool) -> bool { let (open,) = match crate::points_generated::P626.get() { Some(__l) => { let mut __a = (open,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (open,) };
         let (before, count) = self.count_opener(key, open);
         let pos = [key.0, key.1, key.2];
         self.block_entity_event(pos, 1, count);
@@ -181,7 +181,7 @@ impl Game<'_> {
     /// `BarrelBlockEntity.openersCounter`: the first opener opens the barrel
     /// (`open=true`), the last one to leave closes it (`updateBlockState`).
     /// True when the count crossed zero.
-    fn barrel_openers_changed(&mut self, key: (i32, i32, i32), open: bool) -> bool {
+    fn barrel_openers_changed(&mut self, key: (i32, i32, i32), open: bool) -> bool { let (open,) = match crate::points_generated::P625.get() { Some(__l) => { let mut __a = (open,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (open,) };
         let (before, count) = self.count_opener(key, open);
         let edge = (before == 0) != (count == 0);
         if edge {
@@ -196,7 +196,7 @@ impl Game<'_> {
     }
     /// One opener more (`open`) or less at `key`: the count before and after
     /// (`ContainerOpenersCounter.incrementOpeners` / `decrementOpeners`).
-    fn count_opener(&mut self, key: (i32, i32, i32), open: bool) -> (i32, i32) {
+    fn count_opener(&mut self, key: (i32, i32, i32), open: bool) -> (i32, i32) { let (open,) = match crate::points_generated::P624.get() { Some(__l) => { let mut __a = (open,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (open,) };
         let count = self.lid_openers.entry(key).or_default();
         let before = *count;
         *count = (before + if open { 1 } else { -1 }).max(0);
@@ -215,7 +215,7 @@ impl Game<'_> {
     }
     /// `BellBlockEntity.updateEntities`: the living entities whose bounding
     /// box meets the bell's block box inflated by 48.
-    fn bell_gather(&self, pos: [i32; 3]) -> Vec<u64> {
+    fn bell_gather(&self, pos: [i32; 3]) -> Vec<u64> { let (pos,) = match crate::points_generated::P623.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let area = Aabb::new(
             Vec3::new(
                 f64::from(pos[0]) - 48.0,
@@ -245,7 +245,7 @@ impl Game<'_> {
     /// `BellBlockEntity.updateEntities`: every gathered entity alive within 32
     /// blocks of the bell's centre gets `HEARD_BELL_TIME` (only villagers
     /// have a brain that reads it).
-    fn bell_heard(&mut self, pos: [i32; 3], now: i64) {
+    fn bell_heard(&mut self, pos: [i32; 3], now: i64) { let (pos,now,) = match crate::points_generated::P622.get() { Some(__l) => { let mut __a = (pos,now,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,now,) };
         let nearby = self
             .be_anims
             .bells
@@ -264,7 +264,7 @@ impl Game<'_> {
     }
     /// `ShulkerBoxBlock.canOpen`: a closed box opens only when its lid has
     /// room to rise (`level.noCollision` of the half-open lid box).
-    pub(super) fn shulker_can_open(&self, pos: [i32; 3]) -> bool {
+    pub(super) fn shulker_can_open(&self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P621.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]).0;
         let Some(Ticker::Shulker { facing }) = self.be_anims.ticker(state) else {
             return true;
@@ -290,7 +290,7 @@ impl Game<'_> {
     }
     /// The client tickers of the loaded animated block entities, once per
     /// client tick (`ClientLevel.tickBlockEntities`).
-    pub(super) fn tick_block_entity_anims(&mut self) {
+    pub(super) fn tick_block_entity_anims(&mut self) { if let Some(__l) = crate::points_generated::P620.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A server has no window, but its gateways and conduits still run
         // their server tickers; a client of one only animates what it is sent.
         if self.remote.is_none() {
@@ -484,7 +484,7 @@ impl Game<'_> {
     /// tick blocks, with or without a renderer. The conduits are looked for
     /// when the shape is checked, every 40 ticks (they have no block entity
     /// of their own here).
-    fn tick_conduit_servers(&mut self) {
+    fn tick_conduit_servers(&mut self) { if let Some(__l) = crate::points_generated::P619.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.world.game_time % 40 == 0 {
             self.find_conduits();
         }
@@ -496,7 +496,7 @@ impl Game<'_> {
     }
     /// Sets `be_anims.conduit_servers` to the conduits in the
     /// chunks that tick blocks, keeping the state of those already known.
-    fn find_conduits(&mut self) {
+    fn find_conduits(&mut self) { if let Some(__l) = crate::points_generated::P618.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let levels = self.tickets.levels();
         let kinds = &self.be_anims.kinds;
         let is_conduit = |id: u32| matches!(kinds.get(id as usize), Some(Some(Ticker::Conduit)));
@@ -530,7 +530,7 @@ impl Game<'_> {
     /// that ticks blocks: the shape check every 40 ticks with its sounds, the
     /// power for players in range, the hurt for an enemy, then the ambient
     /// sounds.
-    fn tick_conduit_server(&mut self, pos: [i32; 3]) {
+    fn tick_conduit_server(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P617.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]).0;
         if self.be_anims.ticker(state) != Some(Ticker::Conduit) {
             // Broken since the chunks were searched.
@@ -605,7 +605,7 @@ impl Game<'_> {
     }
     /// `ConduitBlockEntity.applyEffects`: conduit power for every player
     /// in water or rain within `frames / 7 * 16` blocks.
-    fn conduit_apply_effects(&mut self, pos: [i32; 3], frames: usize) {
+    fn conduit_apply_effects(&mut self, pos: [i32; 3], frames: usize) { let (pos,frames,) = match crate::points_generated::P616.get() { Some(__l) => { let mut __a = (pos,frames,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,frames,) };
         let range = (frames / 7 * 16) as i64;
         self.for_each_player(|g| {
             let Some(p) = g.player.as_ref().filter(|p| !p.health.dead_or_dying()) else {
@@ -635,7 +635,7 @@ impl Game<'_> {
         });
     }
     /// `Entity.isInRain`: rain at the block position or at the top of the box.
-    pub(super) fn in_rain(&mut self, at: Vec3, top: f64) -> bool {
+    pub(super) fn in_rain(&mut self, at: Vec3, top: f64) -> bool { let (top,) = match crate::points_generated::P615.get() { Some(__l) => { let mut __a = (top,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (top,) };
         let p = BlockPos::new(
             at.x.floor() as i32,
             at.y.floor() as i32,
@@ -653,7 +653,7 @@ impl Game<'_> {
     /// (42 frame blocks) its target stays until it dies or leaves the 8
     /// blocks, else a random enemy in water or rain is chosen; the target
     /// takes 4 magic damage.
-    fn conduit_attack(&mut self, conduit: &mut ConduitServer, pos: [i32; 3], hunting: bool) {
+    fn conduit_attack(&mut self, conduit: &mut ConduitServer, pos: [i32; 3], hunting: bool) { let (pos,hunting,) = match crate::points_generated::P614.get() { Some(__l) => { let mut __a = (pos,hunting,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,hunting,) };
         conduit.target = match conduit.target {
             _ if !hunting => None,
             None => self.conduit_new_target(pos),
@@ -690,7 +690,7 @@ impl Game<'_> {
     }
     /// `ConduitBlockEntity.selectNewTarget`: one of the enemies in water or
     /// rain whose box meets the conduit's block inflated by 8.
-    fn conduit_new_target(&mut self, pos: [i32; 3]) -> Option<u32> {
+    fn conduit_new_target(&mut self, pos: [i32; 3]) -> Option<u32> { let (pos,) = match crate::points_generated::P613.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let [x, y, z] = pos.map(f64::from);
         let area = Aabb::new(
             Vec3::new(x - 8.0, y - 8.0, z - 8.0),
@@ -721,7 +721,7 @@ impl Game<'_> {
         Some(candidates[pick as usize])
     }
     /// The conduit's `destroyTarget` as the client draws it.
-    fn conduit_target(&self, pos: [i32; 3]) -> Option<ConduitTarget> {
+    fn conduit_target(&self, pos: [i32; 3]) -> Option<ConduitTarget> { let (pos,) = match crate::points_generated::P612.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let id = self.be_anims.conduit_servers.get(&pos)?.target?;
         let m = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
         Some(ConduitTarget {
@@ -735,7 +735,7 @@ impl Game<'_> {
     /// gateways a server keeps a copy of, in block-ticking chunks
     /// (`Level.tickBlockEntities`): the cooldown an entry started runs out,
     /// and every 2400 ticks `triggerCooldown` sends its block event.
-    fn tick_gateway_servers(&mut self) {
+    fn tick_gateway_servers(&mut self) { if let Some(__l) = crate::points_generated::P611.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let levels = self.tickets.levels();
         let mut positions: Vec<[i32; 3]> = self
             .be_anims
@@ -758,7 +758,7 @@ impl Game<'_> {
     }
     /// `EndGatewayBlock.entityInside` on the server: whether the gateway at
     /// `pos` let the entity in (`triggerCooldown`, with its block event).
-    pub(super) fn gateway_available(&self, pos: [i32; 3]) -> bool {
+    pub(super) fn gateway_available(&self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P610.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.be_anims
             .gateway_servers
             .get(&pos)
@@ -768,7 +768,7 @@ impl Game<'_> {
             <= 0
     }
 
-    pub(super) fn gateway_enter(&mut self, pos: [i32; 3]) -> bool {
+    pub(super) fn gateway_enter(&mut self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P609.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let initial = self.gateway_loaded(pos);
         let entered = self
             .be_anims
@@ -783,7 +783,7 @@ impl Game<'_> {
     }
     /// The End gateway at `pos` as its chunk was loaded: `Age` from the saved
     /// block entity (`getUpdateTag`), or a new gateway.
-    fn gateway_loaded(&self, pos: [i32; 3]) -> EndGateway {
+    fn gateway_loaded(&self, pos: [i32; 3]) -> EndGateway { let (pos,) = match crate::points_generated::P608.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let age = self.saved_tag(pos).and_then(|t| number(t.get("Age")));
         EndGateway {
             age: age.unwrap_or(0),
@@ -791,7 +791,7 @@ impl Game<'_> {
         }
     }
     /// The block entity at `pos` Horizon keeps as loaded, if any.
-    fn saved_tag(&self, pos: [i32; 3]) -> Option<&Tag> {
+    fn saved_tag(&self, pos: [i32; 3]) -> Option<&Tag> { let (pos,) = match crate::points_generated::P607.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.world
             .chunks
             .get(&(pos[0] >> 4, pos[2] >> 4))
@@ -806,7 +806,7 @@ impl Game<'_> {
     }
     /// The renderer's view of the block entity at `pos`, with a decorated
     /// pot's saved `sherds` (back, left, right, front).
-    pub(super) fn block_anim(&self, pos: [i32; 3], partial: f32) -> BlockAnim {
+    pub(super) fn block_anim(&self, pos: [i32; 3], partial: f32) -> BlockAnim { let (pos,partial,) = match crate::points_generated::P606.get() { Some(__l) => { let mut __a = (pos,partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,partial,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let sherds = if &*self.res.facts().get(state).name == "minecraft:decorated_pot" {
             let sherds = self.saved_tag(pos).and_then(|t| t.get("sherds"));
@@ -825,14 +825,14 @@ impl Game<'_> {
             .block_anim(pos, self.world.game_time, partial, sherds)
     }
     /// `ChestLidController.getOpenness(partial)` at `pos`.
-    pub(super) fn chest_lid(&self, pos: [i32; 3], partial: f32) -> f32 {
+    pub(super) fn chest_lid(&self, pos: [i32; 3], partial: f32) -> f32 { let (pos,partial,) = match crate::points_generated::P605.get() { Some(__l) => { let mut __a = (pos,partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,partial,) };
         self.be_anims.lid(pos, partial)
     }
     /// `SkullBlockRenderer.getPlayerSkin`: the skin sprite of the profile of
     /// the player head at `pos`. The skin download is started here; while it
     /// is in flight (or when it cannot be got) the profile's default skin
     /// stands in. A head with no profile answers None: `SKIN_BY_TYPE`.
-    pub(super) fn skull_skin_at(&self, pos: [i32; 3]) -> Option<String> {
+    pub(super) fn skull_skin_at(&self, pos: [i32; 3]) -> Option<String> { let (pos,) = match crate::points_generated::P604.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let Some(BlockEntity::Skull(skull)) =
             self.world.block_entities.get(&(pos[0], pos[1], pos[2]))
         else {

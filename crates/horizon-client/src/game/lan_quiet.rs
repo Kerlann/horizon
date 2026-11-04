@@ -29,7 +29,7 @@ pub(super) struct QuietBatch {
 impl Game<'_> {
     /// A `horizon:quiet_commands` payload from `conn`: queued (or logged as
     /// refused when it breaks the payload's caps).
-    pub(super) fn guest_quiet_commands(&mut self, conn: u32, data: &[u8]) {
+    pub(super) fn guest_quiet_commands(&mut self, conn: u32, data: &[u8]) { let (conn,) = match crate::points_generated::P2412.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -65,7 +65,7 @@ impl Game<'_> {
     }
 
     /// The waiting batches, [`PER_TICK`] lines a player this tick, in order.
-    pub(super) fn run_quiet_commands(&mut self) {
+    pub(super) fn run_quiet_commands(&mut self) { if let Some(__l) = crate::points_generated::P2411.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut left: HashMap<u32, usize> = HashMap::new();
         let mut i = 0;
         loop {
@@ -106,7 +106,7 @@ impl Game<'_> {
     /// One line as `guest_command` would run it for `conn`, quietly. False
     /// when it is refused or fails. A command that carries a chat message
     /// (`say`, `msg`...) is refused: it would need the player's signature.
-    fn run_quiet_line(&mut self, conn: u32, line: &str) -> bool {
+    fn run_quiet_line(&mut self, conn: u32, line: &str) -> bool { let (conn,) = match crate::points_generated::P2410.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let allowed = self.options.dedicated.is_some() || self.allow_commands();
         let Some(host) = self.lan.as_ref() else {
             return false;

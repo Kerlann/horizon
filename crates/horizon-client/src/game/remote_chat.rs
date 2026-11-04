@@ -147,7 +147,7 @@ fn random_uuid() -> u128 {
 
 impl Game<'_> {
     /// handleLogin: a new session state and signature cache, and prepareKeyPair.
-    pub(super) fn remote_chat_login(&mut self) {
+    pub(super) fn remote_chat_login(&mut self) { if let Some(__l) = crate::points_generated::P4985.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(r) = self.remote.as_mut() {
             r.secure_chat = SecureChat::default();
             r.signatures = Default::default();
@@ -163,7 +163,7 @@ impl Game<'_> {
 
     /// ClientPacketListener.tick's key refresh (shouldRefreshKeyPair), then
     /// setKeyPair with whatever key pair is ready.
-    pub(super) fn tick_chat_session(&mut self) {
+    pub(super) fn tick_chat_session(&mut self) { if let Some(__l) = crate::points_generated::P4984.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // shouldRefreshKeyPair is asked only once there is a chat session; a
         // first key pair arrives through the join's prepareKeyPair.
         if self
@@ -183,7 +183,7 @@ impl Game<'_> {
     /// setKeyPair: only for the signed-in account's own profile
     /// (isLocalPlayer), and only when the key pair changed: a new session
     /// (random id, chain from link 0) the server hears of at once.
-    fn update_chat_session(&mut self) {
+    fn update_chat_session(&mut self) { if let Some(__l) = crate::points_generated::P4983.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(account) = self.auth() else {
             return;
         };
@@ -216,7 +216,7 @@ impl Game<'_> {
 
     /// ClientPacketListener.sendChat: the last-seen update goes with every
     /// message; the signature only with a chat session.
-    pub(super) fn send_signed_chat(&mut self, content: &str) {
+    pub(super) fn send_signed_chat(&mut self, content: &str) { if let Some(__l) = crate::points_generated::P4982.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let content = truncate_utf16(content, 256);
         let (timestamp, salt) = (auth::now_millis(), salt());
         let Some(r) = self.remote.as_mut() else {
@@ -250,7 +250,7 @@ impl Game<'_> {
     /// all with the same time, salt and last seen (without a chat session the
     /// signature list is empty, as in vanilla); any other command goes as the
     /// unsigned packet.
-    pub(super) fn send_command(&mut self, command: &str) {
+    pub(super) fn send_command(&mut self, command: &str) { if let Some(__l) = crate::points_generated::P4981.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(r) = self.remote.as_mut() else {
             return;
         };
@@ -299,7 +299,7 @@ impl Game<'_> {
     /// asks first, and one with a message argument is never sent from here:
     /// the player can only send it themselves, from the chat box. So neither
     /// a server nor a mod can have the player sign a message they never saw.
-    pub(super) fn send_unattended_command(&mut self, command: &str) {
+    pub(super) fn send_unattended_command(&mut self, command: &str) { if let Some(__l) = crate::points_generated::P4980.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let command = command.trim();
         let command = command.strip_prefix('/').unwrap_or(command);
         if command.is_empty() || !self.chat_abilities().allows(&format!("/{command}")) {
@@ -354,7 +354,7 @@ impl Game<'_> {
     }
 
     /// The command just clicked left this screen: if it asks, no returns there.
-    pub(super) fn command_prompt_returns_to(&mut self, behind: Behind) {
+    pub(super) fn command_prompt_returns_to(&mut self, behind: Behind) { if let Some(__l) = crate::points_generated::P4979.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(prompt) = self.command_prompt.as_mut() {
             prompt.behind = Some(behind);
             prompt.over_screen = true;
@@ -362,13 +362,13 @@ impl Game<'_> {
     }
 
     /// The translation key of the open confirmation's message.
-    pub(super) fn command_prompt_message(&self) -> Option<&'static str> {
+    pub(super) fn command_prompt_message(&self) -> Option<&'static str> { if let Some(__l) = crate::points_generated::P4978.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.command_prompt.as_ref().map(|p| p.message)
     }
 
     /// The confirmation's title, the command in yellow in its message, and
     /// its two buttons.
-    fn command_prompt_layout(&self, prompt: &CommandPrompt, size: (f32, f32)) -> Choice {
+    fn command_prompt_layout(&self, prompt: &CommandPrompt, size: (f32, f32)) -> Choice { if let Some(__l) = crate::points_generated::P4977.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let command = Text::literal(&prompt.command).with_color(0xFF_FF55);
         let mut choice = Choice::new(
             &self.gui.atlas.font,
@@ -382,7 +382,7 @@ impl Game<'_> {
         choice
     }
 
-    pub(super) fn draw_command_prompt(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_command_prompt(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P4976.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(prompt) = &self.command_prompt else {
             return;
         };
@@ -419,7 +419,7 @@ impl Game<'_> {
     }
 
     /// The confirmation's answer; on no, what was behind it is back.
-    pub(super) fn answer_command_prompt(&mut self, yes: bool) {
+    pub(super) fn answer_command_prompt(&mut self, yes: bool) { let (yes,) = match crate::points_generated::P4975.get() { Some(__l) => { let mut __a = (yes,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (yes,) };
         let Some(prompt) = self.command_prompt.take() else {
             return;
         };
@@ -448,7 +448,7 @@ impl Game<'_> {
 
     /// ConfirmScreen.keyPressed, and what its buttons take from the keyboard
     /// (Screen's focus navigation, AbstractButton's Enter and Space).
-    pub(super) fn command_prompt_key(&mut self, key: KeyCode) {
+    pub(super) fn command_prompt_key(&mut self, key: KeyCode) { if let Some(__l) = crate::points_generated::P4974.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (size, shift) = (self.gui_size(), self.has_shift_down());
         let Some(prompt) = &self.command_prompt else {
             return;
@@ -473,7 +473,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn command_prompt_click(&mut self) {
+    pub(super) fn command_prompt_click(&mut self) { if let Some(__l) = crate::points_generated::P4973.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(prompt) = &self.command_prompt else {
             return;
         };
@@ -489,7 +489,7 @@ impl Game<'_> {
     /// markMessageAsProcessed, when the chat takes a signed message (past
     /// any Chat Delay): whether it was shown, and an acknowledgement once more
     /// than 64 wait (sendChatAcknowledgement).
-    pub(super) fn mark_message_processed(&mut self, signature: &Signature, shown: bool) {
+    pub(super) fn mark_message_processed(&mut self, signature: &Signature, shown: bool) { let (shown,) = match crate::points_generated::P4972.get() { Some(__l) => { let mut __a = (shown,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (shown,) };
         let Some(r) = self.remote.as_mut() else {
             return;
         };
@@ -502,7 +502,7 @@ impl Game<'_> {
 
     /// `ClientPacketListener.sendChatAcknowledgement`, used after a
     /// configuration transition flushes the delayed chat queue.
-    pub(super) fn send_chat_acknowledgement(&mut self) {
+    pub(super) fn send_chat_acknowledgement(&mut self) { if let Some(__l) = crate::points_generated::P4971.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let offset = self
             .remote
             .as_mut()

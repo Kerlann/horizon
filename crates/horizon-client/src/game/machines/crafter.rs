@@ -33,7 +33,7 @@ fn recipe_matches(condition: &Value, id: &str) -> bool {
 
 impl Game<'_> {
     /// `Level.setBlock` of one boolean property of the block at `pos`.
-    pub(crate) fn set_bool_prop(&mut self, pos: Pos, key: &str, value: bool, flags: i32) {
+    pub(crate) fn set_bool_prop(&mut self, pos: Pos, key: &str, value: bool, flags: i32) { let (value,flags,) = match crate::points_generated::P2642.get() { Some(__l) => { let mut __a = (value,flags,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (value,flags,) };
         let registry = self.pack.assets.registry;
         let old = self.world.block(pos.0, pos.1, pos.2);
         let Some(mut state) = registry.state(old).cloned() else {
@@ -51,7 +51,7 @@ impl Game<'_> {
         });
         let _ = self.process_level_events();
     }
-    fn crafter_at(&self, pos: Pos) -> Option<&Crafter> {
+    fn crafter_at(&self, pos: Pos) -> Option<&Crafter> { if let Some(__l) = crate::points_generated::P2641.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.world.block_entities.get(&pos)? {
             BlockEntity::Crafter(c) => Some(c),
             _ => None,
@@ -59,7 +59,7 @@ impl Game<'_> {
     }
     /// `CrafterBlockEntity.serverTick` of the crafter at `pos`, and the
     /// powered flag following the block state.
-    pub(in crate::game) fn tick_crafter(&mut self, pos: Pos) {
+    pub(in crate::game) fn tick_crafter(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P2640.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let state = self.world.block(pos.0, pos.1, pos.2);
         let triggered = self.containers().prop(state, "triggered") == Some("true");
         let mut finished = false;
@@ -86,7 +86,7 @@ impl Game<'_> {
         }
     }
     /// `CrafterBlock.dispenseFrom` (the scheduled tick after a redstone pulse).
-    pub(super) fn crafter_dispense(&mut self, pos: BlockPos, state: BlockStateId) -> Result<()> {
+    pub(super) fn crafter_dispense(&mut self, pos: BlockPos, state: BlockStateId) -> Result<()> { if let Some(__l) = crate::points_generated::P2639.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let key = (pos.x, pos.y, pos.z);
         let Some(crafter) = self.crafter_at(key) else {
             return Ok(());
@@ -148,7 +148,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `CrafterBlock.dispenseItem`: into the container in front, else out as an item.
-    fn crafter_eject(&mut self, pos: Pos, facing: Direction, stack: ItemStack, recipe: &str) {
+    fn crafter_eject(&mut self, pos: Pos, facing: Direction, stack: ItemStack, recipe: &str) { if let Some(__l) = crate::points_generated::P2638.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = offset(pos, facing);
         let mut rest = stack;
         let side = facing.opposite();
@@ -213,16 +213,16 @@ impl Game<'_> {
     // ---- the menu ----
 
     /// The grid's current recipe result (`CrafterMenu.refreshRecipeResult`).
-    pub(in crate::game) fn crafter_result(&self) -> Option<ItemStack> {
+    pub(in crate::game) fn crafter_result(&self) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P2637.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let key = self.container?;
         let c = self.crafter_at(key)?;
         self.recipes().craft(&c.items, 3)
     }
-    fn crafter_open(&self) -> bool {
+    fn crafter_open(&self) -> bool { if let Some(__l) = crate::points_generated::P2636.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         matches!(self.container_kind(), Some(BlockEntity::Crafter(_)))
     }
     /// `CrafterMenu` slot layout: the grid at (26, 17), the result at (134, 35).
-    pub(in crate::game) fn crafter_slot_position(&self, i: usize) -> Option<(f32, f32)> {
+    pub(in crate::game) fn crafter_slot_position(&self, i: usize) -> Option<(f32, f32)> { let (i,) = match crate::points_generated::P2635.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         if !self.crafter_open() {
             return None;
         }
@@ -237,7 +237,7 @@ impl Game<'_> {
     }
     /// `CrafterScreen`'s background, disabled slots and powered arrow (the
     /// verified `screen_layout::crafter`) and its centred title.
-    pub(in crate::game) fn draw_crafter_screen(&self, batch: &mut HudBatch, ox: f32, oy: f32) {
+    pub(in crate::game) fn draw_crafter_screen(&self, batch: &mut HudBatch, ox: f32, oy: f32) { let (ox,oy,) = match crate::points_generated::P2634.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ox,oy,) };
         let Some(c) = self.container.and_then(|k| self.crafter_at(k)) else {
             return;
         };
@@ -281,14 +281,14 @@ impl Game<'_> {
         self.paint_screen(batch, ox, oy, rest, true);
     }
     /// `gui.togglable_slot` over an empty, enabled grid slot.
-    pub(in crate::game) fn crafter_tooltip(&self, slot: usize) -> Option<String> {
+    pub(in crate::game) fn crafter_tooltip(&self, slot: usize) -> Option<String> { let (slot,) = match crate::points_generated::P2633.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let c = self.container.and_then(|k| self.crafter_at(k))?;
         let i = slot.checked_sub(300).filter(|i| *i < 9)?;
         (self.carried.is_none() && c.items[i].is_none() && !c.disabled[i] && !self.spectator())
             .then(|| self.translate("gui.togglable_slot", "Click to disable slot"))
     }
     /// A click in the crafter menu: `CrafterMenu` on the verified menu engine.
-    pub(in crate::game) fn crafter_click(&mut self, slot: usize, shift: bool, right: bool) -> bool {
+    pub(in crate::game) fn crafter_click(&mut self, slot: usize, shift: bool, right: bool) -> bool { let (slot,shift,right,) = match crate::points_generated::P2632.get() { Some(__l) => { let mut __a = (slot,shift,right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,shift,right,) };
         if !self.crafter_open() {
             return false;
         }
@@ -308,7 +308,7 @@ impl Game<'_> {
         slot: usize,
         button: i32,
         input: horizon_client::menu::Input,
-    ) {
+    ) { let (slot,button,) = match crate::points_generated::P2631.get() { Some(__l) => { let mut __a = (slot,button,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,button,) };
         use horizon_client::menu::Input;
         if !self.crafter_open() || !(300..309).contains(&slot) || self.spectator() {
             return;

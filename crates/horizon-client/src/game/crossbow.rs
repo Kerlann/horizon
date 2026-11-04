@@ -105,13 +105,13 @@ impl Game<'_> {
         }
     }
     /// `Player.getProjectile` for `weapon` (`projectile_slot`).
-    pub(super) fn projectile_slot(&self, weapon: &str) -> Option<usize> {
+    pub(super) fn projectile_slot(&self, weapon: &str) -> Option<usize> { if let Some(__l) = crate::points_generated::P1434.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let hands = [OFFHAND_SLOT, self.selected].map(|slot| (slot, self.stack_in(slot)));
         projectile_slot(weapon, hands, &self.inventory)
     }
     /// `Player.getProjectile` for `weapon`, as `LivingGetProjectileEvent` leaves
     /// it: a creative player without arrows has `hasInfiniteMaterials`' arrow.
-    pub(super) fn get_projectile(&mut self, weapon: &ItemStack) -> Option<Ammo> {
+    pub(super) fn get_projectile(&mut self, weapon: &ItemStack) -> Option<Ammo> { if let Some(__l) = crate::points_generated::P1433.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let slot = self.projectile_slot(&weapon.item);
         let vanilla = match slot {
             Some(i) => self.stack_in(i).cloned(),
@@ -144,7 +144,7 @@ impl Game<'_> {
     }
     /// `AbstractSkeleton.performRangedAttack`'s `getProjectile`: the arrow
     /// `mob` shot becomes the replaced ammunition's (`ProjectileUtil.getMobArrow`).
-    pub(super) fn mob_bow_ammo(&mut self, mob: u32, weapon: &ItemStack, arrow: &mut Projectile) {
+    pub(super) fn mob_bow_ammo(&mut self, mob: u32, weapon: &ItemStack, arrow: &mut Projectile) { let (mob,) = match crate::points_generated::P1432.get() { Some(__l) => { let mut __a = (mob,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,) };
         if !mod_api::__private::listened(mod_api::HookId::LivingGetProjectile) {
             return;
         }
@@ -193,7 +193,7 @@ impl Game<'_> {
     /// charging `weapon` (pillagers and piglins: `Monster.getProjectile`). The
     /// replaced ammunition is what the crossbow holds; none leaves it uncharged
     /// and returns false (`tryLoadProjectiles`).
-    pub(super) fn mob_crossbow_ammo(&mut self, mob: u32, weapon: &ItemStack) -> bool {
+    pub(super) fn mob_crossbow_ammo(&mut self, mob: u32, weapon: &ItemStack) -> bool { let (mob,) = match crate::points_generated::P1431.get() { Some(__l) => { let mut __a = (mob,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,) };
         let Some(shooter) = self.mobs.iter().find(|m| m.id == mob) else {
             return false;
         };
@@ -218,7 +218,7 @@ impl Game<'_> {
         loaded
     }
     /// `CrossbowItem.use`: shoot when charged, else start charging.
-    pub(super) fn use_crossbow(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn use_crossbow(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P1430.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != CROSSBOW {
             return false;
         }
@@ -234,7 +234,7 @@ impl Game<'_> {
         true
     }
     /// `CrossbowItem.onUseTick` for the charge in progress.
-    pub(super) fn tick_crossbow(&mut self, slot: usize, ticks: u32, stack: &ItemStack) {
+    pub(super) fn tick_crossbow(&mut self, slot: usize, ticks: u32, stack: &ItemStack) { let (slot,ticks,) = match crate::points_generated::P1429.get() { Some(__l) => { let mut __a = (slot,ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,ticks,) };
         // getUseDuration - the ticks left, as a mod's Start or Tick left them.
         let held = self.ticks_held(stack, ticks);
         self.using = Some((slot, ticks + 1));
@@ -288,7 +288,7 @@ impl Game<'_> {
         }
     }
     /// `CrossbowItem.performShooting`.
-    fn shoot_crossbow(&mut self) {
+    fn shoot_crossbow(&mut self) { if let Some(__l) = crate::points_generated::P1428.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(eye) = self.eye_position() else {
             return;
         };

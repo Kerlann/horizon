@@ -13,12 +13,12 @@ use horizon_protocol::packets::play::{self, Serverbound as S};
 
 impl Game<'_> {
     /// `Util.getMillis` for the menu's fade.
-    fn spectator_now(&self) -> i64 {
+    fn spectator_now(&self) -> i64 { if let Some(__l) = crate::points_generated::P5411.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.started.elapsed().as_millis() as i64
     }
     /// `new SpectatorMenu`: the listed players, and the teams with a player
     /// to go to (`TeleportToTeamMenuCategory.createTeamEntries`).
-    fn new_spectator_menu(&mut self) -> SpectatorMenu {
+    fn new_spectator_menu(&mut self) -> SpectatorMenu { if let Some(__l) = crate::points_generated::P5410.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut tab: Vec<TabPlayer> = self
             .remote_tab_players()
             .map_or_else(Vec::new, |(players, _, _)| players);
@@ -63,37 +63,37 @@ impl Game<'_> {
             .collect();
         SpectatorMenu::new(players, teams)
     }
-    fn spectator_outcome(&mut self, outcome: Outcome) {
+    fn spectator_outcome(&mut self, outcome: Outcome) { if let Some(__l) = crate::points_generated::P5409.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Outcome::Teleport(uuid) = outcome {
             // PlayerMenuItem.selectItem.
             self.send(S::TeleportToEntity(play::TeleportToEntity { uuid }));
         }
     }
     /// A hotbar key as a spectator (`SpectatorGui.onHotbarSelected`).
-    pub(super) fn spectator_hotbar_key(&mut self, slot: i32) {
+    pub(super) fn spectator_hotbar_key(&mut self, slot: i32) { let (slot,) = match crate::points_generated::P5408.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let now = self.spectator_now();
         let menu = self.spectator_menu_if_needed();
         let outcome = self.spectator_gui.on_hotbar_selected(slot, now, menu);
         self.spectator_outcome(outcome);
     }
     /// `key.spectatorHotbar`: opens the menu, or uses the selected item.
-    pub(super) fn spectator_action_key(&mut self) {
+    pub(super) fn spectator_action_key(&mut self) { if let Some(__l) = crate::points_generated::P5407.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let now = self.spectator_now();
         let menu = self.spectator_menu_if_needed();
         let outcome = self.spectator_gui.on_action_key(now, menu);
         self.spectator_outcome(outcome);
     }
     /// The menu a press would open, built only when none is up.
-    fn spectator_menu_if_needed(&mut self) -> Option<SpectatorMenu> {
+    fn spectator_menu_if_needed(&mut self) -> Option<SpectatorMenu> { if let Some(__l) = crate::points_generated::P5406.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         (!self.spectator_gui.is_menu_active()).then(|| self.new_spectator_menu())
     }
     /// `MouseHandler.onScroll` in spectator mode with the menu up.
-    pub(super) fn spectator_scroll(&mut self, wheel: i32) {
+    pub(super) fn spectator_scroll(&mut self, wheel: i32) { let (wheel,) = match crate::points_generated::P5405.get() { Some(__l) => { let mut __a = (wheel,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (wheel,) };
         let now = self.spectator_now();
         self.spectator_gui.on_mouse_scrolled(wheel, now);
     }
     /// `Hud.extractHotbar` for a spectator, and `extractAction`'s prompt.
-    pub(super) fn draw_spectator_hotbar(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_spectator_hotbar(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5404.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (w, h) = (batch.width as i32, batch.height as i32);
         let now = self.spectator_now();
         let labels: Vec<Text> = (1..=9)

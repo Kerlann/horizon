@@ -181,7 +181,7 @@ impl Game<'_> {
         &self,
         registry: &str,
         type_id: &str,
-    ) -> Option<&BTreeMap<String, Value>> {
+    ) -> Option<&BTreeMap<String, Value>> { if let Some(__l) = crate::points_generated::P2973.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.serving.is_none() && self.options.dedicated.is_none() {
             return None;
         }
@@ -199,7 +199,7 @@ impl Game<'_> {
         registry: &str,
         type_id: &str,
         entry: &str,
-    ) -> Option<&Value> {
+    ) -> Option<&Value> { if let Some(__l) = crate::points_generated::P2972.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_data_map_of(registry, type_id)?
             .get(&full_id(entry))
     }
@@ -209,7 +209,7 @@ impl Game<'_> {
         &self,
         registry: &str,
         type_id: &str,
-    ) -> Vec<(&str, &Value)> {
+    ) -> Vec<(&str, &Value)> { if let Some(__l) = crate::points_generated::P2971.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_data_map_of(registry, type_id)
             .map(|map| map.iter().map(|(k, v)| (k.as_str(), v)).collect())
             .unwrap_or_default()

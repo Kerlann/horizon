@@ -388,7 +388,7 @@ impl Game<'_> {
         starts
     }
     /// The recipes on the open page, each with its corner.
-    fn recipes_shown(&self, layout: &Layout) -> Vec<(usize, (f32, f32))> {
+    fn recipes_shown(&self, layout: &Layout) -> Vec<(usize, (f32, f32))> { if let Some(__l) = crate::points_generated::P4043.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(pages) = &self.panel.recipes else {
             return Vec::new();
         };
@@ -404,13 +404,13 @@ impl Game<'_> {
             })
             .collect()
     }
-    fn back_button(&self, layout: &Layout) -> ([f32; 4], String) {
+    fn back_button(&self, layout: &Layout) -> ([f32; 4], String) { if let Some(__l) = crate::points_generated::P4042.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let label = self.translate("gui.back", "Back");
         let w = HudBatch::text_width(&self.gui.atlas, &label) + 8.0;
         ([layout.grid.0, layout.grid.1, w, 14.0], label)
     }
     /// What a slot of a shown recipe holds now: its stacks cycle once a second.
-    fn recipe_slot_now(&self, recipe: usize, slot: usize) -> Option<&(BrowserStack, ItemStack)> {
+    fn recipe_slot_now(&self, recipe: usize, slot: usize) -> Option<&(BrowserStack, ItemStack)> { let (recipe,slot,) = match crate::points_generated::P4041.get() { Some(__l) => { let mut __a = (recipe,slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (recipe,slot,) };
         let pages = self.panel.recipes.as_ref()?;
         let stacks = pages.recipes.get(recipe)?.slots.get(slot)?;
         let n = pages.since.elapsed().as_secs() as usize;
@@ -420,7 +420,7 @@ impl Game<'_> {
     pub(super) fn recipe_tab_hovered(
         &self,
         layout: &Layout,
-    ) -> Option<(usize, BrowserStack, ItemStack)> {
+    ) -> Option<(usize, BrowserStack, ItemStack)> { if let Some(__l) = crate::points_generated::P4040.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let pages = self.panel.recipes.as_ref()?;
         let places = tab_places(pages, layout);
         places.iter().enumerate().find_map(|(i, &(x, y))| {
@@ -435,7 +435,7 @@ impl Game<'_> {
     pub(super) fn recipe_slot_hovered(
         &self,
         layout: &Layout,
-    ) -> Option<(usize, usize, BrowserStack, ItemStack)> {
+    ) -> Option<(usize, usize, BrowserStack, ItemStack)> { if let Some(__l) = crate::points_generated::P4039.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let pages = self.panel.recipes.as_ref()?;
         self.recipes_shown(layout)
             .into_iter()
@@ -452,7 +452,7 @@ impl Game<'_> {
     }
 
     /// Draws the title row, the page's recipes and the page arrows.
-    pub(super) fn draw_browser_recipes(&mut self, batch: &mut HudBatch, layout: &Layout) {
+    pub(super) fn draw_browser_recipes(&mut self, batch: &mut HudBatch, layout: &Layout) { if let Some(__l) = crate::points_generated::P4038.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(pages) = &self.panel.recipes else {
             return;
         };
@@ -643,7 +643,7 @@ impl Game<'_> {
 
     /// A fluid's well, no clicks: its slot, the sprite or colour in it and
     /// its amount under it.
-    fn draw_fluid_well(&self, batch: &mut HudBatch, well: &Well, x: f32, y: f32) {
+    fn draw_fluid_well(&self, batch: &mut HudBatch, well: &Well, x: f32, y: f32) { let (x,y,) = match crate::points_generated::P4037.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,) };
         let atlas = &self.gui.atlas;
         batch.sprite(atlas, "gui/sprites/container/slot", x, y);
         let dst = [x + 1.0, y + 1.0, 16.0, 16.0];
@@ -683,7 +683,7 @@ impl Game<'_> {
     }
 
     /// The tabs, on slots; the selected one framed.
-    fn draw_recipe_tabs(&mut self, batch: &mut HudBatch, layout: &Layout) {
+    fn draw_recipe_tabs(&mut self, batch: &mut HudBatch, layout: &Layout) { if let Some(__l) = crate::points_generated::P4036.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(pages) = &self.panel.recipes else {
             return;
         };
@@ -732,7 +732,7 @@ impl Game<'_> {
         layout: &Layout,
         owner: &Owner,
         right: bool,
-    ) -> bool {
+    ) -> bool { let (right,) = match crate::points_generated::P4035.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         let Some(pages) = &self.panel.recipes else {
             return false;
         };

@@ -29,7 +29,7 @@ fn nearest_entity(
 }
 
 impl Game<'_> {
-    fn crosshair_entity_hit(&self) -> Option<CrosshairEntityHit> {
+    fn crosshair_entity_hit(&self) -> Option<CrosshairEntityHit> { if let Some(__l) = crate::points_generated::P4555.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let hit = |id: u32, distance, pickable| CrosshairEntityHit {
             id: id as i32,
             distance,
@@ -66,7 +66,7 @@ impl Game<'_> {
     /// game's targeting ray, reach and occlusion. None without a client world
     /// or on a miss. Entity hits carry this client level's epoch. Unlike
     /// native_view_hit, this never traces distant terrain.
-    pub(super) fn native_crosshair_target(&self) -> Option<NativeCrosshairTarget> {
+    pub(super) fn native_crosshair_target(&self) -> Option<NativeCrosshairTarget> { if let Some(__l) = crate::points_generated::P4554.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_window() || self.title.is_some() {
             return None;
         }
@@ -89,7 +89,7 @@ impl Game<'_> {
     /// The entity the crosshair hits before any block, as `Entity.getId`; an
     /// entity with nothing to pick (a projectile, a player, the dragon) is
     /// `Some(None)`. `None` when the view hits a block or nothing.
-    pub(super) fn pick_entity_hit(&self) -> Option<Option<i32>> {
+    pub(super) fn pick_entity_hit(&self) -> Option<Option<i32>> { if let Some(__l) = crate::points_generated::P4553.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.crosshair_entity_hit()
             .map(|hit| hit.pickable.then_some(hit.id))
     }
@@ -97,7 +97,7 @@ impl Game<'_> {
     /// `ClientSuggestionProvider.getSelectedEntities`: the UUID
     /// (`Entity.getStringUUID`) of the entity the crosshair hits before any
     /// block (`Minecraft.hitResult` an `EntityHitResult`).
-    pub(super) fn crosshair_entity_uuid(&self) -> Option<String> {
+    pub(super) fn crosshair_entity_uuid(&self) -> Option<String> { if let Some(__l) = crate::points_generated::P4552.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.crosshair_entity_hit()
             .filter(|hit| hit.suggest_uuid)
             .and_then(|hit| self.persist.uuids.get(&(hit.id as u32)).copied())
@@ -107,7 +107,7 @@ impl Game<'_> {
     /// `Entity.getPickResult` of the entity `id`: a mob's spawn egg, the item
     /// of a boat, minecart, armor stand, cushion, painting, item frame (the
     /// framed item when it holds one) or end crystal.
-    pub(super) fn entity_pick_result(&self, id: i32) -> Option<ItemStack> {
+    pub(super) fn entity_pick_result(&self, id: i32) -> Option<ItemStack> { let (id,) = match crate::points_generated::P4551.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let id = u32::try_from(id).ok()?;
         let item = if let Some(m) = self.mobs.iter().find(|m| m.id == id) {
             // Mob.getPickResult: SpawnEggItem.byId.
@@ -140,7 +140,7 @@ impl Game<'_> {
 
     /// `Player.isWithinEntityInteractionRange(entity, 3.0)`: the entity's box
     /// within the interaction range plus 3 of the eyes.
-    pub(super) fn within_entity_range(&self, id: i32) -> bool {
+    pub(super) fn within_entity_range(&self, id: i32) -> bool { let (id,) = match crate::points_generated::P4550.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let Some(eye) = self.eye_position() else {
             return false;
         };

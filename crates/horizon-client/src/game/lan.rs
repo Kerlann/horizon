@@ -103,7 +103,7 @@ impl Game<'_> {
     /// The commands' `minecraft:dialog` ids as the clients get them in the
     /// configuration phase (`sync`, the world's packs' dialogs among them):
     /// `/dialog show` parses an id against these and sends its index.
-    pub(super) fn sync_dialog_ids(&mut self, sync: &SyncData) {
+    pub(super) fn sync_dialog_ids(&mut self, sync: &SyncData) { if let Some(__l) = crate::points_generated::P2228.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(names) = sync.dynamic.registries.get("minecraft:dialog") else {
             return;
         };
@@ -229,7 +229,7 @@ impl Game<'_> {
     /// `PlayerList.remove`: `player.awardStat(Stats.LEAVE_GAME)` before the
     /// player is saved, heard by native mods first. Once per guest, however
     /// often they are saved.
-    pub(super) fn award_leave_game(&mut self, conn: u32, player: u128, name: &str) {
+    pub(super) fn award_leave_game(&mut self, conn: u32, player: u128, name: &str) { let (conn,) = match crate::points_generated::P2227.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(play) = self.lan.as_mut().and_then(|host| host.play.get_mut(&conn)) else {
             return;
         };
@@ -251,7 +251,7 @@ impl Game<'_> {
     }
 
     /// `PlayerList.removeAll`: every player who joined leaves with the world.
-    pub(super) fn award_leave_game_to_all(&mut self) {
+    pub(super) fn award_leave_game_to_all(&mut self) { if let Some(__l) = crate::points_generated::P2226.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -1173,7 +1173,7 @@ fn enforce_guest_game_mode(
 
 impl Game<'_> {
     /// `horizon-ctl lan ...`.
-    pub(super) fn lan_control(&mut self, words: &[&str]) -> Result<Option<serde_json::Value>> {
+    pub(super) fn lan_control(&mut self, words: &[&str]) -> Result<Option<serde_json::Value>> { if let Some(__l) = crate::points_generated::P2225.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use serde_json::json;
         if words[0] != "lan" {
             return Ok(None);
@@ -1214,7 +1214,7 @@ impl Game<'_> {
     }
 
     /// `horizon-ctl lan status`.
-    fn lan_status(&self) -> serde_json::Value {
+    fn lan_status(&self) -> serde_json::Value { if let Some(__l) = crate::points_generated::P2224.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use serde_json::json;
         match &self.lan {
             Some(h) if !self.serving() || self.published_port().is_some() => json!({
@@ -1261,7 +1261,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn lan_open(&mut self, settings: LanSettings) -> Result<()> {
+    pub(super) fn lan_open(&mut self, settings: LanSettings) -> Result<()> { if let Some(__l) = crate::points_generated::P2223.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let port = if let Some(server) = &self.integrated {
             // ShareToLanScreen: IntegratedServer.publishServer.
             server
@@ -1285,7 +1285,7 @@ impl Game<'_> {
         settings: LanSettings,
         net: NetConfig,
         config: HubConfig,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P2222.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut sync = sync_data(&self.res.core.item_data, &self.pack_files())?;
         let features = if self.level.enabled_features.is_empty() {
             vec!["minecraft:vanilla".to_owned()]
@@ -1384,7 +1384,7 @@ impl Game<'_> {
     }
 
     /// IntegratedServer.unpublishServer: the guests are sent away.
-    pub(super) fn lan_close(&mut self, announce: bool) {
+    pub(super) fn lan_close(&mut self, announce: bool) { let (announce,) = match crate::points_generated::P2221.get() { Some(__l) => { let mut __a = (announce,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (announce,) };
         if self.integrated.is_some() || self.serving() {
             let closed = match &self.integrated {
                 Some(server) => server.call(|g| g.unpublish()).unwrap_or(false),
@@ -1432,7 +1432,7 @@ impl Game<'_> {
 
     /// `PlayerList.removeAll`: every guest leaves in turn, the vehicle it
     /// alone rides with it (`PlayerList.remove`), and is saved.
-    pub(super) fn save_leaving_guests(&mut self) {
+    pub(super) fn save_leaving_guests(&mut self) { if let Some(__l) = crate::points_generated::P2220.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -1479,7 +1479,7 @@ impl Game<'_> {
     /// `take_parent_vehicle`, `PlayerList.save`): an integrated server's owner
     /// into the level (`/data`) and both its files (`playerdata::save_owner`),
     /// anyone else into their own file.
-    pub(super) fn save_guest(&mut self, guest: &mut horizon_client::lan::guest::Guest) {
+    pub(super) fn save_guest(&mut self, guest: &mut horizon_client::lan::guest::Guest) { if let Some(__l) = crate::points_generated::P2219.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !guest.participates_in_player_simulation() {
             return;
         }
@@ -1512,7 +1512,7 @@ impl Game<'_> {
         dim: &str,
         but: Option<u128>,
         host: bool,
-    ) -> Vec<u32> {
+    ) -> Vec<u32> { let (host,) = match crate::points_generated::P2218.get() { Some(__l) => { let mut __a = (host,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (host,) };
         let mut others: Vec<u32> = guests
             .iter()
             .filter(|g| g.placed && g.dimension == dim && Some(g.uuid) != but)
@@ -1532,7 +1532,7 @@ impl Game<'_> {
         vehicle: Option<u32>,
         others: &[u32],
         remove: bool,
-    ) -> Option<(horizon_world::nbt::Tag, [i32; 4])> {
+    ) -> Option<(horizon_world::nbt::Tag, [i32; 4])> { let (remove,) = match crate::points_generated::P2217.get() { Some(__l) => { let mut __a = (remove,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (remove,) };
         vehicle?;
         let back = self.dim;
         let theirs = super::Dim::from_id(dim);
@@ -1561,7 +1561,7 @@ impl Game<'_> {
     /// vehicle it alone rides (`saveParentVehicle`'s RootVehicle, kept in
     /// `saved` as a file not yet ridden again), the vehicle tree leaves the
     /// world, and the guest stops riding (`unRide`).
-    pub(super) fn take_parent_vehicle(&mut self, guest: &mut horizon_client::lan::guest::Guest) {
+    pub(super) fn take_parent_vehicle(&mut self, guest: &mut horizon_client::lan::guest::Guest) { if let Some(__l) = crate::points_generated::P2216.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(vehicle) = guest.vehicle.take() else {
             return;
         };
@@ -1587,7 +1587,7 @@ impl Game<'_> {
     }
     /// `ServerPlayer.loadAndSpawnParentVehicle`: a guest whose file names the
     /// vehicle it rode rides it again, once the vehicle is in the world.
-    fn restore_guest_vehicles(&mut self) {
+    fn restore_guest_vehicles(&mut self) { if let Some(__l) = crate::points_generated::P2215.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -1635,7 +1635,7 @@ impl Game<'_> {
     }
     /// The file name of a player's advancements and statistics: an
     /// integrated server's owner keeps single player's.
-    fn records_uuid(&self, host: &LanHost, uuid: u128) -> Option<[i32; 4]> {
+    fn records_uuid(&self, host: &LanHost, uuid: u128) -> Option<[i32; 4]> { if let Some(__l) = crate::points_generated::P2214.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if host.owner.as_ref().is_some_and(|o| o.uuid == uuid) {
             self.level.player_uuid
         } else {
@@ -1647,7 +1647,7 @@ impl Game<'_> {
         &self,
         host: &LanHost,
         guest: &horizon_client::lan::guest::Guest,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P2213.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !guest.participates_in_player_simulation()
             || !guest.placed
             || self.adv.tree.list.is_empty()
@@ -1675,7 +1675,7 @@ impl Game<'_> {
     /// `PlayerAdvancements.load` and `ServerStatsCounter.parseLocal` of a
     /// network player who joined; every statistic goes out on the first
     /// request (`PlayerList.placeNewPlayer`'s `markAllDirty`).
-    fn load_guest_records(&mut self, conn: u32) {
+    fn load_guest_records(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2212.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -1712,7 +1712,7 @@ impl Game<'_> {
     }
     /// The integrated server's owner into the world's player, for `Level::write`.
     /// Returns the owner's uuid and name when they were stored.
-    pub(super) fn store_owner(&mut self) -> Option<(u128, String)> {
+    pub(super) fn store_owner(&mut self) -> Option<(u128, String)> { if let Some(__l) = crate::points_generated::P2211.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let uuid = self.lan.as_ref().and_then(|h| h.owner.as_ref())?.uuid;
         let (riding, dim, others) = self.lan.as_ref().and_then(|h| {
             let g = h.hub.online_players().find(|g| g.uuid == uuid)?;
@@ -1736,7 +1736,7 @@ impl Game<'_> {
     }
 
     /// The world's default game mode (`defaultgamemode`).
-    pub(super) fn set_default_game_mode(&mut self, mode: i32) {
+    pub(super) fn set_default_game_mode(&mut self, mode: i32) { let (mode,) = match crate::points_generated::P2210.get() { Some(__l) => { let mut __a = (mode,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mode,) };
         self.level.game_mode = mode;
         self.level.creative = mode == 1;
         if let Some(host) = self.lan.as_mut() {
@@ -1748,7 +1748,7 @@ impl Game<'_> {
     }
 
     /// Apply the default mode to connected players when forcing it is enabled.
-    pub(super) fn set_force_game_mode(&mut self, force: bool) {
+    pub(super) fn set_force_game_mode(&mut self, force: bool) { let (force,) = match crate::points_generated::P2209.get() { Some(__l) => { let mut __a = (force,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (force,) };
         if let Some(host) = self.lan.as_mut() {
             host.settings.force_game_mode = force;
             host.hub.config.force_game_mode = force;
@@ -1757,28 +1757,28 @@ impl Game<'_> {
     }
 
     /// Update the live movement check's flight policy.
-    pub(super) fn set_allow_flight(&mut self, allow: bool) {
+    pub(super) fn set_allow_flight(&mut self, allow: bool) { let (allow,) = match crate::points_generated::P2208.get() { Some(__l) => { let mut __a = (allow,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (allow,) };
         if let Some(host) = self.lan.as_mut() {
             host.hub.config.allow_flight = allow;
         }
     }
 
     /// Update whether status responses include online player names.
-    pub(super) fn set_hide_online_players(&mut self, hide: bool) {
+    pub(super) fn set_hide_online_players(&mut self, hide: bool) { let (hide,) = match crate::points_generated::P2207.get() { Some(__l) => { let mut __a = (hide,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (hide,) };
         if let Some(host) = self.lan.as_ref() {
             host.hub.lan.shared.set_hide_online_players(hide);
         }
     }
 
     /// Update whether the server answers connection status requests.
-    pub(super) fn set_status_replies(&mut self, enable: bool) {
+    pub(super) fn set_status_replies(&mut self, enable: bool) { let (enable,) = match crate::points_generated::P2206.get() { Some(__l) => { let mut __a = (enable,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (enable,) };
         if let Some(host) = self.lan.as_ref() {
             host.hub.lan.shared.set_enable_status(enable);
         }
     }
 
     /// New command access and game mode forcing settings of the open world.
-    pub(super) fn lan_apply_settings(&mut self, guest_commands: bool, force: bool) {
+    pub(super) fn lan_apply_settings(&mut self, guest_commands: bool, force: bool) { let (guest_commands,force,) = match crate::points_generated::P2205.get() { Some(__l) => { let mut __a = (guest_commands,force,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (guest_commands,force,) };
         if let Some(server) = &self.integrated {
             server.call(move |g| g.lan_apply_settings(guest_commands, force));
             return;
@@ -1794,7 +1794,7 @@ impl Game<'_> {
         self.resend_commands_filtered();
     }
 
-    pub(super) fn lan_port(&self) -> Option<u16> {
+    pub(super) fn lan_port(&self) -> Option<u16> { if let Some(__l) = crate::points_generated::P2204.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(server) = &self.integrated {
             return server.published();
         }
@@ -1807,7 +1807,7 @@ impl Game<'_> {
     /// The entities guests track: mobs, items and the rest (game/lan_entities.rs).
     /// `mob_players` is the guest each mob sees as its player (game/lan_mobs.rs).
     /// Only the entities whose id is above `after` (0: all of them).
-    fn lan_entities(&mut self, out: &mut States, drain_minecart_steps: bool, after: u32) {
+    fn lan_entities(&mut self, out: &mut States, drain_minecart_steps: bool, after: u32) { let (drain_minecart_steps,after,) = match crate::points_generated::P2203.get() { Some(__l) => { let mut __a = (drain_minecart_steps,after,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (drain_minecart_steps,after,) };
         out.clear();
         for m in self.mobs.iter().filter(|m| !m.removed && m.id > after) {
             let Some(host) = self.lan.as_ref() else {
@@ -2258,7 +2258,7 @@ impl Game<'_> {
     /// A sand place in the same tick as another sand's fall schedule still
     /// sees the support (#4510). `tick_lan` then syncs the level; a paused
     /// tick that never calls this still drains inside `tick_lan`.
-    pub(super) fn tick_lan_packets(&mut self) {
+    pub(super) fn tick_lan_packets(&mut self) { if let Some(__l) = crate::points_generated::P2202.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.level_pass.packets_drained {
             return;
         }
@@ -2343,7 +2343,7 @@ impl Game<'_> {
 
     /// The entity id counter, once the entities Horizon keeps without one
     /// have theirs, while guests track the level (None otherwise).
-    fn lan_ids_so_far(&mut self) -> Option<i32> {
+    fn lan_ids_so_far(&mut self) -> Option<i32> { if let Some(__l) = crate::points_generated::P2201.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.lan.as_ref().is_none_or(|h| h.hub.guests.is_empty()) {
             return None;
         }
@@ -2355,7 +2355,7 @@ impl Game<'_> {
     /// before the entities': what joined the level up to here (a falling
     /// block, a dispensed arrow, the last tick's late joins) is paired and
     /// first updated in this tick's pass (`Entities::synced`).
-    pub(super) fn lan_mark_synced(&mut self) {
+    pub(super) fn lan_mark_synced(&mut self) { if let Some(__l) = crate::points_generated::P2200.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(next) = self.lan_ids_so_far()
             && let Some(host) = self.lan.as_mut()
         {
@@ -2366,13 +2366,13 @@ impl Game<'_> {
     /// The start of a phase vanilla runs before ChunkMap.tick and Horizon
     /// among the entities' ticks (ServerChunkCache.tickChunks' spawning and
     /// thunder, the raids): the counter to give `lan_synced_since`.
-    pub(super) fn lan_synced_from(&mut self) -> Option<i32> {
+    pub(super) fn lan_synced_from(&mut self) -> Option<i32> { if let Some(__l) = crate::points_generated::P2199.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.lan_ids_so_far()
     }
 
     /// The end of such a phase: what joined during it is first updated in
     /// this tick's pass too.
-    pub(super) fn lan_synced_since(&mut self, from: Option<i32>) {
+    pub(super) fn lan_synced_since(&mut self, from: Option<i32>) { if let Some(__l) = crate::points_generated::P2198.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(from) = from
             && let Some(next) = self.lan_ids_so_far()
             && next > from
@@ -2388,7 +2388,7 @@ impl Game<'_> {
     /// tracking to pair them from (`Hub::note_joined`). Only they are
     /// described (their ids are above the counter the states were taken at),
     /// and nothing when the counter has not moved or no guest is in the level.
-    pub(super) fn lan_note_joined(&mut self) {
+    pub(super) fn lan_note_joined(&mut self) { if let Some(__l) = crate::points_generated::P2197.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -2409,10 +2409,10 @@ impl Game<'_> {
     }
 
     /// Spend the current level's forced marks after its tracker snapshot.
-    pub(super) fn spend_forced_meta(&mut self) {
+    pub(super) fn spend_forced_meta(&mut self) { if let Some(__l) = crate::points_generated::P2196.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.persist.forced_meta.clear();
     }
-    pub(super) fn tick_lan(&mut self, paused: bool) {
+    pub(super) fn tick_lan(&mut self, paused: bool) { let (paused,) = match crate::points_generated::P2195.get() { Some(__l) => { let mut __a = (paused,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (paused,) };
         // A frozen level does not reach tick_lan_packets through tick_world.
         // Apply its packets before taking the snapshot too.
         if !paused {
@@ -2686,7 +2686,7 @@ impl Game<'_> {
         conn: u32,
         entities: &[EntityState],
         spawn: [f64; 3],
-    ) {
+    ) { let (conn,spawn,) = match crate::points_generated::P2194.get() { Some(__l) => { let mut __a = (conn,spawn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,spawn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -2805,7 +2805,7 @@ impl Game<'_> {
     }
 
     /// Level events the game queued, for the guests (`process_level_events`).
-    pub(super) fn lan_record_events(&mut self, events: &[horizon_world::level::LevelEvent]) {
+    pub(super) fn lan_record_events(&mut self, events: &[horizon_world::level::LevelEvent]) { if let Some(__l) = crate::points_generated::P2193.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.audio.capture.is_none() {
             return;
         }
@@ -2839,14 +2839,14 @@ impl Game<'_> {
     }
 
     /// `Level.blockEvent` for the guests (`ClientboundBlockEventPacket`).
-    pub(super) fn lan_block_event(&mut self, pos: [i32; 3], b0: i32, b1: i32) {
+    pub(super) fn lan_block_event(&mut self, pos: [i32; 3], b0: i32, b1: i32) { let (pos,b0,b1,) = match crate::points_generated::P2192.get() { Some(__l) => { let mut __a = (pos,b0,b1,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,b0,b1,) };
         if self.audio.capture.is_some() {
             let state = self.world.block(pos[0], pos[1], pos[2]).0;
             self.lan_block_events.push((pos, b0, b1, state));
         }
     }
     /// `Level.broadcastEntityEvent` for the guests.
-    pub(super) fn lan_entity_event(&mut self, id: i32, event: i8, at: [f64; 3]) {
+    pub(super) fn lan_entity_event(&mut self, id: i32, event: i8, at: [f64; 3]) { let (id,event,at,) = match crate::points_generated::P2191.get() { Some(__l) => { let mut __a = (id,event,at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,event,at,) };
         if self.audio.capture.is_some() {
             self.lan_entity_events.push((id, event, at));
         }
@@ -2884,7 +2884,7 @@ impl Game<'_> {
         &mut self,
         slot: horizon_world::player_inventory::EquipmentSlot,
         stack: &horizon_client::items::ItemStack,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P2190.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_world::player_inventory::EquipmentSlot;
         let event = match slot {
             EquipmentSlot::MainHand => 47,
@@ -2931,7 +2931,7 @@ impl Game<'_> {
         width: f64,
         height: f64,
         magic: bool,
-    ) {
+    ) { let (id,feet,width,height,magic,) = match crate::points_generated::P2189.get() { Some(__l) => { let mut __a = (id,feet,width,height,magic,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,feet,width,height,magic,) };
         use horizon_client::particles::{ParticleOptions, ParticleType};
         let particle = if magic {
             ParticleType::EnchantedHit
@@ -2945,7 +2945,7 @@ impl Game<'_> {
         }
     }
     /// Send the tick's level events, sounds and mob animations.
-    pub(super) fn lan_flush_effects(&mut self) {
+    pub(super) fn lan_flush_effects(&mut self) { if let Some(__l) = crate::points_generated::P2188.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -3117,7 +3117,7 @@ impl Game<'_> {
     }
 
     /// Keep the chunks around every guest loaded.
-    pub(super) fn lan_update_streaming(&mut self) {
+    pub(super) fn lan_update_streaming(&mut self) { if let Some(__l) = crate::points_generated::P2187.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -3158,7 +3158,7 @@ impl Game<'_> {
     /// `villager::sleep_pose`): its `facing`.
     /// `Entity.setPose` for the server's players: the mods hear each placed
     /// guest's change of pose. Nothing is kept while no mod listens.
-    fn lan_guest_poses(&mut self) {
+    fn lan_guest_poses(&mut self) { if let Some(__l) = crate::points_generated::P2186.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -3181,7 +3181,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn bed_facing(&self, head: [i32; 3]) -> i32 {
+    pub(super) fn bed_facing(&self, head: [i32; 3]) -> i32 { let (head,) = match crate::points_generated::P2185.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (head,) };
         let state = self.world.block(head[0], head[1], head[2]);
         let facing = self
             .pack
@@ -3197,7 +3197,7 @@ impl Game<'_> {
 impl Game<'_> {
     /// After a player's chat was broadcast: the dedicated server's event
     /// log, and `detectRateSpam`.
-    fn lan_player_chatted(&mut self, sender: u128, text: &str) {
+    fn lan_player_chatted(&mut self, sender: u128, text: &str) { if let Some(__l) = crate::points_generated::P2184.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -3218,7 +3218,7 @@ impl Game<'_> {
     /// A hub's chat and log lines: a dedicated server logs them
     /// (MinecraftServer.logChatMessage, `[Not Secure]` for unsigned or
     /// expired messages); a LAN host shows the chat.
-    pub(super) fn lan_log_event(&mut self, event: HostEvent) {
+    pub(super) fn lan_log_event(&mut self, event: HostEvent) { if let Some(__l) = crate::points_generated::P2183.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let dedicated = self.options.dedicated.is_some();
         match event {
             HostEvent::Chat { line, secure } if dedicated => {

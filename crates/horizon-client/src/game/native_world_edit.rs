@@ -17,7 +17,7 @@ impl Game<'_> {
         &mut self,
         dimension: &str,
         edit: &NativeBlockEdit,
-    ) -> Result<u64, String> {
+    ) -> Result<u64, String> { if let Some(__l) = crate::points_generated::P4203.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.native_level_open(dimension) {
             return Err(format!("{dimension} is not the level being ticked"));
         }
@@ -33,7 +33,7 @@ impl Game<'_> {
         Ok(changed)
     }
     /// Whether `dimension` is the authoritative level being ticked: where a server mod's world helpers act.
-    pub(super) fn native_level_open(&self, dimension: &str) -> bool {
+    pub(super) fn native_level_open(&self, dimension: &str) -> bool { if let Some(__l) = crate::points_generated::P4202.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (self.serving.is_some() || self.options.dedicated.is_some()) && dimension == self.dim.id()
     }
 }

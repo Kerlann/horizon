@@ -97,7 +97,7 @@ fn red(key: &str, args: &[Text]) -> Text {
 impl Game<'_> {
     /// `registryAccess().get(testKey)`: the test instance from the game's
     /// data (`data/<namespace>/test_instance/<path>.json`).
-    pub(super) fn test_def(&self, id: &str) -> Option<TestDef> {
+    pub(super) fn test_def(&self, id: &str) -> Option<TestDef> { if let Some(__l) = crate::points_generated::P5635.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(known) = self.test_defs.borrow().get(id) {
             return known.clone();
         }
@@ -108,7 +108,7 @@ impl Game<'_> {
         def
     }
 
-    fn read_test_def(&self, id: &str) -> Option<TestDef> {
+    fn read_test_def(&self, id: &str) -> Option<TestDef> { if let Some(__l) = crate::points_generated::P5634.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (ns, path) = id.split_once(':').unwrap_or(("minecraft", id));
         let file = self
             .options
@@ -191,14 +191,14 @@ impl Game<'_> {
         })
     }
 
-    pub(super) fn test_instance_at(&self, pos: Pos) -> Option<&TestInstanceBlock> {
+    pub(super) fn test_instance_at(&self, pos: Pos) -> Option<&TestInstanceBlock> { if let Some(__l) = crate::points_generated::P5633.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.world.block_entities.get(&pos)? {
             BlockEntity::TestInstanceBlock(b) => Some(b),
             _ => None,
         }
     }
 
-    pub(super) fn test_instance_mut(&mut self, pos: Pos) -> Option<&mut TestInstanceBlock> {
+    pub(super) fn test_instance_mut(&mut self, pos: Pos) -> Option<&mut TestInstanceBlock> { if let Some(__l) = crate::points_generated::P5632.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.world.block_entities.get_mut(&pos)? {
             BlockEntity::TestInstanceBlock(b) => Some(b),
             _ => None,
@@ -206,20 +206,20 @@ impl Game<'_> {
     }
 
     /// `getTestHolder`.
-    pub(super) fn test_holder(&self, pos: Pos) -> Option<TestDef> {
+    pub(super) fn test_holder(&self, pos: Pos) -> Option<TestDef> { if let Some(__l) = crate::points_generated::P5631.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let key = self.test_instance_at(pos)?.data.test.clone()?;
         self.test_def(&key)
     }
 
     /// The padding of the block's test, 0 without one.
-    pub(super) fn test_holder_padding(&self, pos: Pos) -> i32 {
+    pub(super) fn test_holder_padding(&self, pos: Pos) -> i32 { if let Some(__l) = crate::points_generated::P5630.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.test_holder(pos).map_or(0, |t| t.padding)
     }
 
     /// `ClientPacketListener.handleGameTestHighlightPos`:
     /// `GameTestBlockHighlightRenderer.highlightPos` shows the block for ten
     /// seconds with its position relative to the test.
-    pub(super) fn highlight_test_pos(&mut self, absolute: [i32; 3], relative: [i32; 3]) {
+    pub(super) fn highlight_test_pos(&mut self, absolute: [i32; 3], relative: [i32; 3]) { let (absolute,relative,) = match crate::points_generated::P5629.get() { Some(__l) => { let mut __a = (absolute,relative,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (absolute,relative,) };
         let text = format!("{}, {}, {}", relative[0], relative[1], relative[2]);
         let until = std::time::Instant::now() + std::time::Duration::from_millis(10_000);
         self.test_highlights
@@ -235,7 +235,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         out: &mut Vec<Vertex>,
         see_through: &mut Vec<Vertex>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P5628.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::gizmos as g;
         // `GameTestBlockHighlightRenderer.emitGizmos`: expired highlights go,
         // the rest are a green box with the relative position over it.
@@ -310,7 +310,7 @@ impl Game<'_> {
     }
 
     /// `getRotation`: the test's rotation turned by the block's.
-    pub(super) fn test_rotation(&self, pos: Pos) -> Rotation {
+    pub(super) fn test_rotation(&self, pos: Pos) -> Rotation { if let Some(__l) = crate::points_generated::P5627.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let own = self
             .test_instance_at(pos)
             .map_or(Rotation::None, |b| b.data.rotation);
@@ -320,7 +320,7 @@ impl Game<'_> {
     }
 
     /// `getTestName`.
-    pub(super) fn test_name(&self, pos: Pos) -> Text {
+    pub(super) fn test_name(&self, pos: Pos) -> Text { if let Some(__l) = crate::points_generated::P5626.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.test_instance_at(pos).and_then(|b| b.data.test.clone()) {
             Some(key) => Text::literal(key),
             None => Text::translate("test_instance_block.invalid_test", &[]),
@@ -330,7 +330,7 @@ impl Game<'_> {
     /// `ServerGamePacketListenerImpl.handleTestInstanceBlockAction` for a
     /// guest: only a creative player with game master commands. A query or
     /// the screen's first look answers with a status packet.
-    pub(super) fn lan_test_instance_action(&mut self, conn: u32, p: play::TestInstanceBlockAction) {
+    pub(super) fn lan_test_instance_action(&mut self, conn: u32, p: play::TestInstanceBlockAction) { let (conn,) = match crate::points_generated::P5625.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
@@ -358,7 +358,7 @@ impl Game<'_> {
     fn apply_test_instance_action(
         &mut self,
         p: &play::TestInstanceBlockAction,
-    ) -> Option<(Text, Option<[i32; 3]>)> {
+    ) -> Option<(Text, Option<[i32; 3]>)> { if let Some(__l) = crate::points_generated::P5624.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = (p.pos[0], p.pos[1], p.pos[2]);
         self.test_instance_at(pos)?;
         // `ByIdMap.continuous(.., ZERO)`: an unknown action is INIT.
@@ -409,7 +409,7 @@ impl Game<'_> {
     }
 
     /// `getStructureBoundingBox`.
-    pub(super) fn test_structure_box(&self, pos: Pos) -> Option<BoundingBox> {
+    pub(super) fn test_structure_box(&self, pos: Pos) -> Option<BoundingBox> { if let Some(__l) = crate::points_generated::P5623.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let padding = self.test_holder(pos).map_or(0, |t| t.padding);
         let rotation = self.test_rotation(pos);
         Some(
@@ -420,7 +420,7 @@ impl Game<'_> {
 
     /// `processStructureBoundary`: the floor and walls (and the ceiling,
     /// unless the test has sky access) of the box around the structure.
-    pub(super) fn structure_boundary(&self, pos: Pos) -> Vec<Pos> {
+    pub(super) fn structure_boundary(&self, pos: Pos) -> Vec<Pos> { if let Some(__l) = crate::points_generated::P5622.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(bounds) = self.test_structure_box(pos) else {
             return Vec::new();
         };
@@ -444,7 +444,7 @@ impl Game<'_> {
     }
 
     /// `setBlockAndUpdate(pos, state)`.
-    pub(super) fn set_test_block_state(&mut self, at: Pos, name: &str, flags: i32) {
+    pub(super) fn set_test_block_state(&mut self, at: Pos, name: &str, flags: i32) { let (flags,) = match crate::points_generated::P5621.get() { Some(__l) => { let mut __a = (flags,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (flags,) };
         let Some(id) = self.pack.assets.registry.default_state(name) else {
             return;
         };
@@ -453,7 +453,7 @@ impl Game<'_> {
     }
 
     /// `removeBarriers`.
-    pub(super) fn remove_test_barriers(&mut self, pos: Pos) {
+    pub(super) fn remove_test_barriers(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5620.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let barrier = self.pack.assets.registry.default_state("minecraft:barrier");
         for at in self.structure_boundary(pos) {
             if Some(self.world.block(at.0, at.1, at.2)) == barrier {
@@ -464,7 +464,7 @@ impl Game<'_> {
     }
 
     /// `clearErrorMarkers`.
-    pub(super) fn clear_error_markers(&mut self, pos: Pos) {
+    pub(super) fn clear_error_markers(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5619.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(b) = self.test_instance_mut(pos)
             && !b.error_markers.is_empty()
         {
@@ -473,7 +473,7 @@ impl Game<'_> {
     }
 
     /// `resetTest`.
-    pub(super) fn reset_test(&mut self, pos: Pos) {
+    pub(super) fn reset_test(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5618.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.remove_test_barriers(pos);
         self.clear_error_markers(pos);
         if self.place_test_structure(pos) {
@@ -491,7 +491,7 @@ impl Game<'_> {
     }
 
     /// `placeStructure()`: the test's structure, cleared space first.
-    pub(super) fn place_test_structure(&mut self, pos: Pos) -> bool {
+    pub(super) fn place_test_structure(&mut self, pos: Pos) -> bool { if let Some(__l) = crate::points_generated::P5617.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(def) = self.test_holder(pos) else {
             return false;
         };
@@ -538,7 +538,7 @@ impl Game<'_> {
 
     /// `StructureUtils.clearSpaceForStructure`'s blocks: air in the box (stone
     /// below the ground height, which no row of the box is).
-    pub(super) fn clear_test_space(&mut self, area: &BoundingBox) {
+    pub(super) fn clear_test_space(&mut self, area: &BoundingBox) { if let Some(__l) = crate::points_generated::P5616.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ground = area.min[1] - 1;
         for y in area.min[1]..=area.max[1] {
             for z in area.min[2]..=area.max[2] {
@@ -559,7 +559,7 @@ impl Game<'_> {
     }
 
     /// `getBlockTicks().clearArea(bounds)` and `clearBlockEvents(bounds)`.
-    pub(super) fn clear_test_ticks(&mut self, bounds: &BoundingBox) {
+    pub(super) fn clear_test_ticks(&mut self, bounds: &BoundingBox) { if let Some(__l) = crate::points_generated::P5615.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let area = TickArea::new(
             BlockPos::new(bounds.min[0], bounds.min[1], bounds.min[2]),
             BlockPos::new(bounds.max[0], bounds.max[1], bounds.max[2]),
@@ -573,7 +573,7 @@ impl Game<'_> {
     }
 
     /// `saveTest`: the test's structure id, saved from the world.
-    fn save_test(&mut self, pos: Pos) -> Option<String> {
+    fn save_test(&mut self, pos: Pos) -> Option<String> { if let Some(__l) = crate::points_generated::P5614.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = self
             .test_holder(pos)
             .map(|t| t.structure)
@@ -604,7 +604,7 @@ impl Game<'_> {
 
     /// `exportTest`: saves, then writes to the test template folder, which
     /// only a development build has.
-    fn export_test(&mut self, pos: Pos) {
+    fn export_test(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5613.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.save_test(pos).is_some() {
             self.system_message(
                 Text::literal("Test structure exporting is disabled").with_color(text::RED),
@@ -613,7 +613,7 @@ impl Game<'_> {
     }
 
     /// `runTest`: the checks, the structure's placement and the test.
-    fn run_test(&mut self, pos: Pos) {
+    fn run_test(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5612.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let coordinates = [pos.0, pos.1, pos.2].map(|v| Text::literal(v.to_string()));
         let Some(def) = self.test_holder(pos) else {
             self.system_message(red("test_instance_block.error.no_test", &coordinates));

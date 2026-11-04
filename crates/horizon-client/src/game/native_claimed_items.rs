@@ -84,7 +84,7 @@ impl ModInput {
 #[allow(dead_code)]
 impl Game<'_> {
     /// The stack in inventory slot `slot` as a mod's events carry it.
-    fn mod_held(&self, slot: usize) -> Option<NativeHeldItem> {
+    fn mod_held(&self, slot: usize) -> Option<NativeHeldItem> { let (slot,) = match crate::points_generated::P2956.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let stack = self.stack_in(slot)?;
         let extra = stack.extra.as_deref();
         Some(NativeHeldItem {
@@ -100,12 +100,12 @@ impl Game<'_> {
         })
     }
     /// The first block along the view within `distance` (at most 1024), past the loaded chunks over the distant terrain.
-    pub(super) fn native_raycast(&self, distance: f32) -> Option<NativeHit> {
+    pub(super) fn native_raycast(&self, distance: f32) -> Option<NativeHit> { let (distance,) = match crate::points_generated::P2955.get() { Some(__l) => { let mut __a = (distance,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (distance,) };
         let (d, hit) = self.native_view_hit()?;
         (d <= distance.clamp(0.0, RAYCAST_MAX)).then_some(hit)
     }
     /// The first block along the view within `RAYCAST_MAX`, and its distance.
-    pub(super) fn native_view_hit(&self) -> Option<(f32, NativeHit)> {
+    pub(super) fn native_view_hit(&self) -> Option<(f32, NativeHit)> { if let Some(__l) = crate::points_generated::P2954.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player.as_ref()?;
         let eye = self.eye_position()?;
         let dir = super::view_vector(self.yaw, self.pitch);
@@ -141,7 +141,7 @@ impl Game<'_> {
         eye: [f64; 3],
         dir: [f64; 3],
         reach: f64,
-    ) -> Option<([i32; 3], [f64; 3], horizon_world::registry::BlockStateId)> {
+    ) -> Option<([i32; 3], [f64; 3], horizon_world::registry::BlockStateId)> { let (eye,dir,reach,) = match crate::points_generated::P2953.get() { Some(__l) => { let mut __a = (eye,dir,reach,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (eye,dir,reach,) };
         let lod = self.lod.as_ref()?;
         let mut t = 0.0;
         while t <= reach {
@@ -162,16 +162,16 @@ impl Game<'_> {
         None
     }
     /// Right-clicks with these items (at most 64 ids) are mod `mod_id`'s; a later call replaces the list.
-    pub(super) fn native_claim_items(&mut self, mod_id: &str, ids: &[String]) {
+    pub(super) fn native_claim_items(&mut self, mod_id: &str, ids: &[String]) { if let Some(__l) = crate::points_generated::P2952.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_input.claim(mod_id, ids);
     }
     /// Mod `mod_id`'s events since its last poll (at most 256 wait).
-    pub(super) fn native_poll(&mut self, mod_id: &str) -> Vec<NativeModEvent> {
+    pub(super) fn native_poll(&mut self, mod_id: &str) -> Vec<NativeModEvent> { if let Some(__l) = crate::points_generated::P2951.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_input.poll(mod_id)
     }
     /// `use_hand`: a right-click with an item a mod claims starts its use for
     /// that mod and nothing else happens. True when a mod took it.
-    pub(super) fn mod_use_start(&mut self) -> bool {
+    pub(super) fn mod_use_start(&mut self) -> bool { if let Some(__l) = crate::points_generated::P2950.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.guest_use.is_some() || self.using.is_some() {
             return false;
         }
@@ -191,7 +191,7 @@ impl Game<'_> {
     /// `tick_used_item` for a claimed item: counts the ticks held and ends
     /// the use when the button comes up. True when the player's use is a
     /// mod's; a mod use the game reset ends, and the player's own use goes on.
-    pub(super) fn mod_use_tick(&mut self, slot: usize, ticks: u32, released: bool) -> bool {
+    pub(super) fn mod_use_tick(&mut self, slot: usize, ticks: u32, released: bool) -> bool { let (slot,ticks,released,) = match crate::points_generated::P2949.get() { Some(__l) => { let mut __a = (slot,ticks,released,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,ticks,released,) };
         if !self.native_input.owns(Some((slot, ticks))) {
             self.native_input.end();
             return false;
@@ -211,7 +211,7 @@ impl Game<'_> {
     }
     /// The player's use was reset (a respawn, a join, the hand's item
     /// changed): a mod use under way ends and its mod hears `UseStop`.
-    pub(super) fn end_mod_use(&mut self) {
+    pub(super) fn end_mod_use(&mut self) { if let Some(__l) = crate::points_generated::P2948.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_input.end();
     }
 }

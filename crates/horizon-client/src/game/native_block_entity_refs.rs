@@ -8,7 +8,7 @@ use mod_api::__private::game::*;
 use mod_api::{BlockEntityRef, BlockEntityTypeKey, LevelRef, PlayerRef};
 
 impl Game<'_> {
-    fn native_block_entity_target(&self, entity: BlockEntityRef) -> Option<(&World, &BlockEntity)> {
+    fn native_block_entity_target(&self, entity: BlockEntityRef) -> Option<(&World, &BlockEntity)> { if let Some(__l) = crate::points_generated::P2905.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let world = self.native_level_world(entity.fields().level)?;
         Some((world, loaded_block_entity(world, entity.fields().position)?))
     }
@@ -19,7 +19,7 @@ impl Game<'_> {
         &self,
         level: LevelRef,
         pos: [i32; 3],
-    ) -> Option<BlockEntityRef> {
+    ) -> Option<BlockEntityRef> { let (pos,) = match crate::points_generated::P2904.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let entity = mod_api::__private::game::block_entity_ref(level, pos);
         self.native_block_entity_target(entity).map(|_| entity)
     }
@@ -31,7 +31,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         entity: BlockEntityRef,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2903.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player_handle_read(player).is_none()
             || !self.native_level_in_place(entity.fields().level)
             || self.native_block_entity_target(entity).is_none()
@@ -62,7 +62,7 @@ impl Game<'_> {
     pub(super) fn native_block_entity_kind(
         &self,
         entity: BlockEntityRef,
-    ) -> Option<BlockEntityTypeKey> {
+    ) -> Option<BlockEntityTypeKey> { if let Some(__l) = crate::points_generated::P2902.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (world, block_entity) = self.native_block_entity_target(entity)?;
         let [x, y, z] = entity.fields().position;
         let block = &self.pack.assets.registry.state(world.block(x, y, z))?.name;
@@ -70,20 +70,20 @@ impl Game<'_> {
     }
 
     /// The block entity's position.
-    pub(super) fn native_block_entity_position(&self, entity: BlockEntityRef) -> Option<[i32; 3]> {
+    pub(super) fn native_block_entity_position(&self, entity: BlockEntityRef) -> Option<[i32; 3]> { if let Some(__l) = crate::points_generated::P2901.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_block_entity_target(entity)?;
         Some(entity.fields().position)
     }
 
     /// The block entity's level.
-    pub(super) fn native_block_entity_level(&self, entity: BlockEntityRef) -> Option<LevelRef> {
+    pub(super) fn native_block_entity_level(&self, entity: BlockEntityRef) -> Option<LevelRef> { if let Some(__l) = crate::points_generated::P2900.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_block_entity_target(entity)?;
         Some(entity.fields().level)
     }
 
     /// The data saved without identity or position metadata
     /// (`BlockEntity.saveWithoutMetadata`).
-    pub(super) fn native_block_entity_data(&self, entity: BlockEntityRef) -> Option<Compound> {
+    pub(super) fn native_block_entity_data(&self, entity: BlockEntityRef) -> Option<Compound> { if let Some(__l) = crate::points_generated::P2899.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (world, block_entity) = self.native_block_entity_target(entity)?;
         let [x, y, z] = entity.fields().position;
         let block = &self.pack.assets.registry.state(world.block(x, y, z))?.name;
@@ -95,7 +95,7 @@ impl Game<'_> {
     fn native_block_entity_write_target(
         &self,
         entity: BlockEntityRef,
-    ) -> Option<((i32, i32, i32), String)> {
+    ) -> Option<((i32, i32, i32), String)> { if let Some(__l) = crate::points_generated::P2898.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_level_in_place(entity.fields().level) {
             return None;
         }
@@ -122,7 +122,7 @@ impl Game<'_> {
         &mut self,
         entity: BlockEntityRef,
         data: Compound,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2897.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.write_block_entity_data(entity, data, false)
     }
 
@@ -133,7 +133,7 @@ impl Game<'_> {
         &mut self,
         entity: BlockEntityRef,
         data: Compound,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2896.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.write_block_entity_data(entity, data, true)
     }
 
@@ -142,7 +142,7 @@ impl Game<'_> {
         entity: BlockEntityRef,
         data: Compound,
         replace: bool,
-    ) -> bool {
+    ) -> bool { let (replace,) = match crate::points_generated::P2895.get() { Some(__l) => { let mut __a = (replace,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (replace,) };
         let Some((key, block)) = self.native_block_entity_write_target(entity) else {
             return false;
         };
@@ -202,7 +202,7 @@ impl Game<'_> {
     /// `BlockEntity.setChanged`: the chunk is saved again and comparators re-read the
     /// container (`updateNeighbourForOutputSignal`). Inside a transaction it runs once at the
     /// root commit. False for a stale handle, a client or another level than the one in place.
-    pub(super) fn native_block_entity_set_changed(&mut self, entity: BlockEntityRef) -> bool {
+    pub(super) fn native_block_entity_set_changed(&mut self, entity: BlockEntityRef) -> bool { if let Some(__l) = crate::points_generated::P2894.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((key, _)) = self.native_block_entity_write_target(entity) else {
             return false;
         };
@@ -214,7 +214,7 @@ impl Game<'_> {
     /// has none or isn't nameable (chests, barrels, furnaces, hoppers, brewing stands,
     /// banners, beacons, enchanting tables, command blocks...), or for a stale handle or a
     /// client.
-    pub(super) fn native_block_entity_name(&self, entity: BlockEntityRef) -> Option<String> {
+    pub(super) fn native_block_entity_name(&self, entity: BlockEntityRef) -> Option<String> { if let Some(__l) = crate::points_generated::P2893.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (world, block_entity) = self.native_block_entity_target(entity)?;
         let [x, y, z] = entity.fields().position;
         match block_entity {
@@ -231,7 +231,7 @@ impl Game<'_> {
         &mut self,
         entity: BlockEntityRef,
         name: Option<&str>,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2892.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((key, block)) = self.native_block_entity_write_target(entity) else {
             return false;
         };

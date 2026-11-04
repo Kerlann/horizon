@@ -8,7 +8,7 @@ use horizon_core::geometry::Vec3;
 use horizon_optifine::random::Weather;
 
 impl Game<'_> {
-    pub(super) fn tick_random_textures(&mut self) {
+    pub(super) fn tick_random_textures(&mut self) { if let Some(__l) = crate::points_generated::P4722.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let res = self.res.clone();
         let textures = res
             .mob_data()
@@ -32,7 +32,7 @@ impl Game<'_> {
     }
 
     /// What OptiFine reads of a mob's surroundings when it first appears.
-    fn seen_at(&self, at: Vec3) -> Seen {
+    fn seen_at(&self, at: Vec3) -> Seen { if let Some(__l) = crate::points_generated::P4721.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (x, y, z) = (
             at.x.floor() as i32,
             at.y.floor() as i32,

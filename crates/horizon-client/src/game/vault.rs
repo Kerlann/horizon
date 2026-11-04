@@ -32,7 +32,7 @@ impl VaultLevel for Players {
 }
 
 impl Game<'_> {
-    fn vault_players(&self) -> Players {
+    fn vault_players(&self) -> Players { if let Some(__l) = crate::points_generated::P5774.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let host = self.player.as_ref().map(|p| VaultPlayer {
             uuid: self.acting_uuid(),
             block: [p.position.x, p.position.y, p.position.z].map(|v| v.floor() as i32),
@@ -49,7 +49,7 @@ impl Game<'_> {
         }
     }
     /// The vault at `key` with its block's state and ominous flag.
-    pub(super) fn take_vault(&mut self, key: Pos) -> Option<(Box<Vault>, VaultState, bool)> {
+    pub(super) fn take_vault(&mut self, key: Pos) -> Option<(Box<Vault>, VaultState, bool)> { if let Some(__l) = crate::points_generated::P5773.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let state = self.world.block(key.0, key.1, key.2);
         let block = self.pack.assets.registry.state(state)?;
         if block.name != "minecraft:vault" {
@@ -123,7 +123,7 @@ impl Game<'_> {
     }
     /// The server tick of the vault at `key`, then its client tick when there
     /// is a window.
-    pub(super) fn tick_vault(&mut self, key: Pos) -> Result<()> {
+    pub(super) fn tick_vault(&mut self, key: Pos) -> Result<()> { if let Some(__l) = crate::points_generated::P5772.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = [key.0, key.1, key.2];
         let ticked = self.with_vault(key, |v, l, random, state, ominous, roll, events| {
             v.server_tick(l, random, pos, state, ominous, roll, events);
@@ -138,7 +138,7 @@ impl Game<'_> {
     }
     /// `VaultBlock.useItemOn` with `held` in the hand that acts: true when the
     /// vault took the click (an active vault, with anything in the hand).
-    pub(super) fn use_vault(&mut self, pos: [i32; 3], held: Option<&ItemStack>) -> Result<bool> {
+    pub(super) fn use_vault(&mut self, pos: [i32; 3], held: Option<&ItemStack>) -> Result<bool> { let (pos,) = match crate::points_generated::P5771.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let Some(stack) = held.cloned() else {
             return Ok(false);
         };
@@ -173,7 +173,7 @@ impl Game<'_> {
         self.trigger_block("minecraft:item_used_on_block", pos, &stack);
         Ok(true)
     }
-    fn vault_events(&mut self, key: Pos, events: Vec<VaultEvent>) -> Result<()> {
+    fn vault_events(&mut self, key: Pos, events: Vec<VaultEvent>) -> Result<()> { if let Some(__l) = crate::points_generated::P5770.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = [key.0, key.1, key.2];
         let center = pos.map(|v| f64::from(v) + 0.5);
         for event in events {
@@ -195,7 +195,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `setBlockAndUpdate` with the new `vault_state`.
-    fn set_vault_state(&mut self, key: Pos, state: VaultState) -> Result<()> {
+    fn set_vault_state(&mut self, key: Pos, state: VaultState) -> Result<()> { if let Some(__l) = crate::points_generated::P5769.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let current = self.world.block(key.0, key.1, key.2);
         let Some(mut block) = self.pack.assets.registry.state(current).cloned() else {
             return Ok(());
@@ -210,7 +210,7 @@ impl Game<'_> {
     }
     /// `VaultRenderer`: the display item of every vault near the camera that
     /// shows one, turning above its floor.
-    pub(super) fn vault_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
+    pub(super) fn vault_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) { let (alpha,) = match crate::points_generated::P5768.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         for (key, entity) in &self.world.block_entities {
             let BlockEntity::Vault(vault) = entity else {
                 continue;

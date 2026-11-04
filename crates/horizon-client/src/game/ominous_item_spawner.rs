@@ -67,7 +67,7 @@ impl Game<'_> {
         item: ItemStack,
         position: [f64; 3],
         delay: i32,
-    ) {
+    ) { let (position,delay,) = match crate::points_generated::P4316.get() { Some(__l) => { let mut __a = (position,delay,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (position,delay,) };
         self.next_entity += 1;
         self.ominous_spawners.push(OminousItemSpawner {
             id: self.next_entity,
@@ -81,7 +81,7 @@ impl Game<'_> {
     }
     /// A saved spawner, as `readAdditionalSaveData` leaves it: its tick
     /// count starts again from 0.
-    pub(super) fn load_ominous_item_spawner(&mut self, tag: horizon_world::nbt::Tag) {
+    pub(super) fn load_ominous_item_spawner(&mut self, tag: horizon_world::nbt::Tag) { if let Some(__l) = crate::points_generated::P4315.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((item, at, spawn_item_after)) =
             horizon_client::entity_nbt::ominous_item_spawner_from_nbt(&tag)
         else {
@@ -106,7 +106,7 @@ impl Game<'_> {
     /// Every item spawner's tick: `commonTick`'s count, `tickServer` (the
     /// warning sound, then the item) and `tickClient` (particles every 5
     /// game ticks).
-    pub(super) fn tick_ominous_item_spawners(&mut self) {
+    pub(super) fn tick_ominous_item_spawners(&mut self) { if let Some(__l) = crate::points_generated::P4314.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let spawners = std::mem::take(&mut self.ominous_spawners);
         let mut kept = Vec::with_capacity(spawners.len());
         for mut s in spawners {
@@ -135,7 +135,7 @@ impl Game<'_> {
     }
     /// `handleAddEntity` for a spawner a server sent: its item comes with the
     /// entity data (`ItemStack.EMPTY` until then, which draws nothing).
-    pub(super) fn add_remote_ominous_item_spawner(&mut self, id: u32, position: [f64; 3]) {
+    pub(super) fn add_remote_ominous_item_spawner(&mut self, id: u32, position: [f64; 3]) { let (id,position,) = match crate::points_generated::P4313.get() { Some(__l) => { let mut __a = (id,position,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,position,) };
         self.ominous_spawners.push(OminousItemSpawner {
             id,
             item: ItemStack::new("minecraft:air", 1),
@@ -148,7 +148,7 @@ impl Game<'_> {
     }
     /// `OminousItemSpawner.tick` on a client: `tickCount` and `tickClient`,
     /// the particles every 5 game ticks; only the server spawns the item.
-    pub(super) fn tick_remote_ominous_item_spawners(&mut self) {
+    pub(super) fn tick_remote_ominous_item_spawners(&mut self) { if let Some(__l) = crate::points_generated::P4312.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at: Vec<[f64; 3]> = self.ominous_spawners.iter().map(|s| s.position).collect();
         for s in &mut self.ominous_spawners {
             s.tick_count += 1;
@@ -161,7 +161,7 @@ impl Game<'_> {
     }
     /// `spawnItem`: a projectile shot down, or an item entity; level event
     /// 3021 and the entity_place game event.
-    fn spawn_ominous_item(&mut self, s: &OminousItemSpawner) {
+    fn spawn_ominous_item(&mut self, s: &OminousItemSpawner) { if let Some(__l) = crate::points_generated::P4311.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // An empty item spawns nothing, and no event marks it.
         if &*s.item.item == "minecraft:air" {
             return;
@@ -183,7 +183,7 @@ impl Game<'_> {
     }
     /// `OminousItemSpawner.addParticles`: one to three ominous spawning
     /// particles from the spawner out to points around it.
-    fn ominous_spawner_particles(&mut self, at: [f64; 3]) {
+    fn ominous_spawner_particles(&mut self, at: [f64; 3]) { let (at,) = match crate::points_generated::P4310.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let options = ParticleOptions::simple(ParticleType::OminousSpawning);
         let r = self.particles.random();
         let count = r.next_int_between_inclusive(1, 3).unwrap_or(1);
@@ -204,7 +204,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         alpha: f64,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P4309.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         for s in &self.ominous_spawners {
             let at = glam::DVec3::from_array(s.position);
             if at.distance_squared(camera) >= 64.0 * 64.0 {

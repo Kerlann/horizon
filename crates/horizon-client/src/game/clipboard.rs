@@ -8,7 +8,7 @@ impl Game<'_> {
     /// `InputWithModifiers.isSelectAll`/`isCopy`/`isPaste`/`isCut` of a key
     /// press (or repeat): the keyboard's modifier state, or a modifier key an
     /// agent holds.
-    pub(super) fn edit_shortcut(&self, event: &KeyEvent) -> Option<EditShortcut> {
+    pub(super) fn edit_shortcut(&self, event: &KeyEvent) -> Option<EditShortcut> { if let Some(__l) = crate::points_generated::P885.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if event.state != ElementState::Pressed {
             return None;
         }
@@ -24,7 +24,7 @@ impl Game<'_> {
     /// `InputWithModifiers.hasControlDownWithQuirk`: the edit shortcuts'
     /// modifier (`InputQuirks.EDIT_SHORTCUT_KEY_MODIFIER`: Cmd on macOS, Ctrl
     /// elsewhere), held on the keyboard or by an agent.
-    pub(super) fn has_control_down_with_quirk(&self) -> bool {
+    pub(super) fn has_control_down_with_quirk(&self) -> bool { if let Some(__l) = crate::points_generated::P884.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let held = |keys: [KeyCode; 2]| keys.iter().any(|k| self.keys.contains(k));
         if cfg!(target_os = "macos") {
             self.modifiers.super_key() || held([KeyCode::SuperLeft, KeyCode::SuperRight])
@@ -35,7 +35,7 @@ impl Game<'_> {
     /// Whether the held keys let a key's text through to the focused field
     /// (`clipboard::types_text`): not with the edit modifier, unless it is
     /// part of AltGr.
-    pub(super) fn types_text(&self) -> bool {
+    pub(super) fn types_text(&self) -> bool { if let Some(__l) = crate::points_generated::P883.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let held = |keys: [KeyCode; 2]| keys.iter().any(|k| self.physical_keys.contains(k));
         let edit = if cfg!(target_os = "macos") {
             held([KeyCode::SuperLeft, KeyCode::SuperRight])
@@ -63,7 +63,7 @@ impl Game<'_> {
         })
     }
     /// Shortcuts on the title, world creation and server screens.
-    pub(super) fn title_shortcut(&mut self, shortcut: EditShortcut) {
+    pub(super) fn title_shortcut(&mut self, shortcut: EditShortcut) { if let Some(__l) = crate::points_generated::P882.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(title) = self.title.as_mut() else {
             return;
         };
@@ -86,7 +86,7 @@ impl Game<'_> {
     }
     /// Typing or a backspace in a title-screen field. A field that still only
     /// appends replaces a Select All selection before the edit.
-    pub(super) fn title_edit(&mut self, typed: Option<&str>, backspace: bool) {
+    pub(super) fn title_edit(&mut self, typed: Option<&str>, backspace: bool) { let (backspace,) = match crate::points_generated::P881.get() { Some(__l) => { let mut __a = (backspace,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (backspace,) };
         let Some(title) = self.title.as_mut() else {
             return;
         };
@@ -106,7 +106,7 @@ impl Game<'_> {
         }
     }
     /// Shortcuts in the creative inventory's search box (an `EditBox` of 50).
-    pub(super) fn creative_search_shortcut(&mut self, shortcut: EditShortcut) {
+    pub(super) fn creative_search_shortcut(&mut self, shortcut: EditShortcut) { if let Some(__l) = crate::points_generated::P880.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .creative_screen
             .search
@@ -118,14 +118,14 @@ impl Game<'_> {
     /// A backspace in the creative search box: with Ctrl, the whole word
     /// before the caret (`EditBox.deleteWords(-1)`), otherwise one character.
     /// A selection is what it deletes, as in `EditBox.keyPressed`.
-    pub(super) fn creative_search_backspace(&mut self, ctrl: bool) {
+    pub(super) fn creative_search_backspace(&mut self, ctrl: bool) { let (ctrl,) = match crate::points_generated::P879.get() { Some(__l) => { let mut __a = (ctrl,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ctrl,) };
         self.creative_screen
             .search
             .key(KeyCode::Backspace, ctrl, false);
         self.creative_screen.scroll = 0.0;
     }
     /// Typing in the creative search box.
-    pub(super) fn creative_search_edit(&mut self, typed: Option<&str>) {
+    pub(super) fn creative_search_edit(&mut self, typed: Option<&str>) { if let Some(__l) = crate::points_generated::P878.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(text) = typed {
             self.creative_screen.search.insert_text(text);
             self.creative_screen.scroll = 0.0;

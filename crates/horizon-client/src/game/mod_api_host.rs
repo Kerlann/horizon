@@ -59,7 +59,7 @@ impl Game<'_> {
     /// Whether entity `id` is in the level, as a holder of attachments: one walk
     /// over the entity lists (a kind added there holds attachments too), then the
     /// kinds that are not on it.
-    fn attachment_entity_exists(&self, id: u32) -> bool {
+    fn attachment_entity_exists(&self, id: u32) -> bool { let (id,) = match crate::points_generated::P2786.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         use super::entity::{Entity as _, entity_lists_of, for_each_entity};
         let mut found = false;
         for_each_entity!(entity_lists_of!(self), entity => {
@@ -71,7 +71,7 @@ impl Game<'_> {
     /// The attachments of entities that left the level, dropped: each tick
     /// while any entity has some. Only those entities are looked at, and
     /// nothing else of the entities' memory changes.
-    pub(super) fn prune_entity_attachments(&mut self) {
+    pub(super) fn prune_entity_attachments(&mut self) { if let Some(__l) = crate::points_generated::P2785.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let alive = self.live_entity_ids();
         let gone: Vec<[i32; 4]> = self
             .persist
@@ -87,7 +87,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn native_authoritative(&self) -> bool {
+    pub(super) fn native_authoritative(&self) -> bool { if let Some(__l) = crate::points_generated::P2784.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.serving.is_some() || self.options.dedicated.is_some()
     }
 
@@ -97,7 +97,7 @@ impl Game<'_> {
     pub(super) fn attachment_map(
         &mut self,
         holder: mod_api::Holder,
-    ) -> Result<&mut mod_api::Attachments, mod_api::AttachmentError> {
+    ) -> Result<&mut mod_api::Attachments, mod_api::AttachmentError> { if let Some(__l) = crate::points_generated::P2783.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.native_authoritative() {
             self.world.attachment_syncs.insert(holder);
             return self.attachment_map_quiet(holder);
@@ -113,7 +113,7 @@ impl Game<'_> {
     pub(super) fn attachment_map_quiet(
         &mut self,
         holder: mod_api::Holder,
-    ) -> Result<&mut mod_api::Attachments, mod_api::AttachmentError> {
+    ) -> Result<&mut mod_api::Attachments, mod_api::AttachmentError> { if let Some(__l) = crate::points_generated::P2782.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.native_authoritative() {
             return Err(mod_api::AttachmentError::MissingHolder);
         }
@@ -126,7 +126,7 @@ impl Game<'_> {
     pub(super) fn attachment_slot(
         &mut self,
         holder: mod_api::Holder,
-    ) -> Result<&mut mod_api::Attachments, mod_api::AttachmentError> {
+    ) -> Result<&mut mod_api::Attachments, mod_api::AttachmentError> { if let Some(__l) = crate::points_generated::P2781.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use mod_api::AttachmentError;
         if let mod_api::Holder::Entity(id) = holder {
             if !self.attachment_entity_exists(id) {

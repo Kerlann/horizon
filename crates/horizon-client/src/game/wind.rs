@@ -78,7 +78,7 @@ fn triggers(name: &str) -> bool {
 }
 impl Game<'_> {
     /// `WindChargeItem.use`.
-    pub(super) fn throw_wind_charge(&mut self) -> Result<bool> {
+    pub(super) fn throw_wind_charge(&mut self) -> Result<bool> { if let Some(__l) = crate::points_generated::P5828.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (Some(eye), Some(p)) = (self.eye_position(), self.player.as_ref()) else {
             return Ok(false);
         };
@@ -113,7 +113,7 @@ impl Game<'_> {
         Ok(true)
     }
     /// A wind charge meeting an entity or a block (or flying too high).
-    pub(super) fn wind_charge_hit(&mut self, p: &Projectile, hit: Hit) -> Result<()> {
+    pub(super) fn wind_charge_hit(&mut self, p: &Projectile, hit: Hit) -> Result<()> { if let Some(__l) = crate::points_generated::P5827.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let breeze = p.kind == ProjectileKind::BreezeWindCharge;
         let (radius, knockback) = if breeze {
             (BREEZE_RADIUS, 1.0)
@@ -149,7 +149,7 @@ impl Game<'_> {
         burst
     }
     /// `AbstractWindCharge.onHitEntity`: one point of damage.
-    fn wind_charge_damage(&mut self, p: &Projectile, who: Who) {
+    fn wind_charge_damage(&mut self, p: &Projectile, who: Who) { if let Some(__l) = crate::points_generated::P5826.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let owner_breeze = matches!(p.owner, Some(Who::Mob(id))
             if self.mobs.iter().any(|m| m.id == id && m.species() == Species::Breeze));
         match who {
@@ -196,7 +196,7 @@ impl Game<'_> {
     }
     /// The exploded positions: rays through everything but the blocks that
     /// stop wind (`blocks_wind_charge_explosions`).
-    fn wind_positions(&mut self, center: [f64; 3], radius: f32) -> Vec<[i32; 3]> {
+    fn wind_positions(&mut self, center: [f64; 3], radius: f32) -> Vec<[i32; 3]> { let (center,radius,) = match crate::points_generated::P5825.get() { Some(__l) => { let mut __a = (center,radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,) };
         let stops = self
             .res
             .items()
@@ -265,7 +265,7 @@ impl Game<'_> {
         breeze: bool,
         wind_charge: bool,
         blocks: &[[i32; 3]],
-    ) -> Vec<(u32, [f64; 3])> {
+    ) -> Vec<(u32, [f64; 3])> { let (center,radius,multiplier,breeze,wind_charge,) = match crate::points_generated::P5824.get() { Some(__l) => { let mut __a = (center,radius,multiplier,breeze,wind_charge,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,multiplier,breeze,wind_charge,) };
         // ServerExplosion.shouldAffectBlocklikeEntities
         let blocklike = !breeze && !wind_charge && self.ui.rules.bool("mob_griefing");
         let diameter = f64::from(radius * 2.0);
@@ -360,7 +360,7 @@ impl Game<'_> {
     }
     /// The pushes `wind_knockback` held for entities that tick after the
     /// projectiles, applied once those entities have ticked.
-    pub(super) fn apply_late_wind_pushes(&mut self) {
+    pub(super) fn apply_late_wind_pushes(&mut self) { if let Some(__l) = crate::points_generated::P5823.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let late = std::mem::take(&mut self.creatures.late_wind_pushes);
         if late.is_empty() {
             return;
@@ -384,7 +384,7 @@ impl Game<'_> {
         breeze: bool,
         wind_charge: bool,
         blocks: &[[i32; 3]],
-    ) -> Option<[f64; 3]> {
+    ) -> Option<[f64; 3]> { let (center,radius,multiplier,breeze,wind_charge,) = match crate::points_generated::P5822.get() { Some(__l) => { let mut __a = (center,radius,multiplier,breeze,wind_charge,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,multiplier,breeze,wind_charge,) };
         if self.spectator() {
             return None;
         }
@@ -461,7 +461,7 @@ impl Game<'_> {
         breeze: bool,
         wind_charge: bool,
         cause: BurstCause,
-    ) -> Result<()> {
+    ) -> Result<()> { let (center,radius,multiplier,breeze,wind_charge,) = match crate::points_generated::P5821.get() { Some(__l) => { let mut __a = (center,radius,multiplier,breeze,wind_charge,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,multiplier,breeze,wind_charge,) };
         // In a guest's turn (their charge landing, their mace's burst) the
         // host holds the other players (`as_guest`): the burst waits for the
         // turn to end so that it reaches every player, the guest too.
@@ -536,7 +536,7 @@ impl Game<'_> {
         Ok(())
     }
     /// The bursts guests' turns put off.
-    pub(super) fn flush_wind_bursts(&mut self) -> Result<()> {
+    pub(super) fn flush_wind_bursts(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P5820.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.flush_smash_pushes();
         for b in std::mem::take(&mut self.creatures.wind_bursts) {
             self.wind_burst(
@@ -552,7 +552,7 @@ impl Game<'_> {
     }
     /// `BlockBehaviour.onExplosionHit` for `TRIGGER_BLOCK`: doors, gates,
     /// buttons, levers and bells react as if used; candles go out.
-    fn wind_trigger_block(&mut self, pos: [i32; 3]) -> Result<()> {
+    fn wind_trigger_block(&mut self, pos: [i32; 3]) -> Result<()> { let (pos,) = match crate::points_generated::P5819.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let name = self.res.facts().get(state).name.clone();
         let prop = |game: &Self, key: &str| {
@@ -639,7 +639,7 @@ impl Game<'_> {
         light: u32,
         partial: f32,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { let (light,partial,) = match crate::points_generated::P5818.get() { Some(__l) => { let mut __a = (light,partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (light,partial,) };
         let Some(model) = self.entity_models.wind_charge.as_ref() else {
             return;
         };

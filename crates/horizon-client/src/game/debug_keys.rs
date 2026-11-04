@@ -52,7 +52,7 @@ impl DebugHost for Host<'_, '_> {
 }
 
 impl Game<'_> {
-    fn open_screen(&self) -> OpenScreen {
+    fn open_screen(&self) -> OpenScreen { if let Some(__l) = crate::points_generated::P1482.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.title.is_some() {
             return OpenScreen::Other;
         }
@@ -66,7 +66,7 @@ impl Game<'_> {
     /// A physical key event (already in `physical_keys`) before the game's
     /// own handling. Returns true when it is used up (a debug combination,
     /// F3 itself, F3+Escape).
-    pub(super) fn debug_key(&mut self, key: KeyCode, action: KeyAction) -> bool {
+    pub(super) fn debug_key(&mut self, key: KeyCode, action: KeyAction) -> bool { if let Some(__l) = crate::points_generated::P1481.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.title.is_some() {
             return false;
         }
@@ -171,11 +171,11 @@ impl Game<'_> {
         }
     }
     /// `Util.getMillis` (positive: KeyboardHandler treats 0 as unset).
-    pub(super) fn debug_millis(&self) -> i64 {
+    pub(super) fn debug_millis(&self) -> i64 { if let Some(__l) = crate::points_generated::P1480.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.started.elapsed().as_millis() as i64 + 1_000_000
     }
     /// `KeyboardHandler.tick`: the debug crash countdown.
-    pub(super) fn tick_debug_keys(&mut self) -> Result<()> {
+    pub(super) fn tick_debug_keys(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P1479.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let now = self.debug_millis();
         match self.debug_keys.tick(now) {
             None => {}
@@ -204,7 +204,7 @@ impl Game<'_> {
     }
     /// The network charts' samples each tick: `PingDebugMonitor.tick` while
     /// they show, `BandwidthDebugMonitor.tick` always.
-    pub(super) fn tick_debug_charts(&mut self) {
+    pub(super) fn tick_debug_charts(&mut self) { if let Some(__l) = crate::points_generated::P1478.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let shown = self.debug && self.debug_charts.network;
         let Some(r) = &self.remote else {
             // The integrated server answers within the tick.
@@ -232,7 +232,7 @@ impl Game<'_> {
         }
     }
     /// The overlay's chart lines (`DebugScreenOverlay`'s "Debug charts").
-    pub(super) fn debug_chart_lines(&self) -> [String; 3] {
+    pub(super) fn debug_chart_lines(&self) -> [String; 3] { if let Some(__l) = crate::points_generated::P1477.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let keys = &self.settings.keys;
         let modifier = keys.get("key.debug.modifier");
         let key = |mapping: &str| {
@@ -280,7 +280,7 @@ impl Game<'_> {
     }
     /// `Gui.extractRenderState`'s debug overlay, over everything the frame
     /// drew (menus too); the debug options screen draws it under itself.
-    pub(super) fn draw_debug_overlay(&self, batch: &mut HudBatch, size: [u32; 2]) {
+    pub(super) fn draw_debug_overlay(&self, batch: &mut HudBatch, size: [u32; 2]) { let (size,) = match crate::points_generated::P1476.get() { Some(__l) => { let mut __a = (size,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (size,) };
         if self.screen != Screen::DebugOptions {
             self.draw_debug_overlay_under(batch, size);
         }
@@ -288,7 +288,7 @@ impl Game<'_> {
     /// `DebugScreenOverlay.extractRenderState`: the enabled entries' lines
     /// (`debug-profile.json`), at the debug GUI scale, and the charts while
     /// the overlay is open. F1 hides it unless a screen is open.
-    pub(super) fn draw_debug_overlay_under(&self, batch: &mut HudBatch, size: [u32; 2]) {
+    pub(super) fn draw_debug_overlay_under(&self, batch: &mut HudBatch, size: [u32; 2]) { let (size,) = match crate::points_generated::P1475.get() { Some(__l) => { let mut __a = (size,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (size,) };
         let screen_open = self.screen != Screen::Playing;
         let reduced = self.reduced_debug_info();
         if self.title.is_some()
@@ -343,7 +343,7 @@ impl Game<'_> {
         hud_layout::paint(batch, atlas, &draws);
     }
     /// `DebugEntryFps`.
-    pub(super) fn debug_fps_line(&self, d: &mut debug_overlay::Displayer) {
+    pub(super) fn debug_fps_line(&self, d: &mut debug_overlay::Displayer) { if let Some(__l) = crate::points_generated::P1474.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let limit = self.framerate_limit();
         let present = self
             .renderer
@@ -385,7 +385,7 @@ impl Game<'_> {
         ));
     }
     /// `DebugEntrySimplePerformanceImpactors`.
-    pub(super) fn debug_performance_lines(&self, d: &mut debug_overlay::Displayer) {
+    pub(super) fn debug_performance_lines(&self, d: &mut debug_overlay::Displayer) { if let Some(__l) = crate::points_generated::P1473.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let s = &self.settings;
         d.line(format!(
             "{}{}B: {}",
@@ -416,7 +416,7 @@ impl Game<'_> {
         &self,
         d: &mut debug_overlay::Displayer,
         framebuffer: [i32; 2],
-    ) {
+    ) { let (framebuffer,) = match crate::points_generated::P1472.get() { Some(__l) => { let mut __a = (framebuffer,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (framebuffer,) };
         if let Some(r) = self.renderer.as_ref() {
             static CPU: std::sync::OnceLock<String> = std::sync::OnceLock::new();
             d.group(
@@ -484,7 +484,7 @@ impl Game<'_> {
         }
     }
     /// `DebugEntryTps` for local and remote connections.
-    pub(super) fn debug_tps_line(&self, d: &mut debug_overlay::Displayer) {
+    pub(super) fn debug_tps_line(&self, d: &mut debug_overlay::Displayer) { if let Some(__l) = crate::points_generated::P1471.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.player.is_some() {
             let [tx, rx] = self.debug_charts.packet_rates.map(|n| n.round() as i64);
             let (target, status) = if self.clock.sprinting() {
@@ -518,12 +518,12 @@ impl Game<'_> {
         }
     }
     /// `KeyMapping.getTranslatedKeyMessage`.
-    fn key_text(&self, mapping: &str) -> Text {
+    fn key_text(&self, mapping: &str) -> Text { if let Some(__l) = crate::points_generated::P1470.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         keybinds::display_name(self.settings.keys.get(mapping))
     }
     /// `KeyboardHandler.decorateDebugComponent`: `[Debug]:` in bold, a space,
     /// the message, shown with `Minecraft.showDebugChat`.
-    fn debug_decorated(&mut self, color: u32, message: Text) {
+    fn debug_decorated(&mut self, color: u32, message: Text) { let (color,) = match crate::points_generated::P1469.get() { Some(__l) => { let mut __a = (color,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (color,) };
         let prefix = Text::translate("debug.prefix", &[])
             .with_color(color)
             .bold();
@@ -535,39 +535,39 @@ impl Game<'_> {
         );
     }
     /// `Minecraft.showDebugChat`: a client system message the narrator says.
-    fn show_debug_chat(&mut self, message: Text) {
+    fn show_debug_chat(&mut self, message: Text) { if let Some(__l) = crate::points_generated::P1468.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.say_system_queued(&message);
         self.system_message(message);
     }
-    fn debug_feedback(&mut self, message: Text) {
+    fn debug_feedback(&mut self, message: Text) { if let Some(__l) = crate::points_generated::P1467.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.debug_decorated(YELLOW, message);
     }
-    fn debug_warning(&mut self, message: Text) {
+    fn debug_warning(&mut self, message: Text) { if let Some(__l) = crate::points_generated::P1466.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.debug_decorated(RED, message);
     }
-    fn debug_translated(&mut self, key: &str) {
+    fn debug_translated(&mut self, key: &str) { if let Some(__l) = crate::points_generated::P1465.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.debug_feedback(Text::translate(key, &[]));
     }
     /// `LocalPlayer.isReducedDebugInfo`: the server's rule or the option.
-    pub(super) fn reduced_debug_info(&self) -> bool {
+    pub(super) fn reduced_debug_info(&self) -> bool { if let Some(__l) = crate::points_generated::P1464.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.settings.reduced_debug_info
             || self.ui.rules.bool("reduced_debug_info")
             || self.remote.as_ref().is_some_and(|r| r.reduced_debug_info)
     }
     /// `DebugScreenEntryList.isCurrentlyEnabled` for an entry's path.
-    pub(super) fn debug_entry(&self, path: &str) -> bool {
+    pub(super) fn debug_entry(&self, path: &str) -> bool { if let Some(__l) = crate::points_generated::P1463.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.debug_entries
             .enabled(path, self.debug, self.reduced_debug_info())
     }
     /// The `3d_crosshair` entry.
-    pub(super) fn debug_crosshair(&self) -> bool {
+    pub(super) fn debug_crosshair(&self) -> bool { if let Some(__l) = crate::points_generated::P1462.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.debug_entry("3d_crosshair")
     }
     /// `Permissions.COMMANDS_GAMEMASTER` (`GameModeCommand.PERMISSION_CHECK`).
-    pub(super) fn gamemaster(&self) -> bool {
+    pub(super) fn gamemaster(&self) -> bool { if let Some(__l) = crate::points_generated::P1461.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.ui.registries.permission >= 2
     }
-    fn toggle_option(&mut self, key: &str) -> bool {
+    fn toggle_option(&mut self, key: &str) -> bool { if let Some(__l) = crate::points_generated::P1460.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let on = !self.settings.file.bool(key);
         self.settings
             .file
@@ -576,7 +576,7 @@ impl Game<'_> {
         on
     }
     /// One matching mapping of `handleDebugKeys`; whether it counts.
-    fn run_debug_action(&mut self, action: DebugAction, shift: bool) -> bool {
+    fn run_debug_action(&mut self, action: DebugAction, shift: bool) -> bool { let (shift,) = match crate::points_generated::P1459.get() { Some(__l) => { let mut __a = (shift,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (shift,) };
         let player = self.player.is_some() && !self.reduced_debug_info();
         match action {
             DebugAction::ReloadChunks => {
@@ -768,7 +768,7 @@ impl Game<'_> {
     }
     /// `ServerboundChangeGameModePacket` handled by the integrated server:
     /// `GameModeCommand.setGameMode` with its feedback.
-    pub(super) fn change_game_mode(&mut self, mode: GameMode) {
+    pub(super) fn change_game_mode(&mut self, mode: GameMode) { if let Some(__l) = crate::points_generated::P1458.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             use horizon_protocol::packets::play::ChangeGameMode;
             let mode = match mode {
@@ -789,7 +789,7 @@ impl Game<'_> {
     /// `/setblock` or `/summon` command. The server's data (no Shift) comes
     /// from the server the game is connected to, the integrated one included
     /// (`DebugQueryHandler`); without one, the game's own data is the server's.
-    fn copy_recreate_command(&mut self, add_nbt: bool, from_server: bool) {
+    fn copy_recreate_command(&mut self, add_nbt: bool, from_server: bool) { let (add_nbt,from_server,) = match crate::points_generated::P1457.get() { Some(__l) => { let mut __a = (add_nbt,from_server,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (add_nbt,from_server,) };
         let query = add_nbt && from_server && self.remote.is_some();
         let side = if add_nbt && from_server {
             "server"
@@ -857,7 +857,7 @@ impl Game<'_> {
     }
     /// `BlockEntity.saveWithoutMetadata` of the block entity at `pos`, if
     /// there is one: its data without the id or the position.
-    pub(super) fn block_entity_tag(&self, pos: [i32; 3]) -> Option<Tag> {
+    pub(super) fn block_entity_tag(&self, pos: [i32; 3]) -> Option<Tag> { let (pos,) = match crate::points_generated::P1456.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let e = self.world.block_entities.get(&(pos[0], pos[1], pos[2]))?;
         let name = self.data_block_name(pos);
         let mut tag = horizon_client::save::encode_block_entity((pos[0], pos[1], pos[2]), e, &name);
@@ -871,7 +871,7 @@ impl Game<'_> {
     /// `ClientPacketListener.handleTagQueryPacket`: the server's answer to
     /// the last debug query (`DebugQueryHandler.handleResponse`) completes
     /// it; an answer to an older query is ignored.
-    pub(super) fn answer_tag_query(&mut self, transaction: i32, tag: Tag) {
+    pub(super) fn answer_tag_query(&mut self, transaction: i32, tag: Tag) { let (transaction,) = match crate::points_generated::P1455.get() { Some(__l) => { let mut __a = (transaction,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (transaction,) };
         let Some(reply) = self
             .remote
             .as_mut()
@@ -903,7 +903,7 @@ impl Game<'_> {
         }
     }
     /// `KeyboardHandler.copyCreateBlockCommand`.
-    fn copy_create_block_command(&mut self, pos: [i32; 3], state: &str, tag: Option<&Tag>) {
+    fn copy_create_block_command(&mut self, pos: [i32; 3], state: &str, tag: Option<&Tag>) { let (pos,) = match crate::points_generated::P1454.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let mut description = state.to_owned();
         if let Some(tag) = tag {
             description.push_str(&horizon_client::snbt::to_snbt(tag));
@@ -915,7 +915,7 @@ impl Game<'_> {
     }
     /// `KeyboardHandler.copyCreateEntityCommand`: the data without its UUID
     /// or position.
-    fn copy_create_entity_command(&mut self, kind: &str, pos: Vec3, tag: Option<Tag>) {
+    fn copy_create_entity_command(&mut self, kind: &str, pos: Vec3, tag: Option<Tag>) { if let Some(__l) = crate::points_generated::P1453.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::java_text::format_fixed2 as f2;
         let mut command = format!("/summon {kind} {} {} {}", f2(pos.x), f2(pos.y), f2(pos.z));
         if let Some(mut tag) = tag {
@@ -930,12 +930,12 @@ impl Game<'_> {
         self.set_clipboard(&command);
     }
     /// `KeyboardHandler.setClipboard`.
-    fn set_clipboard(&mut self, text: &str) {
+    fn set_clipboard(&mut self, text: &str) { if let Some(__l) = crate::points_generated::P1452.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::clipboard::Clipboard;
         self.clipboard.set(text);
     }
     /// The debug renderers' gizmos for a frame (`DebugRenderer.emitGizmos`).
-    pub(super) fn debug_gizmos(&self, alpha: f32, camera: [f64; 3]) -> Gizmos {
+    pub(super) fn debug_gizmos(&self, alpha: f32, camera: [f64; 3]) -> Gizmos { let (alpha,camera,) = match crate::points_generated::P1451.get() { Some(__l) => { let mut __a = (alpha,camera,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,camera,) };
         let mut g = Gizmos::default();
         self.bounding_box_gizmos(camera, &mut g);
         self.debug_renderer_gizmos(&mut g);

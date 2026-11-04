@@ -28,7 +28,7 @@ pub(super) const OWN: i32 = i32::MIN;
 impl Game<'_> {
     /// `Item.use` of a kinetic weapon: `startUsingItem` with a new
     /// `recentKineticEnemies`, and `KineticWeapon.makeSound` at the user.
-    pub(super) fn use_spear(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn use_spear(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P5403.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(kinetic) = Kinetic::of(&stack.item) else {
             return false;
         };
@@ -47,7 +47,7 @@ impl Game<'_> {
     /// in the last tick. A guest's comes with their moves. A rider's is its
     /// mount's move (`getKnownSpeed`: the vehicle's, or the move the driver's
     /// client sent for it), so a charge on horseback carries the horse's speed.
-    pub(super) fn known_player_movement(&self) -> Vec3 {
+    pub(super) fn known_player_movement(&self) -> Vec3 { if let Some(__l) = crate::points_generated::P5402.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(i) = self
             .riding
             .and_then(|v| self.mobs.iter().position(|m| m.id == v))
@@ -64,7 +64,7 @@ impl Game<'_> {
 
     /// `Entity.getKnownSpeed` of the mob at `index`, per second: its root
     /// vehicle's (`KineticWeapon.getMotion`).
-    fn mob_speed(&self, index: usize) -> Vec3 {
+    fn mob_speed(&self, index: usize) -> Vec3 { let (index,) = match crate::points_generated::P5401.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (index,) };
         let mut mob = &self.mobs[index];
         while let Some(vehicle) = mob
             .extra
@@ -78,7 +78,7 @@ impl Game<'_> {
 
     /// `Level.clip` with COLLIDER shapes and no fluids: where the segment
     /// first meets a block, if it does (tall grass lets a stab through).
-    fn clip_collider(&self, from: Vec3, to: Vec3) -> Option<Vec3> {
+    fn clip_collider(&self, from: Vec3, to: Vec3) -> Option<Vec3> { if let Some(__l) = crate::points_generated::P5400.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut scene = SceneCollisions {
             world: &self.world,
             binding: self.collision,
@@ -101,7 +101,7 @@ impl Game<'_> {
 
     /// The boxes of the mobs a spear can hit: alive, and not the vehicle
     /// ridden (`PiercingWeapon.canHitEntity`), with their index.
-    pub(super) fn hittable_mob_boxes(&self) -> Vec<(usize, Aabb)> {
+    pub(super) fn hittable_mob_boxes(&self) -> Vec<(usize, Aabb)> { if let Some(__l) = crate::points_generated::P5399.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (self.mobs.iter().enumerate())
             .filter(|(_, m)| m.alive() && !m.removed && self.riding != Some(m.id))
             .map(|(i, m)| (i, m.bounds()))
@@ -109,7 +109,7 @@ impl Game<'_> {
     }
 
     /// `ProjectileUtil.getHitEntitiesAlong` with the spear's `AttackRange`.
-    fn stab_targets(&self, eye: Vec3, look: Vec3, movement: Vec3) -> Vec<usize> {
+    fn stab_targets(&self, eye: Vec3, look: Vec3, movement: Vec3) -> Vec<usize> { if let Some(__l) = crate::points_generated::P5398.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // AttackRange.effectiveMinRange and effectiveMaxRange for a player.
         let (min, max) = if self.creative {
             (REACH.min_creative, REACH.max_creative)
@@ -127,7 +127,7 @@ impl Game<'_> {
 
     /// `KineticWeapon.damageEntities`: one tick of the spear in use, `ticks`
     /// ticks into the use.
-    pub(super) fn spear_tick(&mut self, stack: &ItemStack, ticks: u32) {
+    pub(super) fn spear_tick(&mut self, stack: &ItemStack, ticks: u32) { let (ticks,) = match crate::points_generated::P5397.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         let Some(kinetic) = Kinetic::of(&stack.item) else {
             return;
         };
@@ -192,7 +192,7 @@ impl Game<'_> {
         deals_damage: bool,
         deals_knockback: bool,
         dismounts: bool,
-    ) -> bool {
+    ) -> bool { let (index,base_damage,deals_damage,deals_knockback,dismounts,) = match crate::points_generated::P5396.get() { Some(__l) => { let mut __a = (index,base_damage,deals_damage,deals_knockback,dismounts,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,base_damage,deals_damage,deals_knockback,dismounts,) };
         let kind = format!(
             "minecraft:{}",
             self.mobs[index].kind.id.trim_start_matches("minecraft:")
@@ -304,7 +304,7 @@ impl Game<'_> {
     /// `Player.cannotAttackWithItem` for the held item: a spear needs its
     /// `minimum_attack_charge` of 1, counting `tolerance` ticks more than the
     /// `ticker` ticks charged.
-    pub(super) fn cannot_attack_with_item(&self, ticker: i32, tolerance: i32) -> bool {
+    pub(super) fn cannot_attack_with_item(&self, ticker: i32, tolerance: i32) -> bool { let (ticker,tolerance,) = match crate::points_generated::P5395.get() { Some(__l) => { let mut __a = (ticker,tolerance,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ticker,tolerance,) };
         self.held().is_some_and(|s| Kinetic::of(&s.item).is_some())
             && (ticker + tolerance) as f32 / delay(self.main_hand_attack_speed()) < 1.0
     }
@@ -313,7 +313,7 @@ impl Game<'_> {
     /// click: every mob along the view is stabbed, then `postPiercingAttack`
     /// (Lunge), the hit sound and the swing. Gives the sound of the jab
     /// (`makeSound`), which everyone but the user hears from the server.
-    pub(super) fn jab(&mut self) -> Option<&'static str> {
+    pub(super) fn jab(&mut self) -> Option<&'static str> { if let Some(__l) = crate::points_generated::P5394.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let kinetic = self.held().and_then(|s| Kinetic::of(&s.item))?;
         let eye = self.eye_position()?;
         let eye = Vec3::new(eye[0], eye[1], eye[2]);
@@ -343,7 +343,7 @@ impl Game<'_> {
     }
 
     /// A sound at the player's feet.
-    pub(super) fn play_at_feet(&mut self, sound: &str) {
+    pub(super) fn play_at_feet(&mut self, sound: &str) { if let Some(__l) = crate::points_generated::P5393.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(p) = &self.player {
             let at = [p.position.x, p.position.y, p.position.z];
             self.audio.play(sound, Some(at), 1.0, 1.0);
@@ -353,7 +353,7 @@ impl Game<'_> {
     /// `LivingEntity.onKineticHit` for `entity`: the hit feels (the spear
     /// moves back, `kinetic_hit_ticks`) and sounds, at most once every ten
     /// ticks.
-    pub(super) fn kinetic_hit_feedback(&mut self, entity: i32, kinetic: &Kinetic, at: [f64; 3]) {
+    pub(super) fn kinetic_hit_feedback(&mut self, entity: i32, kinetic: &Kinetic, at: [f64; 3]) { let (entity,at,) = match crate::points_generated::P5392.get() { Some(__l) => { let mut __a = (entity,at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,at,) };
         let now = self.world.game_time;
         if self
             .kinetic_feedback
@@ -367,7 +367,7 @@ impl Game<'_> {
     }
 
     /// `getTicksSinceLastKineticHitFeedback` of this window's player.
-    pub(super) fn kinetic_hit_ticks(&self, partial: f32) -> f32 {
+    pub(super) fn kinetic_hit_ticks(&self, partial: f32) -> f32 { let (partial,) = match crate::points_generated::P5391.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         self.kinetic_feedback
             .get(&OWN)
             .map_or(0.0, |&t| (self.world.game_time - t) as f32 + partial)
@@ -375,7 +375,7 @@ impl Game<'_> {
 
     /// `LivingEntity.handleEntityEvent(2)` on a server's client: the
     /// player `id` (this one, or another) was hit by the spear it uses.
-    pub(super) fn remote_kinetic_hit(&mut self, id: i32) {
+    pub(super) fn remote_kinetic_hit(&mut self, id: i32) { let (id,) = match crate::points_generated::P5390.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let own = self.remote.as_ref().is_some_and(|r| r.entity_id == id);
         let (item, at) = if own {
             let item = self

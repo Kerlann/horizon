@@ -21,12 +21,12 @@ pub(super) struct FangState {
     model: Option<Arc<Part>>,
 }
 impl Game<'_> {
-    pub(super) fn add_fangs(&mut self, at: [f64; 3], yaw: f32, delay: i32, owner: u32) {
+    pub(super) fn add_fangs(&mut self, at: [f64; 3], yaw: f32, delay: i32, owner: u32) { let (at,yaw,delay,owner,) = match crate::points_generated::P1889.get() { Some(__l) => { let mut __a = (at,yaw,delay,owner,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,yaw,delay,owner,) };
         self.next_entity += 1;
         self.insert_fangs(self.next_entity, at, yaw, delay, owner);
     }
 
-    pub(super) fn insert_fangs(&mut self, id: u32, at: [f64; 3], yaw: f32, delay: i32, owner: u32) {
+    pub(super) fn insert_fangs(&mut self, id: u32, at: [f64; 3], yaw: f32, delay: i32, owner: u32) { let (id,at,yaw,delay,owner,) = match crate::points_generated::P1888.get() { Some(__l) => { let mut __a = (id,at,yaw,delay,owner,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,at,yaw,delay,owner,) };
         if self.fangs.model.is_none() {
             self.fangs.model = self.entity_models.evoker_fangs.clone();
         }
@@ -40,7 +40,7 @@ impl Game<'_> {
             started: false,
         });
     }
-    pub(super) fn fangs_to_nbt(&self, f: &Fangs, uuid: [i32; 4]) -> horizon_world::nbt::Tag {
+    pub(super) fn fangs_to_nbt(&self, f: &Fangs, uuid: [i32; 4]) -> horizon_world::nbt::Tag { let (uuid,) = match crate::points_generated::P1887.get() { Some(__l) => { let mut __a = (uuid,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (uuid,) };
         horizon_client::entity_nbt::evoker_fangs_to_nbt(
             Vec3::new(f.pos[0], f.pos[1], f.pos[2]),
             f.yaw,
@@ -50,7 +50,7 @@ impl Game<'_> {
             self.persist.raw.get(&f.id),
         )
     }
-    pub(super) fn loaded_fangs_owner(&self, tag: &horizon_world::nbt::Tag) -> u32 {
+    pub(super) fn loaded_fangs_owner(&self, tag: &horizon_world::nbt::Tag) -> u32 { if let Some(__l) = crate::points_generated::P1886.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match tag.get("Owner") {
             Some(horizon_world::nbt::Tag::IntArray(v)) => v.as_slice().try_into().ok(),
             _ => None,
@@ -59,7 +59,7 @@ impl Game<'_> {
         .unwrap_or(0)
     }
     /// `EvokerFangs.handleEntityEvent`: only event 4 starts a client attack.
-    pub(super) fn remote_fangs_event(&mut self, id: u32, event: i8) {
+    pub(super) fn remote_fangs_event(&mut self, id: u32, event: i8) { let (id,event,) = match crate::points_generated::P1885.get() { Some(__l) => { let mut __a = (id,event,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,event,) };
         if event == 4
             && let Some(f) = self.fangs.list.iter_mut().find(|f| f.id == id)
         {
@@ -74,7 +74,7 @@ impl Game<'_> {
     }
 
     /// `EvokerFangs.tick`: clients only advance animation, never damage or discard.
-    pub(super) fn tick_remote_fangs(&mut self) {
+    pub(super) fn tick_remote_fangs(&mut self) { if let Some(__l) = crate::points_generated::P1884.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for f in &mut self.fangs.list {
             if f.started {
                 f.life -= 1;
@@ -83,7 +83,7 @@ impl Game<'_> {
     }
 
     /// `EvokerFangs.tick`.
-    pub(super) fn tick_fangs(&mut self) {
+    pub(super) fn tick_fangs(&mut self) { if let Some(__l) = crate::points_generated::P1883.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut list = std::mem::take(&mut self.fangs.list);
         list.retain_mut(|f| {
             f.warmup = f.warmup.wrapping_sub(1);
@@ -110,7 +110,7 @@ impl Game<'_> {
     }
     /// `dealDamageTo` everything alive in the fangs' box (0.5 x 0.8,
     /// inflated 0.2 sideways) but the evoker's allies.
-    fn fangs_bite(&mut self, f: &Fangs) {
+    fn fangs_bite(&mut self, f: &Fangs) { if let Some(__l) = crate::points_generated::P1882.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let half = 0.25 + 0.2;
         let lo = Vec3::new(f.pos[0] - half, f.pos[1], f.pos[2] - half);
         let hi = Vec3::new(f.pos[0] + half, f.pos[1] + 0.8, f.pos[2] + half);
@@ -179,7 +179,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         alpha: f64,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P1881.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let Some(model) = self.fangs.model.as_ref() else {
             return;
         };

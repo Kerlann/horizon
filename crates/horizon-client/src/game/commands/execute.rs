@@ -84,7 +84,7 @@ fn java_int(v: f64) -> i32 {
 
 impl Game<'_> {
     /// The source a command typed by the player starts from.
-    pub(in crate::game) fn player_source(&self) -> Source {
+    pub(in crate::game) fn player_source(&self) -> Source { if let Some(__l) = crate::points_generated::P1110.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Source {
             // The server console has no entity (CommandSourceStack of the server).
             entity: self.player.is_some().then_some(Target::Player),
@@ -100,7 +100,7 @@ impl Game<'_> {
         }
     }
     /// The server as a source (function ticks and schedules): the world spawn.
-    pub(in crate::game) fn server_source(&self) -> Source {
+    pub(in crate::game) fn server_source(&self) -> Source { if let Some(__l) = crate::points_generated::P1109.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Source {
             entity: None,
             pos: self.server_position(),
@@ -114,7 +114,7 @@ impl Game<'_> {
             cart: None,
         }
     }
-    pub(in crate::game) fn target_rotation(&self, t: Target) -> [f32; 2] {
+    pub(in crate::game) fn target_rotation(&self, t: Target) -> [f32; 2] { if let Some(__l) = crate::points_generated::P1108.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match t {
             Target::Player => [self.yaw, self.pitch],
             Target::Guest(conn) => self
@@ -154,7 +154,7 @@ impl Game<'_> {
             _ => [0.0; 2],
         }
     }
-    pub(in crate::game) fn target_eye_height(&self, t: Target) -> f64 {
+    pub(in crate::game) fn target_eye_height(&self, t: Target) -> f64 { if let Some(__l) = crate::points_generated::P1107.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match t {
             Target::Player => self
                 .player
@@ -179,7 +179,7 @@ impl Game<'_> {
     }
     /// `EntityType.getDimensions().eyeHeight()` from `entity-types.json`,
     /// read once: a float, widened as `Entity.getEyeY` does.
-    fn type_eye_height(&self, ty: &str) -> f64 {
+    fn type_eye_height(&self, ty: &str) -> f64 { if let Some(__l) = crate::points_generated::P1106.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         static EYE_HEIGHTS: std::sync::OnceLock<std::collections::HashMap<String, f64>> =
             std::sync::OnceLock::new();
         EYE_HEIGHTS
@@ -203,7 +203,7 @@ impl Game<'_> {
             .unwrap_or(0.0)
     }
     /// EntityAnchorArgument.Anchor.apply.
-    pub(super) fn anchor_position(&self, s: &Source) -> [f64; 3] {
+    pub(super) fn anchor_position(&self, s: &Source) -> [f64; 3] { if let Some(__l) = crate::points_generated::P1105.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match s.entity {
             Some(t) if s.eyes => [s.pos[0], s.pos[1] + self.target_eye_height(t), s.pos[2]],
             _ => s.pos,
@@ -231,7 +231,7 @@ impl Game<'_> {
 
     /// Run one command line with `source` (no error reporting): the entry
     /// for functions and `execute run`.
-    pub(in crate::game) fn execute_line(&mut self, line: &str, source: Source) -> R<i32> {
+    pub(in crate::game) fn execute_line(&mut self, line: &str, source: Source) -> R<i32> { if let Some(__l) = crate::points_generated::P1104.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let d = vanilla::game_dispatcher_with_features(&self.level.enabled_features);
         let parse = d.parse(line, &self.ui.registries);
         let (ctx, _) = parse.executable()?;
@@ -241,7 +241,7 @@ impl Game<'_> {
     }
     /// Run a parsed command (`root` is the first context; `ctx` the one with
     /// the executable node): `execute` and `return` walk their own chains.
-    pub(in crate::game) fn run_chain(&mut self, root: &Context, ctx: &Context) -> R<i32> {
+    pub(in crate::game) fn run_chain(&mut self, root: &Context, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1103.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.exec.commands += 1;
         let limit = self.ui.rules.int("max_command_sequence_length").max(1) as u32;
         if self.exec.commands > limit {
@@ -257,7 +257,7 @@ impl Game<'_> {
         }
     }
     /// Run a leaf command and report its outcome to the `store` callbacks.
-    pub(in crate::game) fn run_leaf(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(in crate::game) fn run_leaf(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1102.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.exec.callback = None;
         let store = self.command_source.and_then(|s| s.store);
         let result = self.execute_command(id, ctx);
@@ -273,7 +273,7 @@ impl Game<'_> {
         result
     }
     /// `CommandResultCallback`s of a source's `store` chain, oldest first.
-    fn deliver(&mut self, store: Option<u32>, success: bool, value: i32) {
+    fn deliver(&mut self, store: Option<u32>, success: bool, value: i32) { let (success,value,) = match crate::points_generated::P1101.get() { Some(__l) => { let mut __a = (success,value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (success,value,) };
         // The outermost source's own CommandResultCallback (harness record).
         if self.exec.function_depth == 0
             && let Some(results) = self.cmds.results.as_mut()
@@ -294,7 +294,7 @@ impl Game<'_> {
             self.store_value(&e.target, v);
         }
     }
-    fn store_value(&mut self, target: &StoreTarget, value: i32) {
+    fn store_value(&mut self, target: &StoreTarget, value: i32) { let (value,) = match crate::points_generated::P1100.get() { Some(__l) => { let mut __a = (value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (value,) };
         match target {
             StoreTarget::Score(holders, objective) => {
                 for h in holders {
@@ -323,7 +323,7 @@ impl Game<'_> {
     }
 
     /// ExecuteCommand: `ctx` is the context holding the `execute` literal.
-    pub(in crate::game) fn run_execute(&mut self, ctx: &Context) -> R<i32> {
+    pub(in crate::game) fn run_execute(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1099.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // BuildContexts: a modifier may not bring the sources to this many.
         let fork_limit = self.ui.rules.int("max_command_forks") as usize;
         let mut sources = vec![self.command_source.unwrap_or_else(|| self.player_source())];
@@ -416,7 +416,7 @@ impl Game<'_> {
         c: &Context,
         sources: Vec<Source>,
         want: bool,
-    ) -> R<i32> {
+    ) -> R<i32> { let (want,) = match crate::points_generated::P1098.get() { Some(__l) => { let mut __a = (want,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (want,) };
         let numeric = ["entity", "data", "blocks", "items", "slots"]
             .iter()
             .any(|k| c.has(k));
@@ -470,7 +470,7 @@ impl Game<'_> {
         }
     }
     /// `return run <command>`: run it and return its result from the frame.
-    fn run_return_run(&mut self, root: &Context) -> R<i32> {
+    fn run_return_run(&mut self, root: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1097.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(command) = root.child.as_deref() else {
             return Err(err("command.unknown.command", &[]));
         };
@@ -489,12 +489,12 @@ impl Game<'_> {
         Ok(0)
     }
     /// `Frame.returnSuccess`/`returnFailure` then `discard`.
-    pub(in crate::game) fn finish_return(&mut self, value: Option<i32>) {
+    pub(in crate::game) fn finish_return(&mut self, value: Option<i32>) { if let Some(__l) = crate::points_generated::P1096.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.exec.returned = Some(value);
     }
 
     /// The sources one modifier produces from `s`.
-    fn modify(&mut self, word: &str, c: &Context, s: Source) -> R<Vec<Source>> {
+    fn modify(&mut self, word: &str, c: &Context, s: Source) -> R<Vec<Source>> { if let Some(__l) = crate::points_generated::P1095.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = |g: &mut Self| -> R<Vec<Target>> {
             // An empty selection forks to nothing rather than failing.
             match c.get("targets") {
@@ -654,7 +654,7 @@ impl Game<'_> {
         })
     }
     /// The entities `on <relation>` reaches from the source entity.
-    fn relation(&mut self, c: &Context, s: Source) -> Vec<Source> {
+    fn relation(&mut self, c: &Context, s: Source) -> Vec<Source> { if let Some(__l) = crate::points_generated::P1094.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(entity) = s.entity else {
             return Vec::new();
         };
@@ -813,7 +813,7 @@ impl Game<'_> {
     /// only mobs (displays, armor stands, items...). The map is keyed by id,
     /// so a killed entity and a later summon of the same UUID can both be
     /// in it; the one the level still holds is the entity.
-    pub(in crate::game) fn target_with_uuid(&self, uuid: [i32; 4]) -> Option<Target> {
+    pub(in crate::game) fn target_with_uuid(&self, uuid: [i32; 4]) -> Option<Target> { let (uuid,) = match crate::points_generated::P1093.get() { Some(__l) => { let mut __a = (uuid,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (uuid,) };
         if Some(uuid) == self.level.player_uuid {
             if self.native_command_filter {
                 return self
@@ -830,7 +830,7 @@ impl Game<'_> {
         })
     }
     /// The highest block of a heightmap type at a column (`Level.getHeight`).
-    fn heightmap_at(&self, kind: &str, x: i32, z: i32) -> i32 {
+    fn heightmap_at(&self, kind: &str, x: i32, z: i32) -> i32 { let (x,z,) = match crate::points_generated::P1092.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,z,) };
         let top = self.world.top_y();
         for y in (self.world.bottom_y()..top).rev() {
             let state = self.world.block(x, y, z);
@@ -858,7 +858,7 @@ impl Game<'_> {
         self.world.bottom_y()
     }
     /// A `store` modifier: a new callback in the source's chain.
-    fn store_source(&mut self, c: &Context, s: Source) -> R<Source> {
+    fn store_source(&mut self, c: &Context, s: Source) -> R<Source> { if let Some(__l) = crate::points_generated::P1091.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let result = c.has("result");
         let target = if c.has("score") {
             let holders = self.score_holder_names(c, "targets", true)?;
@@ -913,7 +913,7 @@ impl Game<'_> {
         })
     }
     /// CommandSourceStack.facing: rotation from the anchor point to `to`.
-    fn facing(&self, s: Source, to: [f64; 3]) -> Source {
+    fn facing(&self, s: Source, to: [f64; 3]) -> Source { let (to,) = match crate::points_generated::P1090.get() { Some(__l) => { let mut __a = (to,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (to,) };
         let from = self.anchor_position(&s);
         let (dx, dy, dz) = (to[0] - from[0], to[1] - from[1], to[2] - from[2]);
         let horizontal = (dx * dx + dz * dz).sqrt();
@@ -929,7 +929,7 @@ impl Game<'_> {
 
     /// Whether the source stays for `if`/`unless` (`want`), and the count the
     /// numeric conditions report.
-    fn condition(&mut self, c: &Context, want: bool) -> R<(bool, i32)> {
+    fn condition(&mut self, c: &Context, want: bool) -> R<(bool, i32)> { let (want,) = match crate::points_generated::P1089.get() { Some(__l) => { let mut __a = (want,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (want,) };
         if c.has("function") {
             return self.condition_function(c, want);
         }
@@ -939,7 +939,7 @@ impl Game<'_> {
     /// `if function`/`unless function`: the source stays when a function
     /// returns a non-zero (`if`) or zero (`unless`) value; one that does not
     /// return leaves it out either way.
-    fn condition_function(&mut self, c: &Context, want: bool) -> R<(bool, i32)> {
+    fn condition_function(&mut self, c: &Context, want: bool) -> R<(bool, i32)> { let (want,) = match crate::points_generated::P1088.get() { Some(__l) => { let mut __a = (want,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (want,) };
         let Some(Arg::Resource(name)) = c.get("name").cloned() else {
             return Ok((false, 0));
         };
@@ -947,7 +947,7 @@ impl Game<'_> {
         let keep = results.iter().any(|r| r.is_some_and(|v| (v != 0) == want));
         Ok((keep, 0))
     }
-    fn condition_matches(&mut self, c: &Context) -> R<(bool, i32)> {
+    fn condition_matches(&mut self, c: &Context) -> R<(bool, i32)> { if let Some(__l) = crate::points_generated::P1087.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let flag = |b: bool| (b, i32::from(b));
         if c.has("data") {
             let r = self.data_ref_named(c, 0, "source")?;
@@ -1021,7 +1021,7 @@ impl Game<'_> {
         }
         Ok((false, 0))
     }
-    fn condition_stopwatch(&mut self, c: &Context) -> R<bool> {
+    fn condition_stopwatch(&mut self, c: &Context) -> R<bool> { if let Some(__l) = crate::points_generated::P1086.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Arg::Resource(id)) = c.get("id").cloned() else {
             return Ok(false);
         };
@@ -1033,7 +1033,7 @@ impl Game<'_> {
         };
         Ok(lo.is_none_or(|l| t >= l) && hi.is_none_or(|h| t <= h))
     }
-    fn condition_score(&mut self, c: &Context) -> R<bool> {
+    fn condition_score(&mut self, c: &Context) -> R<bool> { if let Some(__l) = crate::points_generated::P1085.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = self.score_holder_names(c, "target", false)?;
         let Some(Arg::Str(to)) = c.get("targetObjective").cloned() else {
             return Ok(false);
@@ -1079,7 +1079,7 @@ impl Game<'_> {
         })
     }
     /// `if blocks`: the region at `start..end` equals the one at `destination`.
-    fn condition_blocks(&mut self, c: &Context) -> R<(bool, i32)> {
+    fn condition_blocks(&mut self, c: &Context) -> R<(bool, i32)> { if let Some(__l) = crate::points_generated::P1084.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (a, b, d) = (
             self.block_pos_arg(c, "start")?,
             self.block_pos_arg(c, "end")?,
@@ -1129,7 +1129,7 @@ impl Game<'_> {
         Ok((true, count))
     }
     /// The biome name at a block position.
-    fn biome_name_at_block(&self, p: [i32; 3]) -> Option<String> {
+    fn biome_name_at_block(&self, p: [i32; 3]) -> Option<String> { let (p,) = match crate::points_generated::P1083.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let chunk = self.world.chunks.get(&(p[0] >> 4, p[2] >> 4))?;
         // The world's table (`world_biomes!`): a packed biome's id is past
         // the built-in list, and `Biomes::get` would clamp it to the last
@@ -1142,7 +1142,7 @@ impl Game<'_> {
         )
     }
     /// A biome id or `#tag` matched against a biome name.
-    pub(super) fn biome_matches(&self, wanted: &str, biome: &str) -> bool {
+    pub(super) fn biome_matches(&self, wanted: &str, biome: &str) -> bool { if let Some(__l) = crate::points_generated::P1082.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match wanted.strip_prefix('#') {
             Some(tag) => self.biome_tag_has(tag, biome),
             None => wanted == biome,
@@ -1151,7 +1151,7 @@ impl Game<'_> {
     /// `#tag`: the biome tags the game's files and the world's packs define,
     /// nested tags expanded; an unknown tag falls back to the game's built-in
     /// table.
-    fn biome_tag_has(&self, tag: &str, biome: &str) -> bool {
+    fn biome_tag_has(&self, tag: &str, biome: &str) -> bool { if let Some(__l) = crate::points_generated::P1081.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let entries = self.tag_entries("worldgen/biome", tag);
         entries.iter().any(|id| id == biome)
             || (entries.is_empty() && self.res.mob_data().biome_has(tag, biome))

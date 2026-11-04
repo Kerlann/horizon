@@ -440,7 +440,7 @@ impl CartModels {
     }
 }
 impl Game<'_> {
-    pub(super) fn rail(&self, x: i32, y: i32, z: i32) -> Option<Rail> {
+    pub(super) fn rail(&self, x: i32, y: i32, z: i32) -> Option<Rail> { let (x,y,z,) = match crate::points_generated::P2756.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,z,) };
         let state = self.world.block(x, y, z);
         let name = self.res.facts().get(state).name.clone();
         if !matches!(
@@ -462,7 +462,7 @@ impl Game<'_> {
         })
     }
     /// `getCurrentBlockPosOrRailBelow`.
-    fn rail_block(&self, p: Vec3) -> [i32; 3] {
+    fn rail_block(&self, p: Vec3) -> [i32; 3] { if let Some(__l) = crate::points_generated::P2755.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (x, y, z) = (p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32);
         let below = if self.minecart_improvements() {
             (p.y - 0.1 - f64::from(1.0e-5_f32)).floor() as i32
@@ -475,14 +475,14 @@ impl Game<'_> {
             [x, y, z]
         }
     }
-    fn conductor(&self, x: i32, y: i32, z: i32) -> bool {
+    fn conductor(&self, x: i32, y: i32, z: i32) -> bool { let (x,y,z,) = match crate::points_generated::P2754.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,z,) };
         self.res
             .facts()
             .get(self.world.block(x, y, z))
             .full_collision
     }
     /// `OldMinecartBehavior.getPos`: the point on the rail under (x, y, z).
-    fn rail_pos(&self, x: f64, y: f64, z: f64) -> Option<[f64; 3]> {
+    fn rail_pos(&self, x: f64, y: f64, z: f64) -> Option<[f64; 3]> { let (x,y,z,) = match crate::points_generated::P2753.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,z,) };
         let [xt, yt, zt] = self.rail_block(Vec3::new(x, y, z));
         let rail = self.rail(xt, yt, zt)?;
         let (e0, e1) = rail.shape.exits();
@@ -510,7 +510,7 @@ impl Game<'_> {
         Some(out)
     }
     /// `OldMinecartBehavior.getPosOffs`.
-    fn rail_pos_offs(&self, mut x: f64, y: f64, mut z: f64, offs: f64) -> Option<[f64; 3]> {
+    fn rail_pos_offs(&self, mut x: f64, y: f64, mut z: f64, offs: f64) -> Option<[f64; 3]> { let (mut x,y,mut z,offs,) = match crate::points_generated::P2752.get() { Some(__l) => { let mut __a = (x,y,z,offs,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,z,offs,) };
         let [xt, yt, zt] = self.rail_block(Vec3::new(x, y, z));
         let rail = self.rail(xt, yt, zt)?;
         let mut y = f64::from(yt) + if rail.shape.is_slope() { 1.0 } else { 0.0 };
@@ -533,7 +533,7 @@ impl Game<'_> {
     /// `AbstractBoat.canVehicleCollide` takes any other cart, boat, shulker or pushable mob and
     /// player, except one riding this cart. A cart that runs into one has a horizontal
     /// collision, which sets a TNT minecart off.
-    fn cart_entity_collisions(&self, c: &Minecart) -> Vec<Aabb> {
+    fn cart_entity_collisions(&self, c: &Minecart) -> Vec<Aabb> { if let Some(__l) = crate::points_generated::P2751.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let near = c.bounds().inflate(Vec3::new(2.0, 2.0, 2.0));
         // Every cart asks about every entity of the level each tick, and the box
         // turns nearly all of them away: it is tested first, before a mob's
@@ -592,7 +592,7 @@ impl Game<'_> {
     }
     /// Entity.move for a cart: collisions zero the blocked components, the world border's walls
     /// among them (`CollisionGetter.borderCollision`, asked for every entity).
-    fn move_cart(&self, c: &mut Minecart, delta: Vec3) {
+    fn move_cart(&self, c: &mut Minecart, delta: Vec3) { if let Some(__l) = crate::points_generated::P2750.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let scene = SceneCollisions {
             world: &self.world,
             binding: self.collision,
@@ -655,13 +655,13 @@ impl Game<'_> {
             self.cart_block_effects(c);
         }
     }
-    fn max_speed(&self, c: &Minecart) -> f64 {
+    fn max_speed(&self, c: &Minecart) -> f64 { if let Some(__l) = crate::points_generated::P2749.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let base = if c.in_water { 0.2 } else { 0.4 };
         furnace_speed(c, base)
     }
     /// `AbstractMinecart.getMaxSpeed`: the behavior's, which a furnace
     /// minecart cuts (`MinecartFurnace.getMaxSpeed`).
-    pub(super) fn cart_max_speed(&self, c: &Minecart) -> f64 {
+    pub(super) fn cart_max_speed(&self, c: &Minecart) -> f64 { if let Some(__l) = crate::points_generated::P2748.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.minecart_improvements() {
             furnace_speed(c, self.max_speed_new(c))
         } else {
@@ -670,7 +670,7 @@ impl Game<'_> {
     }
     /// `applyNaturalSlowdown` (with `MinecartFurnace`'s push); `factor` is
     /// `getSlowdownFactor`: 0.997 riding, the empty cart's own by behavior.
-    fn natural_slowdown(&self, c: &mut Minecart, ridden: bool, factor: f64) -> Vec3 {
+    fn natural_slowdown(&self, c: &mut Minecart, ridden: bool, factor: f64) -> Vec3 { let (ridden,factor,) = match crate::points_generated::P2747.get() { Some(__l) => { let mut __a = (ridden,factor,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ridden,factor,) };
         let mut v = c.velocity;
         let water = c.in_water;
         if c.kind == CartKind::Furnace {
@@ -696,7 +696,7 @@ impl Game<'_> {
     /// `Entity.isVehicle` for a cart: the local player, a LAN guest or a mob
     /// sits in it. `getSlowdownFactor` (0.997) and the 0.75 speed scale key on
     /// this, not on who rides.
-    fn cart_is_vehicle(&self, id: u32) -> bool {
+    fn cart_is_vehicle(&self, id: u32) -> bool { let (id,) = match crate::points_generated::P2746.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.riding == Some(id)
             || self.ridden_by_guest(id)
             || self
@@ -705,7 +705,7 @@ impl Game<'_> {
                 .any(|m| !m.removed && m.extra.mount == Some(id))
     }
     /// `OldMinecartBehavior.moveAlongTrack`.
-    fn move_along_track(&mut self, c: &mut Minecart, pos: [i32; 3], rail: &Rail, intent: [f64; 2]) {
+    fn move_along_track(&mut self, c: &mut Minecart, pos: [i32; 3], rail: &Rail, intent: [f64; 2]) { let (pos,intent,) = match crate::points_generated::P2745.get() { Some(__l) => { let mut __a = (pos,intent,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,intent,) };
         c.fall_distance = 0.0;
         let ridden = self.cart_is_vehicle(c.id);
         let (x, z) = (c.position.x, c.position.z);
@@ -829,20 +829,20 @@ impl Game<'_> {
     }
     /// `AbstractMinecart`: `minecart_improvements` picks the smoother
     /// physics.
-    pub(super) fn minecart_improvements(&self) -> bool {
+    pub(super) fn minecart_improvements(&self) -> bool { if let Some(__l) = crate::points_generated::P2744.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.enabled_feature_ids()
             .iter()
             .any(|f| f == "minecraft:minecart_improvements")
     }
     /// `NewMinecartBehavior.getMaxSpeed`: the game rule over water's half,
     /// every cart alike (`cart_max_speed` cuts a furnace minecart's).
-    fn max_speed_new(&self, c: &Minecart) -> f64 {
+    fn max_speed_new(&self, c: &Minecart) -> f64 { if let Some(__l) = crate::points_generated::P2743.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         f64::from(self.ui.rules.int("max_minecart_speed")) * if c.in_water { 0.5 } else { 1.0 }
             / 20.0
     }
     /// `AbstractMinecart.getRedstoneDirection` (over the old port's
     /// conductor proxy): which way a powered rail pushes a resting cart.
-    fn redstone_direction(&self, pos: [i32; 3], shape: Shape) -> Vec3 {
+    fn redstone_direction(&self, pos: [i32; 3], shape: Shape) -> Vec3 { let (pos,) = match crate::points_generated::P2742.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let (dx, dz) = match shape {
             Shape::NorthSouth => (0, 1),
             Shape::EastWest => (1, 0),
@@ -893,7 +893,7 @@ impl Game<'_> {
     }
     /// `NewMinecartBehavior.moveAlongTrack`: each step has its own rotation
     /// and interpolation weight, including the final off-rail move.
-    fn finish_cart_step(&self, c: &mut Minecart, old: Vec3, initial: Vec3) {
+    fn finish_cart_step(&self, c: &mut Minecart, old: Vec3, initial: Vec3) { if let Some(__l) = crate::points_generated::P2741.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let delta = old.vector_to(c.position);
         let length = delta.length();
         if length > f64::from(1.0e-5_f32) {
@@ -971,7 +971,7 @@ impl Game<'_> {
     /// `NewMinecartBehavior.moveAlongTrack`: the iteration keeps moving
     /// while distance is left, over as many rails as it takes, the speed
     /// recomputed per rail (slope, halt, boost).
-    fn move_along_track_new(&mut self, c: &mut Minecart, intent: [f64; 2]) {
+    fn move_along_track_new(&mut self, c: &mut Minecart, intent: [f64; 2]) { let (intent,) = match crate::points_generated::P2740.get() { Some(__l) => { let mut __a = (intent,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (intent,) };
         // `TrackIteration`: the slope, halt and boost speeds each apply once
         // per tick, and the iteration keeps moving while distance is left.
         let mut first = true;
@@ -1100,7 +1100,7 @@ impl Game<'_> {
         pos: [i32; 3],
         rail: &Rail,
         mut movement_left: f64,
-    ) -> f64 {
+    ) -> f64 { let (pos,mut movement_left,) = match crate::points_generated::P2739.get() { Some(__l) => { let mut __a = (pos,movement_left,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,movement_left,) };
         if movement_left < f64::from(1.0e-5_f32) {
             return 0.0;
         }
@@ -1187,7 +1187,7 @@ impl Game<'_> {
         movement_left
     }
     /// `comeOffTrack`.
-    fn come_off_track(&self, c: &mut Minecart) {
+    fn come_off_track(&self, c: &mut Minecart) { if let Some(__l) = crate::points_generated::P2738.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let max = self.cart_max_speed(c);
         c.velocity.x = c.velocity.x.clamp(-max, max);
         c.velocity.z = c.velocity.z.clamp(-max, max);
@@ -1223,7 +1223,7 @@ impl Game<'_> {
     }
     /// `applyEffectsFromBlocks` for a cart: a bubble column lifts or drags it
     /// and resets the fall distance.
-    fn cart_block_effects(&self, c: &mut Minecart) {
+    fn cart_block_effects(&self, c: &mut Minecart) { if let Some(__l) = crate::points_generated::P2737.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if c.push_by_bubble_column(
             &self.world,
             self.pack.assets.registry,
@@ -1236,7 +1236,7 @@ impl Game<'_> {
     /// Runs `push_from_cart` for the cart being ticked (`c` is a copy of the
     /// stored one): the stored cart is replaced by `c` for the push and `c`
     /// takes back what the push changed.
-    fn push_from_ticked_cart(&mut self, c: &mut Minecart) {
+    fn push_from_ticked_cart(&mut self, c: &mut Minecart) { if let Some(__l) = crate::points_generated::P2736.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(i) = self.carts.iter().position(|x| x.id == c.id) else {
             return;
         };
@@ -1247,7 +1247,7 @@ impl Game<'_> {
         }
     }
     /// `AbstractMinecart.tick` for one cart; returns false once it is gone.
-    fn tick_cart(&mut self, c: &mut Minecart, intent: [f64; 2]) -> bool {
+    fn tick_cart(&mut self, c: &mut Minecart, intent: [f64; 2]) -> bool { let (intent,) = match crate::points_generated::P2735.get() { Some(__l) => { let mut __a = (intent,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (intent,) };
         c.tick_count += 1;
         c.previous = c.position;
         c.previous_yaw = c.yaw;
@@ -1381,7 +1381,7 @@ impl Game<'_> {
         true
     }
     /// `activateMinecart` on an activator rail.
-    fn activate_cart(&mut self, c: &mut Minecart, powered: bool) {
+    fn activate_cart(&mut self, c: &mut Minecart, powered: bool) { let (powered,) = match crate::points_generated::P2734.get() { Some(__l) => { let mut __a = (powered,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (powered,) };
         match c.kind {
             CartKind::Rideable if powered => {
                 // Minecart.activateMinecart: ejectPassengers.
@@ -1411,7 +1411,7 @@ impl Game<'_> {
             _ => {}
         }
     }
-    pub(super) fn prime_cart(&mut self, c: &mut Minecart) {
+    pub(super) fn prime_cart(&mut self, c: &mut Minecart) { if let Some(__l) = crate::points_generated::P2733.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.ui.rules.bool("tnt_explodes") {
             return;
         }
@@ -1422,7 +1422,7 @@ impl Game<'_> {
         self.audio
             .play("minecraft:entity.tnt.primed", Some(at), 1.0, 1.0);
     }
-    fn explode_cart(&mut self, c: &Minecart, speed_sqr: f64) {
+    fn explode_cart(&mut self, c: &Minecart, speed_sqr: f64) { let (speed_sqr,) = match crate::points_generated::P2732.get() { Some(__l) => { let mut __a = (speed_sqr,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (speed_sqr,) };
         if !self.ui.rules.bool("tnt_explodes") {
             return;
         }
@@ -1454,7 +1454,7 @@ impl Game<'_> {
     /// gets back only moves the server's copy of it (`Entity.push` marks
     /// `needsSync`, which `ServerEntity` sends to the other players only),
     /// so no player feels it.
-    fn push_carts(&mut self) {
+    fn push_carts(&mut self) { if let Some(__l) = crate::points_generated::P2731.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.carts.is_empty() {
             return;
         }
@@ -1505,7 +1505,7 @@ impl Game<'_> {
     /// (`LivingEntity.pushEntities` -> `doPush`): the cart gets the push and
     /// the mob a quarter of it back (`Entity.push`, which needs the mob to be
     /// pushable and to carry no one). Bats push nothing (`Bat.pushEntities`).
-    fn push_carts_from_mobs(&mut self, cells: &horizon_client::mobs::seen_grid::SeenGrid) {
+    fn push_carts_from_mobs(&mut self, cells: &horizon_client::mobs::seen_grid::SeenGrid) { if let Some(__l) = crate::points_generated::P2730.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let teams = self.mob_teams();
         // (mob index, feet, box)
         let pushers: Vec<(usize, Vec3, Aabb)> = self
@@ -1551,7 +1551,7 @@ impl Game<'_> {
     /// cart `i`'s own tick: each other cart in its box (0.2 wider on each
     /// side) gets `push(cart i)`. Running it per cart, after that cart moved
     /// and before the next one does, is what splits stacked carts apart.
-    fn push_from_cart(&mut self, i: usize) {
+    fn push_from_cart(&mut self, i: usize) { let (i,) = match crate::points_generated::P2729.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let reach = f64::from(0.2f32);
         let hitbox = self.carts[i].bounds().inflate(Vec3::new(reach, 0.0, reach));
         for j in 0..self.carts.len() {
@@ -1617,7 +1617,7 @@ impl Game<'_> {
     /// `i`'s box (0.2 wider on each side): only a rideable cart moving at
     /// `horizontalDistanceSqr() >= 0.01` picks up; an eligible mob boards an
     /// empty cart (`startRiding`); others get `Entity.push`.
-    fn pickup_from_cart(&mut self, i: usize) {
+    fn pickup_from_cart(&mut self, i: usize) { let (i,) = match crate::points_generated::P2728.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let v = self.carts[i].velocity;
         if self.carts[i].kind != CartKind::Rideable || v.x * v.x + v.z * v.z < 0.01 {
             return;
@@ -1683,7 +1683,7 @@ impl Game<'_> {
     }
     /// `positionRider` for the mobs in minecarts: each sits on the cart's
     /// passenger attachment, less its own vehicle attachment.
-    pub(super) fn seat_cart_mobs(&mut self) {
+    pub(super) fn seat_cart_mobs(&mut self) { if let Some(__l) = crate::points_generated::P2727.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for i in 0..self.carts.len() {
             let id = self.carts[i].id;
             let (pos, prev) = (self.carts[i].position, self.carts[i].previous);
@@ -1708,7 +1708,7 @@ impl Game<'_> {
         }
     }
     /// `ejectPassengers` for the mobs in cart `i`.
-    pub(super) fn eject_cart_mobs(&mut self, i: usize) {
+    pub(super) fn eject_cart_mobs(&mut self, i: usize) { let (i,) = match crate::points_generated::P2726.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let (id, y) = (self.carts[i].id, self.carts[i].position.y);
         let js: Vec<usize> = (0..self.mobs.len())
             .filter(|&j| self.mobs[j].extra.mount == Some(id))
@@ -1723,7 +1723,7 @@ impl Game<'_> {
         }
     }
     /// Every cart but the ridden one (which ticks with its rider).
-    pub(super) fn tick_carts(&mut self) {
+    pub(super) fn tick_carts(&mut self) { if let Some(__l) = crate::points_generated::P2725.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.push_carts();
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
@@ -1804,7 +1804,7 @@ impl Game<'_> {
     /// own `isInLava`. The second breaks the cart, or primes a TNT minecart
     /// (`MinecartTNT.destroy` for a fire source). A cart has no `baseTick`,
     /// so the fire `lavaIgnite` lights never burns it.
-    fn cart_lava_tick(&mut self, id: u32) {
+    fn cart_lava_tick(&mut self, id: u32) { let (id,) = match crate::points_generated::P2724.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         for _ in 0..2 {
             let Some(i) = self.carts.iter().position(|c| c.id == id) else {
                 return;
@@ -1821,7 +1821,7 @@ impl Game<'_> {
     /// joined the level since the last tick, and `LocalPlayer.startRiding`'s
     /// two inside sounds when the player got in one; then what the sound
     /// instances read this tick (the ridden cart and every cart).
-    pub(super) fn start_cart_sounds(&mut self) -> (Option<u32>, Vec<CartSound>) {
+    pub(super) fn start_cart_sounds(&mut self) -> (Option<u32>, Vec<CartSound>) { if let Some(__l) = crate::points_generated::P2723.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let carts: Vec<CartSound> = self
             .carts
             .iter()
@@ -1865,7 +1865,7 @@ impl Game<'_> {
         (vehicle, carts)
     }
     /// The rider's tick: the cart moves with the rider's input as its push.
-    pub(super) fn tick_cart_riding(&mut self, keys: Keys) -> bool {
+    pub(super) fn tick_cart_riding(&mut self, keys: Keys) -> bool { if let Some(__l) = crate::points_generated::P2722.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(i) = self.carts.iter().position(|c| Some(c.id) == self.riding) else {
             return false;
         };
@@ -1921,7 +1921,7 @@ impl Game<'_> {
         true
     }
     /// `getDismountLocationForPassenger`: beside the cart (across its facing), else on top.
-    pub(super) fn dismount_cart(&mut self, i: usize) {
+    pub(super) fn dismount_cart(&mut self, i: usize) { let (i,) = match crate::points_generated::P2721.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let id = self.carts[i].id;
         if self.riding == Some(id) && !self.native_may_leave(id) {
             return;
@@ -1979,7 +1979,7 @@ impl Game<'_> {
         }
     }
     /// `MinecartItem.useOn`: a cart on the clicked rail.
-    pub(super) fn place_minecart(&mut self, hit: &Hit, stack: &ItemStack) -> bool {
+    pub(super) fn place_minecart(&mut self, hit: &Hit, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P2720.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(kind) = CartKind::from_id(&stack.item) else {
             return false;
         };
@@ -2011,7 +2011,7 @@ impl Game<'_> {
         self.swing_arm();
         true
     }
-    pub(super) fn cart_hit(&self) -> Option<(usize, f64)> {
+    pub(super) fn cart_hit(&self) -> Option<(usize, f64)> { if let Some(__l) = crate::points_generated::P2719.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (eye, dir) = self.aim()?;
         let reach: f64 = self.entity_reach;
         let mut best: Option<(usize, f64)> = None;
@@ -2046,7 +2046,7 @@ impl Game<'_> {
     /// `setChestVehicleItem` first unpack its loot table with no player, so
     /// no `player_generates_container_loot` fires later. While its menu is
     /// open the live slots are the placeholder copy (`open_cart_container`).
-    pub(super) fn cart_slots(&mut self, id: u32) -> Option<&mut Vec<Option<ItemStack>>> {
+    pub(super) fn cart_slots(&mut self, id: u32) -> Option<&mut Vec<Option<ItemStack>>> { let (id,) = match crate::points_generated::P2718.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let c = self.carts.iter_mut().find(|c| c.id == id)?;
         c.loot = None;
         match self
@@ -2061,7 +2061,7 @@ impl Game<'_> {
     /// `ContainerEntity.unpackChestVehicleLootTable` for a player who opens a
     /// chest minecart: a roll it still holds fires `player_generates_container_loot`
     /// for its table, and the cart keeps its items from then on.
-    fn unpack_cart_loot(&mut self, i: usize) {
+    fn unpack_cart_loot(&mut self, i: usize) { let (i,) = match crate::points_generated::P2717.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let Some(loot) = self.carts[i].loot.take() else {
             return;
         };
@@ -2071,7 +2071,7 @@ impl Game<'_> {
     }
     /// `interact`: ride, open, fuel or ignite the cart under the crosshair, or
     /// the one a guest's interact packet named.
-    pub(super) fn interact_cart(&mut self, target: Option<InteractTarget>) -> bool {
+    pub(super) fn interact_cart(&mut self, target: Option<InteractTarget>) -> bool { if let Some(__l) = crate::points_generated::P2716.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((i, d)) = (match target {
             Some(t) => Self::named_entity(&self.carts, t.id, |c| c.id).map(|i| (i, 0.0)),
             None => self.cart_hit(),
@@ -2144,7 +2144,7 @@ impl Game<'_> {
     /// `AbstractMinecartContainer.interact`: the menu opens over the cart's
     /// own slots, kept under a placeholder key until it closes
     /// (`store_cart_items`/`close_cart_container`).
-    pub(super) fn open_cart_container(&mut self, i: usize) {
+    pub(super) fn open_cart_container(&mut self, i: usize) { let (i,) = match crate::points_generated::P2715.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         self.unpack_cart_loot(i);
         let c = self.carts[i].clone();
         let key = (i32::MAX - 15, CART_KEY_Y, c.id as i32);
@@ -2168,7 +2168,7 @@ impl Game<'_> {
         }
     }
     /// Closing the cart's container open under `key` copies the items back.
-    pub(super) fn close_cart_container(&mut self, key: (i32, i32, i32)) {
+    pub(super) fn close_cart_container(&mut self, key: (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P2714.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if key.1 != CART_KEY_Y {
             return;
         }
@@ -2180,7 +2180,7 @@ impl Game<'_> {
     /// menu edited goes back to the vehicle, so it is what drops or travels
     /// with it, and the menu's stand-in leaves the level. A menu that is
     /// still open over it then has nothing left to take.
-    pub(super) fn release_vehicle_container(&mut self, id: u32) {
+    pub(super) fn release_vehicle_container(&mut self, id: u32) { let (id,) = match crate::points_generated::P2713.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let key = (i32::MAX - 15, CART_KEY_Y, id as i32);
         self.store_cart_items(key);
         self.world.block_entities.remove(&key);
@@ -2191,7 +2191,7 @@ impl Game<'_> {
     /// The menu of a chest or hopper minecart or a chest boat works on the
     /// vehicle's own items (`ContainerEntity`): the placeholder under `key`
     /// that the menu edits is copied back to the vehicle.
-    pub(super) fn store_cart_items(&mut self, key: (i32, i32, i32)) {
+    pub(super) fn store_cart_items(&mut self, key: (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P2712.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if key.1 != CART_KEY_Y {
             return;
         }
@@ -2206,7 +2206,7 @@ impl Game<'_> {
         }
     }
     /// The open cart's kind when a cart container is shown.
-    pub(super) fn open_cart_kind(&self) -> Option<CartKind> {
+    pub(super) fn open_cart_kind(&self) -> Option<CartKind> { if let Some(__l) = crate::points_generated::P2711.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let key = self.container.filter(|k| k.1 == CART_KEY_Y)?;
         // A chest boat's chest shows like a chest minecart's.
         self.carts
@@ -2221,7 +2221,7 @@ impl Game<'_> {
             })
     }
     /// `VehicleEntity.hurtServer` from the player's attack.
-    pub(super) fn attack_cart(&mut self) -> bool {
+    pub(super) fn attack_cart(&mut self) -> bool { if let Some(__l) = crate::points_generated::P2710.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((i, d)) = self.cart_hit() else {
             return false;
         };
@@ -2253,7 +2253,7 @@ impl Game<'_> {
         arrow_velocity: Vec3,
         burning: bool,
         creative: bool,
-    ) {
+    ) { let (i,damage,burning,creative,) = match crate::points_generated::P2709.get() { Some(__l) => { let mut __a = (i,damage,burning,creative,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,damage,burning,creative,) };
         if i >= self.carts.len() {
             return;
         }
@@ -2270,7 +2270,7 @@ impl Game<'_> {
     /// `VehicleEntity.hurtServer`: shake, add the damage, break past 40 (at
     /// once for creative players); TNT minecarts prime instead when moving
     /// or hurt by fire or an explosion (`damageSourceIgnitesTnt`).
-    pub(super) fn hurt_cart(&mut self, i: usize, mut damage: f32, creative: bool, fire: bool) {
+    pub(super) fn hurt_cart(&mut self, i: usize, mut damage: f32, creative: bool, fire: bool) { let (i,mut damage,creative,fire,) = match crate::points_generated::P2708.get() { Some(__l) => { let mut __a = (i,damage,creative,fire,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,damage,creative,fire,) };
         let kind = self.carts[i].kind.id();
         let mut cancel = false;
         self.native_vehicle_damage(kind, &mut damage, &mut cancel);
@@ -2337,7 +2337,7 @@ impl Game<'_> {
         light: u32,
         diffuse: bool,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (seed,light,diffuse,) = match crate::points_generated::P2707.get() { Some(__l) => { let mut __a = (seed,light,diffuse,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (seed,light,diffuse,) };
         // BlockTintSource.color(state) with no level: each tinted face's default colour.
         let grass = self.pack.item_renderer.grass_color(0.5, 1.0) as u32;
         let tables = &self.pack.context.tables;
@@ -2436,12 +2436,12 @@ impl Game<'_> {
     }
     /// The block the cart shows: `None` for air (`AbstractMinecartRenderer`
     /// draws and stretches its culling box only for a non-air state).
-    fn display_state(&self, c: &Minecart) -> Option<BlockStateId> {
+    fn display_state(&self, c: &Minecart) -> Option<BlockStateId> { if let Some(__l) = crate::points_generated::P2706.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         shown_unless_air(self.display_state_unfiltered(c), |s| {
             self.res.facts().is_air(s)
         })
     }
-    fn display_state_unfiltered(&self, c: &Minecart) -> Option<BlockStateId> {
+    fn display_state_unfiltered(&self, c: &Minecart) -> Option<BlockStateId> { if let Some(__l) = crate::points_generated::P2705.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let registry = &self.pack.assets.registry;
         let with = |name: &str, props: &[(&str, &str)]| {
             let mut s = registry.state(registry.default_state(name)?)?.clone();
@@ -2477,7 +2477,7 @@ impl Game<'_> {
     }
     /// `AbstractMinecartRenderer` (old render): on the rail between the
     /// front and back points, pitched on slopes, with the display block.
-    pub(super) fn cart_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
+    pub(super) fn cart_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) { let (alpha,) = match crate::points_generated::P2704.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let a = alpha as f32;
         let Some(uv) = self
             .gui
@@ -2639,7 +2639,7 @@ impl Game<'_> {
         m: glam::Mat4,
         light: u8,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (light,) = match crate::points_generated::P2703.get() { Some(__l) => { let mut __a = (light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (light,) };
         let lid = |_: [i32; 3]| 0.0;
         let scene = horizon_client::block_entity_render::Scene {
             camera: glam::DVec3::ZERO,

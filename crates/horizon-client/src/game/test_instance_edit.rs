@@ -340,7 +340,7 @@ impl Editor for TestInstanceEditor {
 
 impl Game<'_> {
     /// `LocalPlayer.openTestInstanceBlock`.
-    pub(super) fn open_test_instance_block(&mut self, pos: Pos) {
+    pub(super) fn open_test_instance_block(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P5611.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BlockEntity::TestInstanceBlock(b)) = self.world.block_entities.get(&pos) else {
             return;
         };

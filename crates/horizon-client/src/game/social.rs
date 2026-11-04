@@ -46,7 +46,7 @@ impl Default for Social {
 
 impl Game<'_> {
     /// The players of the level, as the tab list shows them, and the local player's id.
-    fn social_players(&mut self) -> (Vec<TabPlayer>, u128) {
+    fn social_players(&mut self) -> (Vec<TabPlayer>, u128) { if let Some(__l) = crate::points_generated::P5369.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.remote_tab_players() {
             Some((players, _, _)) => {
                 let me = self.remote.as_ref().map_or(0, |r| r.profile());
@@ -65,7 +65,7 @@ impl Game<'_> {
         }
     }
     /// `Minecraft.isBlocked`: whether a player's chat is hidden (never the player's own).
-    pub(super) fn social_hides(&mut self, id: u128) -> bool {
+    pub(super) fn social_hides(&mut self, id: u128) -> bool { if let Some(__l) = crate::points_generated::P5368.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.social.hidden.contains(&id) {
             return false;
         }
@@ -73,7 +73,7 @@ impl Game<'_> {
         id != me
     }
     /// `new SocialInteractionsScreen(lastScreen)`: it opens on All, with an empty search.
-    pub(super) fn open_social(&mut self, from_pause: bool) {
+    pub(super) fn open_social(&mut self, from_pause: bool) { let (from_pause,) = match crate::points_generated::P5367.get() { Some(__l) => { let mut __a = (from_pause,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from_pause,) };
         self.social.page = Page::All;
         self.social.search.set_value("");
         self.social.scroll = 0.0;
@@ -81,7 +81,7 @@ impl Game<'_> {
         self.set_screen(Screen::Social);
         self.capture(false);
     }
-    pub(super) fn close_social(&mut self) {
+    pub(super) fn close_social(&mut self) { if let Some(__l) = crate::points_generated::P5366.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.social.from_pause {
             self.set_screen(Screen::Paused);
         } else {
@@ -90,7 +90,7 @@ impl Game<'_> {
         }
     }
     /// The page's rows, sorted and filtered as `SocialInteractionsPlayerList` does.
-    fn social_view(&mut self) -> SocialView {
+    fn social_view(&mut self) -> SocialView { if let Some(__l) = crate::points_generated::P5365.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (players, me) = self.social_players();
         for p in &players {
             self.social.names.insert(p.uuid, p.name.clone());
@@ -148,14 +148,14 @@ impl Game<'_> {
         }
     }
     /// The server's name: a local world's name, a server's entry in the list.
-    fn social_server_name(&self) -> String {
+    fn social_server_name(&self) -> String { if let Some(__l) = crate::points_generated::P5364.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match (&self.integrated, self.server_address()) {
             (Some(server), _) => server.world_name.clone(),
             (None, Some(address)) if self.remote.is_some() => address.to_owned(),
             _ => self.level.name.clone(),
         }
     }
-    pub(super) fn draw_social_screen(&mut self, batch: &mut horizon_client::hud::HudBatch) {
+    pub(super) fn draw_social_screen(&mut self, batch: &mut horizon_client::hud::HudBatch) { if let Some(__l) = crate::points_generated::P5363.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.flush_skin_slots();
         let view = self.social_view();
         horizon_client::widgets::begin_screen(|| {
@@ -170,7 +170,7 @@ impl Game<'_> {
             true,
         );
     }
-    pub(super) fn social_click(&mut self) {
+    pub(super) fn social_click(&mut self) { if let Some(__l) = crate::points_generated::P5362.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let view = self.social_view();
         let Some(action) = social_screen::click(self.gui_size(), self.cursor, &view) else {
             return;
@@ -203,13 +203,13 @@ impl Game<'_> {
         }
     }
     /// `AbstractSelectionList.mouseScrolled`: a row's height and a bit a notch.
-    pub(super) fn social_scroll(&mut self, delta: f32) {
+    pub(super) fn social_scroll(&mut self, delta: f32) { let (delta,) = match crate::points_generated::P5361.get() { Some(__l) => { let mut __a = (delta,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (delta,) };
         self.social.scroll -= delta * 18.0;
         // `social_view` clamps it to the list.
         let _ = self.social_view();
     }
     /// The search box has the focus from the start (`setInitialFocus`): typing fills it.
-    pub(super) fn social_key(&mut self, event: &KeyEvent) {
+    pub(super) fn social_key(&mut self, event: &KeyEvent) { if let Some(__l) = crate::points_generated::P5360.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if event.state != ElementState::Pressed {
             return;
         }
@@ -231,12 +231,12 @@ impl Game<'_> {
             }
         }
     }
-    pub(super) fn social_backspace(&mut self) {
+    pub(super) fn social_backspace(&mut self) { if let Some(__l) = crate::points_generated::P5359.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.social.search.key(KeyCode::Backspace, false, false);
         self.social.scroll = 0.0;
     }
     /// Characters into the search box (`searchBox.setMaxLength(16)`).
-    pub(super) fn social_type(&mut self, text: &str) {
+    pub(super) fn social_type(&mut self, text: &str) { if let Some(__l) = crate::points_generated::P5358.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let text: String = text.chars().filter(|c| !c.is_control()).collect();
         self.social.search.insert_text(&text);
         self.social.scroll = 0.0;

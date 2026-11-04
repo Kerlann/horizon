@@ -25,7 +25,7 @@ impl Game<'_> {
         words: &[&str],
         line: &str,
         reply: &Sender<String>,
-    ) -> Result<Option<Option<Value>>> {
+    ) -> Result<Option<Option<Value>>> { if let Some(__l) = crate::points_generated::P5110.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let folder = || {
             words
                 .get(1)

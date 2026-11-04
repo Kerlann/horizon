@@ -9,7 +9,7 @@ impl Game<'_> {
     /// holds swaps the old item's attribute modifiers for the new one's. An
     /// entity that changed nothing costs a compare of its eight slots, and
     /// one that wears nothing and never wore anything is skipped outright.
-    pub(super) fn tick_equipment_attributes(&mut self) {
+    pub(super) fn tick_equipment_attributes(&mut self) { if let Some(__l) = crate::points_generated::P2551.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() || self.options.execution_role.is_client() {
             return;
         }

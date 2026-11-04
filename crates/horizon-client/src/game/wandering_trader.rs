@@ -41,13 +41,13 @@ impl Creatures {
     }
 }
 impl Game<'_> {
-    fn trader_path(&self) -> std::path::PathBuf {
+    fn trader_path(&self) -> std::path::PathBuf { if let Some(__l) = crate::points_generated::P5810.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world_root
             .join("data")
             .join("minecraft")
             .join("wandering_trader.dat")
     }
-    fn load_trader_data(&mut self) {
+    fn load_trader_data(&mut self) { if let Some(__l) = crate::points_generated::P5809.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.creatures.trader.loaded {
             return;
         }
@@ -62,7 +62,7 @@ impl Game<'_> {
         t.chance = get("spawn_chance", MIN_CHANCE);
         t.loaded = true;
     }
-    pub(super) fn save_wandering_trader(&mut self) {
+    pub(super) fn save_wandering_trader(&mut self) { if let Some(__l) = crate::points_generated::P5808.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.creatures.trader.loaded || !self.creatures.trader.dirty {
             return;
         }
@@ -82,7 +82,7 @@ impl Game<'_> {
         }
     }
     /// `WanderingTraderSpawner.tick`.
-    pub(super) fn tick_wandering_trader(&mut self) {
+    pub(super) fn tick_wandering_trader(&mut self) { if let Some(__l) = crate::points_generated::P5807.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.dim != Dim::Overworld || !self.ui.rules.bool("spawn_wandering_traders") {
             return;
         }
@@ -106,7 +106,7 @@ impl Game<'_> {
         }
     }
     /// `WanderingTraderSpawner.spawn`.
-    fn spawn_trader(&mut self) -> bool {
+    fn spawn_trader(&mut self) -> bool { if let Some(__l) = crate::points_generated::P5806.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // ServerLevel.getRandomPlayer: one of the living players, drawn
         // from the level random.
         let alive: Vec<Vec3> = self
@@ -173,7 +173,7 @@ impl Game<'_> {
         true
     }
     /// `tryToSpawnLlamaFor`: a trader llama near the trader, on its lead.
-    fn spawn_trader_llama(&mut self, trader: u32, radius: i32) {
+    fn spawn_trader_llama(&mut self, trader: u32, radius: i32) { let (trader,radius,) = match crate::points_generated::P5805.get() { Some(__l) => { let mut __a = (trader,radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (trader,radius,) };
         let Some(at) = self.mobs.iter().find(|m| m.id == trader).map(|m| {
             [
                 m.position.x.floor() as i32,
@@ -201,7 +201,7 @@ impl Game<'_> {
     }
     /// `findSpawnPositionNear`: ten tries at a column near the reference
     /// where the trader could stand.
-    fn find_trader_spawn_near(&mut self, reference: [i32; 3], radius: i32) -> Option<[i32; 3]> {
+    fn find_trader_spawn_near(&mut self, reference: [i32; 3], radius: i32) -> Option<[i32; 3]> { let (reference,radius,) = match crate::points_generated::P5804.get() { Some(__l) => { let mut __a = (reference,radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (reference,radius,) };
         for _ in 0..ATTEMPTS {
             let x =
                 reference[0] + self.world.random.next_int_bound(radius * 2).unwrap_or(0) - radius;
@@ -219,7 +219,7 @@ impl Game<'_> {
         None
     }
     /// `hasEnoughSpace`: no collision in the 2 by 3 by 2 box.
-    fn trader_has_space(&self, pos: [i32; 3]) -> bool {
+    fn trader_has_space(&self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P5803.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         (0..=1).all(|dx| {
             (0..=2).all(|dy| {
                 (0..=1).all(|dz| {
@@ -233,7 +233,7 @@ impl Game<'_> {
         })
     }
     /// The closest bell (`PoiTypes.MEETING`) within `range` blocks.
-    fn nearest_bell(&self, from: [i32; 3], range: i32) -> Option<[i32; 3]> {
+    fn nearest_bell(&self, from: [i32; 3], range: i32) -> Option<[i32; 3]> { let (from,range,) = match crate::points_generated::P5802.get() { Some(__l) => { let mut __a = (from,range,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from,range,) };
         let mut best: Option<([i32; 3], i32)> = None;
         for x in from[0] - range..=from[0] + range {
             for z in from[2] - range..=from[2] + range {

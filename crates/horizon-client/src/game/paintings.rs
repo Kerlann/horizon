@@ -100,7 +100,7 @@ fn faces_camera(corners: &[glam::DVec3; 4], normal: glam::DVec3) -> bool {
 impl Game<'_> {
     /// `HangingEntity.survives`: no block collision in the box, solid blocks
     /// (or diodes) behind it and no other painting overlapping it.
-    pub(super) fn painting_survives(&self, p: &Painting) -> bool {
+    pub(super) fn painting_survives(&self, p: &Painting) -> bool { if let Some(__l) = crate::points_generated::P4430.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (lo, hi) = p.bounds();
         let bounds = Aabb::new(
             Vec3::new(lo[0], lo[1], lo[2]),
@@ -139,7 +139,7 @@ impl Game<'_> {
     /// `Painting.create` finds a surviving variant (and the stack's
     /// `painting/variant`, if any, also survives). The random pick and
     /// spawn are the server's.
-    pub(super) fn painting_fits(&self, hit: &Hit, stack: &ItemStack) -> bool {
+    pub(super) fn painting_fits(&self, hit: &Hit, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P4429.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if &*stack.item != "minecraft:painting" {
             return false;
         }
@@ -182,7 +182,7 @@ impl Game<'_> {
         true
     }
     /// `HangingEntityItem.useOn` for a painting against `hit`'s face.
-    pub(super) fn place_painting(&mut self, hit: &Hit, stack: &ItemStack) -> bool {
+    pub(super) fn place_painting(&mut self, hit: &Hit, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P4428.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:painting" {
             return false;
         }
@@ -257,7 +257,7 @@ impl Game<'_> {
         true
     }
     /// The painting under the crosshair within reach and its distance.
-    pub(super) fn painting_hit(&self) -> Option<(usize, f64)> {
+    pub(super) fn painting_hit(&self) -> Option<(usize, f64)> { if let Some(__l) = crate::points_generated::P4427.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (eye, dir) = self.aim()?;
         let reach: f64 = self.entity_reach;
         let mut best: Option<(usize, f64)> = None;
@@ -285,7 +285,7 @@ impl Game<'_> {
     }
     /// `Painting.hurtServer` -> kill and `dropItem`. False when a mod kept it
     /// (`native_hanging_break`): it stays at `index`.
-    pub(super) fn break_painting(&mut self, index: usize, by_player: bool) -> bool {
+    pub(super) fn break_painting(&mut self, index: usize, by_player: bool) -> bool { let (index,by_player,) = match crate::points_generated::P4426.get() { Some(__l) => { let mut __a = (index,by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,by_player,) };
         let pos = self.paintings[index].pos;
         if self.hanging_break_cancelled("minecraft:painting", pos, by_player) {
             return false;
@@ -323,7 +323,7 @@ impl Game<'_> {
         true
     }
     /// BlockAttachedEntity.tick: check survival every 100 ticks.
-    pub(super) fn tick_paintings(&mut self) {
+    pub(super) fn tick_paintings(&mut self) { if let Some(__l) = crate::points_generated::P4425.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
         let mut i = 0;
@@ -347,7 +347,7 @@ impl Game<'_> {
     }
     /// PaintingRenderer: the variant on the front, the back texture behind and
     /// on the edges.
-    pub(super) fn painting_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
+    pub(super) fn painting_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) { if let Some(__l) = crate::points_generated::P4424.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let sprites = &self.gui.atlas.sprites;
         let Some(back) = sprites.get("painting/back").copied() else {
             return;

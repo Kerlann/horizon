@@ -306,7 +306,7 @@ impl EyeOfEnder {
 
 impl Game<'_> {
     /// The environment attributes of the current dimension.
-    pub(super) fn dim_environment(&self) -> &Environment {
+    pub(super) fn dim_environment(&self) -> &Environment { if let Some(__l) = crate::points_generated::P1825.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.dim {
             Dim::Overworld => self.res.environment(),
             Dim::Nether => self.res.nether_environment(),
@@ -315,7 +315,7 @@ impl Game<'_> {
     }
 
     /// SkyRenderer.renderEndFlash, drawn after the renderer's resident sky mesh.
-    pub(super) fn end_flash_geometry(&self) -> Vec<Vertex> {
+    pub(super) fn end_flash_geometry(&self) -> Vec<Vertex> { if let Some(__l) = crate::points_generated::P1824.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out = Vec::new();
         // The old combined sky/flash draw also skipped the flash without a sky sprite.
         if !self.gui.atlas.sprites.contains_key("environment/end_sky") {
@@ -359,7 +359,7 @@ impl Game<'_> {
 
     /// Iris's `endFlashIntensity` and the flash's direction (camera-relative, length 100: the
     /// sprite's centre), for shader packs; no flash outside the End.
-    pub(super) fn end_flash_for_pack(&self, partial: f32) -> (f32, glam::Vec3) {
+    pub(super) fn end_flash_for_pack(&self, partial: f32) -> (f32, glam::Vec3) { let (partial,) = match crate::points_generated::P1823.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         if self.dim != Dim::End {
             return (0.0, glam::Vec3::ZERO);
         }
@@ -375,7 +375,7 @@ impl Game<'_> {
     /// LightmapRenderStateExtractor: End flashes add to the sky light factor
     /// unless Hide Lightning Flashes is on (the sky sprite is not gated), a
     /// third of it under a boss bar's world fog.
-    pub(super) fn end_flash_sky(&self, sky: &mut horizon_client::environment::Sky, partial: f64) {
+    pub(super) fn end_flash_sky(&self, sky: &mut horizon_client::environment::Sky, partial: f64) { let (partial,) = match crate::points_generated::P1822.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         if self.dim == Dim::End && !self.settings.file.bool("hideLightningFlashes") {
             let intensity = self.end.flash.intensity(partial as f32);
             sky.sky_light_factor += if self.boss_overlay.should_create_world_fog() {
@@ -386,7 +386,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn block_name(&self, p: [i32; 3]) -> std::sync::Arc<str> {
+    pub(super) fn block_name(&self, p: [i32; 3]) -> std::sync::Arc<str> { let (p,) = match crate::points_generated::P1821.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         self.res
             .facts()
             .get(self.world.block(p[0], p[1], p[2]))
@@ -396,14 +396,14 @@ impl Game<'_> {
 
     /// EnderEyeItem.use's `getPlayerPOVHitResult`: whether the block aimed
     /// at is an End portal frame (the use passes there).
-    pub(super) fn aims_at_end_portal_frame(&self) -> bool {
+    pub(super) fn aims_at_end_portal_frame(&self) -> bool { if let Some(__l) = crate::points_generated::P1820.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pick()
             .is_some_and(|hit| &*self.block_name(hit.pos) == "minecraft:end_portal_frame")
     }
 
     /// EnderEyeItem.useOn: fill an empty End portal frame, then light the
     /// portal when the ring of twelve filled frames is complete.
-    pub(super) fn use_ender_eye(&mut self, stack: &ItemStack, use_on_block: bool) -> Result<bool> {
+    pub(super) fn use_ender_eye(&mut self, stack: &ItemStack, use_on_block: bool) -> Result<bool> { let (use_on_block,) = match crate::points_generated::P1819.get() { Some(__l) => { let mut __a = (use_on_block,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (use_on_block,) };
         if &*stack.item != "minecraft:ender_eye" {
             return Ok(false);
         }
@@ -474,7 +474,7 @@ impl Game<'_> {
     /// EndPortalFrameBlock.getOrCreatePortalShape matched around `frame`: a 5×5
     /// ring (corners free) of filled frames, all facing the centre or all
     /// facing away from it. Returns the centre of the 3×3 opening.
-    fn portal_ring_center(&self, frame: [i32; 3]) -> Option<[i32; 3]> {
+    fn portal_ring_center(&self, frame: [i32; 3]) -> Option<[i32; 3]> { let (frame,) = match crate::points_generated::P1818.get() { Some(__l) => { let mut __a = (frame,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (frame,) };
         let registry = self.pack.assets.registry;
         // (offset from the centre, facing when the frames face the centre)
         let mut ring = Vec::with_capacity(12);
@@ -512,7 +512,7 @@ impl Game<'_> {
     }
 
     /// End portals, End gateways and the exit portal, once per tick.
-    pub(super) fn tick_end(&mut self) -> Result<()> {
+    pub(super) fn tick_end(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P1817.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.end.gateway_cooldown = self.end.gateway_cooldown.saturating_sub(1);
         if self.dim == Dim::End {
             self.tick_fight();
@@ -550,7 +550,7 @@ impl Game<'_> {
         position: Vec3,
         width: f64,
         height: f64,
-    ) -> (bool, Option<[i32; 3]>) {
+    ) -> (bool, Option<[i32; 3]>) { let (width,height,) = match crate::points_generated::P1816.get() { Some(__l) => { let mut __a = (width,height,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (width,height,) };
         let w = width / 2.0;
         let lo = [position.x - w, position.y, position.z - w];
         let hi = [position.x + w, position.y + height, position.z + w];
@@ -576,7 +576,7 @@ impl Game<'_> {
     }
 
     /// EndPortalBlock.getPortalDestination for the pending enter_dimension.
-    pub(super) fn end_destination(&self, target: Dim) -> Option<Vec3> {
+    pub(super) fn end_destination(&self, target: Dim) -> Option<Vec3> { if let Some(__l) = crate::points_generated::P1815.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.end_portal_travel {
             return None;
         }
@@ -609,7 +609,7 @@ impl Game<'_> {
         &mut self,
         target: Vec3,
         finder: &mut Option<PlayerSpawnFinder>,
-    ) -> Result<Option<(Vec3, Option<f32>)>> {
+    ) -> Result<Option<(Vec3, Option<f32>)>> { if let Some(__l) = crate::points_generated::P1814.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.dim == Dim::End {
             // EndPlatformFeature.createEndPlatform below the spawn point.
             let origin = [END_SPAWN[0], END_SPAWN[1] - 1, END_SPAWN[2]];
@@ -671,7 +671,7 @@ impl Game<'_> {
     /// first gateway (spawnNewGateway) if the portal is not there yet. Like
     /// scanState and spawnExitPortal, only while the fight has no exit portal
     /// location: a podium that is later broken stays broken.
-    fn ensure_exit_portal(&mut self) -> Result<()> {
+    fn ensure_exit_portal(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P1813.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !(-1..=0).all(|cz| (-1..=0).all(|cx| self.streaming.is_lit(cx, cz)))
             || !self.fight_ready()
         {
@@ -720,7 +720,7 @@ impl Game<'_> {
     /// The portal level of the podium around the centre column, read from the
     /// bedrock that EndPodiumFeature places (rim at the portal level, disc
     /// below it, the torch column) so a broken column does not hide it.
-    fn podium_level(&self) -> Option<i32> {
+    fn podium_level(&self) -> Option<i32> { if let Some(__l) = crate::points_generated::P1812.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut offsets: Vec<[i32; 3]> = (0..4).map(|dy| [0, dy, 0]).collect();
         for z in -4..=4i32 {
             for x in -4..=4i32 {
@@ -745,7 +745,7 @@ impl Game<'_> {
             .map(|(_, y)| y)
     }
     /// `spawnExitPortal(true)` after the dragon dies.
-    pub(super) fn activate_exit_portal(&mut self) -> Result<()> {
+    pub(super) fn activate_exit_portal(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P1811.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let origin = match self.exit_portal() {
             Some(o) => o,
             None => {
@@ -755,13 +755,13 @@ impl Game<'_> {
         };
         self.place_podium(origin, true)
     }
-    pub(super) fn place_gateway_at(&mut self, pos: [i32; 3]) -> Result<()> {
+    pub(super) fn place_gateway_at(&mut self, pos: [i32; 3]) -> Result<()> { let (pos,) = match crate::points_generated::P1810.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.place_gateway(pos)
     }
 
     /// The first gateway of the shuffled ring (EnderDragonFight constructor
     /// and spawnNewGateway).
-    fn first_gateway(&self) -> [i32; 3] {
+    fn first_gateway(&self) -> [i32; 3] { if let Some(__l) = crate::points_generated::P1809.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut gateways: Vec<i32> = (0..20).collect();
         let mut random = LegacyRandom::new(self.level.seed);
         for i in (2..=gateways.len()).rev() {
@@ -778,7 +778,7 @@ impl Game<'_> {
     }
 
     /// EndPodiumFeature(active).place at `origin` (the portal level).
-    pub(super) fn place_podium(&mut self, origin: [i32; 3], active: bool) -> Result<()> {
+    pub(super) fn place_podium(&mut self, origin: [i32; 3], active: bool) -> Result<()> { let (origin,active,) = match crate::points_generated::P1808.get() { Some(__l) => { let mut __a = (origin,active,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,active,) };
         for y in origin[1] - 1..=origin[1] + 32 {
             for z in origin[2] - 4..=origin[2] + 4 {
                 for x in origin[0] - 4..=origin[0] + 4 {
@@ -834,7 +834,7 @@ impl Game<'_> {
     }
 
     /// EndGatewayFeature.place: the gateway block in a bedrock cross.
-    fn place_gateway(&mut self, origin: [i32; 3]) -> Result<()> {
+    fn place_gateway(&mut self, origin: [i32; 3]) -> Result<()> { let (origin,) = match crate::points_generated::P1807.get() { Some(__l) => { let mut __a = (origin,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,) };
         for y in -2i32..=2 {
             for z in -1..=1 {
                 for x in -1..=1 {
@@ -862,7 +862,7 @@ impl Game<'_> {
     }
 
     /// `TheEndGatewayBlockEntity.setExitPosition`: the block entity alone owns the exit.
-    fn set_gateway_exit(&mut self, gateway: [i32; 3], exit: [i32; 3], exact: bool) -> Result<()> {
+    fn set_gateway_exit(&mut self, gateway: [i32; 3], exit: [i32; 3], exact: bool) -> Result<()> { let (gateway,exit,exact,) = match crate::points_generated::P1806.get() { Some(__l) => { let mut __a = (gateway,exit,exact,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gateway,exit,exact,) };
         let chunk = (gateway[0] >> 4, gateway[2] >> 4);
         if !self.world.chunks.contains_key(&chunk) {
             return Err("gateway source chunk is not loaded".into());
@@ -885,7 +885,7 @@ impl Game<'_> {
         Ok(())
     }
 
-    fn known_gateway_exit(&self, gateway: [i32; 3]) -> Option<([i32; 3], bool)> {
+    fn known_gateway_exit(&self, gateway: [i32; 3]) -> Option<([i32; 3], bool)> { let (gateway,) = match crate::points_generated::P1805.get() { Some(__l) => { let mut __a = (gateway,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (gateway,) };
         match self
             .world
             .block_entities
@@ -899,7 +899,7 @@ impl Game<'_> {
     /// Where `gateway` leads (TheEndGatewayBlockEntity.getPortalPosition):
     /// its exit, or the search for one, and the spot to load before either
     /// is resolved ([`Game::resolve_gateway`]).
-    pub(super) fn gateway_job(&mut self, gateway: [i32; 3]) -> (GatewayJob, Vec3) {
+    pub(super) fn gateway_job(&mut self, gateway: [i32; 3]) -> (GatewayJob, Vec3) { let (gateway,) = match crate::points_generated::P1804.get() { Some(__l) => { let mut __a = (gateway,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gateway,) };
         let job = GatewayJob::for_gateway(
             gateway,
             self.world
@@ -928,7 +928,7 @@ impl Game<'_> {
         (job, destination)
     }
 
-    fn chunk_empty(&self, x: f64, z: f64) -> Option<bool> {
+    fn chunk_empty(&self, x: f64, z: f64) -> Option<bool> { let (x,z,) = match crate::points_generated::P1803.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,z,) };
         let chunk = self
             .world
             .chunks
@@ -937,7 +937,7 @@ impl Game<'_> {
     }
 
     /// TheEndGatewayBlockEntity.findTallestBlock.
-    fn tallest_block(&self, around: [i32; 3], dist: i32, allow_bedrock: bool) -> [i32; 3] {
+    fn tallest_block(&self, around: [i32; 3], dist: i32, allow_bedrock: bool) -> [i32; 3] { let (around,dist,allow_bedrock,) = match crate::points_generated::P1802.get() { Some(__l) => { let mut __a = (around,dist,allow_bedrock,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (around,dist,allow_bedrock,) };
         let mut tallest: Option<[i32; 3]> = None;
         for xd in -dist..=dist {
             for zd in -dist..=dist {
@@ -962,7 +962,7 @@ impl Game<'_> {
 
     /// The teleport position of a gateway job, creating the exit gateway (and
     /// an island when the chunk has no landing spot) for new destinations.
-    pub(super) fn resolve_gateway(&mut self, job: GatewayJob, target: Vec3) -> Result<Vec3> {
+    pub(super) fn resolve_gateway(&mut self, job: GatewayJob, target: Vec3) -> Result<Vec3> { if let Some(__l) = crate::points_generated::P1801.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let bottom_center = horizon_client::end_gateway::bottom_center;
         let find_exit = |game: &Self, exit: [i32; 3]| {
             let p = game.tallest_block([exit[0], exit[1] + 2, exit[2]], 5, false);
@@ -1057,7 +1057,7 @@ impl Game<'_> {
     }
 
     /// EndIslandFeature with RandomSource.create(pos.asLong()).
-    fn place_end_island(&mut self, origin: [i32; 3]) -> Result<()> {
+    fn place_end_island(&mut self, origin: [i32; 3]) -> Result<()> { let (origin,) = match crate::points_generated::P1800.get() { Some(__l) => { let mut __a = (origin,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,) };
         let packed = ((i64::from(origin[0]) & 0x3FF_FFFF) << 38)
             | ((i64::from(origin[2]) & 0x3FF_FFFF) << 12)
             | (i64::from(origin[1]) & 0xFFF);
@@ -1085,14 +1085,14 @@ impl Game<'_> {
     /// End crystals (on the spikes, or placed in any dimension) and thrown
     /// eyes of ender, as camera-relative entity geometry (End portals and
     /// gateways are block entities).
-    pub(super) fn end_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
+    pub(super) fn end_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) { if let Some(__l) = crate::points_generated::P1799.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.end_crystal_geometry(camera, out);
         self.eye_geometry(camera, out);
     }
 
     /// EndCrystalRenderer and EndCrystalModel for the end crystals, and the
     /// beam to a crystal's target (the spikes being summoned back).
-    fn end_crystal_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
+    fn end_crystal_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) { if let Some(__l) = crate::points_generated::P1798.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (Some(model), Some(r)) = (
             self.crystal_model.as_ref(),
             self.gui
@@ -1156,7 +1156,7 @@ impl Game<'_> {
     /// EnderEyeItem.use: findNearestMapStructure over the stronghold rings,
     /// then an EyeOfEnder signalled towards it. Without a stronghold (other
     /// dimensions) nothing is thrown.
-    fn throw_ender_eye(&mut self) {
+    fn throw_ender_eye(&mut self) { if let Some(__l) = crate::points_generated::P1797.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let rings = self
             .end
             .locator
@@ -1224,7 +1224,7 @@ impl Game<'_> {
     }
 
     /// EyeOfEnder.tick: fly, then drop (4 in 5) or shatter after 80 ticks.
-    fn tick_eyes(&mut self) {
+    fn tick_eyes(&mut self) { if let Some(__l) = crate::points_generated::P1796.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut eyes = std::mem::take(&mut self.end.eyes);
         let mut shattered = Vec::new();
         eyes.retain_mut(|eye| {
@@ -1263,7 +1263,7 @@ impl Game<'_> {
 
     /// `LevelEventHandler` 2003: a shattered eye's item crumbs and two rings
     /// of portal particles drawn in towards it.
-    pub(super) fn eye_break_particles(&mut self, pos: [i32; 3]) {
+    pub(super) fn eye_break_particles(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P1795.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let (x, y, z) = (
             f64::from(pos[0]) + 0.5,
             f64::from(pos[1]),
@@ -1292,7 +1292,7 @@ impl Game<'_> {
 
     /// `EyeOfEnder.tick` on a client: behind each eye (a quarter of its last
     /// move back), four bubbles in water, else a portal particle.
-    pub(super) fn eye_particles(&mut self) {
+    pub(super) fn eye_particles(&mut self) { if let Some(__l) = crate::points_generated::P1794.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for i in 0..self.end.eyes.len() {
             let e = &self.end.eyes[i];
             let movement = (e.position - e.previous).to_array();
@@ -1320,7 +1320,7 @@ impl Game<'_> {
         }
     }
     /// ThrownItemRenderer: the ender eye item facing the camera.
-    fn eye_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
+    fn eye_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) { if let Some(__l) = crate::points_generated::P1793.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(r) = self.gui.atlas.sprites.get("item/ender_eye").copied() else {
             return;
         };
@@ -1344,7 +1344,7 @@ impl Game<'_> {
     /// pearls in the End: the gateway blocks their box swept through. A
     /// gateway that is cooling down (`TheEndGatewayBlockEntity.triggerCooldown`)
     /// takes nobody in.
-    pub(super) fn find_end_gateway_portals(&mut self) {
+    pub(super) fn find_end_gateway_portals(&mut self) { if let Some(__l) = crate::points_generated::P1792.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() || self.dim != Dim::End {
             return;
         }
@@ -1405,7 +1405,7 @@ impl Game<'_> {
     /// `ServerPlayer.onInsideBlock`, the enter_block trigger, as if they had
     /// walked in. A guest's pearl triggers theirs; one whose guest has left
     /// has no owner.
-    fn pearl_owner_in_gateway(&mut self, guest: Option<u32>, pos: BlockPos) {
+    fn pearl_owner_in_gateway(&mut self, guest: Option<u32>, pos: BlockPos) { if let Some(__l) = crate::points_generated::P1791.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let state = self.world.block(pos.x, pos.y, pos.z);
         let Some(conn) = guest else {
             self.trigger_enter_block(state);
@@ -1416,7 +1416,7 @@ impl Game<'_> {
 
     /// `Entity.handlePortal` for the entities in an End gateway: they go
     /// through to the gateway's exit, where they wait for its chunks.
-    pub(super) fn handle_end_gateway_portals(&mut self) {
+    pub(super) fn handle_end_gateway_portals(&mut self) { if let Some(__l) = crate::points_generated::P1790.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() || self.dim != Dim::End {
             return;
         }
@@ -1460,7 +1460,7 @@ impl Game<'_> {
 
     /// `Entity.teleportToPortalDestination` for an entity that goes through an
     /// End gateway: it is saved and waits for the exit's chunks.
-    fn send_through_gateway(&mut self, id: u32, gateway: BlockPos) {
+    fn send_through_gateway(&mut self, id: u32, gateway: BlockPos) { let (id,) = match crate::points_generated::P1789.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let tag = if let Some(i) = self.dropped.iter().position(|e| e.id == id) {
             let uuid = self.uuid_for(id);
             let tag = horizon_client::entity_nbt::item_entity_to_nbt(
@@ -1526,7 +1526,7 @@ impl Game<'_> {
 
     /// The entities that reached a gateway's exit: they land where the
     /// gateway leads, once its chunks have loaded.
-    pub(super) fn resolve_end_gateway_arrivals(&mut self) -> Result<()> {
+    pub(super) fn resolve_end_gateway_arrivals(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P1788.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() || self.dim != Dim::End {
             return Ok(());
         }
@@ -1541,7 +1541,7 @@ impl Game<'_> {
     /// `Entity.teleport` of a gateway traveller once its exit's chunk has
     /// loaded: an item or a mob joins the chunk it lands in, a pearl flies
     /// on from there. The traveller comes back while it still waits.
-    fn arrive_through_gateway(&mut self, arrival: GatewayArrival) -> Option<GatewayArrival> {
+    fn arrive_through_gateway(&mut self, arrival: GatewayArrival) -> Option<GatewayArrival> { if let Some(__l) = crate::points_generated::P1787.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let chunk = |at: Vec3| ((at.x.floor() as i32) >> 4, (at.z.floor() as i32) >> 4);
         if !self.world.chunks.contains_key(&chunk(arrival.target))
             || arrival
@@ -1594,7 +1594,7 @@ impl Game<'_> {
 
     /// The chunks the entities waiting to arrive need, kept loaded like the
     /// areas a server keeps around its players.
-    pub(super) fn keep_gateway_destinations(&mut self) {
+    pub(super) fn keep_gateway_destinations(&mut self) { if let Some(__l) = crate::points_generated::P1786.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let areas = &self.end.areas;
         self.streaming
             .extra

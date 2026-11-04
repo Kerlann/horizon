@@ -148,14 +148,14 @@ impl FnState {
 impl Game<'_> {
     // ---- loading -----------------------------------------------------------
 
-    fn datapack_settings_path(&self) -> std::path::PathBuf {
+    fn datapack_settings_path(&self) -> std::path::PathBuf { if let Some(__l) = crate::points_generated::P2004.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world_root.join("datapacks.json")
     }
     pub(super) fn reload_datapacks(
         &mut self,
         run_load: bool,
         enabled_features: &[String],
-    ) -> Result<PackStack, super::server_reload::ReloadStageError> {
+    ) -> Result<PackStack, super::server_reload::ReloadStageError> { let (run_load,) = match crate::points_generated::P2003.get() { Some(__l) => { let mut __a = (run_load,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (run_load,) };
         let stack = pack_stack(
             &self.world_root,
             &self.options.resources,
@@ -182,7 +182,7 @@ impl Game<'_> {
         }
         Ok(stack)
     }
-    fn save_datapack_settings(&self) {
+    fn save_datapack_settings(&self) { if let Some(__l) = crate::points_generated::P2002.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let disabled: Vec<&String> = self
             .fns
             .packs
@@ -193,7 +193,7 @@ impl Game<'_> {
         let json = serde_json::json!({"enabled": self.fns.enabled, "disabled": disabled});
         let _ = std::fs::write(self.datapack_settings_path(), json.to_string());
     }
-    pub(super) fn sync_function_registries(&mut self, stack: &PackStack) {
+    pub(super) fn sync_function_registries(&mut self, stack: &PackStack) { if let Some(__l) = crate::points_generated::P2001.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.sync_schedule_registry();
         let reg = &mut self.ui.registries;
         reg.functions = self.fns.store.functions.keys().cloned().collect();
@@ -253,16 +253,16 @@ impl Game<'_> {
         entry.tags.sort();
     }
 
-    fn sync_schedule_registry(&mut self) {
+    fn sync_schedule_registry(&mut self) { if let Some(__l) = crate::points_generated::P2000.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.ui.registries.schedules = self.fns.schedule.iter().map(|s| s.id.clone()).collect();
     }
 
     // ---- scheduled events ------------------------------------------------------
 
-    fn schedule_path(&self) -> std::path::PathBuf {
+    fn schedule_path(&self) -> std::path::PathBuf { if let Some(__l) = crate::points_generated::P1999.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world_root.join("data/minecraft/scheduled_events.dat")
     }
-    fn load_schedule(&mut self) {
+    fn load_schedule(&mut self) { if let Some(__l) = crate::points_generated::P1998.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(root) = save::read_dat(&self.schedule_path()) else {
             return;
         };
@@ -284,7 +284,7 @@ impl Game<'_> {
             });
         }
     }
-    pub(super) fn save_schedule(&self) {
+    pub(super) fn save_schedule(&self) { if let Some(__l) = crate::points_generated::P1997.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.fns.loaded || self.remote.is_some() {
             return;
         }
@@ -325,7 +325,7 @@ impl Game<'_> {
     // ---- ticking -----------------------------------------------------------------
 
     /// `ServerFunctionManager.tick` and the scheduled events.
-    pub(super) fn tick_functions(&mut self) {
+    pub(super) fn tick_functions(&mut self) { if let Some(__l) = crate::points_generated::P1996.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return;
         }
@@ -362,7 +362,7 @@ impl Game<'_> {
             self.run_function_by_id(&f, None, source);
         }
     }
-    fn run_function_by_id(&mut self, id: &str, args: Option<&Tag>, source: Source) {
+    fn run_function_by_id(&mut self, id: &str, args: Option<&Tag>, source: Source) { if let Some(__l) = crate::points_generated::P1995.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.exec.commands = 0;
         if let Some(f) = self.fns.store.functions.get(id).cloned() {
             // `ServerFunctionManager.execute` logs a function that failed to
@@ -384,7 +384,7 @@ impl Game<'_> {
         f: &Function,
         args: Option<&Tag>,
         source: Source,
-    ) -> R<Outcome> {
+    ) -> R<Outcome> { if let Some(__l) = crate::points_generated::P1994.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let lines = f.instantiate(args).map_err(|(key, a)| {
             let args: Vec<&dyn std::fmt::Display> =
                 a.iter().map(|s| s as &dyn std::fmt::Display).collect();
@@ -423,7 +423,7 @@ impl Game<'_> {
         })
     }
     /// The functions a `FunctionArgument` names: a function or a tag.
-    pub(in crate::game) fn functions_named(&mut self, name: &str) -> R<Vec<Function>> {
+    pub(in crate::game) fn functions_named(&mut self, name: &str) -> R<Vec<Function>> { if let Some(__l) = crate::points_generated::P1993.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match name.strip_prefix('#') {
             // ServerFunctionLibrary.getTag: an unknown tag is empty.
             Some(tag) => {
@@ -453,7 +453,7 @@ impl Game<'_> {
         &mut self,
         name: &str,
         args: Option<&Tag>,
-    ) -> R<Vec<Option<i32>>> {
+    ) -> R<Vec<Option<i32>>> { if let Some(__l) = crate::points_generated::P1992.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let functions = self.functions_named(name)?;
         let source = self.command_source.unwrap_or_else(|| self.player_source());
         let mut out = Vec::new();
@@ -469,7 +469,7 @@ impl Game<'_> {
 
     // ---- commands ------------------------------------------------------------------
 
-    pub(super) fn cmd_function(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_function(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1991.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Arg::Resource(name)) = ctx.get("name").cloned() else {
             return Ok(0);
         };
@@ -554,7 +554,7 @@ impl Game<'_> {
         Ok(sum)
     }
     /// `return <value>` and `return fail` (`return run` is a chain).
-    pub(super) fn cmd_return(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_return(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1990.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if id == "return.fail" {
             self.finish_return(None);
             self.exec.callback = Some(Some((false, 0)));
@@ -567,7 +567,7 @@ impl Game<'_> {
         self.finish_return(Some(value));
         Ok(value)
     }
-    pub(super) fn cmd_schedule(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_schedule(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1989.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if id == "schedule.clear" {
             let Some(Arg::Resource(name)) = ctx.get("function").cloned() else {
                 return Ok(0);
@@ -644,7 +644,7 @@ impl Game<'_> {
         Ok((tick_time.rem_euclid(i64::from(i32::MAX))) as i32)
     }
     /// ReloadCommand: the message, then the (asynchronous) reload; returns 0.
-    pub(super) fn cmd_reload(&mut self) -> R<i32> {
+    pub(super) fn cmd_reload(&mut self) -> R<i32> { if let Some(__l) = crate::points_generated::P1988.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.feedback(Text::translate("commands.reload.success", &[]));
         self.reload_datapacks(true, &self.level.enabled_features.clone())
             .map_err(Self::reload_failure)?;
@@ -652,7 +652,7 @@ impl Game<'_> {
     }
     /// `PackLocationInfo.createChatLink`: the id decorated with its source
     /// (`pack.nameAndSource`, grey) in brackets, green when enabled.
-    fn pack_link(&self, id: &str, enabled: bool) -> Text {
+    fn pack_link(&self, id: &str, enabled: bool) -> Text { let (enabled,) = match crate::points_generated::P1987.get() { Some(__l) => { let mut __a = (enabled,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (enabled,) };
         let hint = if enabled { "disable" } else { "enable" };
         let style = text::Style {
             color: Some(if enabled { text::GREEN } else { text::RED }),
@@ -686,7 +686,7 @@ impl Game<'_> {
         bracketed(name).with_style(&style)
     }
     /// The selected packs, lowest priority first.
-    fn selected_packs(&self) -> Vec<String> {
+    fn selected_packs(&self) -> Vec<String> { if let Some(__l) = crate::points_generated::P1986.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let vanilla = (!self.cmds.vanilla_disabled).then(|| "vanilla".to_owned());
         vanilla
             .into_iter()
@@ -706,7 +706,7 @@ impl Game<'_> {
     }
     /// `DataPackCommand.createPack`: a pack folder with its `data` folder and a
     /// `pack.mcmeta` in the world's datapacks folder.
-    fn create_pack(&mut self, ctx: &Context) -> R<i32> {
+    fn create_pack(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1985.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = match ctx.get("id") {
             Some(Arg::Str(s)) => s.clone(),
             _ => String::new(),
@@ -762,7 +762,7 @@ impl Game<'_> {
         ));
         Ok(1)
     }
-    pub(super) fn cmd_datapack(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_datapack(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1984.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let name = match ctx.get("name") {
             Some(Arg::Str(n)) => Some(n.clone()),
             _ => None,
@@ -908,7 +908,7 @@ impl Game<'_> {
         &mut self,
         previous_enabled: Vec<String>,
         previous_vanilla_disabled: bool,
-    ) -> R<()> {
+    ) -> R<()> { let (previous_vanilla_disabled,) = match crate::points_generated::P1983.get() { Some(__l) => { let mut __a = (previous_vanilla_disabled,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (previous_vanilla_disabled,) };
         // One resolve for the store and the tables, as `/reload`'s is: the
         // timers already in memory stay, and none come back from disk
         // (`ServerFunctionManager` keeps its queue over a pack change).
@@ -947,7 +947,7 @@ impl Game<'_> {
     // ---- predicates -------------------------------------------------------------------
 
     /// `if predicate`: a datapack predicate tested for the source entity.
-    pub(in crate::game) fn check_predicate(&mut self, id: &str) -> R<bool> {
+    pub(in crate::game) fn check_predicate(&mut self, id: &str) -> R<bool> { if let Some(__l) = crate::points_generated::P1982.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(json) = self.fns.store.predicates.get(id).cloned() else {
             return Err(err("argument.predicate.unknown", &[&id]));
         };

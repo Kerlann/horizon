@@ -132,7 +132,7 @@ fn window(w: f32, h: f32) -> (f32, f32) {
     (((w - 252.0) / 2.0).floor(), ((h - 140.0) / 2.0).floor())
 }
 impl Game<'_> {
-    pub(super) fn open_advancements(&mut self, from_pause: bool) {
+    pub(super) fn open_advancements(&mut self, from_pause: bool) { let (from_pause,) = match crate::points_generated::P470.get() { Some(__l) => { let mut __a = (from_pause,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from_pause,) };
         self.load_advancements();
         let tab = self.adv_ui.tab;
         self.adv_ui = AdvUi {
@@ -144,7 +144,7 @@ impl Game<'_> {
         self.set_screen(Screen::Advancements);
         self.capture(false);
     }
-    pub(super) fn close_advancements(&mut self) {
+    pub(super) fn close_advancements(&mut self) { if let Some(__l) = crate::points_generated::P469.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.adv_ui.from_pause {
             self.set_screen(Screen::Paused);
         } else {
@@ -152,7 +152,7 @@ impl Game<'_> {
             self.capture(true);
         }
     }
-    fn adv_cache(&mut self) {
+    fn adv_cache(&mut self) { if let Some(__l) = crate::points_generated::P468.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .adv_ui
             .cache
@@ -177,10 +177,10 @@ impl Game<'_> {
         };
         self.adv_ui.cache = Some(Cache { tree, kids, pos });
     }
-    fn adv_done(&self, i: usize) -> bool {
+    fn adv_done(&self, i: usize) -> bool { let (i,) = match crate::points_generated::P467.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         self.adv.progress.done(&self.adv.tree.list[i])
     }
-    fn adv_view(&mut self) -> View {
+    fn adv_view(&mut self) -> View { if let Some(__l) = crate::points_generated::P466.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.adv_cache();
         let Some(c) = self.adv_ui.cache.as_ref() else {
             return View {
@@ -255,7 +255,7 @@ impl Game<'_> {
             bounds,
         }
     }
-    fn adv_scroll_by(&mut self, view: &View, dx: f64, dy: f64) {
+    fn adv_scroll_by(&mut self, view: &View, dx: f64, dy: f64) { let (dx,dy,) = match crate::points_generated::P465.get() { Some(__l) => { let mut __a = (dx,dy,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (dx,dy,) };
         let (min_x, min_y, max_x, max_y) = view.bounds;
         let Some((sx, sy)) = self.adv_ui.scroll.as_mut() else {
             return;
@@ -268,7 +268,7 @@ impl Game<'_> {
         }
     }
     /// `AdvancementWidget`'s title lines, description lines and width.
-    fn adv_widget_text(&self, i: usize) -> (Vec<Text>, Vec<Text>, f32) {
+    fn adv_widget_text(&self, i: usize) -> (Vec<Text>, Vec<Text>, f32) { let (i,) = match crate::points_generated::P464.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         let font = &self.gui.atlas.font;
         let a = &self.adv.tree.list[i];
         let Some(d) = &a.display else {
@@ -316,7 +316,7 @@ impl Game<'_> {
         }
         (title, desc, longest + 3.0 + 5.0)
     }
-    pub(super) fn draw_advancements(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_advancements(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P463.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         horizon_client::widgets::begin_screen(|| {
             horizon_client::widgets::ScreenInfo::new(
                 "advancements",
@@ -546,7 +546,7 @@ impl Game<'_> {
         }
     }
     /// `AdvancementTab.tick`, run per frame at the tick rate's pace.
-    fn adv_tick_hover(&mut self, view: &View, sx: i32, sy: i32, left: f32, top: f32) {
+    fn adv_tick_hover(&mut self, view: &View, sx: i32, sy: i32, left: f32, top: f32) { let (sx,sy,left,top,) = match crate::points_generated::P462.get() { Some(__l) => { let mut __a = (sx,sy,left,top,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (sx,sy,left,top,) };
         let now = Instant::now();
         let ticks = self
             .adv_ui
@@ -596,7 +596,7 @@ impl Game<'_> {
         sy: i32,
         left: f32,
         screen_w: f32,
-    ) {
+    ) { let (i,ix,iy,sx,sy,left,screen_w,) = match crate::points_generated::P461.get() { Some(__l) => { let mut __a = (i,ix,iy,sx,sy,left,screen_w,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,ix,iy,sx,sy,left,screen_w,) };
         let (title, desc, width) = self.adv_widget_text(i);
         let tree = self.adv.tree.clone();
         let a = &tree.list[i];
@@ -746,7 +746,7 @@ impl Game<'_> {
         self.draw_item(batch, &icon, ix + f(x + 8), iy + f(y + 5));
     }
     /// A left button press or release.
-    pub(super) fn advancements_mouse(&mut self, pressed: bool, size: [u32; 2]) {
+    pub(super) fn advancements_mouse(&mut self, pressed: bool, size: [u32; 2]) { let (pressed,size,) = match crate::points_generated::P460.get() { Some(__l) => { let mut __a = (pressed,size,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pressed,size,) };
         if !pressed {
             self.adv_ui.drag = None;
             self.adv_ui.scrolling = false;
@@ -785,7 +785,7 @@ impl Game<'_> {
     }
     /// `mouseDragged` with the left button: the first step starts
     /// scrolling, later ones move the tree.
-    pub(super) fn advancements_drag(&mut self) {
+    pub(super) fn advancements_drag(&mut self) { if let Some(__l) = crate::points_generated::P459.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(last) = self.adv_ui.drag else {
             return;
         };
@@ -798,7 +798,7 @@ impl Game<'_> {
         let view = self.adv_view();
         self.adv_scroll_by(&view, f64::from(dx), f64::from(dy));
     }
-    pub(super) fn advancements_scroll(&mut self, x: f32, y: f32) {
+    pub(super) fn advancements_scroll(&mut self, x: f32, y: f32) { let (x,y,) = match crate::points_generated::P458.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,y,) };
         let view = self.adv_view();
         self.adv_scroll_by(&view, f64::from(x) * 16.0, f64::from(y) * 16.0);
     }

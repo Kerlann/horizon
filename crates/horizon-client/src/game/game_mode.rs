@@ -29,29 +29,29 @@ pub(super) fn loads_chunks(spectators_generate_chunks: bool, spectator: bool) ->
     !spectator || spectators_generate_chunks
 }
 impl Game<'_> {
-    pub(super) fn spectator(&self) -> bool {
+    pub(super) fn spectator(&self) -> bool { if let Some(__l) = crate::points_generated::P2015.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.mode == GameMode::Spectator
     }
     /// `Abilities.mayBuild`.
-    pub(super) fn may_build(&self) -> bool {
+    pub(super) fn may_build(&self) -> bool { if let Some(__l) = crate::points_generated::P2014.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.acting_abilities.map_or(
             matches!(self.mode, GameMode::Survival | GameMode::Creative),
             |a| a.may_build,
         )
     }
     /// `Abilities.instabuild`. A client and the in-frame world derive it from the mode.
-    pub(super) fn instabuild(&self) -> bool {
+    pub(super) fn instabuild(&self) -> bool { if let Some(__l) = crate::points_generated::P2013.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.acting_abilities
             .map_or(self.creative, |a| a.instabuild)
     }
-    pub(super) fn mode_id(&self) -> i32 {
+    pub(super) fn mode_id(&self) -> i32 { if let Some(__l) = crate::points_generated::P2012.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mode_id_of(self.mode)
     }
-    pub(super) fn set_mode_id(&mut self, id: i32) {
+    pub(super) fn set_mode_id(&mut self, id: i32) { let (id,) = match crate::points_generated::P2011.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.set_mode(mode_from_id(id));
     }
     /// `ServerPlayer.setGameMode` and `GameType.updatePlayerAbilities`.
-    pub(super) fn set_mode(&mut self, mode: GameMode) {
+    pub(super) fn set_mode(&mut self, mode: GameMode) { if let Some(__l) = crate::points_generated::P2010.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let was_spectator = self.spectator();
         let changed = mode != self.mode;
         // MultiPlayerGameMode.setLocalMode: the mode it leaves.
@@ -124,7 +124,7 @@ impl Game<'_> {
     /// `can_place_on` component (`AdventureModePredicate`: one block predicate
     /// or a list) matches the block at `pos`. Predicates with `nbt` or
     /// `components` need the block entity's data and never match.
-    fn adventure_predicate(&self, component: &str, pos: [i32; 3]) -> bool {
+    fn adventure_predicate(&self, component: &str, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P2009.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         use horizon_world::nbt::Tag;
         let Some(tag) = self
             .held()
@@ -191,7 +191,7 @@ impl Game<'_> {
         }
     }
     /// A `HolderSet<Block>` entry: a block id or a `#tag`.
-    fn block_in_holder_set(&self, entry: &str, block: &str) -> bool {
+    fn block_in_holder_set(&self, entry: &str, block: &str) -> bool { if let Some(__l) = crate::points_generated::P2008.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let namespaced = |id: &str| {
             if id.contains(':') {
                 id.to_owned()
@@ -207,7 +207,7 @@ impl Game<'_> {
     /// `Player.blockActionRestricted` for the block at `pos`: spectators never
     /// act on blocks, adventure players only with a main-hand item whose
     /// `can_break` matches it.
-    pub(super) fn block_action_restricted(&self, pos: [i32; 3]) -> bool {
+    pub(super) fn block_action_restricted(&self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P2007.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         if self.spectator() {
             return true;
         }
@@ -215,11 +215,11 @@ impl Game<'_> {
     }
     /// `ItemStack.useOn` in adventure mode: the used item's `can_place_on`
     /// matches the clicked block (`Player.mayUseItemAt`).
-    pub(super) fn can_place_on_in_adventure(&self, clicked: [i32; 3]) -> bool {
+    pub(super) fn can_place_on_in_adventure(&self, clicked: [i32; 3]) -> bool { let (clicked,) = match crate::points_generated::P2006.get() { Some(__l) => { let mut __a = (clicked,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (clicked,) };
         self.adventure_predicate("minecraft:can_place_on", clicked)
     }
     /// `ServerPlayer.setGameMode(SPECTATOR)`: `stopRiding`.
-    fn dismount_for_spectator(&mut self) {
+    fn dismount_for_spectator(&mut self) { if let Some(__l) = crate::points_generated::P2005.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(id) = self.riding else {
             return;
         };

@@ -16,7 +16,7 @@ use mod_api::{EntityRef, NativeSoundSource, PlayerRef};
 
 impl Game<'_> {
     /// Where `player` is reached now: the window's own player or a guest.
-    fn native_player_sound_target(&self, player: PlayerRef) -> Option<Target> {
+    fn native_player_sound_target(&self, player: PlayerRef) -> Option<Target> { if let Some(__l) = crate::points_generated::P4192.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.native_player_ref(player.uuid()) != Some(player) {
             return None;
         }
@@ -27,7 +27,7 @@ impl Game<'_> {
     }
     /// Whether the server's registry has `sound`, when it is a vanilla
     /// event; a mod's goes by name.
-    fn native_sound_known(&self, sound: &str) -> bool {
+    fn native_sound_known(&self, sound: &str) -> bool { if let Some(__l) = crate::points_generated::P4191.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         !sound.starts_with("minecraft:")
             || self.lan.as_ref().is_none_or(|host| {
                 host.hub
@@ -43,7 +43,7 @@ impl Game<'_> {
         player: PlayerRef,
         sound: Option<&str>,
         source: Option<NativeSoundSource>,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4190.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(target) = self.native_player_sound_target(player) else {
             return false;
         };
@@ -64,7 +64,7 @@ impl Game<'_> {
         source: NativeSoundSource,
         volume: f32,
         pitch: f32,
-    ) -> bool {
+    ) -> bool { let (volume,pitch,) = match crate::points_generated::P4189.get() { Some(__l) => { let mut __a = (volume,pitch,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (volume,pitch,) };
         let Some(target) = self.native_player_sound_target(player) else {
             return false;
         };
@@ -92,7 +92,7 @@ impl Game<'_> {
         source: NativeSoundSource,
         volume: f32,
         pitch: f32,
-    ) -> bool {
+    ) -> bool { let (volume,pitch,) = match crate::points_generated::P4188.get() { Some(__l) => { let mut __a = (volume,pitch,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (volume,pitch,) };
         let Some(target) = self.native_entity_target(entity) else {
             return false;
         };

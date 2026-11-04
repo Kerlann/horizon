@@ -10,12 +10,12 @@ const MIB: u64 = 1024 * 1024;
 
 impl Game<'_> {
     /// The render distance in use: the player's, unless memory holds it lower.
-    pub(super) fn render_distance_in_use(&self) -> i32 {
+    pub(super) fn render_distance_in_use(&self) -> i32 { if let Some(__l) = crate::points_generated::P4720.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.ram_limit.distance(self.settings.render_distance)
     }
 
     /// Once a second, on the window's game while a world is open.
-    pub(super) fn tick_ram_limit(&mut self) {
+    pub(super) fn tick_ram_limit(&mut self) { if let Some(__l) = crate::points_generated::P4719.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.ticks.is_multiple_of(20) {
             return;
         }
@@ -65,7 +65,7 @@ impl Game<'_> {
 
     /// The streaming radius follows the distance in use, within what the server sends; the server
     /// hears of it with the next `ClientInformation` or `set_distances`.
-    fn apply_render_distance_in_use(&mut self) {
+    fn apply_render_distance_in_use(&mut self) { if let Some(__l) = crate::points_generated::P4718.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let distance = self.render_distance_in_use();
         self.streaming.radius = match &self.remote {
             Some(r) if r.logged_in => distance.min(r.view_distance + 1).max(2),
@@ -74,7 +74,7 @@ impl Game<'_> {
     }
 
     /// `/ramlimit`, answered here on any server. False: another command.
-    pub(super) fn ram_limit_command(&mut self, command: &str) -> bool {
+    pub(super) fn ram_limit_command(&mut self, command: &str) -> bool { if let Some(__l) = crate::points_generated::P4717.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(answer) = ram_limit::run(command) else {
             return false;
         };

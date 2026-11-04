@@ -164,7 +164,7 @@ fn guest_view(mut v: PlayerView, uuid: u128, moved: [f64; 3]) -> PlayerView {
 impl Game<'_> {
     /// How mobs see each guest in play (`player_view` with the guest swapped
     /// in).
-    pub(super) fn lan_guest_views(&mut self) -> GuestViews {
+    pub(super) fn lan_guest_views(&mut self) -> GuestViews { if let Some(__l) = crate::points_generated::P2368.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return Vec::new();
         };
@@ -216,7 +216,7 @@ impl Game<'_> {
     }
 
     /// Mob events aimed at a guest, run as that guest (`guest_hit_by`).
-    pub(super) fn lan_guest_mob_events(&mut self, events: Vec<(u32, MobEvent)>) {
+    pub(super) fn lan_guest_mob_events(&mut self, events: Vec<(u32, MobEvent)>) { if let Some(__l) = crate::points_generated::P2367.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if events.is_empty() {
             return;
         }
@@ -231,7 +231,7 @@ impl Game<'_> {
     /// tripwires, detector rails): `Entity.checkInsideBlocks` and
     /// `Level.getEntities` see every player in the level, but not spectators
     /// (`Entity.isIgnoringBlockTriggers`).
-    pub(super) fn lan_block_trigger_boxes(&self) -> Vec<([f64; 3], [f64; 3])> {
+    pub(super) fn lan_block_trigger_boxes(&self) -> Vec<([f64; 3], [f64; 3])> { if let Some(__l) = crate::points_generated::P2366.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return Vec::new();
         };
@@ -247,7 +247,7 @@ impl Game<'_> {
             .collect()
     }
     /// The same guests' cast fishing hooks, for `GameLevel::trigger_projectiles`.
-    pub(super) fn lan_hook_triggers(&self, out: &mut Vec<(Aabb, bool)>) {
+    pub(super) fn lan_hook_triggers(&self, out: &mut Vec<(Aabb, bool)>) { if let Some(__l) = crate::points_generated::P2365.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -262,7 +262,7 @@ impl Game<'_> {
     }
     /// The same guests' feet and whether they stand on the ground, for the
     /// blocks that also ask that (`BigDripleafBlock.canEntityTilt`).
-    pub(super) fn lan_guest_feet(&self) -> Vec<([f64; 3], bool)> {
+    pub(super) fn lan_guest_feet(&self) -> Vec<([f64; 3], bool)> { if let Some(__l) = crate::points_generated::P2364.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return Vec::new();
         };
@@ -275,7 +275,7 @@ impl Game<'_> {
     }
 
     /// The guests a projectile can hit, under their entity ids.
-    pub(super) fn lan_projectile_targets(&self) -> Vec<(Who, Aabb)> {
+    pub(super) fn lan_projectile_targets(&self) -> Vec<(Who, Aabb)> { if let Some(__l) = crate::points_generated::P2363.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return Vec::new();
         };
@@ -289,7 +289,7 @@ impl Game<'_> {
 
     /// A projectile that hit a guest: its hit runs as theirs. False when
     /// `id` is not a guest.
-    pub(super) fn lan_projectile_hit(&mut self, p: &Projectile, id: u32, at: Vec3) -> bool {
+    pub(super) fn lan_projectile_hit(&mut self, p: &Projectile, id: u32, at: Vec3) -> bool { let (id,) = match crate::points_generated::P2362.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(host) = self.lan.as_ref() else {
             return false;
         };
@@ -358,7 +358,7 @@ impl Game<'_> {
     }
 
     /// ClientboundSetEntityMotionPacket to a guest about themselves.
-    pub(super) fn send_guest_motion(&self, conn: u32, velocity: Option<Vec3>) {
+    pub(super) fn send_guest_motion(&self, conn: u32, velocity: Option<Vec3>) { let (conn,) = match crate::points_generated::P2361.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,) };
         if let (Some(v), Some(g)) = (
             velocity,
             self.lan.as_ref().and_then(|host| host.hub.guest(conn)),
@@ -387,7 +387,7 @@ pub(super) struct Present {
 
 impl Game<'_> {
     /// Every guest in the world (`ServerLevel.getPlayers` past the host).
-    pub(super) fn lan_present(&self) -> Vec<Present> {
+    pub(super) fn lan_present(&self) -> Vec<Present> { if let Some(__l) = crate::points_generated::P2360.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let guests = self
             .lan
             .iter()
@@ -416,7 +416,7 @@ impl Game<'_> {
             .collect()
     }
     /// The UUID of the player acting: the guest `as_guest` runs, else the host.
-    pub(super) fn acting_uuid(&self) -> [i32; 4] {
+    pub(super) fn acting_uuid(&self) -> [i32; 4] { if let Some(__l) = crate::points_generated::P2359.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.lan_acting_uuid
             .map(horizon_client::lan::playerdata::uuid_ints)
             .or(self.level.player_uuid)

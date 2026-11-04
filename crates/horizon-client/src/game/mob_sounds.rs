@@ -13,7 +13,7 @@ impl Game<'_> {
     /// `LocalPlayer.startRiding` on a happy ghast or an `AbstractNautilus`:
     /// its riding sound (a minecart's are `start_cart_sounds`'). Then what the
     /// instance reads about the mob the player rides.
-    pub(super) fn start_riding_sound(&mut self) -> Option<RiddenSound> {
+    pub(super) fn start_riding_sound(&mut self) -> Option<RiddenSound> { if let Some(__l) = crate::points_generated::P2780.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ridden = self
             .riding
             .and_then(|id| self.mobs.iter().find(|m| m.id == id && !m.removed))
@@ -58,7 +58,7 @@ impl Game<'_> {
     /// Start the buzz of each bee that has none (or whose anger changed, which
     /// swaps the flying loop for the aggressive one and back), forget the mobs
     /// that are gone, and read what the instances follow.
-    pub(super) fn start_mob_sounds(&mut self) -> Vec<MobSound> {
+    pub(super) fn start_mob_sounds(&mut self) -> Vec<MobSound> { if let Some(__l) = crate::points_generated::P2779.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let game_time = self.world.game_time;
         let mobs: Vec<MobSound> = self
             .mobs
@@ -111,7 +111,7 @@ impl Game<'_> {
     /// `ClientPacketListener.handleEntityEvent` 21: a guardian's attack
     /// hum starts (one loop per guardian; the loops of its earlier beams are
     /// the same loop, as each one follows the guardian's charge).
-    pub(super) fn start_guardian_sound(&mut self, id: u32) {
+    pub(super) fn start_guardian_sound(&mut self, id: u32) { let (id,) = match crate::points_generated::P2778.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(m) = self.mobs.iter().find(|m| {
             m.id == id && matches!(m.species(), Species::Guardian | Species::ElderGuardian)
         }) else {

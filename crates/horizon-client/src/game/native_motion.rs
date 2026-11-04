@@ -19,7 +19,7 @@ impl Game<'_> {
     /// For a client mod: a push added to the local player's velocity, in blocks a tick, as an
     /// explosion's knockback is (the window's player moves itself, as vanilla's client does). Each component is
     /// clamped to -4..4; a spectator, or a value that is not a number, is left alone.
-    pub(super) fn native_push_player(&mut self, kick: [f32; 3]) {
+    pub(super) fn native_push_player(&mut self, kick: [f32; 3]) { let (kick,) = match crate::points_generated::P4000.get() { Some(__l) => { let mut __a = (kick,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (kick,) };
         if let Some(p) = self.player.as_mut()
             && !p.spectator
             && let Some([x, y, z]) = pushed([p.velocity.x, p.velocity.y, p.velocity.z], kick)

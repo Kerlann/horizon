@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 impl Game<'_> {
     /// Dispatch on the server thread with the exact full-chunk save copies.
-    pub(super) fn native_full_chunk_snapshots(&mut self, chunks: &[Arc<Chunk>]) {
+    pub(super) fn native_full_chunk_snapshots(&mut self, chunks: &[Arc<Chunk>]) { if let Some(__l) = crate::points_generated::P2947.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() || mod_api::mods().is_empty() {
             return;
         }
@@ -15,7 +15,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn native_late_full_chunk_snapshot(&mut self, chunk: &Chunk) {
+    pub(super) fn native_late_full_chunk_snapshot(&mut self, chunk: &Chunk) { if let Some(__l) = crate::points_generated::P2946.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_none() && !mod_api::mods().is_empty() {
             self.native_full_chunk_snapshot(chunk);
         }
@@ -24,7 +24,7 @@ impl Game<'_> {
     fn native_full_chunk_snapshot(&mut self, _chunk: &Chunk) {}
 
     /// The proto stays checked out until all callbacks return and the save is submitted.
-    pub(super) fn native_proto_snapshots(&mut self, protos: &[ProtoSave]) {
+    pub(super) fn native_proto_snapshots(&mut self, protos: &[ProtoSave]) { if let Some(__l) = crate::points_generated::P2945.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() || mod_api::mods().is_empty() {
             return;
         }

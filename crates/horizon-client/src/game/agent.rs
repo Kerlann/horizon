@@ -314,11 +314,11 @@ pub(super) enum Handled {
 }
 
 impl Game<'_> {
-    pub(super) fn state_string(&self, state: BlockStateId) -> String {
+    pub(super) fn state_string(&self, state: BlockStateId) -> String { if let Some(__l) = crate::points_generated::P506.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_block_state_string(state)
             .unwrap_or_else(|| "?".into())
     }
-    fn block_json(&self, pos: [i32; 3]) -> Value {
+    fn block_json(&self, pos: [i32; 3]) -> Value { let (pos,) = match crate::points_generated::P505.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let mut v = json!({
             "pos": pos,
@@ -340,7 +340,7 @@ impl Game<'_> {
         }
         v
     }
-    pub(super) fn stack_value(&self, s: &ItemStack) -> Value {
+    pub(super) fn stack_value(&self, s: &ItemStack) -> Value { if let Some(__l) = crate::points_generated::P504.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut v = json!({ "item": &*s.item, "count": s.count });
         if s.damage > 0 {
             v["damage"] = json!(s.damage);
@@ -350,7 +350,7 @@ impl Game<'_> {
         }
         v
     }
-    fn slot_value(&self, slot: usize, s: &Option<ItemStack>) -> Value {
+    fn slot_value(&self, slot: usize, s: &Option<ItemStack>) -> Value { let (slot,) = match crate::points_generated::P503.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         match s {
             Some(s) => {
                 let mut v = self.stack_value(s);
@@ -360,13 +360,13 @@ impl Game<'_> {
             None => json!({ "slot": slot, "item": null }),
         }
     }
-    fn need_world(&self) -> Result<()> {
+    fn need_world(&self) -> Result<()> { if let Some(__l) = crate::points_generated::P502.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.title.is_some() {
             return Err("no world open (title screen); use: open WORLD [SEED] [creative]".into());
         }
         Ok(())
     }
-    fn playing(&self) -> Result<()> {
+    fn playing(&self) -> Result<()> { if let Some(__l) = crate::points_generated::P501.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.title.is_some() {
             return Err("no world open (title screen); use: open WORLD [SEED] [creative]".into());
         }
@@ -382,7 +382,7 @@ impl Game<'_> {
         }
         Ok(())
     }
-    pub(super) fn screen_label(&self) -> &'static str {
+    pub(super) fn screen_label(&self) -> &'static str { if let Some(__l) = crate::points_generated::P500.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.dialog_open() {
             return "dialog";
         }
@@ -421,7 +421,7 @@ impl Game<'_> {
             Screen::Mod => "mod",
         }
     }
-    pub(super) fn inventory_counts(&self) -> BTreeMap<String, i64> {
+    pub(super) fn inventory_counts(&self) -> BTreeMap<String, i64> { if let Some(__l) = crate::points_generated::P499.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         counts(
             self.inventory
                 .iter()
@@ -434,7 +434,7 @@ impl Game<'_> {
     }
 
     /// The block or entity under the crosshair.
-    fn looking_at(&self) -> Value {
+    fn looking_at(&self) -> Value { if let Some(__l) = crate::points_generated::P498.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(eye) = self.eye_position() else {
             return Value::Null;
         };
@@ -459,7 +459,7 @@ impl Game<'_> {
         json!({ "kind": kind, "block": block, "entity": entity })
     }
 
-    pub(super) fn state_value(&self) -> Value {
+    pub(super) fn state_value(&self) -> Value { if let Some(__l) = crate::points_generated::P497.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let player = self.player.as_ref().map(|p| {
             json!({
                 "position": [p.position.x, p.position.y, p.position.z],
@@ -530,15 +530,15 @@ impl Game<'_> {
     }
 
     /// Splitscreen's profile page, a joining player's (`split_profiles`).
-    fn split_profiles_open(&self) -> bool {
+    fn split_profiles_open(&self) -> bool { if let Some(__l) = crate::points_generated::P496.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.screen == Screen::Options
             && self.ui.options.page() == horizon_client::options_ui::Page::SplitProfiles
     }
-    fn split_setup_open(&self) -> bool {
+    fn split_setup_open(&self) -> bool { if let Some(__l) = crate::points_generated::P495.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.screen == Screen::Options
             && self.ui.options.page() == horizon_client::options_ui::Page::SplitSetup
     }
-    fn title_value(&self) -> Value {
+    fn title_value(&self) -> Value { if let Some(__l) = crate::points_generated::P494.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::title::Mode;
         if self.split_profiles_open() {
             return self.ui.options.split_profiles.state();
@@ -663,7 +663,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn entities_value(&self, radius: f64, kind: Option<&str>) -> Value {
+    pub(super) fn entities_value(&self, radius: f64, kind: Option<&str>) -> Value { let (radius,) = match crate::points_generated::P493.get() { Some(__l) => { let mut __a = (radius,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (radius,) };
         let Some(p) = &self.player else {
             return json!({ "entities": [] });
         };
@@ -717,7 +717,7 @@ impl Game<'_> {
         json!({ "entities": list.into_iter().map(|(_, v)| v).collect::<Vec<_>>() })
     }
 
-    pub(super) fn inventory_value(&self) -> Value {
+    pub(super) fn inventory_value(&self) -> Value { if let Some(__l) = crate::points_generated::P492.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let armor = ["head", "chest", "legs", "feet"];
         json!({
             "selected": self.selected + 1,
@@ -735,7 +735,7 @@ impl Game<'_> {
         })
     }
 
-    fn screen_value(&mut self) -> Value {
+    fn screen_value(&mut self) -> Value { if let Some(__l) = crate::points_generated::P491.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let buttons: Vec<Value> = widgets::last()
             .iter()
             .map(|w| json!({ "label": w.label, "enabled": w.enabled, "x": w.x, "y": w.y, "w": w.w, "h": w.h }))
@@ -797,7 +797,7 @@ impl Game<'_> {
         v
     }
 
-    fn messages_value(&self, n: usize) -> Value {
+    fn messages_value(&self, n: usize) -> Value { let (n,) = match crate::points_generated::P490.get() { Some(__l) => { let mut __a = (n,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (n,) };
         let titles = &self.titles;
         json!({
             "chat": self.remote_chat(n).unwrap_or_else(|| self.ui.chat.recent_lines(n)),
@@ -816,7 +816,7 @@ impl Game<'_> {
         goal: [f64; 3],
         near: f64,
         blocked: &[(Node, Node)],
-    ) -> Option<Plan> {
+    ) -> Option<Plan> { let (goal,near,) = match crate::points_generated::P489.get() { Some(__l) => { let mut __a = (goal,near,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (goal,near,) };
         navigation::find_path(from, goal, near, blocked, |n| {
             if !self.world.chunks.contains_key(&(n[0] >> 4, n[2] >> 4)) {
                 return None;
@@ -831,7 +831,7 @@ impl Game<'_> {
     }
 
     /// Point the view at `at` from the eye.
-    fn face_point(&mut self, at: [f64; 3]) -> Result<()> {
+    fn face_point(&mut self, at: [f64; 3]) -> Result<()> { let (at,) = match crate::points_generated::P488.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let eye = self.eye_position().ok_or("no player")?;
         let (yaw, pitch) = yaw_pitch(eye, at);
         self.yaw = yaw;
@@ -839,7 +839,7 @@ impl Game<'_> {
         Ok(())
     }
     /// Aim at a face of `pos` the crosshair can reach; the face hit.
-    fn aim_block(&mut self, pos: [i32; 3], face: Option<[i32; 3]>) -> Result<[i32; 3]> {
+    fn aim_block(&mut self, pos: [i32; 3], face: Option<[i32; 3]>) -> Result<[i32; 3]> { let (pos,) = match crate::points_generated::P487.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let eye = self.eye_position().ok_or("no player")?;
         let centre = pos.map(|v| f64::from(v) + 0.5);
         let mut faces: Vec<[i32; 3]> = match face {
@@ -878,10 +878,10 @@ impl Game<'_> {
     }
 
     /// A left or right click, as the mouse would.
-    fn agent_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> {
+    fn agent_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> { let (pressed,) = match crate::points_generated::P486.get() { Some(__l) => { let mut __a = (pressed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pressed,) };
         self.play_mouse(button, pressed)
     }
-    fn release_agent_keys(&mut self) {
+    fn release_agent_keys(&mut self) { if let Some(__l) = crate::points_generated::P485.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for k in MOVE_KEYS {
             self.keys.remove(&k);
         }
@@ -900,7 +900,7 @@ impl Game<'_> {
         x: f32,
         y: f32,
         button: MouseButton,
-    ) -> Result<()> {
+    ) -> Result<()> { let (x,y,) = match crate::points_generated::P484.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,y,) };
         self.synth_drag(event_loop, &[(x, y)], button)
     }
     /// The window events of a press at the first GUI point, moves through
@@ -910,7 +910,7 @@ impl Game<'_> {
         event_loop: &dyn EventLoopCtl,
         points: &[(f32, f32)],
         button: MouseButton,
-    ) -> Result<()> {
+    ) -> Result<()> { if let Some(__l) = crate::points_generated::P483.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = self.window.as_ref().ok_or("no window yet")?.id();
         let scale = self
             .renderer
@@ -961,7 +961,7 @@ impl Game<'_> {
         kind: TaskKind,
         reply: &Sender<String>,
         timeout: f64,
-    ) -> Result<Handled> {
+    ) -> Result<Handled> { let (timeout,) = match crate::points_generated::P482.get() { Some(__l) => { let mut __a = (timeout,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (timeout,) };
         self.agent.task = Some(Task {
             kind,
             reply: reply.clone(),
@@ -972,7 +972,7 @@ impl Game<'_> {
     }
 
     /// A deferred agent action (goto, break, wait...) is still running.
-    pub(super) fn agent_busy(&self) -> bool {
+    pub(super) fn agent_busy(&self) -> bool { if let Some(__l) = crate::points_generated::P481.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.agent.task.is_some()
     }
 
@@ -983,7 +983,7 @@ impl Game<'_> {
         line: &str,
         reply: &Sender<String>,
         event_loop: &dyn EventLoopCtl,
-    ) -> Result<Handled> {
+    ) -> Result<Handled> { if let Some(__l) = crate::points_generated::P480.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let name = words[0];
         let a = parse_args(&words[1..]);
         let ok = |v: Value| Ok(Handled::Reply(v));
@@ -1718,7 +1718,7 @@ impl Game<'_> {
     }
 
     /// Select the hotbar slot holding `item`.
-    fn select_item(&mut self, item: &str) -> Result<()> {
+    fn select_item(&mut self, item: &str) -> Result<()> { if let Some(__l) = crate::points_generated::P479.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(i) =
             (0..9).find(|&i| self.inventory[i].as_ref().is_some_and(|s| &*s.item == item))
         {
@@ -1736,7 +1736,7 @@ impl Game<'_> {
 
     /// Mouse motion turns the view only in the world with no screen open
     /// (`MouseHandler` turns the player while the mouse is grabbed).
-    fn turning(&self) -> Result<()> {
+    fn turning(&self) -> Result<()> { if let Some(__l) = crate::points_generated::P478.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.playing()?;
         if self.agent.glide.is_some() {
             return Err("already turning; wait for it or send stop".into());
@@ -1750,7 +1750,7 @@ impl Game<'_> {
         over: f64,
         aim: Option<&'static str>,
         reply: &Sender<String>,
-    ) -> Result<Handled> {
+    ) -> Result<Handled> { let (over,) = match crate::points_generated::P477.get() { Some(__l) => { let mut __a = (over,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (over,) };
         if !over.is_finite() || !(0.0..=60.0).contains(&over) {
             return Err("--over takes 0 to 60 seconds".into());
         }
@@ -1775,7 +1775,7 @@ impl Game<'_> {
 
     /// Feed the motion due by now (eased over the glide's time); reply once
     /// all of it has been turned by a frame.
-    fn advance_glide(&mut self) {
+    fn advance_glide(&mut self) { if let Some(__l) = crate::points_generated::P476.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut g) = self.agent.glide.take() else {
             return;
         };
@@ -1832,7 +1832,7 @@ impl Game<'_> {
     }
 
     /// Advance the running agent task; reply when it ends.
-    pub(super) fn advance_agent(&mut self) {
+    pub(super) fn advance_agent(&mut self) { if let Some(__l) = crate::points_generated::P475.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.advance_glide();
         let Some(mut task) = self.agent.task.take() else {
             return;
@@ -1850,14 +1850,14 @@ impl Game<'_> {
         }
     }
 
-    fn position(&self) -> [f64; 3] {
+    fn position(&self) -> [f64; 3] { if let Some(__l) = crate::points_generated::P474.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player
             .as_ref()
             .map_or([0.0; 3], |p| [p.position.x, p.position.y, p.position.z])
     }
 
     /// One frame of a task: Some(reply) when it is over.
-    fn step_task(&mut self, kind: &mut TaskKind, timed_out: bool) -> Option<Value> {
+    fn step_task(&mut self, kind: &mut TaskKind, timed_out: bool) -> Option<Value> { let (timed_out,) = match crate::points_generated::P473.get() { Some(__l) => { let mut __a = (timed_out,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (timed_out,) };
         // Leaving the world (death, a screen, the title) ends movement tasks.
         let interrupted = if self.title.is_some() || self.player.is_none() {
             Some("the world closed")
@@ -1992,7 +1992,7 @@ impl Game<'_> {
         }
     }
 
-    fn step_goto(&mut self, g: &mut Goto, timed_out: bool) -> Option<Value> {
+    fn step_goto(&mut self, g: &mut Goto, timed_out: bool) -> Option<Value> { let (timed_out,) = match crate::points_generated::P472.get() { Some(__l) => { let mut __a = (timed_out,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (timed_out,) };
         let p = self.position();
         let on_ground = self.player.as_ref().is_some_and(|p| p.ground.on_ground);
         let horizontal =
@@ -2096,7 +2096,7 @@ impl Game<'_> {
         b: &mut Break,
         timed_out: bool,
         interrupted: Option<&str>,
-    ) -> Option<Value> {
+    ) -> Option<Value> { let (timed_out,) = match crate::points_generated::P471.get() { Some(__l) => { let mut __a = (timed_out,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (timed_out,) };
         let state = self.world.block(b.pos[0], b.pos[1], b.pos[2]);
         if b.collect_until.is_none() {
             if let Some(why) = interrupted {

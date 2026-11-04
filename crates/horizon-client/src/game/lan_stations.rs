@@ -59,7 +59,7 @@ pub(super) fn menu_of(kind: StationKind) -> Option<(&'static str, Kind, std::ops
 impl Game<'_> {
     /// A workstation a guest's use opened (`ServerPlayer.openMenu`); false
     /// when guests can't use that one yet.
-    pub(super) fn lan_open_station(&mut self, conn: u32, station: &Station) -> bool {
+    pub(super) fn lan_open_station(&mut self, conn: u32, station: &Station) -> bool { let (conn,) = match crate::points_generated::P2454.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some((menu_type, kind, _)) = menu_of(station.kind) else {
             return false;
         };
@@ -282,14 +282,14 @@ impl Game<'_> {
 
     /// How many slots of its own the guest's open station menu has before the
     /// player's inventory (`slot_count - 36`), if one is open.
-    pub(super) fn lan_station_own_slots(&self, conn: u32) -> Option<usize> {
+    pub(super) fn lan_station_own_slots(&self, conn: u32) -> Option<usize> { let (conn,) = match crate::points_generated::P2453.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,) };
         let gs = self.lan.as_ref()?.play.get(&conn)?.station.as_ref()?;
         Some(gs.menu.slot_count() - 36)
     }
 
     /// `LecternBlock.openScreen` for a guest: `minecraft:lectern` over the
     /// block entity, with its book and page.
-    pub(super) fn lan_open_lectern(&mut self, conn: u32, key: (i32, i32, i32)) {
+    pub(super) fn lan_open_lectern(&mut self, conn: u32, key: (i32, i32, i32)) { let (conn,) = match crate::points_generated::P2452.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         if !self.guest_may_open(conn, "minecraft:lectern", Some([key.0, key.1, key.2])) {
             return;
         }
@@ -316,7 +316,7 @@ impl Game<'_> {
 
     /// The lectern's book and page for the client: everything (`all`), or
     /// what changed since it was last sent.
-    fn lan_send_lectern(&mut self, conn: u32, all: bool) {
+    fn lan_send_lectern(&mut self, conn: u32, all: bool) { let (conn,all,) = match crate::points_generated::P2451.get() { Some(__l) => { let mut __a = (conn,all,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,all,) };
         let Some((key, window, sent)) = self
             .lan
             .as_ref()
@@ -424,7 +424,7 @@ impl Game<'_> {
     }
 
     /// A click on the guest's lectern window; false for other windows.
-    pub(super) fn lan_lectern_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool {
+    pub(super) fn lan_lectern_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool { let (conn,) = match crate::points_generated::P2450.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         self.lan_lectern_op(conn, p.container, |menu, env| {
             let _ = menu.click(env, i32::from(p.slot), i32::from(p.button), input(p.input));
         })
@@ -439,7 +439,7 @@ impl Game<'_> {
         conn: u32,
         gs: &mut GuestStation,
         craft: Option<&AnvilCraft>,
-    ) {
+    ) { let (conn,) = match crate::points_generated::P2449.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let change = std::mem::take(&mut gs.menu.level_change);
         if change != 0 {
             self.as_guest(conn, |g| g.give_levels(change));
@@ -467,7 +467,7 @@ impl Game<'_> {
 
     /// `EnchantmentMenu.slotsChanged` with a level: the costs and clues for
     /// the guest's seed and the bookshelves around the table.
-    fn lan_enchant_offers(&mut self, gi: usize, gs: &mut GuestStation) {
+    fn lan_enchant_offers(&mut self, gi: usize, gs: &mut GuestStation) { let (gi,) = match crate::points_generated::P2448.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let (seed, guest_uuid, guest_entity_id, guest_name) = self
             .lan
             .as_ref()
@@ -563,7 +563,7 @@ impl Game<'_> {
     /// `EnchantmentMenu.clickMenuButton`'s `access.execute`: the item gets
     /// the offer's enchantments, the guest pays its levels and lapis and
     /// gets a new seed, the table sounds, and the offers are made again.
-    fn lan_enchant(&mut self, gi: usize, gs: &mut GuestStation, button: usize) {
+    fn lan_enchant(&mut self, gi: usize, gs: &mut GuestStation, button: usize) { let (gi,button,) = match crate::points_generated::P2447.get() { Some(__l) => { let mut __a = (gi,button,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,button,) };
         let Some(item) = gs.menu.slot(0).cloned() else {
             return;
         };
@@ -641,7 +641,7 @@ impl Game<'_> {
 
     /// `ServerGamePacketListenerImpl.handleRenameItem`: the guest's anvil
     /// takes the name (`AnvilMenu.setItemName`).
-    pub(super) fn lan_station_rename(&mut self, conn: u32, name: &str) {
+    pub(super) fn lan_station_rename(&mut self, conn: u32, name: &str) { let (conn,) = match crate::points_generated::P2446.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let anvil = self
             .lan
             .as_ref()
@@ -663,7 +663,7 @@ impl Game<'_> {
 
     /// The sounds the menu played, at the station (heard by everyone around,
     /// as `level.playSound(null, pos, ...)`), once per tick.
-    fn lan_station_sounds(&mut self, gs: &mut GuestStation) {
+    fn lan_station_sounds(&mut self, gs: &mut GuestStation) { if let Some(__l) = crate::points_generated::P2445.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let sounds = std::mem::take(&mut gs.menu.sounds);
         if sounds.is_empty() || gs.last_sound == self.ticks {
             return;
@@ -676,7 +676,7 @@ impl Game<'_> {
     }
 
     /// A click on the guest's station window; false for other windows.
-    pub(super) fn lan_station_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool {
+    pub(super) fn lan_station_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool { let (conn,) = match crate::points_generated::P2444.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         self.lan_station_op(conn, Some(p.container), |menu, env| {
             let _ = menu.click(env, i32::from(p.slot), i32::from(p.button), input(p.input));
         })
@@ -684,7 +684,7 @@ impl Game<'_> {
 
     /// `ServerGamePacketListenerImpl.handleContainerButtonClick`:
     /// `clickMenuButton`, then `broadcastChanges` when the menu took it.
-    pub(super) fn lan_station_button(&mut self, conn: u32, window: i32, id: i32) {
+    pub(super) fn lan_station_button(&mut self, conn: u32, window: i32, id: i32) { let (conn,window,id,) = match crate::points_generated::P2443.get() { Some(__l) => { let mut __a = (conn,window,id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,window,id,) };
         // A mod container's menu: its mod's buttons (`native_menu_button`),
         // as handleContainerButtonClick checks them: the open menu, not a
         // spectator, still valid.
@@ -766,7 +766,7 @@ impl Game<'_> {
 
     /// The whole station menu and its changed data slots for the client
     /// (`sendAllDataToRemote` / `broadcastChanges`).
-    fn lan_send_station(&mut self, conn: u32) {
+    fn lan_send_station(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2442.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -812,7 +812,7 @@ impl Game<'_> {
     /// None closes it whichever it is): the carried stack and the inputs go
     /// back to the inventory, what doesn't fit is dropped. False when no such
     /// window is open.
-    pub(super) fn lan_station_closed(&mut self, conn: u32, window: Option<i32>) -> bool {
+    pub(super) fn lan_station_closed(&mut self, conn: u32, window: Option<i32>) -> bool { let (conn,) = match crate::points_generated::P2441.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         // A lectern's menu keeps nothing of its own (the book is the block entity's).
         let lectern = self
             .lan
@@ -880,7 +880,7 @@ impl Game<'_> {
 
     /// `BeaconBlockEntity.dataAccess`: the pyramid's levels and the powers
     /// (`BeaconMenu.encodeEffect`: the `mob_effect` id + 1, 0 for none).
-    fn beacon_data(&self, pos: [i32; 3]) -> [i32; 3] {
+    fn beacon_data(&self, pos: [i32; 3]) -> [i32; 3] { let (pos,) = match crate::points_generated::P2440.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let Some(BlockEntity::Beacon(b)) = self.world.block_entities.get(&(pos[0], pos[1], pos[2]))
         else {
             return [0; 3];
@@ -906,7 +906,7 @@ impl Game<'_> {
         conn: u32,
         primary: Option<i32>,
         secondary: Option<i32>,
-    ) {
+    ) { let (conn,) = match crate::points_generated::P2439.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(pos) = self
             .lan
             .as_ref()
@@ -992,7 +992,7 @@ impl Game<'_> {
 
     /// `ServerPlayer.doTick`'s `stillValid`: a guest's station closes once its
     /// block is gone or the guest is out of reach (`isWithinBlockInteractionRange(pos, 4)`).
-    pub(super) fn lan_stations_tick(&mut self) {
+    pub(super) fn lan_stations_tick(&mut self) { if let Some(__l) = crate::points_generated::P2438.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.lan_lecterns_tick();
         let conns: Vec<u32> = self
             .lan
@@ -1056,7 +1056,7 @@ impl Game<'_> {
         &self,
         g: &horizon_client::lan::guest::Guest,
         gs: &GuestStation,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2437.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let [x, y, z] = gs.pos;
         let name = &self.res.facts().get(self.world.block(x, y, z)).name;
         StationKind::from_block(name) == Some(gs.kind) && g.within_block_range(gs.pos, 4.0)
@@ -1069,7 +1069,7 @@ impl Game<'_> {
         &self,
         g: &horizon_client::lan::guest::Guest,
         key: (i32, i32, i32),
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2436.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         matches!(
             self.world.block_entities.get(&key),
             Some(BlockEntity::Lectern(l)) if l.book.is_some()
@@ -1079,7 +1079,7 @@ impl Game<'_> {
     /// The guests' lecterns each tick: `stillValid` (the block entity, its
     /// book, the reach) closes them, and `broadcastChanges` sends a book or
     /// page another player changed.
-    fn lan_lecterns_tick(&mut self) {
+    fn lan_lecterns_tick(&mut self) { if let Some(__l) = crate::points_generated::P2435.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };

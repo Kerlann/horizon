@@ -202,7 +202,7 @@ impl Levels {
 
 impl Game<'_> {
     /// A new level for `dim`, opened from the save (`MinecraftServer.createLevels`).
-    fn open_level(&self, dim: Dim) -> Result<Parked> {
+    fn open_level(&self, dim: Dim) -> Result<Parked> { if let Some(__l) = crate::points_generated::P2535.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (streaming, save, locator) = super::world_loading::make_streaming(
             &self.res,
             &self.pack,
@@ -273,7 +273,7 @@ impl Game<'_> {
     }
 
     /// Exchange the level in place with `p`.
-    fn swap_level(&mut self, p: &mut Parked) {
+    fn swap_level(&mut self, p: &mut Parked) { if let Some(__l) = crate::points_generated::P2534.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use std::mem::swap;
         swap(&mut self.world, &mut p.world);
         swap(&mut self.streaming, &mut p.streaming);
@@ -343,7 +343,7 @@ impl Game<'_> {
     /// Put `target`'s level in place, opening it first if it is not loaded.
     /// The level that was in place is kept with the others; the shared
     /// clock and weather go with the swap.
-    pub(super) fn enter_level(&mut self, target: Dim) -> Result<()> {
+    pub(super) fn enter_level(&mut self, target: Dim) -> Result<()> { if let Some(__l) = crate::points_generated::P2533.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A client holds no levels.
         if self.options.execution_role.is_client() {
             return Ok(());
@@ -389,7 +389,7 @@ impl Game<'_> {
     /// The entity's memory (its UUID and the compound it was loaded with)
     /// moves with it from the level not in place to the level in place, so
     /// it is saved in the other level as it was.
-    pub(super) fn move_entity_memory(&mut self, from: Dim, id: u32) {
+    pub(super) fn move_entity_memory(&mut self, from: Dim, id: u32) { let (id,) = match crate::points_generated::P2532.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(p) = self.levels.parked.get_mut(&from) else {
             return;
         };
@@ -408,7 +408,7 @@ impl Game<'_> {
     pub(super) fn lod_source_in(
         &self,
         dim: Dim,
-    ) -> Option<Arc<dyn horizon_client::streaming::LodSource>> {
+    ) -> Option<Arc<dyn horizon_client::streaming::LodSource>> { if let Some(__l) = crate::points_generated::P2531.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if dim == self.dim {
             return Some(self.streaming.lod_source());
         }
@@ -420,7 +420,7 @@ impl Game<'_> {
     /// (`execute in`, `execute at` a player in another level), opening it if
     /// nobody is in it; returns the level to put back afterwards. Only a
     /// server holds other levels.
-    pub(super) fn enter_command_level(&mut self, dim: Dim) -> Option<Dim> {
+    pub(super) fn enter_command_level(&mut self, dim: Dim) -> Option<Dim> { if let Some(__l) = crate::points_generated::P2530.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.options.execution_role.is_client() || dim == self.dim {
             return None;
         }
@@ -441,7 +441,7 @@ impl Game<'_> {
     /// the next ones only their level. While `paused`, only the connections
     /// run. The native server tick hook brackets it (`ServerTickStart` before
     /// the first level, `ServerTickEnd` after the last).
-    pub(super) fn tick_server(&mut self, paused: bool) -> Result<()> {
+    pub(super) fn tick_server(&mut self, paused: bool) -> Result<()> { let (paused,) = match crate::points_generated::P2529.get() { Some(__l) => { let mut __a = (paused,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (paused,) };
         // `tickRateManager.tick()` once per server tick, before any level
         // (each `ServerLevel.tick` only reads `runsNormally`), and the native
         // `ServerTickStart` before that level work, where NeoForge fires
@@ -536,7 +536,7 @@ impl Game<'_> {
 
     /// `tick_server` as a server thread runs it. With `HORIZON_SPIKES=MS`, a
     /// tick longer than MS is logged with its thread CPU time and spans.
-    pub(super) fn tick_server_timed(&mut self, paused: bool) -> Result<()> {
+    pub(super) fn tick_server_timed(&mut self, paused: bool) -> Result<()> { let (paused,) = match crate::points_generated::P2528.get() { Some(__l) => { let mut __a = (paused,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (paused,) };
         self.tick_server_spans(paused, |_, _, _| {})
     }
 
@@ -585,7 +585,7 @@ impl Game<'_> {
         &mut self,
         next: &mut Instant,
         paused: bool,
-    ) -> Option<Duration> {
+    ) -> Option<Duration> { let (paused,) = match crate::points_generated::P2527.get() { Some(__l) => { let mut __a = (paused,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (paused,) };
         if let Some(report) = self.clock.take_sprint_report() {
             // ServerTickRateManager.finishTickSprint: the server's sendSuccess.
             self.console_broadcast = Some(true);
@@ -619,7 +619,7 @@ impl Game<'_> {
     /// The levels this server tick runs, in `MinecraftServer.levels` order
     /// (the Overworld, the Nether, the End): every level with a player in
     /// it, forced chunks or a `/pregen` task, or the Overworld while idle.
-    pub(super) fn levels_to_tick(&self) -> Vec<Dim> {
+    pub(super) fn levels_to_tick(&self) -> Vec<Dim> { if let Some(__l) = crate::points_generated::P2526.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let guests = self
             .lan
             .as_ref()
@@ -658,7 +658,7 @@ impl Game<'_> {
     }
 
     /// The chunks holding a portal ticket in `dim`'s level (`placePortalTicket`).
-    pub(super) fn portal_ticket_chunks(&self, dim: Dim) -> Vec<(i32, i32)> {
+    pub(super) fn portal_ticket_chunks(&self, dim: Dim) -> Vec<(i32, i32)> { if let Some(__l) = crate::points_generated::P2525.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if dim == self.dim {
             self.tickets.portal_chunks().collect()
         } else {
@@ -671,7 +671,7 @@ impl Game<'_> {
 
     /// Count the parked levels' empty ticks, and save and close the ones
     /// (other than the Overworld) nobody has been in for a while.
-    pub(super) fn close_idle_levels(&mut self) -> Result<()> {
+    pub(super) fn close_idle_levels(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P2524.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let occupied = self.levels_to_tick();
         // A vehicle waiting there for its rider's arrival in another level.
         let waiting: Vec<Dim> = self
@@ -715,7 +715,7 @@ impl Game<'_> {
     }
 
     /// The mods hear `dim`'s level open (`LevelEvent.Load`), on a server.
-    pub(super) fn native_level_opened(&mut self, dim: Dim) {
+    pub(super) fn native_level_opened(&mut self, dim: Dim) { if let Some(__l) = crate::points_generated::P2523.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some()
             || self.options.execution_role.is_client()
             || self.levels.heard_open.contains(&dim)
@@ -729,7 +729,7 @@ impl Game<'_> {
 
     /// The mods hear `dim`'s level close (`LevelEvent.Unload`), once for
     /// each open they heard.
-    fn native_level_closed(&mut self, dim: Dim) {
+    fn native_level_closed(&mut self, dim: Dim) { if let Some(__l) = crate::points_generated::P2522.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.remove_level_fake_players(dim.id());
         let Some(i) = self.levels.heard_open.iter().position(|d| *d == dim) else {
             return;
@@ -741,7 +741,7 @@ impl Game<'_> {
     /// Every level still open closes with the server, however it ends
     /// (`MinecraftServer.stopServer`'s `level.close()` loop), in vanilla's
     /// order of its levels: the Overworld, the Nether, the End.
-    pub(super) fn native_levels_closing(&mut self) {
+    pub(super) fn native_levels_closing(&mut self) { if let Some(__l) = crate::points_generated::P2521.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for dim in [Dim::Overworld, Dim::Nether, Dim::End] {
             self.native_level_closed(dim);
         }
@@ -749,7 +749,7 @@ impl Game<'_> {
 
     /// Save every parked level (`MinecraftServer.saveAllChunks`); the level
     /// in place is the caller's to save.
-    pub(super) fn save_parked_levels(&mut self, wait: bool) -> Result<()> {
+    pub(super) fn save_parked_levels(&mut self, wait: bool) -> Result<()> { let (wait,) = match crate::points_generated::P2520.get() { Some(__l) => { let mut __a = (wait,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (wait,) };
         if self.levels.parked.is_empty() {
             return Ok(());
         }

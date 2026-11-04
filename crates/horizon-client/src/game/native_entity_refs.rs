@@ -37,7 +37,7 @@ impl Game<'_> {
     }
 
     /// What a handle names now, or None for a stale or foreign one.
-    pub(super) fn native_entity_target(&self, entity: EntityRef) -> Option<Target> {
+    pub(super) fn native_entity_target(&self, entity: EntityRef) -> Option<Target> { if let Some(__l) = crate::points_generated::P3105.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.held_out.contains(&entity.id())
             || !self.is_logical_server()
             || self.native_lifecycle.epoch() != Some(entity.epoch())
@@ -76,7 +76,7 @@ impl Game<'_> {
     /// server told this client of (`ClientLevel.getEntity`, whose entities are
     /// the ones the server tracks to it). None for a stale handle, with no
     /// login, or for an entity the client doesn't have.
-    pub(super) fn native_client_entity_target(&self, entity: EntityRef) -> Option<Target> {
+    pub(super) fn native_client_entity_target(&self, entity: EntityRef) -> Option<Target> { if let Some(__l) = crate::points_generated::P3104.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let remote = self.remote.as_ref().filter(|r| r.logged_in)?;
         (self.native_lifecycle.epoch() == Some(entity.epoch())).then_some(())?;
         let id = i32::try_from(entity.id()).ok()?;
@@ -91,7 +91,7 @@ impl Game<'_> {
     }
     /// What a handle names for a read that works on both sides: the server's
     /// entity (`native_entity_target`) or, on a client, its own copy of it.
-    pub(super) fn native_entity_read_target(&self, entity: EntityRef) -> Option<Target> {
+    pub(super) fn native_entity_read_target(&self, entity: EntityRef) -> Option<Target> { if let Some(__l) = crate::points_generated::P3103.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.is_logical_server() {
             self.native_entity_target(entity)
         } else {
@@ -103,14 +103,14 @@ impl Game<'_> {
     /// in place or among the server's players. During a nested player swap,
     /// an outer player's displaced record is unavailable. On a client, the
     /// entity is the local player or one the client tracks.
-    pub(super) fn native_entity(&self, id: u32) -> Option<EntityRef> {
+    pub(super) fn native_entity(&self, id: u32) -> Option<EntityRef> { let (id,) = match crate::points_generated::P3102.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let entity = EntityRef::new(self.native_lifecycle.epoch()?, id);
         self.native_entity_read_target(entity).map(|_| entity)
     }
     /// The level `dimension` (`minecraft:the_nether`) as a handle: None with
     /// no world open, or for a dimension the server hasn't loaded. On a
     /// client, only the level it shows (`Minecraft.level`) has one.
-    pub(super) fn native_level(&self, dimension: &str) -> Option<LevelRef> {
+    pub(super) fn native_level(&self, dimension: &str) -> Option<LevelRef> { if let Some(__l) = crate::points_generated::P3101.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.is_logical_server() {
             let epoch = self.native_lifecycle.epoch()?;
             self.remote.as_ref().filter(|r| r.logged_in)?;
@@ -137,7 +137,7 @@ impl Game<'_> {
         level: LevelRef,
         min: [f64; 3],
         max: [f64; 3],
-    ) -> Option<Vec<EntityRef>> {
+    ) -> Option<Vec<EntityRef>> { let (min,max,) = match crate::points_generated::P3100.get() { Some(__l) => { let mut __a = (min,max,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (min,max,) };
         if !self.is_logical_server()
             || self.native_lifecycle.epoch() != Some(level.epoch())
             || level.dimension() != self.dim.id()
@@ -198,7 +198,7 @@ impl Game<'_> {
         pos: [i32; 3],
         state: BlockStateId,
         flags: NativeBlockUpdateFlags,
-    ) -> bool {
+    ) -> bool { let (pos,) = match crate::points_generated::P3099.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if !self.native_level_write_allowed(level, pos) {
             return false;
         }
@@ -211,7 +211,7 @@ impl Game<'_> {
         level: LevelRef,
         pos: [i32; 3],
         drop: bool,
-    ) -> bool {
+    ) -> bool { let (pos,drop,) = match crate::points_generated::P3098.get() { Some(__l) => { let mut __a = (pos,drop,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,drop,) };
         if !self.native_level_write_allowed(level, pos)
             || !self.is_logical_server()
             || self.dim.id() != level.dimension()
@@ -223,7 +223,7 @@ impl Game<'_> {
         let _ = self.process_level_events();
         changed
     }
-    fn native_level_write_allowed(&self, level: LevelRef, pos: [i32; 3]) -> bool {
+    fn native_level_write_allowed(&self, level: LevelRef, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P3097.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.is_logical_server()
             && self.native_lifecycle.epoch() == Some(level.epoch())
             && self.world.loaded(pos[0], pos[2])
@@ -238,7 +238,7 @@ impl Game<'_> {
         level: LevelRef,
         pos: [i32; 3],
         kind: NativeBlockShapeKind,
-    ) -> Option<Vec<[f64; 6]>> {
+    ) -> Option<Vec<[f64; 6]>> { let (pos,) = match crate::points_generated::P3096.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         if !self.is_logical_server() || self.native_lifecycle.epoch() != Some(level.epoch()) {
             return None;
         }
@@ -277,7 +277,7 @@ impl Game<'_> {
         pos: [i32; 3],
         face: NativeBlockFace,
         support: NativeSupportType,
-    ) -> Option<bool> {
+    ) -> Option<bool> { let (pos,) = match crate::points_generated::P3095.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.native_level_state(level, pos)?;
         use horizon_core::geometry::Direction;
         let direction = match face {
@@ -310,7 +310,7 @@ impl Game<'_> {
         to: [f64; 3],
         blocks: NativeClipBlock,
         fluids: NativeClipFluid,
-    ) -> Option<NativeClipHit> {
+    ) -> Option<NativeClipHit> { let (from,to,) = match crate::points_generated::P3094.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from,to,) };
         use horizon_client::collisions::SceneCollisions;
         use horizon_core::geometry::Direction;
         use horizon_world::{
@@ -371,26 +371,26 @@ impl Game<'_> {
 
     /// The entity's position (`Entity.position`): its feet, the middle of
     /// its box for a painting or an item frame.
-    pub(super) fn native_entity_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
+    pub(super) fn native_entity_position(&self, entity: EntityRef) -> Option<[f64; 3]> { if let Some(__l) = crate::points_generated::P3093.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.target_position(self.native_entity_read_target(entity)?)
     }
     /// The block the entity's position is in (`Entity.blockPosition`).
-    pub(super) fn native_entity_block_position(&self, entity: EntityRef) -> Option<[i32; 3]> {
+    pub(super) fn native_entity_block_position(&self, entity: EntityRef) -> Option<[i32; 3]> { if let Some(__l) = crate::points_generated::P3092.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_entity_position(entity)
             .map(|p| p.map(|v| v.floor() as i32))
     }
     /// The entity's yaw and pitch in degrees (`Entity.getYRot`, `getXRot`); 0
     /// for the kinds that don't turn.
-    pub(super) fn native_entity_rotation(&self, entity: EntityRef) -> Option<[f32; 2]> {
+    pub(super) fn native_entity_rotation(&self, entity: EntityRef) -> Option<[f32; 2]> { if let Some(__l) = crate::points_generated::P3091.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.target_rotation(self.native_entity_read_target(entity)?))
     }
     /// The entity's type (`Entity.getType`): `minecraft:zombie`.
-    pub(super) fn native_entity_kind(&self, entity: EntityRef) -> Option<String> {
+    pub(super) fn native_entity_kind(&self, entity: EntityRef) -> Option<String> { if let Some(__l) = crate::points_generated::P3090.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.target_type(self.native_entity_target(entity)?))
     }
     /// The entity's UUID (`Entity.getUUID`), the one it is saved with; an
     /// entity that has none yet gets it now, as a new vanilla entity does.
-    pub(super) fn native_entity_uuid(&mut self, entity: EntityRef) -> Option<u128> {
+    pub(super) fn native_entity_uuid(&mut self, entity: EntityRef) -> Option<u128> { if let Some(__l) = crate::points_generated::P3089.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let words = match self.native_entity_target(entity)? {
             Target::Player => return self.lan_acting_uuid,
             Target::Guest(conn) => return self.command_guest(conn).map(|g| g.uuid),
@@ -399,7 +399,7 @@ impl Game<'_> {
         Some(uuid_from_words(words))
     }
     /// The level the entity is in (`Entity.level`).
-    pub(super) fn native_entity_level(&self, entity: EntityRef) -> Option<LevelRef> {
+    pub(super) fn native_entity_level(&self, entity: EntityRef) -> Option<LevelRef> { if let Some(__l) = crate::points_generated::P3088.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let dim: Dim = self.target_level(self.native_entity_target(entity)?);
         Some(LevelRef::new(entity.epoch(), dim.id()))
     }

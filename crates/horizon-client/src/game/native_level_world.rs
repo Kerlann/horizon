@@ -83,19 +83,19 @@ impl LevelAccess for RainView<'_> {
 impl Game<'_> {
     /// The enabled feature flags as this side knows them: a client's are the server's, sent at
     /// join; a server's are its world's `enabled_features`.
-    pub(super) fn enabled_feature_ids(&self) -> &[String] {
+    pub(super) fn enabled_feature_ids(&self) -> &[String] { if let Some(__l) = crate::points_generated::P3848.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote
             .as_ref()
             .map_or(&self.level.enabled_features, |remote| &remote.features)
     }
     /// The world's seed (`WorldOptions.seed`), as `/seed` shows it.
-    pub(super) fn native_level_seed(&self, level: LevelRef) -> Option<i64> {
+    pub(super) fn native_level_seed(&self, level: LevelRef) -> Option<i64> { if let Some(__l) = crate::points_generated::P3847.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_level_world(level)?;
         Some(self.level.seed)
     }
     /// The difficulty (`Level.getDifficulty`): `peaceful`, `easy`, `normal`
     /// or `hard`, as `/difficulty` names it.
-    pub(super) fn native_level_difficulty(&self, level: LevelRef) -> Option<&'static str> {
+    pub(super) fn native_level_difficulty(&self, level: LevelRef) -> Option<&'static str> { if let Some(__l) = crate::points_generated::P3846.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_level_world(level)?;
         DIFFICULTIES.get(usize::from(self.ui.difficulty)).copied()
     }
@@ -105,7 +105,7 @@ impl Game<'_> {
         &self,
         level: LevelRef,
         rule: &str,
-    ) -> Option<GameRuleValue> {
+    ) -> Option<GameRuleValue> { if let Some(__l) = crate::points_generated::P3845.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_level_world(level)?;
         let r = horizon_client::gamerules::rule(rule)?;
         self.ui.rules.get(r.name)
@@ -113,7 +113,7 @@ impl Game<'_> {
     /// The rain and thunder levels, each 0.0 to 1.0 (`Level.getRainLevel`,
     /// `getThunderLevel`): both 0 in a level with no weather, as the Nether
     /// and the End.
-    pub(super) fn native_level_weather(&self, level: LevelRef) -> Option<(f32, f32)> {
+    pub(super) fn native_level_weather(&self, level: LevelRef) -> Option<(f32, f32)> { if let Some(__l) = crate::points_generated::P3844.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let world = self.native_level_world(level)?;
         Some(weather_for_level(
             world.shape,
@@ -122,7 +122,7 @@ impl Game<'_> {
         ))
     }
     /// Whether it rains (`Level.isRaining`: a rain level above 0.2).
-    pub(super) fn native_level_is_raining(&self, level: LevelRef) -> Option<bool> {
+    pub(super) fn native_level_is_raining(&self, level: LevelRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3843.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(weather_flags(self.native_level_weather(level)?).0)
     }
     /// `Level.isRainingAt(pos)` in the level a handle names, the one in place or a parked one:
@@ -133,7 +133,7 @@ impl Game<'_> {
         &self,
         level: LevelRef,
         pos: [i32; 3],
-    ) -> Option<bool> {
+    ) -> Option<bool> { let (pos,) = match crate::points_generated::P3842.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let world = self.native_level_world(level)?;
         if !world.is_loaded_at(pos[0], pos[1], pos[2]) {
             return None;
@@ -157,12 +157,12 @@ impl Game<'_> {
     pub(super) fn native_level_enabled_features(
         &self,
         level: LevelRef,
-    ) -> Option<FeatureFlags<'_>> {
+    ) -> Option<FeatureFlags<'_>> { if let Some(__l) = crate::points_generated::P3841.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_level_world(level)?;
         Some(FeatureFlags::new(self.enabled_feature_ids()))
     }
     /// Whether it thunders (`Level.isThundering`: a thunder level above 0.9).
-    pub(super) fn native_level_is_thundering(&self, level: LevelRef) -> Option<bool> {
+    pub(super) fn native_level_is_thundering(&self, level: LevelRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3840.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(weather_flags(self.native_level_weather(level)?).1)
     }
 }

@@ -18,7 +18,7 @@ use std::{
 };
 
 impl Game<'_> {
-    pub(super) fn run_net_harness(&mut self, report: &Path) -> Result<()> {
+    pub(super) fn run_net_harness(&mut self, report: &Path) -> Result<()> { if let Some(__l) = crate::points_generated::P4269.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let deadline = Instant::now() + Duration::from_secs(120);
         let mut next = Instant::now();
         let mut spawned_at: Option<Instant> = None;

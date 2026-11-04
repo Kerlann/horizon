@@ -75,12 +75,12 @@ pub(super) const APPARITION_TICKS: i32 = 30;
 
 impl Game<'_> {
     /// Count the elder guardian's apparition down.
-    pub(super) fn tick_apparition(&mut self) {
+    pub(super) fn tick_apparition(&mut self) { if let Some(__l) = crate::points_generated::P2765.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.creatures.elder_apparition = (self.creatures.elder_apparition - 1).max(0);
     }
     /// `ElderGuardianParticleGroup`: the ghostly elder guardian that swings
     /// up in front of the camera while the curse is laid, fading in and out.
-    pub(super) fn elder_apparition_geometry(&self, alpha: f64, out: &mut Vec<Vertex>) {
+    pub(super) fn elder_apparition_geometry(&self, alpha: f64, out: &mut Vec<Vertex>) { let (alpha,) = match crate::points_generated::P2764.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let left = self.creatures.elder_apparition;
         if left <= 0 {
             return;
@@ -136,7 +136,7 @@ impl Game<'_> {
         alpha: f64,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,light,) = match crate::points_generated::P2763.get() { Some(__l) => { let mut __a = (alpha,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,light,) };
         use horizon_client::mobs::anim::Poses;
         if !horizon_client::mobs::raider::is_captain(mob) {
             return;
@@ -189,7 +189,7 @@ impl Game<'_> {
         light: u32,
         skin: Option<&mut super::creatures::Skinned>,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,light,) = match crate::points_generated::P2762.get() { Some(__l) => { let mut __a = (alpha,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,light,) };
         self.captain_banner_geometry(mob, camera, alpha, light, out);
         self.held_item_geometry(mob, camera, alpha, light, true, skin, out);
         self.worn_block_geometry(mob, camera, alpha, light, out);
@@ -225,7 +225,7 @@ impl Game<'_> {
         alpha: f64,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,light,) = match crate::points_generated::P2761.get() { Some(__l) => { let mut __a = (alpha,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,light,) };
         if mob.species() != Species::CopperGolem || mob.is_invisible() {
             return;
         }
@@ -279,7 +279,7 @@ impl Game<'_> {
         alpha: f64,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,light,) = match crate::points_generated::P2760.get() { Some(__l) => { let mut __a = (alpha,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,light,) };
         use glam::{Mat4, Vec3};
         if mob.species() != Species::IronGolem || mob.extra.counter <= 0 || mob.is_invisible() {
             return;
@@ -310,7 +310,7 @@ impl Game<'_> {
         alpha: f64,
         light: u32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,light,) = match crate::points_generated::P2759.get() { Some(__l) => { let mut __a = (alpha,light,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,light,) };
         use glam::{Mat4, Vec3};
         let species = mob.species();
         let on_head = match species {
@@ -383,7 +383,7 @@ impl Game<'_> {
         lit: bool,
         mut skin: Option<&mut super::creatures::Skinned>,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,light,lit,) = match crate::points_generated::P2758.get() { Some(__l) => { let mut __a = (alpha,light,lit,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,light,lit,) };
         // ItemInHandLayer submits with OverlayTexture.NO_OVERLAY: no hurt tint.
         for (slot, off_hand) in [
             (horizon_items::equipment::MAINHAND, false),
@@ -511,7 +511,7 @@ impl Game<'_> {
         light: u32,
         lit: bool,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,light,lit,) = match crate::points_generated::P2757.get() { Some(__l) => { let mut __a = (alpha,light,lit,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,light,lit,) };
         // The layer also draws on an invisible mob.
         let species = mob.species();
         if species == Species::SnowGolem

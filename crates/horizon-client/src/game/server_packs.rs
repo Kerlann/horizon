@@ -215,7 +215,7 @@ impl Game<'_> {
     /// `WorldOpenFlows.loadBundledResourcePack`: a world's own
     /// `resourcepacks/resources.zip` is pushed as a local pack before the world
     /// connects, after `configureForLocalWorld` so the pack is accepted at once.
-    pub(super) fn server_packs_world_pack(&mut self, folder: &str) {
+    pub(super) fn server_packs_world_pack(&mut self, folder: &str) { if let Some(__l) = crate::points_generated::P5276.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let path = saves()
             .join(folder)
             .join("resourcepacks")
@@ -228,7 +228,7 @@ impl Game<'_> {
     /// `ConnectScreen`: the server's setting decides what its packs do
     /// (`configureForServerControl`); single player's own server takes them
     /// all, quietly (`configureForLocalWorld`).
-    pub(super) fn server_packs_connect(&mut self, address: Option<&str>, user: (String, u128)) {
+    pub(super) fn server_packs_connect(&mut self, address: Option<&str>, user: (String, u128)) { if let Some(__l) = crate::points_generated::P5275.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let state = &mut self.server_packs;
         state.user = user;
         state.prompt = None;
@@ -245,7 +245,7 @@ impl Game<'_> {
         state.packs.connect(Prompt::for_server(setting));
     }
     /// `Minecraft.clearDownloadedResourcePacks`: every server pack goes at once.
-    pub(super) fn server_packs_disconnect(&mut self) {
+    pub(super) fn server_packs_disconnect(&mut self) { if let Some(__l) = crate::points_generated::P5274.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.server_packs.prompt = None;
         self.server_packs.notifiers.clear();
         self.server_packs.packs.disconnect();
@@ -253,7 +253,7 @@ impl Game<'_> {
     }
 
     /// `handleResourcePackPush`.
-    pub(super) fn handle_pack_push(&mut self, p: ResourcePackPush) {
+    pub(super) fn handle_pack_push(&mut self, p: ResourcePackPush) { if let Some(__l) = crate::points_generated::P5273.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !valid_url(&p.url) {
             self.send_pack_status(p.id, action::INVALID_URL);
             return;
@@ -295,21 +295,21 @@ impl Game<'_> {
         self.capture(false);
     }
     /// `handleResourcePackPop`: one pack, or all of them.
-    pub(super) fn handle_pack_pop(&mut self, id: Option<u128>) {
+    pub(super) fn handle_pack_pop(&mut self, id: Option<u128>) { if let Some(__l) = crate::points_generated::P5272.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match id {
             Some(id) => self.server_packs.packs.pop(id),
             None => self.server_packs.packs.pop_all(),
         }
     }
     /// The joined server's entry in the server list: its `acceptTextures`.
-    fn server_setting(&self) -> Option<bool> {
+    fn server_setting(&self) -> Option<bool> { if let Some(__l) = crate::points_generated::P5271.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let address = self.server_packs.address.as_deref()?;
         servers::load(&multiplayer::servers_file(&saves()))
             .into_iter()
             .find(|s| s.ip == address)?
             .accept_textures
     }
-    fn send_pack_status(&self, id: u128, status: i32) {
+    fn send_pack_status(&self, id: u128, status: i32) { let (status,) = match crate::points_generated::P5270.get() { Some(__l) => { let mut __a = (status,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (status,) };
         if let Some(r) = &self.remote {
             r.session.send_pack_status(id, status);
         }
@@ -317,7 +317,7 @@ impl Game<'_> {
 
     /// Splitscreen: this player's answer for the server's packs, once it gave one (or its
     /// server list entry did).
-    pub(super) fn pack_answer(&self) -> Option<bool> {
+    pub(super) fn pack_answer(&self) -> Option<bool> { if let Some(__l) = crate::points_generated::P5269.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.server_packs.packs.prompt() {
             Prompt::Allowed => Some(true),
             Prompt::Declined => Some(false),
@@ -325,13 +325,13 @@ impl Game<'_> {
         }
     }
     /// Splitscreen: this player is asked about a server's packs right now.
-    pub(super) fn pack_prompt_open(&self) -> bool {
+    pub(super) fn pack_prompt_open(&self) -> bool { if let Some(__l) = crate::points_generated::P5268.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.server_packs.prompt.is_some()
     }
     /// The prompt's answer (`PackConfirmScreen`'s callback): the server's
     /// setting follows it, declining a required pack disconnects, and every
     /// pack it asked about is pushed.
-    pub(super) fn answer_pack_prompt(&mut self, yes: bool) -> Result<()> {
+    pub(super) fn answer_pack_prompt(&mut self, yes: bool) -> Result<()> { let (yes,) = match crate::points_generated::P5267.get() { Some(__l) => { let mut __a = (yes,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (yes,) };
         let Some(prompt) = self.server_packs.prompt.take() else {
             return Ok(());
         };
@@ -369,7 +369,7 @@ impl Game<'_> {
     /// Runs what the packs need (`createUpdateScheduler`): the downloads
     /// that finished, the ones to start, a resource reload when the active
     /// packs change, and the statuses for the server.
-    pub(super) fn tick_server_packs(&mut self) {
+    pub(super) fn tick_server_packs(&mut self) { if let Some(__l) = crate::points_generated::P5266.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.server_packs.notifiers.retain_mut(PackNotifier::poll);
         // A reload waits for the world's resources (`reload_packs`).
         if self.rest_loader.is_some() {
@@ -406,7 +406,7 @@ impl Game<'_> {
             self.send_pack_status(id, status);
         }
     }
-    fn start_pack_downloads(&mut self, requests: Vec<horizon_client::server_packs::Request>) {
+    fn start_pack_downloads(&mut self, requests: Vec<horizon_client::server_packs::Request>) { if let Some(__l) = crate::points_generated::P5265.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let state = &mut self.server_packs;
         if state.queue.is_none() {
             let dir = std::env::current_dir()
@@ -447,7 +447,7 @@ impl Game<'_> {
     /// own, staged on a worker (`Minecraft.reloadResourcePacks` under a
     /// `LoadingOverlay`); `drive_pack_reload` applies it. A pack with no
     /// readable `pack.mcmeta` fails the reload at once, as `onFailure`.
-    fn start_pack_reload(&mut self, load: &[(u128, PathBuf)]) {
+    fn start_pack_reload(&mut self, load: &[(u128, PathBuf)]) { if let Some(__l) = crate::points_generated::P5264.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let server: Option<Vec<_>> = load
             .iter()
             .map(|(id, path)| packs::server_pack(*id, path))
@@ -464,13 +464,13 @@ impl Game<'_> {
         }
     }
     /// `ServerPacks::reloaded` and the recovery reload it can ask for.
-    pub(super) fn finish_pack_reload(&mut self, ok: bool) {
+    pub(super) fn finish_pack_reload(&mut self, ok: bool) { let (ok,) = match crate::points_generated::P5263.get() { Some(__l) => { let mut __a = (ok,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ok,) };
         if let Some(recovery) = self.server_packs.packs.reloaded(ok) {
             self.start_pack_reload(&recovery);
         }
     }
 
-    pub(super) fn draw_pack_prompt(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_pack_prompt(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5262.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(prompt) = &self.server_packs.prompt else {
             return;
         };
@@ -500,7 +500,7 @@ impl Game<'_> {
     /// `IntegratedServer.reportChunkLoadFailure` and the like: what the server
     /// thread reported since the last frame, each in `SystemToast.addOrUpdate`
     /// (a toast still shown is reset, else a new one).
-    fn add_chunk_io_toasts(&mut self) {
+    fn add_chunk_io_toasts(&mut self) { if let Some(__l) = crate::points_generated::P5261.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pending = horizon_client::chunk_io::take();
         let toasts = [
             pending
@@ -524,7 +524,7 @@ impl Game<'_> {
 
     /// The download notifiers' toasts, each in a free 32-pixel slot of the
     /// `ToastManager` (`hidden`, F1, keeps them timing out undrawn).
-    pub(super) fn draw_pack_toasts(&mut self, batch: &mut HudBatch, hidden: bool) {
+    pub(super) fn draw_pack_toasts(&mut self, batch: &mut HudBatch, hidden: bool) { let (hidden,) = match crate::points_generated::P5260.get() { Some(__l) => { let mut __a = (hidden,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (hidden,) };
         let multiplier = f64::from(self.settings.notification_display_time);
         self.add_chunk_io_toasts();
         let mut used = self.toast_slots_used();
@@ -563,7 +563,7 @@ impl Game<'_> {
         self.draw_split_hud(batch, hidden);
     }
     /// A left click on the prompt: its answer when it hit a button.
-    pub(super) fn pack_prompt_click(&mut self) -> Result<()> {
+    pub(super) fn pack_prompt_click(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P5259.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(prompt) = &self.server_packs.prompt else {
             return Ok(());
         };

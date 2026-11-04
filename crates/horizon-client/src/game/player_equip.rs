@@ -23,7 +23,7 @@ fn same(a: Option<&ItemStack>, b: Option<&ItemStack>) -> bool {
 impl Game<'_> {
     /// The armour (head first) and the off hand, in `EquipmentSlot` order of
     /// the inventory menu's slots.
-    pub(super) fn player_equipment(&self) -> [Option<ItemStack>; 5] {
+    pub(super) fn player_equipment(&self) -> [Option<ItemStack>; 5] { if let Some(__l) = crate::points_generated::P4599.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let [head, chest, legs, feet] = self.armor.clone();
         [head, chest, legs, feet, self.offhand.clone()]
     }
@@ -31,7 +31,7 @@ impl Game<'_> {
     /// `onEquipItem` for every slot that changed since `before`: what the
     /// server does for the creative screen, which sends each changed slot
     /// (`handleSetCreativeModeSlot` sets it by player).
-    pub(super) fn player_equipment_changed(&mut self, before: &[Option<ItemStack>; 5]) {
+    pub(super) fn player_equipment_changed(&mut self, before: &[Option<ItemStack>; 5]) { if let Some(__l) = crate::points_generated::P4598.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let after = self.player_equipment();
         for (i, slot) in ARMOR.into_iter().chain([OFFHAND]).enumerate() {
             self.player_on_equip(slot, before[i].as_ref(), after[i].as_ref());
@@ -45,7 +45,7 @@ impl Game<'_> {
         slot: &str,
         old: Option<&ItemStack>,
         new: Option<&ItemStack>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4597.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !same(old, new) {
             self.player_equipped(slot, new);
         }
@@ -56,7 +56,7 @@ impl Game<'_> {
     /// `equip` / `unequip` game event for armour. Nothing on a client (the
     /// server plays it) or for a spectator. The player's `firstTick` never
     /// sees an equip here: loading a save sets the slots directly.
-    pub(super) fn player_equipped(&mut self, slot: &str, new: Option<&ItemStack>) {
+    pub(super) fn player_equipped(&mut self, slot: &str, new: Option<&ItemStack>) { if let Some(__l) = crate::points_generated::P4596.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() || self.spectator() {
             return;
         }

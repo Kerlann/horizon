@@ -20,7 +20,7 @@ pub(super) const CONTROL_HELP: &[&str] = &[
 ];
 
 impl Game<'_> {
-    pub(super) fn save_title_options(&mut self) {
+    pub(super) fn save_title_options(&mut self) { if let Some(__l) = crate::points_generated::P4339.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(title) = &self.title
             && (title.last_server != self.settings.file.string("lastServer")
                 || title.skip_multiplayer_warning
@@ -38,7 +38,7 @@ impl Game<'_> {
         }
     }
     /// `options-get` and `options-set`; None for other commands.
-    pub(super) fn options_control(&mut self, words: &[&str], line: &str) -> Result<Option<Value>> {
+    pub(super) fn options_control(&mut self, words: &[&str], line: &str) -> Result<Option<Value>> { if let Some(__l) = crate::points_generated::P4338.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match words[0] {
             "options-get" => {
                 let file = self.settings.to_file();
@@ -105,7 +105,7 @@ impl Game<'_> {
     pub(super) fn shader_packs_dir() -> std::path::PathBuf {
         Self::game_dir().join(horizon_client::shader_pack_list::DIR)
     }
-    pub(super) fn gui_size(&self) -> (f32, f32) {
+    pub(super) fn gui_size(&self) -> (f32, f32) { if let Some(__l) = crate::points_generated::P4337.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let size = self
             .renderer
             .as_ref()
@@ -114,10 +114,10 @@ impl Game<'_> {
         (b.width, b.height)
     }
     /// Open the options screens (OptionsScreen) from the title or pause menu.
-    pub(super) fn open_options(&mut self, from_title: bool) {
+    pub(super) fn open_options(&mut self, from_title: bool) { let (from_title,) = match crate::points_generated::P4336.get() { Some(__l) => { let mut __a = (from_title,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from_title,) };
         self.open_options_at(from_title, Page::Main);
     }
-    pub(super) fn open_options_at(&mut self, from_title: bool, page: Page) {
+    pub(super) fn open_options_at(&mut self, from_title: bool, page: Page) { let (from_title,) = match crate::points_generated::P4335.get() { Some(__l) => { let mut __a = (from_title,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from_title,) };
         // Gameplay keys must not stay held behind the options screen, where
         // bindings can also change before the physical key is released.
         self.keys.clear();
@@ -135,7 +135,7 @@ impl Game<'_> {
     /// While the resource pack screen is open, `resourcepacks/` is looked at once a second
     /// and the list found again when its packs changed (`PackSelectionScreen.tick`'s
     /// watcher).
-    fn watch_pack_folder(&mut self) {
+    fn watch_pack_folder(&mut self) { if let Some(__l) = crate::points_generated::P4334.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.ui.options.resource_packs_open() {
             self.pack_folder = None;
             return;
@@ -172,7 +172,7 @@ impl Game<'_> {
             self.ui.options.update_pack_infos(infos);
         }
     }
-    pub(super) fn draw_options(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_options(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P4333.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.watch_pack_folder();
         let mut ui = std::mem::take(&mut self.ui.options);
         ui.draw(&self.settings, batch, &self.gui.atlas, self.cursor);
@@ -181,7 +181,7 @@ impl Game<'_> {
     }
     /// HDR calibration's test picture to the renderer, full screen while it runs: the
     /// window goes fullscreen for it and back after, if it wasn't already.
-    pub(super) fn show_calibration(&mut self, h: f32) {
+    pub(super) fn show_calibration(&mut self, h: f32) { let (h,) = match crate::points_generated::P4332.get() { Some(__l) => { let mut __a = (h,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (h,) };
         let picture = (self.screen == Screen::Options)
             .then(|| self.ui.options.calibration_picture(h))
             .flatten();
@@ -214,7 +214,7 @@ impl Game<'_> {
             _ => {}
         }
     }
-    pub(super) fn options_mouse(&mut self, pressed: bool, right: bool) -> Result<()> {
+    pub(super) fn options_mouse(&mut self, pressed: bool, right: bool) -> Result<()> { let (pressed,right,) = match crate::points_generated::P4331.get() { Some(__l) => { let mut __a = (pressed,right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pressed,right,) };
         if !pressed {
             if right {
                 return Ok(());
@@ -245,7 +245,7 @@ impl Game<'_> {
         self.ui.options = ui;
         self.handle_option_events(events)
     }
-    pub(super) fn options_drag(&mut self) -> Result<()> {
+    pub(super) fn options_drag(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P4330.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let size = self.gui_size();
         let framebuffer = self.renderer.as_ref().map_or([1280, 720], |r| {
             [r.config.width as i32, r.config.height as i32]
@@ -264,7 +264,7 @@ impl Game<'_> {
         self.ui.options = ui;
         self.handle_option_events(events)
     }
-    pub(super) fn options_key(&mut self, key: KeyCode, text: Option<&str>) -> Result<()> {
+    pub(super) fn options_key(&mut self, key: KeyCode, text: Option<&str>) -> Result<()> { if let Some(__l) = crate::points_generated::P4329.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let size = self.gui_size();
         let shift = self.has_shift_down();
         let framebuffer = self.renderer.as_ref().map_or([1280, 720], |r| {
@@ -281,12 +281,12 @@ impl Game<'_> {
     pub(super) fn options_shortcut(
         &mut self,
         shortcut: horizon_client::clipboard::EditShortcut,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4328.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.ui
             .options
             .shortcut(&self.gui.atlas, shortcut, &mut self.clipboard)
     }
-    pub(super) fn options_scroll(&mut self, amount: f32) -> Result<()> {
+    pub(super) fn options_scroll(&mut self, amount: f32) -> Result<()> { let (amount,) = match crate::points_generated::P4327.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let framebuffer = self.renderer.as_ref().map_or([1280, 720], |r| {
             [r.config.width as i32, r.config.height as i32]
         });
@@ -305,14 +305,14 @@ impl Game<'_> {
         self.handle_option_events(events)
     }
     /// Mouse buttons pressed while a key is being bound.
-    pub(super) fn options_waiting_for_key(&self) -> bool {
+    pub(super) fn options_waiting_for_key(&self) -> bool { if let Some(__l) = crate::points_generated::P4326.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.ui.options.selected_key.is_some()
     }
-    pub(super) fn options_bind_mouse(&mut self, button: MouseButton) -> Result<()> {
+    pub(super) fn options_bind_mouse(&mut self, button: MouseButton) -> Result<()> { if let Some(__l) = crate::points_generated::P4325.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let events = self.ui.options.bind_mouse(&mut self.settings, button);
         self.handle_option_events(events)
     }
-    pub(super) fn handle_option_events(&mut self, events: Vec<Event>) -> Result<()> {
+    pub(super) fn handle_option_events(&mut self, events: Vec<Event>) -> Result<()> { if let Some(__l) = crate::points_generated::P4324.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for e in events {
             match e {
                 Event::ButtonClick => self.audio.play_button_click(),
@@ -430,7 +430,7 @@ impl Game<'_> {
         Ok(())
     }
     /// LanguageManager.setSelected + reload: translations, then re-wrap chat.
-    pub(super) fn load_language(&mut self, code: &str) {
+    pub(super) fn load_language(&mut self, code: &str) { if let Some(__l) = crate::points_generated::P4323.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let root = self.options.resources.clone();
         lang::set(lang::Language::load(&[&root], code));
         self.refresh_remote_language();
@@ -440,7 +440,7 @@ impl Game<'_> {
     /// Window.updateFullscreenIfChanged: only a changed option asks the
     /// window to change, so applying settings never undoes a fullscreen
     /// the compositor set up.
-    fn apply_fullscreen(&mut self) {
+    fn apply_fullscreen(&mut self) { if let Some(__l) = crate::points_generated::P4322.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A splitscreen guest draws in a window it shares: its option never changes the window.
         if self.options.split_guest {
             return;
@@ -472,7 +472,7 @@ impl Game<'_> {
         }
     }
     /// Settings that Horizon applies beyond render distance, volume and GUI scale.
-    pub(super) fn apply_ui_settings(&mut self) {
+    pub(super) fn apply_ui_settings(&mut self) { if let Some(__l) = crate::points_generated::P4321.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if horizon_client_render::mipmap::set_dither_cutouts(
             self.settings.horizon.dither_cutout_mips,
         ) {
@@ -543,7 +543,7 @@ impl Game<'_> {
     }
     /// `Window.updateFullscreenState`: a fullscreen change made by the window
     /// system is adopted by the option (`Minecraft.fullscreenStateChanged`).
-    pub(super) fn observe_fullscreen(&mut self) {
+    pub(super) fn observe_fullscreen(&mut self) { if let Some(__l) = crate::points_generated::P4320.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // HDR calibration's own fullscreen is not the player's option: it
         // goes back to what it was when the calibration ends.
         if self.ui.options.calibration_fullscreen.is_some() {
@@ -561,7 +561,7 @@ impl Game<'_> {
         }
     }
     /// F11 (key.fullscreen): Window.toggleFullScreen, remembered in options.txt.
-    pub(super) fn toggle_fullscreen(&mut self) {
+    pub(super) fn toggle_fullscreen(&mut self) { if let Some(__l) = crate::points_generated::P4319.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Splitscreen: another player's F11 toggles the window it plays in, kept out of its
         // options (a profile that saved it would turn the next window fullscreen on joining).
         if self.options.split_guest {
@@ -584,7 +584,7 @@ impl Game<'_> {
     }
     /// `FramerateLimitTracker.getFramerateLimit`: the Max Framerate option,
     /// throttled when minimised, idle, or in a menu without a world.
-    pub(super) fn framerate_limit(&self) -> i32 {
+    pub(super) fn framerate_limit(&self) -> i32 { if let Some(__l) = crate::points_generated::P4318.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let context = FrameContext {
             inactivity: if self.settings.inactivity_fps_limit == "minimized" {
                 InactivityFpsLimit::Minimized
@@ -629,7 +629,7 @@ impl Game<'_> {
     /// `Minecraft.runTick`'s frame limiter: `FramerateLimiter.limitDisplayFPS`
     /// below 260 frames per second, sleeping then spin-waiting until the
     /// frame's slot ends (not in scripted frame-count runs).
-    pub(super) fn limit_frame(&mut self) {
+    pub(super) fn limit_frame(&mut self) { if let Some(__l) = crate::points_generated::P4317.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.options.frames.is_some() || self.options.paced_by_split {
             return;
         }

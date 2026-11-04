@@ -41,10 +41,10 @@ fn flame(ominous: bool) -> T {
 }
 
 impl Game<'_> {
-    fn particle(&mut self, ty: T, p: [f64; 3], v: [f64; 3]) {
+    fn particle(&mut self, ty: T, p: [f64; 3], v: [f64; 3]) { let (p,v,) = match crate::points_generated::P5728.get() { Some(__l) => { let mut __a = (p,v,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (p,v,) };
         self.particles.add(&ParticleOptions::simple(ty), p, v);
     }
-    fn local_sound(&mut self, name: &str, pos: [i32; 3], volume: f32, pitch: f32) {
+    fn local_sound(&mut self, name: &str, pos: [i32; 3], volume: f32, pitch: f32) { let (pos,volume,pitch,) = match crate::points_generated::P5727.get() { Some(__l) => { let mut __a = (pos,volume,pitch,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,volume,pitch,) };
         self.audio.play(
             &format!("minecraft:{name}"),
             Some(center(pos)),
@@ -53,7 +53,7 @@ impl Game<'_> {
         );
     }
     /// `LevelEventHandler.levelEvent` 3011 to 3021.
-    pub(super) fn trial_level_event(&mut self, id: i32, pos: [i32; 3], data: i32) {
+    pub(super) fn trial_level_event(&mut self, id: i32, pos: [i32; 3], data: i32) { let (id,pos,data,) = match crate::points_generated::P5726.get() { Some(__l) => { let mut __a = (id,pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,pos,data,) };
         // TrialSpawner.FlameParticle.decode.
         let spawn_flame = if data == 1 {
             T::SoulFireFlame
@@ -138,7 +138,7 @@ impl Game<'_> {
         }
     }
     /// `TrialSpawner.addSpawnParticles`.
-    fn trial_spawn_particles(&mut self, pos: [i32; 3], ty: T) {
+    fn trial_spawn_particles(&mut self, pos: [i32; 3], ty: T) { let (pos,) = match crate::points_generated::P5725.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         for _ in 0..20 {
             let random = self.particles.level_random();
             let at = pos.map(|c| f64::from(c) + 0.5 + (random.next_double() - 0.5) * 2.0);
@@ -147,7 +147,7 @@ impl Game<'_> {
         }
     }
     /// `TrialSpawner.addDetectPlayerParticles`.
-    fn detect_player_particles(&mut self, pos: [i32; 3], data: i32, ty: T) {
+    fn detect_player_particles(&mut self, pos: [i32; 3], data: i32, ty: T) { let (pos,data,) = match crate::points_generated::P5724.get() { Some(__l) => { let mut __a = (pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,data,) };
         for _ in 0..30 + data.min(10) * 5 {
             let random = self.particles.level_random();
             let x = f64::from(2.0 * random.next_float() - 1.0) * 0.65;
@@ -158,7 +158,7 @@ impl Game<'_> {
         }
     }
     /// `TrialSpawner.addEjectItemParticles`.
-    fn eject_item_particles(&mut self, pos: [i32; 3]) {
+    fn eject_item_particles(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P5723.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         for _ in 0..20 {
             let random = self.particles.level_random();
             let at = pos.map(|c| f64::from(c) + 0.4 + random.next_double() * 0.2);
@@ -169,7 +169,7 @@ impl Game<'_> {
     }
     /// `TrialSpawner.tickClient`: the state's particles, the spin of the
     /// mob shown inside and the ambient sound.
-    pub(super) fn client_tick_trial_spawner(&mut self, key: Pos) {
+    pub(super) fn client_tick_trial_spawner(&mut self, key: Pos) { if let Some(__l) = crate::points_generated::P5722.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((state, ominous)) = self.trial_spawner_block(key) else {
             return;
         };
@@ -229,7 +229,7 @@ impl Game<'_> {
         self.update_spawner_display(key);
     }
     /// `VaultBlockEntity.Client.tick`.
-    pub(super) fn client_tick_vault(&mut self, key: Pos) {
+    pub(super) fn client_tick_vault(&mut self, key: Pos) { if let Some(__l) = crate::points_generated::P5721.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((mut vault, _, ominous)) = self.take_vault(key) else {
             return;
         };
@@ -262,7 +262,7 @@ impl Game<'_> {
         }
     }
     /// `VaultBlockEntity.Client.emitActivationParticles`.
-    fn vault_activation_particles(&mut self, pos: [i32; 3], ominous: bool) {
+    fn vault_activation_particles(&mut self, pos: [i32; 3], ominous: bool) { let (pos,ominous,) = match crate::points_generated::P5720.get() { Some(__l) => { let mut __a = (pos,ominous,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,ominous,) };
         self.vault_connection_particles(pos);
         for _ in 0..20 {
             let at = cage_point(pos, self.particles.level_random());
@@ -272,7 +272,7 @@ impl Game<'_> {
     }
     /// `emitConnectionParticlesForNearbyPlayers`: from the keyhole towards
     /// each connected player within the particles' range.
-    fn vault_connection_particles(&mut self, pos: [i32; 3]) {
+    fn vault_connection_particles(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P5719.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let key = (pos[0], pos[1], pos[2]);
         let Some(BlockEntity::Vault(vault)) = self.world.block_entities.get(&key) else {
             return;

@@ -25,7 +25,7 @@ impl Game<'_> {
     /// packs' and native mods' changes included. Read from the item report's JSON, so a
     /// number is an `Int`, `Long` or `Double` and a boolean a `Byte`. None where the item
     /// hasn't the component, and for an unknown item.
-    pub(super) fn native_item_default_component(&self, item: &str, component: &str) -> Option<Tag> {
+    pub(super) fn native_item_default_component(&self, item: &str, component: &str) -> Option<Tag> { if let Some(__l) = crate::points_generated::P2963.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let prototype = self.pack.item_renderer.models.prototypes.get(item)?;
         Some(horizon_client::scoreboard::json_to_tag(
             prototype.get(component)?,
@@ -34,13 +34,13 @@ impl Game<'_> {
     /// Item `item`'s cooking-fuel burn time in ticks (`FuelValues.burnDuration` of its `cooking_fuel`
     /// component, the data pack's context int provider resolved), None where it is no fuel. API
     /// @API:item_components@.
-    pub(super) fn native_item_burn_time(&self, item: &str) -> Option<i32> {
+    pub(super) fn native_item_burn_time(&self, item: &str) -> Option<i32> { if let Some(__l) = crate::points_generated::P2962.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (time, _) = self.items().get(item)?.fuel.as_ref()?;
         Some(self.res.providers().int_value(time))
     }
     /// Item `item`'s chance to raise a composter's level (its `compostable` component's layers provider
     /// resolved), None where it is not compostable. API @API:item_components@.
-    pub(super) fn native_item_compost_chance(&self, item: &str) -> Option<f32> {
+    pub(super) fn native_item_compost_chance(&self, item: &str) -> Option<f32> { if let Some(__l) = crate::points_generated::P2961.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let layers = self.items().get(item)?.compostable.as_ref()?;
         Some(self.res.providers().layer_chance(layers))
     }
@@ -52,7 +52,7 @@ impl Game<'_> {
         &self,
         stack: &ItemStack,
         effect: &str,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2960.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         world_stations!(self)
             .enchantments
             .has_component(stack, effect)
@@ -67,7 +67,7 @@ impl Game<'_> {
         &'a self,
         stack: &'a ItemStack,
         id: &str,
-    ) -> Result<Option<&'a Tag>, NativeComponentError> {
+    ) -> Result<Option<&'a Tag>, NativeComponentError> { if let Some(__l) = crate::points_generated::P2959.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if horizon_protocol::item::custom::id(id).is_none() {
             return Err(NativeComponentError::UnknownType);
         }
@@ -91,7 +91,7 @@ impl Game<'_> {
         stack: &mut ItemStack,
         id: &str,
         value: Tag,
-    ) -> Result<(), NativeComponentError> {
+    ) -> Result<(), NativeComponentError> { if let Some(__l) = crate::points_generated::P2958.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if horizon_protocol::item::custom::id(id).is_none() {
             return Err(NativeComponentError::UnknownType);
         }
@@ -115,7 +115,7 @@ impl Game<'_> {
         &self,
         stack: &mut ItemStack,
         id: &str,
-    ) -> Result<(), NativeComponentError> {
+    ) -> Result<(), NativeComponentError> { if let Some(__l) = crate::points_generated::P2957.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if horizon_protocol::item::custom::id(id).is_none() {
             return Err(NativeComponentError::UnknownType);
         }

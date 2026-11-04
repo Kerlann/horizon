@@ -631,7 +631,7 @@ impl Game<'_> {
     /// exist yet: `level-type`'s preset, a flat world's `generator-settings`
     /// and `generate-structures`, written before the world opens so that
     /// streaming reads them.
-    fn write_world_gen(&self, dir: &std::path::Path, props: &ServerProperties) -> Result<()> {
+    fn write_world_gen(&self, dir: &std::path::Path, props: &ServerProperties) -> Result<()> { if let Some(__l) = crate::points_generated::P1556.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let level_type = &props.level_type;
         let preset = parse_identifier(level_type)
             .as_deref()
@@ -826,7 +826,7 @@ const BROADCAST: &[&str] = &[
 impl Game<'_> {
     /// DedicatedServer.initServer and MinecraftServer.runServer.
     // The epoch starts at world open; failures before that send no lifecycle event.
-    pub(super) fn run_dedicated(&mut self) -> Result<()> {
+    pub(super) fn run_dedicated(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P1555.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let result = self.run_dedicated_inner();
         if let Err(error) = &result {
             self.native_players_leaving();
@@ -836,7 +836,7 @@ impl Game<'_> {
         result
     }
 
-    fn run_dedicated_inner(&mut self) -> Result<()> {
+    fn run_dedicated_inner(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P1554.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // This thread ticks the server (MinecraftServer.spin's priority).
         horizon_threads::favour_current();
         self.join_world_rest()?;
@@ -1310,14 +1310,14 @@ impl Game<'_> {
 
     /// A dedicated server of its own, not single player's server thread
     /// (which runs with `options.dedicated` too).
-    pub(super) fn standalone_server(&self) -> bool {
+    pub(super) fn standalone_server(&self) -> bool { if let Some(__l) = crate::points_generated::P1553.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.options.dedicated.is_some() && self.serving.is_none()
     }
     /// Load the spawn area and find the world spawn as single player does,
     /// without keeping a player there. A dedicated server only finds the world
     /// spawn (MinecraftServer.setInitialSpawn): a player's spawn is found as
     /// one joins.
-    pub(super) fn settle_spawn(&mut self) -> Result<()> {
+    pub(super) fn settle_spawn(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P1552.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let deadline = Instant::now() + Duration::from_secs(600);
         if self.standalone_server() {
             if self.level.spawn.is_none() {
@@ -1356,7 +1356,7 @@ impl Game<'_> {
     /// The chunks to keep loaded: the players' (lan_update_streaming). While
     /// nobody is online a dedicated server keeps none (vanilla has no spawn
     /// ticket), an integrated one the spawn chunk's.
-    pub(super) fn update_dedicated_streaming(&mut self) {
+    pub(super) fn update_dedicated_streaming(&mut self) { if let Some(__l) = crate::points_generated::P1551.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let rule = self.ui.rules.bool("spectators_generate_chunks");
         let guest = self.lan.as_ref().and_then(|h| {
             h.hub
@@ -1380,7 +1380,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn ban_ip_target(&self, target: &str) -> Option<String> {
+    pub(super) fn ban_ip_target(&self, target: &str) -> Option<String> { if let Some(__l) = crate::points_generated::P1550.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if target.parse::<std::net::IpAddr>().is_ok() {
             Some(target.to_owned())
         } else {
@@ -1395,7 +1395,7 @@ impl Game<'_> {
     }
 
     /// Network players `BanIpCommands` and the management service disconnect for an address.
-    fn ip_ban_players(&self, ip: &str) -> Vec<u128> {
+    fn ip_ban_players(&self, ip: &str) -> Vec<u128> { if let Some(__l) = crate::points_generated::P1549.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.lan.as_ref().map_or_else(Vec::new, |h| {
             h.hub
                 .guests
@@ -1408,7 +1408,7 @@ impl Game<'_> {
 
     /// ServerGamePacketListenerImpl.tick: players idle longer than the
     /// timeout are kicked.
-    pub(super) fn kick_idle(&mut self, minutes: i32) {
+    pub(super) fn kick_idle(&mut self, minutes: i32) { let (minutes,) = match crate::points_generated::P1548.get() { Some(__l) => { let mut __a = (minutes,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (minutes,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -1429,7 +1429,7 @@ impl Game<'_> {
     }
 
     /// Ops' permission levels for the hub (PlayerList.getProfilePermissions).
-    pub(super) fn sync_ops(&mut self, lists: &Arc<Mutex<Lists>>) {
+    pub(super) fn sync_ops(&mut self, lists: &Arc<Mutex<Lists>>) { if let Some(__l) = crate::points_generated::P1547.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -1451,7 +1451,7 @@ impl Game<'_> {
         lists: &Arc<Mutex<Lists>>,
         user: &NameAndId,
         new: i32,
-    ) -> bool {
+    ) -> bool { let (new,) = match crate::points_generated::P1546.get() { Some(__l) => { let mut __a = (new,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (new,) };
         let old = lists.lock().unwrap().ops.get(user).map_or(0, |e| e.level);
         let entity = self
             .lan
@@ -1476,7 +1476,7 @@ impl Game<'_> {
     }
 
     /// A player on the server, by name.
-    pub(super) fn online_player(&self, name: &str) -> Option<NameAndId> {
+    pub(super) fn online_player(&self, name: &str) -> Option<NameAndId> { if let Some(__l) = crate::points_generated::P1545.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let hub = &self.lan.as_ref()?.hub;
         let g = hub
             .guests
@@ -1491,7 +1491,7 @@ impl Game<'_> {
     /// GameProfileArgument for a name: the user cache, else the profile
     /// service, else (offline) the offline player. None, told to the console:
     /// no such player.
-    fn resolve(&self, name: &str) -> Option<NameAndId> {
+    fn resolve(&self, name: &str) -> Option<NameAndId> { if let Some(__l) = crate::points_generated::P1544.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let found = self.resolve_name(name);
         if found.is_none() {
             let unknown = Text::translate("argument.player.unknown", &[]);
@@ -1502,7 +1502,7 @@ impl Game<'_> {
 
     /// `Services.nameToIdCache().get(name)`: the user cache, else the profile
     /// service, else (offline) the offline player.
-    pub(super) fn resolve_name(&self, name: &str) -> Option<NameAndId> {
+    pub(super) fn resolve_name(&self, name: &str) -> Option<NameAndId> { if let Some(__l) = crate::points_generated::P1543.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         USER_CACHE.lock().unwrap().as_mut().and_then(|cache| {
             cache.get_by_name(name, |lower| {
                 let found = profiles::find_by_name(&profiles::discovery_url(), lower);
@@ -1517,7 +1517,7 @@ impl Game<'_> {
     /// MinecraftServer.sendSystemMessage: what the console is told; while
     /// the console runs a command, the replies vanilla broadcasts go to the
     /// operators too.
-    fn console_reply(&mut self, text: Text) {
+    fn console_reply(&mut self, text: Text) { if let Some(__l) = crate::points_generated::P1542.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         log("INFO", &format!("System chat: {}", text.plain()));
         if self.console_broadcast.is_some()
             && text
@@ -1529,20 +1529,20 @@ impl Game<'_> {
     }
 
     /// One console line, then the operators' share of its feedback.
-    fn console_line(&mut self, state: &mut ServerState, line: &str) {
+    fn console_line(&mut self, state: &mut ServerState, line: &str) { if let Some(__l) = crate::points_generated::P1541.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.console_line_telling(state, line, state.broadcast_console);
     }
 
     /// One console line run as `RconConsoleSource` runs an RCON command: the same console at level 4,
     /// its source named `Rcon`, and the operators told when `broadcast-rcon-to-ops` is on.
-    fn rcon_line(&mut self, state: &mut ServerState, line: &str) {
+    fn rcon_line(&mut self, state: &mut ServerState, line: &str) { if let Some(__l) = crate::points_generated::P1540.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.rcon_source = true;
         self.console_line_telling(state, line, state.broadcast_rcon);
         self.rcon_source = false;
     }
 
     /// `console_line` with `inform` as `CommandSource.shouldInformAdmins`.
-    fn console_line_telling(&mut self, state: &mut ServerState, line: &str, inform: bool) {
+    fn console_line_telling(&mut self, state: &mut ServerState, line: &str, inform: bool) { let (inform,) = match crate::points_generated::P1539.get() { Some(__l) => { let mut __a = (inform,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (inform,) };
         self.console_broadcast = Some(inform);
         self.console_command(state, line);
         self.console_broadcast = None;
@@ -1557,7 +1557,7 @@ impl Game<'_> {
     /// DedicatedServer.handleConsoleInputs: one console line, run as the
     /// server (permission level 4). The dedicated-only commands are here;
     /// everything else goes to the game's dispatcher.
-    fn console_command(&mut self, state: &mut ServerState, line: &str) {
+    fn console_command(&mut self, state: &mut ServerState, line: &str) { if let Some(__l) = crate::points_generated::P1538.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let line = line.strip_prefix('/').unwrap_or(line);
         let mut words = line.split_whitespace();
         let Some(command) = words.next() else {
@@ -1933,7 +1933,7 @@ impl Game<'_> {
         }
     }
 
-    fn console_whitelist(&mut self, state: &mut ServerState, rest: &[&str]) {
+    fn console_whitelist(&mut self, state: &mut ServerState, rest: &[&str]) { if let Some(__l) = crate::points_generated::P1537.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let lit = |s: &str| Text::literal(s.to_owned());
         match rest {
             ["on"] | ["off"] => {
@@ -2014,7 +2014,7 @@ impl Game<'_> {
 
     /// `DedicatedServer.setUsingWhitelist`: the flag, and `white-list` in
     /// server.properties.
-    pub(super) fn set_using_whitelist(&mut self, lists: &Arc<Mutex<Lists>>, on: bool) {
+    pub(super) fn set_using_whitelist(&mut self, lists: &Arc<Mutex<Lists>>, on: bool) { let (on,) = match crate::points_generated::P1536.get() { Some(__l) => { let mut __a = (on,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (on,) };
         let changed = {
             let mut lists = lists.lock().unwrap();
             let changed = lists.use_whitelist != on;
@@ -2028,14 +2028,14 @@ impl Game<'_> {
     }
 
     /// `DedicatedServer.setPlayerIdleTimeout`: update the live idle sweep and persist its minutes.
-    pub(super) fn set_player_idle_timeout(&mut self, lists: &Arc<Mutex<Lists>>, minutes: i32) {
+    pub(super) fn set_player_idle_timeout(&mut self, lists: &Arc<Mutex<Lists>>, minutes: i32) { let (minutes,) = match crate::points_generated::P1535.get() { Some(__l) => { let mut __a = (minutes,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (minutes,) };
         lists.lock().unwrap().player_idle_timeout = minutes;
         self.store_property("player-idle-timeout", minutes.to_string());
     }
 
     /// `DedicatedServer.setMaxPlayers`: the live login limit, and `max-players` in
     /// server.properties.
-    fn set_max_players(&mut self, state: &mut ServerState, max_players: usize) {
+    fn set_max_players(&mut self, state: &mut ServerState, max_players: usize) { let (max_players,) = match crate::points_generated::P1534.get() { Some(__l) => { let mut __a = (max_players,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (max_players,) };
         state.max_players = max_players;
         if let Some(lan) = &self.lan {
             lan.hub.lan.shared.set_max_players(max_players);
@@ -2045,20 +2045,20 @@ impl Game<'_> {
 
     /// `DedicatedServer.setEnforceWhitelist`: the flag, and `enforce-whitelist` in
     /// server.properties.
-    pub(super) fn set_enforce_whitelist(&mut self, lists: &Arc<Mutex<Lists>>, on: bool) {
+    pub(super) fn set_enforce_whitelist(&mut self, lists: &Arc<Mutex<Lists>>, on: bool) { let (on,) = match crate::points_generated::P1533.get() { Some(__l) => { let mut __a = (on,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (on,) };
         lists.lock().unwrap().enforce_whitelist = on;
         self.store_property("enforce-whitelist", on.to_string());
     }
 
     /// `DedicatedServer.setPauseWhenEmptySeconds`: the live pause timer, and
     /// `pause-when-empty-seconds` in server.properties.
-    fn set_pause_when_empty_seconds(&mut self, state: &mut ServerState, seconds: i32) {
+    fn set_pause_when_empty_seconds(&mut self, state: &mut ServerState, seconds: i32) { let (seconds,) = match crate::points_generated::P1532.get() { Some(__l) => { let mut __a = (seconds,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (seconds,) };
         state.pause_when_empty_seconds = seconds;
         self.store_property("pause-when-empty-seconds", seconds.to_string());
     }
 
     /// DedicatedServerSettings.update: change one key and store the file.
-    pub(super) fn store_property(&mut self, key: &str, value: String) {
+    pub(super) fn store_property(&mut self, key: &str, value: String) { if let Some(__l) = crate::points_generated::P1531.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let path = PathBuf::from("server.properties");
         if let Ok(p) = ServerProperties::from_file(&path, &mut SystemEntropy::default())
             && let Ok(p) = p.update(key, value)
@@ -2070,7 +2070,7 @@ impl Game<'_> {
     /// MinecraftServer.kickUnlistedPlayers: with `enforce-whitelist` and the
     /// whitelist on, whoever is online and not on the whitelist file is
     /// disconnected (operators are not spared here).
-    pub(super) fn kick_unlisted_players(&mut self, lists: &Arc<Mutex<Lists>>) {
+    pub(super) fn kick_unlisted_players(&mut self, lists: &Arc<Mutex<Lists>>) { if let Some(__l) = crate::points_generated::P1530.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let unlisted: Vec<u128> = {
             let l = lists.lock().unwrap();
             let Some(host) = self.lan.as_ref() else {
@@ -2102,7 +2102,7 @@ impl Game<'_> {
 
     /// The anticheat bans a player (`HostEvent::Ban`): `banned-players.json` gets it as `/ban` adds it,
     /// with the anticheat as its source, and the player is sent away with the ban's message.
-    pub(super) fn anticheat_ban(&mut self, uuid: u128, name: &str, reason: &str) {
+    pub(super) fn anticheat_ban(&mut self, uuid: u128, name: &str, reason: &str) { if let Some(__l) = crate::points_generated::P1529.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -2147,7 +2147,7 @@ impl Game<'_> {
         events::record("ban", name, uuid, serde_json::json!({ "reason": reason }));
     }
 
-    pub(super) fn kick_uuid(&mut self, uuid: u128, reason: Tag) {
+    pub(super) fn kick_uuid(&mut self, uuid: u128, reason: Tag) { if let Some(__l) = crate::points_generated::P1528.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(h) = self.lan.as_mut() {
             let conns: Vec<u32> = h
                 .hub
@@ -2173,7 +2173,7 @@ impl Game<'_> {
     /// MinecraftServer.stopServer: players saved and sent away, worlds saved.
     /// MinecraftServer.saveAllChunks, not silent: one line per level, in
     /// the server's level order.
-    fn log_saved_levels(&self) {
+    fn log_saved_levels(&self) { if let Some(__l) = crate::points_generated::P1527.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         for dimension in [
             "minecraft:overworld",
             "minecraft:the_nether",
@@ -2195,7 +2195,7 @@ impl Game<'_> {
     /// back older data than the last autosave; that guest keeps the file it has. If the hub
     /// has already closed, no players can be saved. The levels, the scoreboard and the other
     /// state are saved as in a normal stop.
-    fn stop_after_crash(&mut self, message: &str) -> Result<()> {
+    fn stop_after_crash(&mut self, message: &str) -> Result<()> { if let Some(__l) = crate::points_generated::P1526.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         log("ERROR", &format!("The server thread panicked: {message}"));
         let acting = self.lan_acting;
         let hub_lost = self.lan.is_none();
@@ -2224,7 +2224,7 @@ impl Game<'_> {
         Err(format!("the server thread panicked: {message}").into())
     }
 
-    fn stop_dedicated(&mut self) -> Result<()> {
+    fn stop_dedicated(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P1525.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The close request starts before player and world saves.
         self.native_lifecycle.begin_close();
         // MinecraftServer.stopServer's start: everyone is still here.

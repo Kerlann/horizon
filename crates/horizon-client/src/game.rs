@@ -1130,7 +1130,7 @@ fn point_box(feet: [f64; 3], width: f64, height: f64) -> Aabb {
 }
 impl GameLevel<'_> {
     /// `LilyPadBlock.entityInside`: the boxes of the boats that can break a pad.
-    fn boat_trigger_boxes(&self) -> impl Iterator<Item = Aabb> + '_ {
+    fn boat_trigger_boxes(&self) -> impl Iterator<Item = Aabb> + '_ { if let Some(__l) = crate::points_generated::P384.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.entities.boats.iter().map(boats::Boat::bounds)
     }
     /// How many entities in `area` press plates and tripwires, or with
@@ -1151,7 +1151,7 @@ impl GameLevel<'_> {
     }
     /// `DetectorRailBlock.getAnalogOutputSignal`: a powered rail reads the
     /// minecart on it, a command block cart first (its success count), else the first container cart's fullness.
-    fn detector_rail_signal(&self, pos: BlockPos, powered: bool) -> i32 {
+    fn detector_rail_signal(&self, pos: BlockPos, powered: bool) -> i32 { let (powered,) = match crate::points_generated::P383.get() { Some(__l) => { let mut __a = (powered,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (powered,) };
         if !powered {
             return 0;
         }
@@ -1183,7 +1183,7 @@ impl GameLevel<'_> {
     }
     /// A container minecart's comparator signal: its open menu's slots while
     /// someone has it open, else its own.
-    fn cart_signal(&self, cart: &minecarts::Minecart) -> i32 {
+    fn cart_signal(&self, cart: &minecarts::Minecart) -> i32 { if let Some(__l) = crate::points_generated::P382.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let key = (i32::MAX - 15, minecarts::CART_KEY_Y, cart.id as i32);
         let slots = match self.world.block_entities.get(&key) {
             Some(BlockEntity::Chest(open)) => open,
@@ -1194,7 +1194,7 @@ impl GameLevel<'_> {
     /// Every entity box that blocks building: the players who aren't
     /// spectators, the minecarts and the `Blockers` (a removed mob or a marker
     /// armor stand, whose box is empty, doesn't).
-    fn building_blocker_boxes(&self) -> Vec<Aabb> {
+    fn building_blocker_boxes(&self) -> Vec<Aabb> { if let Some(__l) = crate::points_generated::P381.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let boxed = |(lo, hi): &([f64; 3], [f64; 3])| {
             Aabb::new(
                 Vec3::new(lo[0], lo[1], lo[2]),
@@ -1226,17 +1226,17 @@ impl GameLevel<'_> {
     }
 }
 impl LevelAccess for GameLevel<'_> {
-    fn redstone_experiments(&self) -> bool {
+    fn redstone_experiments(&self) -> bool { if let Some(__l) = crate::points_generated::P380.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.redstone_experiments
     }
-    fn allow_hopper_pickup_item(&self, pos: BlockPos, item: &str, count: u32) -> bool {
+    fn allow_hopper_pickup_item(&self, pos: BlockPos, item: &str, count: u32) -> bool { let (count,) = match crate::points_generated::P379.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (count,) };
         let mut cancel = false;
         if self.native_authoritative {
             self.native_hopper_pickup_item(self.dimension, pos, item, count, &mut cancel);
         }
         !cancel
     }
-    fn observe_block_changed(&self, pos: BlockPos, old: BlockStateId, new: BlockStateId) {
+    fn observe_block_changed(&self, pos: BlockPos, old: BlockStateId, new: BlockStateId) { if let Some(__l) = crate::points_generated::P378.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.native_authoritative {
             self.native_block_changed(self.dimension, pos, old, new);
         }
@@ -1247,7 +1247,7 @@ impl LevelAccess for GameLevel<'_> {
         state: BlockStateId,
         changed: horizon_world::level::BlockId,
         moved: bool,
-    ) {
+    ) { let (moved,) = match crate::points_generated::P377.get() { Some(__l) => { let mut __a = (moved,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (moved,) };
         if self.native_authoritative {
             self.native_neighbor_changed(self.dimension, pos, state, changed, moved);
         }
@@ -1258,7 +1258,7 @@ impl LevelAccess for GameLevel<'_> {
         state: BlockStateId,
         moved: bool,
         updates: &mut Vec<horizon_world::level::NeighbourUpdate>,
-    ) {
+    ) { let (moved,) = match crate::points_generated::P376.get() { Some(__l) => { let mut __a = (moved,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (moved,) };
         if self.native_authoritative {
             self.native_affect_neighbors_after_removal(self.dimension, pos, state, moved, updates);
         }
@@ -1268,7 +1268,7 @@ impl LevelAccess for GameLevel<'_> {
         kind: horizon_world::level::Spread,
         from: BlockPos,
         to: BlockPos,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P375.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut canceled = false;
         if self.native_authoritative {
             let kind = match kind {
@@ -1284,7 +1284,7 @@ impl LevelAccess for GameLevel<'_> {
         pos: BlockPos,
         liquid_pos: BlockPos,
         state: BlockStateId,
-    ) -> Option<BlockStateId> {
+    ) -> Option<BlockStateId> { if let Some(__l) = crate::points_generated::P374.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut new_state = state;
         let mut cancel = false;
         if self.native_authoritative {
@@ -1305,14 +1305,14 @@ impl LevelAccess for GameLevel<'_> {
         fluid: &'static str,
         from: i32,
         to: i32,
-    ) -> bool {
+    ) -> bool { let (from,to,) = match crate::points_generated::P373.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from,to,) };
         let mut cancel = false;
         if self.native_authoritative {
             self.native_fluid_level_change(self.dimension, pos, fluid, from, to, &mut cancel);
         }
         !cancel
     }
-    fn allow_block_ignite(&self, pos: BlockPos, cause: &'static str) -> bool {
+    fn allow_block_ignite(&self, pos: BlockPos, cause: &'static str) -> bool { if let Some(__l) = crate::points_generated::P372.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut cancel = false;
         if self.native_authoritative {
             self.native_block_ignite(self.dimension, self.native_player, pos, cause, &mut cancel);
@@ -1323,7 +1323,7 @@ impl LevelAccess for GameLevel<'_> {
         &mut self,
         pos: BlockPos,
         feature: Option<&'a str>,
-    ) -> Option<std::borrow::Cow<'a, str>> {
+    ) -> Option<std::borrow::Cow<'a, str>> { if let Some(__l) = crate::points_generated::P371.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.native_authoritative
             || !mod_api::__private::listened(mod_api::HookId::BlockGrowFeature)
         {
@@ -1334,40 +1334,40 @@ impl LevelAccess for GameLevel<'_> {
         self.native_block_grow_feature(self.dimension, pos, &mut feature, &mut cancel);
         feature.filter(|_| !cancel).map(std::borrow::Cow::Owned)
     }
-    fn allow_block_burn(&self, pos: BlockPos) -> bool {
+    fn allow_block_burn(&self, pos: BlockPos) -> bool { if let Some(__l) = crate::points_generated::P370.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut cancel = false;
         if self.native_authoritative {
             self.native_block_burn(self.dimension, pos, &mut cancel);
         }
         !cancel
     }
-    fn allow_leaves_decay(&self, pos: BlockPos) -> bool {
+    fn allow_leaves_decay(&self, pos: BlockPos) -> bool { if let Some(__l) = crate::points_generated::P369.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut cancel = false;
         if self.native_authoritative {
             self.native_leaves_decay(self.dimension, pos, &mut cancel);
         }
         !cancel
     }
-    fn allow_moisture_change(&self, pos: BlockPos, from: i32, to: i32) -> bool {
+    fn allow_moisture_change(&self, pos: BlockPos, from: i32, to: i32) -> bool { let (from,to,) = match crate::points_generated::P368.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from,to,) };
         let mut cancel = false;
         if self.native_authoritative {
             self.native_moisture_change(self.dimension, pos, from, to, &mut cancel);
         }
         !cancel
     }
-    fn observe_sponge_absorb(&self, pos: BlockPos) {
+    fn observe_sponge_absorb(&self, pos: BlockPos) { if let Some(__l) = crate::points_generated::P367.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.native_authoritative {
             self.native_sponge_absorb(self.dimension, pos);
         }
     }
-    fn allow_block_fade(&self, pos: BlockPos, from: BlockStateId, to: BlockStateId) -> bool {
+    fn allow_block_fade(&self, pos: BlockPos, from: BlockStateId, to: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P366.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut cancel = false;
         if self.native_authoritative {
             self.native_block_fade(self.dimension, pos, from, to, &mut cancel);
         }
         !cancel
     }
-    fn allow_block_form(&self, pos: BlockPos, from: BlockStateId, to: BlockStateId) -> bool {
+    fn allow_block_form(&self, pos: BlockPos, from: BlockStateId, to: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P365.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut cancel = false;
         if self.native_authoritative {
             self.native_block_form(self.dimension, pos, from, to, &mut cancel);
@@ -1380,7 +1380,7 @@ impl LevelAccess for GameLevel<'_> {
         instrument: u8,
         old: i32,
         mut new: i32,
-    ) -> Option<i32> {
+    ) -> Option<i32> { let (instrument,old,mut new,) = match crate::points_generated::P364.get() { Some(__l) => { let mut __a = (instrument,old,new,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (instrument,old,new,) };
         let mut cancel = false;
         if self.native_authoritative {
             let context = mod_api::NativeNoteBlockChange {
@@ -1399,7 +1399,7 @@ impl LevelAccess for GameLevel<'_> {
         by_player: bool,
         instrument: &mut u8,
         note: &mut i32,
-    ) -> bool {
+    ) -> bool { let (by_player,) = match crate::points_generated::P363.get() { Some(__l) => { let mut __a = (by_player,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (by_player,) };
         use mod_api::NativeNoteInstrument;
         if !self.native_authoritative
             || !mod_api::__private::listened(mod_api::HookId::NoteBlockPlay)
@@ -1435,7 +1435,7 @@ impl LevelAccess for GameLevel<'_> {
         pos: BlockPos,
         state: BlockStateId,
         shape: &horizon_world::level::PortalShape,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P362.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut cancel = false;
         if self.native_authoritative && mod_api::__private::listened(mod_api::HookId::PortalSpawn) {
             let b = shape.bottom_left;
@@ -1450,7 +1450,7 @@ impl LevelAccess for GameLevel<'_> {
         }
         !cancel
     }
-    fn allow_bell_ring(&self, pos: BlockPos) -> bool {
+    fn allow_bell_ring(&self, pos: BlockPos) -> bool { if let Some(__l) = crate::points_generated::P361.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut cancel = false;
         if self.native_authoritative {
             self.native_bell_ring(self.dimension, self.native_player, pos, &mut cancel);
@@ -1463,7 +1463,7 @@ impl LevelAccess for GameLevel<'_> {
         from: i32,
         to: i32,
         reason: &'static str,
-    ) -> bool {
+    ) -> bool { let (from,to,) = match crate::points_generated::P360.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from,to,) };
         let mut cancel = false;
         if self.native_authoritative {
             self.native_cauldron_level_changed(
@@ -1484,7 +1484,7 @@ impl LevelAccess for GameLevel<'_> {
         direction: horizon_core::geometry::Direction,
         push: &[BlockPos],
         destroy: &[BlockPos],
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P359.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut canceled = false;
         if self.native_authoritative {
             let step = direction.normal();
@@ -1492,14 +1492,14 @@ impl LevelAccess for GameLevel<'_> {
         }
         !canceled
     }
-    fn adjust_signal_source(&self, state: BlockStateId, vanilla: bool) -> bool {
+    fn adjust_signal_source(&self, state: BlockStateId, vanilla: bool) -> bool { let (vanilla,) = match crate::points_generated::P358.get() { Some(__l) => { let mut __a = (vanilla,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (vanilla,) };
         let mut source = vanilla;
         if self.native_authoritative {
             self.native_is_signal_source(state, &mut source);
         }
         source
     }
-    fn has_weak_power_hook(&self) -> bool {
+    fn has_weak_power_hook(&self) -> bool { if let Some(__l) = crate::points_generated::P357.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_authoritative
             && mod_api::__private::has_scoped_hook(mod_api::HookId::ShouldCheckWeakPower)
     }
@@ -1509,12 +1509,12 @@ impl LevelAccess for GameLevel<'_> {
         state: BlockStateId,
         direction: Direction,
         vanilla: bool,
-    ) -> bool {
+    ) -> bool { let (vanilla,) = match crate::points_generated::P356.get() { Some(__l) => { let mut __a = (vanilla,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (vanilla,) };
         let mut check = vanilla;
         self.native_should_check_weak_power(self.dimension, pos, state, direction, &mut check);
         check
     }
-    fn has_redstone_wire_connection_hook(&self) -> bool {
+    fn has_redstone_wire_connection_hook(&self) -> bool { if let Some(__l) = crate::points_generated::P355.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_authoritative
             && mod_api::__private::has_scoped_hook(mod_api::HookId::ShouldRedstoneWireConnectTo)
     }
@@ -1524,7 +1524,7 @@ impl LevelAccess for GameLevel<'_> {
         state: BlockStateId,
         direction: Option<Direction>,
         vanilla: bool,
-    ) -> bool {
+    ) -> bool { let (vanilla,) = match crate::points_generated::P354.get() { Some(__l) => { let mut __a = (vanilla,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (vanilla,) };
         let mut connected = vanilla;
         self.native_should_redstone_wire_connect_to(
             self.dimension,
@@ -1542,7 +1542,7 @@ impl LevelAccess for GameLevel<'_> {
         direction: Direction,
         direct: bool,
         vanilla: i32,
-    ) -> i32 {
+    ) -> i32 { let (direct,vanilla,) = match crate::points_generated::P353.get() { Some(__l) => { let mut __a = (direct,vanilla,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (direct,vanilla,) };
         let mut signal = vanilla;
         if self.native_authoritative {
             let face = direction.opposite();
@@ -1550,7 +1550,7 @@ impl LevelAccess for GameLevel<'_> {
         }
         signal.clamp(0, 15)
     }
-    fn adjust_has_analog_output(&self, state: BlockStateId, vanilla: bool) -> bool {
+    fn adjust_has_analog_output(&self, state: BlockStateId, vanilla: bool) -> bool { let (vanilla,) = match crate::points_generated::P352.get() { Some(__l) => { let mut __a = (vanilla,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (vanilla,) };
         let mut output = vanilla;
         if self.native_authoritative {
             self.native_has_analog_output(state, &mut output);
@@ -1563,7 +1563,7 @@ impl LevelAccess for GameLevel<'_> {
         state: BlockStateId,
         direction: Direction,
         vanilla: i32,
-    ) -> i32 {
+    ) -> i32 { let (vanilla,) = match crate::points_generated::P351.get() { Some(__l) => { let mut __a = (vanilla,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (vanilla,) };
         let mut output = vanilla;
         if self.native_authoritative {
             self.native_analog_output(self.dimension, pos, state, direction, &mut output);
@@ -1576,7 +1576,7 @@ impl LevelAccess for GameLevel<'_> {
         pos: BlockPos,
         state: &mut BlockStateId,
         handled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P350.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.native_authoritative {
             // Any block the hook writes moves the world's revision on.
             let revision = self.world.revision;
@@ -1592,7 +1592,7 @@ impl LevelAccess for GameLevel<'_> {
         pos: BlockPos,
         state: &mut BlockStateId,
         handled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P349.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.native_authoritative {
             // Any block the hook writes moves the world's revision on.
             let revision = self.world.revision;
@@ -1611,7 +1611,7 @@ impl LevelAccess for GameLevel<'_> {
         neighbour_pos: BlockPos,
         neighbour: BlockStateId,
         new: &mut Option<BlockStateId>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P348.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.native_authoritative {
             self.native_update_shape(
                 ticks,
@@ -1632,12 +1632,12 @@ impl LevelAccess for GameLevel<'_> {
         context: &PlacementContext,
         fluid: FluidState,
         answer: &mut Option<Option<BlockStateId>>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P347.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.native_authoritative {
             self.native_state_for_placement(self.dimension, state, context, fluid, answer);
         }
     }
-    fn before_can_survive(&self, pos: BlockPos, state: BlockStateId, survives: &mut Option<bool>) {
+    fn before_can_survive(&self, pos: BlockPos, state: BlockStateId, survives: &mut Option<bool>) { if let Some(__l) = crate::points_generated::P346.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.native_authoritative {
             self.native_can_survive(self.dimension, pos, state, survives);
         }
@@ -1648,50 +1648,50 @@ impl LevelAccess for GameLevel<'_> {
         ground: BlockStateId,
         ground_pos: BlockPos,
         may: &mut Option<bool>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P345.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.native_authoritative {
             self.native_may_place_on(self.dimension, state, ground, ground_pos, may);
         }
     }
-    fn is_client_side(&self) -> bool {
+    fn is_client_side(&self) -> bool { if let Some(__l) = crate::points_generated::P344.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.client_side
     }
-    fn is_valid_bonemeal_target(&self, pos: BlockPos, state: BlockStateId) -> Option<bool> {
+    fn is_valid_bonemeal_target(&self, pos: BlockPos, state: BlockStateId) -> Option<bool> { if let Some(__l) = crate::points_generated::P343.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // Asked on both sides, as vanilla asks `isValidBonemealTarget`: a
         // client predicts the use with it. Only a mod answers.
         let mut valid = None;
         self.native_is_valid_bonemeal_target(self.dimension, pos, state, &mut valid);
         valid
     }
-    fn is_bonemeal_success(&mut self, pos: BlockPos, state: BlockStateId) -> bool {
+    fn is_bonemeal_success(&mut self, pos: BlockPos, state: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P342.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut success = false;
         if self.native_authoritative {
             self.native_is_bonemeal_success(self.dimension, pos, state, &mut success);
         }
         success
     }
-    fn perform_bonemeal(&mut self, ticks: &mut Ticks, pos: BlockPos, state: BlockStateId) {
+    fn perform_bonemeal(&mut self, ticks: &mut Ticks, pos: BlockPos, state: BlockStateId) { if let Some(__l) = crate::points_generated::P341.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.native_authoritative {
             self.native_perform_bonemeal(ticks, self.dimension, pos, state);
         }
     }
-    fn before_fire_odds(&self, state: BlockStateId, odds: &mut Option<(i32, i32)>) {
+    fn before_fire_odds(&self, state: BlockStateId, odds: &mut Option<(i32, i32)>) { if let Some(__l) = crate::points_generated::P340.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.native_authoritative {
             self.native_fire_odds(self.dimension, state, odds);
         }
     }
-    fn before_smoke_source(&self, state: BlockStateId, smoke: &mut Option<bool>) {
+    fn before_smoke_source(&self, state: BlockStateId, smoke: &mut Option<bool>) { if let Some(__l) = crate::points_generated::P339.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.native_authoritative {
             self.native_smoke_source(self.dimension, state, smoke);
         }
     }
-    fn world_surface(&self, x: i32, z: i32) -> i32 {
+    fn world_surface(&self, x: i32, z: i32) -> i32 { let (x,z,) = match crate::points_generated::P338.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,z,) };
         self.world.world_surface(x, z, |s| self.facts.is_air(s))
     }
-    fn precipitation(&self, pos: BlockPos) -> Option<horizon_world::level::Precipitation> {
+    fn precipitation(&self, pos: BlockPos) -> Option<horizon_world::level::Precipitation> { if let Some(__l) = crate::points_generated::P337.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.behaviours.precipitation_info(self, pos)
     }
-    fn is_raining_at(&self, pos: BlockPos) -> bool {
+    fn is_raining_at(&self, pos: BlockPos) -> bool { if let Some(__l) = crate::points_generated::P336.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.behaviours.is_raining_at(self, pos)
     }
     /// `ContainerOpenersCounter.recheckOpeners` for the block entity at `pos`,
@@ -1699,7 +1699,7 @@ impl LevelAccess for GameLevel<'_> {
     /// the count a recount of the players with that container open finds, and
     /// the count it replaces. Only the block entities that keep a counter and
     /// a scheduled recheck answer; anything else is `None`.
-    fn recheck_container_openers(&mut self, pos: BlockPos) -> Option<(i32, i32)> {
+    fn recheck_container_openers(&mut self, pos: BlockPos) -> Option<(i32, i32)> { if let Some(__l) = crate::points_generated::P335.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_world::level::classes::Class;
         let data = self.behaviours.data(self.world.block(pos.x, pos.y, pos.z));
         if !(data.is(Class::Chest) || data.is(Class::EnderChest) || data.is(Class::Barrel)) {
@@ -1717,7 +1717,7 @@ impl LevelAccess for GameLevel<'_> {
         pos: BlockPos,
         state: BlockStateId,
         direction: Direction,
-    ) -> i32 {
+    ) -> i32 { if let Some(__l) = crate::points_generated::P334.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(s) = self.registry.state(state)
             && s.name == "minecraft:detector_rail"
         {
@@ -1756,7 +1756,7 @@ impl LevelAccess for GameLevel<'_> {
         }
         machines::container_signal(self.world, self.behaviours, self.items, self.registry, pos)
     }
-    fn item_frame_analog_output(&self, pos: BlockPos, facing: Direction) -> Option<i32> {
+    fn item_frame_analog_output(&self, pos: BlockPos, facing: Direction) -> Option<i32> { if let Some(__l) = crate::points_generated::P333.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut frames = self
             .item_frames
             .iter()
@@ -1775,7 +1775,7 @@ impl LevelAccess for GameLevel<'_> {
         pos: BlockPos,
         _state: BlockStateId,
         _direction: Direction,
-    ) -> i32 {
+    ) -> i32 { if let Some(__l) = crate::points_generated::P332.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // TestBlock.ownSignal.
         if let Some(BlockEntity::TestBlock(b)) =
             self.world.block_entities.get(&(pos.x, pos.y, pos.z))
@@ -1788,26 +1788,26 @@ impl LevelAccess for GameLevel<'_> {
         }
         jukebox::jukebox_signals(self.world, self.items, pos).map_or(0, |(signal, _)| signal)
     }
-    fn biome_name(&self, pos: BlockPos) -> Option<&str> {
+    fn biome_name(&self, pos: BlockPos) -> Option<&str> { if let Some(__l) = crate::points_generated::P331.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let chunk = self.world.chunks.get(&(pos.x >> 4, pos.z >> 4))?;
         Some(&self.biomes.get(chunk.biome(pos.x, pos.y, pos.z)).name)
     }
-    fn world_seed(&self) -> i64 {
+    fn world_seed(&self) -> i64 { if let Some(__l) = crate::points_generated::P330.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.seed
     }
-    fn day_time(&self) -> i64 {
+    fn day_time(&self) -> i64 { if let Some(__l) = crate::points_generated::P329.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world.day_time
     }
-    fn game_rules(&self) -> horizon_world::level::GameRules {
+    fn game_rules(&self) -> horizon_world::level::GameRules { if let Some(__l) = crate::points_generated::P328.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.rules
     }
-    fn difficulty(&self) -> i32 {
+    fn difficulty(&self) -> i32 { if let Some(__l) = crate::points_generated::P327.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.difficulty
     }
     /// `ServerLevel.canSpreadFireAround`: a player (not a spectator) closer
     /// than the `fire_spread_radius_around_player` rule to the block's corner
     /// (`ChunkMap.anyPlayerCloseEnoughTo`); -1 spreads everywhere.
-    fn can_spread_fire_around(&self, pos: BlockPos) -> bool {
+    fn can_spread_fire_around(&self, pos: BlockPos) -> bool { if let Some(__l) = crate::points_generated::P326.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let radius = self.rules.fire_spread_radius_around_player;
         radius == -1
             || self.fire_players.iter().any(|p| {
@@ -1819,7 +1819,7 @@ impl LevelAccess for GameLevel<'_> {
                 d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < f64::from(radius) * f64::from(radius)
             })
     }
-    fn increased_fire_burnout(&self, pos: BlockPos) -> bool {
+    fn increased_fire_burnout(&self, pos: BlockPos) -> bool { if let Some(__l) = crate::points_generated::P325.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world
             .chunks
             .get(&(pos.x >> 4, pos.z >> 4))
@@ -1829,10 +1829,10 @@ impl LevelAccess for GameLevel<'_> {
                     .increased_fire_burnout
             })
     }
-    fn block_state(&self, pos: BlockPos) -> BlockStateId {
+    fn block_state(&self, pos: BlockPos) -> BlockStateId { if let Some(__l) = crate::points_generated::P324.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world.block(pos.x, pos.y, pos.z)
     }
-    fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> {
+    fn set_raw(&mut self, pos: BlockPos, state: BlockStateId) -> Option<BlockStateId> { if let Some(__l) = crate::points_generated::P323.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // `Level.setBlock`: a server level of the Debug preset never changes.
         if self.debug && !self.client_side {
             return None;
@@ -1847,49 +1847,49 @@ impl LevelAccess for GameLevel<'_> {
         self.world.set(pos.x, pos.y, pos.z, state).ok()?;
         Some(previous)
     }
-    fn is_loaded(&self, pos: BlockPos) -> bool {
+    fn is_loaded(&self, pos: BlockPos) -> bool { if let Some(__l) = crate::points_generated::P322.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world.loaded(pos.x, pos.z)
     }
-    fn min_y(&self) -> i32 {
+    fn min_y(&self) -> i32 { if let Some(__l) = crate::points_generated::P321.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world.shape.min_y
     }
-    fn max_y(&self) -> i32 {
+    fn max_y(&self) -> i32 { if let Some(__l) = crate::points_generated::P320.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // Exclusive, as LevelAccess::max_y documents.
         self.world.shape.max_y()
     }
-    fn random(&mut self) -> &mut horizon_core::random::LegacyRandom {
+    fn random(&mut self) -> &mut horizon_core::random::LegacyRandom { if let Some(__l) = crate::points_generated::P319.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         &mut self.world.random
     }
-    fn game_time(&self) -> i64 {
+    fn game_time(&self) -> i64 { if let Some(__l) = crate::points_generated::P318.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world.game_time
     }
-    fn block_light(&self, pos: BlockPos) -> i32 {
+    fn block_light(&self, pos: BlockPos) -> i32 { if let Some(__l) = crate::points_generated::P317.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         i32::from(self.world.light(pos.x, pos.y, pos.z) & 15)
     }
-    fn sky_light(&self, pos: BlockPos) -> i32 {
+    fn sky_light(&self, pos: BlockPos) -> i32 { if let Some(__l) = crate::points_generated::P316.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         i32::from(self.world.light(pos.x, pos.y, pos.z) >> 4)
     }
-    fn sky_darken(&self) -> i32 {
+    fn sky_darken(&self) -> i32 { if let Some(__l) = crate::points_generated::P315.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.darken
     }
-    fn sun_angle(&self, _pos: BlockPos) -> f32 {
+    fn sun_angle(&self, _pos: BlockPos) -> f32 { if let Some(__l) = crate::points_generated::P314.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.environment
             .sample(self.world.day_time, None, None)
             .sun_angle
     }
-    fn is_raining(&self) -> bool {
+    fn is_raining(&self) -> bool { if let Some(__l) = crate::points_generated::P313.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.raining
     }
-    fn is_thundering(&self) -> bool {
+    fn is_thundering(&self) -> bool { if let Some(__l) = crate::points_generated::P312.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.thundering
     }
-    fn dimension(&self) -> LevelDimension {
+    fn dimension(&self) -> LevelDimension { if let Some(__l) = crate::points_generated::P311.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.dimension
     }
     /// `Level.isUnobstructed`: the placed state's collision shape against the player.
     /// `Level.isUnobstructed(state, pos, CollisionContext.of(player))`: no
     /// entity that blocks building is in the state's collision shape.
-    fn is_unobstructed(&self, pos: BlockPos, state: BlockStateId) -> bool {
+    fn is_unobstructed(&self, pos: BlockPos, state: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P310.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let player = self.player_collision.as_ref();
         let context = player.map_or_else(
             || CollisionContext::empty(false),
@@ -1942,14 +1942,14 @@ impl LevelAccess for GameLevel<'_> {
     }
     /// `ServerLevel.isPositionTickingWithEntitiesLoaded`: block ticking, and
     /// a ticking chunk.
-    fn is_ticking_chunk(&self, chunk: horizon_core::position::ChunkPos) -> bool {
+    fn is_ticking_chunk(&self, chunk: horizon_core::position::ChunkPos) -> bool { if let Some(__l) = crate::points_generated::P309.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.tickets.block_ticking(chunk.x, chunk.z) && ticking_chunk(self.world, chunk.x, chunk.z)
     }
     /// Entities that trigger pressure plates, tripwires, detector rails and
     /// wooden buttons: the players (the host and the LAN guests), the mobs,
     /// the minecarts and the other entities that don't ignore block triggers,
     /// and for `EntityQuery::Arrows` the arrows.
-    fn count_entities(&self, area: Aabb, query: EntityQuery) -> usize {
+    fn count_entities(&self, area: Aabb, query: EntityQuery) -> usize { if let Some(__l) = crate::points_generated::P308.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let hit = |(lo, hi): &([f64; 3], [f64; 3])| {
             area.intersects(Aabb::new(
                 Vec3::new(lo[0], lo[1], lo[2]),
@@ -1981,7 +1981,7 @@ impl LevelAccess for GameLevel<'_> {
             EntityQuery::Everything => players() + self.count_triggers::<false>(area) + others(),
         }
     }
-    fn emit(&mut self, event: LevelEvent) {
+    fn emit(&mut self, event: LevelEvent) { if let Some(__l) = crate::points_generated::P307.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match event {
             // Block.dropResources draws its loot and spots right away.
             // `popResource` only drops server-side (`!level.isClientSide`):
@@ -2023,7 +2023,7 @@ impl LevelAccess for GameLevel<'_> {
             event => self.events.push(event),
         }
     }
-    fn has_mod_block_entity(&self, pos: BlockPos) -> bool {
+    fn has_mod_block_entity(&self, pos: BlockPos) -> bool { if let Some(__l) = crate::points_generated::P306.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // Asked on every block change: no lookup until a mod block entity exists.
         self.world.block_entities.has_mods()
             && matches!(
@@ -2031,10 +2031,10 @@ impl LevelAccess for GameLevel<'_> {
                 Some(BlockEntity::Mod(_))
             )
     }
-    fn remove_block_entity(&mut self, pos: BlockPos, old: BlockStateId, side_effects: bool) -> u8 {
+    fn remove_block_entity(&mut self, pos: BlockPos, old: BlockStateId, side_effects: bool) -> u8 { let (side_effects,) = match crate::points_generated::P305.get() { Some(__l) => { let mut __a = (side_effects,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (side_effects,) };
         self.remove_entity(pos, old, side_effects)
     }
-    fn load_block_entity(&mut self, pos: BlockPos, mut nbt: horizon_world::nbt::Compound) {
+    fn load_block_entity(&mut self, pos: BlockPos, mut nbt: horizon_world::nbt::Compound) { if let Some(__l) = crate::points_generated::P304.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_world::nbt::Tag;
         for (k, v) in [("x", pos.x), ("y", pos.y), ("z", pos.z)] {
             nbt.insert(k.into(), Tag::Int(v));
@@ -2050,11 +2050,11 @@ impl LevelAccess for GameLevel<'_> {
             self.world.block_entities.insert(key, entity);
         }
     }
-    fn set_command_block_powered(&mut self, pos: BlockPos, powered: bool) -> Option<(bool, bool)> {
+    fn set_command_block_powered(&mut self, pos: BlockPos, powered: bool) -> Option<(bool, bool)> { let (powered,) = match crate::points_generated::P303.get() { Some(__l) => { let mut __a = (powered,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (powered,) };
         command_blocks::set_powered(self.world, self.registry, (pos.x, pos.y, pos.z), powered)
     }
     /// `PotentSulfurBlockEntity.resetCountdown`.
-    fn reset_potent_sulfur_countdown(&mut self, pos: BlockPos) {
+    fn reset_potent_sulfur_countdown(&mut self, pos: BlockPos) { if let Some(__l) = crate::points_generated::P302.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(BlockEntity::PotentSulfur(sulfur)) =
             self.world.block_entities.get_mut(&(pos.x, pos.y, pos.z))
         {
@@ -3616,7 +3616,7 @@ impl Game<'_> {
     /// `Level.canHaveWeather`, from the level's dimension type (sky light, no
     /// ceiling) and the End, which vanilla names by id. Every rain, thunder
     /// and lightning rule asks this, never the dimension's id.
-    fn can_have_weather(&self) -> bool {
+    fn can_have_weather(&self) -> bool { if let Some(__l) = crate::points_generated::P301.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         level_can_have_weather(
             self.world.shape.sky_light,
             self.world.shape.has_ceiling,
@@ -3625,14 +3625,14 @@ impl Game<'_> {
     }
     /// The rain and thunder levels (`Level.getRainLevel`, `getThunderLevel`):
     /// the world's, where the level can have weather, else none.
-    fn weather_levels(&self, partial: f32) -> (f32, f32) {
+    fn weather_levels(&self, partial: f32) -> (f32, f32) { let (partial,) = match crate::points_generated::P300.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         if self.can_have_weather() {
             self.world.weather.levels(partial)
         } else {
             (0.0, 0.0)
         }
     }
-    fn eye_position(&self) -> Option<[f64; 3]> {
+    fn eye_position(&self) -> Option<[f64; 3]> { if let Some(__l) = crate::points_generated::P299.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let p = self.player.as_ref()?;
         Some([
             p.position.x,
@@ -3643,7 +3643,7 @@ impl Game<'_> {
     /// Where targeting starts and points: the eyes along the view. Every
     /// crosshair target (blocks, fluids, entities, mod raycasts) is found
     /// along this ray, so a tracked controller can stand in for it.
-    fn aim(&self) -> Option<([f64; 3], [f64; 3])> {
+    fn aim(&self) -> Option<([f64; 3], [f64; 3])> { if let Some(__l) = crate::points_generated::P298.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // Minecraft.pick: from the camera entity's eyes along its view
         // (LivingEntity.getViewYRot: the head's yaw).
         if let Some(m) = self.camera_mob() {
@@ -3655,7 +3655,7 @@ impl Game<'_> {
         Some((self.eye_position()?, view_vector(self.yaw, self.pitch)))
     }
     /// `Player.blockInteractionRange`: the block pick's and mining's reach.
-    fn reach(&self) -> f64 {
+    fn reach(&self) -> f64 { if let Some(__l) = crate::points_generated::P297.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.block_reach
     }
     /// Outline shapes that depend on more than the block state, as one box
@@ -3669,7 +3669,7 @@ impl Game<'_> {
         state: BlockStateId,
         player_context: bool,
         anims: &horizon_client::block_entity_anim::BlockEntityAnims,
-    ) -> Option<[f64; 6]> {
+    ) -> Option<[f64; 6]> { let (pos,player_context,) = match crate::points_generated::P296.get() { Some(__l) => { let mut __a = (pos,player_context,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,player_context,) };
         let name = &self.res.facts().get(state).name;
         if matches!(&**name, "minecraft:light" | "minecraft:scaffolding") {
             return (player_context && self.held().is_some_and(|s| *s.item == **name))
@@ -3697,7 +3697,7 @@ impl Game<'_> {
         Some(b)
     }
     /// A block's outline boxes in world space (`getShape` plus the random offset).
-    fn outline_boxes(&self, pos: [i32; 3]) -> Vec<[f64; 6]> {
+    fn outline_boxes(&self, pos: [i32; 3]) -> Vec<[f64; 6]> { let (pos,) = match crate::points_generated::P295.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.outline_boxes_in_context(&self.world, &self.be_anims, pos, true)
     }
     fn outline_boxes_in_context(
@@ -3706,7 +3706,7 @@ impl Game<'_> {
         anims: &horizon_client::block_entity_anim::BlockEntityAnims,
         pos: [i32; 3],
         player_context: bool,
-    ) -> Vec<[f64; 6]> {
+    ) -> Vec<[f64; 6]> { let (pos,player_context,) = match crate::points_generated::P294.get() { Some(__l) => { let mut __a = (pos,player_context,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,player_context,) };
         let state = world.block(pos[0], pos[1], pos[2]);
         if let Some(b) = self.context_outline(pos, state, player_context, anims) {
             return vec![std::array::from_fn(|i| f64::from(pos[i % 3]) + b[i])];
@@ -3731,7 +3731,7 @@ impl Game<'_> {
     }
     /// Voxel traversal against non-air, non-fluid blocks, clipped against
     /// each block's outline shape (`BlockGetter.clip` with `ClipContext.Block.OUTLINE`).
-    fn pick(&self) -> Option<Hit> {
+    fn pick(&self) -> Option<Hit> { if let Some(__l) = crate::points_generated::P293.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // A guest of a hosted world acts on the block their client targeted.
         if let Some(hit) = self.forced_hit {
             return Some(hit);
@@ -3752,7 +3752,7 @@ impl Game<'_> {
     /// The same traversal without `filterHitResult`: the block hit that
     /// bounds the entity ray in `GameRenderer.pick`, out to the larger
     /// interaction range — a wall between the two still hides the entity.
-    fn pick_unfiltered(&self) -> Option<Hit> {
+    fn pick_unfiltered(&self) -> Option<Hit> { if let Some(__l) = crate::points_generated::P292.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(hit) = self.forced_hit {
             return Some(hit);
         }
@@ -3760,7 +3760,7 @@ impl Game<'_> {
         self.clip_ray(origin, dir, self.block_reach.max(self.entity_reach))
     }
     /// The first block outline hit within `reach` along the unit `dir`.
-    fn clip_ray(&self, origin: [f64; 3], dir: [f64; 3], reach: f64) -> Option<Hit> {
+    fn clip_ray(&self, origin: [f64; 3], dir: [f64; 3], reach: f64) -> Option<Hit> { let (origin,dir,reach,) = match crate::points_generated::P291.get() { Some(__l) => { let mut __a = (origin,dir,reach,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (origin,dir,reach,) };
         let mut pos = origin.map(|v| v.floor() as i32);
         let step = dir.map(|d| if d > 0.0 { 1 } else { -1 });
         let delta = dir.map(|d| {
@@ -3885,17 +3885,17 @@ impl Game<'_> {
         None
     }
     /// The stack in the hand that acts (`getItemInHand(hand)`).
-    fn held(&self) -> Option<&ItemStack> {
+    fn held(&self) -> Option<&ItemStack> { if let Some(__l) = crate::points_generated::P290.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.stack_in(self.held_slot())
     }
-    fn held_mut(&mut self) -> &mut Option<ItemStack> {
+    fn held_mut(&mut self) -> &mut Option<ItemStack> { if let Some(__l) = crate::points_generated::P289.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.stack_in_mut(self.held_slot())
     }
     /// The slot of the hand that acts: the selected one, or `OFFHAND_SLOT`.
     /// `LivingEntity.canGlide`: some worn piece `gliding_pieces` lets glide,
     /// or a stack in a hand that glides there (`canGlideUsing` walks every
     /// `EquipmentSlot`).
-    fn glider_worn(&self) -> bool {
+    fn glider_worn(&self) -> bool { if let Some(__l) = crate::points_generated::P288.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let items = self.res.items();
         let hand = |stack: Option<&ItemStack>, slot: &str| {
             stack.is_some_and(|s| horizon_client::item_sync::can_glide_using(s, slot, items))
@@ -3909,7 +3909,7 @@ impl Game<'_> {
     /// random), and
     /// `ItemStack.hurtAndBreak` takes `points` of its durability (Unbreaking
     /// may save it). Callers skip creative.
-    pub(super) fn wear_glider(&mut self, points: u32) {
+    pub(super) fn wear_glider(&mut self, points: u32) { let (points,) = match crate::points_generated::P287.get() { Some(__l) => { let mut __a = (points,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (points,) };
         let gliding = gliding_pieces(self.res.items(), &self.armor);
         let pieces: Vec<usize> = (0..4).filter(|&i| gliding[i]).collect();
         if pieces.is_empty() {
@@ -3928,7 +3928,7 @@ impl Game<'_> {
     }
     /// `LivingEntity.canFreeze`'s armor half: any worn piece in
     /// `freeze_immune_wearables`.
-    pub(crate) fn wears_freeze_immune(&self) -> bool {
+    pub(crate) fn wears_freeze_immune(&self) -> bool { if let Some(__l) = crate::points_generated::P286.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let immune = self
             .res
             .items()
@@ -3945,7 +3945,7 @@ impl Game<'_> {
     /// free, on that side's axis; a later corner overwrites an earlier one.
     /// Suffocating is a full collision cube that is also a full render cube,
     /// as `in_wall` has it.
-    fn closest_space_nudge(&self) -> [Option<f64>; 2] {
+    fn closest_space_nudge(&self) -> [Option<f64>; 2] { if let Some(__l) = crate::points_generated::P285.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.player.as_ref() {
             Some(p) if !p.spectator && self.riding.is_none() => {
                 closest_space_nudge(p, &self.world, self.res.facts())
@@ -3960,7 +3960,7 @@ impl Game<'_> {
     /// (PowderSnowBlock.canEntityWalkOnPowderSnow), freeze-immune wear
     /// (LivingEntity.canFreeze), the dimension's FAST_LAVA, the sleeping
     /// pose and blindness (Player.isMobilityRestricted, which stops a sprint).
-    pub(crate) fn sync_player_body(&mut self) {
+    pub(crate) fn sync_player_body(&mut self) { if let Some(__l) = crate::points_generated::P284.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let glider = self.glider_worn();
         let sleeping = self.sleeping.is_some();
         let item_in_use = self
@@ -4008,14 +4008,14 @@ impl Game<'_> {
         player.burn_from_stepping_immune = burn_immune;
         player.fluids.fast_lava = self.dim == Dim::Nether;
     }
-    fn held_slot(&self) -> usize {
+    fn held_slot(&self) -> usize { if let Some(__l) = crate::points_generated::P283.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.hand {
             Hand::Main => self.selected,
             Hand::Off => shield::OFFHAND_SLOT,
         }
     }
     /// `LivingEntity.getUsedItemHand`: the hand of the item in use.
-    fn used_hand(&self) -> Option<Hand> {
+    fn used_hand(&self) -> Option<Hand> { if let Some(__l) = crate::points_generated::P282.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.using.map(|(slot, _)| {
             if slot == shield::OFFHAND_SLOT {
                 Hand::Off
@@ -4032,7 +4032,7 @@ impl Game<'_> {
         out
     }
     /// Inventory.add: returns the stack that did not fit.
-    fn give(&mut self, mut stack: ItemStack) -> Option<ItemStack> {
+    fn give(&mut self, mut stack: ItemStack) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P281.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let tutorial_item = matches!(
             self.tutorial.step,
             tutorial::Step::FindTree | tutorial::Step::PunchTree | tutorial::Step::CraftPlanks
@@ -4058,7 +4058,7 @@ impl Game<'_> {
     }
     /// The block's first up face (or any face) and its fixed tint, for block
     /// models drawn as entities (falling blocks, carried blocks).
-    fn block_face_sprite(&self, state: BlockStateId) -> Option<(String, u32)> {
+    fn block_face_sprite(&self, state: BlockStateId) -> Option<(String, u32)> { if let Some(__l) = crate::points_generated::P280.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let pack = &self.pack;
         let models = pack
             .render
@@ -4087,7 +4087,7 @@ impl Game<'_> {
     /// 0's `colorAsTerrainParticle` (white when the block has none).
     /// `HoneyBlock.showSlideParticles` (entity event 53): five honey block
     /// particles at the entity.
-    fn honey_slide_particles(&mut self, at: [f64; 3]) {
+    fn honey_slide_particles(&mut self, at: [f64; 3]) { let (at,) = match crate::points_generated::P279.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         use horizon_client::particles::{ParticleOptions, ParticleType};
         let Some(honey) = self
             .pack
@@ -4112,7 +4112,7 @@ impl Game<'_> {
             }
         }
     }
-    fn particle_sprite(&self, state: BlockStateId, pos: [i32; 3]) -> Option<(String, u32)> {
+    fn particle_sprite(&self, state: BlockStateId, pos: [i32; 3]) -> Option<(String, u32)> { let (pos,) = match crate::points_generated::P278.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let sprite = Self::block_particle_sprite(&self.pack, state)?;
         let chunks = &self.world.chunks;
         let (cx, cz) = (pos[0] >> 4, pos[2] >> 4);
@@ -4155,7 +4155,7 @@ impl Game<'_> {
         })?;
         pack.layer_names.get(&layer).cloned()
     }
-    fn particle_shape(&self, pos: [i32; 3], state: BlockStateId) -> Vec<[f64; 6]> {
+    fn particle_shape(&self, pos: [i32; 3], state: BlockStateId) -> Vec<[f64; 6]> { let (pos,) = match crate::points_generated::P277.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let f = self.res.facts().get(state);
         let offset = if f.outline_offset {
             self.pack
@@ -4172,7 +4172,7 @@ impl Game<'_> {
             .collect()
     }
     /// ClientLevel.addDestroyBlockEffect: a burst per outline box.
-    fn destroy_particles(&mut self, pos: [i32; 3], state: BlockStateId) {
+    fn destroy_particles(&mut self, pos: [i32; 3], state: BlockStateId) { let (pos,) = match crate::points_generated::P276.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if self.settings.extras.hide_block_particles {
             return;
         }
@@ -4186,7 +4186,7 @@ impl Game<'_> {
         });
     }
     /// ClientLevel.addBreakingParticles: one crumb on the face being mined.
-    fn crack_particle(&mut self, pos: [i32; 3], face: [i32; 3], state: BlockStateId) {
+    fn crack_particle(&mut self, pos: [i32; 3], face: [i32; 3], state: BlockStateId) { let (pos,face,) = match crate::points_generated::P275.get() { Some(__l) => { let mut __a = (pos,face,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,face,) };
         if self.settings.extras.hide_block_particles {
             return;
         }
@@ -4209,7 +4209,7 @@ impl Game<'_> {
     /// `at` (the eyes less 0.3): slots 0..36, armor feet to head (36..39),
     /// the off hand (40), each thrown in a random direction. The mods hear
     /// the drops (`native_living_drops`) before they join the level.
-    fn drop_inventory(&mut self, at: [f64; 3], dying: &creatures::DyingDrops<'_>) {
+    fn drop_inventory(&mut self, at: [f64; 3], dying: &creatures::DyingDrops<'_>) { let (at,) = match crate::points_generated::P274.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let mut stacks: Vec<ItemStack> = Vec::new();
         if !self.ui.rules.bool("keep_inventory") {
             stacks.extend(self.inventory.iter_mut().filter_map(Option::take));
@@ -4228,20 +4228,20 @@ impl Game<'_> {
         });
     }
     /// Item entity `i` leaves the level (`Entity.discard`); mods hear it.
-    pub(super) fn remove_dropped(&mut self, i: usize) -> ItemEntity {
+    pub(super) fn remove_dropped(&mut self, i: usize) -> ItemEntity { let (i,) = match crate::points_generated::P273.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let e = self.dropped.remove(i);
         self.native_entity_left(e.id);
         e
     }
     /// Experience orb `i` leaves the level (`Entity.discard`); mods hear it.
-    pub(super) fn remove_orb(&mut self, i: usize) -> ExperienceOrb {
+    pub(super) fn remove_orb(&mut self, i: usize) -> ExperienceOrb { let (i,) = match crate::points_generated::P272.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let o = self.orbs.remove(i);
         self.native_entity_left(o.id);
         o
     }
     /// The item entity `spawn_item` just added, unless a native mod kept it
     /// out of the level (`native_entity_join_level`).
-    pub(super) fn just_spawned_item(&mut self) -> Option<&mut ItemEntity> {
+    pub(super) fn just_spawned_item(&mut self) -> Option<&mut ItemEntity> { if let Some(__l) = crate::points_generated::P271.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = self.next_entity;
         self.dropped.last_mut().filter(|d| d.id == id)
     }
@@ -4251,7 +4251,7 @@ impl Game<'_> {
         position: [f64; 3],
         velocity: [f64; 3],
         pickup_delay: u32,
-    ) {
+    ) { let (position,velocity,pickup_delay,) = match crate::points_generated::P270.get() { Some(__l) => { let mut __a = (position,velocity,pickup_delay,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (position,velocity,pickup_delay,) };
         let item = stack.item.clone();
         let count = stack.count as i32;
         self.next_entity += 1;
@@ -4288,7 +4288,7 @@ impl Game<'_> {
     /// The block entity at `pos` saved with its id and position
     /// (`saveWithFullMetadata`), or the saved one Horizon keeps as loaded:
     /// what a broken block's loot sees as `LootContextParams.BLOCK_ENTITY`.
-    fn loot_block_entity(&self, pos: [i32; 3], block: &str) -> Option<horizon_world::nbt::Tag> {
+    fn loot_block_entity(&self, pos: [i32; 3], block: &str) -> Option<horizon_world::nbt::Tag> { let (pos,) = match crate::points_generated::P269.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let key = (pos[0], pos[1], pos[2]);
         match self.world.block_entities.get(&key) {
             Some(entity) => Some(horizon_client::save::encode_block_entity(
@@ -4306,7 +4306,7 @@ impl Game<'_> {
         &self,
         origin: [f64; 3],
         block_entity: Option<horizon_world::nbt::Tag>,
-    ) -> horizon_world::loot::NativeLootPlace {
+    ) -> horizon_world::loot::NativeLootPlace { let (origin,) = match crate::points_generated::P268.get() { Some(__l) => { let mut __a = (origin,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (origin,) };
         let (rain, thunder) = self.world.weather.levels(1.0);
         // Level.canHaveWeather: sky light, no ceiling and not the End.
         let weather =
@@ -4333,7 +4333,7 @@ impl Game<'_> {
         state: BlockStateId,
         held: Option<&ItemStack>,
         block_entity: Option<horizon_world::nbt::Tag>,
-    ) -> Vec<ItemStack> {
+    ) -> Vec<ItemStack> { let (pos,) = match crate::points_generated::P267.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let registry = self.pack.assets.registry;
         let dynamic = self.pending.dynamic(pos);
         let place = self.loot_place_at(pos.map(|v| f64::from(v) + 0.5), block_entity);
@@ -4359,7 +4359,7 @@ impl Game<'_> {
         drops
     }
     /// Block.popResource
-    fn pop_resource(&mut self, pos: [i32; 3], mut stack: ItemStack) {
+    fn pop_resource(&mut self, pos: [i32; 3], mut stack: ItemStack) { let (pos,) = match crate::points_generated::P266.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.pending.attach(pos, &mut stack);
         // Block.popResource: Mth.nextDouble offsets from the level random; the
         // motion is `new ItemEntity(..)`'s own, from the item's random.
@@ -4372,7 +4372,7 @@ impl Game<'_> {
         self.spawn_item(stack, p, v, 10);
     }
     /// Player.drop: thrown from the eyes along the view direction.
-    fn drop_held(&mut self, all: bool) {
+    fn drop_held(&mut self, all: bool) { let (all,) = match crate::points_generated::P265.get() { Some(__l) => { let mut __a = (all,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (all,) };
         if self.eye_position().is_none() {
             return;
         }
@@ -4387,7 +4387,7 @@ impl Game<'_> {
         self.player_drop(thrown);
     }
     /// `Player.drop`: the statistics and a thrown item entity in front of the player.
-    pub(super) fn player_drop(&mut self, thrown: ItemStack) -> Option<u32> {
+    pub(super) fn player_drop(&mut self, thrown: ItemStack) -> Option<u32> { if let Some(__l) = crate::points_generated::P264.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let eye = self.eye_position()?;
         // LivingEntity.drop: every drop swings the main hand, a menu's
         // THROW and a creative tab's drop included.
@@ -4401,7 +4401,7 @@ impl Game<'_> {
     }
     /// `Player.drop(stack, false)`, as `ItemUtils.createFilledResult` drops what no longer fits
     /// in the inventory: thrown from the eyes, with no thrower, statistic or drop hook.
-    pub(super) fn drop_plain(&mut self, stack: ItemStack) -> Option<u32> {
+    pub(super) fn drop_plain(&mut self, stack: ItemStack) -> Option<u32> { if let Some(__l) = crate::points_generated::P263.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if stack.count == 0 {
             return None;
         }
@@ -4421,7 +4421,7 @@ impl Game<'_> {
         eye: [f64; 3],
         randomly: bool,
         thrown_from_hand: bool,
-    ) -> Option<u32> {
+    ) -> Option<u32> { let (eye,randomly,thrown_from_hand,) = match crate::points_generated::P262.get() { Some(__l) => { let mut __a = (eye,randomly,thrown_from_hand,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (eye,randomly,thrown_from_hand,) };
         let r = &mut self.world.random;
         let v = horizon_client::entities::drop_motion(r, self.yaw, self.pitch, randomly);
         let y = eye[1] - f64::from(0.3f32);
@@ -4432,13 +4432,13 @@ impl Game<'_> {
         Some(item.id)
     }
     /// The UUID of the player acting: the guest whose turn it is, else the host.
-    pub(super) fn acting_player_uuid(&mut self) -> [i32; 4] {
+    pub(super) fn acting_player_uuid(&mut self) -> [i32; 4] { if let Some(__l) = crate::points_generated::P261.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.lan_acting_uuid {
             Some(guest) => horizon_client::lan::playerdata::uuid_ints(guest),
             None => self.level.ensure_player_uuid(),
         }
     }
-    fn tick_items(&mut self) {
+    fn tick_items(&mut self) { if let Some(__l) = crate::points_generated::P260.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // EntityTickEvent.Pre for the items about to tick, and the Post after them.
         let mut round = self.native_tick_round();
         if round.listening() {
@@ -4461,7 +4461,7 @@ impl Game<'_> {
         self.tick_dropped_items(&mut round);
         self.native_tick_post_batch(round);
     }
-    fn tick_dropped_items(&mut self, round: &mut native_ticks::TickRound) {
+    fn tick_dropped_items(&mut self, round: &mut native_ticks::TickRound) { if let Some(__l) = crate::points_generated::P259.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut items = std::mem::take(&mut self.dropped);
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
@@ -4719,7 +4719,7 @@ impl Game<'_> {
     /// `ItemUtils.onContainerDestroyed`: each stack a destroyed item held
     /// becomes an item entity where that item lay (`new ItemEntity(level, x,
     /// y, z, stack)`), nudged by 0.2 less 0.1 per axis and pickable at once.
-    fn spawn_destroyed_contents(&mut self, destroyed: Vec<(ItemStack, Vec3)>) {
+    fn spawn_destroyed_contents(&mut self, destroyed: Vec<(ItemStack, Vec3)>) { if let Some(__l) = crate::points_generated::P258.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (stack, at) in destroyed {
             let r = &mut self.world.random;
             let motion = [
@@ -4917,7 +4917,7 @@ impl Game<'_> {
         &mut self,
         pos: BlockPos,
         cause: &'static str,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P257.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.with_level(|_, level, _| level.allow_block_ignite(pos, cause))
     }
     pub(super) fn native_cauldron_level_change_allowed(
@@ -4926,11 +4926,11 @@ impl Game<'_> {
         from: i32,
         to: i32,
         reason: &'static str,
-    ) -> bool {
+    ) -> bool { let (from,to,) = match crate::points_generated::P256.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,to,) };
         self.with_level(|_, level, _| level.allow_cauldron_level_change(pos, from, to, reason))
     }
     /// Level.setBlock(pos, state, UPDATE_ALL) with neighbour/shape updates.
-    fn level_set(&mut self, pos: [i32; 3], state: BlockStateId) -> Result<()> {
+    fn level_set(&mut self, pos: [i32; 3], state: BlockStateId) -> Result<()> { let (pos,) = match crate::points_generated::P255.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.level_set_with_flags(pos, state, level_flags::UPDATE_ALL)
     }
     /// Level.setBlock with the caller's update flags.
@@ -4939,7 +4939,7 @@ impl Game<'_> {
         pos: [i32; 3],
         state: BlockStateId,
         flags: i32,
-    ) -> Result<()> {
+    ) -> Result<()> { let (pos,flags,) = match crate::points_generated::P254.get() { Some(__l) => { let mut __a = (pos,flags,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,flags,) };
         self.with_level(|b, level, ticks| {
             b.set_block(
                 level,
@@ -4951,7 +4951,7 @@ impl Game<'_> {
         });
         self.process_level_events()
     }
-    fn attack_block(&mut self, pos: [i32; 3]) -> Result<()> {
+    fn attack_block(&mut self, pos: [i32; 3]) -> Result<()> { let (pos,) = match crate::points_generated::P253.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let note = self.with_level(|b, level, ticks| {
             b.attack_block(level, ticks, BlockPos::new(pos[0], pos[1], pos[2]))
         });
@@ -4980,7 +4980,7 @@ impl Game<'_> {
     }
     /// `AbstractCandleBlock.extinguish`: the smoke from each wick, at the
     /// block's `getParticleOffsets` (sixteenths of a block), rising 0.1.
-    fn candle_smoke(&mut self, pos: [i32; 3], state: BlockStateId) {
+    fn candle_smoke(&mut self, pos: [i32; 3], state: BlockStateId) { let (pos,) = match crate::points_generated::P252.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         use horizon_client::particles::{ParticleOptions, ParticleType};
         let candles = self
             .pack
@@ -5003,7 +5003,7 @@ impl Game<'_> {
     }
     /// `LeverBlock.makeParticle` at full scale: a powered lever puffs one red
     /// dust on the clicking client (`LeverBlock.useWithoutItem`).
-    fn lever_puff(&mut self, pos: [i32; 3]) {
+    fn lever_puff(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P251.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         // The server's side of a guest's pull draws nothing.
         if self.lan_acting.is_some() {
             return;
@@ -5040,7 +5040,7 @@ impl Game<'_> {
         );
     }
     /// Track which chunks are ticking (Ticks needs chunk load/unload).
-    fn sync_tick_chunks(&mut self) {
+    fn sync_tick_chunks(&mut self) { if let Some(__l) = crate::points_generated::P250.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.tick_chunks.synchronize(&self.world.chunks) {
             return;
         }
@@ -5066,7 +5066,7 @@ impl Game<'_> {
     /// rule skips holds none), its forced chunks and its portal tickets. A game
     /// with neither a server nor a player (the headless fixtures) ticks
     /// everywhere.
-    fn update_chunk_tickets(&mut self) {
+    fn update_chunk_tickets(&mut self) { if let Some(__l) = crate::points_generated::P249.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let rule = self.ui.rules.bool("spectators_generate_chunks");
         let mut players: Vec<((i32, i32), bool)> = self.lan.as_ref().map_or_else(Vec::new, |h| {
             h.hub
@@ -5113,7 +5113,7 @@ impl Game<'_> {
     /// scheduled from the game time at which it becomes a ticking chunk
     /// (block ticking, with its neighbours loaded). Chunks become ticking
     /// between ticks in vanilla: before this tick's clock advanced.
-    fn start_ticking_chunks(&mut self) {
+    fn start_ticking_chunks(&mut self) { if let Some(__l) = crate::points_generated::P248.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let levels = self.tickets.levels();
         let world = &self.world;
         let started = self
@@ -5128,7 +5128,7 @@ impl Game<'_> {
     }
     /// ServerLevel.tick block phases: scheduled ticks, random ticks in the
     /// chunks the tickets simulate, block events and moving pistons.
-    fn tick_blocks(&mut self) -> Result<()> {
+    fn tick_blocks(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P247.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // ServerChunkCache.tick: the tickets that time out.
         self.tickets.tick_portal();
         self.sync_tick_chunks();
@@ -5376,7 +5376,7 @@ impl Game<'_> {
     }
     /// Copies the moving-piston block entities into the world, where the
     /// collision queries and the renderer read them.
-    fn sync_moving_pistons(&mut self) {
+    fn sync_moving_pistons(&mut self) { if let Some(__l) = crate::points_generated::P246.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let previous = std::mem::take(&mut self.world.moving_pistons);
         let current: Vec<_> = self
             .block_ticks
@@ -5403,7 +5403,7 @@ impl Game<'_> {
     /// `ServerLevel.tick`'s scheduled block then fluid ticks, one at a time:
     /// the side effects of each (a shrieker summoning a warden, drops, game
     /// events) happen before the next tick runs, as they do inline in vanilla.
-    pub(super) fn tick_scheduled(&mut self) -> Result<()> {
+    pub(super) fn tick_scheduled(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P245.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for fluids in [false, true] {
             if !self.with_level(|b, level, ticks| b.scheduled_begin(level, ticks, fluids)) {
                 continue;
@@ -5432,7 +5432,7 @@ impl Game<'_> {
         Ok(())
     }
     /// Side effects reported by the behaviour library, in vanilla order.
-    fn process_level_events(&mut self) -> Result<()> {
+    fn process_level_events(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P244.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let events = std::mem::take(&mut self.level_events);
         self.lan_record_events(&events);
         dispense_fixture::record_events(&events);
@@ -5980,7 +5980,7 @@ impl Game<'_> {
         Ok(())
     }
     /// Menus opened by PlayerEffect::OpenMenu.
-    fn open_menu(&mut self, pos: [i32; 3]) {
+    fn open_menu(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P243.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if self.lan_acting_fake {
             return;
         }
@@ -6097,7 +6097,7 @@ impl Game<'_> {
     /// One falling block's `tick`: places or drops its block in its own tick,
     /// so a block falling onto one that just landed lands on top of it. `i` is
     /// its place in the list; the caller has checked it is ticking.
-    fn tick_one_falling(&mut self, i: usize) -> Result<()> {
+    fn tick_one_falling(&mut self, i: usize) -> Result<()> { let (i,) = match crate::points_generated::P242.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let entity_drops = self.ui.rules.bool("entity_drops");
         let mut f = self.falling.remove(i);
         let original = f.clone();
@@ -6114,7 +6114,7 @@ impl Game<'_> {
         Ok(())
     }
     /// One `FallingBlockEntity.tick` move of `f`.
-    fn fall_step(&mut self, f: &mut FallingBlock, entity_drops: bool) -> Result<FallStep> {
+    fn fall_step(&mut self, f: &mut FallingBlock, entity_drops: bool) -> Result<FallStep> { let (entity_drops,) = match crate::points_generated::P241.get() { Some(__l) => { let mut __a = (entity_drops,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity_drops,) };
         f.previous = f.position;
         f.age = f.age.wrapping_add(1);
         f.velocity.y -= horizon_client::entity_rules::EntityRules::get_gravity(f);
@@ -6269,7 +6269,7 @@ impl Game<'_> {
         })
     }
     /// `Entity.spawnAtLocation`: an item entity where the block was.
-    fn drop_falling_block(&mut self, state: BlockStateId, at: Vec3) {
+    fn drop_falling_block(&mut self, state: BlockStateId, at: Vec3) { if let Some(__l) = crate::points_generated::P240.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Entity.spawnAtLocation: an item entity where the block was.
         let item = self.res.facts().get(state).item.clone();
         if &*item != "minecraft:air" {
@@ -6288,7 +6288,7 @@ impl Game<'_> {
     /// `DecoratedPotBlock.playerWillDestroy`: a pot mined with an item in
     /// `breaks_decorated_pots`, unless an enchantment prevents shattering, is
     /// cracked first (flags 260), so it shatters into its sherds.
-    fn crack_mined_pot(&mut self, pos: [i32; 3], state: BlockStateId) -> BlockStateId {
+    fn crack_mined_pot(&mut self, pos: [i32; 3], state: BlockStateId) -> BlockStateId { let (pos,) = match crate::points_generated::P239.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let registry = &self.pack.assets.registry;
         let Some(mut pot) = registry
             .state(state)
@@ -6326,7 +6326,7 @@ impl Game<'_> {
     /// mined the block `name`: an item with a `tool` component counts as used
     /// and loses its `damage_per_block` on a block that doesn't break
     /// instantly (`ShearsItem`: on any block but fire).
-    fn mine_block_with_held(&mut self, name: &str, hardness: f32) {
+    fn mine_block_with_held(&mut self, name: &str, hardness: f32) { let (hardness,) = match crate::points_generated::P238.get() { Some(__l) => { let mut __a = (hardness,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (hardness,) };
         let Some(stack) = self.inventory[self.selected].clone() else {
             return;
         };
@@ -6348,10 +6348,10 @@ impl Game<'_> {
         }
         self.award_stat("used", &stack.item, 1);
     }
-    fn break_block(&mut self, pos: [i32; 3]) -> Result<()> {
+    fn break_block(&mut self, pos: [i32; 3]) -> Result<()> { let (pos,) = match crate::points_generated::P237.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.with_player_actor(|game| game.break_block_as_player(pos))
     }
-    fn break_block_as_player(&mut self, pos: [i32; 3]) -> Result<()> {
+    fn break_block_as_player(&mut self, pos: [i32; 3]) -> Result<()> { let (pos,) = match crate::points_generated::P236.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         // DebugStickItem.canDestroyBlock: a left click selects a property and
         // never destroys the block.
         if !self.debug_stick_can_destroy(pos)? {
@@ -6565,11 +6565,11 @@ impl Game<'_> {
         Ok(())
     }
     /// The hand whose use ended the click, if any.
-    fn use_item(&mut self) -> Result<Option<Hand>> {
+    fn use_item(&mut self) -> Result<Option<Hand>> { if let Some(__l) = crate::points_generated::P235.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.with_player_actor(|game| game.use_item_as_player())
     }
     /// `Minecraft.startUseItem`: the main hand, then the off hand.
-    fn use_item_as_player(&mut self) -> Result<Option<Hand>> {
+    fn use_item_as_player(&mut self) -> Result<Option<Hand>> { if let Some(__l) = crate::points_generated::P234.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Spectators only look (MultiPlayerGameMode.useItemOn/useItem pass),
         // but on a server a spectator's use on a block opens the block's
         // menu (ServerPlayerGameMode.useItemOn).
@@ -6644,7 +6644,7 @@ impl Game<'_> {
     /// guest's interact packet names its entity (`target`), which the helpers
     /// use as it is; the local player picks from the crosshair instead, the
     /// way `Minecraft.hitResult` does.
-    fn interact_entity(&mut self, target: Option<InteractTarget>) -> Result<bool> {
+    fn interact_entity(&mut self, target: Option<InteractTarget>) -> Result<bool> { if let Some(__l) = crate::points_generated::P233.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Native mods, where Player.interactOn starts: before the entity's
         // own interact and the item's interactLivingEntity. The entity is the
         // one the packet named, or the one the crosshair picked.
@@ -6675,7 +6675,7 @@ impl Game<'_> {
     /// `use_cooldown` component starts its entry (`UseCooldown.apply`). A
     /// server's guest also gets `ClientboundCooldownPacket`
     /// (`ServerItemCooldowns.onCooldownStarted`), queued for their turn's end.
-    pub(super) fn apply_use_cooldown(&mut self, stack: &ItemStack) {
+    pub(super) fn apply_use_cooldown(&mut self, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P232.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let default = self
             .res
             .items()
@@ -6703,7 +6703,7 @@ impl Game<'_> {
         }
     }
     /// `ItemCooldowns.addCooldown` (a guest also gets the packet).
-    pub(super) fn add_cooldown(&mut self, group: Arc<str>, ticks: i32) {
+    pub(super) fn add_cooldown(&mut self, group: Arc<str>, ticks: i32) { let (ticks,) = match crate::points_generated::P231.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         self.cooldowns.add(Arc::clone(&group), ticks);
         if self.lan_acting.is_some() {
             self.guest_cooldowns.push((group, ticks));
@@ -6711,7 +6711,7 @@ impl Game<'_> {
     }
     /// One hand's turn in `startUseItem`: `useItemOn` the block aimed at,
     /// then `useItem`. Whether the click ends here (it acted or failed).
-    fn use_hand(&mut self, block_hit: Option<&Hit>) -> Result<bool> {
+    fn use_hand(&mut self, block_hit: Option<&Hit>) -> Result<bool> { if let Some(__l) = crate::points_generated::P230.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.use_failed = false;
         // isSecondaryUseActive with something in either hand keeps blocks
         // from reacting.
@@ -7349,7 +7349,7 @@ impl Game<'_> {
     /// Asks the mods whether the acting guest may empty `stack` at `pos`
     /// (`native_bucket_empty`): true when one cancelled it. A game's own
     /// player is not asked.
-    fn bucket_empty_cancelled(&mut self, stack: &ItemStack, pos: [i32; 3]) -> bool {
+    fn bucket_empty_cancelled(&mut self, stack: &ItemStack, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P229.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let (Some(uuid), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone()) else {
             return false;
         };
@@ -7363,7 +7363,7 @@ impl Game<'_> {
         cancel
     }
     /// The player as a block's `useItemOn` / `useWithoutItem` sees them.
-    fn use_context(&self) -> PlayerContext {
+    fn use_context(&self) -> PlayerContext { if let Some(__l) = crate::points_generated::P228.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         PlayerContext {
             yaw: self.yaw,
             pitch: self.pitch,
@@ -7379,7 +7379,7 @@ impl Game<'_> {
     /// `Consumable.startConsuming` for a held consumable: food needs
     /// `Player.canEat` (`Consumable.canConsume`), anything else is always
     /// consumed. The right click is held for `consume_seconds`.
-    fn start_eating(&mut self, info: &horizon_client::items::ItemInfo) -> bool {
+    fn start_eating(&mut self, info: &horizon_client::items::ItemInfo) -> bool { if let Some(__l) = crate::points_generated::P227.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(stack) = self.held().cloned() else {
             return false;
         };
@@ -7409,7 +7409,7 @@ impl Game<'_> {
     /// (`SoundSource.RECORDS`, volume `range / 16`), `INSTRUMENT_PLAY` is
     /// posted, the used statistic counts and the horn is on cooldown as long.
     /// A horn whose instrument is unknown fails, which still ends the click.
-    fn use_instrument(&mut self, stack: &ItemStack) {
+    fn use_instrument(&mut self, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P226.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(instrument) = self.res.items().instrument(stack) else {
             return;
         };
@@ -7430,7 +7430,7 @@ impl Game<'_> {
         }
         self.award_stat("used", &stack.item, 1);
     }
-    fn apply_consume_effect(&mut self, effect: &horizon_client::items::ConsumeEffect) {
+    fn apply_consume_effect(&mut self, effect: &horizon_client::items::ConsumeEffect) { if let Some(__l) = crate::points_generated::P225.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::items::ConsumeEffect;
         match effect {
             ConsumeEffect::ApplyEffects {
@@ -7489,7 +7489,7 @@ impl Game<'_> {
             }
         }
     }
-    fn consume_held(&mut self) {
+    fn consume_held(&mut self) { if let Some(__l) = crate::points_generated::P224.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.creative {
             return;
         }
@@ -7501,14 +7501,14 @@ impl Game<'_> {
             }
         }
     }
-    fn tick_using(&mut self) {
+    fn tick_using(&mut self) { if let Some(__l) = crate::points_generated::P223.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(hand) = self.used_hand() else {
             return;
         };
         self.with_hand(hand, Self::tick_used_item);
     }
     /// `LivingEntity.updatingUsingItem` for the item in use, its hand acting.
-    fn tick_used_item(&mut self) {
+    fn tick_used_item(&mut self) { if let Some(__l) = crate::points_generated::P222.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((slot, ticks)) = self.using else {
             return;
         };
@@ -7621,7 +7621,7 @@ impl Game<'_> {
     /// `BundleItem.onUseTick` and `getUseDuration` (200): the first tick and
     /// then every second tick from the 11th on drop one stack out of the
     /// bundle in `slot`; the use ends after 200 ticks.
-    fn tick_bundle(&mut self, slot: usize, ticks: u32) {
+    fn tick_bundle(&mut self, slot: usize, ticks: u32) { let (slot,ticks,) = match crate::points_generated::P221.get() { Some(__l) => { let mut __a = (slot,ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,ticks,) };
         const USE_DURATION: u32 = 200;
         let remaining = USE_DURATION - ticks.min(USE_DURATION);
         if ticks == 0 || (remaining < USE_DURATION - 10 && remaining.is_multiple_of(2)) {
@@ -7631,7 +7631,7 @@ impl Game<'_> {
     }
     /// `BundleItem.dropContent`: `removeOneItemFromBundle` and `Player.drop`,
     /// then the drop sound and the used statistic.
-    fn drop_bundle_content(&mut self, slot: usize) {
+    fn drop_bundle_content(&mut self, slot: usize) { let (slot,) = match crate::points_generated::P220.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let items = self.items();
         let Some(mut bundle) = self.stack_in(slot).cloned() else {
             return;
@@ -7670,7 +7670,7 @@ impl Game<'_> {
     /// when its hand changed), a spyglass stops scoping, and a mod's own
     /// release follows. A mod's `Stop` may skip the release. `stopUsingItem`
     /// ends the use after it.
-    pub(super) fn release_used_item(&mut self, stack: &ItemStack, ticks: u32, hand_changed: bool) {
+    pub(super) fn release_used_item(&mut self, stack: &ItemStack, ticks: u32, hand_changed: bool) { let (ticks,hand_changed,) = match crate::points_generated::P219.get() { Some(__l) => { let mut __a = (ticks,hand_changed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,hand_changed,) };
         let canceled = !hand_changed && !self.use_item_stopped(stack, ticks);
         let (release, spyglass) = item_use::release_parts(canceled, hand_changed);
         match &*stack.item {
@@ -7688,14 +7688,14 @@ impl Game<'_> {
     /// its remaining ticks are cleared), and when the use effects of the stack
     /// ask for it, `ItemStack.causeUseVibration` sends an `ITEM_INTERACT_FINISH`
     /// game event from the player, at its feet.
-    pub(super) fn stop_using_item(&mut self, stack: &ItemStack) {
+    pub(super) fn stop_using_item(&mut self, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P218.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.using = None;
         self.use_vibration(stack);
     }
     /// `ItemStack.causeUseVibration` for `stack` used by the player: an
     /// `ITEM_INTERACT_FINISH` game event from the player, at its feet, when the
     /// stack's use effects ask for interaction vibrations (the default).
-    pub(super) fn use_vibration(&mut self, stack: &ItemStack) {
+    pub(super) fn use_vibration(&mut self, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P217.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self
             .items()
             .get(&stack.item)
@@ -7712,7 +7712,7 @@ impl Game<'_> {
     /// `ServerPlayerGameMode.tick` while a player digs: level event 2020 every
     /// fourth tick since the START (the hit sound), else 2019 (the crack only),
     /// for everyone around, the digger included (`levelEvent(null, ...)`).
-    fn destroy_progress_event(&mut self, pos: [i32; 3], face: [i32; 3], ticks: u32) {
+    fn destroy_progress_event(&mut self, pos: [i32; 3], face: [i32; 3], ticks: u32) { let (pos,face,ticks,) = match crate::points_generated::P216.get() { Some(__l) => { let mut __a = (pos,face,ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,face,ticks,) };
         let id = if ticks.is_multiple_of(4) { 2020 } else { 2019 };
         let direction = horizon_core::geometry::Direction::ALL
             .iter()
@@ -7720,7 +7720,7 @@ impl Game<'_> {
             .unwrap_or(1);
         self.level_event_at(id, pos, direction as i32);
     }
-    fn tick_mining(&mut self) -> Result<()> {
+    fn tick_mining(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P215.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.destroy_delay > 0 {
             self.destroy_delay -= 1;
         }
@@ -7795,7 +7795,7 @@ impl Game<'_> {
         Ok(())
     }
     /// A column whose surface is a full solid, non-fluid, non-leaf block open to the sky.
-    fn land_column(&self, x: i32, z: i32) -> Option<i32> {
+    fn land_column(&self, x: i32, z: i32) -> Option<i32> { let (x,z,) = match crate::points_generated::P214.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,z,) };
         if self.dim == Dim::Nether {
             // Below the bedrock ceiling: a solid floor with two air blocks above.
             for y in (32..120).rev() {
@@ -7825,7 +7825,7 @@ impl Game<'_> {
         }
         None
     }
-    fn spawn_player(&mut self) -> Result<()> {
+    fn spawn_player(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P213.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player.is_some() || self.remote.is_some() {
             return Ok(());
         }
@@ -7948,7 +7948,7 @@ impl Game<'_> {
     /// farmland breaks. The local player's and every server player's landings.
     /// The level events they send go out too: a turtle egg's break particles
     /// and sound (`decreaseEggs`' 2001, `Level.destroyBlock`'s for the last).
-    fn landing_block_updates(&mut self, event: &horizon_client::landing::FallEvent) {
+    fn landing_block_updates(&mut self, event: &horizon_client::landing::FallEvent) { if let Some(__l) = crate::points_generated::P212.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::landing::FallEvent;
         let (position, flags) = match *event {
             FallEvent::Write {
@@ -7972,7 +7972,7 @@ impl Game<'_> {
         };
         self.with_level(|b, level, ticks| b.notify_written(level, ticks, position, flags));
     }
-    fn tick(&mut self) -> Result<()> {
+    fn tick(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P211.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.agent.hold_server {
             return Ok(());
         }
@@ -8064,7 +8064,7 @@ impl Game<'_> {
     }
     /// What the tick runs after the local player's own update: effects, the
     /// world's entities and blocks, and the network hub.
-    fn tick_world(&mut self, running: bool) -> Result<()> {
+    fn tick_world(&mut self, running: bool) -> Result<()> { let (running,) = match crate::points_generated::P210.get() { Some(__l) => { let mut __a = (running,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (running,) };
         // Entities added since the last tick join the level before it ticks.
         self.native_joins_flush(false, 0);
         self.share_spawn_conditions();
@@ -8227,7 +8227,7 @@ impl Game<'_> {
     /// Keep the held-key state of toggled sneak and sprint in step with their mapping.
     /// `KeyMapping.resetToggleKeys`: every toggle mapping up, and the latched sneak and sprint
     /// keys with it.
-    fn reset_toggle_keys(&mut self) {
+    fn reset_toggle_keys(&mut self) { if let Some(__l) = crate::points_generated::P209.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for key in &mut self.toggles.0 {
             key.reset();
         }
@@ -8236,7 +8236,7 @@ impl Game<'_> {
         self.left = false;
         self.right = false;
     }
-    fn sync_toggle(&mut self, slot: usize) {
+    fn sync_toggle(&mut self, slot: usize) { let (slot,) = match crate::points_generated::P208.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let key = [KeyCode::ShiftLeft, KeyCode::ControlLeft][slot];
         if self.toggles.is_down(slot) {
             self.keys.insert(key);
@@ -8264,7 +8264,7 @@ impl Game<'_> {
     /// drop. Those do not care what sneak and sprint are bound to. A modifier
     /// says nothing about which side is down, so one being up means both
     /// Shifts, or both Controls, are.
-    fn heal_hold_latches(&mut self) {
+    fn heal_hold_latches(&mut self) { if let Some(__l) = crate::points_generated::P207.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (shift, control) = (self.modifiers.shift_key(), self.modifiers.control_key());
         if !shift {
             for key in [KeyCode::ShiftLeft, KeyCode::ShiftRight] {
@@ -8295,7 +8295,7 @@ impl Game<'_> {
         }
     }
     /// Apply a physical key to every mapping bound to it.
-    fn mapped_key_event(&mut self, key: KeyCode, pressed: bool, repeat: bool) -> Result<()> {
+    fn mapped_key_event(&mut self, key: KeyCode, pressed: bool, repeat: bool) -> Result<()> { let (pressed,repeat,) = match crate::points_generated::P206.get() { Some(__l) => { let mut __a = (pressed,repeat,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pressed,repeat,) };
         for mapped in self.settings.keys.translate_all(key) {
             match mapped {
                 Ok(k) => {
@@ -8336,7 +8336,7 @@ impl Game<'_> {
         pressed: bool,
         repeat: bool,
         raw: KeyCode,
-    ) -> Result<()> {
+    ) -> Result<()> { let (pressed,repeat,) = match crate::points_generated::P205.get() { Some(__l) => { let mut __a = (pressed,repeat,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pressed,repeat,) };
         // Sneak and sprint are ToggleKeyMappings: a press (or a key
         // repeat) flips them when toggling; only releases reach them
         // behind a screen (KeyboardHandler.keyPress).
@@ -8374,7 +8374,7 @@ impl Game<'_> {
     }
     /// `KeyMapping.releaseAll` when a screen opens and
     /// `restoreToggleStatesOnScreenClosed` when it closes.
-    fn track_toggle_screens(&mut self) {
+    fn track_toggle_screens(&mut self) { if let Some(__l) = crate::points_generated::P204.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let dialog = self.dialog_open();
         drop_held_behind_dialog(dialog, &mut self.keys, &mut self.left, &mut self.right);
         let playing = gameplay_has_keyboard(self.screen, self.title.is_some(), dialog);
@@ -8399,7 +8399,7 @@ impl Game<'_> {
         self.right = self.toggles.is_down(3);
     }
     /// The options `MouseHandler.turnPlayer` reads.
-    fn look_options(&self) -> LookOptions {
+    fn look_options(&self) -> LookOptions { if let Some(__l) = crate::points_generated::P203.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         LookOptions {
             sensitivity: f64::from(self.settings.sensitivity),
             smooth_camera: self.smooth_camera,
@@ -8411,7 +8411,7 @@ impl Game<'_> {
     /// `MouseHandler.handleAccumulatedMovement` and `Entity.turn`, once per frame.
     /// An agent moving the mouse (`mouse-move`) counts as a grabbed pointer in
     /// an active window, as it cannot grab the real one.
-    fn apply_mouse_look(&mut self) {
+    fn apply_mouse_look(&mut self) { if let Some(__l) = crate::points_generated::P202.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut look = self.look_options();
         let time = self.started.elapsed().as_secs_f64();
         let pointer = self.captured || self.agent_pointer;
@@ -8439,7 +8439,7 @@ impl Game<'_> {
         }
     }
     /// `Minecraft.pause`: a single-player game with a pausing screen open.
-    fn pauses_game(&self) -> bool {
+    fn pauses_game(&self) -> bool { if let Some(__l) = crate::points_generated::P201.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.has_singleplayer_server()
             && !self.is_published()
             && self.title.is_none()
@@ -8463,7 +8463,7 @@ impl Game<'_> {
     /// A screen open over gameplay while `screen` stays `Playing`: a book or
     /// lectern, a sign, a server dialog, the code of conduct, a link or
     /// server pack prompt (vanilla's `Minecraft.screen` is set for each).
-    fn screen_over_playing(&self) -> bool {
+    fn screen_over_playing(&self) -> bool { if let Some(__l) = crate::points_generated::P200.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.book.is_some()
             || self.sign_edit.is_some()
             || self.dialog_open()
@@ -8475,7 +8475,7 @@ impl Game<'_> {
     /// `Minecraft.pauseIfInactive`: a window without focus for more than 500 ms
     /// pauses the game. An open screen (books, signs, the pack prompt, a server
     /// dialog) stays instead of pausing (`Gui.setPauseScreen`).
-    fn pause_if_inactive(&mut self) {
+    fn pause_if_inactive(&mut self) { if let Some(__l) = crate::points_generated::P199.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .focus_lost
             .is_some_and(|t| t.elapsed() > Duration::from_millis(500))
@@ -8497,7 +8497,7 @@ impl Game<'_> {
     /// mapping it is bound to, so a key pressed or kept down behind a screen
     /// counts once the game has the keyboard back. A sneak or sprint that
     /// toggles keeps its toggle state (`shouldSetOnIngameFocus`).
-    fn restore_held_keys(&mut self) {
+    fn restore_held_keys(&mut self) { if let Some(__l) = crate::points_generated::P198.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let held: Vec<KeyCode> = self.physical_keys.iter().copied().collect();
         let toggles = [self.settings.toggle_crouch, self.settings.toggle_sprint];
         for key in held {
@@ -8525,7 +8525,7 @@ impl Game<'_> {
     /// already released does nothing, so moving from screen to screen keeps
     /// the cursor where it is. Like GLFW's `glfwSetCursorPos`, nothing warps
     /// while the window is unfocused (losing focus releases the pointer).
-    fn capture(&mut self, capture: bool) {
+    fn capture(&mut self, capture: bool) { let (capture,) = match crate::points_generated::P197.get() { Some(__l) => { let mut __a = (capture,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (capture,) };
         // A guest's action (`as_guest`) opens and closes screens on the
         // guest's own client: the window's pointer stays the host's (#687).
         if self.lan_acting.is_some() {
@@ -8655,7 +8655,7 @@ impl Game<'_> {
     /// A Linux window manager can release the native pointer grab while the
     /// window remains focused. Reapply the recorded mode on the next gameplay
     /// click or wheel event, without warping the pointer or consuming input.
-    fn reassert_pointer_capture(&mut self) {
+    fn reassert_pointer_capture(&mut self) { if let Some(__l) = crate::points_generated::P196.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         #[cfg(target_os = "linux")]
         if self.screen == Screen::Playing
             && self.focused
@@ -8682,7 +8682,7 @@ impl Game<'_> {
     /// `GuiGraphicsExtractor.applyCursor` -> `Window.selectCursor` at the end
     /// of a frame: the cursor the frame's widgets asked for, set on the window
     /// only when it changes.
-    fn apply_cursor_icon(&mut self) {
+    fn apply_cursor_icon(&mut self) { if let Some(__l) = crate::points_generated::P195.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::widgets::Cursor;
         let wanted = horizon_client::widgets::take_cursor();
         // The widgets under the keyboard's hidden pointer aren't under the
@@ -8705,7 +8705,7 @@ impl Game<'_> {
         self.cursor_icon = effective;
     }
     /// LevelLoadingScreen.onClose -> Gui.setScreen(null) -> grabMouse.
-    fn capture_loaded_world(&mut self) {
+    fn capture_loaded_world(&mut self) { if let Some(__l) = crate::points_generated::P194.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Loading may finish after focus was lost or another screen opened.
         if self.title.is_none() && self.screen == Screen::Playing {
             self.capture(true);
@@ -8717,12 +8717,12 @@ impl Game<'_> {
     /// mode), so the game takes the pointer again without waiting for a
     /// click. A screen that is open keeps it free, as releasing the pointer
     /// for that screen did: it is the screen, not the focus, that shows it.
-    fn regrab_on_refocus(&mut self) {
+    fn regrab_on_refocus(&mut self) { if let Some(__l) = crate::points_generated::P193.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if std::mem::take(&mut self.regrab_on_refocus) && self.screen == Screen::Playing {
             self.capture(true);
         }
     }
-    fn draw_item(&self, batch: &mut HudBatch, stack: &ItemStack, x: f32, y: f32) {
+    fn draw_item(&self, batch: &mut HudBatch, stack: &ItemStack, x: f32, y: f32) { let (x,y,) = match crate::points_generated::P192.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,) };
         // `GuiGraphics.renderItem`: the resolved item model (tints, foil and
         // special renderers included), then the decorations.
         self.draw_item_model(batch, stack, x, y);
@@ -8740,7 +8740,7 @@ impl Game<'_> {
         stack: &Option<ItemStack>,
         x: f32,
         y: f32,
-    ) {
+    ) { let (slot,x,y,) = match crate::points_generated::P191.get() { Some(__l) => { let mut __a = (slot,x,y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,x,y,) };
         let carried;
         let (stack, capped) = match drag.and_then(|d| d.slots.get(&slot)) {
             Some(None) => return,
@@ -8762,7 +8762,7 @@ impl Game<'_> {
     }
     /// `extractCarriedItem`: the carried stack at the cursor, showing what a
     /// quick craft drag over several slots leaves in hand.
-    fn draw_carried(&mut self, batch: &mut HudBatch) {
+    fn draw_carried(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P190.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut stack) = self.carried.clone() else {
             return;
         };
@@ -8775,7 +8775,7 @@ impl Game<'_> {
         self.draw_item(batch, &stack, self.cursor.0 - 8.0, self.cursor.1 - 8.0);
     }
     /// The quick craft drag in progress, as the menu engine previews it.
-    fn drag_view(&mut self) -> Option<DragView> {
+    fn drag_view(&mut self) -> Option<DragView> { if let Some(__l) = crate::points_generated::P189.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (ty, slots) = self.inv_drag.clone()?;
         let mut view = None;
         self.menu_session(|menu, env, to_menu| {
@@ -8802,7 +8802,7 @@ impl Game<'_> {
     /// Whether a quick craft drag takes `slot`
     /// (`shouldAddSlotToQuickCraft`); screens the menu engine doesn't
     /// model take every slot.
-    fn quick_craft_accepts(&mut self, slot: usize, ty: i32, dragged: usize) -> bool {
+    fn quick_craft_accepts(&mut self, slot: usize, ty: i32, dragged: usize) -> bool { let (slot,ty,dragged,) = match crate::points_generated::P188.get() { Some(__l) => { let mut __a = (slot,ty,dragged,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,ty,dragged,) };
         let mut accepts = true;
         self.menu_session(|menu, env, to_menu| {
             accepts = to_menu(slot).is_some_and(|s| menu.quick_craft_accepts(env, s, ty, dragged));
@@ -8819,7 +8819,7 @@ impl Game<'_> {
         x: f32,
         y: f32,
         count_text: Option<String>,
-    ) {
+    ) { let (x,y,) = match crate::points_generated::P187.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,) };
         // GuiGraphicsExtractor.itemDecorations, laid out at the origin and
         // moved to (x, y): the damage bar, the cooldown shade and the count.
         let info = self.items().get(&stack.item);
@@ -8857,7 +8857,7 @@ impl Game<'_> {
         hud_layout::paint(batch, &self.gui.atlas, &draws);
         self.native_item_decorations(stack, x, y, batch);
     }
-    fn hud(&mut self, size: [u32; 2]) -> HudBatch {
+    fn hud(&mut self, size: [u32; 2]) -> HudBatch { let (size,) = match crate::points_generated::P186.get() { Some(__l) => { let mut __a = (size,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (size,) };
         // The pack prompt replaces the connecting screen (setScreen), but
         // in game it opens over the world.
         let mut batch = if (self.server_packs.prompt.is_some()
@@ -8889,7 +8889,7 @@ impl Game<'_> {
         self.resolve_inline_profiles(&batch.inline_profiles);
         batch
     }
-    fn hud_layers(&mut self, size: [u32; 2]) -> HudBatch {
+    fn hud_layers(&mut self, size: [u32; 2]) -> HudBatch { let (size,) = match crate::points_generated::P185.get() { Some(__l) => { let mut __a = (size,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (size,) };
         let mut batch = HudBatch::new(size);
         // GlobalSettingsUniform's GameTime, for a resource pack's text shader.
         batch.game_time = ((self.world.game_time.rem_euclid(24000)) as f32
@@ -9290,7 +9290,7 @@ impl Game<'_> {
     /// playing with no screen, nor while the server pack prompt hides the
     /// open screen (`hud_layers` draws `Playing` then). Client only,
     /// read-only: what a mod draws is its own.
-    fn fire_screen_render_post(&self, batch: &mut HudBatch) {
+    fn fire_screen_render_post(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P184.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let screen = self.screen;
         if screen == Screen::Playing || self.server_packs.prompt.is_some() || self.book.is_some() {
             return;
@@ -9306,7 +9306,7 @@ impl Game<'_> {
     /// screen of the game's own is over the title (Options draws and fires
     /// its own), nor while a dialog, a prompt or a connect or load hides it.
     /// Client only, read-only: what a mod draws is its own.
-    fn fire_title_screen_render_post(&self, batch: &mut HudBatch) {
+    fn fire_title_screen_render_post(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P183.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.screen != Screen::Playing || self.screen_over_playing() || self.remote_loading() {
             return;
         }
@@ -9318,19 +9318,19 @@ impl Game<'_> {
     /// `CreativeModeInventoryScreen.hasPermissions` (`canUseGameMasterBlocks`
     /// and the Operator Items Tab option) given to `tryRefreshInvalidatedTabs`,
     /// as the screen's constructor and `containerTick` do.
-    fn refresh_creative_tabs(&mut self) {
+    fn refresh_creative_tabs(&mut self) { if let Some(__l) = crate::points_generated::P182.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let permissions = self.can_use_game_master_blocks() && self.settings.operator_items_tab;
         self.creative_screen
             .set_permissions(permissions, &self.pack.names);
     }
-    fn creative_inventory_open(&self) -> bool {
+    fn creative_inventory_open(&self) -> bool { if let Some(__l) = crate::points_generated::P181.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.screen == Screen::Creative && self.creative_screen.tab().inventory
     }
     /// An item tab of the creative screen (its ItemPickerMenu).
-    fn creative_tab_open(&self) -> bool {
+    fn creative_tab_open(&self) -> bool { if let Some(__l) = crate::points_generated::P180.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.screen == Screen::Creative && !self.creative_screen.tab().inventory
     }
-    fn inventory_origin(&self, batch: &HudBatch) -> (f32, f32) {
+    fn inventory_origin(&self, batch: &HudBatch) -> (f32, f32) { if let Some(__l) = crate::points_generated::P179.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.screen == Screen::Creative {
             return Self::creative_origin(batch);
         }
@@ -9339,12 +9339,12 @@ impl Game<'_> {
         (x + self.recipe_book_shift(batch.width), y)
     }
     /// Slot ids: 0..36 player inventory, 100..109 crafting grid, 200 result.
-    fn container_kind(&self) -> Option<&BlockEntity> {
+    fn container_kind(&self) -> Option<&BlockEntity> { if let Some(__l) = crate::points_generated::P178.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.container
             .and_then(|k| self.world.block_entities.get(&k))
     }
     /// 300.. are the open container's slots.
-    fn slots(&self) -> Vec<usize> {
+    fn slots(&self) -> Vec<usize> { if let Some(__l) = crate::points_generated::P177.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.creative_inventory_open() {
             return Creative::inventory_slots().collect();
         }
@@ -9404,7 +9404,7 @@ impl Game<'_> {
     /// How many slots `slots` lists, counted without building the list: the
     /// screen render hook asks once a frame and must not allocate. Same
     /// branches in the same order, so the two stay in step.
-    fn slot_count(&self) -> usize {
+    fn slot_count(&self) -> usize { if let Some(__l) = crate::points_generated::P176.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.creative_inventory_open() {
             return Creative::inventory_slots().count();
         }
@@ -9460,7 +9460,7 @@ impl Game<'_> {
         inventory + container
     }
     /// InventoryMenu / CraftingMenu slot layouts.
-    fn slot_position(&self, i: usize) -> (f32, f32) {
+    fn slot_position(&self, i: usize) -> (f32, f32) { let (i,) = match crate::points_generated::P175.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         if self.creative_inventory_open()
             && let Some(position) = Creative::inventory_slot_position(i)
         {
@@ -9539,7 +9539,7 @@ impl Game<'_> {
         if mod_screen_shown { None } else { stock }
     }
 
-    fn slot_at(&self, batch: &HudBatch, x: f32, y: f32) -> Option<usize> {
+    fn slot_at(&self, batch: &HudBatch, x: f32, y: f32) -> Option<usize> { let (x,y,) = match crate::points_generated::P174.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,) };
         if self.book_covers_menu(batch.width) {
             return None;
         }
@@ -9555,7 +9555,7 @@ impl Game<'_> {
     /// `AbstractContainerScreen.extractSlotHighlightFront`: the 24 x 24
     /// `container/slot_highlight_back` sprite behind the slot at `x`, `y` (its
     /// 16 x 16 item box), the `_front` one over its item.
-    fn draw_slot_highlight(&self, batch: &mut HudBatch, front: bool, x: f32, y: f32) {
+    fn draw_slot_highlight(&self, batch: &mut HudBatch, front: bool, x: f32, y: f32) { let (front,x,y,) = match crate::points_generated::P173.get() { Some(__l) => { let mut __a = (front,x,y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (front,x,y,) };
         let sprite = if front {
             "gui/sprites/container/slot_highlight_front"
         } else {
@@ -9575,7 +9575,7 @@ impl Game<'_> {
     /// The highlight of the slot under the cursor, for the screens whose
     /// slots all sit in `slot_at`'s grid. `Slot.isHighlightable` is false
     /// for the crafter's result (`NonInteractiveResultSlot`).
-    fn draw_hovered_slot_highlight(&self, batch: &mut HudBatch, front: bool, ox: f32, oy: f32) {
+    fn draw_hovered_slot_highlight(&self, batch: &mut HudBatch, front: bool, ox: f32, oy: f32) { let (front,ox,oy,) = match crate::points_generated::P172.get() { Some(__l) => { let mut __a = (front,ox,oy,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (front,ox,oy,) };
         let Some(slot) = self.slot_at(batch, self.cursor.0, self.cursor.1) else {
             return;
         };
@@ -9585,7 +9585,7 @@ impl Game<'_> {
         let (sx, sy) = self.slot_position(slot);
         self.draw_slot_highlight(batch, front, ox + sx, oy + sy);
     }
-    fn slot_mut(&mut self, i: usize) -> &mut Option<ItemStack> {
+    fn slot_mut(&mut self, i: usize) -> &mut Option<ItemStack> { let (i,) = match crate::points_generated::P171.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         if i >= mount_menu::SADDLE {
             return self.mount_slot_mut(i);
         }
@@ -9608,7 +9608,7 @@ impl Game<'_> {
         }
     }
     /// What a slot shows: the crafting result slots are computed.
-    fn slot_view(&self, i: usize) -> Option<ItemStack> {
+    fn slot_view(&self, i: usize) -> Option<ItemStack> { let (i,) = match crate::points_generated::P170.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         match i {
             200 => self.craft_result(),
             309 if matches!(self.container_kind(), Some(BlockEntity::Crafter(_))) => {
@@ -9623,7 +9623,7 @@ impl Game<'_> {
             _ => self.inventory[i].clone(),
         }
     }
-    fn craft_result(&self) -> Option<ItemStack> {
+    fn craft_result(&self) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P169.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // A server's result slot is the server's (`CraftingMenu.slotChangedCraftingGrid`).
         if let Some(r) = &self.remote {
             return r.craft_result.clone();
@@ -9633,7 +9633,7 @@ impl Game<'_> {
     /// The recipe id and result of the crafting grid.
     /// `RecipeCraftingHolder.awardUsedRecipes`: a crafted recipe becomes known
     /// (special ones never do).
-    fn award_crafted(&mut self, crafts: &[(String, Vec<Option<ItemStack>>)]) {
+    fn award_crafted(&mut self, crafts: &[(String, Vec<Option<ItemStack>>)]) { if let Some(__l) = crate::points_generated::P168.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (recipe, ingredients) in crafts {
             // The whole id: the advancements' `recipe_crafted` criteria name
             // `minecraft:x`, and the crafting copy names the recipe bare.
@@ -9646,7 +9646,7 @@ impl Game<'_> {
             .collect();
         self.award_recipes(&recipes);
     }
-    fn craft_recipe(&self) -> Option<(String, ItemStack)> {
+    fn craft_recipe(&self) -> Option<(String, ItemStack)> { if let Some(__l) = crate::points_generated::P167.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let n = self.craft_size;
         let grid: Vec<Option<ItemStack>> = (0..n * n).map(|i| self.craft_grid[i].clone()).collect();
         let scale = |id: i32| self.maps.data.get(&id).map(|m| m.scale);
@@ -9655,7 +9655,7 @@ impl Game<'_> {
             .find_with(&grid, n, &scale)
             .map(|(name, result)| (name.to_owned(), result))
     }
-    fn draw_inventory_slots(&mut self, batch: &mut HudBatch, ox: f32, oy: f32) {
+    fn draw_inventory_slots(&mut self, batch: &mut HudBatch, ox: f32, oy: f32) { let (ox,oy,) = match crate::points_generated::P166.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ox,oy,) };
         let drag = self.drag_view();
         for i in self.slots() {
             let (sx, sy) = self.slot_position(i);
@@ -9680,7 +9680,7 @@ impl Game<'_> {
             self.draw_slot_item(batch, drag.as_ref(), i, &stack, ox + sx, oy + sy);
         }
     }
-    fn draw_inventory(&mut self, batch: &mut HudBatch) {
+    fn draw_inventory(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P165.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         screen_info::begin_container("container");
         if self.draw_station(batch) {
             return;
@@ -9860,12 +9860,12 @@ impl Game<'_> {
     /// state, and a press whose release never reached the screen -- the
     /// pointer left the window, or the screen closed first -- would
     /// otherwise leave every later press on every later screen swallowed.
-    pub(super) fn reset_inventory_clicks(&mut self) {
+    pub(super) fn reset_inventory_clicks(&mut self) { if let Some(__l) = crate::points_generated::P164.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.inv_clicks.cancel_drag();
         self.inv_drag = None;
         self.last_inv_click = None;
     }
-    pub(super) fn close_container(&mut self) {
+    pub(super) fn close_container(&mut self) { if let Some(__l) = crate::points_generated::P163.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // `Gui.setScreen` clears the old screen's focus before it goes: the
         // key that closed the container (Tab bound to the inventory) has
         // already moved the focus, and it must not outlive the screen.
@@ -9908,7 +9908,7 @@ impl Game<'_> {
         self.close_ender_chest();
     }
     /// `quickMoveStack` of the open plain menu for a shift-click.
-    fn inventory_quick_move(&mut self, slot: usize) -> bool {
+    fn inventory_quick_move(&mut self, slot: usize) -> bool { let (slot,) = match crate::points_generated::P162.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         self.menu_click(Some(slot), 0, horizon_client::menu::Input::QuickMove)
     }
     /// `AbstractContainerMenu.clicked` on the open inventory, crafting table,
@@ -9920,7 +9920,7 @@ impl Game<'_> {
         slot: Option<usize>,
         button: i32,
         input: horizon_client::menu::Input,
-    ) -> bool {
+    ) -> bool { let (button,) = match crate::points_generated::P161.get() { Some(__l) => { let mut __a = (button,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (button,) };
         if let Some(slot) = slot
             && slot >= Creative::DISPLAY
             && self.creative_tab_open()
@@ -9946,7 +9946,7 @@ impl Game<'_> {
     /// `handleCreativeModeItemDrop`, then sends the slot (`broadcastChanges`,
     /// `handleCreativeModeItemAdd`); the carried stack stays. Only the server drops it: this is
     /// the client of a server (`remote`).
-    fn creative_throw_carrying(&mut self, slot: usize, button: i32) {
+    fn creative_throw_carrying(&mut self, slot: usize, button: i32) { let (slot,button,) = match crate::points_generated::P160.get() { Some(__l) => { let mut __a = (slot,button,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,button,) };
         let Some(old) = self.slot_mut(slot).clone() else {
             return;
         };
@@ -9978,7 +9978,7 @@ impl Game<'_> {
         slot: usize,
         button: i32,
         input: horizon_client::menu::Input,
-    ) {
+    ) { let (slot,button,) = match crate::points_generated::P159.get() { Some(__l) => { let mut __a = (slot,button,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,button,) };
         use horizon_client::creative::{DisplayClick, click_display};
         if self.creative_screen.tab().search {
             // CreativeModeInventoryScreen.slotClicked: moveCursorToEnd, then
@@ -10012,7 +10012,7 @@ impl Game<'_> {
         }
     }
     /// Several clicks on one menu instance (a quick craft drag is three).
-    fn menu_ops(&mut self, ops: &[(Option<usize>, i32, horizon_client::menu::Input)]) -> bool {
+    fn menu_ops(&mut self, ops: &[(Option<usize>, i32, horizon_client::menu::Input)]) -> bool { if let Some(__l) = crate::points_generated::P158.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::menu::Input;
         // BundleMouseActions.onSlotClicked: a Shift click or a swap clears the bundle's selection.
         for &(slot, _, input) in ops {
@@ -10061,7 +10061,7 @@ impl Game<'_> {
     }
     /// A sound a menu click made the player play (a bundle's insert or
     /// remove): `Entity.playSound` at the player.
-    pub(super) fn player_menu_sound(&mut self, sound: &str) {
+    pub(super) fn player_menu_sound(&mut self, sound: &str) { if let Some(__l) = crate::points_generated::P157.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -10609,7 +10609,7 @@ impl Game<'_> {
     }
     /// `CreativeModeInventoryScreen.keyPressed` on the search tab: a hotbar
     /// key over a slot swaps before the search box sees it.
-    fn search_tab_hotbar_key(&mut self, code: KeyCode) -> bool {
+    fn search_tab_hotbar_key(&mut self, code: KeyCode) -> bool { if let Some(__l) = crate::points_generated::P156.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::creative::{Hover, search_key_swaps};
         let numeric = HOTBAR_DIGITS.contains(&code) || NUMERIC_KEYS.contains(&code);
         if !numeric {
@@ -10643,7 +10643,7 @@ impl Game<'_> {
     }
     /// Number keys, F and Q over a slot of the open menu: SWAP with a hotbar
     /// slot or the off hand, THROW one or the whole stack.
-    fn inventory_hotkey(&mut self, key: KeyCode) -> bool {
+    fn inventory_hotkey(&mut self, key: KeyCode) -> bool { if let Some(__l) = crate::points_generated::P155.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::menu::Input;
         let Some(size) = self
             .renderer
@@ -10674,7 +10674,7 @@ impl Game<'_> {
     /// The pick block key bound to a keyboard key, over a slot of the open
     /// menu (`AbstractContainerScreen.keyPressed`): `CLONE` with button 0. The
     /// search tab's box takes the key instead.
-    fn inventory_pick_key(&mut self) {
+    fn inventory_pick_key(&mut self) { if let Some(__l) = crate::points_generated::P154.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let menu = (self.screen == Screen::Inventory
             || (self.screen == Screen::Creative && !self.creative_screen.tab().search))
             && !self.dialog_open();
@@ -10700,7 +10700,7 @@ impl Game<'_> {
     }
     /// The plain inventory mouse press: starts a quick craft drag when a
     /// stack is held, gathers on a double click, else the normal click.
-    fn inventory_press(&mut self, right: bool) {
+    fn inventory_press(&mut self, right: bool) { let (right,) = match crate::points_generated::P153.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         use horizon_client::container_screen::Target;
         use horizon_client::menu::Input;
         if self.mod_browser_press(right) {
@@ -10851,7 +10851,7 @@ impl Game<'_> {
         self.click_inventory(right);
     }
     /// Mouse movement while a quick craft drag is running.
-    fn inventory_drag_move(&mut self) {
+    fn inventory_drag_move(&mut self) { if let Some(__l) = crate::points_generated::P152.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.tweaks_on() && self.tweak_drag_move(self.inventory_target().0) {
             return;
         }
@@ -10873,7 +10873,7 @@ impl Game<'_> {
         }
     }
     /// The hovered slot and whether the cursor is outside the window.
-    fn inventory_target(&self) -> (Option<usize>, bool) {
+    fn inventory_target(&self) -> (Option<usize>, bool) { if let Some(__l) = crate::points_generated::P151.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(r) = self.renderer.as_ref() else {
             return (None, false);
         };
@@ -10895,17 +10895,17 @@ impl Game<'_> {
     /// on the way from the OS (a stuck Shift then kept every screen's Shift
     /// and a sneak the key no longer held: #4166's in-game report), so a
     /// cached key set is not vanilla's answer.
-    pub(super) fn has_shift_down(&self) -> bool {
+    pub(super) fn has_shift_down(&self) -> bool { if let Some(__l) = crate::points_generated::P150.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.modifiers.shift_key()
     }
     /// The same live word for Control (`InputWithModifiers.hasControlDown`).
-    pub(super) fn has_control_down(&self) -> bool {
+    pub(super) fn has_control_down(&self) -> bool { if let Some(__l) = crate::points_generated::P149.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.modifiers.control_key()
     }
     /// Real events word the modifiers by their own `ModifiersChanged`; a
     /// control socket's `key` is synthesized, so it words the bit directly
     /// and every reader can ask the one live state.
-    fn press_modifier_key(&mut self, key: KeyCode, down: bool) {
+    fn press_modifier_key(&mut self, key: KeyCode, down: bool) { let (down,) = match crate::points_generated::P148.get() { Some(__l) => { let mut __a = (down,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (down,) };
         horizon_client_input::modifiers::set_key(
             &mut self.modifiers,
             &mut self.physical_keys,
@@ -10914,7 +10914,7 @@ impl Game<'_> {
         );
     }
     /// `hasClickedOutside` of the open screen at the cursor.
-    fn clicked_outside(&self, batch: &HudBatch) -> bool {
+    fn clicked_outside(&self, batch: &HudBatch) -> bool { if let Some(__l) = crate::points_generated::P147.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::container_screen::{Book, clicked_outside};
         let image = self.container_image(batch);
         let book = self
@@ -10931,7 +10931,7 @@ impl Game<'_> {
         )
     }
     /// The open container screen's window: its place and size.
-    fn container_image(&self, batch: &HudBatch) -> horizon_client::container_screen::Image {
+    fn container_image(&self, batch: &HudBatch) -> horizon_client::container_screen::Image { if let Some(__l) = crate::points_generated::P146.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (ox, oy) = self.inventory_origin(batch);
         let (shift, width, height) = if self.screen == Screen::Creative {
             (0.0, Creative::WIDTH as i32, Creative::HEIGHT as i32)
@@ -10953,7 +10953,7 @@ impl Game<'_> {
     /// A click outside the window (slot id -999): `THROW` does nothing; a
     /// `PICKUP` drops the carried stack (left) or one of it (right), thrown
     /// from the hand (`AbstractContainerMenu.doClick`, `LivingEntity.drop`).
-    fn throw_click(&mut self, right: bool, input: horizon_client::menu::Input) {
+    fn throw_click(&mut self, right: bool, input: horizon_client::menu::Input) { let (right,) = match crate::points_generated::P145.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         use horizon_client::menu::Input;
         let button = i32::from(right);
         if self.remote.is_some() {
@@ -10993,7 +10993,7 @@ impl Game<'_> {
     }
     /// Mouse release over an inventory screen: `mouseReleased` ends or
     /// cancels the drag, drops a stack released outside, or clicks.
-    fn inventory_mouse_release(&mut self, right: bool) {
+    fn inventory_mouse_release(&mut self, right: bool) { let (right,) = match crate::points_generated::P144.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         use horizon_client::container_screen::{Release, Target};
         self.tweak_release();
         let (slot, outside) = self.inventory_target();
@@ -11031,7 +11031,7 @@ impl Game<'_> {
     /// full size (`CLONE`), a carried stack starts a quick craft drag of type
     /// 2 that fills every slot it crosses; without infinite materials the
     /// press does nothing.
-    fn inventory_pick_press(&mut self) {
+    fn inventory_pick_press(&mut self) { if let Some(__l) = crate::points_generated::P143.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::container_screen::{Button, Target};
         let (slot, outside) = self.inventory_target();
         let was_crafting = self.inv_clicks.quick_crafting().is_some();
@@ -11060,7 +11060,7 @@ impl Game<'_> {
     /// The pick block button's release (`mouseReleased`): ends its quick
     /// craft drag, cancels another button's, or clones onto the slot under a
     /// carried stack (`CLONE`, which only an item tab's display slot takes).
-    fn inventory_pick_release(&mut self) {
+    fn inventory_pick_release(&mut self) { if let Some(__l) = crate::points_generated::P142.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::container_screen::{Button, Release, Target};
         let (slot, outside) = self.inventory_target();
         let dragged = self.inv_drag.as_ref().is_some_and(|(_, s)| !s.is_empty());
@@ -11082,7 +11082,7 @@ impl Game<'_> {
         }
     }
     /// Mouse release: finishes a quick craft drag (one slot is a plain click).
-    fn inventory_release(&mut self) {
+    fn inventory_release(&mut self) { if let Some(__l) = crate::points_generated::P141.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::menu::Input;
         let Some((ty, slots)) = self.inv_drag.take() else {
             return;
@@ -11109,7 +11109,7 @@ impl Game<'_> {
             self.container_changed(key);
         }
     }
-    fn click_inventory(&mut self, right: bool) {
+    fn click_inventory(&mut self, right: bool) { let (right,) = match crate::points_generated::P140.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         if self.mod_browser_press(right) || self.mount_click(right) {
             return;
         }
@@ -11304,12 +11304,12 @@ impl Game<'_> {
     }
     /// `Camera.setRotation`: the camera's orientation, turned round in
     /// third-person front view.
-    pub(super) fn camera_orientation(&self) -> glam::Quat {
+    pub(super) fn camera_orientation(&self) -> glam::Quat { if let Some(__l) = crate::points_generated::P139.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         camera_rotation(self.camera_type, self.yaw, self.pitch)
     }
     /// The entity whose geometry starts at vertex `start` (0: none), for frame
     /// generation to follow its own motion. Each run lasts until the next mark.
-    pub(super) fn mark_motion(&self, start: usize, id: u64) {
+    pub(super) fn mark_motion(&self, start: usize, id: u64) { let (start,id,) = match crate::points_generated::P138.get() { Some(__l) => { let mut __a = (start,id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (start,id,) };
         self.entity_motion.borrow_mut().push((start as u32, id));
     }
     /// ItemEntityRenderer: items bob and spin; blocks render as small cubes.
@@ -11324,7 +11324,7 @@ impl Game<'_> {
         Arc<[StaticSectionSnapshot]>,
         Vec<[i32; 3]>,
         StaticCacheFrameStats,
-    ) {
+    ) { let (alpha,fov_degrees,) = match crate::points_generated::P137.get() { Some(__l) => { let mut __a = (alpha,fov_degrees,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (alpha,fov_degrees,) };
         // Its steps as spans (HORIZON_SPIKES): each lap names the step that just ended.
         let mut laps = horizon_client::spans::laps();
         let mut static_block_entities = std::sync::Arc::from([]);
@@ -11934,7 +11934,7 @@ impl Game<'_> {
 
     /// `LevelRenderer.destroyBlockProgress`: a player's crack on a block (0..=9), or none
     /// (any other progress). Cracks not updated for 400 ticks are dropped.
-    pub(crate) fn destroy_block_progress(&mut self, breaker: i32, pos: [i32; 3], progress: i32) {
+    pub(crate) fn destroy_block_progress(&mut self, breaker: i32, pos: [i32; 3], progress: i32) { let (breaker,pos,progress,) = match crate::points_generated::P136.get() { Some(__l) => { let mut __a = (breaker,pos,progress,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (breaker,pos,progress,) };
         let now = self.world.game_time;
         self.destroying
             .retain(|_, c| now.saturating_sub(c.2) <= 400);
@@ -11948,7 +11948,7 @@ impl Game<'_> {
     /// The cracks to draw and their stage sprite's atlas origin: our own mining and the
     /// other players' (`renderBlockDestroyAnimation`: within 32 blocks of the camera, the
     /// furthest progress on each block).
-    fn cracks(&self, camera: glam::DVec3) -> Vec<([i32; 3], [f32; 2])> {
+    fn cracks(&self, camera: glam::DVec3) -> Vec<([i32; 3], [f32; 2])> { if let Some(__l) = crate::points_generated::P135.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // `destroy_stage_0` .. `destroy_stage_9`: the sprite name by stage, so the
         // lookup does not format a string per crack.
         const DESTROY_STAGES: [&str; 10] = [
@@ -11995,7 +11995,7 @@ impl Game<'_> {
             .collect()
     }
 
-    fn sky_darken(&self) -> i32 {
+    fn sky_darken(&self) -> i32 { if let Some(__l) = crate::points_generated::P134.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.dim == Dim::Nether {
             return 11;
         }
@@ -12023,7 +12023,7 @@ impl Game<'_> {
         self.sky_darken_memo.set(Some((key, darken)));
         darken
     }
-    fn mob_hit(&self) -> Option<(usize, f64)> {
+    fn mob_hit(&self) -> Option<(usize, f64)> { if let Some(__l) = crate::points_generated::P133.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(hit) = self.tick_mob {
             return hit;
         }
@@ -12055,7 +12055,7 @@ impl Game<'_> {
         &mut self,
         target_kind: &str,
         living: bool,
-    ) -> (f32, f32, bool, bool) {
+    ) -> (f32, f32, bool, bool) { let (living,) = match crate::points_generated::P132.get() { Some(__l) => { let mut __a = (living,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (living,) };
         let hand_damage = self.attack_damage();
         // Riptide's spin replaces the attack damage attribute.
         let spin = self.player.as_ref().map_or(0.0, |p| p.auto_spin_attack_dmg);
@@ -12084,7 +12084,7 @@ impl Game<'_> {
         (amount, scale, crit, enchant_bonus * scale > 0.0)
     }
     /// `Player.getAttackStrengthScale(0.5)`.
-    fn attack_strength_scale(&self) -> f32 {
+    fn attack_strength_scale(&self) -> f32 { if let Some(__l) = crate::points_generated::P131.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let delay = horizon_client::attack_strength::delay(self.main_hand_attack_speed());
         ((self.attack_ticks as f32 + 0.5) / delay).clamp(0.0, 1.0)
     }
@@ -12095,7 +12095,7 @@ impl Game<'_> {
         scale: f32,
         crit: bool,
         target: &str,
-    ) -> Option<[f64; 3]> {
+    ) -> Option<[f64; 3]> { let (scale,crit,) = match crate::points_generated::P130.get() { Some(__l) => { let mut __a = (scale,crit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (scale,crit,) };
         // Player.getSpeed: the movement speed attribute as it is now (the
         // field is only refreshed by the local movement step, never for a
         // server's player).
@@ -12118,7 +12118,7 @@ impl Game<'_> {
     }
     /// `Player.isSweepAttack` with the player's speed as it is, then
     /// `native_sweep_attack`, on either side: whether the hit on `target` sweeps.
-    pub(super) fn sweep_decision(&mut self, scale: f32, crit: bool, target: &str) -> bool {
+    pub(super) fn sweep_decision(&mut self, scale: f32, crit: bool, target: &str) -> bool { let (scale,crit,) = match crate::points_generated::P129.get() { Some(__l) => { let mut __a = (scale,crit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (scale,crit,) };
         let Some(p) = self.player.as_ref() else {
             return false;
         };
@@ -12144,7 +12144,7 @@ impl Game<'_> {
         from: Option<[f64; 3]>,
         target: Option<(Aabb, mace::Spared)>,
         scale: f32,
-    ) {
+    ) { let (at,scale,) = match crate::points_generated::P128.get() { Some(__l) => { let mut __a = (at,scale,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,scale,) };
         self.audio
             .play("minecraft:entity.player.attack.sweep", from, 1.0, 1.0);
         if let Some((area, mob)) = target {
@@ -12172,7 +12172,7 @@ impl Game<'_> {
     /// `Player.attack`'s `isSweepAttack`, decided before the hit as vanilla does
     /// (`crit`: the hit on a living target is critical): where the sweep plays,
     /// none without one. Reads the charge, so before the hit resets it.
-    pub(super) fn sweep_before_hit(&mut self, target: &str, crit: bool) -> Option<[f64; 3]> {
+    pub(super) fn sweep_before_hit(&mut self, target: &str, crit: bool) -> Option<[f64; 3]> { let (crit,) = match crate::points_generated::P127.get() { Some(__l) => { let mut __a = (crit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (crit,) };
         let scale = self.attack_strength_scale();
         self.sweep_attack_position(scale, crit, target)
     }
@@ -12185,7 +12185,7 @@ impl Game<'_> {
         area: Aabb,
         sweep: Option<[f64; 3]>,
         magic: Option<i32>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P126.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.attack_effects(area, sweep, None, false, mace::Spared::Nothing, magic);
     }
     /// `Player.attack` after a target that is not a mob took the hit:
@@ -12201,7 +12201,7 @@ impl Game<'_> {
         crit: bool,
         spared: mace::Spared,
         magic: Option<i32>,
-    ) {
+    ) { let (crit,) = match crate::points_generated::P125.get() { Some(__l) => { let mut __a = (crit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (crit,) };
         let scale = self.attack_strength_scale();
         let full = scale > 0.9;
         let player = self.player.as_ref();
@@ -12235,7 +12235,7 @@ impl Game<'_> {
     }
     /// `critical_hit` around the box `area` of entity `id` (`magic`: the
     /// enchanted hit instead of the crit).
-    fn area_critical_hit(&mut self, id: i32, area: Aabb, magic: bool) {
+    fn area_critical_hit(&mut self, id: i32, area: Aabb, magic: bool) { let (id,magic,) = match crate::points_generated::P124.get() { Some(__l) => { let mut __a = (id,magic,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,magic,) };
         let (feet, size) = (area.bottom_center(), area.size());
         self.critical_hit(
             self.lan_acting,
@@ -12249,7 +12249,7 @@ impl Game<'_> {
     /// `Player.canCriticalAttack` for a living target at attack strength
     /// `scale`: falling, off the ground, not in water, not blind (mobility
     /// restricted), not riding, not sprinting.
-    pub(super) fn critical_attack(&self, scale: f32) -> bool {
+    pub(super) fn critical_attack(&self, scale: f32) -> bool { let (scale,) = match crate::points_generated::P123.get() { Some(__l) => { let mut __a = (scale,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (scale,) };
         let player = self.player.as_ref();
         let falling = player.is_some_and(|p| {
             !p.ground.on_ground
@@ -12261,7 +12261,7 @@ impl Game<'_> {
         scale > 0.9 && falling && !restricted
     }
     /// Player.attack with the attack-strength charge, crits and knockback.
-    fn attack(&mut self) -> bool {
+    fn attack(&mut self) -> bool { if let Some(__l) = crate::points_generated::P122.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.spectator() {
             return false;
         }
@@ -12299,7 +12299,7 @@ impl Game<'_> {
     }
     /// `Player.attack` on a mob: the damage, knockback, sweep, particles and
     /// sounds.
-    pub(super) fn attack_mob(&mut self, index: usize) {
+    pub(super) fn attack_mob(&mut self, index: usize) { let (index,) = match crate::points_generated::P121.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let _attacker = self.knockback_scope(self.player.as_ref().map_or(0, |p| p.entity_id));
         let target_kind = self.mobs[index].kind.id.clone();
         let target_kind = format!("minecraft:{}", target_kind.trim_start_matches("minecraft:"));
@@ -12475,7 +12475,7 @@ impl Game<'_> {
     /// A mob explosion (`ServerLevel.explode` with `ExplosionInteraction.MOB`:
     /// blocks are kept without mobGriefing, else the mob_explosion_drop_decay
     /// rule picks decay).
-    fn explode(&mut self, center: [f64; 3], radius: f32) -> Result<()> {
+    fn explode(&mut self, center: [f64; 3], radius: f32) -> Result<()> { let (center,radius,) = match crate::points_generated::P120.get() { Some(__l) => { let mut __a = (center,radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,) };
         let interaction = if !self.ui.rules.bool("mob_griefing") {
             explosion::BlockInteraction::Keep
         } else {
@@ -12500,7 +12500,7 @@ impl Game<'_> {
         })
         .collect()
     }
-    fn tick_mobs(&mut self) -> Result<()> {
+    fn tick_mobs(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P119.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.tick_creatures()?;
         if !self.entity_attachments.is_empty() {
             self.prune_entity_attachments();
@@ -12526,7 +12526,7 @@ impl Game<'_> {
         &self,
         sky: &horizon_client::environment::Sky,
         rain: f32,
-    ) -> (Vec<Vertex>, Option<(glam::Mat4, f32)>) {
+    ) -> (Vec<Vertex>, Option<(glam::Mat4, f32)>) { let (rain,) = match crate::points_generated::P118.get() { Some(__l) => { let mut __a = (rain,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (rain,) };
         let body_color =
             0x00FF_FFFF | (((1.0 - rain).clamp(0.0, 1.0) * 255.0).round() as u32) << 24;
         let mut out = Vec::new();
@@ -12594,7 +12594,7 @@ impl Game<'_> {
     }
     /// `onAbort`: the confirm screen's Back or Escape reopens the Data
     /// Packs screen with the selection it had.
-    fn reopen_data_packs(&mut self, event_loop: &dyn EventLoopCtl) -> Result<()> {
+    fn reopen_data_packs(&mut self, event_loop: &dyn EventLoopCtl) -> Result<()> { if let Some(__l) = crate::points_generated::P117.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let action = self
             .title
             .as_mut()
@@ -12605,7 +12605,7 @@ impl Game<'_> {
         Ok(())
     }
     /// What the title screen asked for, from a click or Enter.
-    fn title_action(&mut self, event_loop: &dyn EventLoopCtl, action: Action) -> Result<()> {
+    fn title_action(&mut self, event_loop: &dyn EventLoopCtl, action: Action) -> Result<()> { if let Some(__l) = crate::points_generated::P116.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match action {
             // A splitscreen player's title never ends the process (P1's does).
             Action::Quit if self.options.split_guest => {}
@@ -12656,7 +12656,7 @@ impl Game<'_> {
         seed: Option<i64>,
         creative: bool,
         create: Option<&horizon_client::title::WorldOptions>,
-    ) -> Result<()> {
+    ) -> Result<()> { let (creative,) = match crate::points_generated::P115.get() { Some(__l) => { let mut __a = (creative,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (creative,) };
         // openWorldLoadLevelData: an existing world whose level data does not read opens
         // RecoverWorldDataScreen instead.
         if create.is_none()
@@ -12722,7 +12722,7 @@ impl Game<'_> {
 
     /// Load authoritative world state synchronously, without client entry or
     /// integrated-server selection. Server startup must use this entry point.
-    fn load_world(&mut self, request: world_loading::WorldRequest) -> Result<()> {
+    fn load_world(&mut self, request: world_loading::WorldRequest) -> Result<()> { if let Some(__l) = crate::points_generated::P114.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.join_world_rest()?;
         self.perf.world_opening();
         let prepared = request.prepare(
@@ -12735,7 +12735,7 @@ impl Game<'_> {
         self.finish_open_world(prepared)
     }
 
-    fn finish_open_world(&mut self, prepared: world_loading::PreparedWorld) -> Result<()> {
+    fn finish_open_world(&mut self, prepared: world_loading::PreparedWorld) -> Result<()> { if let Some(__l) = crate::points_generated::P113.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.reset_tutorial();
         // Another world: its generator, not the last one's Density line.
         self.debug_density.borrow_mut().clear();
@@ -12908,7 +12908,7 @@ impl Game<'_> {
         Ok(())
     }
     /// PortalShape: an obsidian frame around 2..=21 by 3..=21 empty blocks.
-    fn portal_shape(&self, start: [i32; 3], x_axis: bool) -> Option<([i32; 3], i32, i32)> {
+    fn portal_shape(&self, start: [i32; 3], x_axis: bool) -> Option<([i32; 3], i32, i32)> { let (start,x_axis,) = match crate::points_generated::P112.get() { Some(__l) => { let mut __a = (start,x_axis,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (start,x_axis,) };
         let name = |p: [i32; 3]| {
             self.res
                 .facts()
@@ -12981,7 +12981,7 @@ impl Game<'_> {
     }
     /// BaseFireBlock.onPlace: lighting fire inside a frame creates a portal,
     /// only in the Overworld and the Nether (`inPortalDimension`).
-    fn try_light_portal(&mut self, at: [i32; 3]) -> Result<bool> {
+    fn try_light_portal(&mut self, at: [i32; 3]) -> Result<bool> { let (at,) = match crate::points_generated::P111.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         if !matches!(self.dim, Dim::Overworld | Dim::Nether) {
             return Ok(false);
         }
@@ -13022,7 +13022,7 @@ impl Game<'_> {
     /// once.
     /// Keeps this play session's performance summary for the launcher to send, if the player
     /// allows performance statistics (`horizon_client::telemetry`), and starts the next one.
-    pub(super) fn finish_perf(&mut self) {
+    pub(super) fn finish_perf(&mut self) { if let Some(__l) = crate::points_generated::P110.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // One session per computer: P1's (a splitscreen player's would count it again).
         if self.options.split_guest {
             return;
@@ -13049,7 +13049,7 @@ impl Game<'_> {
             .finish(&horizon_client::logging::game_home(), settings);
     }
 
-    pub(super) fn save_for_exit(&mut self) -> Result<()> {
+    pub(super) fn save_for_exit(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P109.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Native application termination can bypass CloseRequested. Finish any
         // save screen synchronously here, before the process can go away.
         while self.pending_save.is_some() {
@@ -13090,7 +13090,7 @@ impl Game<'_> {
         self.saved_for_exit = true;
         Ok(())
     }
-    fn close_world(&mut self) -> Result<()> {
+    fn close_world(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P108.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A recording cannot cross into another world, and a replay feeding the
         // title screen is nonsense.
         self.repro_world_closed();
@@ -13102,7 +13102,7 @@ impl Game<'_> {
         }
         self.begin_closing_save(false)
     }
-    fn finish_close_world(&mut self) -> Result<()> {
+    fn finish_close_world(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P107.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.ambience.clear(&mut self.audio);
         // updateLevelInEngines(null): every sound stops; the music manager
         // lets go of its track.
@@ -13159,7 +13159,7 @@ impl Game<'_> {
     }
     /// Let go of every entity of the level (saved first): the next world
     /// opened must not inherit them, nor save them as its own.
-    fn clear_entities(&mut self) {
+    fn clear_entities(&mut self) { if let Some(__l) = crate::points_generated::P106.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.mobs.clear();
         self.dropped.clear();
         self.orbs.clear();
@@ -13188,7 +13188,7 @@ impl Game<'_> {
         self.entity_attachments.clear();
     }
     /// Equipment attribute modifiers (LivingEntity.collectEquipmentChanges).
-    fn apply_equipment(&mut self) {
+    fn apply_equipment(&mut self) { if let Some(__l) = crate::points_generated::P105.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(player) = self.player.as_mut() else {
             return;
         };
@@ -13227,7 +13227,7 @@ impl Game<'_> {
     /// The armor hits among a tick's motion events (`Player.hurtArmor` from
     /// `getDamageAfterArmorAbsorb`), whatever the damage: a mob, an explosion,
     /// a cactus, lava, a campfire.
-    fn wear_armor(&mut self, events: &[MotionEvent]) {
+    fn wear_armor(&mut self, events: &[MotionEvent]) { if let Some(__l) = crate::points_generated::P104.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for event in events {
             if let MotionEvent::Health(horizon_client::health::HealthEvent::ArmorHurt {
                 source,
@@ -13241,7 +13241,7 @@ impl Game<'_> {
     /// `Player.hurtArmor` -> `LivingEntity.doHurtEquipment`: each worn piece that
     /// wears when its wearer is hurt loses max(1, damage / 4) durability, except
     /// to a fire source when the piece resists fire (`ItemStack.canBeHurtBy`).
-    fn hurt_armor(&mut self, source: horizon_world::damage_source::DamageTypeId, damage: f32) {
+    fn hurt_armor(&mut self, source: horizon_world::damage_source::DamageTypeId, damage: f32) { let (damage,) = match crate::points_generated::P103.get() { Some(__l) => { let mut __a = (damage,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (damage,) };
         if damage <= 0.0 {
             return;
         }
@@ -13353,7 +13353,7 @@ impl Game<'_> {
         }
     }
     /// Voxel traversal that also stops at fluid source blocks (bucket pick).
-    fn pick_fluid(&self) -> Option<Hit> {
+    fn pick_fluid(&self) -> Option<Hit> { if let Some(__l) = crate::points_generated::P102.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (origin, dir) = self.aim()?;
         let mut t = 0.0;
         let mut last = origin.map(|v| v.floor() as i32);
@@ -13417,7 +13417,7 @@ impl Game<'_> {
     /// bucket: the block outline or a source fluid, whichever is nearer. A
     /// waterlogged block is a block hit (its outline is the block's, its
     /// fluid a source); flowing fluid has no shape to pick.
-    pub(super) fn bucket_hit(&self) -> Option<Hit> {
+    pub(super) fn bucket_hit(&self) -> Option<Hit> { if let Some(__l) = crate::points_generated::P101.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let origin = self.aim().map_or([0.0; 3], |(origin, _)| origin);
         let distance = |p: [f64; 3]| {
             (p[0] - origin[0]).powi(2) + (p[1] - origin[1]).powi(2) + (p[2] - origin[2]).powi(2)
@@ -13437,7 +13437,7 @@ impl Game<'_> {
     /// seagrass); every other bucket empties into the block the clicked face
     /// leads to. `SolidBucketItem` places like a block item, into a
     /// replaceable clicked block.
-    pub(super) fn bucket_target(&self, content: BucketContent, hit: &Hit) -> [i32; 3] {
+    pub(super) fn bucket_target(&self, content: BucketContent, hit: &Hit) -> [i32; 3] { if let Some(__l) = crate::points_generated::P100.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let clicked = self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]);
         let behaviours = self.res.behaviours();
         if content == BucketContent::Powder {
@@ -13461,7 +13461,7 @@ impl Game<'_> {
     pub(super) fn cauldron_at(
         &self,
         pos: [i32; 3],
-    ) -> Option<(horizon_world::chunk::BlockState, bool)> {
+    ) -> Option<(horizon_world::chunk::BlockState, bool)> { let (pos,) = match crate::points_generated::P99.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let registry = self.pack.assets.registry;
         let id = self.world.block(pos[0], pos[1], pos[2]);
         let state = registry
@@ -13482,7 +13482,7 @@ impl Game<'_> {
         &self,
         pos: [i32; 3],
         held: Option<&ItemStack>,
-    ) -> horizon_client::cauldron::Outcome {
+    ) -> horizon_client::cauldron::Outcome { let (pos,) = match crate::points_generated::P98.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         use horizon_client::cauldron::{self, Outcome};
         let Some(held) = held else {
             return Outcome::Pass;
@@ -13497,7 +13497,7 @@ impl Game<'_> {
         cauldron::outcome(&state, under_water, removes_dye, held)
     }
     /// `CauldronInteractions` for the held item aimed at a cauldron.
-    fn use_on_cauldron(&mut self, pos: [i32; 3]) -> Result<bool> {
+    fn use_on_cauldron(&mut self, pos: [i32; 3]) -> Result<bool> { let (pos,) = match crate::points_generated::P97.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         use horizon_client::cauldron::{self, Outcome};
         let registry = self.pack.assets.registry;
         let Some((state, under_water)) = self.cauldron_at(pos) else {
@@ -13546,7 +13546,7 @@ impl Game<'_> {
         &self,
         stack: &ItemStack,
         hit: &Hit,
-    ) -> Option<(BlockStateId, String, Option<String>, u32, String)> {
+    ) -> Option<(BlockStateId, String, Option<String>, u32, String)> { if let Some(__l) = crate::points_generated::P96.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::block_transform::Around;
         let Hit { pos, face, .. } = *hit;
         struct Column<'w> {
@@ -13659,7 +13659,7 @@ impl Game<'_> {
         None
     }
     /// `BlockTransformer.TransformParticle.send`: its level event.
-    pub(super) fn transform_particle(&mut self, particle: &str, pos: [i32; 3]) {
+    pub(super) fn transform_particle(&mut self, particle: &str, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P95.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let source = self
             .lan_acting_uuid
             .map(horizon_world::level::LevelEventPlayer);
@@ -13671,7 +13671,7 @@ impl Game<'_> {
         }
     }
     /// `BlockTransformer.transformBlock` for a held axe, hoe or shovel.
-    fn use_block_transformer(&mut self, stack: &ItemStack, hit: &Hit) -> Result<bool> {
+    fn use_block_transformer(&mut self, stack: &ItemStack, hit: &Hit) -> Result<bool> { if let Some(__l) = crate::points_generated::P94.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = hit.pos;
         let face = hit.face;
         let Some((new, sound, loot, damage, particle)) = self.block_transform(stack, hit) else {
@@ -13707,7 +13707,7 @@ impl Game<'_> {
         self.post_block_game_event("minecraft:block_change", pos, self.sculk_actor(), Some(new));
         Ok(true)
     }
-    fn set_state_named(&mut self, pos: [i32; 3], name: &str, keep: &[&str]) -> Result<bool> {
+    fn set_state_named(&mut self, pos: [i32; 3], name: &str, keep: &[&str]) -> Result<bool> { let (pos,) = match crate::points_generated::P93.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let registry = &self.pack.assets.registry;
         let old = self.world.block(pos[0], pos[1], pos[2]);
         let Some(default) = registry.default_state(name) else {
@@ -13729,7 +13729,7 @@ impl Game<'_> {
     /// in the cauldron at `pos` (`mayInteract`: not a spectator): the fill
     /// level drops (`lowerFillLevel`, a `block_change` with no source). A
     /// server's cauldron is the server's.
-    pub(super) fn cauldron_extinguish(&mut self, pos: BlockPos) {
+    pub(super) fn cauldron_extinguish(&mut self, pos: BlockPos) { if let Some(__l) = crate::points_generated::P92.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return;
         }
@@ -13778,7 +13778,7 @@ impl Game<'_> {
             self.post_block_game_event("minecraft:block_change", at, None, Some(new));
         }
     }
-    pub(super) fn damage_held(&mut self, amount: u32) {
+    pub(super) fn damage_held(&mut self, amount: u32) { let (amount,) = match crate::points_generated::P91.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         if self.creative {
             return;
         }
@@ -13810,7 +13810,7 @@ impl Game<'_> {
     }
     /// `ItemStack.hurtWithoutBreaking`: Unbreaking applies, but the stack stops at
     /// one point of durability left instead of breaking.
-    fn hurt_held_without_breaking(&mut self, amount: u32) {
+    fn hurt_held_without_breaking(&mut self, amount: u32) { let (amount,) = match crate::points_generated::P90.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         if self.creative {
             return;
         }
@@ -13831,7 +13831,7 @@ impl Game<'_> {
         &mut self,
         stack: &ItemStack,
         allow_block_actions: bool,
-    ) -> Result<horizon_client::first_person::UseResult> {
+    ) -> Result<horizon_client::first_person::UseResult> { let (allow_block_actions,) = match crate::points_generated::P89.get() { Some(__l) => { let mut __a = (allow_block_actions,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (allow_block_actions,) };
         use horizon_client::first_person::UseResult;
         let item = stack.item.trim_start_matches("minecraft:").to_owned();
         let at = |p: [i32; 3]| {
@@ -14082,7 +14082,7 @@ impl Game<'_> {
     /// `ExperienceOrb.award`: orbs of the largest sizes; each draws the id
     /// `tryMergeToExisting` compares from the level random, then moves with
     /// its own random.
-    fn spawn_orbs(&mut self, at: [f64; 3], mut value: u32) {
+    fn spawn_orbs(&mut self, at: [f64; 3], mut value: u32) { let (at,mut value,) = match crate::points_generated::P88.get() { Some(__l) => { let mut __a = (at,value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,value,) };
         while value > 0 {
             let v = ExperienceOrb::split(value);
             value -= v;
@@ -14094,7 +14094,7 @@ impl Game<'_> {
     /// 1 block box of `at`, whose id is a multiple of 40 from `merge_id`, takes
     /// the new one as one more in its count (and restarts its age); otherwise
     /// a fresh orb spawns.
-    fn award_orb(&mut self, at: [f64; 3], value: u32, merge_id: i32) {
+    fn award_orb(&mut self, at: [f64; 3], value: u32, merge_id: i32) { let (at,value,merge_id,) = match crate::points_generated::P87.get() { Some(__l) => { let mut __a = (at,value,merge_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,value,merge_id,) };
         let centre = Vec3::new(at[0], at[1], at[2]);
         let half = Vec3::new(0.5, 0.5, 0.5);
         let area = Aabb::new(centre.subtract(half), centre.add_vector(half));
@@ -14129,7 +14129,7 @@ impl Game<'_> {
         from: u32,
         from_value: u32,
         vanilla: bool,
-    ) -> bool {
+    ) -> bool { let (into,into_value,from,from_value,vanilla,) = match crate::points_generated::P86.get() { Some(__l) => { let mut __a = (into,into_value,from,from_value,vanilla,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (into,into_value,from,from_value,vanilla,) };
         let dimension = self.dim.id();
         let mut can_merge = vanilla;
         self.native_experience_orb_can_merge(
@@ -14150,7 +14150,7 @@ impl Game<'_> {
     /// `ExperienceOrb.scanForMerges`, run by each orb on `tickCount % 20 == 1`:
     /// it absorbs the orbs that `canMerge` within 0.5 blocks of its box,
     /// adding their counts and keeping the smaller age. Server only.
-    fn merge_orbs(&mut self) {
+    fn merge_orbs(&mut self) { if let Some(__l) = crate::points_generated::P85.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut removed = vec![false; self.orbs.len()];
         // Only the orbs of the tick's start tick; an orb a merge hook awards
         // joins the level at once, so each later orb's own entity query sees it.
@@ -14184,7 +14184,7 @@ impl Game<'_> {
     /// `Entity.unstuckIfPossible`, which `ExperienceOrb`'s constructor runs on an
     /// orb whose box is in a block: the free spot nearest its box's centre. An
     /// orb in open air keeps its position.
-    fn unstuck_orb(&self, at: [f64; 3]) -> [f64; 3] {
+    fn unstuck_orb(&self, at: [f64; 3]) -> [f64; 3] { let (at,) = match crate::points_generated::P84.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,) };
         let b = self.res.behaviours();
         let border = self.border_bounds();
         ExperienceOrb::unstuck(Vec3::new(at[0], at[1], at[2]), &border, |p| {
@@ -14195,7 +14195,7 @@ impl Game<'_> {
     }
     /// `new ExperienceOrb(level, pos, Vec3.ZERO, value)`: yaw and motion from
     /// the orb's own random.
-    fn add_orb(&mut self, at: [f64; 3], value: u32) {
+    fn add_orb(&mut self, at: [f64; 3], value: u32) { let (at,value,) = match crate::points_generated::P83.get() { Some(__l) => { let mut __a = (at,value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,value,) };
         let at = self.unstuck_orb(at);
         let mut r = dispenser::entity_random();
         let _yaw = r.next_float();
@@ -14222,7 +14222,7 @@ impl Game<'_> {
         // ServerLevel.addFreshEntity.
         self.native_joins_flush(false, 0);
     }
-    fn can_place_used_fire(&mut self, target: [i32; 3]) -> bool {
+    fn can_place_used_fire(&mut self, target: [i32; 3]) -> bool { let (target,) = match crate::points_generated::P82.get() { Some(__l) => { let mut __a = (target,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (target,) };
         let pos = BlockPos::new(target[0], target[1], target[2]);
         let direction = match ((self.yaw / 90.0 + 0.5).floor() as i32).rem_euclid(4) {
             0 => Direction::South,
@@ -14232,13 +14232,13 @@ impl Game<'_> {
         };
         self.with_level(|b, level, ticks| b.fire_can_be_placed_at(level, ticks, pos, direction))
     }
-    fn place_used_fire(&mut self, target: [i32; 3]) -> Result<()> {
+    fn place_used_fire(&mut self, target: [i32; 3]) -> Result<()> { let (target,) = match crate::points_generated::P81.get() { Some(__l) => { let mut __a = (target,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (target,) };
         let pos = BlockPos::new(target[0], target[1], target[2]);
         let state = self.with_level(|b, level, ticks| b.fire_state_for(level, ticks, pos));
         self.level_set(target, state)
     }
     /// DropExperienceBlock / RedStoneOreBlock / SculkBlock experience ranges.
-    fn block_experience(&mut self, name: &str) -> u32 {
+    fn block_experience(&mut self, name: &str) -> u32 { if let Some(__l) = crate::points_generated::P80.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (min, max) = match name.trim_start_matches("minecraft:") {
             "coal_ore" | "deepslate_coal_ore" => (0, 2),
             "nether_gold_ore" => (0, 1),
@@ -14267,7 +14267,7 @@ impl Game<'_> {
     /// `ExperienceOrb.followNearbyPlayer`'s candidates: each orb goes for the
     /// nearest living player within 8 blocks, the host's own or a guest. Each
     /// is the player's feet and the point the orb homes on.
-    pub(super) fn orb_followed(&self) -> Vec<([f64; 3], [f64; 3])> {
+    pub(super) fn orb_followed(&self) -> Vec<([f64; 3], [f64; 3])> { if let Some(__l) = crate::points_generated::P79.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let spectator = self.spectator();
         let player = self
             .player
@@ -14306,7 +14306,7 @@ impl Game<'_> {
     }
     /// The orbs' tick, but for the movement: that is `tick_ordered_before`'s,
     /// in join order with the other kinds.
-    fn tick_experience(&mut self) {
+    fn tick_experience(&mut self) { if let Some(__l) = crate::points_generated::P78.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.xp_delay > 0 {
             self.xp_delay -= 1;
         }
@@ -14383,7 +14383,7 @@ impl Game<'_> {
     /// `FurnaceResultSlot.checkTakeAchievements`: the player took from the output of the
     /// furnace at `pos`, which pops the experience of what it made at them
     /// (`awardUsedRecipesAndPopExperience`) and forgets it.
-    pub(super) fn award_furnace_recipes(&mut self, pos: (i32, i32, i32), at: [f64; 3]) {
+    pub(super) fn award_furnace_recipes(&mut self, pos: (i32, i32, i32), at: [f64; 3]) { let (at,) = match crate::points_generated::P77.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let used = match self.world.block_entities.get_mut(&pos) {
             Some(BlockEntity::Furnace(f)) => {
                 let used = f.recipe_experience(world_recipes!(self));
@@ -14403,7 +14403,7 @@ impl Game<'_> {
     }
     /// `Player.giveExperiencePoints`: `add_experience_levels` runs once for each
     /// level gained or lost, and the mods hear of the level change once.
-    pub(super) fn give_experience_points(&mut self, points: i32) {
+    pub(super) fn give_experience_points(&mut self, points: i32) { let (points,) = match crate::points_generated::P76.get() { Some(__l) => { let mut __a = (points,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (points,) };
         let Some(points) = self.xp_change(points) else {
             return;
         };
@@ -14432,7 +14432,7 @@ impl Game<'_> {
         self.native_player_level_changed(old_level);
     }
     /// BowItem.releaseUsing: power from charge time, arrows at power * 3.
-    fn release_bow(&mut self, stack: &ItemStack, ticks: u32) {
+    fn release_bow(&mut self, stack: &ItemStack, ticks: u32) { let (ticks,) = match crate::points_generated::P75.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         let ammo = self.get_projectile(stack);
         let mut charge = i32::try_from(ticks).unwrap_or(i32::MAX);
         let mut canceled = false;
@@ -14529,7 +14529,7 @@ impl Game<'_> {
         light: u32,
         partial: f32,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (left,light,partial,) = match crate::points_generated::P74.get() { Some(__l) => { let mut __a = (left,light,partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (left,light,partial,) };
         if mod_api::__private::listened(mod_api::HookId::RenderArm) {
             let eye = self.eye_position().unwrap_or_default();
             let mut draw = BlockEntityDraw::posed(
@@ -14582,7 +14582,7 @@ impl Game<'_> {
     }
     /// FirstPersonHandsAndItemsRenderer: the right arm or the held items of
     /// both hands in view space, converted to camera-relative world space.
-    fn hand_geometry(&mut self, alpha: f64) -> Vec<Vertex> {
+    fn hand_geometry(&mut self, alpha: f64) -> Vec<Vertex> { let (alpha,) = match crate::points_generated::P73.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (alpha,) };
         let mut out = Vec::new();
         // GameRenderer.renderItemInHand: F1 hides the hand with the HUD.
         if self.spectator()
@@ -14833,11 +14833,11 @@ impl Game<'_> {
     }
     /// The renderer for the window, with the current block sprites, GUI
     /// atlas and world border texture.
-    fn new_renderer(&self, window: Arc<Window>) -> Result<Renderer> {
+    fn new_renderer(&self, window: Arc<Window>) -> Result<Renderer> { if let Some(__l) = crate::points_generated::P72.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.renderer_for(window, &self.pack, &self.gui)
     }
     /// Rebuild GPU-owned state after the backend reports device loss.
-    fn recover_device(&mut self) -> Result<()> {
+    fn recover_device(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P71.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.renderer.as_ref().is_some_and(Renderer::device_lost) {
             return Ok(());
         }
@@ -14903,7 +14903,7 @@ impl Game<'_> {
         window: Arc<Window>,
         pack: &PackResources,
         gui: &UiResources,
-    ) -> Result<Renderer> {
+    ) -> Result<Renderer> { if let Some(__l) = crate::points_generated::P70.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         build_renderer(
             window,
             self.options.offscreen,
@@ -14917,7 +14917,7 @@ impl Game<'_> {
             shader_packs::picked_pack_draws_flat(&self.settings),
         )
     }
-    fn apply_settings(&mut self) {
+    fn apply_settings(&mut self) { if let Some(__l) = crate::points_generated::P69.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // LocalPlayer.refreshChatAbilities: the chat shows what the Chat option allows.
         let abilities = self.chat_abilities();
         self.ui.chat.set_abilities(&self.gui.atlas.font, abilities);
@@ -14956,14 +14956,14 @@ impl Game<'_> {
     }
     /// The sprite layers a shader pack draws in the translucent pass: every section is meshed
     /// again when they change.
-    pub(super) fn set_translucent_layers(&mut self, layers: Vec<bool>) {
+    pub(super) fn set_translucent_layers(&mut self, layers: Vec<bool>) { if let Some(__l) = crate::points_generated::P68.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if *layers != *self.streaming.translucent_layers {
             self.streaming.translucent_layers = layers.into();
             self.all_sections_changed();
         }
     }
     /// `LevelExtractor.allChanged`: every loaded section is rebuilt.
-    fn all_sections_changed(&mut self) {
+    fn all_sections_changed(&mut self) { if let Some(__l) = crate::points_generated::P67.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for &(x, z) in self.world.chunks.keys() {
             for sy in 0..self.world.layout().height() / 16 {
                 self.world.dirty_sections.insert((x, sy, z));
@@ -14972,7 +14972,7 @@ impl Game<'_> {
     }
     /// Whether precipitation at a column is snow (Biome.coldEnoughToSnow:
     /// height adjusted temperature) or none (no precipitation).
-    fn precipitation(&self, x: i32, y: i32, z: i32) -> Option<bool> {
+    fn precipitation(&self, x: i32, y: i32, z: i32) -> Option<bool> { let (x,y,z,) = match crate::points_generated::P66.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,z,) };
         let chunk = self.world.chunks.get(&(x >> 4, z >> 4))?;
         self.res
             .biomes()
@@ -14981,7 +14981,7 @@ impl Game<'_> {
     }
     /// `Level.isRainingAt`: it rains, the sky light is 15, nothing that stops
     /// motion is above, and the biome's precipitation there is rain.
-    fn raining_at(&self, p: BlockPos) -> bool {
+    fn raining_at(&self, p: BlockPos) -> bool { if let Some(__l) = crate::points_generated::P65.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.weather_levels(1.0).0 > 0.2
             && self.world.light(p.x, p.y, p.z) >> 4 == 15
             && self.rain_height(p.x, p.z) <= p.y
@@ -14989,10 +14989,10 @@ impl Game<'_> {
     }
     /// `getHeight(Heightmap.Types.MOTION_BLOCKING, x, z)`: one above the
     /// highest block in `blocks_motion_in_heightmap` or holding a fluid.
-    fn rain_height(&self, x: i32, z: i32) -> i32 {
+    fn rain_height(&self, x: i32, z: i32) -> i32 { let (x,z,) = match crate::points_generated::P64.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,z,) };
         render_tick::motion_blocking_height(&self.world, &self.pack.assets.properties, x, z)
     }
-    fn tick_weather_effects(&mut self) {
+    fn tick_weather_effects(&mut self) { if let Some(__l) = crate::points_generated::P63.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.flash > 0 {
             self.flash -= 1;
         }
@@ -15003,7 +15003,7 @@ impl Game<'_> {
         &mut self,
         camera: glam::DVec3,
         alpha: f64,
-    ) -> Vec<horizon_client::weather::Vertex> {
+    ) -> Vec<horizon_client::weather::Vertex> { let (alpha,) = match crate::points_generated::P62.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (alpha,) };
         use horizon_client::weather;
         let (intensity, _) = self.weather_levels(alpha as f32);
         if intensity <= 0.0 {
@@ -15081,7 +15081,7 @@ impl Game<'_> {
     /// A translated message for the player the game acts for: `overlay` is
     /// `sendOverlayMessage` (the action bar), else `sendSystemMessage` (chat).
     /// A guest gets a packet, so its own client translates it.
-    fn tell_sleeper(&mut self, key: &str, fallback: &str, overlay: bool) {
+    fn tell_sleeper(&mut self, key: &str, fallback: &str, overlay: bool) { let (overlay,) = match crate::points_generated::P61.get() { Some(__l) => { let mut __a = (overlay,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (overlay,) };
         if self.lan_acting.is_some() {
             self.guest_packets
                 .push(horizon_protocol::packets::play::Clientbound::SystemChat(
@@ -15099,7 +15099,7 @@ impl Game<'_> {
     /// ServerPlayer.startSleepInBed: in reach, not obstructed, night or thunder,
     /// and (outside creative) no monsters within 8 blocks; the bed becomes the
     /// respawn point either way.
-    fn try_sleep(&mut self, pos: [i32; 3]) {
+    fn try_sleep(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P60.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if self.lan_acting_fake {
             return;
         }
@@ -15296,7 +15296,7 @@ impl Game<'_> {
         self.trigger_player("minecraft:slept_in_bed");
         self.stats.reset("custom", "minecraft:time_since_rest");
     }
-    fn wake_up(&mut self) {
+    fn wake_up(&mut self) { if let Some(__l) = crate::points_generated::P59.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             // InBedChatScreen.sendWakeUp: the server wakes the player.
             self.remote_stop_sleeping();
@@ -15326,7 +15326,7 @@ impl Game<'_> {
             self.native_player_bed_leave(player, &name, head);
         }
     }
-    fn tick_sleep(&mut self) {
+    fn tick_sleep(&mut self) { if let Some(__l) = crate::points_generated::P58.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.sleep_timer = tick_sleep_timer(self.sleep_timer, self.sleeping.is_some());
         if let Some(head) = self.sleeping {
             // LivingEntity.tick's checkBedExists: a sleeper whose bed is
@@ -15399,7 +15399,7 @@ impl Game<'_> {
     /// A creative tab's title: `itemGroup.*` for vanilla's; a mod tab's
     /// `itemGroup.<mod>.<name>`, else its `title` as a lang key (a mod's own
     /// `itemGroup.<mod>`), else `title` as English text.
-    fn creative_tab_title(&self, tab: &horizon_client::creative::Tab) -> String {
+    fn creative_tab_title(&self, tab: &horizon_client::creative::Tab) -> String { if let Some(__l) = crate::points_generated::P57.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match horizon_client::creative::item_group_key(&tab.id) {
             Some(key) => self.translate(key, &tab.title),
             None => {
@@ -15410,7 +15410,7 @@ impl Game<'_> {
     }
     /// Vanilla tooltip: dark box with a purple gradient border, laid out and
     /// drawn like an item tooltip (4 px of padding on every side).
-    fn tooltip(&self, batch: &mut HudBatch, text: &str, x: f32, y: f32) {
+    fn tooltip(&self, batch: &mut HudBatch, text: &str, x: f32, y: f32) { let (x,y,) = match crate::points_generated::P56.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,) };
         let atlas = &self.gui.atlas;
         let lines = vec![(horizon_client::text::Text::literal(text), u32::MAX)];
         let (x, y, w, h) =
@@ -15426,7 +15426,7 @@ impl Game<'_> {
         &self,
         stack: &ItemStack,
         grid: bool,
-    ) -> Vec<(horizon_client::text::Text, u32)> {
+    ) -> Vec<(horizon_client::text::Text, u32)> { let (grid,) = match crate::points_generated::P55.get() { Some(__l) => { let mut __a = (grid,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (grid,) };
         let screen = &self.creative_screen;
         let tab = screen.tab();
         let category = !tab.search && !tab.inventory;
@@ -15452,7 +15452,7 @@ impl Game<'_> {
     }
     /// `CreativeModeInventoryScreen.extractRenderState`: item slots share the
     /// container screen's hover target for their highlight and tooltip.
-    fn draw_creative(&mut self, batch: &mut HudBatch) {
+    fn draw_creative(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P54.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // CreativeModeInventoryScreen: `CommonComponents.EMPTY` for a title.
         screen_info::begin_container("creative");
         let (ox, oy) = Self::creative_origin(batch);
@@ -15693,7 +15693,7 @@ impl Game<'_> {
         }
     }
     /// The page buttons and "page / pages" between them.
-    fn draw_creative_pages(&self, batch: &mut HudBatch, ox: f32, oy: f32) {
+    fn draw_creative_pages(&self, batch: &mut HudBatch, ox: f32, oy: f32) { let (ox,oy,) = match crate::points_generated::P53.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ox,oy,) };
         let pages = self.creative_screen.pages();
         if pages <= 1 {
             return;
@@ -15729,7 +15729,7 @@ impl Game<'_> {
             true,
         );
     }
-    fn click_creative(&mut self, right: bool) {
+    fn click_creative(&mut self, right: bool) { let (right,) = match crate::points_generated::P52.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         let Some(size) = self
             .renderer
             .as_ref()
@@ -15806,7 +15806,7 @@ impl Game<'_> {
         }
     }
     /// A click on the search tab's box (`EditBox.onClick`).
-    fn creative_search_click(&mut self, ox: f32, oy: f32) -> bool {
+    fn creative_search_click(&mut self, ox: f32, oy: f32) -> bool { let (ox,oy,) = match crate::points_generated::P51.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ox,oy,) };
         if !self.creative_screen.tab().search {
             return false;
         }
@@ -15824,7 +15824,7 @@ impl Game<'_> {
         true
     }
     /// Copy the live player and world state into the `Level` that gets saved.
-    pub(super) fn sync_level(&mut self) {
+    pub(super) fn sync_level(&mut self) { if let Some(__l) = crate::points_generated::P50.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Level.write saves the game rules (game_rules.dat) with the rest.
         self.level.game_rules = self.ui.rules.by_name();
         // PrimaryLevelData.setDifficulty: /difficulty and the options button change it.
@@ -15957,7 +15957,7 @@ impl Game<'_> {
     }
     /// The saved player's hands, armor, body, saddle and ender chest go in
     /// their fields; the 36 inventory slots come back.
-    fn load_saved_inventory(&mut self, level: &Level) -> Vec<Option<ItemStack>> {
+    fn load_saved_inventory(&mut self, level: &Level) -> Vec<Option<ItemStack>> { if let Some(__l) = crate::points_generated::P49.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut inventory = vec![None; 36];
         self.armor = [None, None, None, None];
         self.offhand = None;
@@ -15986,13 +15986,13 @@ impl Game<'_> {
         }
         inventory
     }
-    fn save_game(&mut self) -> Result<()> {
+    fn save_game(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P48.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.save_game_with(true)
     }
     /// `MinecraftServer.computeNextAutosaveInterval`: three hundred seconds
     /// of ticks at the rate the server runs at now - its measured rate while
     /// a `/tick sprint` runs - never fewer than a hundred.
-    fn next_autosave_interval(&self) -> i64 {
+    fn next_autosave_interval(&self) -> i64 { if let Some(__l) = crate::points_generated::P47.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let rate = if self.clock.sprinting() {
             1.0e9 / (self.clock.average_nanos() + 1) as f32
         } else {
@@ -16002,7 +16002,7 @@ impl Game<'_> {
     }
     /// `MinecraftServer.onTickRateChanged`: a rate that asks for a shorter
     /// wait than the one already running shortens it.
-    pub(super) fn on_tick_rate_changed(&mut self) {
+    pub(super) fn on_tick_rate_changed(&mut self) { if let Some(__l) = crate::points_generated::P46.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let interval = self.next_autosave_interval();
         if interval < self.ticks_until_autosave {
             self.ticks_until_autosave = interval;
@@ -16011,7 +16011,7 @@ impl Game<'_> {
     /// The autosave doesn't `wait` for the chunks to be on disk: every
     /// generated chunk is saved, hundreds at a time, encoded and written on
     /// the region writer meanwhile.
-    fn save_game_with(&mut self, wait: bool) -> Result<()> {
+    fn save_game_with(&mut self, wait: bool) -> Result<()> { let (wait,) = match crate::points_generated::P45.get() { Some(__l) => { let mut __a = (wait,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (wait,) };
         if self.remote.is_some() {
             return Ok(());
         }
@@ -16031,7 +16031,7 @@ impl Game<'_> {
         }
         Ok(())
     }
-    fn finish_player_autosaves(&mut self, wait: bool) -> Result<bool> {
+    fn finish_player_autosaves(&mut self, wait: bool) -> Result<bool> { let (wait,) = match crate::points_generated::P44.get() { Some(__l) => { let mut __a = (wait,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (wait,) };
         let saved = self.player_autosaves.completed(wait);
         if !saved.is_empty() {
             let directory = horizon_client::lan::playerdata::directory(&self.world_root);
@@ -16041,7 +16041,7 @@ impl Game<'_> {
         }
         self.player_autosaves.writes_finished()
     }
-    fn save_game_metadata(&mut self) -> Result<()> {
+    fn save_game_metadata(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P43.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.save_maps();
         self.save_random_sequences();
         self.save_fight();
@@ -16087,7 +16087,7 @@ impl Game<'_> {
         Ok(())
     }
     /// Save the level in place: its changed chunks, its entities and its raids.
-    fn save_level(&mut self, wait: bool) -> Result<()> {
+    fn save_level(&mut self, wait: bool) -> Result<()> { let (wait,) = match crate::points_generated::P42.get() { Some(__l) => { let mut __a = (wait,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (wait,) };
         self.save_chunk_tickets()?;
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
@@ -16127,7 +16127,7 @@ impl Game<'_> {
     /// `GameRenderer.tryTakeScreenshotIfNeeded`: while a local world without a
     /// saved icon is on the screen, grab the rendered frame once a second until
     /// the save has one. The Select World list shows it as the world's preview.
-    fn tick_world_icon(&mut self) {
+    fn tick_world_icon(&mut self) { if let Some(__l) = crate::points_generated::P41.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(icon) = self.world_icon.as_ref() else {
             return;
         };
@@ -16174,7 +16174,7 @@ impl Game<'_> {
             scaled: false,
         });
     }
-    fn render(&mut self) -> Result<bool> {
+    fn render(&mut self) -> Result<bool> { if let Some(__l) = crate::points_generated::P40.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The window's GPU holds the atlas: its copy in memory is kept
         // compressed (a no-op once it is).
         if self.renderer.is_some() {
@@ -16846,7 +16846,7 @@ impl Game<'_> {
     }
     /// The frame shows the title's panorama, not a level: the title screen, or a
     /// LevelLoadingScreen (Reason.OTHER), which draws it too.
-    fn shows_panorama(&self) -> bool {
+    fn shows_panorama(&self) -> bool { if let Some(__l) = crate::points_generated::P39.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // The two cases that always had one: the title screen and waiting on
         // a server. Left exactly as they were.
         self.title.is_some() || self.remote_loading() || self.screen_wants_panorama()
@@ -16861,7 +16861,7 @@ impl Game<'_> {
     ///
     /// Only in a menu: in a world the panorama would replace the world the
     /// player is standing in, which is not what any of these screens want.
-    fn screen_wants_panorama(&self) -> bool {
+    fn screen_wants_panorama(&self) -> bool { if let Some(__l) = crate::points_generated::P38.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::screen_draw::Backdrop;
         if self.player.is_some() {
             return false;
@@ -16877,7 +16877,7 @@ impl Game<'_> {
         &self,
         batch: &mut HudBatch,
         reason: horizon_client::level_loading::Reason,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P37.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_client::level_loading::Reason;
         let atlas = &self.gui.atlas;
         let (w, h) = (batch.width, batch.height);
@@ -16896,7 +16896,7 @@ impl Game<'_> {
     /// `GameRenderer.update`'s `requestedPostEffects`: `end_of_frame` (a resource
     /// pack's own chain), then the server's `LocalPlayer.postEffects`. Only the
     /// world is drawn through them.
-    fn requested_post_effects(&self) -> Vec<String> {
+    fn requested_post_effects(&self) -> Vec<String> { if let Some(__l) = crate::points_generated::P36.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.title.is_some() || self.player.is_none() {
             return Vec::new();
         }
@@ -16907,7 +16907,7 @@ impl Game<'_> {
     }
     /// `Screen.extractBlurredBackground` over the panorama or the world and
     /// HUD, when `menuBackgroundBlurriness` is at least 1.
-    fn menu_blur(&self) -> Option<f32> {
+    fn menu_blur(&self) -> Option<f32> { if let Some(__l) = crate::points_generated::P35.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let blurred = self.remote_loading()
             || self.title.as_ref().is_some_and(|t| {
                 matches!(self.screen, Screen::Options | Screen::Win)
@@ -16926,7 +16926,7 @@ impl Game<'_> {
         &mut self,
         camera: [f64; 3],
         partial: f32,
-    ) -> Option<horizon_client::gfx::BorderDraw> {
+    ) -> Option<horizon_client::gfx::BorderDraw> { let (camera,partial,) = match crate::points_generated::P34.get() { Some(__l) => { let mut __a = (camera,partial,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (camera,partial,) };
         use horizon_client::border_render::{self, BorderRenderer};
         let distance = f64::from(self.streaming.radius * 16);
         border_render::extract(
@@ -16967,7 +16967,7 @@ impl Game<'_> {
     /// physical key as pressed (the same where the caller had no window key):
     /// `Screen.keyPressed` hears the raw one, and only a raw key settles what
     /// the container's hotbar keys are now (`checkHotbarKeyPressed`).
-    fn key_pressed(&mut self, key: KeyCode, raw: KeyCode) -> Result<()> {
+    fn key_pressed(&mut self, key: KeyCode, raw: KeyCode) -> Result<()> { if let Some(__l) = crate::points_generated::P33.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.sleeping.is_some()
             && self.screen == Screen::Playing
             && !matches!(
@@ -17203,7 +17203,7 @@ impl Game<'_> {
         Ok(())
     }
     /// A mouse button while playing (window or control socket).
-    fn play_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> {
+    fn play_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> { let (pressed,) = match crate::points_generated::P32.get() { Some(__l) => { let mut __a = (pressed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pressed,) };
         if self.sleeping.is_some() {
             return Ok(());
         }
@@ -17275,7 +17275,7 @@ impl Game<'_> {
     }
     /// LOD Distance and Far Detail Reduced as the player chose them, the
     /// distance no farther than a server sampling far terrain for us allows.
-    fn far_terrain_choice(&self) -> (u32, bool) {
+    fn far_terrain_choice(&self) -> (u32, bool) { if let Some(__l) = crate::points_generated::P31.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let g = &self.settings.horizon;
         let reduced = g.far_detail == horizon_client::graphics::FarDetail::Reduced;
         let distance = if self.ram_limit.far_off() {
@@ -17291,14 +17291,14 @@ impl Game<'_> {
     /// The far terrain another machine's server samples for us
     /// (`lod_net`): a client of a dedicated server or of a LAN world, not of
     /// its own server thread, which hands its generator over directly.
-    fn server_far_terrain(&self) -> Option<horizon_client::lod_net::Offer> {
+    fn server_far_terrain(&self) -> Option<horizon_client::lod_net::Offer> { if let Some(__l) = crate::points_generated::P30.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.integrated.is_some() {
             return None;
         }
         self.remote.as_ref()?.far_terrain
     }
     /// LOD Distance as far terrain uses it (`graphics::lod_distance_capped`).
-    fn lod_distance(&self) -> u32 {
+    fn lod_distance(&self) -> u32 { if let Some(__l) = crate::points_generated::P29.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (distance, _) = self.far_terrain_choice();
         match &self.renderer {
             Some(renderer) => {
@@ -17308,14 +17308,14 @@ impl Game<'_> {
         }
     }
     /// Only enabled LOD worlds extend the renderer's range, never simulation.
-    fn terrain_distance(&self) -> i32 {
+    fn terrain_distance(&self) -> i32 { if let Some(__l) = crate::points_generated::P28.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.lod.is_some() {
             self.streaming.radius.max(self.lod_distance() as i32)
         } else {
             self.streaming.radius
         }
     }
-    fn clear_lod(&mut self) {
+    fn clear_lod(&mut self) { if let Some(__l) = crate::points_generated::P27.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The samplers waiting on the server stop first: dropping the far
         // terrain joins them.
         if let Some(remote) = &self.remote {
@@ -17331,7 +17331,7 @@ impl Game<'_> {
             renderer.clear_lods();
         }
     }
-    fn prepare_lod(&mut self) {
+    fn prepare_lod(&mut self) { if let Some(__l) = crate::points_generated::P26.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let enabled = self.far_terrain_choice().0 > 0
             && self.renderer.is_some()
             && self.player.is_some()
@@ -17451,7 +17451,7 @@ impl Game<'_> {
             self.lod_observe.extend(self.world.chunks.keys().copied());
         }
     }
-    fn update_world(&mut self) {
+    fn update_world(&mut self) { if let Some(__l) = crate::points_generated::P25.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Err(e) = horizon_client::spans::time("poll_remote", || self.poll_remote()) {
             log::warn!("Horizon: {e}");
         }
@@ -17716,7 +17716,7 @@ fn autosave_interval(rate: f32) -> i64 {
     i64::from((rate * 300.0) as i32).max(100)
 }
 impl ApplicationHandler for Game<'_> {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) { if let Some(__l) = crate::points_generated::P24.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.window.is_some() {
             return;
         }
@@ -17766,7 +17766,7 @@ impl ApplicationHandler for Game<'_> {
         self.apply_settings();
         self.previous = Instant::now();
     }
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) { if let Some(__l) = crate::points_generated::P23.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let key = if self.window.as_ref().is_some_and(|w| w.id() == id)
             && let WindowEvent::KeyboardInput {
                 event,
@@ -17792,7 +17792,7 @@ impl ApplicationHandler for Game<'_> {
             self.native_input_key(name.unwrap_or("key.keyboard.unknown"), action, modifiers);
         }
     }
-    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
+    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) { if let Some(__l) = crate::points_generated::P22.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A composited view renders offscreen but its keyboard/mouse owner still
         // controls a visible native window. A headless offscreen run never does.
         if self.pending_save.is_none()
@@ -17812,13 +17812,13 @@ impl ApplicationHandler for Game<'_> {
             self.last_input = Instant::now();
         }
     }
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) { if let Some(__l) = crate::points_generated::P21.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.idle(event_loop);
     }
     /// The application is ending. On macOS, Quit (Cmd+Q) ends it through
     /// applicationWillTerminate without a CloseRequested; vanilla's GLFW
     /// window turns it into a window close, so Minecraft.stop saves the world.
-    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) { if let Some(__l) = crate::points_generated::P20.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.shut_down();
     }
 }
@@ -17834,7 +17834,7 @@ impl Game<'_> {
         id: WindowId,
         mut event: WindowEvent,
         origin: input_trace::InputOrigin,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P19.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A headless game has no window: its events (the frame, the control socket's input)
         // carry `WindowId::dummy()`.
         let ours = match &self.window {
@@ -17901,7 +17901,7 @@ impl Game<'_> {
             self.native_mouse_button_post(button, pressed, modifiers);
         }
     }
-    fn handle_window_event_inner(&mut self, event_loop: &dyn EventLoopCtl, mut event: WindowEvent) {
+    fn handle_window_event_inner(&mut self, event_loop: &dyn EventLoopCtl, mut event: WindowEvent) { if let Some(__l) = crate::points_generated::P18.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let WindowEvent::Focused(false) = &event {
             self.physical_keys.clear();
             self.physical_buttons.clear();
@@ -19331,7 +19331,7 @@ impl Game<'_> {
         }
     }
     /// The loop ended: close the pads' output, save the world, write the perf report.
-    pub(super) fn shut_down(&mut self) {
+    pub(super) fn shut_down(&mut self) { if let Some(__l) = crate::points_generated::P17.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.pad_close_output();
         if let Err(e) = self.save_for_exit() {
             log::warn!("Horizon: failed to save the world on exit: {e}");
@@ -19340,7 +19340,7 @@ impl Game<'_> {
     }
     /// winit's `about_to_wait`: what happens between frames (stop requests, the closing
     /// save, world entry, the control socket, pads), then the next frame.
-    pub(super) fn idle(&mut self, event_loop: &dyn EventLoopCtl) {
+    pub(super) fn idle(&mut self, event_loop: &dyn EventLoopCtl) { if let Some(__l) = crate::points_generated::P16.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A splitscreen player's game has nothing to save: P1's shuts the process down.
         if horizon_threads::stop_requests() > 0
             && !self.options.split_guest
@@ -20151,7 +20151,7 @@ impl WorldRestLoader {
 }
 
 impl Game<'_> {
-    fn defer_world_entry(&mut self, entry: PendingWorldEntry) -> Result<bool> {
+    fn defer_world_entry(&mut self, entry: PendingWorldEntry) -> Result<bool> { if let Some(__l) = crate::points_generated::P15.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.poll_world_rest()?;
         if self.rest_loader.is_none() {
             return Ok(false);
@@ -20171,7 +20171,7 @@ impl Game<'_> {
         Ok(true)
     }
 
-    fn resume_world_entry(&mut self) -> Result<()> {
+    fn resume_world_entry(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P14.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.poll_integrated_start()?;
         self.poll_world_rest()?;
         self.poll_world_creation();
@@ -20219,7 +20219,7 @@ impl Game<'_> {
     /// `CreateWorldScreen.openCreateWorldScreen`: read the world generation
     /// data the create screen describes, on a worker, then open the screen
     /// (`title.preparing`).
-    fn poll_world_creation(&mut self) {
+    fn poll_world_creation(&mut self) { if let Some(__l) = crate::points_generated::P13.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(title) = self.title.as_ref() else {
             return;
         };
@@ -20286,7 +20286,7 @@ impl Game<'_> {
         }
     }
 
-    fn poll_world_rest(&mut self) -> Result<()> {
+    fn poll_world_rest(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P12.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(loader) = &self.rest_loader
             && loader.ready()?
         {
@@ -20302,16 +20302,16 @@ impl Game<'_> {
 
     /// The content tables the world plays with: its data packs' over the
     /// game's own when it has packs, `Resources.rest`'s own otherwise.
-    fn items(&self) -> &Items {
+    fn items(&self) -> &Items { if let Some(__l) = crate::points_generated::P11.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         world_items!(self)
     }
-    fn recipes(&self) -> &Recipes {
+    fn recipes(&self) -> &Recipes { if let Some(__l) = crate::points_generated::P10.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match &self.world_tables {
             Some(t) => &t.recipes,
             None => self.synced_recipes().unwrap_or_else(|| self.res.recipes()),
         }
     }
-    fn stations(&self) -> &horizon_client::stations::StationData {
+    fn stations(&self) -> &horizon_client::stations::StationData { if let Some(__l) = crate::points_generated::P9.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match &self.world_tables {
             Some(t) => &t.stations,
             None => self.res.stations(),
@@ -20319,7 +20319,7 @@ impl Game<'_> {
     }
     /// The world's packs' content files, none without packs.
     /// The biome table the world plays with, `None` before a world opens.
-    fn packed_biomes(&self) -> Option<Arc<Biomes>> {
+    fn packed_biomes(&self) -> Option<Arc<Biomes>> { if let Some(__l) = crate::points_generated::P8.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let table = world_loading::packed_biomes(
             &self.world_root,
             &self.options.resources,
@@ -20330,19 +20330,19 @@ impl Game<'_> {
     }
     /// What the chunk and far-terrain workers mesh with: the pack's context,
     /// over the world's biomes when it has its own.
-    fn worker_context(&self) -> Arc<WorkerContext> {
+    fn worker_context(&self) -> Arc<WorkerContext> { if let Some(__l) = crate::points_generated::P7.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match &self.world_biomes {
             Some(table) => self.pack.context_with(table.clone()),
             None => self.pack.context.clone(),
         }
     }
-    fn pack_files(&self) -> horizon_world::loot::PackOverlay<'_> {
+    fn pack_files(&self) -> horizon_world::loot::PackOverlay<'_> { if let Some(__l) = crate::points_generated::P6.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         pack_files(&self.world_tables)
     }
     /// Load the world's data packs' content tables (`None`: the world has no
     /// packs, and `Resources.rest` stays in use). This re-reads the tables,
     /// so it runs once per world open and on `/reload`.
-    fn build_world_tables(&mut self, stack: &functions::PackStack) -> Option<WorldTables> {
+    fn build_world_tables(&mut self, stack: &functions::PackStack) -> Option<WorldTables> { if let Some(__l) = crate::points_generated::P5.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The ask of this load, both here and on `/reload`: a native mod
         // recomputes the pack files it contributes every time.
         let mut contributed = Vec::new();
@@ -20399,7 +20399,7 @@ impl Game<'_> {
         })
     }
     /// Build and publish one server snapshot for this world load or reload.
-    fn load_server_loot(&mut self) {
+    fn load_server_loot(&mut self) { if let Some(__l) = crate::points_generated::P4.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.server_items = None;
         let overlay = pack_files(&self.world_tables);
         let loot = if mod_api::mods().is_empty() {
@@ -20440,7 +20440,7 @@ impl Game<'_> {
 
     /// Resolve the mods' parts against the tags this game plays with (`/reload` again): mods
     /// that attach parts to a block or item it doesn't have are an error.
-    pub(super) fn resolve_parts(&self) -> Result<()> {
+    pub(super) fn resolve_parts(&self) -> Result<()> { if let Some(__l) = crate::points_generated::P3.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let items = self.items();
         let registry = self.pack.assets.registry;
         mod_api::__private::resolve_parts(
@@ -20459,7 +20459,7 @@ impl Game<'_> {
     }
     /// Ask the parts of each block `isPathfindable` once per state and type: the answer depends
     /// on nothing else, so path finding and spawning read it with no dispatch.
-    fn resolve_pathfindable(&self) {
+    fn resolve_pathfindable(&self) { if let Some(__l) = crate::points_generated::P2.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let asked = mod_api::__private::has_scoped_hook(mod_api::HookId::IsPathfindable);
         let data = &self.res.rest().mob_data;
         data.set_pathfindable(asked, |state, kind, mut pathfindable| {
@@ -20469,7 +20469,7 @@ impl Game<'_> {
     }
     /// Reload the content tables with the world's packs, as
     /// `/reload` reloads a server's (`ReloadableServerResources`).
-    pub(super) fn reload_world_tables(&mut self, stack: &functions::PackStack) {
+    pub(super) fn reload_world_tables(&mut self, stack: &functions::PackStack) { if let Some(__l) = crate::points_generated::P1.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return;
         }
@@ -20511,7 +20511,7 @@ impl Game<'_> {
         self.native_server_data_loaded(true);
     }
 
-    fn join_world_rest(&mut self) -> Result<()> {
+    fn join_world_rest(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P0.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.rest_loader.is_some() {
             let waited = Instant::now();
             log::info!("Horizon: waiting for world resources");

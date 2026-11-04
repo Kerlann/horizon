@@ -54,7 +54,7 @@ impl Game<'_> {
     /// `ServerChunkCache.tickSpawningChunk`: one `tickThunder` roll per
     /// spawning chunk (within 128 blocks of a player) that is in entity
     /// ticking range.
-    pub(super) fn tick_thunder(&mut self) {
+    pub(super) fn tick_thunder(&mut self) { if let Some(__l) = crate::points_generated::P2550.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // isRaining (rain level > 0.2) and isThundering (> 0.9) both need
         // Level.canHaveWeather: sky light, no ceiling and not the End.
         let (rain, thunder) = self.world.weather.levels(1.0);
@@ -125,7 +125,7 @@ impl Game<'_> {
     /// block is the top (`WORLD_SURFACE`) of its column; the strike lands one
     /// above it. Horizon keeps no point-of-interest index, so this scans the
     /// loaded chunks the way `/locate poi` does.
-    fn find_lightning_rod(&self, center: [i32; 3]) -> Option<[i32; 3]> {
+    fn find_lightning_rod(&self, center: [i32; 3]) -> Option<[i32; 3]> { let (center,) = match crate::points_generated::P2549.get() { Some(__l) => { let mut __a = (center,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (center,) };
         const RANGE: i32 = 128;
         let facts = self.res.facts();
         let mut is_rod: std::collections::HashMap<u32, bool> = std::collections::HashMap::new();
@@ -179,7 +179,7 @@ impl Game<'_> {
     /// `findLightningTargetAround`: the closest lightning rod, else a living
     /// entity under open sky in the column (3 blocks around), else the top of
     /// the column.
-    fn lightning_target(&mut self, x: i32, z: i32) -> Option<[i32; 3]> {
+    fn lightning_target(&mut self, x: i32, z: i32) -> Option<[i32; 3]> { let (x,z,) = match crate::points_generated::P2548.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,z,) };
         if !self.world.loaded(x, z) {
             return None;
         }
@@ -231,7 +231,7 @@ impl Game<'_> {
         }
         Some([x, top.y, z])
     }
-    pub(super) fn spawn_bolt(&mut self, at: [f64; 3], visual_only: bool) {
+    pub(super) fn spawn_bolt(&mut self, at: [f64; 3], visual_only: bool) { let (at,visual_only,) = match crate::points_generated::P2547.get() { Some(__l) => { let mut __a = (at,visual_only,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,visual_only,) };
         if !visual_only {
             let ctx = horizon_client::sculk::Context::default();
             self.post_game_event("minecraft:lightning_strike", at, ctx);
@@ -261,14 +261,14 @@ impl Game<'_> {
         player: Option<u128>,
         pos: [i32; 3],
         cause: &str,
-    ) -> bool {
+    ) -> bool { let (pos,) = match crate::points_generated::P2546.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let mut cancel = false;
         self.native_lightning_strike(player, pos, cause, &mut cancel);
         !cancel
     }
     /// `ClientLevel.addEntity` for a server's lightning bolt: on a client it
     /// only flashes, sounds and draws (`LightningBolt.tick` off the server).
-    pub(super) fn spawn_remote_bolt(&mut self, id: u32, at: [f64; 3]) {
+    pub(super) fn spawn_remote_bolt(&mut self, id: u32, at: [f64; 3]) { let (id,at,) = match crate::points_generated::P2545.get() { Some(__l) => { let mut __a = (id,at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,at,) };
         self.bolts.retain(|b| b.id != id);
         let r = &mut self.world.random;
         let seed = r.next_long();
@@ -292,7 +292,7 @@ impl Game<'_> {
     /// `spawnFire`: fire at the strike point and `extra` random neighbours,
     /// wherever `BaseFireBlock.getState` fire can survive. Returns how many
     /// blocks it set on fire.
-    fn bolt_fire(&mut self, at: [f64; 3], extra: i32) -> i32 {
+    fn bolt_fire(&mut self, at: [f64; 3], extra: i32) -> i32 { let (at,extra,) = match crate::points_generated::P2544.get() { Some(__l) => { let mut __a = (at,extra,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,extra,) };
         let mut set = 0;
         let base = [
             at[0].floor() as i32,
@@ -327,7 +327,7 @@ impl Game<'_> {
         set
     }
     /// `LightningBolt.tick` for every bolt.
-    pub(super) fn tick_bolts(&mut self) {
+    pub(super) fn tick_bolts(&mut self) { if let Some(__l) = crate::points_generated::P2543.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut bolts = std::mem::take(&mut self.bolts);
         bolts.retain_mut(|b| {
             if b.life == 2 {
@@ -394,7 +394,7 @@ impl Game<'_> {
         self.bolts = bolts;
     }
     /// `LightningRodBlock.onLightningStrike`: powered for 8 ticks.
-    fn strike_rod(&mut self, at: [f64; 3]) {
+    fn strike_rod(&mut self, at: [f64; 3]) { let (at,) = match crate::points_generated::P2542.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let p = [
             at[0].floor() as i32,
             (at[1] - 1.0e-6).floor() as i32,
@@ -434,7 +434,7 @@ impl Game<'_> {
         }
     }
     /// `LightningBolt.clearCopperOnLightningStrike` at the block the bolt struck.
-    fn bolt_clear_copper(&mut self, at: [f64; 3]) {
+    fn bolt_clear_copper(&mut self, at: [f64; 3]) { let (at,) = match crate::points_generated::P2541.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let p = BlockPos::new(
             at[0].floor() as i32,
             (at[1] - 1.0e-6).floor() as i32,
@@ -445,7 +445,7 @@ impl Game<'_> {
     }
     /// `LightningStrikeTrigger` at the bolt's discard: every player within 256
     /// blocks, with the mobs in its 30-block box that it did not hit.
-    fn lightning_strike_triggers(&mut self, b: &Bolt) {
+    fn lightning_strike_triggers(&mut self, b: &Bolt) { if let Some(__l) = crate::points_generated::P2540.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = b.at;
         let bolt = EntityView {
             kind: "minecraft:lightning_bolt".into(),
@@ -499,7 +499,7 @@ impl Game<'_> {
     /// How many entities of `stage` the strike reaches: one loop per list over
     /// the borrowed slices, where a kind that takes no stage folds away, so a
     /// stage nobody is in is skipped without walking the handles.
-    fn thunder_count(&self, strike: Aabb, stage: ThunderHit) -> usize {
+    fn thunder_count(&self, strike: Aabb, stage: ThunderHit) -> usize { if let Some(__l) = crate::points_generated::P2539.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let lists = entity_lists_of!(self);
         let mut n = 0;
         for_each_entity!(lists, e => {
@@ -510,7 +510,7 @@ impl Game<'_> {
         n
     }
     /// Whether the strike reaches `h` and its kind takes `stage`.
-    fn thunder_struck(&self, h: EntityHandle, strike: Aabb, stage: ThunderHit) -> bool {
+    fn thunder_struck(&self, h: EntityHandle, strike: Aabb, stage: ThunderHit) -> bool { if let Some(__l) = crate::points_generated::P2538.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         with_entity!(self, h, e => e.thunder_hit() == stage && strike.intersects(e.thunder_bounds()))
     }
     /// `thunderHit` for entities whose box meets the strike box, 3 blocks
@@ -519,7 +519,7 @@ impl Game<'_> {
     /// `CHANNELED_LIGHTNING` counts them. Boats, minecarts and experience
     /// orbs are hit too (`VehicleEntity.hurtServer` adds 5 x 10 > 40 and
     /// destroys them; an orb has 5 health).
-    fn thunder_hit(&mut self, b: &mut Bolt) -> Vec<EntityView> {
+    fn thunder_hit(&mut self, b: &mut Bolt) -> Vec<EntityView> { if let Some(__l) = crate::points_generated::P2537.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = b.at;
         let strike = Aabb::new(
             Vec3::new(at[0] - 3.0, at[1] - 3.0, at[2] - 3.0),
@@ -706,7 +706,7 @@ impl Game<'_> {
     pub(super) fn bolt_instances(
         &self,
         camera: glam::DVec3,
-    ) -> Vec<horizon_client::gfx::lightning::Bolt> {
+    ) -> Vec<horizon_client::gfx::lightning::Bolt> { if let Some(__l) = crate::points_generated::P2536.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let range = 64.0 * self.view_scale();
         self.bolts
             .iter()

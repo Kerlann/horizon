@@ -72,7 +72,7 @@ struct Drag {
 
 impl Game<'_> {
     /// The open screen is one the tweaks run in, with the extra on.
-    pub(super) fn tweaks_on(&self) -> bool {
+    pub(super) fn tweaks_on(&self) -> bool { if let Some(__l) = crate::points_generated::P5763.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.settings.extras.mouse_tweaks
             || self.screen != Screen::Inventory
             || self.station.is_some()
@@ -87,7 +87,7 @@ impl Game<'_> {
         }
     }
     /// One ordinary click on a game slot. False when nothing took it.
-    pub(super) fn tweak_click(&mut self, slot: usize, button: i32, input: Input) -> bool {
+    pub(super) fn tweak_click(&mut self, slot: usize, button: i32, input: Input) -> bool { let (slot,button,) = match crate::points_generated::P5762.get() { Some(__l) => { let mut __a = (slot,button,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,button,) };
         if self.remote.is_some() {
             return self.remote_menu_ops(&[(Some(slot), button, input)]);
         }
@@ -103,7 +103,7 @@ impl Game<'_> {
     /// drag (`QUICK_CRAFT`) and not a click: a server that has the hand empty
     /// (the stack it was to come from just burned as fuel) ignores a drag, but
     /// a click would pick up what's in `slot`.
-    fn tweak_put(&mut self, slot: usize, right: bool) -> bool {
+    fn tweak_put(&mut self, slot: usize, right: bool) -> bool { let (slot,right,) = match crate::points_generated::P5761.get() { Some(__l) => { let mut __a = (slot,right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,right,) };
         let kind = i32::from(right) << 2;
         let ops = [
             (None, kind, Input::QuickCraft),
@@ -123,7 +123,7 @@ impl Game<'_> {
     }
     /// A press on `slot`: true when the tweaks took it (a right-drag
     /// placing), else vanilla's press runs and the tweaks watch the drag.
-    pub(super) fn tweak_press(&mut self, slot: Option<usize>, right: bool, shift: bool) -> bool {
+    pub(super) fn tweak_press(&mut self, slot: Option<usize>, right: bool, shift: bool) -> bool { let (right,shift,) = match crate::points_generated::P5760.get() { Some(__l) => { let mut __a = (right,shift,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,shift,) };
         self.tweaks.drag = None;
         let Some(slot) = slot.filter(|&s| s != 200 && s < Creative::DISPLAY) else {
             return false;
@@ -161,7 +161,7 @@ impl Game<'_> {
         false
     }
     /// Places one held item in `slot` when it takes it.
-    fn tweak_place(&mut self, drag: &mut Drag, slot: usize) {
+    fn tweak_place(&mut self, drag: &mut Drag, slot: usize) { let (slot,) = match crate::points_generated::P5759.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let Some(held) = drag.held.clone() else {
             return;
         };
@@ -174,7 +174,7 @@ impl Game<'_> {
     }
     /// The cursor moved while a button is held: true when the tweaks own
     /// the drag (vanilla's quick craft drag doesn't grow).
-    pub(super) fn tweak_drag_move(&mut self, slot: Option<usize>) -> bool {
+    pub(super) fn tweak_drag_move(&mut self, slot: Option<usize>) -> bool { if let Some(__l) = crate::points_generated::P5758.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut drag) = self.tweaks.drag.take() else {
             return false;
         };
@@ -222,11 +222,11 @@ impl Game<'_> {
         owned
     }
     /// The button went up: the drag ends.
-    pub(super) fn tweak_release(&mut self) {
+    pub(super) fn tweak_release(&mut self) { if let Some(__l) = crate::points_generated::P5757.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.tweaks.drag = None;
     }
     /// The wheel over an inventory screen: true when the tweaks used it.
-    pub(super) fn tweak_scroll(&mut self, delta: f32, slot: Option<usize>) -> bool {
+    pub(super) fn tweak_scroll(&mut self, delta: f32, slot: Option<usize>) -> bool { let (delta,) = match crate::points_generated::P5756.get() { Some(__l) => { let mut __a = (delta,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (delta,) };
         if !self.settings.extras.mouse_tweaks_wheel || !self.tweaks_on() || self.carried.is_some() {
             return false;
         }
@@ -247,7 +247,7 @@ impl Game<'_> {
         true
     }
     /// `slot` is a result slot of the open menu.
-    fn tweak_result(&mut self, slot: usize) -> bool {
+    fn tweak_result(&mut self, slot: usize) -> bool { let (slot,) = match crate::points_generated::P5755.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let mut result = false;
         self.menu_session(|menu, _, to_menu| {
             result = to_menu(slot).is_some_and(|i| menu.is_result(i));
@@ -256,7 +256,7 @@ impl Game<'_> {
         result
     }
     /// `slot` takes one more of `stack`, by the open menu's rules.
-    fn tweak_takes_one(&mut self, slot: usize, stack: &ItemStack) -> bool {
+    fn tweak_takes_one(&mut self, slot: usize, stack: &ItemStack) -> bool { let (slot,) = match crate::points_generated::P5754.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let mut takes = false;
         self.menu_session(|menu, env, to_menu| {
             takes = to_menu(slot).is_some_and(|i| menu.takes_one(env, i, stack));
@@ -266,7 +266,7 @@ impl Game<'_> {
     }
     /// Where vanilla's quick move would put `slot`'s items, tried on a copy
     /// of the menu that's dropped (`Some(false)` keeps nothing).
-    fn tweak_landing(&mut self, slot: usize) -> Vec<usize> {
+    fn tweak_landing(&mut self, slot: usize) -> Vec<usize> { let (slot,) = match crate::points_generated::P5753.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let slots = self.slots();
         let mut landing = Vec::new();
         self.menu_session(|menu, env, to_menu| {
@@ -283,7 +283,7 @@ impl Game<'_> {
     /// The slots across from `slot`: a container's or crafting grid's face
     /// the inventory (hotbar first, from the right), the inventory's face
     /// them; without one, hotbar and main inventory trade.
-    fn other_side(&self, slot: usize) -> Vec<usize> {
+    fn other_side(&self, slot: usize) -> Vec<usize> { let (slot,) = match crate::points_generated::P5752.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let table = self.craft_size == 3;
         let own: Vec<usize> = self
             .slots()
@@ -302,7 +302,7 @@ impl Game<'_> {
     /// Wheel down: one item of `slot` to where a quick move sends it. A
     /// result can't be split or put back: one craft (or the furnace's whole
     /// output) goes, when it all fits.
-    fn tweak_push(&mut self, slot: usize) {
+    fn tweak_push(&mut self, slot: usize) { let (slot,) = match crate::points_generated::P5751.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let Some(stack) = self.slot_view(slot) else {
             return;
         };
@@ -327,7 +327,7 @@ impl Game<'_> {
     }
     /// Wheel up: one item of the same kind from the other side into `slot`.
     /// A result slot takes none and gives none.
-    fn tweak_pull(&mut self, slot: usize) {
+    fn tweak_pull(&mut self, slot: usize) { let (slot,) = match crate::points_generated::P5750.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let Some(stack) = self.slot_view(slot) else {
             return;
         };
@@ -361,7 +361,7 @@ impl Game<'_> {
     /// corner (from the screen's) and the slots each sorts. The container's
     /// (chest-like ones only) sits by its title, the main inventory's by
     /// the "Inventory" label's line.
-    fn sort_buttons(&self) -> Vec<((f32, f32), Vec<usize>)> {
+    fn sort_buttons(&self) -> Vec<((f32, f32), Vec<usize>)> { if let Some(__l) = crate::points_generated::P5749.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.settings.extras.sort
             || self.screen != Screen::Inventory
             || self.station.is_some()
@@ -397,7 +397,7 @@ impl Game<'_> {
     }
     /// The sort buttons: a bordered square with three bars, lighter under
     /// the cursor.
-    pub(super) fn draw_sort_buttons(&self, batch: &mut HudBatch, ox: f32, oy: f32) {
+    pub(super) fn draw_sort_buttons(&self, batch: &mut HudBatch, ox: f32, oy: f32) { let (ox,oy,) = match crate::points_generated::P5748.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ox,oy,) };
         let atlas = &self.gui.atlas;
         for ((x, y), _) in self.sort_buttons() {
             let (x, y) = (ox + x, oy + y);
@@ -424,7 +424,7 @@ impl Game<'_> {
         }
     }
     /// A left press on a sort button sorts its slots (true).
-    pub(super) fn sort_press(&mut self) -> bool {
+    pub(super) fn sort_press(&mut self) -> bool { if let Some(__l) = crate::points_generated::P5747.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(r) = self.renderer.as_ref() else {
             return false;
         };
@@ -443,21 +443,21 @@ impl Game<'_> {
     }
     /// The sort key: sorts the part under the cursor (the container when
     /// the cursor is over no slot).
-    pub(super) fn sort_key_press(&mut self, key: KeyCode) -> bool {
+    pub(super) fn sort_key_press(&mut self, key: KeyCode) -> bool { if let Some(__l) = crate::points_generated::P5746.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         keybinds::key_name(key).is_some_and(|name| self.sort_input(name))
     }
-    pub(super) fn sort_mouse_press(&mut self, button: MouseButton) -> bool {
+    pub(super) fn sort_mouse_press(&mut self, button: MouseButton) -> bool { if let Some(__l) = crate::points_generated::P5745.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.sort_input(&keybinds::mouse_name(button))
     }
     /// The HDR settings key (`Graphics::hdr_key`): opens the graphics screen's HDR page from the game, where
     /// the display offers HDR; Done goes back to the game.
-    pub(super) fn hdr_key_press(&mut self, key: KeyCode) -> bool {
+    pub(super) fn hdr_key_press(&mut self, key: KeyCode) -> bool { if let Some(__l) = crate::points_generated::P5744.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         keybinds::key_name(key).is_some_and(|name| self.hdr_input(name))
     }
-    pub(super) fn hdr_mouse_press(&mut self, button: MouseButton) -> bool {
+    pub(super) fn hdr_mouse_press(&mut self, button: MouseButton) -> bool { if let Some(__l) = crate::points_generated::P5743.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.hdr_input(&keybinds::mouse_name(button))
     }
-    fn hdr_input(&mut self, name: &str) -> bool {
+    fn hdr_input(&mut self, name: &str) -> bool { if let Some(__l) = crate::points_generated::P5742.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.screen != Screen::Playing
             || self.title.is_some()
             || self.settings.horizon.hdr_key != name
@@ -470,7 +470,7 @@ impl Game<'_> {
         self.options_to_game = true;
         true
     }
-    fn sort_input(&mut self, name: &str) -> bool {
+    fn sort_input(&mut self, name: &str) -> bool { if let Some(__l) = crate::points_generated::P5741.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let e = &self.settings.extras;
         if !e.sort || e.sort_key != name || self.recipe_search_focused() {
             return false;
@@ -489,7 +489,7 @@ impl Game<'_> {
         true
     }
     /// Sorts `slots` with ordinary left clicks (needs an empty hand).
-    fn sort_slots(&mut self, slots: &[usize]) {
+    fn sort_slots(&mut self, slots: &[usize]) { if let Some(__l) = crate::points_generated::P5740.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.carried.is_some() {
             return;
         }

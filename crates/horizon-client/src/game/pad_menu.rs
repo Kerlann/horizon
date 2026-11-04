@@ -126,21 +126,21 @@ impl MenuCursor {
 impl Game<'_> {
     /// A menu, a screen, the title, a sign or a book is open: the pad drives
     /// it instead of the player.
-    pub(super) fn pad_in_menu(&self) -> bool {
+    pub(super) fn pad_in_menu(&self) -> bool { if let Some(__l) = crate::points_generated::P4423.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.title.is_some()
             || self.screen != Screen::Playing
             || self.sign_edit.is_some()
             || self.book.is_some()
     }
 
-    pub(super) fn gui_scale(&self) -> Option<HudBatch> {
+    pub(super) fn gui_scale(&self) -> Option<HudBatch> { if let Some(__l) = crate::points_generated::P4422.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.renderer
             .as_ref()
             .map(|r| HudBatch::new([r.config.width, r.config.height]))
     }
 
     /// Focus mode is on for the open screen (the keyboard always focuses).
-    fn pad_focus_mode(&self) -> bool {
+    fn pad_focus_mode(&self) -> bool { if let Some(__l) = crate::points_generated::P4421.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pad.menu.keyboard
             || (self.settings.controller.menu_nav == MenuNav::Focus) != self.pad.menu.swapped
     }
@@ -149,7 +149,7 @@ impl Game<'_> {
     /// target (sliders, fields, rows, keyboard keys), and the slots
     /// and tabs of inventories (GUI pixels), on screen. The keyboard's
     /// focus skips what vanilla's keyboard can't reach (`key_targets`).
-    fn pad_targets(&self) -> Vec<Target> {
+    fn pad_targets(&self) -> Vec<Target> { if let Some(__l) = crate::points_generated::P4420.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.pad.menu.keyboard {
             self.key_targets()
         } else {
@@ -158,13 +158,13 @@ impl Game<'_> {
     }
 
     /// The targets the keyboard reaches: no slots, no inventory tabs.
-    fn key_targets(&self) -> Vec<Target> {
+    fn key_targets(&self) -> Vec<Target> { if let Some(__l) = crate::points_generated::P4419.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let inventory =
             self.title.is_none() && matches!(self.screen, Screen::Inventory | Screen::Creative);
         key_focus::keyboard_targets(self.pad_visible_targets(), inventory)
     }
 
-    fn pad_visible_targets(&self) -> Vec<Target> {
+    fn pad_visible_targets(&self) -> Vec<Target> { if let Some(__l) = crate::points_generated::P4418.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let targets = self.pad_all_targets();
         match self.gui_scale() {
             Some(batch) => key_focus::on_screen(targets, (batch.width, batch.height)),
@@ -172,7 +172,7 @@ impl Game<'_> {
         }
     }
 
-    fn pad_all_targets(&self) -> Vec<Target> {
+    fn pad_all_targets(&self) -> Vec<Target> { if let Some(__l) = crate::points_generated::P4417.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut targets = key_focus::drawn_targets();
         if self.title.is_some() || self.sign_edit.is_some() || self.book.is_some() {
             return targets;
@@ -241,7 +241,7 @@ impl Game<'_> {
     /// Where focus starts when a menu opens: the held hotbar slot in an
     /// inventory, else the first button, else the first target that isn't
     /// a tab.
-    fn pad_first_target(&self, targets: &[Target]) -> Option<Target> {
+    fn pad_first_target(&self, targets: &[Target]) -> Option<Target> { if let Some(__l) = crate::points_generated::P4416.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.pad.menu.keyboard {
             // Screen.setInitialFocus: a forward Tab from nothing.
             return key_focus::tab_step(targets, None, true).map(|i| targets[i]);
@@ -280,7 +280,7 @@ impl Game<'_> {
     }
 
     /// Send the window a pointer move to `at` (GUI pixels), as the mouse would.
-    fn pad_pointer_to(&mut self, event_loop: &dyn EventLoopCtl, at: (f32, f32)) {
+    fn pad_pointer_to(&mut self, event_loop: &dyn EventLoopCtl, at: (f32, f32)) { if let Some(__l) = crate::points_generated::P4415.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (Some(window), Some(batch)) = (self.window.as_ref(), self.gui_scale()) else {
             return;
         };
@@ -303,7 +303,7 @@ impl Game<'_> {
         self.pad.menu.pos = Some(self.cursor);
     }
 
-    fn pad_pointer_button(&mut self, event_loop: &dyn EventLoopCtl, right: bool, pressed: bool) {
+    fn pad_pointer_button(&mut self, event_loop: &dyn EventLoopCtl, right: bool, pressed: bool) { let (right,pressed,) = match crate::points_generated::P4414.get() { Some(__l) => { let mut __a = (right,pressed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,pressed,) };
         let Some(id) = self.window.as_ref().map(|w| w.id()) else {
             return;
         };
@@ -337,7 +337,7 @@ impl Game<'_> {
         event_loop: &dyn EventLoopCtl,
         id: WindowId,
         event: WindowEvent,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4413.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let was = std::mem::replace(&mut self.pad.menu.synthetic, true);
         self.handle_window_event(event_loop, id, event, super::input_trace::InputOrigin::Game);
         self.pad.menu.synthetic = was;
@@ -347,17 +347,17 @@ impl Game<'_> {
     /// up (`pad_synthetic_event`), not the window's. A controller's click or
     /// a focused widget's is not the mouse, so the native mods' mouse hooks
     /// skip it.
-    pub(super) fn pad_synthetic_input(&self) -> bool {
+    pub(super) fn pad_synthetic_input(&self) -> bool { if let Some(__l) = crate::points_generated::P4412.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pad.menu.synthetic
     }
 
-    fn pad_click_at(&mut self, event_loop: &dyn EventLoopCtl, at: (f32, f32), right: bool) {
+    fn pad_click_at(&mut self, event_loop: &dyn EventLoopCtl, at: (f32, f32), right: bool) { let (right,) = match crate::points_generated::P4411.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         self.pad_pointer_to(event_loop, at);
         self.pad_pointer_button(event_loop, right, true);
         self.pad_pointer_button(event_loop, right, false);
     }
 
-    fn pad_wheel(&mut self, event_loop: &dyn EventLoopCtl, x: f32, y: f32) {
+    fn pad_wheel(&mut self, event_loop: &dyn EventLoopCtl, x: f32, y: f32) { let (x,y,) = match crate::points_generated::P4410.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,y,) };
         let Some(id) = self.window.as_ref().map(|w| w.id()) else {
             return;
         };
@@ -374,7 +374,7 @@ impl Game<'_> {
 
     /// Put the pointer where the pad last left it, or on the first target
     /// (focus mode: focus lands there too).
-    fn pad_take_pointer(&mut self, event_loop: &dyn EventLoopCtl) {
+    fn pad_take_pointer(&mut self, event_loop: &dyn EventLoopCtl) { if let Some(__l) = crate::points_generated::P4409.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.pad.menu.pos.is_some() {
             return;
         }
@@ -388,7 +388,7 @@ impl Game<'_> {
     }
 
     /// Focus mode with something to focus on this screen.
-    fn pad_focusing(&self) -> bool {
+    fn pad_focusing(&self) -> bool { if let Some(__l) = crate::points_generated::P4408.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pad_focus_mode() && self.pad.menu.focus.is_some()
     }
 
@@ -398,7 +398,7 @@ impl Game<'_> {
         event_loop: &dyn EventLoopCtl,
         button: Button,
         down: bool,
-    ) -> Result<()> {
+    ) -> Result<()> { let (down,) = match crate::points_generated::P4407.get() { Some(__l) => { let mut __a = (down,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (down,) };
         if !down {
             match button {
                 Button::South if self.pad.menu.held[0] => {
@@ -549,7 +549,7 @@ impl Game<'_> {
     }
 
     /// One D-pad (or stick) step in either mode.
-    fn pad_step(&mut self, event_loop: &dyn EventLoopCtl, button: Button) {
+    fn pad_step(&mut self, event_loop: &dyn EventLoopCtl, button: Button) { if let Some(__l) = crate::points_generated::P4406.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(keyboard) = self.pad.menu.osk.as_mut() {
             keyboard.step(button);
             return;
@@ -573,7 +573,7 @@ impl Game<'_> {
     }
 
     /// Pointer mode: hop the cursor to the nearest target that way.
-    fn pad_pointer_step(&mut self, event_loop: &dyn EventLoopCtl, button: Button) {
+    fn pad_pointer_step(&mut self, event_loop: &dyn EventLoopCtl, button: Button) { if let Some(__l) = crate::points_generated::P4405.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.pad.menu.pos.is_none() {
             self.pad_take_pointer(event_loop);
             return;
@@ -603,7 +603,7 @@ impl Game<'_> {
         event_loop: &dyn EventLoopCtl,
         button: Button,
         targets: &[Target],
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4404.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(focus) = self.pad.menu.focus else {
             self.pad.menu.pos = None;
             self.pad_take_pointer(event_loop);
@@ -626,7 +626,7 @@ impl Game<'_> {
 
     /// Move a focused slider's handle by `by` GUI pixels (one pixel is
     /// vanilla's arrow-key step, `value + 1 / (width - 8)`), as a click there.
-    fn pad_nudge(&mut self, event_loop: &dyn EventLoopCtl, focus: Target, by: f32) {
+    fn pad_nudge(&mut self, event_loop: &dyn EventLoopCtl, focus: Target, by: f32) { let (by,) = match crate::points_generated::P4403.get() { Some(__l) => { let mut __a = (by,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (by,) };
         let Kind::Slider { value, track } = focus.kind else {
             return;
         };
@@ -648,7 +648,7 @@ impl Game<'_> {
         button: Button,
         focus: Target,
         targets: &[Target],
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4402.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let rects: Vec<Rect> = targets.iter().map(|t| t.rect).collect();
         let vertical = matches!(button, Button::DPadUp | Button::DPadDown);
         let step = if vertical {
@@ -675,7 +675,7 @@ impl Game<'_> {
         }
     }
 
-    fn pad_focus_on(&mut self, event_loop: &dyn EventLoopCtl, target: Target) {
+    fn pad_focus_on(&mut self, event_loop: &dyn EventLoopCtl, target: Target) { if let Some(__l) = crate::points_generated::P4401.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let left = self.pad.menu.focus.replace(target);
         self.pad.menu.pending = None;
         self.pad.menu.nudge = None;
@@ -694,7 +694,7 @@ impl Game<'_> {
 
     /// The controller's focus ring in focus mode, for the screen's narration:
     /// the focused widget.
-    pub(super) fn pad_focus_rect(&self) -> Option<[f32; 4]> {
+    pub(super) fn pad_focus_rect(&self) -> Option<[f32; 4]> { if let Some(__l) = crate::points_generated::P4400.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let focus = self
             .pad
             .menu
@@ -705,7 +705,7 @@ impl Game<'_> {
 
     /// A bumper: the next or previous tab, wrapping (creative keeps its own
     /// order; other screens register their tabs).
-    fn pad_tab(&mut self, event_loop: &dyn EventLoopCtl, next: bool) {
+    fn pad_tab(&mut self, event_loop: &dyn EventLoopCtl, next: bool) { let (next,) = match crate::points_generated::P4399.get() { Some(__l) => { let mut __a = (next,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (next,) };
         if self.screen == Screen::Creative && self.title.is_none() {
             self.pad_creative_tab(next);
             return;
@@ -742,7 +742,7 @@ impl Game<'_> {
     /// Select the next or previous creative tab (wrapping), as clicking it does. A tab on
     /// another page of mods' tabs shows its page: clicking where it would be would hit the
     /// tab drawn there on this page.
-    fn pad_creative_tab(&mut self, next: bool) {
+    fn pad_creative_tab(&mut self, next: bool) { let (next,) = match crate::points_generated::P4398.get() { Some(__l) => { let mut __a = (next,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (next,) };
         let count = self.creative_screen.tabs.len();
         if count == 0 {
             return;
@@ -763,7 +763,7 @@ impl Game<'_> {
     /// steps focus, the right stick scrolls, a held direction repeats, focus
     /// follows its widget from frame to frame, and the OS pointer hides
     /// while the pad drives.
-    pub(super) fn pad_menu_frame(&mut self, event_loop: &dyn EventLoopCtl) {
+    pub(super) fn pad_menu_frame(&mut self, event_loop: &dyn EventLoopCtl) { if let Some(__l) = crate::points_generated::P4397.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let now = Instant::now();
         let seconds = self
             .pad
@@ -896,7 +896,7 @@ impl Game<'_> {
     /// Focus mode, each poll: find the focused widget in the new frame (a
     /// list scrolled, a page changed), finish a step that scrolled a list,
     /// and keep the hidden pointer on the focused widget.
-    fn pad_follow_focus(&mut self, event_loop: &dyn EventLoopCtl, targets: &[Target]) {
+    fn pad_follow_focus(&mut self, event_loop: &dyn EventLoopCtl, targets: &[Target]) { if let Some(__l) = crate::points_generated::P4396.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let rects: Vec<Rect> = targets.iter().map(|t| t.rect).collect();
         let ready = self
             .pad
@@ -982,7 +982,7 @@ impl Game<'_> {
         }
     }
 
-    fn pad_show_os_pointer(&mut self, show: bool) {
+    fn pad_show_os_pointer(&mut self, show: bool) { let (show,) = match crate::points_generated::P4395.get() { Some(__l) => { let mut __a = (show,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (show,) };
         if self.pad.menu.os_hidden != show {
             return;
         }
@@ -997,7 +997,7 @@ impl Game<'_> {
     }
 
     /// `pad status`: the menu mode, the focused target and every target.
-    pub(super) fn pad_menu_status(&self) -> serde_json::Value {
+    pub(super) fn pad_menu_status(&self) -> serde_json::Value { if let Some(__l) = crate::points_generated::P4394.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let kind = |k: Kind| match k {
             Kind::Button => "button",
             Kind::Slider { .. } => "slider",
@@ -1019,14 +1019,14 @@ impl Game<'_> {
     // ---- the keyboard: vanilla's focus navigation (`key_focus`) ----
 
     /// The keyboard drives the open menu's focus.
-    pub(super) fn key_focus_driving(&self) -> bool {
+    pub(super) fn key_focus_driving(&self) -> bool { if let Some(__l) = crate::points_generated::P4393.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pad.menu.keyboard && self.pad_in_menu()
     }
 
     /// A pointer event the keyboard sends (a press, the hidden pointer on
     /// the focused widget) is being handled: the screen's narration doesn't
     /// take it for the mouse (`InputType` stays the keyboard's).
-    pub(super) fn key_focus_quiet(&self) -> bool {
+    pub(super) fn key_focus_quiet(&self) -> bool { if let Some(__l) = crate::points_generated::P4392.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pad.menu.synthetic && self.pad.menu.keyboard
     }
 
@@ -1034,7 +1034,7 @@ impl Game<'_> {
     /// completes a command), a sign, a book, the creative, recipe-book and
     /// mods searches, the anvil's name, a command block, a dialog, a key or
     /// button being bound, the credits, the on-screen keyboard.
-    fn key_focus_blocked(&self) -> bool {
+    fn key_focus_blocked(&self) -> bool { if let Some(__l) = crate::points_generated::P4391.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let playing_screen = |screen| self.title.is_none() && self.screen == screen;
         self.pad.menu.osk.is_some()
             || playing_screen(Screen::Chat)
@@ -1057,7 +1057,7 @@ impl Game<'_> {
     /// container's own close key can move the focus and close the screen in
     /// one press (Tab bound to the inventory), and vanilla clears the focus
     /// before the next frame, so nothing stays highlighted.
-    pub(super) fn pad_clear_focus(&mut self) {
+    pub(super) fn pad_clear_focus(&mut self) { if let Some(__l) = crate::points_generated::P4390.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.pad.menu.clear_focus();
     }
 
@@ -1067,7 +1067,7 @@ impl Game<'_> {
     /// widget's own keys come first (a text field's caret, a slider's
     /// value). Whether the key was used; when not, the screen has it (a
     /// container also has Tab and the arrows once they moved the focus).
-    pub(super) fn key_focus_key(&mut self, event_loop: &dyn EventLoopCtl, key: KeyCode) -> bool {
+    pub(super) fn key_focus_key(&mut self, event_loop: &dyn EventLoopCtl, key: KeyCode) -> bool { if let Some(__l) = crate::points_generated::P4389.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(nav) = key_focus::nav_of(key, self.has_shift_down()) else {
             return false;
         };
@@ -1157,7 +1157,7 @@ impl Game<'_> {
     }
 
     /// Which screen is open, as far as the keyboard's focus cares.
-    fn key_screen(&self) -> u64 {
+    fn key_screen(&self) -> u64 { if let Some(__l) = crate::points_generated::P4388.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         std::mem::discriminant(&self.screen).hash(&mut hasher);
@@ -1181,7 +1181,7 @@ impl Game<'_> {
     /// (a pressed button opened it), so once it is drawn the focus starts on
     /// its first widget (`Screen.setInitialFocus` after a key). Whether the
     /// focus is waiting for that or just started again.
-    fn key_focus_restart(&mut self, event_loop: &dyn EventLoopCtl, targets: &[Target]) -> bool {
+    fn key_focus_restart(&mut self, event_loop: &dyn EventLoopCtl, targets: &[Target]) -> bool { if let Some(__l) = crate::points_generated::P4387.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.pad.menu.keyboard {
             return false;
         }
@@ -1215,7 +1215,7 @@ impl Game<'_> {
         event_loop: &dyn EventLoopCtl,
         left: Option<Target>,
         target: Target,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4386.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.pad.menu.slider_edit = false;
         if left.is_some_and(|l| l.rect == target.rect) {
             return;
@@ -1243,7 +1243,7 @@ impl Game<'_> {
     /// The real mouse, before the screen takes it: where it is, and a press
     /// or a scroll hands it the pointer back from the keyboard, at the
     /// place the mouse left it (`setLastInputType(MOUSE)`).
-    pub(super) fn key_focus_mouse(&mut self, event_loop: &dyn EventLoopCtl, event: &WindowEvent) {
+    pub(super) fn key_focus_mouse(&mut self, event_loop: &dyn EventLoopCtl, event: &WindowEvent) { if let Some(__l) = crate::points_generated::P4385.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.pad.menu.synthetic {
             return;
         }
@@ -1261,7 +1261,7 @@ impl Game<'_> {
     }
 
     /// Only a press accepted by ScreenEvent.Pre may focus the widget under it.
-    pub(super) fn key_focus_mouse_press(&mut self, event: &WindowEvent) {
+    pub(super) fn key_focus_mouse_press(&mut self, event: &WindowEvent) { if let Some(__l) = crate::points_generated::P4384.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.pad.menu.synthetic
             && self.pad_in_menu()
             && matches!(
@@ -1286,7 +1286,7 @@ impl Game<'_> {
     }
 
     /// The keyboard lets go of the pointer: it goes back to the real mouse.
-    fn key_focus_to_mouse(&mut self, event_loop: &dyn EventLoopCtl) {
+    fn key_focus_to_mouse(&mut self, event_loop: &dyn EventLoopCtl) { if let Some(__l) = crate::points_generated::P4383.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !std::mem::take(&mut self.pad.menu.keyboard) {
             return;
         }
@@ -1310,7 +1310,7 @@ impl Game<'_> {
 
     /// Each poll: what a click focused is forgotten once it is gone (the
     /// screen changed), and out of menus.
-    fn key_focus_frame(&mut self) {
+    fn key_focus_frame(&mut self) { if let Some(__l) = crate::points_generated::P4382.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(origin) = self.pad.menu.origin else {
             return;
         };
@@ -1326,7 +1326,7 @@ impl Game<'_> {
 
     /// The keyboard focus the title had while resources loaded
     /// (`StartupMenu`), carried into the game's.
-    pub(super) fn key_focus_adopt(&mut self, focus: Target, slider_edit: bool) {
+    pub(super) fn key_focus_adopt(&mut self, focus: Target, slider_edit: bool) { let (slider_edit,) = match crate::points_generated::P4381.get() { Some(__l) => { let mut __a = (slider_edit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slider_edit,) };
         let screen = self.key_screen();
         let menu = &mut self.pad.menu;
         menu.key_screen = screen;
@@ -1342,7 +1342,7 @@ impl Game<'_> {
     /// A text field has keyboard focus: chat, a sign, a book being written,
     /// a search box, the anvil's name, the title screens' and the options'
     /// fields, the LAN port.
-    fn pad_typing(&self) -> bool {
+    fn pad_typing(&self) -> bool { if let Some(__l) = crate::points_generated::P4380.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (self.screen == Screen::Chat && self.title.is_none())
             || self.sign_edit.is_some()
             || matches!(self.book, Some(super::books::BookScreen::Edit { .. }))
@@ -1354,7 +1354,7 @@ impl Game<'_> {
     /// Open the on-screen keyboard over the focused field: Horizon's, or
     /// Steam's on a Steam Deck (`steam://open/keyboard`, which types into
     /// the window like a real keyboard).
-    fn pad_open_keyboard(&mut self) {
+    fn pad_open_keyboard(&mut self) { if let Some(__l) = crate::points_generated::P4379.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Without xdg-open (macOS, Windows), Horizon's keyboard instead.
         if gamepad::steam_keyboard(self.settings.controller.keyboard)
             && std::process::Command::new("xdg-open")
@@ -1372,7 +1372,7 @@ impl Game<'_> {
 
     /// Chat or a sign opened by the pad (either menu mode): the keyboard
     /// opens with it (once per screen; B closes it for good).
-    fn pad_auto_keyboard(&mut self) {
+    fn pad_auto_keyboard(&mut self) { if let Some(__l) = crate::points_generated::P4378.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let menu = &self.pad.menu;
         if osk_auto_opens(
             menu.osk.is_some(),
@@ -1388,7 +1388,7 @@ impl Game<'_> {
 
     /// What a key of the on-screen keyboard does: the same as a typed key in
     /// the field that has focus.
-    fn pad_osk_output(&mut self, out: osk::Output) {
+    fn pad_osk_output(&mut self, out: osk::Output) { if let Some(__l) = crate::points_generated::P4377.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use osk::Output;
         let (key, text) = match &out {
             Output::Text(t) => (None, Some(t.as_str())),
@@ -1464,7 +1464,7 @@ impl Game<'_> {
 
     /// The pad's cursor (pointer mode) or focus highlight (focus mode), and
     /// the on-screen keyboard, over everything else.
-    pub(super) fn draw_pad_cursor(&self, batch: &mut HudBatch) {
+    pub(super) fn draw_pad_cursor(&self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P4376.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.pad_in_menu() {
             return;
         }
@@ -1523,7 +1523,7 @@ impl Game<'_> {
     /// (hidden) pointer, and list rows and fields get vanilla's white
     /// one-pixel outline (`AbstractSelectionList`'s focused selection,
     /// `EditBox`'s highlighted border).
-    fn draw_pad_focus(&self, batch: &mut HudBatch, focus: Target) {
+    fn draw_pad_focus(&self, batch: &mut HudBatch, focus: Target) { if let Some(__l) = crate::points_generated::P4375.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         key_focus::draw_outline(&self.gui.atlas, batch, focus);
     }
 }

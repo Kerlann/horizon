@@ -43,7 +43,7 @@ impl Game<'_> {
         pos: [f64; 3],
         velocity: [f64; 3],
         falling: NativeFalling,
-    ) -> bool {
+    ) -> bool { let (pos,velocity,) = match crate::points_generated::P3155.get() { Some(__l) => { let mut __a = (pos,velocity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,velocity,) };
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
             || self.pack.assets.registry.state(state).is_none()

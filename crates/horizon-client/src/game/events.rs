@@ -170,7 +170,7 @@ fn parse_wait(words: &[&str]) -> Result<(Condition, Duration, Option<u64>)> {
 }
 
 impl Game<'_> {
-    fn snapshot(&self) -> Snapshot {
+    fn snapshot(&self) -> Snapshot { if let Some(__l) = crate::points_generated::P1841.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let world = self.title.is_none().then(|| self.level.name.clone());
         Snapshot {
             screen: self.screen_label(),
@@ -189,14 +189,14 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn loaded(&self) -> bool {
+    pub(super) fn loaded(&self) -> bool { if let Some(__l) = crate::points_generated::P1840.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.title.is_none()
             && self.player.is_some()
             && self.streaming.pending() + self.pending_uploads.len() == 0
     }
 
     /// Once per event loop turn: record what changed, answer the waits that hold.
-    pub(super) fn watch_events(&mut self) {
+    pub(super) fn watch_events(&mut self) { if let Some(__l) = crate::points_generated::P1839.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let now = self.snapshot();
         if let Some(before) = &self.events.last
             && *before != now
@@ -261,7 +261,7 @@ impl Game<'_> {
         &mut self,
         words: &[&str],
         reply: &Sender<String>,
-    ) -> Result<Option<Option<Value>>> {
+    ) -> Result<Option<Option<Value>>> { if let Some(__l) = crate::points_generated::P1838.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match words[0] {
             "events" => {
                 let since = match words.get(1..) {

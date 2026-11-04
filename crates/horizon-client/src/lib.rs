@@ -6,3 +6,5 @@ extern crate self as horizon_client;
 pub use horizon_client_lib::*;
 pub mod entry;
 pub mod game;
+#[doc(hidden)]
+pub mod points_generated;

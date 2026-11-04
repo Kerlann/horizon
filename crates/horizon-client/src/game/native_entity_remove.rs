@@ -14,7 +14,7 @@ impl Game<'_> {
     /// chest boat or a minecart with a chest still drops what it holds, and
     /// a boat its lead, as vanilla's `remove` does. False for a player, or a
     /// stale handle.
-    pub(super) fn native_entity_discard(&mut self, entity: EntityRef) -> bool {
+    pub(super) fn native_entity_discard(&mut self, entity: EntityRef) -> bool { if let Some(__l) = crate::points_generated::P3110.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_entity_remove(entity, NativeRemovalReason::Discarded)
     }
     /// Removes the entity for `reason` (`Entity.remove`): `Discarded`, as
@@ -26,7 +26,7 @@ impl Game<'_> {
         &mut self,
         entity: EntityRef,
         reason: NativeRemovalReason,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3109.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let killed = reason == NativeRemovalReason::Killed;
         match self.native_entity_target(entity) {
             None | Some(Target::Player | Target::Guest(_)) => false,
@@ -43,7 +43,7 @@ impl Game<'_> {
         }
     }
     /// A mob leaves the level: its effects act first when it was killed.
-    fn remove_mob_now(&mut self, id: u32, killed: bool) {
+    fn remove_mob_now(&mut self, id: u32, killed: bool) { let (id,killed,) = match crate::points_generated::P3108.get() { Some(__l) => { let mut __a = (id,killed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,killed,) };
         let Some(i) = self.mobs.iter().position(|m| m.id == id && !m.removed) else {
             return;
         };
@@ -68,7 +68,7 @@ impl Game<'_> {
     /// `AbstractMinecartContainer.remove` and `AbstractChestBoat.remove`: a
     /// chest or hopper minecart or a chest boat spills what it holds
     /// (`Containers.dropContents`) for every destroying reason.
-    fn spill_vehicle(&mut self, t: Target) {
+    fn spill_vehicle(&mut self, t: Target) { if let Some(__l) = crate::points_generated::P3107.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let id = match t {
             Target::Cart(id) | Target::Boat(id) => id,
             _ => return,
@@ -103,7 +103,7 @@ impl Game<'_> {
         self.flush_spill();
     }
     /// Takes out the entities mods removed since the last sweep.
-    pub(super) fn native_removals_flush(&mut self) {
+    pub(super) fn native_removals_flush(&mut self) { if let Some(__l) = crate::points_generated::P3106.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.persist.removals.is_empty() {
             return;
         }

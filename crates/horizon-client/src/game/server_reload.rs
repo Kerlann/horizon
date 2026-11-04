@@ -50,7 +50,7 @@ impl Game<'_> {
     pub(super) fn prepare_server_reload(
         &self,
         stack: &PackStack,
-    ) -> Result<PreparedServerReload, ReloadStageError> {
+    ) -> Result<PreparedServerReload, ReloadStageError> { if let Some(__l) = crate::points_generated::P5279.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // Nobody listens: no registration graph, only the vanilla function library.
         if !mod_api::__private::listened(mod_api::HookId::AddServerReloadListeners) {
             return Ok(PreparedServerReload {
@@ -79,7 +79,7 @@ impl Game<'_> {
         &mut self,
         prepared: PreparedServerReload,
         stack: &PackStack,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P5278.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         apply_listeners(prepared.steps, "server_reload_apply", |store| {
             self.fns.store = *store;
             self.sync_function_registries(stack);
@@ -87,7 +87,7 @@ impl Game<'_> {
         self.reload_resources = prepared.resources;
     }
     /// The retained server reload listeners of the last successful reload.
-    pub(super) fn native_reload_resources(&self) -> &ServerReloadResources {
+    pub(super) fn native_reload_resources(&self) -> &ServerReloadResources { if let Some(__l) = crate::points_generated::P5277.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         &self.reload_resources
     }
 }

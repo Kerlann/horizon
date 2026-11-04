@@ -205,19 +205,19 @@ impl Game<'_> {
         id: i32,
         position: [f64; 3],
         rotation: Option<(f32, f32)>,
-    ) {
+    ) { let (id,position,) = match crate::points_generated::P5641.get() { Some(__l) => { let mut __a = (id,position,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,position,) };
         if let Some(d) = self.text_displays.get_mut(&id) {
             d.move_to(position, rotation);
         }
     }
-    pub(super) fn tick_text_displays(&mut self) {
+    pub(super) fn tick_text_displays(&mut self) { if let Some(__l) = crate::points_generated::P5640.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for display in self.text_displays.values_mut() {
             display.tick();
         }
     }
     /// The camera's yaw and pitch as `DisplayRenderer` reads them (the
     /// front view turns around).
-    fn display_camera_angles(&self) -> [f32; 2] {
+    fn display_camera_angles(&self) -> [f32; 2] { if let Some(__l) = crate::points_generated::P5639.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.camera_type == super::perspective::CameraType::ThirdPersonFront {
             [self.yaw + 180.0, -self.pitch]
         } else {
@@ -251,7 +251,7 @@ impl Game<'_> {
         origin: glam::DVec3,
         data: &TextDisplayData,
         view_scale: f64,
-    ) -> bool {
+    ) -> bool { let (view_scale,) = match crate::points_generated::P5638.get() { Some(__l) => { let mut __a = (view_scale,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (view_scale,) };
         let range = f64::from(data.view_range) * 64.0 * view_scale;
         if text_display::no_culling(data.width, data.height) {
             return (origin - camera).length_squared() < range * range;
@@ -268,7 +268,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         partial: f64,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (partial,) = match crate::points_generated::P5637.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (partial,) };
         let angles = self.display_camera_angles();
         let scale = self.view_scale();
         let mut displays = std::mem::take(&mut self.text_displays);
@@ -342,7 +342,7 @@ impl Game<'_> {
         partial: f64,
         normal: &mut Vec<Vertex>,
         see_through: &mut Vec<Vertex>,
-    ) {
+    ) { let (partial,) = match crate::points_generated::P5636.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (partial,) };
         self.text_display_vertices = 0;
         self.mark_translucent_entity(normal.len(), "minecraft:text_display");
         let angles = self.display_camera_angles();

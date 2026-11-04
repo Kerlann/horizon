@@ -36,7 +36,7 @@ impl Game<'_> {
         entity: EntityRef,
         pos: [f64; 3],
         rotation: Option<[f32; 2]>,
-    ) -> bool {
+    ) -> bool { let (pos,) = match crate::points_generated::P3087.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };
@@ -64,7 +64,7 @@ impl Game<'_> {
         entity: EntityRef,
         yaw: f32,
         pitch: f32,
-    ) -> bool {
+    ) -> bool { let (yaw,pitch,) = match crate::points_generated::P3086.get() { Some(__l) => { let mut __a = (yaw,pitch,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (yaw,pitch,) };
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };
@@ -105,7 +105,7 @@ impl Game<'_> {
     }
     /// The yaw of the entity's head (`Entity.getYHeadRot`): a mob's or a
     /// player's own, zero for the kinds without a head.
-    pub(super) fn native_entity_head_yaw(&self, entity: EntityRef) -> Option<f32> {
+    pub(super) fn native_entity_head_yaw(&self, entity: EntityRef) -> Option<f32> { if let Some(__l) = crate::points_generated::P3085.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let t = self.native_entity_target(entity)?;
         if let Some(g) = self.native_target_guest(t) {
             return Some(g.head_yaw);
@@ -118,7 +118,7 @@ impl Game<'_> {
     /// Turns a mob's head to `yaw` (`Entity.setYHeadRot`); its body follows
     /// as its AI turns it. Players' heads can turn too; false for other kinds
     /// or an unavailable player.
-    pub(super) fn native_entity_set_head_yaw(&mut self, entity: EntityRef, yaw: f32) -> bool {
+    pub(super) fn native_entity_set_head_yaw(&mut self, entity: EntityRef, yaw: f32) -> bool { let (yaw,) = match crate::points_generated::P3084.get() { Some(__l) => { let mut __a = (yaw,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (yaw,) };
         if !yaw.is_finite() {
             return false;
         }
@@ -148,20 +148,20 @@ impl Game<'_> {
     }
     /// The horizontal direction the entity faces (`Entity.getDirection`):
     /// `north`, `south`, `east` or `west`.
-    pub(super) fn native_entity_direction(&self, entity: EntityRef) -> Option<&'static str> {
+    pub(super) fn native_entity_direction(&self, entity: EntityRef) -> Option<&'static str> { if let Some(__l) = crate::points_generated::P3083.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let t = self.native_entity_target(entity)?;
         Some(facing(self.target_rotation(t)[0]))
     }
     /// The entity's width and height (`Entity.getBbWidth`, `getBbHeight`):
     /// its box's, so a baby's or a scaled entity's own.
-    pub(super) fn native_entity_dimensions(&self, entity: EntityRef) -> Option<[f64; 2]> {
+    pub(super) fn native_entity_dimensions(&self, entity: EntityRef) -> Option<[f64; 2]> { if let Some(__l) = crate::points_generated::P3082.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let [min, max] = self.native_entity_bounding_box(entity)?;
         Some([max[0] - min[0], max[1] - min[1]])
     }
     /// Adds `delta` to the entity's velocity (`Entity.push`,
     /// `addDeltaMovement`). False for an unavailable player, an entity
     /// Horizon doesn't simulate, or a value that isn't finite.
-    pub(super) fn native_entity_push(&mut self, entity: EntityRef, delta: [f64; 3]) -> bool {
+    pub(super) fn native_entity_push(&mut self, entity: EntityRef, delta: [f64; 3]) -> bool { let (delta,) = match crate::points_generated::P3081.get() { Some(__l) => { let mut __a = (delta,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (delta,) };
         if !delta.iter().all(|v| v.is_finite()) {
             return false;
         }

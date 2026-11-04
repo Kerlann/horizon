@@ -6,7 +6,7 @@ use horizon_world::nbt::Tag;
 
 impl Game<'_> {
     /// Whether the key bound to `mapping` is held.
-    pub(super) fn mapped_key_down(&self, mapping: &str) -> bool {
+    pub(super) fn mapped_key_down(&self, mapping: &str) -> bool { if let Some(__l) = crate::points_generated::P1325.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         keybinds::key_code(self.settings.keys.get(mapping))
             .is_some_and(|k| self.physical_keys.contains(&k))
     }
@@ -14,7 +14,7 @@ impl Game<'_> {
     /// `CreativeModeInventoryScreen.selectTab` on the HOTBAR tab: each saved
     /// row's nine stacks, or for an empty row a locked paper in that row's own
     /// slot, named after the keys that save it (`inventory.hotbarInfo`).
-    pub(super) fn refresh_saved_hotbars(&mut self) {
+    pub(super) fn refresh_saved_hotbars(&mut self) { if let Some(__l) = crate::points_generated::P1324.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.creative_screen.tab().hotbar {
             return;
         }
@@ -67,7 +67,7 @@ impl Game<'_> {
     /// `index`: load puts the saved row in the hotbar (the creative slot
     /// packets follow from the inventory change), save stores the hotbar and
     /// says so on the action bar.
-    pub(super) fn hotbar_load_or_save(&mut self, index: usize, load: bool) {
+    pub(super) fn hotbar_load_or_save(&mut self, index: usize, load: bool) { let (index,load,) = match crate::points_generated::P1323.get() { Some(__l) => { let mut __a = (index,load,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,load,) };
         let path = Self::options_path().with_file_name("hotbar.nbt");
         let known = |id: &str| self.items().get(id).is_some();
         let mut rows = hotbar::load(&path, &known);

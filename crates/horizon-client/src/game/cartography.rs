@@ -64,7 +64,7 @@ impl Game<'_> {
     }
 
     /// The scaled and locked copies a menu made (`level.setMapData`).
-    pub(super) fn register_made_maps(&mut self, maps: LevelMaps) {
+    pub(super) fn register_made_maps(&mut self, maps: LevelMaps) { if let Some(__l) = crate::points_generated::P815.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (id, source, scale) in maps.made.into_inner() {
             let Some(data) = self
                 .map(source)
@@ -77,7 +77,7 @@ impl Game<'_> {
         }
     }
     /// `CartographyTableScreen.extractBackground` after the background.
-    pub(super) fn draw_cartography(&mut self, batch: &mut HudBatch, ox: f32, oy: f32) {
+    pub(super) fn draw_cartography(&mut self, batch: &mut HudBatch, ox: f32, oy: f32) { let (ox,oy,) = match crate::points_generated::P814.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ox,oy,) };
         let Some((map, extra)) = self
             .station
             .as_ref()
@@ -148,7 +148,7 @@ impl Game<'_> {
     /// `(x, y)` drawn `scale` GUI pixels per map pixel. Only those with
     /// `renderOnFrame` (`MapDecorationType.showOnItemFrame`) are drawn: the
     /// screen's `map` skips the player arrows and the two markers.
-    fn draw_map_decorations(&self, batch: &mut HudBatch, id: i32, x: f32, y: f32, scale: f32) {
+    fn draw_map_decorations(&self, batch: &mut HudBatch, id: i32, x: f32, y: f32, scale: f32) { let (id,x,y,scale,) = match crate::points_generated::P813.get() { Some(__l) => { let mut __a = (id,x,y,scale,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,x,y,scale,) };
         let Some(map) = self.maps.data.get(&id) else {
             return;
         };

@@ -67,7 +67,7 @@ fn equipment_stack(stack: Option<ItemStack>) -> Option<ItemStack> {
 
 impl Game<'_> {
     /// What a living handle names now: a player, a mob, an armor stand or the dragon.
-    pub(super) fn native_living_target(&self, living: LivingRef) -> Option<Target> {
+    pub(super) fn native_living_target(&self, living: LivingRef) -> Option<Target> { if let Some(__l) = crate::points_generated::P3888.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_target(living.entity())? {
             t @ (Target::Player
             | Target::Guest(_)
@@ -83,14 +83,14 @@ impl Game<'_> {
     ///
     /// On a client, only the local player is one: the client keeps the others'
     /// equipment, effects and health only as far as it draws them.
-    pub(super) fn native_living(&self, entity: EntityRef) -> Option<LivingRef> {
+    pub(super) fn native_living(&self, entity: EntityRef) -> Option<LivingRef> { if let Some(__l) = crate::points_generated::P3887.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let living = LivingRef::new(entity);
         self.native_living_read_target(living).map(|_| living)
     }
     /// What a living handle names for a read that works on both sides: the
     /// server's entity, or on a client the local player (`Minecraft.player`),
     /// whose state is the client's copy of what the server sent.
-    pub(super) fn native_living_read_target(&self, living: LivingRef) -> Option<Target> {
+    pub(super) fn native_living_read_target(&self, living: LivingRef) -> Option<Target> { if let Some(__l) = crate::points_generated::P3886.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.is_logical_server() {
             return self.native_living_target(living);
         }
@@ -104,7 +104,7 @@ impl Game<'_> {
     /// unavailable entity, or on a client. A mob, an armor stand and the
     /// dragon answer from their live attribute map: the type's defaults, the
     /// saved `attributes`, and the modifiers of what they wear or hold.
-    pub(super) fn native_living_attribute_value(&self, living: LivingRef, id: &str) -> Option<f64> {
+    pub(super) fn native_living_attribute_value(&self, living: LivingRef, id: &str) -> Option<f64> { if let Some(__l) = crate::points_generated::P3885.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_living_attribute(
             living,
             id,
@@ -114,7 +114,7 @@ impl Game<'_> {
 
     /// The base value of an attribute, before modifiers
     /// (`AttributeMap.getBaseValue`), read as the effective value is.
-    pub(super) fn native_living_attribute_base(&self, living: LivingRef, id: &str) -> Option<f64> {
+    pub(super) fn native_living_attribute_base(&self, living: LivingRef, id: &str) -> Option<f64> { if let Some(__l) = crate::points_generated::P3884.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_living_attribute(living, id, horizon_world::attribute_map::ValueKind::Base)
     }
 
@@ -123,7 +123,7 @@ impl Game<'_> {
         living: LivingRef,
         name: &str,
         kind: horizon_world::attribute_map::ValueKind,
-    ) -> Option<f64> {
+    ) -> Option<f64> { if let Some(__l) = crate::points_generated::P3883.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_target_attribute(self.native_living_target(living)?, name, kind)
     }
 
@@ -132,7 +132,7 @@ impl Game<'_> {
         target: Target,
         name: &str,
         kind: horizon_world::attribute_map::ValueKind,
-    ) -> Option<f64> {
+    ) -> Option<f64> { if let Some(__l) = crate::points_generated::P3882.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let catalog = &self.motion.attributes;
         let player = match target {
             Target::Player => self.player.as_ref()?,
@@ -168,7 +168,7 @@ impl Game<'_> {
     /// `Damageable#getHealth`). During a player's turn only that player
     /// resolves: the hub is out for their action, and other players'
     /// handles read `None` until it is back.
-    pub(super) fn native_living_health(&self, living: LivingRef) -> Option<f32> {
+    pub(super) fn native_living_health(&self, living: LivingRef) -> Option<f32> { if let Some(__l) = crate::points_generated::P3881.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_living_read_target(living)? {
             Target::Player => Some(self.player.as_ref()?.health.health()),
             Target::Guest(conn) => Some(self.command_guest(conn)?.health),
@@ -197,7 +197,7 @@ impl Game<'_> {
     /// map; a mob, an armor stand and the dragon their own fields (the
     /// armor stand the fixed 20 the game seeds it with, the dragon its
     /// 200) until live attribute maps cover them.
-    pub(super) fn native_living_max_health(&self, living: LivingRef) -> Option<f32> {
+    pub(super) fn native_living_max_health(&self, living: LivingRef) -> Option<f32> { if let Some(__l) = crate::points_generated::P3880.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let target = self.native_living_read_target(living)?;
         match target {
             Target::Player | Target::Guest(_) => self
@@ -220,7 +220,7 @@ impl Game<'_> {
     /// Whether the entity is alive (`LivingEntity.isAlive`; Paper's
     /// `Entity#isDead` is its inverse). A dying mob, mid death
     /// animation, is not.
-    pub(super) fn native_living_alive(&self, living: LivingRef) -> Option<bool> {
+    pub(super) fn native_living_alive(&self, living: LivingRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3879.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_living_health(living).map(alive_at)
     }
 
@@ -228,7 +228,7 @@ impl Game<'_> {
     /// `Damageable#setHealth`), cut to its maximum health. No heal or damage
     /// hook runs. False for a stale handle, a non-finite value, an armor stand
     /// or the dragon.
-    pub(super) fn native_living_set_health(&mut self, living: LivingRef, health: f32) -> bool {
+    pub(super) fn native_living_set_health(&mut self, living: LivingRef, health: f32) -> bool { let (health,) = match crate::points_generated::P3878.get() { Some(__l) => { let mut __a = (health,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (health,) };
         if !health.is_finite() {
             return false;
         }
@@ -256,7 +256,7 @@ impl Game<'_> {
     /// `living_heal` hook, which may change or cancel it. A dead or dying
     /// entity isn't healed, and health stops at the maximum. False for a stale
     /// handle, a non-finite amount, a zero-health entity, an armor stand or the dragon.
-    pub(super) fn native_living_heal(&mut self, living: LivingRef, amount: f32) -> bool {
+    pub(super) fn native_living_heal(&mut self, living: LivingRef, amount: f32) -> bool { let (amount,) = match crate::points_generated::P3877.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         if !amount.is_finite()
             || !self
                 .native_living_health(living)
@@ -285,7 +285,7 @@ impl Game<'_> {
     /// `LivingEntity.getKillCredit`: the remembered player takes precedence,
     /// even if the player cannot be resolved; otherwise the last hurting mob.
     /// Unlike vanilla, a mob that changed dimension cannot be resolved.
-    pub(super) fn native_living_kill_credit(&self, living: LivingRef) -> Option<EntityRef> {
+    pub(super) fn native_living_kill_credit(&self, living: LivingRef) -> Option<EntityRef> { if let Some(__l) = crate::points_generated::P3876.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let credit = match self.native_living_target(living)? {
             Target::Player => self.combat.player_credit(self.world.game_time),
             Target::Guest(conn) => self
@@ -309,7 +309,7 @@ impl Game<'_> {
     /// `armadillo.rs` reads it). None for a stale handle, a window that has
     /// passed, an attacker that is gone, an armor stand, the dragon or a
     /// client.
-    pub(super) fn native_living_last_attacker(&self, living: LivingRef) -> Option<EntityRef> {
+    pub(super) fn native_living_last_attacker(&self, living: LivingRef) -> Option<EntityRef> { if let Some(__l) = crate::points_generated::P3875.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_living_target(living)? {
             Target::Player => self
                 .combat
@@ -368,7 +368,7 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         slot: EquipmentSlot,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P3874.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_living_read_target(living)? {
             Target::Player => player_slot(
                 &self.inventory,
@@ -414,7 +414,7 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         hand: Hand,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P3873.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let slot = match hand {
             Hand::Main => EquipmentSlot::MainHand,
             Hand::Off => EquipmentSlot::OffHand,
@@ -435,7 +435,7 @@ impl Game<'_> {
         living: LivingRef,
         slot: EquipmentSlot,
         stack: Option<ItemStack>,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3872.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(t) = self.native_living_target(living) else {
             return false;
         };
@@ -527,7 +527,7 @@ impl Game<'_> {
     pub(super) fn equippable_slot_sound(
         &self,
         stack: &ItemStack,
-    ) -> Option<(super::dispenser::Slot, String)> {
+    ) -> Option<(super::dispenser::Slot, String)> { if let Some(__l) = crate::points_generated::P3871.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let name = horizon_client::item_sync::equippable_slot(stack, self.items())?;
         let equip_slot = super::dispenser::Slot::from_name(&name)?;
         let sound = match stack.data().and_then(|d| d.other("minecraft:equippable")) {
@@ -554,7 +554,7 @@ impl Game<'_> {
         sound: Option<String>,
         equips: bool,
         ctx: horizon_client::sculk::Context,
-    ) {
+    ) { let (at,equips,) = match crate::points_generated::P3870.get() { Some(__l) => { let mut __a = (at,equips,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,equips,) };
         if let Some(sound) = sound {
             self.audio.play(&sound, Some(at), 1.0, 1.0);
         }
@@ -581,7 +581,7 @@ impl Game<'_> {
         stack: ItemStack,
         throw_randomly: bool,
         include_thrower_name: bool,
-    ) -> Option<EntityRef> {
+    ) -> Option<EntityRef> { let (throw_randomly,include_thrower_name,) = match crate::points_generated::P3869.get() { Some(__l) => { let mut __a = (throw_randomly,include_thrower_name,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (throw_randomly,include_thrower_name,) };
         let target = self.native_living_target(living)?;
         let stack = equipment_stack(Some(stack))?;
         let mut item = None;
@@ -603,17 +603,17 @@ impl Game<'_> {
     }
     /// `TamableAnimal.isTame`, `AbstractHorse.isTamed`: None for a kind that
     /// can't be tamed or a stale handle. API @API:living_refs@.
-    pub(super) fn native_living_is_tamed(&self, living: LivingRef) -> Option<bool> {
+    pub(super) fn native_living_is_tamed(&self, living: LivingRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3868.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_tamable(living).map(|m| m.extra.tame)
     }
     /// The owner's UUID (`OwnableEntity.getOwnerReference`): None for a wild
     /// mob, a kind that can't be tamed, or a stale handle. API @API:living_refs@.
-    pub(super) fn native_living_owner(&self, living: LivingRef) -> Option<u128> {
+    pub(super) fn native_living_owner(&self, living: LivingRef) -> Option<u128> { if let Some(__l) = crate::points_generated::P3867.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let owner = self.native_tamable(living)?.extra.owner?;
         Some(horizon_client::lan::playerdata::ints_uuid(owner))
     }
     /// The mob a handle names, when it is a `TamableAnimal` or an `AbstractHorse`.
-    fn native_tamable(&self, living: LivingRef) -> Option<&Mob> {
+    fn native_tamable(&self, living: LivingRef) -> Option<&Mob> { if let Some(__l) = crate::points_generated::P3866.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Target::Mob(id) = self.native_living_target(living)? else {
             return None;
         };
@@ -638,7 +638,7 @@ impl Game<'_> {
         stack: ItemStack,
         randomly: bool,
         thrown_from_hand: bool,
-    ) -> Option<u32> {
+    ) -> Option<u32> { let (randomly,thrown_from_hand,) = match crate::points_generated::P3865.get() { Some(__l) => { let mut __a = (randomly,thrown_from_hand,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (randomly,thrown_from_hand,) };
         if randomly {
             let eye = self.eye_position()?;
             self.throw_from_eyes(stack, eye, true, thrown_from_hand)
@@ -655,7 +655,7 @@ impl Game<'_> {
         stack: ItemStack,
         randomly: bool,
         thrown_from_hand: bool,
-    ) -> Option<u32> {
+    ) -> Option<u32> { let (id,randomly,thrown_from_hand,) = match crate::points_generated::P3864.get() { Some(__l) => { let mut __a = (id,randomly,thrown_from_hand,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,randomly,thrown_from_hand,) };
         let m = self.mobs.iter_mut().find(|m| m.id == id)?;
         let v = horizon_client::entities::drop_motion(&mut m.random, m.yaw, m.head_pitch, randomly);
         let at = [m.position.x, m.eye_y() - f64::from(0.3f32), m.position.z];

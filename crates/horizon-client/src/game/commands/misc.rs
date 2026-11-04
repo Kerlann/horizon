@@ -14,7 +14,7 @@ fn millis(nanos: u64) -> String {
 
 impl Game<'_> {
     /// `/stopwatch` (StopwatchCommand).
-    pub(super) fn cmd_stopwatch(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_stopwatch(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1167.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Arg::Resource(name)) = ctx.get("id").cloned() else {
             return Ok(0);
         };
@@ -67,7 +67,7 @@ impl Game<'_> {
         }
     }
     /// `/tick` (TickCommand) over the game clock.
-    pub(super) fn cmd_tick(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_tick(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1166.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let t = |key: &str, args: &[Text]| Text::translate(key, args);
         let lit = |s: String| Text::literal(s);
         let time = match ctx.get("time") {
@@ -187,7 +187,7 @@ impl Game<'_> {
         }
     }
     /// The report `/tick sprint` prints when a sprint ends.
-    pub(in crate::game) fn sprint_report(&mut self, report: &SprintReport) {
+    pub(in crate::game) fn sprint_report(&mut self, report: &SprintReport) { if let Some(__l) = crate::points_generated::P1165.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.feedback(Text::translate(
             "commands.tick.sprint.report",
             &[
@@ -196,7 +196,7 @@ impl Game<'_> {
             ],
         ));
     }
-    pub(super) fn cmd_random(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_random(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1164.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let seed = self.level.seed;
         if id == "random.reset" {
             let sequence = match ctx.get("sequence") {
@@ -300,7 +300,7 @@ impl Game<'_> {
         Ok(value)
     }
     /// `/teammsg`: the executor's team hears the message.
-    pub(super) fn cmd_teammsg(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_teammsg(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1163.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let entity = match self.command_source {
             Some(s) => s.entity,
             None => Some(Target::Player),

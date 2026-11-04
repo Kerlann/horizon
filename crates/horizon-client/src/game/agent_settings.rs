@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 impl Game<'_> {
     /// The endpoint: the one the command line gave, else the default horizon-ctl looks for.
-    fn agent_socket_path(&self) -> PathBuf {
+    fn agent_socket_path(&self) -> PathBuf { if let Some(__l) = crate::points_generated::P513.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.options
             .control
             .clone()
@@ -17,7 +17,7 @@ impl Game<'_> {
     }
 
     /// At startup: open the socket if the game was started for an agent or Agent Control is on.
-    pub(super) fn start_agent_control(&mut self) -> Result<()> {
+    pub(super) fn start_agent_control(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P512.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.agent_control_on = self.settings.extras.agent_control;
         if self.options.benchmark.is_some() && self.options.control.is_none() {
             return Ok(());
@@ -45,7 +45,7 @@ impl Game<'_> {
 
     /// The setting's socket: a failure (another game holds the default endpoint) is logged and
     /// shown on the AI Agent page, not fatal.
-    fn open_agent_socket(&mut self) {
+    fn open_agent_socket(&mut self) { if let Some(__l) = crate::points_generated::P511.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let path = self.agent_socket_path();
         match control::Server::start(&path) {
             Ok(server) => {
@@ -58,7 +58,7 @@ impl Game<'_> {
 
     /// After a settings change: No AI closes the socket; Agent Control turned on or off opens or
     /// closes it.
-    pub(super) fn sync_agent_control(&mut self) {
+    pub(super) fn sync_agent_control(&mut self) { if let Some(__l) = crate::points_generated::P510.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let wanted = self.settings.extras.agent_control;
         let changed = wanted != self.agent_control_on;
         self.agent_control_on = wanted;
@@ -77,12 +77,12 @@ impl Game<'_> {
     }
 
     /// An agent's command arrived.
-    pub(super) fn agent_command_seen(&mut self) {
+    pub(super) fn agent_command_seen(&mut self) { if let Some(__l) = crate::points_generated::P509.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.agent_last = Some(std::time::Instant::now());
     }
 
     /// The AI Agent page's lines: the state, then where agents connect.
-    pub(super) fn agent_status_lines(&self) -> Vec<String> {
+    pub(super) fn agent_status_lines(&self) -> Vec<String> { if let Some(__l) = crate::points_generated::P508.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let server = self
             .control
             .as_ref()
@@ -109,7 +109,7 @@ impl Game<'_> {
 
     /// What Copy Connection Details puts on the clipboard: the socket, a horizon-ctl line to try,
     /// and an MCP client's config for this game.
-    pub(super) fn agent_details(&self) -> String {
+    pub(super) fn agent_details(&self) -> String { if let Some(__l) = crate::points_generated::P507.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let socket = self.agent_socket_path();
         let ctl = std::env::current_exe()
             .unwrap_or_default()

@@ -15,7 +15,7 @@ use horizon_world::nbt::Tag;
 impl Game<'_> {
     /// `Minecraft.getQuickActionsDialog`: the dialogs the tag names, from
     /// `RegistryAccess.lookupOrThrow(Registries.DIALOG)`.
-    fn quick_actions_dialog(&self) -> Option<Tag> {
+    fn quick_actions_dialog(&self) -> Option<Tag> { if let Some(__l) = crate::points_generated::P4666.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let registries = &self.remote.as_ref()?.registries;
         let dialogs = registries.registries.get("minecraft:dialog")?;
         let tag = registries.dialog_tags.get("minecraft:quick_actions")?;
@@ -37,12 +37,12 @@ impl Game<'_> {
     }
 
     /// `key.quickActions`: only open if the tag names a dialog.
-    pub(super) fn has_quick_actions(&self) -> bool {
+    pub(super) fn has_quick_actions(&self) -> bool { if let Some(__l) = crate::points_generated::P4665.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.quick_actions_dialog().is_some()
     }
 
     /// `getQuickActionsDialog().ifPresent(showDialog(holder, gui.screen()))`.
-    pub(super) fn open_quick_actions(&mut self) {
+    pub(super) fn open_quick_actions(&mut self) { if let Some(__l) = crate::points_generated::P4664.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(dialog) = self.quick_actions_dialog() {
             self.show_dialog(&dialog);
         }

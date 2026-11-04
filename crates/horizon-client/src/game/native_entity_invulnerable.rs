@@ -11,7 +11,7 @@ use mod_api::EntityRef;
 
 impl Game<'_> {
     /// A player's body, where it is kept now.
-    fn native_player_body(&self, t: Target) -> Option<&horizon_client::motion::PlayerMotion> {
+    fn native_player_body(&self, t: Target) -> Option<&horizon_client::motion::PlayerMotion> { if let Some(__l) = crate::points_generated::P3067.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match t {
             Target::Player => self.player.as_ref(),
             Target::Guest(conn) => self.lan.as_ref()?.hub.guest(conn)?.motion.as_deref(),
@@ -21,7 +21,7 @@ impl Game<'_> {
     fn native_player_body_mut(
         &mut self,
         t: Target,
-    ) -> Option<&mut horizon_client::motion::PlayerMotion> {
+    ) -> Option<&mut horizon_client::motion::PlayerMotion> { if let Some(__l) = crate::points_generated::P3066.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match t {
             Target::Player => self.player.as_mut(),
             Target::Guest(conn) => self
@@ -39,7 +39,7 @@ impl Game<'_> {
     /// only damage that bypasses invulnerability (the void, `/kill`) or a
     /// creative player gets past. Mobs keep it; Horizon keeps no such flag
     /// for players or other kinds yet, so they read None.
-    pub(super) fn native_entity_permanently_invulnerable(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn native_entity_permanently_invulnerable(&self, entity: EntityRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3065.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_target(entity)? {
             Target::Mob(id) => Some(self.mobs.iter().find(|m| m.id == id)?.invulnerable_flag),
             _ => None,
@@ -51,7 +51,7 @@ impl Game<'_> {
         &mut self,
         entity: EntityRef,
         invulnerable: bool,
-    ) -> bool {
+    ) -> bool { let (invulnerable,) = match crate::points_generated::P3064.get() { Some(__l) => { let mut __a = (invulnerable,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (invulnerable,) };
         let Some(Target::Mob(id)) = self.native_entity_target(entity) else {
             return false;
         };
@@ -64,7 +64,7 @@ impl Game<'_> {
     /// `LivingEntity.damageCooldownTime`: 20 after a hit, counting down;
     /// while it is above 10 a hit does only what it deals beyond the last
     /// one. Mobs and players.
-    pub(super) fn native_entity_damage_cooldown_time(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn native_entity_damage_cooldown_time(&self, entity: EntityRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3063.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_target(entity)? {
             Target::Mob(id) => Some(self.mobs.iter().find(|m| m.id == id)?.invulnerable),
             t => Some(self.native_player_body(t)?.health.hurt.cooldown),
@@ -76,7 +76,7 @@ impl Game<'_> {
         &mut self,
         entity: EntityRef,
         ticks: i32,
-    ) -> bool {
+    ) -> bool { let (ticks,) = match crate::points_generated::P3062.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };

@@ -20,17 +20,17 @@ fn uuid(ints: [i32; 4]) -> u128 {
 
 impl Game<'_> {
     /// `ClientPacketListener.handleWaypoint`.
-    pub(super) fn handle_waypoint(&mut self, packet: &TrackedWaypoint) {
+    pub(super) fn handle_waypoint(&mut self, packet: &TrackedWaypoint) { if let Some(__l) = crate::points_generated::P2562.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.waypoints.apply(packet);
     }
     /// A new connection or world starts with no waypoints.
-    pub(super) fn clear_waypoints(&mut self) {
+    pub(super) fn clear_waypoints(&mut self) { if let Some(__l) = crate::points_generated::P2561.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.waypoints = ClientWaypoints::default();
     }
     /// `LocalPlayer.setExperienceValues`: a change of progress shows the
     /// experience bar for 100 ticks, except the first one
     /// (`experienceDisplayStartTick` starts at `Integer.MIN_VALUE`).
-    pub(super) fn track_experience_display(&mut self) {
+    pub(super) fn track_experience_display(&mut self) { if let Some(__l) = crate::points_generated::P2560.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let progress = self.experience.progress;
         let (last, seen, _) = &mut self.experience_display;
         if progress != *last {
@@ -52,19 +52,19 @@ impl Game<'_> {
         }
     }
     /// `Hud.willPrioritizeExperienceInfo`.
-    pub(super) fn experience_recent(&self) -> bool {
+    pub(super) fn experience_recent(&self) -> bool { if let Some(__l) = crate::points_generated::P2559.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (_, _, start) = self.experience_display;
         start != 0 && start + 100 > self.ticks
     }
     /// The local player's UUID, as servers know it.
-    pub(super) fn own_uuid(&self) -> u128 {
+    pub(super) fn own_uuid(&self) -> u128 { if let Some(__l) = crate::points_generated::P2558.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match &self.remote {
             Some(r) => r.profile(),
             None => self.level.player_uuid.map_or(0, uuid),
         }
     }
     /// An entity's block position and (interpolated) eyes, by UUID.
-    fn waypoint_entity(&self, id: u128, alpha: f64) -> Option<([i32; 3], [f64; 3])> {
+    fn waypoint_entity(&self, id: u128, alpha: f64) -> Option<([i32; 3], [f64; 3])> { let (alpha,) = match crate::points_generated::P2557.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let at = |p: [f64; 3], q: [f64; 3], eyes: f64| {
             let pos: [f64; 3] = std::array::from_fn(|i| q[i] + (p[i] - q[i]) * alpha);
             (p.map(|c| c.floor() as i32), [pos[0], pos[1] + eyes, pos[2]])
@@ -80,7 +80,7 @@ impl Game<'_> {
         Some(at(g.position, g.previous_position, PLAYER_EYES))
     }
     /// `LocatorBar.extractRenderState` from the last frame's camera.
-    pub(super) fn locator_bar_draws(&self, gui_width: i32, gui_height: i32) -> Vec<GuiDraw> {
+    pub(super) fn locator_bar_draws(&self, gui_width: i32, gui_height: i32) -> Vec<GuiDraw> { let (gui_width,gui_height,) = match crate::points_generated::P2556.get() { Some(__l) => { let mut __a = (gui_width,gui_height,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (gui_width,gui_height,) };
         let (Some((camera_pos, yaw, pitch, fov)), Some(p)) = (self.locator_camera, &self.player)
         else {
             return Vec::new();

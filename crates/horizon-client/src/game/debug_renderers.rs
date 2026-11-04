@@ -58,7 +58,7 @@ fn cube(center: [i32; 3], radius: i32) -> impl Iterator<Item = [i32; 3]> {
 impl Game<'_> {
     /// `CollisionBoxRenderer`: the block collisions within 6 of the camera
     /// entity's box, white.
-    pub(super) fn debug_renderer_gizmos(&self, g: &mut Gizmos) {
+    pub(super) fn debug_renderer_gizmos(&self, g: &mut Gizmos) { if let Some(__l) = crate::points_generated::P1517.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.debug_entry("visualize_collision_boxes") {
             return;
         }
@@ -99,7 +99,7 @@ impl Game<'_> {
     }
 
     /// The fill and text renderers' geometry for this frame.
-    pub(super) fn debug_renderer_geometry(&mut self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
+    pub(super) fn debug_renderer_geometry(&mut self, camera: glam::DVec3, out: &mut Vec<Vertex>) { if let Some(__l) = crate::points_generated::P1516.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let water = self.debug_entry("visualize_water_levels");
         let heightmap = self.debug_entry("visualize_heightmap");
         let block_light = self.debug_entry("visualize_block_light_levels");
@@ -177,7 +177,7 @@ impl Game<'_> {
         feet: [i32; 3],
         fills: &mut Vec<([[f64; 3]; 4], u32)>,
         texts: &mut Vec<([f64; 3], String, u32)>,
-    ) {
+    ) { let (feet,) = match crate::points_generated::P1515.get() { Some(__l) => { let mut __a = (feet,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (feet,) };
         use horizon_client::blocks::Fluid;
         for pos in cube(feet, 10) {
             let f = self
@@ -208,7 +208,7 @@ impl Game<'_> {
 
     /// `HeightMapRenderer`: the client chunk's heightmaps of the 5x5 chunks
     /// around the camera, a small box per column, stacked by type.
-    fn heightmap_shapes(&self, eye: [i32; 3], fills: &mut Vec<([[f64; 3]; 4], u32)>) {
+    fn heightmap_shapes(&self, eye: [i32; 3], fills: &mut Vec<([[f64; 3]; 4], u32)>) { let (eye,) = match crate::points_generated::P1514.get() { Some(__l) => { let mut __a = (eye,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (eye,) };
         let (cx, cz) = (eye[0] >> 4, eye[2] >> 4);
         for chunk_x in cx - 2..=cx + 2 {
             for chunk_z in cz - 2..=cz + 2 {
@@ -241,7 +241,7 @@ impl Game<'_> {
 
     /// `SolidFaceRenderer`: each outline box of the blocks within 6 of the
     /// camera, grown by 0.002, with its sides that are sturdy filled.
-    fn solid_face_shapes(&self, eye: [i32; 3], fills: &mut Vec<([[f64; 3]; 4], u32)>) {
+    fn solid_face_shapes(&self, eye: [i32; 3], fills: &mut Vec<([[f64; 3]; 4], u32)>) { let (eye,) = match crate::points_generated::P1513.get() { Some(__l) => { let mut __a = (eye,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (eye,) };
         // In SolidFaceRenderer's order (WEST, SOUTH, EAST, NORTH, DOWN, UP):
         // the Direction ordinal and the side's quad in `cuboid_fill_quads`.
         const SIDES: [(u8, usize); 6] = [(4, 1), (3, 3), (5, 0), (2, 2), (0, 5), (1, 4)];

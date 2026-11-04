@@ -19,7 +19,7 @@ const RECHECK_TICKS: i64 = 5;
 impl Game<'_> {
     /// A copper golem opened or closed a chest half: the counter changes and
     /// the clients see the block event (`openerCountChanged`).
-    pub(super) fn golem_chest_open(&mut self, chest: [i32; 3], open: bool) {
+    pub(super) fn golem_chest_open(&mut self, chest: [i32; 3], open: bool) { let (chest,open,) = match crate::points_generated::P1311.get() { Some(__l) => { let mut __a = (chest,open,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (chest,open,) };
         let key = (chest[0], chest[1], chest[2]);
         let entry = self.world.chest_openers.entry(key).or_insert((0, 0.0));
         if open {
@@ -45,7 +45,7 @@ impl Game<'_> {
         chest: [i32; 3],
         slot: usize,
         stack: Option<ItemStack>,
-    ) {
+    ) { let (chest,slot,) = match crate::points_generated::P1310.get() { Some(__l) => { let mut __a = (chest,slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (chest,slot,) };
         let key = (chest[0], chest[1], chest[2]);
         if let Some(e) = self.world.block_entities.get_mut(&key)
             && let Some(s) = e.slots_mut().get_mut(slot)
@@ -58,7 +58,7 @@ impl Game<'_> {
     /// `ContainerOpenersCounter.recheckOpeners` every five ticks: the golems
     /// whose opened chest is this one, within its range plus 4; when none
     /// is left the chest closes (a double chest the golem left open).
-    pub(super) fn recheck_golem_openers(&mut self) {
+    pub(super) fn recheck_golem_openers(&mut self) { if let Some(__l) = crate::points_generated::P1309.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.world.game_time % RECHECK_TICKS != 0 {
             return;
         }
@@ -106,7 +106,7 @@ impl Game<'_> {
         }
     }
     /// `ChestBlockEntity.playSound` for a chest the recheck closed.
-    fn golem_chest_sound(&mut self, p: [i32; 3], open: bool) {
+    fn golem_chest_sound(&mut self, p: [i32; 3], open: bool) { let (p,open,) = match crate::points_generated::P1308.get() { Some(__l) => { let mut __a = (p,open,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (p,open,) };
         let name = self
             .res
             .facts()
@@ -140,7 +140,7 @@ impl Game<'_> {
         );
     }
     /// `CopperGolem.turnToStatue`, which its weathering asked for.
-    pub(super) fn golem_become_statue(&mut self, id: u32) {
+    pub(super) fn golem_become_statue(&mut self, id: u32) { let (id,) = match crate::points_generated::P1307.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(i) = self.mobs.iter().position(|m| m.id == id) else {
             return;
         };
@@ -152,7 +152,7 @@ impl Game<'_> {
             }
         });
     }
-    fn golem_turn_to_statue(&mut self, m: &mut Mob) {
+    fn golem_turn_to_statue(&mut self, m: &mut Mob) { if let Some(__l) = crate::points_generated::P1306.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = [
             m.position.x.floor() as i32,
             m.position.y.floor() as i32,
@@ -211,7 +211,7 @@ impl Game<'_> {
     }
     /// `golem_preserved_equipment`, each `spawnAtLocation` at the golem's feet
     /// (a golem turning into a statue).
-    pub(super) fn golem_drop_equipment(&mut self, m: &mut Mob) {
+    pub(super) fn golem_drop_equipment(&mut self, m: &mut Mob) { if let Some(__l) = crate::points_generated::P1305.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = m.position;
         for stack in Self::golem_preserved_equipment(m) {
             self.spawn_at_location(at, 0.0, stack);
@@ -222,7 +222,7 @@ impl Game<'_> {
     /// statue turns it back into a golem (`CopperGolemStatueBlockEntity.removeStatue`),
     /// wearing the axe. Weathered statues are scraped by the axe's own
     /// transform instead.
-    pub(super) fn use_golem_statue(&mut self, pos: [i32; 3], held: Option<&ItemStack>) -> bool {
+    pub(super) fn use_golem_statue(&mut self, pos: [i32; 3], held: Option<&ItemStack>) -> bool { let (pos,) = match crate::points_generated::P1304.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if !held.is_some_and(|s| s.item.ends_with("_axe")) {
             return false;
         }
@@ -277,7 +277,7 @@ impl Game<'_> {
         true
     }
     /// `CopperGolem.mobInteract`; true when handled.
-    pub(super) fn interact_copper_golem(&mut self, index: usize, item: &str) -> bool {
+    pub(super) fn interact_copper_golem(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P1303.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         if self.mobs[index].species() != Species::CopperGolem || !self.mobs[index].alive() {
             return false;
         }
@@ -362,7 +362,7 @@ impl Game<'_> {
         false
     }
     /// `readyForShearing`: the antenna holds a flower shears take.
-    pub(super) fn golem_shearable(&self, index: usize) -> bool {
+    pub(super) fn golem_shearable(&self, index: usize) -> bool { let (index,) = match crate::points_generated::P1302.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (index,) };
         self.mobs[index].saddle_item().is_some_and(|a| {
             self.res
                 .items()

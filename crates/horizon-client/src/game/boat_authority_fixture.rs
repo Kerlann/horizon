@@ -16,7 +16,7 @@ struct Case {
 }
 
 impl Game<'_> {
-    pub(super) fn run_boat_authority_fixture(&mut self, directory: &Path) -> Result<()> {
+    pub(super) fn run_boat_authority_fixture(&mut self, directory: &Path) -> Result<()> { if let Some(__l) = crate::points_generated::P649.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let cases: Vec<Case> =
             serde_json::from_str(&std::fs::read_to_string(directory.join("inputs.json"))?)?;
         let mut output = Vec::new();

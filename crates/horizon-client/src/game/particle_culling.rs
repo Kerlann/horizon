@@ -511,7 +511,7 @@ impl Game<'_> {
     pub(super) fn particle_occlusion_context(
         &self,
         camera: glam::DVec3,
-    ) -> ParticleOcclusionContext<'_, '_> {
+    ) -> ParticleOcclusionContext<'_, '_> { if let Some(__l) = crate::points_generated::P4441.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let at = camera.to_array().map(|value| value.floor() as i32);
         let camera_inside_opaque =
             state_is_opaque(self.res.facts().get(self.world.block(at[0], at[1], at[2])));
@@ -554,11 +554,11 @@ impl Game<'_> {
         culler: &Culler,
         min: [f64; 3],
         max: [f64; 3],
-    ) -> bool {
+    ) -> bool { let (min,max,) = match crate::points_generated::P4440.get() { Some(__l) => { let mut __a = (min,max,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (min,max,) };
         culler.occluded(min, max, |pos| self.particle_occluder_ready(pos))
     }
 
-    fn particle_occluder_ready(&self, pos: [i32; 3]) -> bool {
+    fn particle_occluder_ready(&self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P4439.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         if !state_is_opaque(self.res.facts().get(state)) {
             return false;
@@ -575,7 +575,7 @@ impl Game<'_> {
             && !self.pending_uploads.iter().any(|(key, _)| *key == section)
     }
 
-    pub(super) fn async_particle_hidden(&self, min: [f64; 3], max: [f64; 3]) -> Option<bool> {
+    pub(super) fn async_particle_hidden(&self, min: [f64; 3], max: [f64; 3]) -> Option<bool> { let (min,max,) = match crate::points_generated::P4438.get() { Some(__l) => { let mut __a = (min,max,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (min,max,) };
         enum Answer {
             Miss,
             Visible,
@@ -608,7 +608,7 @@ impl Game<'_> {
         }
     }
 
-    fn particle_proof_is_current(&self, proof: &OcclusionProof) -> bool {
+    fn particle_proof_is_current(&self, proof: &OcclusionProof) -> bool { if let Some(__l) = crate::points_generated::P4437.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         proof.chunks.iter().all(|(key, expected)| {
             self.world
                 .chunks
@@ -624,7 +624,7 @@ impl Game<'_> {
         })
     }
 
-    pub(super) fn finish_async_particle_culling(&self) {
+    pub(super) fn finish_async_particle_culling(&self) { if let Some(__l) = crate::points_generated::P4436.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(culler) = &mut self.async_particle_culler.borrow_mut().culler {
             culler.finish_frame(&self.world, self.res.facts());
         }

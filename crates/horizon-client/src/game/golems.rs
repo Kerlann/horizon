@@ -9,11 +9,11 @@ use horizon_client::block_pattern::{
 };
 
 impl Game<'_> {
-    fn golem_block(&self, p: [i32; 3]) -> &str {
+    fn golem_block(&self, p: [i32; 3]) -> &str { let (p,) = match crate::points_generated::P2039.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let state = self.world.block(p[0], p[1], p[2]);
         &self.res.facts().get(state).name
     }
-    fn is_golem_head(&self, p: [i32; 3]) -> bool {
+    fn is_golem_head(&self, p: [i32; 3]) -> bool { let (p,) = match crate::points_generated::P2038.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         matches!(
             self.golem_block(p),
             "minecraft:carved_pumpkin" | "minecraft:jack_o_lantern"
@@ -30,7 +30,7 @@ impl Game<'_> {
         &self,
         head: [i32; 3],
         base: bool,
-    ) -> Option<(&'static str, Vec<[i32; 3]>, [i32; 3])> {
+    ) -> Option<(&'static str, Vec<[i32; 3]>, [i32; 3])> { let (head,base,) = match crate::points_generated::P2037.get() { Some(__l) => { let mut __a = (head,base,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (head,base,) };
         let air = |p: [i32; 3]| self.res.facts().is_air(self.world.block(p[0], p[1], p[2]));
         let snow = |c: char, p: [i32; 3]| match c {
             '^' => self.is_golem_head(p),
@@ -54,11 +54,11 @@ impl Game<'_> {
     }
     /// `CarvedPumpkinBlock.canSpawnGolem`: a snow or iron golem base, or a
     /// copper block (`#minecraft:copper`) below.
-    pub(super) fn can_spawn_golem(&self, head: [i32; 3]) -> bool {
+    pub(super) fn can_spawn_golem(&self, head: [i32; 3]) -> bool { let (head,) = match crate::points_generated::P2036.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (head,) };
         self.find_golem(head, true).is_some() || self.copper_golem_base(head)
     }
     /// The copper golem pattern ("^", "#"): a block of `#minecraft:copper` under the head.
-    fn copper_golem_base(&self, head: [i32; 3]) -> bool {
+    fn copper_golem_base(&self, head: [i32; 3]) -> bool { let (head,) = match crate::points_generated::P2035.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (head,) };
         let below = [head[0], head[1] - 1, head[2]];
         let name = self.golem_block(below);
         self.res
@@ -68,7 +68,7 @@ impl Game<'_> {
             .is_some_and(|t| t.contains(name))
     }
     /// `CarvedPumpkinBlock.trySpawnGolem`, after a pumpkin was placed.
-    pub(super) fn check_golem_spawn(&mut self, head: [i32; 3]) -> Result<()> {
+    pub(super) fn check_golem_spawn(&mut self, head: [i32; 3]) -> Result<()> { let (head,) = match crate::points_generated::P2034.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (head,) };
         if !self.is_golem_head(head) {
             return Ok(());
         }
@@ -96,7 +96,7 @@ impl Game<'_> {
     /// the built mob's box (the local player here): 5 for golems
     /// (`CarvedPumpkinBlock.spawnGolemInWorld`), 50 for the wither
     /// (`WitherSkullBlock.checkSpawn`).
-    pub(super) fn trigger_summoned(&mut self, id: Option<u32>, reach: f64) {
+    pub(super) fn trigger_summoned(&mut self, id: Option<u32>, reach: f64) { let (reach,) = match crate::points_generated::P2033.get() { Some(__l) => { let mut __a = (reach,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (reach,) };
         let Some(built) = id
             .and_then(|id| self.mobs.iter().find(|m| m.id == id))
             .cloned()
@@ -121,7 +121,7 @@ impl Game<'_> {
         }
     }
     /// Whether placing a golem head at `head` completes a golem.
-    pub(super) fn completes_golem(&self, head: [i32; 3]) -> bool {
+    pub(super) fn completes_golem(&self, head: [i32; 3]) -> bool { let (head,) = match crate::points_generated::P2032.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (head,) };
         self.find_golem(head, true).is_some() || self.copper_golem_base(head)
     }
     /// `Level.setBlock` of the golem head `state` at `head`, then
@@ -132,7 +132,7 @@ impl Game<'_> {
         &mut self,
         head: [i32; 3],
         state: horizon_world::registry::BlockStateId,
-    ) -> Result<()> {
+    ) -> Result<()> { let (head,) = match crate::points_generated::P2031.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (head,) };
         if self.completes_golem(head) {
             let at = horizon_core::position::BlockPos::new(head[0], head[1], head[2]);
             self.with_level(|b, level, ticks| b.set_block(level, ticks, at, state, 2 | 16));
@@ -144,7 +144,7 @@ impl Game<'_> {
     }
     /// `EntityType.create(level, TRIGGERED)` and `snapTo`: a built golem or
     /// wither has no spawn finalization and draws nothing from the level.
-    pub(super) fn create_triggered(&mut self, kind: &str, at: [f64; 3], yaw: f32) -> Option<u32> {
+    pub(super) fn create_triggered(&mut self, kind: &str, at: [f64; 3], yaw: f32) -> Option<u32> { let (at,yaw,) = match crate::points_generated::P2030.get() { Some(__l) => { let mut __a = (at,yaw,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,yaw,) };
         let t = self.res.mob_types().get(kind).cloned()?;
         self.next_entity += 1;
         let mut mob = horizon_client::mobs::Mob::new(
@@ -165,7 +165,7 @@ impl Game<'_> {
     }
     /// `CarvedPumpkinBlock.clearPatternBlocks`: every cell of the match
     /// becomes air (flags 2) with its destroy event (2001).
-    pub(super) fn clear_pattern_blocks(&mut self, cells: &[[i32; 3]]) -> Result<()> {
+    pub(super) fn clear_pattern_blocks(&mut self, cells: &[[i32; 3]]) -> Result<()> { if let Some(__l) = crate::points_generated::P2029.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let air = self.world.air;
         for &p in cells {
             let state = self.world.block(p[0], p[1], p[2]);
@@ -183,7 +183,7 @@ impl Game<'_> {
     }
     /// `CarvedPumpkinBlock.updatePatternBlocks`: neighbours of every cell
     /// hear that air arrived.
-    pub(super) fn update_pattern_blocks(&mut self, cells: &[[i32; 3]]) -> Result<()> {
+    pub(super) fn update_pattern_blocks(&mut self, cells: &[[i32; 3]]) -> Result<()> { if let Some(__l) = crate::points_generated::P2028.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let air = self.world.air;
         for &p in cells {
             let pos = horizon_core::position::BlockPos::new(p[0], p[1], p[2]);
@@ -198,7 +198,7 @@ impl Game<'_> {
     /// pumpkin was, the copper block becomes the matching copper chest facing
     /// the pumpkin's way (`replaceCopperBlockWithChest`, flags 2) and the
     /// golem takes the block's weathering (`CopperGolem.spawn`).
-    fn try_spawn_copper_golem(&mut self, head: [i32; 3]) -> Result<()> {
+    fn try_spawn_copper_golem(&mut self, head: [i32; 3]) -> Result<()> { let (head,) = match crate::points_generated::P2027.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (head,) };
         if !self.copper_golem_base(head) {
             return Ok(());
         }

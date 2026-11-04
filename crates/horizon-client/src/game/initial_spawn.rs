@@ -78,7 +78,7 @@ impl SpawnLevel for Columns<'_, '_> {
 }
 
 impl Game<'_> {
-    fn spawn_columns(&self) -> Columns<'_, '_> {
+    fn spawn_columns(&self) -> Columns<'_, '_> { if let Some(__l) = crate::points_generated::P2089.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Columns {
             world: &self.world,
             properties: &self.pack.assets.properties,
@@ -90,7 +90,7 @@ impl Game<'_> {
         }
     }
     /// ChunkGenerator.getOrigin and getSpawnHeight of the overworld.
-    fn spawn_origin(&self) -> Result<((i32, i32), i32)> {
+    fn spawn_origin(&self) -> Result<((i32, i32), i32)> { if let Some(__l) = crate::points_generated::P2088.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(flat) =
             horizon_client::save::world_gen_settings(&self.world_root).and_then(|s| {
                 horizon_client::flatgen::FlatTerrain::from_settings(
@@ -115,7 +115,7 @@ impl Game<'_> {
     /// MinecraftServer.setInitialSpawn: the first chunk of the spiral with a
     /// valid respawn column gives the world spawn, else the origin chunk's
     /// centre at the spawn height. None while a chunk to test is loading.
-    pub(super) fn find_world_spawn(&mut self) -> Result<Option<[i32; 3]>> {
+    pub(super) fn find_world_spawn(&mut self) -> Result<Option<[i32; 3]>> { if let Some(__l) = crate::points_generated::P2087.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.spawn_hook_fired {
             self.spawn_hook_fired = true;
             let mut position = self.level.world_spawn.unwrap_or([0, 0, 0]);
@@ -162,7 +162,7 @@ impl Game<'_> {
     /// in the spawn chunk, a chest with the spawn bonus loot and a torch on
     /// each side that can hold one, on the first free column of a shuffled
     /// walk over the chunk. Skipped while the chunk is not loaded.
-    pub(super) fn place_bonus_chest(&mut self, origin: [i32; 3]) -> Result<()> {
+    pub(super) fn place_bonus_chest(&mut self, origin: [i32; 3]) -> Result<()> { let (origin,) = match crate::points_generated::P2086.get() { Some(__l) => { let mut __a = (origin,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,) };
         use horizon_client::containers::BlockEntity;
         let (cx, cz) = (origin[0] >> 4, origin[2] >> 4);
         let registry = &self.pack.assets.registry;
@@ -220,7 +220,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `Level.setBlock(pos, state, UPDATE_CLIENTS)`: no neighbour updates.
-    fn set_block_clients(&mut self, pos: [i32; 3], state: BlockStateId) -> Result<()> {
+    fn set_block_clients(&mut self, pos: [i32; 3], state: BlockStateId) -> Result<()> { let (pos,) = match crate::points_generated::P2085.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.with_level(|b, level, ticks| {
             b.set_block(
                 level,
@@ -233,7 +233,7 @@ impl Game<'_> {
         self.process_level_events()
     }
     /// The block at `pos` has no collision shape.
-    pub(super) fn collision_empty(&self, pos: [i32; 3]) -> bool {
+    pub(super) fn collision_empty(&self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P2084.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let mut scene = SceneCollisions {
             world: &self.world,
             binding: self.collision,
@@ -258,7 +258,7 @@ impl Game<'_> {
         &self,
         suggestion: [i32; 3],
         state: &mut Option<PlayerSpawnFinder>,
-    ) -> std::result::Result<Vec3, (i32, i32)> {
+    ) -> std::result::Result<Vec3, (i32, i32)> { let (suggestion,) = match crate::points_generated::P2083.get() { Some(__l) => { let mut __a = (suggestion,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (suggestion,) };
         let mut finder = state
             .take()
             .unwrap_or_else(|| self.spawn_finder(suggestion));
@@ -290,7 +290,7 @@ impl Game<'_> {
     }
     /// PlayerSpawnFinder.findSpawn around the world spawn: the feet of a
     /// player who has no position yet. None while a candidate's chunk loads.
-    pub(super) fn find_player_spawn(&mut self, suggestion: [i32; 3]) -> Result<Option<Vec3>> {
+    pub(super) fn find_player_spawn(&mut self, suggestion: [i32; 3]) -> Result<Option<Vec3>> { let (suggestion,) = match crate::points_generated::P2082.get() { Some(__l) => { let mut __a = (suggestion,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (suggestion,) };
         let mut state = self.player_spawn.take();
         match self.search_spawn(suggestion, &mut state) {
             Ok(feet) => Ok(Some(feet)),
@@ -303,7 +303,7 @@ impl Game<'_> {
     }
     /// A new PlayerSpawnFinder around `suggestion`: the respawn radius, cut
     /// by the world border; the suggestion itself in adventure mode.
-    fn spawn_finder(&self, suggestion: [i32; 3]) -> PlayerSpawnFinder {
+    fn spawn_finder(&self, suggestion: [i32; 3]) -> PlayerSpawnFinder { let (suggestion,) = match crate::points_generated::P2081.get() { Some(__l) => { let mut __a = (suggestion,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (suggestion,) };
         if self.level.game_mode == 2 {
             let mut finder = PlayerSpawnFinder::new(suggestion, 0, |_| 0);
             finder.next_candidate();
@@ -330,7 +330,7 @@ impl Game<'_> {
     /// stand in one spot. Vanilla waits for each candidate's chunk; a server
     /// tick can't, so a candidate in a chunk not loaded yet is passed over,
     /// and `spawn` stays when the search never reaches a loaded column.
-    pub(super) fn server_player_spawn(&self, spawn: [f64; 3]) -> [f64; 3] {
+    pub(super) fn server_player_spawn(&self, spawn: [f64; 3]) -> [f64; 3] { let (spawn,) = match crate::points_generated::P2080.get() { Some(__l) => { let mut __a = (spawn,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (spawn,) };
         let suggestion = spawn.map(|v| v.floor() as i32);
         let mut finder = self.spawn_finder(suggestion);
         while let Some(candidate) = finder.next_candidate() {
@@ -355,7 +355,7 @@ impl Game<'_> {
     }
     /// PlayerSpawnFinder.noCollisionNoLiquid: a player's box standing at the
     /// block's bottom centre touches no block or liquid.
-    fn player_fits(&self, pos: [i32; 3]) -> bool {
+    fn player_fits(&self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P2079.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let feet = bottom_center(pos);
         let bounds = Aabb::new(
             Vec3::new(feet.x - 0.3, feet.y, feet.z - 0.3),
@@ -370,7 +370,7 @@ impl Game<'_> {
     }
     /// PlayerSpawnFinder.fixupSpawnHeight: up out of anything solid, then
     /// down onto the ground.
-    fn fixup_spawn_height(&self, pos: [i32; 3]) -> Vec3 {
+    fn fixup_spawn_height(&self, pos: [i32; 3]) -> Vec3 { let (pos,) = match crate::points_generated::P2078.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let [x, mut y, z] = pos;
         while !self.player_fits([x, y, z]) && y < self.world.top_y() - 1 {
             y += 1;

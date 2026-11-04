@@ -20,10 +20,10 @@ pub const HELP: &[&str] = &[
 
 impl Game<'_> {
     /// Parse `name[k=v,...]` into a registry state (defaults for missing properties).
-    fn parse_state(&self, text: &str) -> Result<BlockStateId> {
+    fn parse_state(&self, text: &str) -> Result<BlockStateId> { if let Some(__l) = crate::points_generated::P5039.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         parse_state(self.pack.assets.registry, text)
     }
-    pub(super) fn render_command(&mut self, words: &[&str]) -> Result<Option<Value>> {
+    pub(super) fn render_command(&mut self, words: &[&str]) -> Result<Option<Value>> { if let Some(__l) = crate::points_generated::P5038.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let int = |i: usize| -> Result<i32> {
             Ok(words
                 .get(i)

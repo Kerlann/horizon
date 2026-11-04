@@ -228,7 +228,7 @@ fn block_of(p: Vec3) -> [i32; 3] {
 impl Game<'_> {
     /// `Heightmap.Types.WORLD_SURFACE`: the first free block above the
     /// highest non-air one.
-    pub(super) fn surface_height(&self, x: i32, z: i32) -> i32 {
+    pub(super) fn surface_height(&self, x: i32, z: i32) -> i32 { let (x,z,) = match crate::points_generated::P4716.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,z,) };
         let top = if self.dim == Dim::Nether { 127 } else { 319 };
         (self.world.bottom_y()..=top)
             .rev()
@@ -236,7 +236,7 @@ impl Game<'_> {
             .map_or(self.world.bottom_y(), |y| y + 1)
     }
     /// Every claimed village point of interest (job sites, beds, bells).
-    fn village_pois(&self) -> Vec<[i32; 3]> {
+    fn village_pois(&self) -> Vec<[i32; 3]> { if let Some(__l) = crate::points_generated::P4715.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out: Vec<[i32; 3]> = Vec::new();
         for m in &self.mobs {
             if m.species() != Species::Villager || !m.alive() {
@@ -253,7 +253,7 @@ impl Game<'_> {
         }
         out
     }
-    pub(super) fn difficulty_id(&self) -> i32 {
+    pub(super) fn difficulty_id(&self) -> i32 { if let Some(__l) = crate::points_generated::P4714.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_world::food::Difficulty;
         match self.world.health_rules.difficulty {
             Difficulty::Peaceful => 0,
@@ -262,18 +262,18 @@ impl Game<'_> {
             Difficulty::Hard => 3,
         }
     }
-    fn player_block(&self) -> Option<[i32; 3]> {
+    fn player_block(&self) -> Option<[i32; 3]> { if let Some(__l) = crate::points_generated::P4713.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player.as_ref().map(|p| block_of(p.position))
     }
     /// `dimensions/<dimension>/data/minecraft/raids.dat`: each dimension
     /// keeps its own raids.
-    fn raids_path(&self, dim: Dim) -> std::path::PathBuf {
+    fn raids_path(&self, dim: Dim) -> std::path::PathBuf { if let Some(__l) = crate::points_generated::P4712.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         horizon_client::save::dimension_dir(&self.world_root, dim.id())
             .join("data/minecraft/raids.dat")
     }
     /// The raids of the player's dimension, seeded (the previous dimension's
     /// saved first).
-    fn load_raids(&mut self) {
+    fn load_raids(&mut self) { if let Some(__l) = crate::points_generated::P4711.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.read_raids();
         if let Some(order) = self.raiding.unseeded.take() {
             let seed = self.world.random.next_long();
@@ -284,7 +284,7 @@ impl Game<'_> {
     /// dimension's saved first), as a level opens (`ServerLevel`'s
     /// constructor). Their randoms are seeded by `load_raids` on the first
     /// raid tick, at the same point in the world random as before.
-    pub(super) fn read_raids(&mut self) {
+    pub(super) fn read_raids(&mut self) { if let Some(__l) = crate::points_generated::P4710.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.raiding.loaded == Some(self.dim) {
             return;
         }
@@ -304,7 +304,7 @@ impl Game<'_> {
         self.raiding.unseeded = Some(order);
     }
     /// `Raids` as its dimension's `raids.dat`, when it changed.
-    pub(super) fn save_raids(&mut self) {
+    pub(super) fn save_raids(&mut self) { if let Some(__l) = crate::points_generated::P4709.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(dim) = self.raiding.loaded else {
             return;
         };
@@ -324,7 +324,7 @@ impl Game<'_> {
         self.save_raid_omen_position();
     }
     /// `ServerPlayer.raidOmenPosition` from the player data.
-    fn load_raid_omen_position(&mut self) {
+    fn load_raid_omen_position(&mut self) { if let Some(__l) = crate::points_generated::P4708.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.raiding.omen_loaded {
             return;
         }
@@ -340,7 +340,7 @@ impl Game<'_> {
         };
     }
     /// Writes `raid_omen_position` into the player data being saved.
-    fn save_raid_omen_position(&mut self) {
+    fn save_raid_omen_position(&mut self) { if let Some(__l) = crate::points_generated::P4707.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.raiding.omen_loaded {
             return;
         }
@@ -362,7 +362,7 @@ impl Game<'_> {
             }
         }
     }
-    fn gameplay_attributes(&mut self) -> std::sync::Arc<GameplayAttributes> {
+    fn gameplay_attributes(&mut self) -> std::sync::Arc<GameplayAttributes> { if let Some(__l) = crate::points_generated::P4706.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.raiding.attributes.is_none() {
             self.raiding.attributes = Some(std::sync::Arc::new(GameplayAttributes::load(
                 &self.options.resources,
@@ -372,7 +372,7 @@ impl Game<'_> {
     }
     /// A boolean gameplay attribute at a position (dimension, biome, then
     /// the timelines at the overworld clock).
-    fn gameplay_attribute(&mut self, key: &str, at: [i32; 3]) -> bool {
+    fn gameplay_attribute(&mut self, key: &str, at: [i32; 3]) -> bool { let (at,) = match crate::points_generated::P4705.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let attributes = self.gameplay_attributes();
         let biome = self
             .world
@@ -392,7 +392,7 @@ impl Game<'_> {
     /// `BadOmenMobEffect` and `RaidOmenMobEffect.applyEffectTick` for the
     /// player's effect tick: Bad Omen inside a village becomes Raid Omen,
     /// whose last tick starts or extends a raid where it began.
-    pub(super) fn omen_tick(&mut self, e: &EffectInstance) -> OmenTick {
+    pub(super) fn omen_tick(&mut self, e: &EffectInstance) -> OmenTick { if let Some(__l) = crate::points_generated::P4704.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.spectator() || self.player.is_none() {
             return OmenTick::Continue;
         }
@@ -427,7 +427,7 @@ impl Game<'_> {
         }
     }
     /// The Raid Omen sound when the effect is first added.
-    pub(super) fn raid_omen_added(&mut self) {
+    pub(super) fn raid_omen_added(&mut self) { if let Some(__l) = crate::points_generated::P4703.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let eye = self.eye_position().unwrap_or_default();
         self.audio
             .play("minecraft:event.mob_effect.raid_omen", Some(eye), 1.0, 1.0);
@@ -435,7 +435,7 @@ impl Game<'_> {
     /// `Raids.createOrExtendRaid`: not for spectators, with the `raids` rule
     /// and where raids may start; the raid centres on the occupied village
     /// points of interest within 64 blocks.
-    fn create_or_extend_raid(&mut self, at: [i32; 3], amplifier: Option<i32>) -> Option<i32> {
+    fn create_or_extend_raid(&mut self, at: [i32; 3], amplifier: Option<i32>) -> Option<i32> { let (at,) = match crate::points_generated::P4702.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         if self.spectator()
             || !self.ui.rules.bool("raids")
             || !self.gameplay_attribute(horizon_client::patrol::CAN_START_RAID, at)
@@ -458,18 +458,18 @@ impl Game<'_> {
         Some(id)
     }
     /// The raids of the level in place, once they are read (`read_raids`).
-    pub(super) fn raids_in_place(&self) -> Option<&Raids> {
+    pub(super) fn raids_in_place(&self) -> Option<&Raids> { if let Some(__l) = crate::points_generated::P4701.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (self.raiding.loaded == Some(self.dim)).then_some(&self.raiding.raids)
     }
     /// `ServerLevel.getRaidAt`.
-    pub(super) fn raiding_nearby(&self, at: [i32; 3]) -> Option<i32> {
+    pub(super) fn raiding_nearby(&self, at: [i32; 3]) -> Option<i32> { let (at,) = match crate::points_generated::P4700.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,) };
         self.raiding.raids.nearby(at).map(|(id, _)| id)
     }
-    pub(super) fn raid_started(&self, id: i32) -> bool {
+    pub(super) fn raid_started(&self, id: i32) -> bool { let (id,) = match crate::points_generated::P4699.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.raiding.raids.get(id).is_some_and(|r| r.started)
     }
     /// `/raid start`: a raid in the local village at the given omen level.
-    pub(super) fn raid_command_create(&mut self, at: [i32; 3], omen_level: i32) -> bool {
+    pub(super) fn raid_command_create(&mut self, at: [i32; 3], omen_level: i32) -> bool { let (at,omen_level,) = match crate::points_generated::P4698.get() { Some(__l) => { let mut __a = (at,omen_level,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,omen_level,) };
         self.load_raids();
         let Some(id) = self.create_or_extend_raid(at, None) else {
             return false;
@@ -480,14 +480,14 @@ impl Game<'_> {
         self.raiding.raids.dirty = true;
         true
     }
-    pub(super) fn raid_command_stop(&mut self, id: i32) {
+    pub(super) fn raid_command_stop(&mut self, id: i32) { let (id,) = match crate::points_generated::P4697.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Some(r) = self.raiding.raids.get_mut(id) {
             r.stop();
             let center = r.center;
             self.native_raid_state_change(id, center, "stopped");
         }
     }
-    pub(super) fn raid_set_omen(&mut self, id: i32, level: i32) -> i32 {
+    pub(super) fn raid_set_omen(&mut self, id: i32, level: i32) -> i32 { let (id,level,) = match crate::points_generated::P4696.get() { Some(__l) => { let mut __a = (id,level,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,level,) };
         let Some(r) = self.raiding.raids.get_mut(id) else {
             return 0;
         };
@@ -495,7 +495,7 @@ impl Game<'_> {
         self.raiding.raids.dirty = true;
         before
     }
-    pub(super) fn raid_glow(&mut self, id: i32) {
+    pub(super) fn raid_glow(&mut self, id: i32) { let (id,) = match crate::points_generated::P4695.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         for m in &mut self.mobs {
             if raider::state(m).is_some_and(|s| s.raid_id == Some(id)) {
                 m.add_effect("glowing", 1000, 1);
@@ -503,7 +503,7 @@ impl Game<'_> {
         }
     }
     /// The `/raid check` summary line.
-    pub(super) fn raid_status_text(&self, id: i32) -> String {
+    pub(super) fn raid_status_text(&self, id: i32) -> String { let (id,) = match crate::points_generated::P4694.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let Some(r) = self.raiding.raids.get(id) else {
             return String::new();
         };
@@ -519,20 +519,20 @@ impl Game<'_> {
         )
     }
     /// A raid's members (`groupRaiderMap`): the living raiders it counts.
-    pub(super) fn raid_members(&self, id: i32) -> impl Iterator<Item = &Mob> {
+    pub(super) fn raid_members(&self, id: i32) -> impl Iterator<Item = &Mob> { let (id,) = match crate::points_generated::P4693.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.mobs.iter().filter(move |m| {
             m.alive() && !m.removed && raider::state(m).is_some_and(|s| s.raid_id == Some(id))
         })
     }
     /// `getHealthOfLivingRaiders`, leaving out one raider.
-    fn raid_living_health(&self, id: i32, except: Option<u32>) -> f32 {
+    fn raid_living_health(&self, id: i32, except: Option<u32>) -> f32 { let (id,) = match crate::points_generated::P4692.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         self.raid_members(id)
             .filter(|m| Some(m.id) != except)
             .fold(0.0, |a, m| a + m.health)
     }
     /// The bar update the last hurt raider of a raid asked for
     /// (`Raider.hurtServer` runs `updateBossbar` before the damage).
-    fn flush_raid_bar(&mut self, id: i32) {
+    fn flush_raid_bar(&mut self, id: i32) { let (id,) = match crate::points_generated::P4691.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let seen = self.raiding.bar_hurts.get(&id).copied().unwrap_or(0);
         let last = self
             .raid_members(id)
@@ -550,7 +550,7 @@ impl Game<'_> {
     }
 
     /// The members of every raid, for `Raids.tick`.
-    fn raider_infos(&self) -> HashMap<i32, Vec<RaiderInfo>> {
+    fn raider_infos(&self) -> HashMap<i32, Vec<RaiderInfo>> { if let Some(__l) = crate::points_generated::P4690.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out: HashMap<i32, Vec<RaiderInfo>> = HashMap::new();
         for m in &self.mobs {
             if !m.alive() || m.removed {
@@ -578,7 +578,7 @@ impl Game<'_> {
     /// Raiders loaded with a `RaidId` join their raid
     /// (`readAdditionalSaveData`: `addWaveMob` without counting health, and
     /// the wave's leader).
-    fn register_loaded_raiders(&mut self) {
+    fn register_loaded_raiders(&mut self) { if let Some(__l) = crate::points_generated::P4689.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pending: Vec<(u32, i32, i32, f32, bool)> = self
             .mobs
             .iter()
@@ -612,7 +612,7 @@ impl Game<'_> {
         }
     }
     /// `ServerLevel.tick` for the raids and their raiders.
-    pub(super) fn tick_raids(&mut self) {
+    pub(super) fn tick_raids(&mut self) { if let Some(__l) = crate::points_generated::P4688.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return;
         }
@@ -660,7 +660,7 @@ impl Game<'_> {
         let infos = self.raider_infos();
         self.sync_villager_raids(&infos);
     }
-    fn apply_raid_action(&mut self, id: i32, action: Action) {
+    fn apply_raid_action(&mut self, id: i32, action: Action) { let (id,) = match crate::points_generated::P4687.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         match action {
             Action::Spawn { pos, wave, spawns } => self.spawn_wave(id, pos, wave, &spawns),
             Action::Horn { pos, .. } => self.raid_horn(id, pos),
@@ -691,7 +691,7 @@ impl Game<'_> {
     }
     /// `Raid.playSound`: the horn, 13 blocks away from the player toward the
     /// wave, for players within 64 blocks or in the raid.
-    fn raid_horn(&mut self, id: i32, pos: [i32; 3]) {
+    fn raid_horn(&mut self, id: i32, pos: [i32; 3]) { let (id,pos,) = match crate::points_generated::P4686.get() { Some(__l) => { let mut __a = (id,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,pos,) };
         let Some(p) = self.level_players().first().map(|p| p.position) else {
             return;
         };
@@ -707,7 +707,7 @@ impl Game<'_> {
     }
     /// `Raid.spawnGroup`: a wave of raiders at `pos`, the leader wearing the
     /// banner, ravagers carrying their riders.
-    fn spawn_wave(&mut self, raid_id: i32, pos: [i32; 3], wave: i32, spawns: &[Spawn]) {
+    fn spawn_wave(&mut self, raid_id: i32, pos: [i32; 3], wave: i32, spawns: &[Spawn]) { let (raid_id,pos,wave,) = match crate::points_generated::P4685.get() { Some(__l) => { let mut __a = (raid_id,pos,wave,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (raid_id,pos,wave,) };
         let odds = self
             .raiding
             .raids
@@ -740,7 +740,7 @@ impl Game<'_> {
         wave: i32,
         leader: bool,
         odds: f32,
-    ) -> Option<u32> {
+    ) -> Option<u32> { let (pos,raid_id,wave,leader,odds,) = match crate::points_generated::P4684.get() { Some(__l) => { let mut __a = (pos,raid_id,wave,leader,odds,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,raid_id,wave,leader,odds,) };
         let at = [
             f64::from(pos[0]) + 0.5,
             f64::from(pos[1]) + 1.0,
@@ -768,7 +768,7 @@ impl Game<'_> {
         at: [f64; 3],
         leader: bool,
         reason: raider::Reason,
-    ) -> Option<u32> {
+    ) -> Option<u32> { let (at,leader,) = match crate::points_generated::P4683.get() { Some(__l) => { let mut __a = (at,leader,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,leader,) };
         let t = self.res.mob_types().get(kind).cloned()?;
         self.next_entity += 1;
         let mut mob = Mob::new(self.next_entity, t, Vec3::new(at[0], at[1], at[2]), 0.0);
@@ -799,7 +799,7 @@ impl Game<'_> {
     /// Per-tick raid bookkeeping of every raider (and the ravagers they
     /// ride): the raid's state for the goals, joining and recruiting,
     /// the banner of a fallen captain, idle time.
-    fn sync_raiders(&mut self, centers: &HashSet<(i32, i32, i32)>) {
+    fn sync_raiders(&mut self, centers: &HashSet<(i32, i32, i32)>) { if let Some(__l) = crate::points_generated::P4682.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let now = self.world.game_time;
         let golems: HashSet<u32> = self
             .mobs
@@ -997,7 +997,7 @@ impl Game<'_> {
     }
     /// `Raid.joinRaid` for a raider already in the world: it counts toward
     /// the bar and takes the raid's current wave.
-    fn join_raid(&mut self, mob: u32, id: i32, health: f32) {
+    fn join_raid(&mut self, mob: u32, id: i32, health: f32) { let (mob,id,health,) = match crate::points_generated::P4681.get() { Some(__l) => { let mut __a = (mob,id,health,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,id,health,) };
         let Some(wave) = self.raiding.raids.get(id).map(|r| r.groups_spawned) else {
             return;
         };
@@ -1021,7 +1021,7 @@ impl Game<'_> {
     }
     /// Beds within 64 blocks of each raid's centre (the `HOME` points of
     /// interest), rescanned every five seconds.
-    fn raid_homes(&mut self) -> HashMap<i32, std::sync::Arc<Vec<[i32; 3]>>> {
+    fn raid_homes(&mut self) -> HashMap<i32, std::sync::Arc<Vec<[i32; 3]>>> { if let Some(__l) = crate::points_generated::P4680.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let now = self.world.game_time;
         let ids: Vec<(i32, [i32; 3])> = self
             .raiding
@@ -1077,7 +1077,7 @@ impl Game<'_> {
     /// `Raider.die`: the wave loses its leader, the killing player becomes
     /// a hero of the village, and the raider leaves the raid (its health
     /// stays in the bar's total).
-    pub(super) fn raider_died(&mut self, m: &Mob, by_player: bool, killer: Option<u32>) {
+    pub(super) fn raider_died(&mut self, m: &Mob, by_player: bool, killer: Option<u32>) { let (by_player,) = match crate::points_generated::P4679.get() { Some(__l) => { let mut __a = (by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (by_player,) };
         let Some(s) = raider::state(m) else {
             return;
         };
@@ -1106,7 +1106,7 @@ impl Game<'_> {
     /// What `getRaidAt` tells each villager where it stands (its brain's
     /// `SetRaidStatus`, `ResetRaidStatus`, `ReactToBell` and raid packages
     /// read it).
-    fn sync_villager_raids(&mut self, infos: &HashMap<i32, Vec<RaiderInfo>>) {
+    fn sync_villager_raids(&mut self, infos: &HashMap<i32, Vec<RaiderInfo>>) { if let Some(__l) = crate::points_generated::P4678.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let raids = &self.raiding.raids;
         let mut ongoing = Vec::new();
         for m in &mut self.mobs {
@@ -1148,7 +1148,7 @@ impl Game<'_> {
     }
     /// Entity event 42 for villager `id`: the guests get the byte, and this
     /// game draws `AbstractVillager.addParticlesAroundSelf(SPLASH)` itself.
-    fn mob_raid_splash(&mut self, id: u32) {
+    fn mob_raid_splash(&mut self, id: u32) { let (id,) = match crate::points_generated::P4677.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
             return;
         };
@@ -1159,7 +1159,7 @@ impl Game<'_> {
 
     /// The raid bar a living player at `at` is in (`Raid.getPlayers`): red,
     /// notched in tens. The name is the translate component the client draws.
-    pub(super) fn raid_boss_at(&self, at: [f64; 3], alive: bool) -> Option<(i32, Tag, f32)> {
+    pub(super) fn raid_boss_at(&self, at: [f64; 3], alive: bool) -> Option<(i32, Tag, f32)> { let (at,alive,) = match crate::points_generated::P4676.get() { Some(__l) => { let mut __a = (at,alive,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,alive,) };
         if !alive || self.dim != Dim::Overworld {
             return None;
         }
@@ -1171,7 +1171,7 @@ impl Game<'_> {
         Some((id, raid_name_tag(raid.bar.name), raid.bar.progress))
     }
     /// A firework a villager launches to celebrate (`CelebrateVillagersSurvivedRaid`).
-    pub(super) fn villager_firework(&mut self, at: [f64; 3], color: usize, flight: u8) {
+    pub(super) fn villager_firework(&mut self, at: [f64; 3], color: usize, flight: u8) { let (at,color,flight,) = match crate::points_generated::P4675.get() { Some(__l) => { let mut __a = (at,color,flight,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,color,flight,) };
         let mut stack = horizon_client::items::ItemStack::new("minecraft:firework_rocket", 1);
         stack.data_mut().fireworks = Some((
             flight,
@@ -1187,7 +1187,7 @@ impl Game<'_> {
         self.rockets.push(rocket);
     }
     /// `BehaviorUtils.throwItem`: a hero's gift tossed toward the player.
-    pub(super) fn throw_gift(&mut self, table: &str, from: [f64; 3], to: [f64; 3]) {
+    pub(super) fn throw_gift(&mut self, table: &str, from: [f64; 3], to: [f64; 3]) { let (from,to,) = match crate::points_generated::P4674.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,to,) };
         let drops = self
             .res
             .items()
@@ -1202,7 +1202,7 @@ impl Game<'_> {
 impl Game<'_> {
     /// Sections holding a claimed village point of interest (a job site,
     /// bed or bell a villager has taken): `PoiManager.isVillageCenter`.
-    pub(super) fn village_centers(&self) -> HashSet<(i32, i32, i32)> {
+    pub(super) fn village_centers(&self) -> HashSet<(i32, i32, i32)> { if let Some(__l) = crate::points_generated::P4673.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out = HashSet::new();
         for m in &self.mobs {
             if m.species() != Species::Villager || !m.alive() {
@@ -1220,7 +1220,7 @@ impl Game<'_> {
     /// `PatrolSpawner.tick` (`horizon_client::patrol`) on the game level:
     /// the pillagers it accepts are created after the pass, finalized for a
     /// patrol.
-    pub(super) fn tick_patrol_spawner(&mut self) {
+    pub(super) fn tick_patrol_spawner(&mut self) { if let Some(__l) = crate::points_generated::P4672.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.dim != Dim::Overworld {
             return;
         }
@@ -1282,7 +1282,7 @@ impl Game<'_> {
     }
     /// `VillageSiege.tick`: at midnight one night in ten, 20 zombies spawn
     /// two ticks apart near a village 32 blocks from a player standing in it.
-    pub(super) fn tick_village_siege(&mut self) {
+    pub(super) fn tick_village_siege(&mut self) { if let Some(__l) = crate::points_generated::P4671.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.dim != Dim::Overworld {
             return;
         }
@@ -1324,7 +1324,7 @@ impl Game<'_> {
     /// `VillageSiege.tryToSetupSiege`: the first player standing in a village
     /// picks a spot 32 blocks away (ten tries); true when one stood in a
     /// village, even if no spot was found.
-    fn try_to_setup_siege(&mut self) -> bool {
+    fn try_to_setup_siege(&mut self) -> bool { if let Some(__l) = crate::points_generated::P4670.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let centers = self.village_centers();
         for player in self.level_players() {
             if player.spectator {
@@ -1370,7 +1370,7 @@ impl Game<'_> {
         false
     }
     /// `VillageSiege.trySpawn`: one zombie, in a random yaw.
-    fn try_spawn_siege_zombie(&mut self) {
+    fn try_spawn_siege_zombie(&mut self) { if let Some(__l) = crate::points_generated::P4669.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let centers = self.village_centers();
         let spot = self.raiding.siege.spot;
         let Some(at) = self.find_siege_spawn_pos(&centers, spot) else {
@@ -1393,7 +1393,7 @@ impl Game<'_> {
         &mut self,
         centers: &HashSet<(i32, i32, i32)>,
         spot: [i32; 3],
-    ) -> Option<[f64; 3]> {
+    ) -> Option<[f64; 3]> { let (spot,) = match crate::points_generated::P4668.get() { Some(__l) => { let mut __a = (spot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (spot,) };
         let mut random = std::mem::replace(
             &mut self.world.random,
             horizon_core::random::LegacyRandom::new(0),
@@ -1432,7 +1432,7 @@ impl Game<'_> {
         &mut self,
         slot: usize,
         stack: &horizon_client::items::ItemStack,
-    ) {
+    ) { let (slot,) = match crate::points_generated::P4667.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let amplifier = stack.data().and_then(|d| d.ominous_amplifier).unwrap_or(0);
         let mut effect =
             horizon_client::effects::EffectInstance::new("bad_omen", 120_000, i32::from(amplifier));

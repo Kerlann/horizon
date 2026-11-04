@@ -8,7 +8,7 @@ use horizon_client::{
 };
 
 impl Game<'_> {
-    pub(super) fn open_gamemode_switcher(&mut self) {
+    pub(super) fn open_gamemode_switcher(&mut self) { if let Some(__l) = crate::points_generated::P2018.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.gamemode_switcher = Some(GameModeSwitcher::new(self.mode, self.previous_mode));
         self.set_screen(Screen::GameModeSwitcher);
         self.keys.clear();
@@ -18,7 +18,7 @@ impl Game<'_> {
         self.capture(false);
     }
 
-    pub(super) fn close_gamemode_switcher(&mut self, apply: bool) {
+    pub(super) fn close_gamemode_switcher(&mut self, apply: bool) { let (apply,) = match crate::points_generated::P2017.get() { Some(__l) => { let mut __a = (apply,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (apply,) };
         let selected = self.gamemode_switcher.take().map(|s| s.selected);
         self.set_screen(Screen::Playing);
         self.capture(true);
@@ -32,7 +32,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn draw_gamemode_switcher(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_gamemode_switcher(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P2016.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (w, h) = (batch.width as i32, batch.height as i32);
         let Some(switcher) = &mut self.gamemode_switcher else {
             return;

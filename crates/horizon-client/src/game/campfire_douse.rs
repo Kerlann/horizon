@@ -8,7 +8,7 @@ use horizon_world::chunk::BlockState;
 impl Game<'_> {
     /// The lit campfire at `pos` that `held` puts out, when the item is in
     /// `#minecraft:douses_campfires` (`CampfireBlock.useItemOn`).
-    fn campfire_to_douse(&self, pos: [i32; 3], held: Option<&ItemStack>) -> Option<BlockState> {
+    fn campfire_to_douse(&self, pos: [i32; 3], held: Option<&ItemStack>) -> Option<BlockState> { let (pos,) = match crate::points_generated::P812.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         held.filter(|s| {
             self.res
                 .items()
@@ -35,7 +35,7 @@ impl Game<'_> {
         hit: &Hit,
         held: Option<&ItemStack>,
         seq: i32,
-    ) -> bool {
+    ) -> bool { let (seq,) = match crate::points_generated::P811.get() { Some(__l) => { let mut __a = (seq,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (seq,) };
         let pos = hit.pos;
         let (Some(held), Some(mut state)) = (held, self.campfire_to_douse(pos, held)) else {
             return false;
@@ -61,7 +61,7 @@ impl Game<'_> {
         hit: &Hit,
         stack: &ItemStack,
         unlit: horizon_world::registry::BlockStateId,
-    ) -> Option<horizon_world::registry::BlockStateId> {
+    ) -> Option<horizon_world::registry::BlockStateId> { if let Some(__l) = crate::points_generated::P810.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !mod_api::__private::listened(mod_api::HookId::BlockToolModification) {
             return Some(unlit);
         }
@@ -86,7 +86,7 @@ impl Game<'_> {
         &mut self,
         hit: &Hit,
         held: Option<&ItemStack>,
-    ) -> Result<bool> {
+    ) -> Result<bool> { if let Some(__l) = crate::points_generated::P809.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = hit.pos;
         let (Some(used), Some(mut state)) = (held.cloned(), self.campfire_to_douse(pos, held))
         else {

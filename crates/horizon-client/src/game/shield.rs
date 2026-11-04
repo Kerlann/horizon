@@ -16,14 +16,14 @@ pub(super) const OFFHAND_SLOT: usize = 40;
 
 impl Game<'_> {
     /// The stack in an inventory slot, the off hand at `OFFHAND_SLOT`.
-    pub(super) fn stack_in(&self, slot: usize) -> Option<&ItemStack> {
+    pub(super) fn stack_in(&self, slot: usize) -> Option<&ItemStack> { let (slot,) = match crate::points_generated::P5324.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         if slot == OFFHAND_SLOT {
             self.offhand.as_ref()
         } else {
             self.inventory.get(slot)?.as_ref()
         }
     }
-    pub(super) fn stack_in_mut(&mut self, slot: usize) -> &mut Option<ItemStack> {
+    pub(super) fn stack_in_mut(&mut self, slot: usize) -> &mut Option<ItemStack> { let (slot,) = match crate::points_generated::P5323.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         if slot == OFFHAND_SLOT {
             &mut self.offhand
         } else {
@@ -34,12 +34,12 @@ impl Game<'_> {
     pub(super) fn blocks_attacks(
         &self,
         stack: &ItemStack,
-    ) -> Option<std::borrow::Cow<'_, horizon_client::items::BlocksAttacks>> {
+    ) -> Option<std::borrow::Cow<'_, horizon_client::items::BlocksAttacks>> { if let Some(__l) = crate::points_generated::P5322.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         horizon_client::items::BlocksAttacks::of_stack(stack, self.items().get(&stack.item))
     }
     /// `ShieldItem.use` (ItemUtils.startUsingInstantly) for the hand at `slot`;
     /// false when that hand holds no blocking item or it is on cooldown.
-    pub(super) fn raise_shield(&mut self, slot: usize) -> bool {
+    pub(super) fn raise_shield(&mut self, slot: usize) -> bool { let (slot,) = match crate::points_generated::P5321.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let Some(stack) = self.stack_in(slot) else {
             return false;
         };
@@ -58,7 +58,7 @@ impl Game<'_> {
         from: Option<[f64; 3]>,
         damage_type: &str,
         pierce: bool,
-    ) -> Option<Blocking> {
+    ) -> Option<Blocking> { let (pierce,) = match crate::points_generated::P5320.get() { Some(__l) => { let mut __a = (pierce,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pierce,) };
         let (slot, ticks) = self.using?;
         let component = self.blocks_attacks(self.stack_in(slot)?)?;
         // BlocksAttacks.blockDelayTicks: Math.round(seconds * 20).
@@ -120,7 +120,7 @@ impl Game<'_> {
         outcome: BlockOutcome,
         (attacker, projectile): (Option<u32>, bool),
         source: HurtSource<'_>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P5319.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((slot, _)) = self.using else { return };
         let Some(stack) = self.stack_in(slot).cloned() else {
             return;
@@ -239,7 +239,7 @@ impl Game<'_> {
         fully: bool,
         at: Option<[f64; 3]>,
         source: HurtSource<'_>,
-    ) {
+    ) { let (fully,) = match crate::points_generated::P5318.get() { Some(__l) => { let mut __a = (fully,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (fully,) };
         // LivingEntity.blockedByItem: defender.knockback(0.5, defender - attacker,
         // source), which moves the defender along -(xd, zd).
         if !fully && let Some(p) = self.player.as_ref() {

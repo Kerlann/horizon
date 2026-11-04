@@ -272,7 +272,7 @@ impl Game<'_> {
         &mut self,
         p: &play::LevelChunkWithLight,
         decoded: Option<(&Arc<ChunkFormat>, Result<Chunk, String>)>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4988.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // ClientChunkCache.replaceWithPacketData: a column outside the
         // storage around the view centre is ignored.
         if !self.remote_chunk_in_range(p.x, p.z) {
@@ -338,7 +338,7 @@ impl Game<'_> {
     /// its new biomes (`ClientChunkCache.replaceBiomes`), then every section
     /// of it and of its neighbours is drawn again, as their colours blend
     /// across columns (`LevelExtractor.setSectionDirty`).
-    pub(super) fn remote_chunks_biomes(&mut self, p: &play::ChunksBiomes) {
+    pub(super) fn remote_chunks_biomes(&mut self, p: &play::ChunksBiomes) { if let Some(__l) = crate::points_generated::P4987.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(format) = self.remote.as_ref().map(|r| r.chunk_format.clone()) else {
             return;
         };
@@ -372,7 +372,7 @@ impl Game<'_> {
     }
 
     /// `handleLightUpdatePacket`: the sections it names take its light.
-    pub(super) fn remote_light_update(&mut self, p: &play::LightUpdate) {
+    pub(super) fn remote_light_update(&mut self, p: &play::LightUpdate) { if let Some(__l) = crate::points_generated::P4986.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(format) = self.remote.as_ref().map(|r| r.chunk_format.clone()) else {
             return;
         };

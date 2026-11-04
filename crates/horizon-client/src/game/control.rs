@@ -89,7 +89,7 @@ pub struct Flight {
 
 impl Game<'_> {
     /// Move the camera along the running flight; reply when it ends.
-    pub(super) fn advance_flight(&mut self) {
+    pub(super) fn advance_flight(&mut self) { if let Some(__l) = crate::points_generated::P1301.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let tick_ms = self
             .integrated
             .as_ref()
@@ -130,7 +130,7 @@ impl Game<'_> {
         }
     }
     /// The game's settings a render capture records beside the renderer's own state.
-    fn render_capture_settings(&self) -> horizon_client::gfx::capture::Settings {
+    fn render_capture_settings(&self) -> horizon_client::gfx::capture::Settings { if let Some(__l) = crate::points_generated::P1300.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let s = &self.settings;
         horizon_client::gfx::capture::Settings {
             graphics_api: format!("{:?}", s.horizon.api),
@@ -149,7 +149,7 @@ impl Game<'_> {
         }
     }
     /// The frame summary, with Horizon's own passes' median GPU times while they are timed.
-    fn summary_with_passes(&self) -> Value {
+    fn summary_with_passes(&self) -> Value { if let Some(__l) = crate::points_generated::P1299.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut summary = self.frame_stats.summary();
         let passes = self
             .renderer
@@ -166,7 +166,7 @@ impl Game<'_> {
         }
         summary
     }
-    pub(super) fn poll_control(&mut self, event_loop: &dyn EventLoopCtl) {
+    pub(super) fn poll_control(&mut self, event_loop: &dyn EventLoopCtl) { if let Some(__l) = crate::points_generated::P1298.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some((deadline, reply)) = self.pending_bench.take() {
             if Instant::now() >= deadline {
                 let _ = reply.send(self.summary_with_passes().to_string());
@@ -204,7 +204,7 @@ impl Game<'_> {
         }
     }
 
-    fn answer(&mut self, request: horizon_client::control::Request, event_loop: &dyn EventLoopCtl) {
+    fn answer(&mut self, request: horizon_client::control::Request, event_loop: &dyn EventLoopCtl) { if let Some(__l) = crate::points_generated::P1297.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let reply = match self.control_command(&request.line, &request.reply, event_loop) {
             Ok(Some(value)) => value,
             // Deferred: the command keeps its own reply channel.
@@ -218,7 +218,7 @@ impl Game<'_> {
     /// `type`: its `\b` is a backspace sentinel for the boxes that have always
     /// taken one, not the characters `\` and `b`. `Err` when no text box of
     /// the screen takes it.
-    pub(super) fn type_into_screen(&mut self, text: &str) -> Result<()> {
+    pub(super) fn type_into_screen(&mut self, text: &str) -> Result<()> { if let Some(__l) = crate::points_generated::P1296.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if text == "\\b" {
             match self.screen {
                 Screen::WorldOptions => {
@@ -243,7 +243,7 @@ impl Game<'_> {
     /// socket's `type` and a key press's surviving characters (`charTyped`).
     /// Nothing here is a key — the caller drops control characters. `Err` when
     /// no text box of the screen takes them.
-    pub(super) fn type_chars_into_screen(&mut self, text: &str) -> Result<()> {
+    pub(super) fn type_chars_into_screen(&mut self, text: &str) -> Result<()> { if let Some(__l) = crate::points_generated::P1295.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.book.is_some() {
             self.book_type(text);
             return Ok(());
@@ -295,7 +295,7 @@ impl Game<'_> {
         line: &str,
         reply: &Sender<String>,
         event_loop: &dyn EventLoopCtl,
-    ) -> Result<Option<Value>> {
+    ) -> Result<Option<Value>> { if let Some(__l) = crate::points_generated::P1294.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A tap's or an up's release must run even when a dialog, the sign
         // editor or a screen consumes the key, there is no world, or a
         // command handler returns an error: a lost release keeps Shift down.
@@ -310,7 +310,7 @@ impl Game<'_> {
 
     /// A recorded control line fed back by a replay: not new input, so the
     /// trace does not see it, and its reply has no one waiting.
-    pub(super) fn replay_line(&mut self, line: &str, event_loop: &dyn EventLoopCtl) {
+    pub(super) fn replay_line(&mut self, line: &str, event_loop: &dyn EventLoopCtl) { if let Some(__l) = crate::points_generated::P1293.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (reply, _) = std::sync::mpsc::channel();
         if let Err(e) = self.control_command(line, &reply, event_loop) {
             log::warn!("Horizon: replay: {line}: {e}");
@@ -322,7 +322,7 @@ impl Game<'_> {
         line: &str,
         reply: &Sender<String>,
         event_loop: &dyn EventLoopCtl,
-    ) -> Result<Option<Value>> {
+    ) -> Result<Option<Value>> { if let Some(__l) = crate::points_generated::P1292.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let words: Vec<&str> = line.split_whitespace().collect();
         if self.pending_save.is_some() && words.first() != Some(&"quit") {
             return Err("a world save is in progress".into());
@@ -1132,7 +1132,7 @@ impl Game<'_> {
     }
 
     /// `horizon-ctl save` and `save-all`.
-    fn control_save(&mut self, all: bool) -> Result<()> {
+    fn control_save(&mut self, all: bool) -> Result<()> { let (all,) = match crate::points_generated::P1291.get() { Some(__l) => { let mut __a = (all,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (all,) };
         if all {
             let keys: Vec<_> = self.world.chunks.keys().copied().collect();
             self.world.modified.extend(keys);
@@ -1140,14 +1140,14 @@ impl Game<'_> {
         self.save_game()
     }
 
-    fn require_world(&self) -> Result<()> {
+    fn require_world(&self) -> Result<()> { if let Some(__l) = crate::points_generated::P1290.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.title.is_some() {
             return Err("no world open; use: open WORLD [SEED] [creative]".into());
         }
         Ok(())
     }
 
-    fn control_key_down(&mut self, key: KeyCode, raw: KeyCode) -> Result<()> {
+    fn control_key_down(&mut self, key: KeyCode, raw: KeyCode) -> Result<()> { if let Some(__l) = crate::points_generated::P1289.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.physical_keys.insert(key);
         // The window's shortcuts come before any screen, here too.
         if self.screenshot_shortcut(key, false) {
@@ -1174,7 +1174,7 @@ impl Game<'_> {
         Ok(())
     }
 
-    fn screen_name(&self) -> &'static str {
+    fn screen_name(&self) -> &'static str { if let Some(__l) = crate::points_generated::P1288.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.screen == Screen::Win {
             return "win";
         }
@@ -1208,7 +1208,7 @@ impl Game<'_> {
 
     /// The hurts and melee attacks each player logged since the last call
     /// (`PlayerMotion::hurt_log`, `attack_log`), taken out.
-    fn control_hurt_log(&mut self) -> Value {
+    fn control_hurt_log(&mut self) -> Value { if let Some(__l) = crate::points_generated::P1287.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         fn drain(
             name: &str,
             hurt_log: &mut Vec<horizon_client::health::HurtRecord>,
@@ -1254,7 +1254,7 @@ impl Game<'_> {
         json!({ "ok": true, "players": players })
     }
 
-    pub(super) fn control_status(&self) -> Value {
+    pub(super) fn control_status(&self) -> Value { if let Some(__l) = crate::points_generated::P1286.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let player = self.player.as_ref().map(|p| {
             json!({
                 "position": [p.position.x, p.position.y, p.position.z],

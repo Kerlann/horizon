@@ -23,13 +23,13 @@ fn registry_index(id: &str, names: &[&str]) -> Option<u8> {
 impl Game<'_> {
     /// An item stack a trade can hold: a nonempty stack of an item the game
     /// has (a client would otherwise be sent air for it).
-    fn merchant_real(&self, stack: &horizon_client::items::ItemStack) -> bool {
+    fn merchant_real(&self, stack: &horizon_client::items::ItemStack) -> bool { if let Some(__l) = crate::points_generated::P3944.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         stack.count > 0
             && &*stack.item != "minecraft:air"
             && self.items().get(&stack.item).is_some()
     }
 
-    fn merchant_valid_offer(&self, offer: &MerchantOffer) -> bool {
+    fn merchant_valid_offer(&self, offer: &MerchantOffer) -> bool { if let Some(__l) = crate::points_generated::P3943.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.merchant_real(&offer.base_cost_a.stack)
             && offer
                 .cost_b
@@ -37,7 +37,7 @@ impl Game<'_> {
                 .is_none_or(|b| self.merchant_real(&b.stack))
             && self.merchant_real(&offer.result)
     }
-    fn native_merchant_index(&self, merchant: MerchantRef) -> Option<usize> {
+    fn native_merchant_index(&self, merchant: MerchantRef) -> Option<usize> { if let Some(__l) = crate::points_generated::P3942.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Target::Mob(id) = self.native_entity_target(merchant.entity())? else {
             return None;
         };
@@ -48,7 +48,7 @@ impl Game<'_> {
         })
     }
 
-    fn native_villager_index(&self, merchant: MerchantRef) -> Option<usize> {
+    fn native_villager_index(&self, merchant: MerchantRef) -> Option<usize> { if let Some(__l) = crate::points_generated::P3941.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let index = self.native_merchant_index(merchant)?;
         (self.mobs[index].species() == Species::Villager).then_some(index)
     }
@@ -113,7 +113,7 @@ impl Game<'_> {
 
     /// Narrows an entity to a villager or wandering trader, or None for
     /// another kind, a stale handle, or a client.
-    pub(super) fn native_merchant(&self, entity: EntityRef) -> Option<MerchantRef> {
+    pub(super) fn native_merchant(&self, entity: EntityRef) -> Option<MerchantRef> { if let Some(__l) = crate::points_generated::P3940.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let merchant = MerchantRef::new(entity);
         self.native_merchant_index(merchant).map(|_| merchant)
     }
@@ -124,7 +124,7 @@ impl Game<'_> {
     pub(super) fn native_merchant_offers(
         &self,
         merchant: MerchantRef,
-    ) -> Option<Vec<MerchantOffer>> {
+    ) -> Option<Vec<MerchantOffer>> { if let Some(__l) = crate::points_generated::P3939.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let index = self.native_merchant_index(merchant)?;
         Some(self.merchant_read(index, |offers, _, _| offers.to_vec()))
     }
@@ -137,7 +137,7 @@ impl Game<'_> {
         merchant: MerchantRef,
         index: u32,
         offer: MerchantOffer,
-    ) -> bool {
+    ) -> bool { let (index,) = match crate::points_generated::P3938.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let Some(mob) = self.native_merchant_index(merchant) else {
             return false;
         };
@@ -161,7 +161,7 @@ impl Game<'_> {
         &mut self,
         merchant: MerchantRef,
         offer: MerchantOffer,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3937.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mob) = self.native_merchant_index(merchant) else {
             return false;
         };
@@ -183,7 +183,7 @@ impl Game<'_> {
         &mut self,
         merchant: MerchantRef,
         index: u32,
-    ) -> bool {
+    ) -> bool { let (index,) = match crate::points_generated::P3936.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let Some(mob) = self.native_merchant_index(merchant) else {
             return false;
         };
@@ -201,7 +201,7 @@ impl Game<'_> {
     pub(super) fn native_merchant_trading_player(
         &self,
         merchant: MerchantRef,
-    ) -> Option<PlayerRef> {
+    ) -> Option<PlayerRef> { if let Some(__l) = crate::points_generated::P3935.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let index = self.native_merchant_index(merchant)?;
         let conn = self.lan_trade_conn(self.mobs[index].id)?;
         self.native_player_ref(self.lan_trade_player(conn)?)
@@ -209,7 +209,7 @@ impl Game<'_> {
 
     /// `VillagerData.profession`, a registry id (`minecraft:farmer`; none is
     /// `minecraft:none`). None for a wandering trader.
-    pub(super) fn native_villager_profession(&self, merchant: MerchantRef) -> Option<String> {
+    pub(super) fn native_villager_profession(&self, merchant: MerchantRef) -> Option<String> { if let Some(__l) = crate::points_generated::P3934.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mob = &self.mobs[self.native_villager_index(merchant)?];
         let name = PROFESSIONS[mob.extra.variant2 as usize % PROFESSIONS.len()];
         Some(format!("minecraft:{name}"))
@@ -223,7 +223,7 @@ impl Game<'_> {
         &mut self,
         merchant: MerchantRef,
         profession: &str,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3933.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(index) = self.native_villager_index(merchant) else {
             return false;
         };
@@ -239,7 +239,7 @@ impl Game<'_> {
     }
 
     /// `VillagerData.level`, 1 to 5.
-    pub(super) fn native_villager_level(&self, merchant: MerchantRef) -> Option<i32> {
+    pub(super) fn native_villager_level(&self, merchant: MerchantRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3932.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let index = self.native_villager_index(merchant)?;
         Some(self.merchant_read(index, |_, _, level| level.max(1)))
     }
@@ -249,7 +249,7 @@ impl Game<'_> {
     /// as 255. The offers stay as they are; the next level-up adds its trades
     /// (a level past 5 can't level up). A trading guest's session follows,
     /// and gets the sequences a level-up from the new level needs.
-    pub(super) fn native_villager_set_level(&mut self, merchant: MerchantRef, level: i32) -> bool {
+    pub(super) fn native_villager_set_level(&mut self, merchant: MerchantRef, level: i32) -> bool { let (level,) = match crate::points_generated::P3931.get() { Some(__l) => { let mut __a = (level,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (level,) };
         let Some(index) = self.native_villager_index(merchant) else {
             return false;
         };
@@ -261,7 +261,7 @@ impl Game<'_> {
     }
 
     /// `VillagerData.type`, a registry id (`minecraft:plains`).
-    pub(super) fn native_villager_type(&self, merchant: MerchantRef) -> Option<String> {
+    pub(super) fn native_villager_type(&self, merchant: MerchantRef) -> Option<String> { if let Some(__l) = crate::points_generated::P3930.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mob = &self.mobs[self.native_villager_index(merchant)?];
         let name = VILLAGER_TYPES[mob.extra.variant as usize % VILLAGER_TYPES.len()];
         Some(format!("minecraft:{name}"))
@@ -270,7 +270,7 @@ impl Game<'_> {
     /// `VillagerData.withType`: also the type a trading guest's session
     /// rolls its next level-up offers with. False for an unknown id, a
     /// wandering trader, or a trade open where this can't reach.
-    pub(super) fn native_villager_set_type(&mut self, merchant: MerchantRef, kind: &str) -> bool {
+    pub(super) fn native_villager_set_type(&mut self, merchant: MerchantRef, kind: &str) -> bool { if let Some(__l) = crate::points_generated::P3929.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(index) = self.native_villager_index(merchant) else {
             return false;
         };
@@ -291,13 +291,13 @@ impl Game<'_> {
     }
 
     /// `Villager.getVillagerXp`.
-    pub(super) fn native_villager_xp(&self, merchant: MerchantRef) -> Option<i32> {
+    pub(super) fn native_villager_xp(&self, merchant: MerchantRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3928.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let index = self.native_villager_index(merchant)?;
         Some(self.merchant_read(index, |_, xp, _| xp))
     }
 
     /// `Villager.setVillagerXp`: assigned as given, as vanilla does.
-    pub(super) fn native_villager_set_xp(&mut self, merchant: MerchantRef, xp: i32) -> bool {
+    pub(super) fn native_villager_set_xp(&mut self, merchant: MerchantRef, xp: i32) -> bool { let (xp,) = match crate::points_generated::P3927.get() { Some(__l) => { let mut __a = (xp,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (xp,) };
         let Some(index) = self.native_villager_index(merchant) else {
             return false;
         };

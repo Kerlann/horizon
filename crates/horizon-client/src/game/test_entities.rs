@@ -36,7 +36,7 @@ impl Game<'_> {
     /// `level.getEntitiesOfClass(Entity.class, bounds, mob -> !(mob instanceof
     /// Player)).forEach(Entity::discard)`: every entity but a player whose box
     /// meets `bounds` is removed without dying or dropping anything.
-    pub(super) fn discard_entities_in(&mut self, bounds: Aabb) {
+    pub(super) fn discard_entities_in(&mut self, bounds: Aabb) { if let Some(__l) = crate::points_generated::P5601.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = |v: horizon_core::geometry::Vec3| [v.x, v.y, v.z];
         for m in &mut self.mobs {
             if !m.removed
@@ -97,7 +97,7 @@ impl Game<'_> {
 
     /// `ServerLevel.setChunkForced(x, z, true)` for the chunks of `area`
     /// (`TestInstanceBlockEntity.forceLoadChunks`).
-    pub(super) fn force_load_test_chunks(&mut self, area: &BoundingBox) {
+    pub(super) fn force_load_test_chunks(&mut self, area: &BoundingBox) { if let Some(__l) = crate::points_generated::P5600.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (x0, x1) = (area.min[0] >> 4, area.max[0] >> 4);
         let (z0, z1) = (area.min[2] >> 4, area.max[2] >> 4);
         self.streaming
@@ -106,7 +106,7 @@ impl Game<'_> {
 
     /// `GameTestRunner`: every forced chunk of the level is released when a
     /// batch is done or a failure halts the run.
-    pub(super) fn release_forced_chunks(&mut self) {
+    pub(super) fn release_forced_chunks(&mut self) { if let Some(__l) = crate::points_generated::P5599.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.streaming.clear_forced();
         self.levels.release_parked_forced_chunks();
     }

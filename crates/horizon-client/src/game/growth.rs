@@ -10,7 +10,7 @@ use std::sync::Arc;
 impl Game<'_> {
     /// Load the configured/placed feature registry used by saplings, fungi
     /// and bone meal (once per process; shares the generator's bundle).
-    pub(super) fn install_live_features(&self) {
+    pub(super) fn install_live_features(&self) { if let Some(__l) = crate::points_generated::P2043.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         install_live_features(&self.res, &self.pack, &self.options);
     }
     /// `BonemealEvent` for the acting hand's bone meal `stack` on `pos`:
@@ -20,7 +20,7 @@ impl Game<'_> {
         &mut self,
         pos: BlockPos,
         stack: &ItemStack,
-    ) -> (Option<bool>, ItemStack) {
+    ) -> (Option<bool>, ItemStack) { if let Some(__l) = crate::points_generated::P2042.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut held = stack.clone();
         let crop = self.bonemeal(pos, true, &mut held);
         if held != *stack {
@@ -32,7 +32,7 @@ impl Game<'_> {
         (crop, held)
     }
     /// `BoneMealItem.useOn` for the targeted block.
-    pub(super) fn use_bone_meal(&mut self, stack: &ItemStack) -> Result<bool> {
+    pub(super) fn use_bone_meal(&mut self, stack: &ItemStack) -> Result<bool> { if let Some(__l) = crate::points_generated::P2041.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if &*stack.item != "minecraft:bone_meal" {
             return Ok(false);
         }
@@ -78,7 +78,7 @@ impl Game<'_> {
     /// `GrowingPlantHeadBlock.getMaxAgeState` (age 25) with
     /// `block.growing_plant.crop`, the level hears a `block_change`, and the
     /// shears wear by one. True when it cropped (SUCCESS).
-    pub(super) fn shears_crop(&mut self, pos: [i32; 3], stack: &ItemStack) -> Result<bool> {
+    pub(super) fn shears_crop(&mut self, pos: [i32; 3], stack: &ItemStack) -> Result<bool> { let (pos,) = match crate::points_generated::P2040.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if &*stack.item != "minecraft:shears" {
             return Ok(false);
         }

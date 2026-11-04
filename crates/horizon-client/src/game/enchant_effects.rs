@@ -34,7 +34,7 @@ fn block_break_speed_factor(value: Option<f64>) -> f32 {
 impl Game<'_> {
     /// `Player.getDestroySpeed` after the tool speed: mining efficiency, haste
     /// and mining fatigue.
-    pub(super) fn modify_destroy_speed(&self, mut speed: f32) -> f32 {
+    pub(super) fn modify_destroy_speed(&self, mut speed: f32) -> f32 { let (mut speed,) = match crate::points_generated::P1785.get() { Some(__l) => { let mut __a = (speed,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (speed,) };
         if speed > 1.0 {
             let held = self.inventory[self.selected].as_ref();
             speed += self
@@ -47,7 +47,7 @@ impl Game<'_> {
     }
     /// `Player.getDestroySpeed`'s final `Attributes.BLOCK_BREAK_SPEED` factor:
     /// 1.0 by default, so a missing player or attribute changes nothing.
-    pub(super) fn block_break_speed(&mut self) -> f32 {
+    pub(super) fn block_break_speed(&mut self) -> f32 { if let Some(__l) = crate::points_generated::P1784.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         block_break_speed_factor(
             self.player
                 .as_mut()
@@ -55,7 +55,7 @@ impl Game<'_> {
         )
     }
     /// `Attributes.SUBMERGED_MINING_SPEED` (0.2, raised by aqua affinity).
-    pub(super) fn submerged_mining_speed(&self) -> f32 {
+    pub(super) fn submerged_mining_speed(&self) -> f32 { if let Some(__l) = crate::points_generated::P1783.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut total = 0.0;
         for stack in self.armor.iter().flatten() {
             for (attr, _, amount, op) in self.stations().enchantments.attributes(stack) {
@@ -67,7 +67,7 @@ impl Game<'_> {
         (0.2 * (1.0 + total)) as f32
     }
     /// `EnchantmentHelper.processDurabilityChange` (unbreaking) for `amount` points.
-    pub(super) fn durability_loss(&mut self, stack: &ItemStack, amount: u32) -> u32 {
+    pub(super) fn durability_loss(&mut self, stack: &ItemStack, amount: u32) -> u32 { let (amount,) = match crate::points_generated::P1782.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let e = &world_stations!(self).enchantments;
         if !e.has_component(stack, "minecraft:item_damage") {
             return amount;
@@ -88,7 +88,7 @@ impl Game<'_> {
     }
     /// `ItemStack.hurtAndBreak` for the player's `stack`: the wear Unbreaking
     /// leaves, and `ItemDurabilityTrigger` when some is left (`applyDamage`).
-    pub(super) fn wear(&mut self, stack: &ItemStack, amount: u32) -> u32 {
+    pub(super) fn wear(&mut self, stack: &ItemStack, amount: u32) -> u32 { let (amount,) = match crate::points_generated::P1781.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let mut loss = self.durability_loss(stack, amount);
         // The mods hear a server player's wear once Unbreaking has had its say,
         // and may change it or stop it.
@@ -106,12 +106,12 @@ impl Game<'_> {
         loss
     }
     /// `getEnchantedDamage - base`: damage bonus of the held weapon against a mob type.
-    pub(super) fn enchant_damage_bonus(&mut self, target: &str) -> f32 {
+    pub(super) fn enchant_damage_bonus(&mut self, target: &str) -> f32 { if let Some(__l) = crate::points_generated::P1780.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.enchanted_damage(target, 0.0)
     }
     /// `Player.getEnchantedDamage`: `base` run through the held weapon's
     /// damage effects against a mob type.
-    pub(super) fn enchanted_damage(&mut self, target: &str, base: f32) -> f32 {
+    pub(super) fn enchanted_damage(&mut self, target: &str, base: f32) -> f32 { let (base,) = match crate::points_generated::P1779.get() { Some(__l) => { let mut __a = (base,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (base,) };
         let Some(held) = self.held().cloned() else {
             return base;
         };
@@ -135,7 +135,7 @@ impl Game<'_> {
     /// `Player.attack`'s extra knockback: `getKnockback` (the weapon's knockback
     /// enchantment, halved) plus 0.5 for a sprinting full-strength hit, and
     /// whether the hit is that knockback attack.
-    pub(super) fn extra_knockback(&mut self, target_kind: &str, scale: f32) -> (f32, bool) {
+    pub(super) fn extra_knockback(&mut self, target_kind: &str, scale: f32) -> (f32, bool) { let (scale,) = match crate::points_generated::P1778.get() { Some(__l) => { let mut __a = (scale,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (scale,) };
         let sprinting = self.player.as_ref().is_some_and(|p| p.sprinting);
         let enchanted = match self.held().cloned() {
             Some(held) => {
@@ -162,7 +162,7 @@ impl Game<'_> {
     /// `causeExtraKnockback`'s direction, `(sin yRot, -cos yRot)` from Mth's
     /// sine table: the target flies where the attacker looks, not away from
     /// it (straight along an axis when the attacker faces one).
-    pub(super) fn extra_knockback_direction(&self) -> (f64, f64) {
+    pub(super) fn extra_knockback_direction(&self) -> (f64, f64) { if let Some(__l) = crate::points_generated::P1777.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_core::geometry::trig;
         let yaw = f64::from(self.yaw * trig::DEG_TO_RAD);
         (f64::from(trig::sin(yaw)), -f64::from(trig::cos(yaw)))
@@ -173,13 +173,13 @@ impl Game<'_> {
     /// the client's own `Player.attack` simulates no hurt on a mob, so it
     /// skips the knockback. A hit on another player does simulate one:
     /// `remote_player_attack`.)
-    pub(super) fn stop_sprint_after_extra_knockback(&mut self) {
+    pub(super) fn stop_sprint_after_extra_knockback(&mut self) { if let Some(__l) = crate::points_generated::P1776.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(p) = self.player.as_mut() {
             let _ = p.set_sprinting(false);
         }
     }
     /// After a successful melee hit: fire aspect and wind burst.
-    pub(super) fn post_attack(&mut self, mob: usize) {
+    pub(super) fn post_attack(&mut self, mob: usize) { let (mob,) = match crate::points_generated::P1775.get() { Some(__l) => { let mut __a = (mob,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,) };
         let Some(held) = self.held().cloned() else {
             return;
         };
@@ -262,7 +262,7 @@ impl Game<'_> {
     /// `EnchantmentHelper.doPostPiercingAttackEffects`: the
     /// `minecraft:post_piercing_attack` effects of the weapon in hand after a
     /// jab (Lunge's dash).
-    pub(super) fn post_piercing_attack(&mut self) {
+    pub(super) fn post_piercing_attack(&mut self) { if let Some(__l) = crate::points_generated::P1774.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(held) = self.held().cloned() else {
             return;
         };
@@ -299,7 +299,7 @@ impl Game<'_> {
     /// One `post_piercing_attack` effect on the player: `AllOf`,
     /// `ChangeItemDamage`, `ApplyExhaustion`, `ApplyEntityImpulse` and
     /// `PlaySoundEffect`.
-    fn apply_piercing_effect(&mut self, effect: &serde_json::Value, level: u32) {
+    fn apply_piercing_effect(&mut self, effect: &serde_json::Value, level: u32) { let (level,) = match crate::points_generated::P1773.get() { Some(__l) => { let mut __a = (level,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (level,) };
         let amount = || level_value(&effect["amount"], level);
         match effect["type"].as_str() {
             Some("minecraft:all_of") => {
@@ -361,7 +361,7 @@ impl Game<'_> {
     }
     /// `ApplyMobEffect.apply`: one of `to_apply` (a single id or a list) for a
     /// random duration and amplifier between the level-based bounds.
-    fn apply_mob_effect(&mut self, mob: usize, effect: &serde_json::Value, level: u32) {
+    fn apply_mob_effect(&mut self, mob: usize, effect: &serde_json::Value, level: u32) { let (mob,level,) = match crate::points_generated::P1772.get() { Some(__l) => { let mut __a = (mob,level,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,level,) };
         use horizon_client::enchant::level_value;
         let Some(m) = self.mobs.get_mut(mob) else {
             return;
@@ -394,7 +394,7 @@ impl Game<'_> {
     /// `minecraft:post_attack` explode effects on the attacker (wind burst):
     /// a burst at the player's feet that only knocks back and triggers
     /// blocks (`ExplodeEffect` with `block_interaction: trigger`).
-    pub(super) fn post_attack_bursts(&mut self, held: &ItemStack, victim: &str) {
+    pub(super) fn post_attack_bursts(&mut self, held: &ItemStack, victim: &str) { if let Some(__l) = crate::points_generated::P1771.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -462,7 +462,7 @@ impl Game<'_> {
     /// Thorns on worn armor when the mob `attacker` hits the player: the
     /// `affected: attacker` effect of `Enchantment.doPostAttack` hurts the
     /// entity that caused the hit.
-    pub(super) fn thorns(&mut self, attacker: u32) {
+    pub(super) fn thorns(&mut self, attacker: u32) { let (attacker,) = match crate::points_generated::P1770.get() { Some(__l) => { let mut __a = (attacker,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (attacker,) };
         let Some(index) = self.mobs.iter().position(|m| m.id == attacker && m.alive()) else {
             return;
         };
@@ -487,7 +487,7 @@ impl Game<'_> {
     /// The victim's side of thorns: for each worn piece whose chance comes up,
     /// the damage to deal the attacker (`DamageEntity` min 1, max 5) and the
     /// piece's wear (`ChangeItemDamage` 2).
-    pub(super) fn thorns_damage(&mut self) -> Vec<f32> {
+    pub(super) fn thorns_damage(&mut self) -> Vec<f32> { if let Some(__l) = crate::points_generated::P1769.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut hits = Vec::new();
         for slot in 0..4 {
             let Some(stack) = self.armor[slot].clone() else {
@@ -536,7 +536,7 @@ impl Game<'_> {
         hits
     }
     /// `ExperienceOrb.repairPlayerItems`: returns the experience left over.
-    pub(super) fn mending(&mut self, amount: u32) -> u32 {
+    pub(super) fn mending(&mut self, amount: u32) -> u32 { let (amount,) = match crate::points_generated::P1768.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let mut amount = amount;
         loop {
             // EnchantmentHelper.getRandomItemWith(REPAIR_WITH_XP, damaged), in
@@ -621,14 +621,14 @@ impl Game<'_> {
             amount = remaining;
         }
     }
-    fn mend_slot(&self, slot: MendSlot) -> &Option<ItemStack> {
+    fn mend_slot(&self, slot: MendSlot) -> &Option<ItemStack> { if let Some(__l) = crate::points_generated::P1767.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match slot {
             MendSlot::Main => &self.inventory[self.selected],
             MendSlot::Off => &self.offhand,
             MendSlot::Armor(i) => &self.armor[i],
         }
     }
-    fn mend_slot_mut(&mut self, slot: MendSlot) -> &mut Option<ItemStack> {
+    fn mend_slot_mut(&mut self, slot: MendSlot) -> &mut Option<ItemStack> { if let Some(__l) = crate::points_generated::P1766.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match slot {
             MendSlot::Main => &mut self.inventory[self.selected],
             MendSlot::Off => &mut self.offhand,
@@ -638,7 +638,7 @@ impl Game<'_> {
     /// Bow enchantments at release: (extra base damage, infinity keeps the arrow).
     /// `ammo` is the item being fired: `Enchantment.itemContext` hands it to the
     /// `ammo_use` conditions as the tool, so Infinity only frees plain arrows.
-    pub(super) fn bow_enchantments(&mut self, ammo: &str) -> (f64, bool) {
+    pub(super) fn bow_enchantments(&mut self, ammo: &str) -> (f64, bool) { if let Some(__l) = crate::points_generated::P1765.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(bow) = self.held().cloned() else {
             return (0.0, false);
         };
@@ -673,7 +673,7 @@ impl Game<'_> {
     }
     /// `EnchantmentHelper.onProjectileSpawned` ignite effects of the held bow
     /// (flame): the seconds the new arrow burns for.
-    pub(super) fn bow_projectile_ignite(&mut self) -> Option<f32> {
+    pub(super) fn bow_projectile_ignite(&mut self) -> Option<f32> { if let Some(__l) = crate::points_generated::P1764.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let bow = self.held().cloned()?;
         let ctx = EffectContext {
             this: Some("minecraft:arrow"),
@@ -724,7 +724,7 @@ impl Game<'_> {
     /// to the players around) and sometimes a sound. Runs for the window's own
     /// player and for each guest on the server (`guest_server_tick`); a remote
     /// client leaves it to its server.
-    pub(super) fn tick_soul_speed(&mut self) -> Option<([f64; 3], [f64; 3])> {
+    pub(super) fn tick_soul_speed(&mut self) -> Option<([f64; 3], [f64; 3])> { if let Some(__l) = crate::points_generated::P1763.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         const ID: &str = "minecraft:soul_speed";
         let player = self.player.as_mut()?;
         if player.client_side {
@@ -808,7 +808,7 @@ impl Game<'_> {
     }
     /// `ItemStack.hurtAndBreak` on the worn boots (`change_item_damage`):
     /// Unbreaking applies, and they break when worn out.
-    fn wear_boots(&mut self, amount: u32) {
+    fn wear_boots(&mut self, amount: u32) { let (amount,) = match crate::points_generated::P1762.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let Some(stack) = self.armor[3].clone() else {
             return;
         };
@@ -839,7 +839,7 @@ impl Game<'_> {
     /// player, run on the server once the player has moved: `LivingEntity.baseTick`
     /// runs it when the block position changed, `checkFallDamage` when it lands.
     /// `from` and `was_on_ground` are where and how the tick began.
-    pub(super) fn location_changed_effects(&mut self, from: [f64; 3], was_on_ground: bool) {
+    pub(super) fn location_changed_effects(&mut self, from: [f64; 3], was_on_ground: bool) { let (from,was_on_ground,) = match crate::points_generated::P1761.get() { Some(__l) => { let mut __a = (from,was_on_ground,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,was_on_ground,) };
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -863,7 +863,7 @@ impl Game<'_> {
     /// `LivingEntity.onChangedBlock`, landing and `collectEquipmentChanges`
     /// for an armor stand: run location effects before travel (including a
     /// piston push), on landing, and for newly equipped items.
-    pub(super) fn armor_stand_location_effects(&mut self, index: usize, landed: bool) {
+    pub(super) fn armor_stand_location_effects(&mut self, index: usize, landed: bool) { let (index,landed,) = match crate::points_generated::P1760.get() { Some(__l) => { let mut __a = (index,landed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,landed,) };
         let stand = &mut self.armor_stands[index];
         let block = BlockPos::containing(stand.position);
         let moved = !landed && stand.enchantment_block.replace(block) != Some(block);
@@ -941,7 +941,7 @@ impl Game<'_> {
     }
     /// `ReplaceDisk.apply`: the blocks of the disk around `at` that pass the
     /// predicate become the effect's state, and each placement is a game event.
-    fn replace_disk(&mut self, effect: &Value, level: u32, at: [f64; 3], who: Who) {
+    fn replace_disk(&mut self, effect: &Value, level: u32, at: [f64; 3], who: Who) { let (level,at,) = match crate::points_generated::P1759.get() { Some(__l) => { let mut __a = (level,at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (level,at,) };
         let registry = self.pack.assets.registry;
         let spec = &effect["block_state"];
         let Some(default) = spec["id"].as_str().and_then(|n| registry.default_state(n)) else {
@@ -989,7 +989,7 @@ impl Game<'_> {
     }
     /// The `BlockPredicate` subset the disk effect uses, tested at `pos`; no
     /// predicate matches everything.
-    fn disk_predicate(&mut self, p: &Value, pos: [i32; 3], placed: BlockStateId) -> bool {
+    fn disk_predicate(&mut self, p: &Value, pos: [i32; 3], placed: BlockStateId) -> bool { let (pos,) = match crate::points_generated::P1758.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if p.is_null() {
             return true;
         }
@@ -1041,7 +1041,7 @@ impl Game<'_> {
     }
     /// Whether a worn enchantment gives immunity to `#burn_from_stepping`
     /// damage (frost walker's `minecraft:damage_immunity`).
-    pub(crate) fn wears_burn_from_stepping_immunity(&self) -> bool {
+    pub(crate) fn wears_burn_from_stepping_immunity(&self) -> bool { if let Some(__l) = crate::points_generated::P1757.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.armor
             .iter()
             .zip(["head", "chest", "legs", "feet"])
@@ -1063,7 +1063,7 @@ impl Game<'_> {
     /// Enchantment attribute modifiers of worn armor (respiration, depth strider...).
     /// Each piece's modifier id ends with its slot (`EnchantmentAttributeEffect.idForSlot`),
     /// so the same enchantment on two pieces stacks instead of replacing itself.
-    pub(super) fn apply_enchantment_attributes(&mut self) {
+    pub(super) fn apply_enchantment_attributes(&mut self) { if let Some(__l) = crate::points_generated::P1756.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut wanted: Vec<(String, String, f64, String)> = Vec::new();
         for (stack, slot) in self.armor.iter().zip(["head", "chest", "legs", "feet"]) {
             let Some(stack) = stack else { continue };

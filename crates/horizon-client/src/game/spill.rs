@@ -337,7 +337,7 @@ pub(super) fn put_saved_entity(
 
 impl GameLevel<'_> {
     /// `Block.popResource(level, pos, stack)` with the broken block's copied components.
-    fn pop_resource(&mut self, pos: [i32; 3], mut stack: ItemStack) {
+    fn pop_resource(&mut self, pos: [i32; 3], mut stack: ItemStack) { let (pos,) = match crate::points_generated::P5423.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.pending.attach(pos, &mut stack);
         let at = pop_position(&mut self.world.random, pos);
         self.spill.spawns.push(Spawn {
@@ -348,7 +348,7 @@ impl GameLevel<'_> {
         });
     }
     /// `Block.popResource(level, pos, new ItemStack(block))`.
-    pub(super) fn pop_block_item(&mut self, pos: BlockPos, state: BlockStateId) {
+    pub(super) fn pop_block_item(&mut self, pos: BlockPos, state: BlockStateId) { if let Some(__l) = crate::points_generated::P5422.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let item = self.facts.get(state).item.clone();
         if &*item != "minecraft:air" {
             self.pop_resource([pos.x, pos.y, pos.z], ItemStack::new(&item, 1));
@@ -356,7 +356,7 @@ impl GameLevel<'_> {
     }
     /// An item `atLowerCornerWithOffset(pos, 0.5, 1.01, 0.5).offsetRandomXZ(random,
     /// 0.7)` with the default pickup delay (`ComposterBlock.extractProduce`).
-    pub(super) fn pop_above(&mut self, pos: BlockPos, item: std::sync::Arc<str>) {
+    pub(super) fn pop_above(&mut self, pos: BlockPos, item: std::sync::Arc<str>) { if let Some(__l) = crate::points_generated::P5421.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = removal::jukebox_pop_position(&mut self.world.random, pos);
         self.spill.spawns.push(Spawn {
             stack: ItemStack::new(&item, 1),
@@ -372,7 +372,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         state: BlockStateId,
         table: &'static str,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P5420.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let drops = self.items.interact_loot(
             table,
             self.registry,
@@ -398,7 +398,7 @@ impl GameLevel<'_> {
     /// `Block.dropResources(state, level, pos, blockEntity)`: the block's loot
     /// (from its random sequence, else the level random), with what its block
     /// entity copies into it, popped at once.
-    pub(super) fn drop_resources_now(&mut self, pos: BlockPos, state: BlockStateId) {
+    pub(super) fn drop_resources_now(&mut self, pos: BlockPos, state: BlockStateId) { if let Some(__l) = crate::points_generated::P5419.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let key = (pos.x, pos.y, pos.z);
         let at = [pos.x, pos.y, pos.z];
         if let Some(entity) = self.world.block_entities.get(&key) {
@@ -449,7 +449,7 @@ impl GameLevel<'_> {
     }
     /// `ExperienceOrb.award`: orbs of the largest sizes, each drawing the id
     /// `tryMergeToExisting` compares from the level random.
-    pub(super) fn award_orbs(&mut self, at: [f64; 3], mut amount: u32) {
+    pub(super) fn award_orbs(&mut self, at: [f64; 3], mut amount: u32) { let (at,mut amount,) = match crate::points_generated::P5418.get() { Some(__l) => { let mut __a = (at,amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,amount,) };
         while amount > 0 {
             let value = removal::orb_value(amount);
             amount -= value;
@@ -465,7 +465,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         old: BlockStateId,
         side_effects: bool,
-    ) -> u8 {
+    ) -> u8 { let (side_effects,) = match crate::points_generated::P5417.get() { Some(__l) => { let mut __a = (side_effects,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (side_effects,) };
         let key = (pos.x, pos.y, pos.z);
         if self.remove_saved_entity(pos, old, side_effects) {
             return 0;
@@ -617,7 +617,7 @@ impl GameLevel<'_> {
         neighbour_updates
     }
     /// The jukebox's `JUKEBOX_STOP_PLAY` game event and level event 1011.
-    fn jukebox_stopped(&mut self, pos: BlockPos, state: BlockStateId) {
+    fn jukebox_stopped(&mut self, pos: BlockPos, state: BlockStateId) { if let Some(__l) = crate::points_generated::P5416.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.events.push(LevelEvent::GameEvent {
             pos,
             event: "minecraft:jukebox_stop_play",
@@ -637,7 +637,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         old: BlockStateId,
         side_effects: bool,
-    ) -> bool {
+    ) -> bool { let (side_effects,) = match crate::points_generated::P5415.get() { Some(__l) => { let mut __a = (side_effects,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (side_effects,) };
         use horizon_world::nbt::Tag;
         let chunk_key = (pos.x >> 4, pos.z >> 4);
         let at = |t: &Tag| {
@@ -696,13 +696,13 @@ impl GameLevel<'_> {
     /// `Containers.dropContents` for a mod block entity that left the world
     /// during its own tick (the block broke itself): what it held spills as
     /// vanilla's `preRemoveSideEffects` would, instead of vanishing with it.
-    pub(super) fn drop_lost_contents(&mut self, pos: BlockPos, items: Vec<Option<ItemStack>>) {
+    pub(super) fn drop_lost_contents(&mut self, pos: BlockPos, items: Vec<Option<ItemStack>>) { if let Some(__l) = crate::points_generated::P5414.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for stack in items {
             self.drop_item_stack(pos, stack);
         }
     }
     /// `Containers.dropItemStack` of one slot (an empty one still draws its spot).
-    fn drop_item_stack(&mut self, pos: BlockPos, stack: Option<ItemStack>) {
+    fn drop_item_stack(&mut self, pos: BlockPos, stack: Option<ItemStack>) { if let Some(__l) = crate::points_generated::P5413.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let count = stack.as_ref().map_or(0, |s| s.count);
         for piece in removal::drop_item_stack(&mut self.world.random, pos, count) {
             let Some(stack) = &stack else { break };
@@ -722,7 +722,7 @@ impl GameLevel<'_> {
 impl Game<'_> {
     /// Add the item entities the block behaviour spawned and follow up on the
     /// block entities it removed.
-    pub(super) fn flush_spill(&mut self) {
+    pub(super) fn flush_spill(&mut self) { if let Some(__l) = crate::points_generated::P5412.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.spill.is_empty() {
             return;
         }

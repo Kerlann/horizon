@@ -80,7 +80,7 @@ pub(super) fn position(p: &Pickup, partial: f64) -> [f64; 3] {
 
 impl Game<'_> {
     /// `ItemPickupParticle.updatePosition`: the collector's x and z, halfway up to its eyes.
-    fn collector_target(&self, collector: Collector) -> Option<[f64; 3]> {
+    fn collector_target(&self, collector: Collector) -> Option<[f64; 3]> { if let Some(__l) = crate::points_generated::P4559.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (p, eye) = match collector {
             Collector::Player => {
                 let p = self.player.as_ref()?;
@@ -95,7 +95,7 @@ impl Game<'_> {
     }
     /// `handleTakeItemEntity`: `particleEngine.add(new ItemPickupParticle(...))` when the
     /// collector is known; it joins the group at the end of the next particle tick.
-    pub(super) fn add_pickup(&mut self, taken: Taken, collector: Collector) {
+    pub(super) fn add_pickup(&mut self, taken: Taken, collector: Collector) { if let Some(__l) = crate::points_generated::P4558.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(target) = self.collector_target(collector) {
             self.add_pickup_toward(taken, collector, target);
         }
@@ -106,7 +106,7 @@ impl Game<'_> {
         taken: Taken,
         collector: Collector,
         target: [f64; 3],
-    ) {
+    ) { let (target,) = match crate::points_generated::P4557.get() { Some(__l) => { let mut __a = (target,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (target,) };
         let kind = match taken {
             Taken::Item(_) => "item",
             Taken::Orb(_) => "orb",
@@ -124,7 +124,7 @@ impl Game<'_> {
     }
     /// `ParticleEngine.tick` for the ITEM_PICKUP group: age (removed at
     /// `LIFE_TIME`), follow the collector, then let the new particles in.
-    pub(super) fn tick_pickups(&mut self) {
+    pub(super) fn tick_pickups(&mut self) { if let Some(__l) = crate::points_generated::P4556.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut live = std::mem::take(&mut self.pickups.live);
         live.retain_mut(|p| {
             p.life += 1;

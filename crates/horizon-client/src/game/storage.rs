@@ -22,7 +22,7 @@ impl Game<'_> {
     /// Only the block containers whose clicks the server takes back from a
     /// spectator (`handleContainerClick`) open here: storage, the furnaces,
     /// the brewing stand and the crafter.
-    pub(super) fn spectator_open_menu(&mut self, pos: [i32; 3]) {
+    pub(super) fn spectator_open_menu(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P5547.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let key = (pos[0], pos[1], pos[2]);
         let name = self
             .res
@@ -60,7 +60,7 @@ impl Game<'_> {
     }
     /// The custom name of the open container, or its default title
     /// (a double chest is named by whichever half has a name).
-    pub(super) fn container_title(&self, default: String) -> String {
+    pub(super) fn container_title(&self, default: String) -> String { if let Some(__l) = crate::points_generated::P5546.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.container_parts()
             .iter()
             .find_map(|(key, _)| self.world.block_names.get(key))
@@ -68,7 +68,7 @@ impl Game<'_> {
             .unwrap_or(default)
     }
     /// ShulkerBoxSlot.mayPlace: no shulker box inside a shulker box.
-    pub(super) fn refuses(&self, slot: usize, stack: &ItemStack) -> bool {
+    pub(super) fn refuses(&self, slot: usize, stack: &ItemStack) -> bool { let (slot,) = match crate::points_generated::P5545.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         (300..400).contains(&slot)
             && is_shulker_box(&stack.item)
             && self.container.is_some_and(|k| {
@@ -76,7 +76,7 @@ impl Game<'_> {
             })
     }
     /// Opening an ender chest shows the player's ender inventory in its place.
-    pub(super) fn open_ender_chest(&mut self, key: (i32, i32, i32)) {
+    pub(super) fn open_ender_chest(&mut self, key: (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P5544.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.world
             .block_entities
             .insert(key, BlockEntity::Chest(self.ender_items.clone()));
@@ -84,7 +84,7 @@ impl Game<'_> {
         self.ender_open = Some(key);
     }
     /// The block above `key` is a redstone conductor.
-    fn conductor_above(&self, key: (i32, i32, i32)) -> bool {
+    fn conductor_above(&self, key: (i32, i32, i32)) -> bool { if let Some(__l) = crate::points_generated::P5543.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let above = self.world.block(key.0, key.1 + 1, key.2);
         self.res.behaviours().facts(above).flags
             & horizon_world::level::data::state_flags::CONDUCTOR
@@ -92,7 +92,7 @@ impl Game<'_> {
     }
     /// `ChestBlock.isChestBlockedAt`: a redstone conductor above the chest or
     /// a cat sitting on it.
-    fn chest_blocked_at(&self, key: (i32, i32, i32)) -> bool {
+    fn chest_blocked_at(&self, key: (i32, i32, i32)) -> bool { if let Some(__l) = crate::points_generated::P5542.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.conductor_above(key) {
             return true;
         }
@@ -119,7 +119,7 @@ impl Game<'_> {
     /// `ChestBlock.getMenuProvider` (`combine(.., false)`) and
     /// `EnderChestBlock.useWithoutItem`: a blocked chest, or a double chest
     /// with either half blocked, opens no menu.
-    pub(super) fn chest_menu_blocked(&self, key: (i32, i32, i32), name: &str) -> bool {
+    pub(super) fn chest_menu_blocked(&self, key: (i32, i32, i32), name: &str) -> bool { if let Some(__l) = crate::points_generated::P5541.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match name {
             n if is_chest_block(n) => {
                 self.chest_blocked_at(key)
@@ -133,7 +133,7 @@ impl Game<'_> {
         }
     }
     /// Closing it copies the items back and leaves no block-entity contents.
-    pub(super) fn close_ender_chest(&mut self) {
+    pub(super) fn close_ender_chest(&mut self) { if let Some(__l) = crate::points_generated::P5540.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(key) = self.ender_open.take() else {
             return;
         };
@@ -165,7 +165,7 @@ fn facing_step(facing: &str) -> (i32, i32) {
 impl Game<'_> {
     /// The other half of the open double chest and whether the open one is
     /// the right half (`ChestBlock.getConnectedDirection`).
-    pub(super) fn chest_partner(&self, key: (i32, i32, i32)) -> Option<((i32, i32, i32), bool)> {
+    pub(super) fn chest_partner(&self, key: (i32, i32, i32)) -> Option<((i32, i32, i32), bool)> { if let Some(__l) = crate::points_generated::P5539.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let registry = self.pack.assets.registry;
         let state = registry.state(self.world.block(key.0, key.1, key.2))?;
         if !is_chest_block(&state.name) {
@@ -186,7 +186,7 @@ impl Game<'_> {
     /// `BarrelBlockEntity.playSound`, `ShulkerBoxBlockEntity.startOpen`): volume
     /// 0.5 and pitch 0.9 to 1.0. A double chest sounds once from the middle of
     /// both halves, a barrel from the face it opens on.
-    pub(super) fn container_sound(&mut self, sound: &str, key: (i32, i32, i32), name: &str) {
+    pub(super) fn container_sound(&mut self, sound: &str, key: (i32, i32, i32), name: &str) { if let Some(__l) = crate::points_generated::P5538.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut at = [
             f64::from(key.0) + 0.5,
             f64::from(key.1) + 0.5,
@@ -223,7 +223,7 @@ impl Game<'_> {
     /// The open or close sound of the container block at `key`, if it has one.
     /// Callers play it only when the opener count crosses zero
     /// (`ContainerOpenersCounter.onOpen` / `onClose`).
-    pub(super) fn container_edge_sound(&mut self, key: (i32, i32, i32), open: bool) {
+    pub(super) fn container_edge_sound(&mut self, key: (i32, i32, i32), open: bool) { let (open,) = match crate::points_generated::P5537.get() { Some(__l) => { let mut __a = (open,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (open,) };
         let name = self
             .res
             .facts()
@@ -260,12 +260,12 @@ impl Game<'_> {
         self.container_sound(sound, key, &name);
     }
     /// The other half of a double chest at `key`, for neighbour updates.
-    pub(super) fn chest_other_half(&self, key: (i32, i32, i32)) -> Option<(i32, i32, i32)> {
+    pub(super) fn chest_other_half(&self, key: (i32, i32, i32)) -> Option<(i32, i32, i32)> { if let Some(__l) = crate::points_generated::P5536.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.chest_partner(key).map(|p| p.0)
     }
     /// The block entities of the open container in menu order, with their
     /// sizes: a double chest is its right half then its left half.
-    pub(super) fn container_parts(&self) -> Vec<((i32, i32, i32), usize)> {
+    pub(super) fn container_parts(&self) -> Vec<((i32, i32, i32), usize)> { if let Some(__l) = crate::points_generated::P5535.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(key) = self.container else {
             return Vec::new();
         };
@@ -281,7 +281,7 @@ impl Game<'_> {
     }
     /// `Container.stillValidBlockEntity`: the open block container closes once
     /// the player's eyes are out of reach of any of its blocks (a 4-block buffer).
-    pub(super) fn tick_container_reach(&mut self) {
+    pub(super) fn tick_container_reach(&mut self) { if let Some(__l) = crate::points_generated::P5534.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A server's menu ends when the server closes it.
         if self.remote.is_some() {
             return;
@@ -308,7 +308,7 @@ impl Game<'_> {
     /// `CraftingMenu.stillValid`: the open crafting table closes once its
     /// block is no longer a crafting table or the player's eyes are out of
     /// reach (a 4-block buffer).
-    pub(super) fn tick_craft_table(&mut self) {
+    pub(super) fn tick_craft_table(&mut self) { if let Some(__l) = crate::points_generated::P5533.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A server's menu ends when the server closes it.
         if self.remote.is_some() || self.craft_size != 3 {
             return;
@@ -326,10 +326,10 @@ impl Game<'_> {
         }
     }
     /// The number of slots of the open container.
-    pub(super) fn container_size(&self) -> usize {
+    pub(super) fn container_size(&self) -> usize { if let Some(__l) = crate::points_generated::P5532.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.container_parts().iter().map(|p| p.1).sum()
     }
-    pub(super) fn container_slot(&self, mut n: usize) -> &Option<ItemStack> {
+    pub(super) fn container_slot(&self, mut n: usize) -> &Option<ItemStack> { let (mut n,) = match crate::points_generated::P5531.get() { Some(__l) => { let mut __a = (n,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (n,) };
         for (pos, size) in self.container_parts() {
             if n < size {
                 return self
@@ -344,7 +344,7 @@ impl Game<'_> {
         &self.scratch_slot
     }
     /// Container slot `n` (menu slot `300 + n`).
-    pub(super) fn container_slot_mut(&mut self, mut n: usize) -> &mut Option<ItemStack> {
+    pub(super) fn container_slot_mut(&mut self, mut n: usize) -> &mut Option<ItemStack> { let (mut n,) = match crate::points_generated::P5530.get() { Some(__l) => { let mut __a = (n,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (n,) };
         let mut target = None;
         for (pos, size) in self.container_parts() {
             if n < size {
@@ -363,12 +363,12 @@ impl Game<'_> {
             None => &mut self.scratch_slot,
         }
     }
-    pub(super) fn container_block_is_shulker(&self) -> bool {
+    pub(super) fn container_block_is_shulker(&self) -> bool { if let Some(__l) = crate::points_generated::P5529.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.container_block()
             .as_deref()
             .is_some_and(is_shulker_box)
     }
-    fn container_block(&self) -> Option<std::sync::Arc<str>> {
+    fn container_block(&self) -> Option<std::sync::Arc<str>> { if let Some(__l) = crate::points_generated::P5528.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let k = self.container?;
         Some(
             self.res
@@ -380,7 +380,7 @@ impl Game<'_> {
     }
     /// Rows of the open generic 9-wide container (`ChestMenu`), or None for
     /// the other menus (hoppers, dispensers, shulker boxes, furnaces...).
-    pub(super) fn chest_rows(&self) -> Option<usize> {
+    pub(super) fn chest_rows(&self) -> Option<usize> { if let Some(__l) = crate::points_generated::P5527.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some((rows, _)) = self.remote_chest_menu() {
             return Some(rows);
         }
@@ -395,7 +395,7 @@ impl Game<'_> {
         generic.then(|| self.container_size() / 9)
     }
     /// The title of the open chest-like menu.
-    fn chest_title(&self, rows: usize) -> Text {
+    fn chest_title(&self, rows: usize) -> Text { let (rows,) = match crate::points_generated::P5526.get() { Some(__l) => { let mut __a = (rows,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (rows,) };
         if let Some((_, title)) = self.remote_chest_menu() {
             return title;
         }
@@ -417,7 +417,7 @@ impl Game<'_> {
         batch: &mut horizon_client::hud::HudBatch,
         ox: f32,
         oy: f32,
-    ) {
+    ) { let (ox,oy,) = match crate::points_generated::P5525.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ox,oy,) };
         use horizon_client::hud::rgba;
         let atlas = &self.gui.atlas;
         let grey = rgba(64, 64, 64, 255);
@@ -483,7 +483,7 @@ impl Game<'_> {
     /// `quickMoveStack` of the open chest-like, hopper, dispenser or furnace
     /// menu for a shift-click on `slot`, run by the verified menu engine
     /// (`horizon_client::menu`); false when the menu has none.
-    pub(super) fn container_quick_move(&mut self, slot: usize) -> bool {
+    pub(super) fn container_quick_move(&mut self, slot: usize) -> bool { let (slot,) = match crate::points_generated::P5524.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         self.menu_click(Some(slot), 0, horizon_client::menu::Input::QuickMove)
     }
 }

@@ -17,7 +17,7 @@ use mod_api::{GlobalPos, Identifier, PlayerRef};
 impl Game<'_> {
     /// The dimension and block of the player's last death
     /// (`Player.getLastDeathLocation`).
-    pub(super) fn native_player_last_death_location(&self, player: PlayerRef) -> Option<GlobalPos> {
+    pub(super) fn native_player_last_death_location(&self, player: PlayerRef) -> Option<GlobalPos> { if let Some(__l) = crate::points_generated::P4052.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (dimension, [x, y, z]) = self.native_player_last_death_record(player)?;
         let dimension = Identifier::parse(&dimension).ok()?;
         Some(GlobalPos::new(dimension, BlockPos::new(x, y, z)))
@@ -30,7 +30,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         location: Option<GlobalPos>,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4051.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.native_player_ref(player.uuid()) != Some(player) {
             return false;
         }

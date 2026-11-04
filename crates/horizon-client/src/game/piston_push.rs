@@ -61,7 +61,7 @@ struct Body {
 impl Game<'_> {
     /// Push whatever this tick's moving pistons ran into, in the order the
     /// pistons ticked: vanilla pushes from each block entity's own tick.
-    pub(super) fn push_piston_entities(&mut self, pushes: Vec<Push>) {
+    pub(super) fn push_piston_entities(&mut self, pushes: Vec<Push>) { if let Some(__l) = crate::points_generated::P4595.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut accumulators = std::collections::HashMap::new();
         for push in pushes {
             self.push_for_piston(push, &mut accumulators);
@@ -72,7 +72,7 @@ impl Game<'_> {
     /// moves itself: every entity the sweeping lid box meets moves out along
     /// the box's facing by the box's own size plus 0.01
     /// (`Entity.move(MoverType.SHULKER_BOX, …)`).
-    pub(super) fn push_shulker_entities(&mut self, pushes: Vec<ShulkerPush>) {
+    pub(super) fn push_shulker_entities(&mut self, pushes: Vec<ShulkerPush>) { if let Some(__l) = crate::points_generated::P4594.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let steps = self.push_step_heights();
         for (pos, facing, lid) in pushes {
             self.push_for_shulker(pos, facing, lid, &steps);
@@ -83,7 +83,7 @@ impl Game<'_> {
     /// (`Entity.move` stops at the blocks and the world border), without a
     /// piston's per-tick travel limit or its noclip. The local player takes the
     /// client's own move instead (`shulker_push_player`).
-    fn push_for_shulker(&mut self, pos: [i32; 3], facing: u8, lid: [f64; 6], steps: &StepHeights) {
+    fn push_for_shulker(&mut self, pos: [i32; 3], facing: u8, lid: [f64; 6], steps: &StepHeights) { let (pos,facing,lid,) = match crate::points_generated::P4593.get() { Some(__l) => { let mut __a = (pos,facing,lid,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,facing,lid,) };
         let (movement, area) = shulker_lid(facing, lid);
         let at = BlockPos::new(pos[0], pos[1], pos[2]);
         self.push_targets().for_each(|target| {
@@ -123,7 +123,7 @@ impl Game<'_> {
     /// moves itself: the lid's pushes, applied to its own body. A client owns
     /// its player's position (the server thread's guest included), so the push
     /// is the client's own `Entity.move(MoverType.SHULKER_BOX, …)`.
-    pub(super) fn push_shulker_local(&mut self, pushes: Vec<ShulkerPush>) {
+    pub(super) fn push_shulker_local(&mut self, pushes: Vec<ShulkerPush>) { if let Some(__l) = crate::points_generated::P4592.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (_, facing, lid) in pushes {
             let (movement, area) = shulker_lid(facing, lid);
             let Some(player) = self.player.as_ref() else {
@@ -141,7 +141,7 @@ impl Game<'_> {
     /// ground state (`Entity.setOnGroundWithMovement`). A lid lifting the body
     /// off the ground leaves it airborne, and the next tick's gravity lands it
     /// on the lid instead of a stale ground flag holding it in place.
-    fn shulker_push_player(&mut self, movement: Vec3) {
+    fn shulker_push_player(&mut self, movement: Vec3) { if let Some(__l) = crate::points_generated::P4591.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let entities = self.player_entity_collisions();
         if let Some(player) = self.player.as_mut() {
             let _ = MotionWorld {
@@ -160,7 +160,7 @@ impl Game<'_> {
         &mut self,
         (pos, piston, new_progress): Push,
         accumulators: &mut std::collections::HashMap<Target, PistonMovement>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4590.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let delta_progress = f64::from(new_progress - piston.progress);
         if delta_progress <= 0.0 {
             return;
@@ -308,7 +308,7 @@ impl Game<'_> {
         &mut self,
         pos: BlockPos,
         old: horizon_world::registry::BlockStateId,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P4589.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let new = self.world.block(pos.x, pos.y, pos.z);
         if new == old {
             return;
@@ -351,7 +351,7 @@ impl Game<'_> {
 
     /// `Entity.getStepHeight` for each body, read once: the attribute lookup
     /// needs the mutable body, and the push only needs the number.
-    fn push_step_heights(&mut self) -> StepHeights {
+    fn push_step_heights(&mut self) -> StepHeights { if let Some(__l) = crate::points_generated::P4588.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let player = self
             .player
             .as_mut()
@@ -373,7 +373,7 @@ impl Game<'_> {
 
     /// The entities a moving block can run into: the window's player, the LAN
     /// guests in the level, then the mobs.
-    fn push_targets(&self) -> impl Iterator<Item = Target> + use<> {
+    fn push_targets(&self) -> impl Iterator<Item = Target> + use<> { if let Some(__l) = crate::points_generated::P4587.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let player = self.player.is_some().then_some(Target::Player);
         // Empty, and so unallocated, unless guests are here.
         let guests: Vec<Target> = self.lan.as_ref().map_or_else(Vec::new, |host| {
@@ -392,7 +392,7 @@ impl Game<'_> {
 
     /// What the push needs from one entity, or `None` when it is not pushed:
     /// removed, dead, a spectator, or an armor-stand marker.
-    fn push_body(&self, target: Target, pos: BlockPos, steps: &StepHeights) -> Option<Body> {
+    fn push_body(&self, target: Target, pos: BlockPos, steps: &StepHeights) -> Option<Body> { if let Some(__l) = crate::points_generated::P4586.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match target {
             Target::Player => {
                 let p = self.player.as_ref()?;
@@ -455,7 +455,7 @@ impl Game<'_> {
         movement: Vec3,
         piston_direction: Direction,
         accumulators: &mut std::collections::HashMap<Target, PistonMovement>,
-    ) {
+    ) { let (at,step_height,on_ground,) = match crate::points_generated::P4585.get() { Some(__l) => { let mut __a = (at,step_height,on_ground,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,step_height,on_ground,) };
         let Some(limited) = self.limit_piston(target, movement, accumulators) else {
             return;
         };
@@ -500,7 +500,7 @@ impl Game<'_> {
         target: Target,
         movement: Vec3,
         accumulators: &mut std::collections::HashMap<Target, PistonMovement>,
-    ) -> Option<Vec3> {
+    ) -> Option<Vec3> { if let Some(__l) = crate::points_generated::P4584.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let time = self.world.game_time;
         let limit = |state: &mut PistonMovement| state.limit(movement, || Ok::<i64, ()>(time)).ok();
         match target {
@@ -518,7 +518,7 @@ impl Game<'_> {
         }
     }
 
-    fn apply_push(&mut self, target: Target, movement: Vec3) {
+    fn apply_push(&mut self, target: Target, movement: Vec3) { if let Some(__l) = crate::points_generated::P4583.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match target {
             Target::Player => {
                 if let Some(p) = self.player.as_mut() {
@@ -546,7 +546,7 @@ impl Game<'_> {
     }
 
     /// `causeBounce`: a slime block sets the velocity along the movement axis.
-    fn bounce(&mut self, target: Target, movement: Direction) {
+    fn bounce(&mut self, target: Target, movement: Direction) { if let Some(__l) = crate::points_generated::P4582.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match target {
             Target::Player => {
                 if let Some(p) = self.player.as_mut() {

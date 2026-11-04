@@ -11,7 +11,7 @@ use mod_api::__private::game::*;
 use mod_api::{BossBarColor, BossBarOverlay, BossBarRef, PlayerRef};
 
 impl Game<'_> {
-    fn boss_bar_state(&self, bar: BossBarRef) -> Option<&BossBar> {
+    fn boss_bar_state(&self, bar: BossBarRef) -> Option<&BossBar> { if let Some(__l) = crate::points_generated::P2944.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.remote.is_some() || self.native_lifecycle.epoch() != Some(bar.fields().epoch) {
             return None;
         }
@@ -39,7 +39,7 @@ impl Game<'_> {
         true
     }
 
-    fn boss_bar_handle(&self, bar: &BossBar) -> Option<BossBarRef> {
+    fn boss_bar_handle(&self, bar: &BossBar) -> Option<BossBarRef> { if let Some(__l) = crate::points_generated::P2943.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(mod_api::__private::game::boss_bar_ref(
             self.native_lifecycle.epoch()?,
             bar.uuid,
@@ -50,13 +50,13 @@ impl Game<'_> {
     /// None. Saved bars are there from the world's start, as vanilla's
     /// `CustomBossEvents`. Boss bars of mobs and raids are not custom boss
     /// events.
-    pub(super) fn native_boss_bar(&self, id: &str) -> Option<BossBarRef> {
+    pub(super) fn native_boss_bar(&self, id: &str) -> Option<BossBarRef> { if let Some(__l) = crate::points_generated::P2942.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let id = Identifier::parse(id).ok()?;
         let id = format!("{}:{}", id.namespace(), id.path());
         self.boss_bar_handle(self.boss_bar_state_by_id(&id)?)
     }
 
-    fn boss_bar_state_by_id(&self, id: &str) -> Option<&BossBar> {
+    fn boss_bar_state_by_id(&self, id: &str) -> Option<&BossBar> { if let Some(__l) = crate::points_generated::P2941.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.remote.is_some() {
             return None;
         }
@@ -64,7 +64,7 @@ impl Game<'_> {
     }
 
     /// Every custom boss bar, in the order `/bossbar list` shows them.
-    pub(super) fn native_boss_bars(&self) -> Vec<BossBarRef> {
+    pub(super) fn native_boss_bars(&self) -> Vec<BossBarRef> { if let Some(__l) = crate::points_generated::P2940.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.remote.is_some() {
             return Vec::new();
         }
@@ -77,7 +77,7 @@ impl Game<'_> {
 
     /// `/bossbar add`: a new bar, visible, white, `progress`, at 0 of 100, with
     /// nobody added. None if the id is taken or invalid, or outside a server.
-    pub(super) fn native_create_boss_bar(&mut self, id: &str, name: Text) -> Option<BossBarRef> {
+    pub(super) fn native_create_boss_bar(&mut self, id: &str, name: Text) -> Option<BossBarRef> { if let Some(__l) = crate::points_generated::P2939.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let epoch = self.native_lifecycle.epoch()?;
         let id = Identifier::parse(id).ok()?;
         let id = format!("{}:{}", id.namespace(), id.path());
@@ -90,22 +90,22 @@ impl Game<'_> {
     }
 
     /// The bar's id (`CustomBossEvent.customId`), or None for a stale handle.
-    pub(super) fn native_boss_bar_id(&self, bar: BossBarRef) -> Option<String> {
+    pub(super) fn native_boss_bar_id(&self, bar: BossBarRef) -> Option<String> { if let Some(__l) = crate::points_generated::P2938.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.boss_bar_state(bar).map(|b| b.id.clone())
     }
 
     /// `BossEvent.getName`.
-    pub(super) fn native_boss_bar_name(&self, bar: BossBarRef) -> Option<Text> {
+    pub(super) fn native_boss_bar_name(&self, bar: BossBarRef) -> Option<Text> { if let Some(__l) = crate::points_generated::P2937.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.boss_bar_state(bar).map(|b| comp_text(&b.name))
     }
 
     /// `ServerBossEvent.setName`: viewers are sent the new name.
-    pub(super) fn native_boss_bar_set_name(&mut self, bar: BossBarRef, name: Text) -> bool {
+    pub(super) fn native_boss_bar_set_name(&mut self, bar: BossBarRef, name: Text) -> bool { if let Some(__l) = crate::points_generated::P2936.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.boss_bar_edit(bar, |b| b.name = name.component())
     }
 
     /// `BossEvent.getColor`.
-    pub(super) fn native_boss_bar_color(&self, bar: BossBarRef) -> Option<BossBarColor> {
+    pub(super) fn native_boss_bar_color(&self, bar: BossBarRef) -> Option<BossBarColor> { if let Some(__l) = crate::points_generated::P2935.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let b = self.boss_bar_state(bar)?;
         Some(BossBarColor::from_name(&b.color).unwrap_or(BossBarColor::White))
     }
@@ -115,12 +115,12 @@ impl Game<'_> {
         &mut self,
         bar: BossBarRef,
         color: BossBarColor,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2934.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.boss_bar_edit(bar, |b| b.color = color.name().to_owned())
     }
 
     /// `BossEvent.getOverlay`.
-    pub(super) fn native_boss_bar_overlay(&self, bar: BossBarRef) -> Option<BossBarOverlay> {
+    pub(super) fn native_boss_bar_overlay(&self, bar: BossBarRef) -> Option<BossBarOverlay> { if let Some(__l) = crate::points_generated::P2933.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let b = self.boss_bar_state(bar)?;
         Some(BossBarOverlay::from_name(&b.style).unwrap_or(BossBarOverlay::Progress))
     }
@@ -130,12 +130,12 @@ impl Game<'_> {
         &mut self,
         bar: BossBarRef,
         overlay: BossBarOverlay,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2932.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.boss_bar_edit(bar, |b| b.style = overlay.name().to_owned())
     }
 
     /// `BossEvent.shouldDarkenScreen`.
-    pub(super) fn native_boss_bar_darken_screen(&self, bar: BossBarRef) -> Option<bool> {
+    pub(super) fn native_boss_bar_darken_screen(&self, bar: BossBarRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P2931.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.boss_bar_state(bar).map(|b| b.darken)
     }
 
@@ -144,12 +144,12 @@ impl Game<'_> {
         &mut self,
         bar: BossBarRef,
         darken: bool,
-    ) -> bool {
+    ) -> bool { let (darken,) = match crate::points_generated::P2930.get() { Some(__l) => { let mut __a = (darken,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (darken,) };
         self.boss_bar_edit(bar, |b| b.darken = darken)
     }
 
     /// `BossEvent.shouldPlayBossMusic`.
-    pub(super) fn native_boss_bar_play_boss_music(&self, bar: BossBarRef) -> Option<bool> {
+    pub(super) fn native_boss_bar_play_boss_music(&self, bar: BossBarRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P2929.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.boss_bar_state(bar).map(|b| b.music)
     }
 
@@ -158,12 +158,12 @@ impl Game<'_> {
         &mut self,
         bar: BossBarRef,
         music: bool,
-    ) -> bool {
+    ) -> bool { let (music,) = match crate::points_generated::P2928.get() { Some(__l) => { let mut __a = (music,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (music,) };
         self.boss_bar_edit(bar, |b| b.music = music)
     }
 
     /// `BossEvent.shouldCreateWorldFog`.
-    pub(super) fn native_boss_bar_create_world_fog(&self, bar: BossBarRef) -> Option<bool> {
+    pub(super) fn native_boss_bar_create_world_fog(&self, bar: BossBarRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P2927.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.boss_bar_state(bar).map(|b| b.fog)
     }
 
@@ -172,18 +172,18 @@ impl Game<'_> {
         &mut self,
         bar: BossBarRef,
         fog: bool,
-    ) -> bool {
+    ) -> bool { let (fog,) = match crate::points_generated::P2926.get() { Some(__l) => { let mut __a = (fog,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (fog,) };
         self.boss_bar_edit(bar, |b| b.fog = fog)
     }
 
     /// `CustomBossEvent.value`.
-    pub(super) fn native_boss_bar_value(&self, bar: BossBarRef) -> Option<i32> {
+    pub(super) fn native_boss_bar_value(&self, bar: BossBarRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P2925.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.boss_bar_state(bar).map(|b| b.value)
     }
 
     /// `CustomBossEvent.setValue`: stored as given, as vanilla does; only the
     /// progress shown is kept between empty and full.
-    pub(super) fn native_boss_bar_set_value(&mut self, bar: BossBarRef, value: i32) -> bool {
+    pub(super) fn native_boss_bar_set_value(&mut self, bar: BossBarRef, value: i32) -> bool { let (value,) = match crate::points_generated::P2924.get() { Some(__l) => { let mut __a = (value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (value,) };
         let Some(id) = self.native_boss_bar_id(bar) else {
             return false;
         };
@@ -192,13 +192,13 @@ impl Game<'_> {
     }
 
     /// `CustomBossEvent.max`.
-    pub(super) fn native_boss_bar_max(&self, bar: BossBarRef) -> Option<i32> {
+    pub(super) fn native_boss_bar_max(&self, bar: BossBarRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P2923.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.boss_bar_state(bar).map(|b| b.max)
     }
 
     /// `CustomBossEvent.setMax`: stored as given, and the value is kept. Only
     /// `/bossbar set max` limits it to 1 or more.
-    pub(super) fn native_boss_bar_set_max(&mut self, bar: BossBarRef, max: i32) -> bool {
+    pub(super) fn native_boss_bar_set_max(&mut self, bar: BossBarRef, max: i32) -> bool { let (max,) = match crate::points_generated::P2922.get() { Some(__l) => { let mut __a = (max,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (max,) };
         let Some(id) = self.native_boss_bar_id(bar) else {
             return false;
         };
@@ -207,18 +207,18 @@ impl Game<'_> {
     }
 
     /// `ServerBossEvent.isVisible`.
-    pub(super) fn native_boss_bar_visible(&self, bar: BossBarRef) -> Option<bool> {
+    pub(super) fn native_boss_bar_visible(&self, bar: BossBarRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P2921.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.boss_bar_state(bar).map(|b| b.visible)
     }
 
     /// `ServerBossEvent.setVisible`: a hidden bar is taken off its players'
     /// screens and keeps them.
-    pub(super) fn native_boss_bar_set_visible(&mut self, bar: BossBarRef, visible: bool) -> bool {
+    pub(super) fn native_boss_bar_set_visible(&mut self, bar: BossBarRef, visible: bool) -> bool { let (visible,) = match crate::points_generated::P2920.get() { Some(__l) => { let mut __a = (visible,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (visible,) };
         self.boss_bar_edit(bar, |b| b.visible = visible)
     }
 
     /// `ServerBossEvent.getPlayers`: the bar's players who are online.
-    pub(super) fn native_boss_bar_players(&self, bar: BossBarRef) -> Option<Vec<PlayerRef>> {
+    pub(super) fn native_boss_bar_players(&self, bar: BossBarRef) -> Option<Vec<PlayerRef>> { if let Some(__l) = crate::points_generated::P2919.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let b = self.boss_bar_state(bar)?;
         Some(
             b.players
@@ -234,7 +234,7 @@ impl Game<'_> {
         &mut self,
         bar: BossBarRef,
         player: PlayerRef,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2918.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.native_player_ref(player.uuid()) != Some(player) {
             return false;
         }
@@ -252,7 +252,7 @@ impl Game<'_> {
         &mut self,
         bar: BossBarRef,
         player: PlayerRef,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P2917.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.native_player_ref(player.uuid()) != Some(player) {
             return false;
         }
@@ -262,7 +262,7 @@ impl Game<'_> {
 
     /// `/bossbar remove` (`CustomBossEvents.remove`): the bar's viewers lose it
     /// and its handle goes stale.
-    pub(super) fn native_boss_bar_remove(&mut self, bar: BossBarRef) -> bool {
+    pub(super) fn native_boss_bar_remove(&mut self, bar: BossBarRef) -> bool { if let Some(__l) = crate::points_generated::P2916.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(id) = self.native_boss_bar_id(bar) else {
             return false;
         };

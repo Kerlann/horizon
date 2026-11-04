@@ -253,7 +253,7 @@ impl Editor for JigsawEditor {
 
 impl Game<'_> {
     /// `LocalPlayer.openJigsawBlock`.
-    pub(super) fn open_jigsaw_block(&mut self, pos: Pos) {
+    pub(super) fn open_jigsaw_block(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P2163.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BlockEntity::JigsawBlock(b)) = self.world.block_entities.get(&pos) else {
             return;
         };

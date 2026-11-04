@@ -172,7 +172,7 @@ impl NativeConfigs {
 
 impl Game<'_> {
     /// Asks the mods for their configs and loads those of `kinds`.
-    fn native_configs_load(&mut self, kinds: &[NativeConfigKind], world: Option<&Path>) {
+    fn native_configs_load(&mut self, kinds: &[NativeConfigKind], world: Option<&Path>) { if let Some(__l) = crate::points_generated::P2969.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let config_dir = match Self::native_config_dir() {
             Ok(dir) => dir,
             Err(e) => {
@@ -193,7 +193,7 @@ impl Game<'_> {
 
     /// The window's `Client` and `Common` configs, once: on its first frame
     /// step, or before it starts a world's server thread if that comes first.
-    pub(super) fn native_configs_client_start(&mut self) {
+    pub(super) fn native_configs_client_start(&mut self) { if let Some(__l) = crate::points_generated::P2968.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.native_configs.started {
             use NativeConfigKind::{Client, Common};
             self.native_configs_load(&[Client, Common], None);
@@ -202,14 +202,14 @@ impl Game<'_> {
 
     /// The window's frame step: its configs load on the first, and changed
     /// files reload once a second.
-    pub(super) fn native_configs_tick_client(&mut self) {
+    pub(super) fn native_configs_tick_client(&mut self) { if let Some(__l) = crate::points_generated::P2967.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_configs_client_start();
         self.native_configs_poll();
     }
 
     /// A server about to open `world`: a dedicated server loads its
     /// `Common` configs too, a single player's server thread only `Server`.
-    pub(super) fn native_configs_server_start(&mut self, world: &Path, dedicated: bool) {
+    pub(super) fn native_configs_server_start(&mut self, world: &Path, dedicated: bool) { let (dedicated,) = match crate::points_generated::P2966.get() { Some(__l) => { let mut __a = (dedicated,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (dedicated,) };
         use NativeConfigKind::{Common, Server};
         let kinds: &[NativeConfigKind] = if dedicated && !self.native_configs.started {
             &[Common, Server]
@@ -220,14 +220,14 @@ impl Game<'_> {
     }
 
     /// The server stops: its `Server` configs unload.
-    pub(super) fn native_configs_server_stop(&mut self) {
+    pub(super) fn native_configs_server_stop(&mut self) { if let Some(__l) = crate::points_generated::P2965.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for file in self.native_configs.drop_server() {
             self.native_config_unloading(&file);
         }
     }
 
     /// Hands changed files over again, at most once a second.
-    pub(super) fn native_configs_poll(&mut self) {
+    pub(super) fn native_configs_poll(&mut self) { if let Some(__l) = crate::points_generated::P2964.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.native_configs.due(Instant::now()) {
             return;
         }

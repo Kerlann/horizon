@@ -90,7 +90,7 @@ fn pick_box(p: &Projectile) -> Aabb {
 impl Game<'_> {
     /// The redirectable projectile under the crosshair within the attack
     /// reach, and how far along the view it is.
-    pub(super) fn redirectable_hit(&self) -> Option<(usize, f64)> {
+    pub(super) fn redirectable_hit(&self) -> Option<(usize, f64)> { if let Some(__l) = crate::points_generated::P1575.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (eye, dir) = self.aim()?;
         let reach: f64 = self.entity_reach;
         self.creatures
@@ -107,7 +107,7 @@ impl Game<'_> {
     /// player its owner, its acceleration power back to 0.1
     /// (`onDeflection` by an attack), and the no-damage sound. True when a
     /// projectile was turned.
-    pub(super) fn attack_redirectable(&mut self) -> bool {
+    pub(super) fn attack_redirectable(&mut self) -> bool { if let Some(__l) = crate::points_generated::P1574.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((i, t)) = self.redirectable_hit() else {
             return false;
         };
@@ -137,7 +137,7 @@ impl Game<'_> {
     /// `ShulkerBullet.hurtServer` from a player's blow: the hurt sound, fifteen crit
     /// particles (`sendParticles`, spread 0.2) and `destroy`. The blow is
     /// `Player.attack` on a target that is not a mob: its sounds, then the swing.
-    pub(super) fn hit_shulker_bullet(&mut self, i: usize) {
+    pub(super) fn hit_shulker_bullet(&mut self, i: usize) { let (i,) = match crate::points_generated::P1573.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let (_, _, _, magic) = self.melee_damage("minecraft:shulker_bullet", false);
         let sweep = self.sweep_before_hit("minecraft:shulker_bullet", false);
         let p = self.creatures.projectiles.remove(i);
@@ -157,7 +157,7 @@ impl Game<'_> {
 
     /// `Player.canInteractWithEntity(box, 3.0)` as the server checks an
     /// attack packet: the projectile's box within the reach plus 3 of the eyes.
-    pub(super) fn within_interaction_range(&self, i: usize) -> bool {
+    pub(super) fn within_interaction_range(&self, i: usize) -> bool { let (i,) = match crate::points_generated::P1572.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         let (Some(eye), Some(p)) = (self.eye_position(), self.creatures.projectiles.get(i)) else {
             return false;
         };
@@ -177,7 +177,7 @@ impl Game<'_> {
 
     /// `Entity.getLookAngle` of a projectile's owner: the host, the guest who
     /// threw it, or a mob; none when the owner is not here.
-    pub(super) fn owner_look(&self, owner: Option<Who>, guest: Option<u32>) -> Option<Vec3> {
+    pub(super) fn owner_look(&self, owner: Option<Who>, guest: Option<u32>) -> Option<Vec3> { if let Some(__l) = crate::points_generated::P1571.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (pitch, yaw) = match (owner?, guest) {
             (Who::Player, Some(conn)) => {
                 let lan = self.lan.as_ref()?;
@@ -202,7 +202,7 @@ impl Game<'_> {
     /// ticks) the blow goes on as an ordinary attack, which a projectile does
     /// not take: `hurtOrSimulate` fails and `PLAYER_ATTACK_NODAMAGE` plays,
     /// the same sound. Either way the swing follows. True when it turned.
-    pub(super) fn deflect(&mut self, i: usize) -> bool {
+    pub(super) fn deflect(&mut self, i: usize) -> bool { let (i,) = match crate::points_generated::P1570.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         self.reset_attack_strength();
         let turned = self.turn_projectile(i);
         self.swing_arm();
@@ -217,7 +217,7 @@ impl Game<'_> {
 
     /// The deflection itself: the view as the new movement, the player as
     /// owner. False, and nothing changes, when the projectile refuses.
-    fn turn_projectile(&mut self, i: usize) -> bool {
+    fn turn_projectile(&mut self, i: usize) -> bool { let (i,) = match crate::points_generated::P1569.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let dir = view_vector(self.yaw, self.pitch);
         let (guest, owner_uuid) = (self.lan_acting, Some(self.acting_player_uuid()));
         let p = &mut self.creatures.projectiles[i];

@@ -39,7 +39,7 @@ impl ServerState {
 
 impl Game<'_> {
     /// Answers the requests waiting on the control endpoint.
-    pub(super) fn poll_server_control(&mut self, state: &mut ServerState) {
+    pub(super) fn poll_server_control(&mut self, state: &mut ServerState) { if let Some(__l) = crate::points_generated::P1568.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         while let Some(request) = self.control.as_ref().and_then(|c| c.try_recv()) {
             let reply = match request.line.trim().split_once(' ') {
                 _ if request.line.trim() == "server-status" => self.server_status(state),
@@ -76,7 +76,7 @@ impl Game<'_> {
         }
     }
 
-    fn server_status(&self, state: &ServerState) -> Value {
+    fn server_status(&self, state: &ServerState) -> Value { if let Some(__l) = crate::points_generated::P1567.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let millis = |nanos: u64| nanos as f64 / 1e6;
         let samples = self.clock.sorted_samples();
         // The percentiles `/tick query` prints (TickCommand.percentileToString).

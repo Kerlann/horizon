@@ -25,7 +25,7 @@ pub(super) const USE_ITEM_COMPLETE_EVENT: i8 = 9;
 impl Game<'_> {
     /// `ServerPlayer.completeUsingItem`: the player's own client is told
     /// first, and completes the use itself (eating the food there too).
-    pub(super) fn send_use_item_complete(&mut self) {
+    pub(super) fn send_use_item_complete(&mut self) { if let Some(__l) = crate::points_generated::P1285.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.lan_acting.is_some() {
             self.guest_entity_events.push(USE_ITEM_COMPLETE_EVENT);
         }
@@ -36,7 +36,7 @@ impl Game<'_> {
         consumable: &ItemConsumable,
         stack: &ItemStack,
         count: i32,
-    ) {
+    ) { let (count,) = match crate::points_generated::P1284.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         let Ok(()) = consumable.emit(&mut Emitter(self), (), stack.clone(), count);
     }
     /// `LivingEntity.completeUsingItem` for a consumable: `Consumable.onConsume`,
@@ -46,7 +46,7 @@ impl Game<'_> {
         info: &ItemInfo,
         consumable: &ItemConsumable,
         stack: &ItemStack,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P1283.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.emit_consume(consumable, stack, 16);
         // ServerPlayer: the used statistic and the consume_item trigger.
         self.award_stat("used", &stack.item, 1);
@@ -95,7 +95,7 @@ impl Game<'_> {
     }
     /// `ItemStack.applyAfterUseComponentSideEffects` uses the stack captured
     /// before the item handler, even when that handler changes the hand.
-    pub(super) fn apply_after_use_components(&mut self, stack: &ItemStack) {
+    pub(super) fn apply_after_use_components(&mut self, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P1282.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let remainder = self
             .items()
             .get(&stack.item)
@@ -103,7 +103,7 @@ impl Game<'_> {
         self.apply_use_remainder(remainder.as_deref(), stack.count);
         self.apply_use_cooldown(stack);
     }
-    fn apply_use_remainder(&mut self, remainder: Option<&str>, count_before: u32) {
+    fn apply_use_remainder(&mut self, remainder: Option<&str>, count_before: u32) { let (count_before,) = match crate::points_generated::P1281.get() { Some(__l) => { let mut __a = (count_before,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count_before,) };
         if self.creative || self.held().map_or(0, |stack| stack.count) >= count_before {
             return;
         }
@@ -116,13 +116,13 @@ impl Game<'_> {
             }
         }
     }
-    fn feet(&self) -> Option<[f64; 3]> {
+    fn feet(&self) -> Option<[f64; 3]> { if let Some(__l) = crate::points_generated::P1280.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player
             .as_ref()
             .map(|p| [p.position.x, p.position.y, p.position.z])
     }
     /// `TeleportRandomlyConsumeEffect.apply` for the local player.
-    pub(super) fn teleport_randomly(&mut self, teleport: &TeleportConsume) {
+    pub(super) fn teleport_randomly(&mut self, teleport: &TeleportConsume) { if let Some(__l) = crate::points_generated::P1279.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player.is_none() {
             return;
         }
@@ -131,7 +131,7 @@ impl Game<'_> {
     }
     /// `LivingEntity.randomTeleport(x, y, z, true, avoid)`: down to the first
     /// block entities can teleport onto, inside the border, in a loaded chunk.
-    fn random_teleport(&mut self, target: Vec3, avoid: &str) -> bool {
+    fn random_teleport(&mut self, target: Vec3, avoid: &str) -> bool { if let Some(__l) = crate::points_generated::P1278.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let [min_x, min_z, max_x, max_z] = self.border.bounds();
         // WorldBorder.clampVec3ToBound (Mth.clamp, 1.0E-5F inside the far edge).
         let clamp = |v: f64, low: f64, high: f64| if v < low { low } else { v.min(high) };
@@ -159,7 +159,7 @@ impl Game<'_> {
         at: Vec3,
         ground: horizon_world::registry::BlockStateId,
         avoid: &str,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P1277.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.state_in_tag(avoid, ground) {
             return false;
         }
@@ -201,7 +201,7 @@ impl Game<'_> {
         self.portal_particles();
         true
     }
-    fn state_in_tag(&self, tag: &str, state: horizon_world::registry::BlockStateId) -> bool {
+    fn state_in_tag(&self, tag: &str, state: horizon_world::registry::BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P1276.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let name = &self.res.facts().get(state).name;
         self.res
             .items()
@@ -212,7 +212,7 @@ impl Game<'_> {
     /// `LivingEntity.handleEntityEvent(46)`: 128 portal particles from the old
     /// to the new position, from the client player's random (the particle
     /// engine's here).
-    fn portal_particles(&mut self) {
+    fn portal_particles(&mut self) { if let Some(__l) = crate::points_generated::P1275.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(p) = self.player.as_ref() else {
             return;
         };
@@ -233,7 +233,7 @@ impl Game<'_> {
         }
     }
     /// `LivingEntity.stopRiding`.
-    pub(super) fn stop_riding(&mut self) {
+    pub(super) fn stop_riding(&mut self) { if let Some(__l) = crate::points_generated::P1274.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(id) = self.riding else {
             return;
         };

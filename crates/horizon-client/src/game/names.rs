@@ -17,7 +17,7 @@ pub(super) const NAME_TAG_UNIT: f32 = 0.025;
 
 impl Game<'_> {
     /// A named name tag names the mob under the crosshair.
-    pub(super) fn name_mob(&mut self, index: usize) -> bool {
+    pub(super) fn name_mob(&mut self, index: usize) -> bool { let (index,) = match crate::points_generated::P2860.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let Some(name) = self
             .held()
             .filter(|h| &*h.item == "minecraft:name_tag")
@@ -45,7 +45,7 @@ impl Game<'_> {
     }
     /// `Entity.belowNameDisplay`: the score holder's score in the objective
     /// shown below names, then a space and the objective's name.
-    fn below_name_text(&self, holder: &str) -> Option<Text> {
+    fn below_name_text(&self, holder: &str) -> Option<Text> { if let Some(__l) = crate::points_generated::P2859.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let board = &self.score.board;
         let objective = board.display_objective(sb::SLOT_BELOW_NAME)?;
         let score = board.score(holder, &objective.name)?;
@@ -62,7 +62,7 @@ impl Game<'_> {
         Some(t)
     }
     /// The other players' models and names: the players a server sends.
-    fn other_players(&self) -> Vec<(&Mob, String)> {
+    fn other_players(&self) -> Vec<(&Mob, String)> { if let Some(__l) = crate::points_generated::P2858.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut out = Vec::new();
         for (id, name) in self.remote_player_names() {
             if let Some(m) = self.mobs.iter().find(|m| m.id == id) {
@@ -74,7 +74,7 @@ impl Game<'_> {
     /// Horizon's own name tag extra (`ownNameTag`): the player's own model and
     /// name, while that model shows in third person. Vanilla never names the
     /// camera entity (`LivingEntityRenderer.shouldShowName`).
-    fn own_name_tag(&self) -> Option<(&Mob, String)> {
+    fn own_name_tag(&self) -> Option<(&Mob, String)> { if let Some(__l) = crate::points_generated::P2857.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.settings.extras.own_name_tag
             || self.camera_type.first_person()
             || self.sleeping.is_some()
@@ -88,21 +88,21 @@ impl Game<'_> {
     }
     /// The local player's profile name as others see it: the session's on a
     /// server (single player's server thread included), else the local player's.
-    pub(super) fn own_profile_name(&self) -> String {
+    pub(super) fn own_profile_name(&self) -> String { if let Some(__l) = crate::points_generated::P2856.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.remote.as_ref() {
             Some(r) if !r.profile_name.is_empty() => r.profile_name.clone(),
             _ => self.acting_player_name().to_owned(),
         }
     }
     /// The names the name tags show this frame (the control socket's status).
-    pub(super) fn shown_name_tags(&self, camera: glam::DVec3) -> Vec<String> {
+    pub(super) fn shown_name_tags(&self, camera: glam::DVec3) -> Vec<String> { if let Some(__l) = crate::points_generated::P2855.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.name_tags(camera, 1.0)
             .into_iter()
             .filter_map(|t| t.lines.last().map(|(t, _)| t.plain()))
             .collect()
     }
     /// Each name tag this frame.
-    fn name_tags(&self, camera: glam::DVec3, alpha: f64) -> Vec<NameTag> {
+    fn name_tags(&self, camera: glam::DVec3, alpha: f64) -> Vec<NameTag> { let (alpha,) = match crate::points_generated::P2854.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,) };
         let hooks = !mod_api::mods().is_empty();
         let target = self.mob_hit().map(|(i, _)| self.mobs[i].id);
         let viewer = self.player_team();
@@ -434,7 +434,7 @@ impl Game<'_> {
         alpha: f64,
         out: &mut Vec<Vertex>,
         see_through: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P2853.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (alpha,) };
         // The text alpha that goes with getBackgroundOpacity(0.25):
         // max((0.25 + 0.75) / 2, 0.5), as ARGB.color (the floor of 255 times it).
         const FADED: u32 = 0x7F;
@@ -504,7 +504,7 @@ impl Game<'_> {
         light: u32,
         unit: f32,
         out: &mut Vec<Vertex>,
-    ) -> Vec<horizon_client::font::Patch> {
+    ) -> Vec<horizon_client::font::Patch> { let (text_alpha,background,text_layer,light,unit,) = match crate::points_generated::P2852.get() { Some(__l) => { let mut __a = (text_alpha,background,text_layer,light,unit,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (text_alpha,background,text_layer,light,unit,) };
         self.styled_name_tag_quads(
             o, lines, text_alpha, background, text_layer, light, unit, out, None,
         )
@@ -524,7 +524,7 @@ impl Game<'_> {
         unit: f32,
         out: &mut Vec<Vertex>,
         style: Option<TagStyle>,
-    ) -> Vec<horizon_client::font::Patch> {
+    ) -> Vec<horizon_client::font::Patch> { let (text_alpha,background,text_layer,light,unit,) = match crate::points_generated::P2851.get() { Some(__l) => { let mut __a = (text_alpha,background,text_layer,light,unit,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (text_alpha,background,text_layer,light,unit,) };
         // Options.getBackgroundOpacity(0.25) black, as ARGB.color.
         const BACKGROUND: u32 = 0x3F00_0000;
         // The camera's facing (Camera.rotation()), turned round in third-person

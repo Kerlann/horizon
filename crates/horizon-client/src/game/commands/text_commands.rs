@@ -59,7 +59,7 @@ fn compile_selector(source: &str, reg: &horizon_client::command::Registries) -> 
 impl Game<'_> {
     /// ComponentArgument with selectors resolved for the source
     /// (ComponentUtils.updateForEntity: names joined by ", ").
-    pub(in crate::game) fn component_arg(&mut self, ctx: &Context, name: &str) -> R<Text> {
+    pub(in crate::game) fn component_arg(&mut self, ctx: &Context, name: &str) -> R<Text> { if let Some(__l) = crate::points_generated::P1243.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Arg::Str(json)) = ctx.get(name) else {
             return Ok(Text::empty());
         };
@@ -139,7 +139,7 @@ impl Game<'_> {
     fn resolve_score_component(
         &mut self,
         o: &serde_json::Map<String, serde_json::Value>,
-    ) -> R<Text> {
+    ) -> R<Text> { if let Some(__l) = crate::points_generated::P1242.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let score = o.get("score");
         let field = |k: &str| score.and_then(|s| s.get(k)).and_then(|v| v.as_str());
         let (name, objective) = (
@@ -183,7 +183,7 @@ impl Game<'_> {
         Ok(format.format(score.value))
     }
     /// The text of an `nbt` component.
-    fn resolve_nbt_component(&mut self, o: &serde_json::Map<String, serde_json::Value>) -> Text {
+    fn resolve_nbt_component(&mut self, o: &serde_json::Map<String, serde_json::Value>) -> Text { if let Some(__l) = crate::points_generated::P1241.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_world::nbt::Tag;
         let path = o.get("nbt").and_then(|v| v.as_str()).unwrap_or("");
         let mut sources: Vec<Tag> = Vec::new();
@@ -246,14 +246,14 @@ impl Game<'_> {
         out
     }
     /// The players the command reaches: the window's own and the LAN guests.
-    fn player_targets(&mut self, ctx: &Context) -> R<Vec<Target>> {
+    fn player_targets(&mut self, ctx: &Context) -> R<Vec<Target>> { if let Some(__l) = crate::points_generated::P1240.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = self.entities(ctx, "targets", true)?;
         Ok(targets
             .into_iter()
             .filter(|t| matches!(t, Target::Player | Target::Guest(_)))
             .collect())
     }
-    pub(super) fn cmd_tellraw(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_tellraw(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1239.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let players = self.player_targets(ctx)?;
         let message = self.component_arg(ctx, "message")?;
         // Each player's chat (a guest's through the connection).
@@ -262,7 +262,7 @@ impl Game<'_> {
         }
         Ok(players.len() as i32)
     }
-    pub(super) fn cmd_title(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_title(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1238.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let players = self.player_targets(ctx)?;
         let n = players.len();
         let name = players

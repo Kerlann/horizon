@@ -20,7 +20,7 @@ impl Game<'_> {
         kind: Kind,
         title: horizon_client::text::Text,
         pos: [i32; 3],
-    ) {
+    ) { let (container,pos,) = match crate::points_generated::P5024.get() { Some(__l) => { let mut __a = (container,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (container,pos,) };
         if let Some(r) = self.remote.as_mut() {
             r.menu.set(Some((container, menu)));
             r.menu_title = Some(title);
@@ -33,7 +33,7 @@ impl Game<'_> {
     }
 
     /// Window `container` is the server's workstation menu, open here.
-    pub(super) fn remote_station_open(&self, container: i32) -> bool {
+    pub(super) fn remote_station_open(&self, container: i32) -> bool { let (container,) = match crate::points_generated::P5023.get() { Some(__l) => { let mut __a = (container,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (container,) };
         self.station.is_some()
             && self
                 .remote
@@ -47,7 +47,7 @@ impl Game<'_> {
     /// The server set station slot `internal`: the client menu's
     /// `Slot.set` runs its container's `setChanged`, so the loom lists the
     /// patterns its inputs allow and the stonecutter the recipes of its input.
-    pub(super) fn remote_station_slot_changed(&mut self, internal: usize) {
+    pub(super) fn remote_station_slot_changed(&mut self, internal: usize) { let (internal,) = match crate::points_generated::P5022.get() { Some(__l) => { let mut __a = (internal,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (internal,) };
         if !self.station.as_ref().is_some_and(|s| {
             matches!(
                 s.kind,
@@ -73,7 +73,7 @@ impl Game<'_> {
     }
 
     /// `AbstractContainerMenu.setData` from the server.
-    pub(super) fn remote_station_data(&mut self, id: usize, value: i16) {
+    pub(super) fn remote_station_data(&mut self, id: usize, value: i16) { let (id,value,) = match crate::points_generated::P5021.get() { Some(__l) => { let mut __a = (id,value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,value,) };
         let Some(s) = self.station.as_mut() else {
             return;
         };
@@ -120,7 +120,7 @@ impl Game<'_> {
     /// `AnvilScreen.onNameChanged` on a server: the rename box's text (blank
     /// when it is the input's own name) goes to the server when the menu's
     /// `setItemName` takes it.
-    pub(super) fn remote_anvil_rename(&mut self) {
+    pub(super) fn remote_anvil_rename(&mut self) { if let Some(__l) = crate::points_generated::P5020.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_none() {
             return;
         }
@@ -143,7 +143,7 @@ impl Game<'_> {
 
     /// `MultiPlayerGameMode.handleInventoryButtonClick`: the screen already
     /// ran `clickMenuButton` on its own menu.
-    pub(super) fn remote_station_button(&self, button: i32) {
+    pub(super) fn remote_station_button(&self, button: i32) { let (button,) = match crate::points_generated::P5019.get() { Some(__l) => { let mut __a = (button,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (button,) };
         if let Some((container, _)) = self.remote.as_ref().and_then(|r| r.menu.as_ref())
             && self.remote_station_open(*container)
         {

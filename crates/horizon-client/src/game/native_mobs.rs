@@ -19,7 +19,7 @@ impl Game<'_> {
     /// empty, as vanilla's `lastEquipmentItems` does. Only while a mod
     /// listens (`native_living_equipment_listened`): a mob's first tick after
     /// that counts from empty too.
-    pub(super) fn native_mobs_equipment(&mut self) {
+    pub(super) fn native_mobs_equipment(&mut self) { if let Some(__l) = crate::points_generated::P3999.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() || self.options.execution_role.is_client() {
             return;
         }
@@ -59,7 +59,7 @@ impl Game<'_> {
     /// too): each slot whose stack differs from what the mods last heard is told, the previous
     /// stack with it, so a hotbar selection that moves the main hand counts. A player new to the
     /// level counts from empty, as for mobs, and only while a mod listens.
-    pub(super) fn native_players_equipment(&mut self) {
+    pub(super) fn native_players_equipment(&mut self) { if let Some(__l) = crate::points_generated::P3998.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut listened = false;
         self.native_living_equipment_listened(&mut listened);
         if !listened {
@@ -156,7 +156,7 @@ fn spawnable(pos: [f64; 3]) -> bool {
 impl Game<'_> {
     /// Whether this is a level that simulates (not a client's copy) and the one
     /// in place is `dimension`.
-    fn native_mob_level(&self, dimension: &str) -> bool {
+    fn native_mob_level(&self, dimension: &str) -> bool { if let Some(__l) = crate::points_generated::P3997.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote.is_none() && dimension == self.dim.id()
     }
     /// Spawns a mob of `kind` (`minecraft:zombie`) at `pos` in the level in
@@ -171,7 +171,7 @@ impl Game<'_> {
         kind: &str,
         pos: [f64; 3],
         options: &NativeSpawn,
-    ) -> Option<u32> {
+    ) -> Option<u32> { let (pos,) = match crate::points_generated::P3996.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if !self.native_mob_level(dimension) || !spawnable(pos) || !self.native_chunk_loaded(pos) {
             return None;
         }
@@ -207,13 +207,13 @@ impl Game<'_> {
         Some(id)
     }
     /// Whether the chunk holding `pos` is loaded in the level in place.
-    fn native_chunk_loaded(&self, pos: [f64; 3]) -> bool {
+    fn native_chunk_loaded(&self, pos: [f64; 3]) -> bool { let (pos,) = match crate::points_generated::P3995.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let (x, z) = (pos[0].floor() as i32, pos[2].floor() as i32);
         self.world.chunks.contains_key(&(x >> 4, z >> 4))
     }
     /// The living mob `id` in the level in place, `dimension`; none on a
     /// client's copy.
-    pub(super) fn native_mob(&self, dimension: &str, id: u32) -> Option<NativeMob> {
+    pub(super) fn native_mob(&self, dimension: &str, id: u32) -> Option<NativeMob> { let (id,) = match crate::points_generated::P3994.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         if !self.native_mob_level(dimension) {
             return None;
         }
@@ -222,7 +222,7 @@ impl Game<'_> {
     }
     /// The living mobs in the level in place, `dimension`; none on a client's
     /// copy.
-    pub(super) fn native_mobs(&self, dimension: &str) -> Vec<NativeMob> {
+    pub(super) fn native_mobs(&self, dimension: &str) -> Vec<NativeMob> { if let Some(__l) = crate::points_generated::P3993.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_mob_level(dimension) {
             return Vec::new();
         }
@@ -234,14 +234,14 @@ impl Game<'_> {
     }
     /// Kills mob `id` as `/kill` does: it falls and drops its loot. False for
     /// no such living mob or another dimension.
-    pub(super) fn native_kill_mob(&mut self, dimension: &str, id: u32) -> bool {
+    pub(super) fn native_kill_mob(&mut self, dimension: &str, id: u32) -> bool { let (id,) = match crate::points_generated::P3992.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if self.native_mob(dimension, id).is_none() {
             return false;
         }
         self.kill_target(Target::Mob(id));
         true
     }
-    fn native_mob_of(&self, m: &horizon_client::mobs::Mob) -> NativeMob {
+    fn native_mob_of(&self, m: &horizon_client::mobs::Mob) -> NativeMob { if let Some(__l) = crate::points_generated::P3991.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         NativeMob {
             id: m.id,
             dimension: self.dim.id().to_owned(),

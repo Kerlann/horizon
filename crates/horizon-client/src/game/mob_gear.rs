@@ -57,7 +57,7 @@ impl Game<'_> {
     /// (the mob as `this`, its random sequence) is rolled and each stack goes
     /// in the slot `EquipmentUser.resolveSlot` picks, with the table's drop
     /// chance for that slot.
-    pub(super) fn equip_from_table(&mut self, id: u32, table: &Tag) {
+    pub(super) fn equip_from_table(&mut self, id: u32, table: &Tag) { let (id,) = match crate::points_generated::P2772.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some((name, chances)) = equipment_table(table) else {
             return;
         };
@@ -107,7 +107,7 @@ impl Game<'_> {
     /// `Mob.populateDefaultEquipmentEnchantments`: the weapon one time in
     /// four and each piece of armour one time in two, scaled by the local
     /// difficulty, enchanted as if at an enchanting table of cost 5 to 22.
-    pub(super) fn enchant_spawn_equipment(&mut self, id: u32) {
+    pub(super) fn enchant_spawn_equipment(&mut self, id: u32) { let (id,) = match crate::points_generated::P2771.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
             return;
         };
@@ -128,7 +128,7 @@ impl Game<'_> {
         }
     }
     /// `Zombie` / `AbstractSkeleton` halloween pumpkin after spawn gear.
-    pub(super) fn halloween_spawn_head(&mut self, id: u32) {
+    pub(super) fn halloween_spawn_head(&mut self, id: u32) { let (id,) = match crate::points_generated::P2770.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let halloween = horizon_client::mobs::finalize::is_halloween();
         let Some(i) = self.mobs.iter().position(|m| m.id == id) else {
             return;
@@ -137,7 +137,7 @@ impl Game<'_> {
         horizon_client::mobs::finalize::halloween_head(&mut self.mobs[i], &mut random, halloween);
         self.mobs[i].random = random;
     }
-    fn enchant_slot(&mut self, id: u32, slot: usize, chance: f32, special: f32) {
+    fn enchant_slot(&mut self, id: u32, slot: usize, chance: f32, special: f32) { let (id,slot,chance,special,) = match crate::points_generated::P2769.get() { Some(__l) => { let mut __a = (id,slot,chance,special,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,slot,chance,special,) };
         let Some(item) = self
             .mobs
             .iter()
@@ -152,7 +152,7 @@ impl Game<'_> {
         self.enchant_item(id, slot, &item, special);
     }
     /// `EnchantmentsByCostWithDifficulty.enchant` on the item in a slot.
-    pub(super) fn enchant_item(&mut self, id: u32, slot: usize, item: &str, special: f32) {
+    pub(super) fn enchant_item(&mut self, id: u32, slot: usize, item: &str, special: f32) { let (id,slot,special,) = match crate::points_generated::P2768.get() { Some(__l) => { let mut __a = (id,slot,special,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,slot,special,) };
         let random = &mut self.world.random;
         let top = MIN_COST + (special * MAX_COST_SPAN) as i32;
         let cost = random
@@ -168,7 +168,7 @@ impl Game<'_> {
         }
     }
     /// A `SingleEnchantment` provider on the item in `slot`, when it is `item`.
-    fn enchant_single(&mut self, id: u32, slot: usize, enchantment: &str, level: u32, item: &str) {
+    fn enchant_single(&mut self, id: u32, slot: usize, enchantment: &str, level: u32, item: &str) { let (id,slot,level,) = match crate::points_generated::P2767.get() { Some(__l) => { let mut __a = (id,slot,level,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,slot,level,) };
         if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id)
             && slot_item(m, slot).as_deref() == Some(item)
         {
@@ -178,7 +178,7 @@ impl Game<'_> {
 
     /// `Pillager` / `Vindicator.applyRaidBuffs`: Quick Charge on a fresh
     /// crossbow after waves 3 and 5, Sharpness on a fresh axe.
-    pub(super) fn apply_raid_buffs(&mut self, id: u32, kind: RaiderType, wave: i32, odds: f32) {
+    pub(super) fn apply_raid_buffs(&mut self, id: u32, kind: RaiderType, wave: i32, odds: f32) { let (id,wave,odds,) = match crate::points_generated::P2766.get() { Some(__l) => { let mut __a = (id,wave,odds,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,wave,odds,) };
         let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) else {
             return;
         };

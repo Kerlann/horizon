@@ -35,7 +35,7 @@ pub(super) fn world_brightness(world: &World, layer: LightLayer, pos: [i32; 3]) 
 
 impl Game<'_> {
     /// The world a handle names now, or None for a stale or foreign one.
-    pub(super) fn native_level_world(&self, level: LevelRef) -> Option<&World> {
+    pub(super) fn native_level_world(&self, level: LevelRef) -> Option<&World> { if let Some(__l) = crate::points_generated::P3839.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.is_logical_server() || self.native_lifecycle.epoch() != Some(level.epoch()) {
             return None;
         }
@@ -47,7 +47,7 @@ impl Game<'_> {
     /// The world a handle names for a read that works on both sides: the
     /// server's level, or on a client the one it shows (`Minecraft.level`, its
     /// copy of the server's). None for a stale handle or another dimension.
-    fn native_level_read_world(&self, level: LevelRef) -> Option<&World> {
+    fn native_level_read_world(&self, level: LevelRef) -> Option<&World> { if let Some(__l) = crate::points_generated::P3838.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.is_logical_server() {
             return self.native_level_world(level);
         }
@@ -57,18 +57,18 @@ impl Game<'_> {
         .then_some(&self.world)
     }
     /// Find a loaded chunk in an open server level.
-    pub(super) fn native_chunk(&self, level: LevelRef, pos: [i32; 2]) -> Option<ChunkRef> {
+    pub(super) fn native_chunk(&self, level: LevelRef, pos: [i32; 2]) -> Option<ChunkRef> { let (pos,) = match crate::points_generated::P3837.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.native_level_world(level)?
             .chunks
             .contains_key(&(pos[0], pos[1]))
             .then_some(mod_api::__private::game::chunk_ref(level, pos))
     }
     /// Whether this chunk is loaded; false on a client or for a stale handle.
-    pub(super) fn native_chunk_ref_loaded(&self, chunk: ChunkRef) -> bool {
+    pub(super) fn native_chunk_ref_loaded(&self, chunk: ChunkRef) -> bool { if let Some(__l) = crate::points_generated::P3836.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_chunk(chunk.level(), chunk.pos()).is_some()
     }
     /// The status of a loaded chunk. Proto chunks are not exposed here.
-    pub(super) fn native_chunk_status(&self, chunk: ChunkRef) -> Option<ChunkStatus> {
+    pub(super) fn native_chunk_status(&self, chunk: ChunkRef) -> Option<ChunkStatus> { if let Some(__l) = crate::points_generated::P3835.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_chunk(chunk.level(), chunk.pos())
             .map(|_| ChunkStatus::Full)
     }
@@ -79,13 +79,13 @@ impl Game<'_> {
         &self,
         level: LevelRef,
         pos: [i32; 2],
-    ) -> Option<ChunkRef> {
+    ) -> Option<ChunkRef> { let (pos,) = match crate::points_generated::P3834.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.native_level_world(level)?;
         chunk_in_world(pos).then_some(ChunkRef::new(level, pos))
     }
     /// The streaming of the level a handle names now, or None for a stale or
     /// foreign one.
-    fn native_level_streaming(&self, level: LevelRef) -> Option<&Streaming> {
+    fn native_level_streaming(&self, level: LevelRef) -> Option<&Streaming> { if let Some(__l) = crate::points_generated::P3833.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_level_world(level)?;
         if level.dimension() == self.dim.id() {
             return Some(&self.streaming);
@@ -94,7 +94,7 @@ impl Game<'_> {
     }
     /// Whether `/forceload` holds the chunk (`ServerLevel.getForcedChunks`),
     /// loaded or not; a mod's own ticket on it does not count. None for a stale handle or on a client.
-    pub(super) fn native_chunk_forced(&self, chunk: ChunkRef) -> Option<bool> {
+    pub(super) fn native_chunk_forced(&self, chunk: ChunkRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3832.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let [x, z] = chunk.pos();
         Some(
             self.native_level_streaming(chunk.level())?
@@ -112,7 +112,7 @@ impl Game<'_> {
     /// this returns: it loads over the next ticks, as after `/forceload`.
     /// False for a stale handle, on a client, and for a level the server
     /// has not opened.
-    pub(super) fn native_chunk_set_forced(&mut self, chunk: ChunkRef, forced: bool) -> bool {
+    pub(super) fn native_chunk_set_forced(&mut self, chunk: ChunkRef, forced: bool) -> bool { let (forced,) = match crate::points_generated::P3831.get() { Some(__l) => { let mut __a = (forced,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (forced,) };
         if self.native_level_streaming(chunk.level()).is_none() {
             return false;
         }
@@ -135,7 +135,7 @@ impl Game<'_> {
     /// `level_load`, say) are not candidates, and a controller registered
     /// without a validator keeps all of its tickets. Nothing is built while no
     /// mod listens.
-    pub(super) fn validate_mod_chunk_tickets(&mut self, dim: super::Dim) {
+    pub(super) fn validate_mod_chunk_tickets(&mut self, dim: super::Dim) { if let Some(__l) = crate::points_generated::P3830.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut loaded = self.streaming.take_loaded_tickets();
         if !loaded.is_empty() && mod_api::__private::listened(mod_api::HookId::ValidateTickets) {
             let mut controllers: Vec<u32> = loaded.iter().map(|t| t.controller).collect();
@@ -186,7 +186,7 @@ impl Game<'_> {
         owner: NativeTicketOwner,
         forced: bool,
         natural_spawning: bool,
-    ) -> bool {
+    ) -> bool { let (forced,natural_spawning,) = match crate::points_generated::P3829.get() { Some(__l) => { let mut __a = (forced,natural_spawning,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (forced,natural_spawning,) };
         if !calling_mod_owns(controller) {
             return false;
         }
@@ -217,7 +217,7 @@ impl Game<'_> {
         &self,
         level: LevelRef,
         controller: TicketController,
-    ) -> Option<Vec<(NativeTicketOwner, [i32; 2], bool)>> {
+    ) -> Option<Vec<(NativeTicketOwner, [i32; 2], bool)>> { if let Some(__l) = crate::points_generated::P3828.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !calling_mod_owns(controller) {
             return None;
         }
@@ -231,7 +231,7 @@ impl Game<'_> {
     }
     /// The level's force-loaded chunks (`/forceload query`), sorted as
     /// the command lists them. None for a stale handle or on a client.
-    pub(super) fn native_level_forced_chunks(&self, level: LevelRef) -> Option<Vec<[i32; 2]>> {
+    pub(super) fn native_level_forced_chunks(&self, level: LevelRef) -> Option<Vec<[i32; 2]>> { if let Some(__l) = crate::points_generated::P3827.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut forced: Vec<(i32, i32)> = self
             .native_level_streaming(level)?
             .commanded()
@@ -248,14 +248,14 @@ impl Game<'_> {
         &self,
         level: LevelRef,
         pos: [i32; 3],
-    ) -> Option<BlockStateId> {
+    ) -> Option<BlockStateId> { let (pos,) = match crate::points_generated::P3826.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let world = self.native_level_read_world(level)?;
         let [x, y, z] = pos;
         world.is_loaded_at(x, y, z).then(|| world.block(x, y, z))
     }
     /// The block at `pos` without its properties: `minecraft:oak_stairs`.
     /// None as for `block_state`.
-    pub(super) fn native_level_block(&self, level: LevelRef, pos: [i32; 3]) -> Option<String> {
+    pub(super) fn native_level_block(&self, level: LevelRef, pos: [i32; 3]) -> Option<String> { let (pos,) = match crate::points_generated::P3825.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.native_level_state(level, pos)
             .map(|state| self.res.facts().get(state).name.to_string())
     }
@@ -267,7 +267,7 @@ impl Game<'_> {
         level: LevelRef,
         pos: [i32; 3],
         key: &str,
-    ) -> Option<String> {
+    ) -> Option<String> { let (pos,) = match crate::points_generated::P3824.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.native_level_state(level, pos)?;
         self.pack
             .assets
@@ -282,7 +282,7 @@ impl Game<'_> {
     /// `LevelRef::capability` looks up. False for a level parked while the server ticks
     /// another (its blocks can still be read), for a handle of an earlier open, and on a
     /// client.
-    pub(super) fn native_level_in_place(&self, level: LevelRef) -> bool {
+    pub(super) fn native_level_in_place(&self, level: LevelRef) -> bool { if let Some(__l) = crate::points_generated::P3823.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.is_logical_server()
             && self.native_lifecycle.epoch() == Some(level.epoch())
             && self.dim.id() == level.dimension()
@@ -292,7 +292,7 @@ impl Game<'_> {
     /// read or write there finds the world. False on a client or for a stale
     /// handle: the position is not loaded here. On a client, a chunk it holds is loaded
     /// (`ClientLevel.hasChunkAt`).
-    pub(super) fn native_level_is_loaded(&self, level: LevelRef, pos: [i32; 3]) -> bool {
+    pub(super) fn native_level_is_loaded(&self, level: LevelRef, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P3822.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.native_level_read_world(level)
             .is_some_and(|w| w.is_loaded_at(pos[0], pos[1], pos[2]))
     }
@@ -303,7 +303,7 @@ impl Game<'_> {
         level: LevelRef,
         layer: LightLayer,
         pos: [i32; 3],
-    ) -> Option<i32> {
+    ) -> Option<i32> { let (pos,) = match crate::points_generated::P3821.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let world = self.native_level_world(level)?;
         world
             .is_loaded_at(pos[0], pos[1], pos[2])
@@ -311,19 +311,19 @@ impl Game<'_> {
     }
     /// The lowest block `y` and the height of the level
     /// (`LevelHeightAccessor.getMinY`, `getHeight`).
-    pub(super) fn native_level_height(&self, level: LevelRef) -> Option<(i32, i32)> {
+    pub(super) fn native_level_height(&self, level: LevelRef) -> Option<(i32, i32)> { if let Some(__l) = crate::points_generated::P3820.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_level_world(level)
             .map(|w| (w.shape.min_y, w.shape.height))
     }
     /// The ticks the server has run (`Level.getGameTime`), shared by every
     /// level as in vanilla.
-    pub(super) fn native_level_game_time(&self, level: LevelRef) -> Option<i64> {
+    pub(super) fn native_level_game_time(&self, level: LevelRef) -> Option<i64> { if let Some(__l) = crate::points_generated::P3819.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_level_world(level)?;
         Some(self.world.game_time)
     }
     /// The time of day in ticks (`Level.getOverworldClockTime`), shared by
     /// every level; it keeps counting past 24000.
-    pub(super) fn native_level_day_time(&self, level: LevelRef) -> Option<i64> {
+    pub(super) fn native_level_day_time(&self, level: LevelRef) -> Option<i64> { if let Some(__l) = crate::points_generated::P3818.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_level_world(level)?;
         Some(self.world.day_time)
     }

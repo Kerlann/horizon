@@ -99,7 +99,7 @@ const BUTTONS: [(Status, &str, u32); 3] = [
 impl Game<'_> {
     /// `KeyboardHandler`'s F3+F6: closes the screen if it is open, else opens
     /// it over the game or the pause menu (`canInterruptScreen`).
-    pub(super) fn toggle_debug_options(&mut self) {
+    pub(super) fn toggle_debug_options(&mut self) { if let Some(__l) = crate::points_generated::P1512.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.screen {
             Screen::DebugOptions => self.close_debug_options(),
             Screen::Playing | Screen::Paused if !self.screen_over_playing() => {
@@ -118,7 +118,7 @@ impl Game<'_> {
         }
     }
     /// `Screen.onClose`: back to the game.
-    pub(super) fn close_debug_options(&mut self) {
+    pub(super) fn close_debug_options(&mut self) { if let Some(__l) = crate::points_generated::P1511.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.debug_options = None;
         self.set_screen(Screen::Playing);
         self.capture(true);
@@ -126,7 +126,7 @@ impl Game<'_> {
     /// The header's title row and warning (`init`'s vertical layout,
     /// centred in the header): the title's x, the row's top, the warning's
     /// lines with their y.
-    fn debug_options_header(&self, w: f32) -> (f32, f32, Vec<(Text, f32)>) {
+    fn debug_options_header(&self, w: f32) -> (f32, f32, Vec<(Text, f32)>) { let (w,) = match crate::points_generated::P1510.get() { Some(__l) => { let mut __a = (w,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (w,) };
         let font = &self.gui.atlas.font;
         let title = Text::translate("debug.options.title", &[]);
         let warning = Text::translate("debug.options.warning", &[]).with_color(WARNING);
@@ -145,7 +145,7 @@ impl Game<'_> {
         (title_x, top, lines)
     }
     /// `debugGuiScale`'s button: `GUI Scale: Unchanged`, `Auto` or the scale.
-    fn debug_gui_scale_label(&self) -> Text {
+    fn debug_gui_scale_label(&self) -> Text { if let Some(__l) = crate::points_generated::P1509.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let value = match self.settings.file.int("debugGuiScale") {
             -1 => Text::translate("options.debugGuiScale.unchanged", &[]),
             0 => Text::translate("options.guiScale.auto", &[]),
@@ -158,7 +158,7 @@ impl Game<'_> {
     }
     /// `ClampingLazyMaxIntRange(-1, window.calculateScale(0, unicode))` as a
     /// CycleButton: the next value, or the previous one with Shift.
-    fn cycle_debug_gui_scale(&mut self, back: bool) {
+    fn cycle_debug_gui_scale(&mut self, back: bool) { let (back,) = match crate::points_generated::P1508.get() { Some(__l) => { let mut __a = (back,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (back,) };
         let size = self.renderer.as_ref().map_or([1280, 720], |r| {
             [r.config.width as i32, r.config.height as i32]
         });
@@ -173,7 +173,7 @@ impl Game<'_> {
         self.settings.file.set("debugGuiScale", V::Int(next));
         self.settings.save(&Self::options_path());
     }
-    pub(super) fn draw_debug_options(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_debug_options(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P1507.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut s) = self.debug_options.take() else {
             return;
         };
@@ -311,7 +311,7 @@ impl Game<'_> {
         self.debug_options = Some(s);
     }
     /// A left click: a status button, the search box, a footer button.
-    pub(super) fn debug_options_click(&mut self) {
+    pub(super) fn debug_options_click(&mut self) { if let Some(__l) = crate::points_generated::P1506.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut s) = self.debug_options.take() else {
             return;
         };
@@ -392,7 +392,7 @@ impl Game<'_> {
         }
     }
     /// The mouse wheel over the list (`scrollRate`: half a row).
-    pub(super) fn debug_options_scroll(&mut self, delta: f32) {
+    pub(super) fn debug_options_scroll(&mut self, delta: f32) { let (delta,) = match crate::points_generated::P1505.get() { Some(__l) => { let mut __a = (delta,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (delta,) };
         let (_, h) = self.gui_size();
         if let Some(s) = &mut self.debug_options {
             let content = content_height(rows(&s.search.value).len());
@@ -401,7 +401,7 @@ impl Game<'_> {
         }
     }
     /// The pointer moved while the list's scrollbar is held.
-    pub(super) fn debug_options_drag(&mut self) {
+    pub(super) fn debug_options_drag(&mut self) { if let Some(__l) = crate::points_generated::P1504.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (_, h) = self.gui_size();
         let y = self.cursor.1;
         if let Some(s) = &mut self.debug_options
@@ -412,13 +412,13 @@ impl Game<'_> {
         }
     }
     /// The button came up: the scrollbar lets go.
-    pub(super) fn debug_options_release(&mut self) {
+    pub(super) fn debug_options_release(&mut self) { if let Some(__l) = crate::points_generated::P1503.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(s) = &mut self.debug_options {
             s.scroll.release();
         }
     }
     /// A key the debug keys left: Escape closes, the rest edits the search.
-    pub(super) fn debug_options_key(&mut self, event: &KeyEvent) {
+    pub(super) fn debug_options_key(&mut self, event: &KeyEvent) { if let Some(__l) = crate::points_generated::P1502.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if event.state != ElementState::Pressed {
             return;
         }
@@ -449,7 +449,7 @@ impl Game<'_> {
         }
     }
     /// Characters typed into the search box (`EditBox.charTyped`).
-    pub(super) fn debug_options_type(&mut self, typed: &str) {
+    pub(super) fn debug_options_type(&mut self, typed: &str) { if let Some(__l) = crate::points_generated::P1501.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let allowed: String = typed
             .chars()
             .filter(|&c| c != '\u{a7}' && c >= ' ' && c != '\u{7f}')

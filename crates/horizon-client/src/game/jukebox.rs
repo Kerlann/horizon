@@ -19,13 +19,13 @@ use horizon_core::{
 use horizon_world::level::flags as level_flags;
 
 impl Game<'_> {
-    fn jukebox(&self, pos: [i32; 3]) -> Option<&Jukebox> {
+    fn jukebox(&self, pos: [i32; 3]) -> Option<&Jukebox> { let (pos,) = match crate::points_generated::P2182.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         match self.world.block_entities.get(&(pos[0], pos[1], pos[2])) {
             Some(BlockEntity::Jukebox(j)) => Some(j),
             _ => None,
         }
     }
-    fn set_has_record(&mut self, pos: [i32; 3], has: bool) {
+    fn set_has_record(&mut self, pos: [i32; 3], has: bool) { let (pos,has,) = match crate::points_generated::P2181.get() { Some(__l) => { let mut __a = (pos,has,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,has,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let registry = self.pack.assets.registry;
         let Some(mut s) = registry.state(state).cloned() else {
@@ -47,13 +47,13 @@ impl Game<'_> {
     /// `has_record` turns on: the model draws the disc and `useWithoutItem`
     /// pops it out. Vanilla reads the item's data, after
     /// `updateCustomBlockEntityTag` has filled the block entity.
-    pub(super) fn jukebox_placed(&mut self, pos: [i32; 3], stack: &ItemStack) {
+    pub(super) fn jukebox_placed(&mut self, pos: [i32; 3], stack: &ItemStack) { let (pos,) = match crate::points_generated::P2180.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if block_entity_item::carries_record(stack) {
             self.set_has_record(pos, true);
         }
     }
     /// `onSongChanged`: neighbours (the signal) and comparators.
-    fn jukebox_changed(&mut self, pos: [i32; 3]) {
+    fn jukebox_changed(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P2179.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let p = BlockPos::new(pos[0], pos[1], pos[2]);
         let state = self.world.block(pos[0], pos[1], pos[2]);
         self.with_level(|b, level, ticks| {
@@ -67,7 +67,7 @@ impl Game<'_> {
     /// feeding the slot): a disc that lands in a jukebox that is not playing
     /// starts its song, as the player's own use does, with the block state,
     /// the song's level event and the neighbour and comparator updates.
-    pub(super) fn jukebox_inserted(&mut self, pos: [i32; 3]) {
+    pub(super) fn jukebox_inserted(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P2178.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let Some(song) = self
             .jukebox(pos)
             .filter(|j| !j.playing)
@@ -90,7 +90,7 @@ impl Game<'_> {
     /// `JukeboxBlockEntity.setTheItem(EMPTY)` from a container (a hopper
     /// below taking the disc): the song stops, the block loses its record,
     /// and the neighbours and comparators hear it.
-    pub(super) fn jukebox_taken(&mut self, pos: [i32; 3]) {
+    pub(super) fn jukebox_taken(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P2177.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if self.jukebox(pos).is_some_and(|j| j.record().is_some()) {
             return;
         }
@@ -98,7 +98,7 @@ impl Game<'_> {
     }
     /// The song of the jukebox at `pos` stops and the block loses its record, whatever its slot
     /// holds now: `jukebox_taken`, and a disc swapped for another in one transaction.
-    pub(super) fn jukebox_stopped(&mut self, pos: [i32; 3]) {
+    pub(super) fn jukebox_stopped(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P2176.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if let Some(BlockEntity::Jukebox(j)) =
             self.world.block_entities.get_mut(&(pos[0], pos[1], pos[2]))
         {
@@ -116,7 +116,7 @@ impl Game<'_> {
         state: horizon_world::registry::BlockStateId,
         held: Option<&ItemStack>,
         branch: horizon_world::level::UseBranch,
-    ) -> Option<mod_api::NativeInteractionResult> {
+    ) -> Option<mod_api::NativeInteractionResult> { let (pos,) = match crate::points_generated::P2175.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         use mod_api::NativeInteractionResult as Answer;
         if &*self.res.facts().get(state).name != "minecraft:jukebox" {
             return None;
@@ -179,7 +179,7 @@ impl Game<'_> {
     /// whether the jukebox at `pos` takes the click (`has_record` pops the
     /// disc out, or a `jukebox_playable` item goes in). The server does the
     /// rest, see `use_jukebox`.
-    pub(super) fn jukebox_takes(&self, pos: [i32; 3], held: Option<&ItemStack>) -> bool {
+    pub(super) fn jukebox_takes(&self, pos: [i32; 3], held: Option<&ItemStack>) -> bool { let (pos,) = match crate::points_generated::P2174.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         if &*self.res.facts().get(state).name != "minecraft:jukebox" {
             return false;
@@ -200,7 +200,7 @@ impl Game<'_> {
             })
     }
     /// Level event 1010: the song from the jukebox, and the "Now Playing" overlay.
-    fn start_song(&mut self, pos: [i32; 3], song: &str) {
+    fn start_song(&mut self, pos: [i32; 3], song: &str) { let (pos,) = match crate::points_generated::P2173.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.stop_sound(pos);
         let Some(s) = self.items().songs.get(song).cloned() else {
             return;
@@ -224,23 +224,23 @@ impl Game<'_> {
     /// for the song the event's data names in the server's `jukebox_song`
     /// registry (`Registry.get(int).ifPresent`: an unknown id does nothing).
     /// The server's jukebox plays it; this client only hears it.
-    pub(super) fn jukebox_song_event(&mut self, pos: [i32; 3], data: i32) {
+    pub(super) fn jukebox_song_event(&mut self, pos: [i32; 3], data: i32) { let (pos,data,) = match crate::points_generated::P2172.get() { Some(__l) => { let mut __a = (pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,data,) };
         if let Some(song) = jukebox_song_name(self.remote.as_ref().map(|r| &*r.registries), data) {
             self.start_song(pos, &song);
         }
     }
     /// `LevelEventHandler` 1011: `stopJukeboxSongAndNotifyNearby`.
-    pub(super) fn jukebox_stop_event(&mut self, pos: [i32; 3]) {
+    pub(super) fn jukebox_stop_event(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P2171.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.stop_sound(pos);
         self.notify_record_playing(pos, false);
     }
-    fn stop_sound(&mut self, pos: [i32; 3]) {
+    fn stop_sound(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P2170.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if let Some(id) = self.jukebox_sounds.remove(&(pos[0], pos[1], pos[2])) {
             self.audio.stop_and_release(id);
         }
     }
     /// Level event 1011: the song ends, here and for the guests.
-    fn stop_song(&mut self, pos: [i32; 3]) {
+    fn stop_song(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P2169.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.stop_sound(pos);
         self.notify_record_playing(pos, false);
         if self.audio.capture.is_some() {
@@ -249,7 +249,7 @@ impl Game<'_> {
     }
     /// `LevelEventHandler.notifyNearbyEntities` (level events 1010 and 1011):
     /// parrots within three blocks of the jukebox start or stop dancing.
-    pub(super) fn notify_record_playing(&mut self, pos: [i32; 3], playing: bool) {
+    pub(super) fn notify_record_playing(&mut self, pos: [i32; 3], playing: bool) { let (pos,playing,) = match crate::points_generated::P2168.get() { Some(__l) => { let mut __a = (pos,playing,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,playing,) };
         let min = Vec3::new(f64::from(pos[0]), f64::from(pos[1]), f64::from(pos[2]));
         let area = Aabb::new(min, min.add_vector(Vec3::new(1.0, 1.0, 1.0)))
             .inflate(Vec3::new(3.0, 3.0, 3.0));
@@ -262,7 +262,7 @@ impl Game<'_> {
         }
     }
     /// `popOutTheItem`: the disc above the jukebox, and the song stops.
-    fn eject_record(&mut self, pos: [i32; 3]) {
+    fn eject_record(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P2167.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let key = (pos[0], pos[1], pos[2]);
         let record = match self.world.block_entities.get_mut(&key) {
             Some(BlockEntity::Jukebox(j)) => {
@@ -286,11 +286,11 @@ impl Game<'_> {
         self.jukebox_changed(pos);
     }
     /// A broken jukebox stops its song (its disc drops with the contents).
-    pub(super) fn jukebox_removed(&mut self, pos: [i32; 3]) {
+    pub(super) fn jukebox_removed(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P2166.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.stop_song(pos);
     }
     /// `JukeboxSongPlayer.tick` of the jukebox at `key`, while it plays.
-    pub(super) fn tick_jukebox(&mut self, key: (i32, i32, i32)) {
+    pub(super) fn tick_jukebox(&mut self, key: (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P2165.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let playing = match self.world.block_entities.get(&key) {
             Some(BlockEntity::Jukebox(j)) if j.playing => j.record().and_then(|r| {
                 let song = self.items().get(&r.item)?.jukebox_song.clone()?;
@@ -335,7 +335,7 @@ impl Game<'_> {
         }
     }
     /// Let go of songs that ended or whose jukebox stopped.
-    pub(super) fn update_song_volumes(&mut self) {
+    pub(super) fn update_song_volumes(&mut self) { if let Some(__l) = crate::points_generated::P2164.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let sounds: Vec<_> = self
             .jukebox_sounds
             .iter()

@@ -30,7 +30,7 @@ impl Game<'_> {
     /// Registers a later reload's client listeners through the game
     /// (`native_add_client_reload_listeners`), gated on the hook being
     /// listened to.
-    pub(super) fn register_client_reload_listeners(&self) -> ClientReloadListeners {
+    pub(super) fn register_client_reload_listeners(&self) -> ClientReloadListeners { if let Some(__l) = crate::points_generated::P877.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut listeners = ClientReloadListeners::new();
         if mod_api::__private::listened(HookId::AddClientReloadListeners) {
             self.native_add_client_reload_listeners(&mut listeners);

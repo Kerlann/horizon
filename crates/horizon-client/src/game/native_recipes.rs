@@ -102,7 +102,7 @@ impl Game<'_> {
     pub(super) fn registered_recipe_book_category(
         &mut self,
         kind: &str,
-    ) -> Option<mod_api::recipe_book::RecipeBookCategory> {
+    ) -> Option<mod_api::recipe_book::RecipeBookCategory> { if let Some(__l) = crate::points_generated::P4140.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.recipe_tables.categories.is_none() {
             let mut declarations = Vec::new();
             self.native_recipe_book_categories(&mut declarations);
@@ -116,7 +116,7 @@ impl Game<'_> {
     }
     /// `native_give`: `count` of `item`, refused outside a world, unless
     /// creative and for an item the game doesn't have.
-    pub(super) fn recipe_give(&mut self, item: &str, count: u32) -> Result<(), String> {
+    pub(super) fn recipe_give(&mut self, item: &str, count: u32) -> Result<(), String> { let (count,) = match crate::points_generated::P4139.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         if self.player.is_none() || self.res.rest.get().is_none() {
             return Err("not in a world".into());
         }
@@ -130,7 +130,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `native_place_recipe`: refused as `recipes.place` refuses it.
-    pub(super) fn recipe_place(&mut self, book_id: i32, all: bool) -> Result<(), String> {
+    pub(super) fn recipe_place(&mut self, book_id: i32, all: bool) -> Result<(), String> { let (book_id,all,) = match crate::points_generated::P4138.get() { Some(__l) => { let mut __a = (book_id,all,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (book_id,all,) };
         if !self.mod_recipe_screen() {
             return Err("no screen that takes recipes is open".into());
         }
@@ -145,7 +145,7 @@ impl Game<'_> {
     /// `recipes.give`: a creative player takes the stack as from the
     /// creative inventory; a server hears it as `SetCreativeModeSlot`
     /// through the inventory's sync, and refuses it unless creative.
-    pub(super) fn mod_give(&mut self, item: &str, count: u32, components: &str) {
+    pub(super) fn mod_give(&mut self, item: &str, count: u32, components: &str) { let (count,) = match crate::points_generated::P4137.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         let Some(max) = self.items().get(item).map(|i| i.max_stack) else {
             return;
         };
@@ -166,7 +166,7 @@ impl Game<'_> {
     }
     /// The tables, made on the first call; none while the world resources
     /// they come from are still loading behind the title on a slow start.
-    pub(super) fn made_recipes(&mut self) -> Option<Arc<Recipes>> {
+    pub(super) fn made_recipes(&mut self) -> Option<Arc<Recipes>> { if let Some(__l) = crate::points_generated::P4136.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.res.rest.get()?;
         if self.recipe_tables.tables.is_none() {
             self.recipe_tables.tables = Some(Arc::new(self.make_mod_recipes()));
@@ -174,7 +174,7 @@ impl Game<'_> {
         self.recipe_tables.tables.clone()
     }
     /// The `book_id`s the player's recipe book holds now.
-    pub(super) fn known_displays(&mut self) -> Arc<[i32]> {
+    pub(super) fn known_displays(&mut self) -> Arc<[i32]> { if let Some(__l) = crate::points_generated::P4135.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.res.rest.get().is_none() {
             return Arc::from([]);
         }
@@ -185,7 +185,7 @@ impl Game<'_> {
         self.recipe_tables.known.1.clone()
     }
 
-    fn make_mod_recipes(&mut self) -> Recipes {
+    fn make_mod_recipes(&mut self) -> Recipes { if let Some(__l) = crate::points_generated::P4134.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let names = &self.pack.names;
         let items = self.items();
         let mut tags: HashMap<&str, Vec<String>> = HashMap::new();
@@ -352,11 +352,11 @@ impl Game<'_> {
 impl Game<'_> {
     /// The server's recipes a client was sent, over its own; None on a
     /// server and until a server sends any.
-    pub(super) fn synced_recipes(&self) -> Option<&horizon_client::crafting::Recipes> {
+    pub(super) fn synced_recipes(&self) -> Option<&horizon_client::crafting::Recipes> { if let Some(__l) = crate::points_generated::P4133.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.recipe_tables.synced.as_ref()
     }
     /// A new play session (`Login`): what the last server sent is gone.
-    pub(super) fn forget_synced_recipes(&mut self) {
+    pub(super) fn forget_synced_recipes(&mut self) { if let Some(__l) = crate::points_generated::P4132.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.recipe_tables.synced = None;
         self.recipe_tables.incoming.clear();
         self.recipe_tables.received = None;
@@ -366,7 +366,7 @@ impl Game<'_> {
     /// `native_recipes_received` for the types that came, once the window
     /// has its player: the recipes of a join come before it, and the helpers
     /// answer nothing until then. Once a frame.
-    pub(super) fn recipes_received_now(&mut self) {
+    pub(super) fn recipes_received_now(&mut self) { if let Some(__l) = crate::points_generated::P4131.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player.is_some()
             && let Some(types) = self.recipe_tables.received.take()
         {
@@ -377,7 +377,7 @@ impl Game<'_> {
     /// want their clients to have, from this load's tables, become what the
     /// server sends its Horizon clients at a join and after `/reload`. Called
     /// once a load's tables are built, before any player hears of them.
-    pub(super) fn sync_recipe_content(&mut self) {
+    pub(super) fn sync_recipe_content(&mut self) { if let Some(__l) = crate::points_generated::P4130.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::lan::recipes;
         let mut types = Vec::new();
         self.native_datapack_sync(&mut types);
@@ -401,7 +401,7 @@ impl Game<'_> {
     /// A `horizon:recipe_content` part the server sent the window. On the
     /// last, the window's tables take the server's recipes of those types in
     /// place of its own, and the mods hear of it (`RecipesReceivedEvent`).
-    pub(super) fn remote_recipe_content(&mut self, data: &[u8]) {
+    pub(super) fn remote_recipe_content(&mut self, data: &[u8]) { if let Some(__l) = crate::points_generated::P4129.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let part: horizon_client::lan::recipes::ContentPart = match serde_json::from_slice(data) {
             Ok(part) => part,
             Err(e) => {

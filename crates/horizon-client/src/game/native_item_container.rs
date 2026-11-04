@@ -172,7 +172,7 @@ fn extract_one(
 #[allow(dead_code)]
 impl Game<'_> {
     /// The slots a mod gave item `item`, clamped; none for any other item.
-    fn item_container_size(&self, item: &str) -> Option<u32> {
+    fn item_container_size(&self, item: &str) -> Option<u32> { if let Some(__l) = crate::points_generated::P3777.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if item.starts_with("minecraft:") {
             return None;
         }
@@ -182,7 +182,7 @@ impl Game<'_> {
     }
     /// `Container.getMaxStackSize(stack)`: the container's 99, or the stack's
     /// own limit (its `max_stack_size` component, else the item's) when less.
-    fn item_container_limit(&self, stack: &ItemStack) -> u32 {
+    fn item_container_limit(&self, stack: &ItemStack) -> u32 { if let Some(__l) = crate::points_generated::P3776.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let own = match stack
             .data()
             .and_then(|d| d.other("minecraft:max_stack_size"))
@@ -202,7 +202,7 @@ impl Game<'_> {
     pub(in crate::game) fn native_item_container_slots(
         &self,
         stack: &ItemStack,
-    ) -> Option<Vec<Option<ItemStack>>> {
+    ) -> Option<Vec<Option<ItemStack>>> { if let Some(__l) = crate::points_generated::P3775.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let size = self.item_container_size(&stack.item)?;
         (stack.count > 0).then(|| contents(stack, size))
     }
@@ -218,7 +218,7 @@ impl Game<'_> {
         &self,
         stack: &ItemStack,
         item: &ItemStack,
-    ) -> Option<(u32, ItemStack)> {
+    ) -> Option<(u32, ItemStack)> { if let Some(__l) = crate::points_generated::P3774.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let size = self.item_container_size(&stack.item);
         insert_one(stack, size, item, self.item_container_limit(item))
     }
@@ -231,7 +231,7 @@ impl Game<'_> {
         stack: &ItemStack,
         slot: usize,
         item: &ItemStack,
-    ) -> Option<(u32, ItemStack)> {
+    ) -> Option<(u32, ItemStack)> { let (slot,) = match crate::points_generated::P3773.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let size = self.item_container_size(&stack.item);
         insert_into(stack, size, slot, item, self.item_container_limit(item))
     }
@@ -243,7 +243,7 @@ impl Game<'_> {
         stack: &ItemStack,
         slot: usize,
         item: &ItemStack,
-    ) -> u32 {
+    ) -> u32 { let (slot,) = match crate::points_generated::P3772.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let fits = self
             .item_container_size(&stack.item)
             .is_some_and(|size| slot < size as usize)
@@ -264,7 +264,7 @@ impl Game<'_> {
         stack: &ItemStack,
         slot: usize,
         max: u32,
-    ) -> Option<(Option<ItemStack>, ItemStack)> {
+    ) -> Option<(Option<ItemStack>, ItemStack)> { let (slot,max,) = match crate::points_generated::P3771.get() { Some(__l) => { let mut __a = (slot,max,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,max,) };
         let size = self.item_container_size(&stack.item);
         extract_one(stack, size, slot, max)
     }

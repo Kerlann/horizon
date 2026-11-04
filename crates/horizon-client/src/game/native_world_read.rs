@@ -70,7 +70,7 @@ impl Game<'_> {
     /// The merged tag tables, once the world has built them. None on a server's client, whose
     /// tags are not the server's, and before the world has loaded its tags (the world lock is
     /// installed after they are built).
-    pub(super) fn native_tag_items(&self) -> Option<&Items> {
+    pub(super) fn native_tag_items(&self) -> Option<&Items> { if let Some(__l) = crate::points_generated::P4211.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (!self.options.execution_role.is_client() && self.session_lock.is_some())
             .then(|| self.items())
     }
@@ -78,7 +78,7 @@ impl Game<'_> {
     /// Whether the block of `state` is in the block tag `tag` (`BlockState.is(TagKey)`), over the
     /// world's merged tags, its data packs and content mods included. An unknown tag or state is
     /// false. None on a server's client or before the world has loaded its tags.
-    pub(super) fn native_block_state_in_tag(&self, state: BlockStateId, tag: &str) -> Option<bool> {
+    pub(super) fn native_block_state_in_tag(&self, state: BlockStateId, tag: &str) -> Option<bool> { if let Some(__l) = crate::points_generated::P4210.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let items = self.native_tag_items()?;
         Some(state_in_tag(items, self.pack.assets.registry, state, tag))
     }
@@ -90,7 +90,7 @@ impl Game<'_> {
         &self,
         registry: TagRegistry,
         tag: &str,
-    ) -> Option<Vec<String>> {
+    ) -> Option<Vec<String>> { if let Some(__l) = crate::points_generated::P4209.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let members = self
             .native_tag_items()?
             .tag_members(registry, &horizon_client::command::args::normalized(tag));
@@ -102,21 +102,21 @@ impl Game<'_> {
     /// max x, y, z]` in the block's own space, with no random offset and none of a world's
     /// context (a state that reads its neighbours or block entity answers what its state alone
     /// gives). Empty for a state with no outline, such as air. None for an id no state has.
-    pub(super) fn native_state_outline(&self, state: BlockStateId) -> Option<Vec<[f64; 6]>> {
+    pub(super) fn native_state_outline(&self, state: BlockStateId) -> Option<Vec<[f64; 6]>> { if let Some(__l) = crate::points_generated::P4208.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pack.assets.registry.state(state)?;
         Some(self.res.facts().get(state).outline.to_vec())
     }
 
     /// The fluid state `state` holds (`BlockState.getFluidState`): water for a waterlogged state,
     /// the empty fluid for most. None for an id no state has.
-    pub(super) fn native_state_fluid_state(&self, state: BlockStateId) -> Option<FluidState> {
+    pub(super) fn native_state_fluid_state(&self, state: BlockStateId) -> Option<FluidState> { if let Some(__l) = crate::points_generated::P4207.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         state_fluid(self.res.behaviours(), self.pack.assets.registry, state)
     }
 
     /// Whether `fluid` is in the fluid tag `tag` (`FluidState.is(TagKey)`, `minecraft:water` or
     /// `water`), over the merged fluid tags. An unknown tag is false. None as for
     /// `native_block_state_in_tag`.
-    pub(super) fn native_fluid_in_tag(&self, fluid: FluidState, tag: &str) -> Option<bool> {
+    pub(super) fn native_fluid_in_tag(&self, fluid: FluidState, tag: &str) -> Option<bool> { if let Some(__l) = crate::points_generated::P4206.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(fluid_in_tag(self.native_tag_items()?, fluid, tag))
     }
 
@@ -127,7 +127,7 @@ impl Game<'_> {
         &self,
         level: LevelRef,
         pos: [i32; 3],
-    ) -> Option<FluidState> {
+    ) -> Option<FluidState> { let (pos,) = match crate::points_generated::P4205.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.native_level_state(level, pos)?;
         self.native_state_fluid_state(state)
     }
@@ -140,7 +140,7 @@ impl Game<'_> {
         context: &NativeLifecycleContext,
         dimension: &str,
         pos: [i32; 3],
-    ) -> Result<BlockState, NativeBlockReadError> {
+    ) -> Result<BlockState, NativeBlockReadError> { let (pos,) = match crate::points_generated::P4204.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         if !self.native_lifecycle.permits_read(context) {
             return Err(NativeBlockReadError::InactiveContext);
         }

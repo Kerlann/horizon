@@ -271,14 +271,14 @@ pub(super) fn analog_signal(world: &World, pos: Pos) -> Option<i32> {
 
 impl Game<'_> {
     /// `Player.canUseGameMasterBlocks`: creative with game master commands.
-    pub(super) fn can_use_game_master_blocks(&self) -> bool {
+    pub(super) fn can_use_game_master_blocks(&self) -> bool { if let Some(__l) = crate::points_generated::P945.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.creative && self.ui.registries.permission >= 2
     }
     /// `CommandBlock.useWithoutItem` on a server's client, which opens the
     /// screen itself (`Player.openCommandBlock`) while the server only
     /// answers the click: the block at `pos`, when it is a command block the
     /// player may edit.
-    pub(super) fn open_command_block_if_editable(&mut self, pos: Pos) {
+    pub(super) fn open_command_block_if_editable(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P944.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let is_command_block = self
             .block_state_at(pos)
             .is_some_and(|state| Mode::of_block(&state.name).is_some());
@@ -286,7 +286,7 @@ impl Game<'_> {
             self.open_command_block(pos);
         }
     }
-    fn command_block(&self, pos: Pos) -> Option<&CommandBlock> {
+    fn command_block(&self, pos: Pos) -> Option<&CommandBlock> { if let Some(__l) = crate::points_generated::P943.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.world.block_entities.get(&pos)? {
             BlockEntity::CommandBlock(c) => Some(c),
             _ => None,
@@ -294,26 +294,26 @@ impl Game<'_> {
     }
     /// The `BaseCommandBlock` an edit screen shows: the block entity's or the
     /// minecart's.
-    fn edit_base(&self, s: &CommandBlockScreen) -> Option<&CommandBlock> {
+    fn edit_base(&self, s: &CommandBlockScreen) -> Option<&CommandBlock> { if let Some(__l) = crate::points_generated::P942.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match s.cart {
             Some(id) => self.carts.iter().find(|c| c.id == id).map(|c| &c.command),
             None => self.command_block(s.pos),
         }
     }
-    fn block_state_at(&self, pos: Pos) -> Option<&'static BlockState> {
+    fn block_state_at(&self, pos: Pos) -> Option<&'static BlockState> { if let Some(__l) = crate::points_generated::P941.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let registry = self.pack.assets.registry;
         state_of(registry, self.world.block(pos.0, pos.1, pos.2))
     }
-    fn schedule_command_block(&mut self, pos: Pos) {
+    fn schedule_command_block(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P940.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = BlockPos::new(pos.0, pos.1, pos.2);
         self.with_level(|b, level, ticks| b.schedule_tick(level, ticks, at, 1));
     }
     /// `CommandBlockEntity.scheduleTick`.
-    fn schedule_command_block_tick(&mut self, pos: Pos) {
+    fn schedule_command_block_tick(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P939.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mark_condition_met(&mut self.world, self.pack.assets.registry, pos);
         self.schedule_command_block(pos);
     }
-    fn update_output_signal(&mut self, pos: Pos) {
+    fn update_output_signal(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P938.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = BlockPos::new(pos.0, pos.1, pos.2);
         self.with_level(|b, level, ticks| b.update_neighbour_for_output_signal(level, ticks, at));
     }
@@ -321,7 +321,7 @@ impl Game<'_> {
     /// `CommandBlockEditScreen.updateGui`: new data for the command block the
     /// edit screen shows refreshes its fields. The mode and conditional live in
     /// the block state here (vanilla's `CommandBlockEntity.Mode`).
-    pub(super) fn command_block_data_arrived(&mut self, pos: Pos) {
+    pub(super) fn command_block_data_arrived(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P937.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .command_block_screen
             .as_ref()
@@ -359,7 +359,7 @@ impl Game<'_> {
     /// `CommandBlock.setPlacedBy`: unless the item carried block entity data
     /// (`defaults` false), output tracking follows `send_command_feedback` and
     /// the block's own automatic flag; then the block takes the signal around it.
-    pub(super) fn command_block_placed(&mut self, pos: Pos, defaults: bool) {
+    pub(super) fn command_block_placed(&mut self, pos: Pos, defaults: bool) { let (defaults,) = match crate::points_generated::P936.get() { Some(__l) => { let mut __a = (defaults,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (defaults,) };
         let feedback = self.ui.rules.bool("send_command_feedback");
         let Some(name) = self.block_state_at(pos).map(|s| s.name.as_str()) else {
             return;
@@ -383,7 +383,7 @@ impl Game<'_> {
     }
 
     /// `CommandBlock.tick`.
-    pub(super) fn command_block_tick(&mut self, pos: BlockPos) {
+    pub(super) fn command_block_tick(&mut self, pos: BlockPos) { if let Some(__l) = crate::points_generated::P935.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let key = (pos.x, pos.y, pos.z);
         let Some(state) = self.block_state_at(key) else {
             return;
@@ -415,7 +415,7 @@ impl Game<'_> {
     }
     /// `CommandBlock.execute`: the command (or no successes without one),
     /// then the chain in front.
-    fn command_block_execute(&mut self, pos: Pos, state: &BlockState) {
+    fn command_block_execute(&mut self, pos: Pos, state: &BlockState) { if let Some(__l) = crate::points_generated::P934.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let has_command = self
             .command_block(pos)
             .is_some_and(|c| !c.command.is_empty());
@@ -428,7 +428,7 @@ impl Game<'_> {
     }
     /// `CommandBlock.executeChain`: the chain command blocks in front, each
     /// facing on to the next, up to `max_command_sequence_length`.
-    fn execute_chain(&mut self, start: Pos, mut step: [i32; 3]) {
+    fn execute_chain(&mut self, start: Pos, mut step: [i32; 3]) { let (mut step,) = match crate::points_generated::P933.get() { Some(__l) => { let mut __a = (step,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (step,) };
         let registry = self.pack.assets.registry;
         let limit = self.ui.rules.int("max_command_sequence_length");
         let mut remaining = limit;
@@ -469,7 +469,7 @@ impl Game<'_> {
     /// `BaseCommandBlock.performCommand`: runs the command as the block, at
     /// game master level, counting the successful results. False when it
     /// already ran this game tick.
-    fn perform_command_block(&mut self, pos: Pos) -> bool {
+    fn perform_command_block(&mut self, pos: Pos) -> bool { if let Some(__l) = crate::points_generated::P932.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let game_time = self.world.game_time;
         let Some(c) = command_block_mut(&mut self.world, pos) else {
             return false;
@@ -524,7 +524,7 @@ impl Game<'_> {
     /// `Commands.performPrefixedCommand` for a `BaseCommandBlock`: `command`
     /// from `source` at game master level, and how many of its results
     /// succeeded.
-    pub(super) fn run_as_game_master(&mut self, command: &str, source: Source) -> i32 {
+    pub(super) fn run_as_game_master(&mut self, command: &str, source: Source) -> i32 { if let Some(__l) = crate::points_generated::P931.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // performPrefixedCommand: a leading slash is allowed.
         let line = command.strip_prefix('/').unwrap_or(command).to_owned();
         let outer = self.cmds.results.replace(Vec::new());
@@ -537,7 +537,7 @@ impl Game<'_> {
     /// `CloseableCommandBlockSource.sendSystemMessage`: the block's last
     /// output, stamped with the time. Nothing when it doesn't track output
     /// (`CommandSource.NULL`).
-    pub(super) fn command_block_output(&mut self, pos: Pos, message: Text) {
+    pub(super) fn command_block_output(&mut self, pos: Pos, message: Text) { if let Some(__l) = crate::points_generated::P930.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(c) = command_block_mut(&mut self.world, pos)
             && c.track_output
         {
@@ -548,7 +548,7 @@ impl Game<'_> {
     /// `CommandSourceStack.sendSuccess` from a command block: its output when
     /// `send_command_feedback`, and `broadcastToAdmins` when `broadcast` and
     /// `command_block_output`.
-    pub(super) fn command_block_success(&mut self, pos: Pos, message: Text, broadcast: bool) {
+    pub(super) fn command_block_success(&mut self, pos: Pos, message: Text, broadcast: bool) { let (broadcast,) = match crate::points_generated::P929.get() { Some(__l) => { let mut __a = (broadcast,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (broadcast,) };
         let Some(name) = self
             .command_block(pos)
             .filter(|c| c.track_output)
@@ -566,7 +566,7 @@ impl Game<'_> {
     }
 
     /// `LocalPlayer.openCommandBlock`.
-    pub(super) fn open_command_block(&mut self, pos: Pos) {
+    pub(super) fn open_command_block(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P928.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(block) = self.command_block(pos).cloned() else {
             return;
         };
@@ -584,7 +584,7 @@ impl Game<'_> {
         block: CommandBlock,
         mode: Mode,
         conditional: bool,
-    ) {
+    ) { let (conditional,) = match crate::points_generated::P927.get() { Some(__l) => { let mut __a = (conditional,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conditional,) };
         let (w, h) = self.gui_size();
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {
@@ -615,12 +615,12 @@ impl Game<'_> {
         self.set_screen(Screen::CommandBlock);
         self.capture(false);
     }
-    pub(super) fn close_command_block(&mut self) {
+    pub(super) fn close_command_block(&mut self) { if let Some(__l) = crate::points_generated::P926.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.command_block_screen = None;
         self.set_screen(Screen::Playing);
         self.capture(true);
     }
-    pub(super) fn draw_command_block(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_command_block(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P925.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut s) = self.command_block_screen.take() else {
             return;
         };
@@ -703,14 +703,14 @@ impl Game<'_> {
         self.command_block_screen = Some(s);
     }
     /// The wheel over the suggestion list (`CommandSuggestions.mouseScrolled`).
-    pub(super) fn command_block_scroll(&mut self, amount: f32) {
+    pub(super) fn command_block_scroll(&mut self, amount: f32) { let (amount,) = match crate::points_generated::P924.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let mouse = (self.cursor.0.floor() as i32, self.cursor.1.floor() as i32);
         if let Some(s) = self.command_block_screen.as_mut() {
             s.command.scroll(mouse, f64::from(amount));
         }
     }
     /// The command box's completion request for an `ask_server` node.
-    pub(super) fn command_block_suggestion_request(&mut self) -> Option<(i32, String)> {
+    pub(super) fn command_block_suggestion_request(&mut self) -> Option<(i32, String)> { if let Some(__l) = crate::points_generated::P923.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.command_block_screen.as_mut()?.command.take_request()
     }
     /// The server's completions for the command box's `ask_server` request.
@@ -719,7 +719,7 @@ impl Game<'_> {
         id: i32,
         range: (usize, usize),
         list: Vec<(String, Option<String>)>,
-    ) {
+    ) { let (id,) = match crate::points_generated::P922.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(mut s) = self.command_block_screen.take() else {
             return;
         };
@@ -731,7 +731,7 @@ impl Game<'_> {
         s.command.server_suggestions(&m, &c, id, range, list);
         self.command_block_screen = Some(s);
     }
-    pub(super) fn command_block_click(&mut self) {
+    pub(super) fn command_block_click(&mut self) { if let Some(__l) = crate::points_generated::P921.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut s) = self.command_block_screen.take() else {
             return;
         };
@@ -785,7 +785,7 @@ impl Game<'_> {
     }
     /// `AbstractCommandBlockEditScreen.keyPressed`: the suggestions first,
     /// then Enter is Done, Escape cancels, the rest edits the command.
-    pub(super) fn command_block_key(&mut self, event: &KeyEvent) {
+    pub(super) fn command_block_key(&mut self, event: &KeyEvent) { if let Some(__l) = crate::points_generated::P920.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if event.state != ElementState::Pressed {
             return;
         }
@@ -802,7 +802,7 @@ impl Game<'_> {
         key: KeyCode,
         shortcut: Option<horizon_client::clipboard::EditShortcut>,
         text: Option<&str>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P919.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ctrl = self.has_control_down_with_quirk();
         let shift = self.has_shift_down();
         // Windows' AltGr is Ctrl+Alt, and its characters still type.
@@ -846,7 +846,7 @@ impl Game<'_> {
         }
     }
     /// Characters typed into the command box (`StringUtil.isAllowedChatCharacter`).
-    pub(super) fn command_block_type(&mut self, typed: &str) {
+    pub(super) fn command_block_type(&mut self, typed: &str) { if let Some(__l) = crate::points_generated::P918.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let allowed: String = typed
             .chars()
             .filter(|&c| c != '\u{a7}' && c >= ' ' && c != '\u{7f}')
@@ -867,7 +867,7 @@ impl Game<'_> {
     }
     /// The edit screen's Done: a server's client sends the packet, the
     /// window's own world applies it (`handleSetCommandBlock`).
-    fn set_command_block(&mut self, s: &CommandBlockScreen) {
+    fn set_command_block(&mut self, s: &CommandBlockScreen) { if let Some(__l) = crate::points_generated::P917.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.can_use_game_master_blocks() {
             self.system_message(Text::translate("advMode.notAllowed", &[]));
             return;
@@ -899,7 +899,7 @@ impl Game<'_> {
     }
     /// `ServerGamePacketListenerImpl.handleSetCommandBlock` for a guest: the
     /// block is edited only by a creative player with game master commands.
-    pub(super) fn lan_set_command_block(&mut self, conn: u32, p: play::SetCommandBlock) {
+    pub(super) fn lan_set_command_block(&mut self, conn: u32, p: play::SetCommandBlock) { let (conn,) = match crate::points_generated::P916.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
@@ -926,7 +926,7 @@ impl Game<'_> {
     /// `ServerPlayer.openCommandBlock`: the command block's data
     /// (`saveCustomOnly`) goes to the guest whose use opened it, as the
     /// chunk's update tag leaves it out and the edit screen shows it.
-    pub(super) fn lan_open_command_block(&mut self, conn: u32, pos: Pos) {
+    pub(super) fn lan_open_command_block(&mut self, conn: u32, pos: Pos) { let (conn,) = match crate::points_generated::P915.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -955,7 +955,7 @@ impl Game<'_> {
         );
     }
     /// What `handleSetCommandBlock` does once the player may edit the block.
-    fn apply_command_block(&mut self, s: &CommandBlockEdit) {
+    fn apply_command_block(&mut self, s: &CommandBlockEdit) { if let Some(__l) = crate::points_generated::P914.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = s.pos;
         let registry = self.pack.assets.registry;
         let Some(current) = self.block_state_at(pos) else {

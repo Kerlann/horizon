@@ -126,11 +126,11 @@ impl merchant::MapMaker for GameMaps<'_> {
 }
 
 impl Game<'_> {
-    pub(super) fn random_sequences_path(&self) -> std::path::PathBuf {
+    pub(super) fn random_sequences_path(&self) -> std::path::PathBuf { if let Some(__l) = crate::points_generated::P5683.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world_root.join("data/minecraft/random_sequences.dat")
     }
     /// `RandomSequences` as `random_sequences.dat` (not on a server's guest).
-    pub(super) fn save_random_sequences(&mut self) {
+    pub(super) fn save_random_sequences(&mut self) { if let Some(__l) = crate::points_generated::P5682.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() || self.rand_sequences.ids().is_empty() {
             return;
         }
@@ -152,7 +152,7 @@ impl Game<'_> {
         set: &str,
         variant: &str,
         origin: [f64; 3],
-    ) -> Vec<MerchantOffer> {
+    ) -> Vec<MerchantOffer> { let (origin,) = match crate::points_generated::P5681.get() { Some(__l) => { let mut __a = (origin,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,) };
         let Some(sequence) = self.stations().trades.sequence(set) else {
             return Vec::new();
         };
@@ -183,7 +183,7 @@ impl Game<'_> {
         offers
     }
     /// `AbstractVillager.getOffers`: generated on first use.
-    pub(super) fn ensure_offers(&mut self, index: usize) {
+    pub(super) fn ensure_offers(&mut self, index: usize) { let (index,) = match crate::points_generated::P5680.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let species = self.mobs[index].species();
         let unset = self.mobs[index]
             .extra
@@ -228,7 +228,7 @@ impl Game<'_> {
         &mut self,
         index: usize,
         item: &str,
-    ) -> horizon_client::Result<bool> {
+    ) -> horizon_client::Result<bool> { let (index,) = match crate::points_generated::P5679.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         let species = m.species();
         if !matches!(species, Species::Villager | Species::WanderingTrader)
@@ -316,7 +316,7 @@ impl Game<'_> {
     }
     /// `Villager.setTradingPlayer(null)`: the session goes back to the mob
     /// (special prices stay as they were), the borrowed sequences to the world.
-    pub(super) fn merchant_closed(&mut self, state: &mut MerchantState) {
+    pub(super) fn merchant_closed(&mut self, state: &mut MerchantState) { if let Some(__l) = crate::points_generated::P5678.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let session = &mut state.session;
         for (id, r) in std::mem::take(&mut session.sequences) {
             self.rand_sequences.give_back(id, r);
@@ -340,7 +340,7 @@ impl Game<'_> {
         }
     }
     /// Opens a merchant menu without a mob (horizon-ctl `trade`).
-    pub(super) fn open_merchant(&mut self, profession: &str, variant: &str, level: i32) {
+    pub(super) fn open_merchant(&mut self, profession: &str, variant: &str, level: i32) { let (level,) = match crate::points_generated::P5677.get() { Some(__l) => { let mut __a = (level,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (level,) };
         let profession = format!("minecraft:{}", profession.trim_start_matches("minecraft:"));
         let variant = format!("minecraft:{}", variant.trim_start_matches("minecraft:"));
         let level = level.clamp(1, 5);
@@ -373,7 +373,7 @@ impl Game<'_> {
         &mut self,
         session: merchant::Session,
         name: Option<String>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P5676.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.open_merchant_state(MerchantState {
             session: Box::new(session),
             scroll: 0,
@@ -383,7 +383,7 @@ impl Game<'_> {
             name,
         });
     }
-    fn open_merchant_state(&mut self, state: MerchantState) {
+    fn open_merchant_state(&mut self, state: MerchantState) { if let Some(__l) = crate::points_generated::P5675.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut s = Station::new_kind(Kind::Merchant, [0, 0, 0]);
         s.merchant = Some(Box::new(state));
         self.station = Some(s);
@@ -392,7 +392,7 @@ impl Game<'_> {
         self.right = false;
     }
     /// The trading mob's random before a menu click (it ticks meanwhile).
-    pub(super) fn merchant_sync_in(&self, session: &mut merchant::Session, mob: Option<u32>) {
+    pub(super) fn merchant_sync_in(&self, session: &mut merchant::Session, mob: Option<u32>) { if let Some(__l) = crate::points_generated::P5674.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(m) = mob.and_then(|id| self.mobs.iter().find(|m| m.id == id)) {
             session.random = m.random.clone();
             session.ambient_sound_time = m.ambient_timer;
@@ -401,7 +401,7 @@ impl Game<'_> {
     }
     /// After a menu click: the session back to the station, its random to
     /// the mob, and what it did (orbs, level-ups, the yes/no voice).
-    pub(super) fn merchant_sync_out(&mut self, session: Box<merchant::Session>) {
+    pub(super) fn merchant_sync_out(&mut self, session: Box<merchant::Session>) { if let Some(__l) = crate::points_generated::P5673.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mob = self
             .station
             .as_ref()
@@ -420,7 +420,7 @@ impl Game<'_> {
         &mut self,
         session: Box<merchant::Session>,
         mob: Option<u32>,
-    ) -> (Box<merchant::Session>, Vec<MerchantOffer>) {
+    ) -> (Box<merchant::Session>, Vec<MerchantOffer>) { if let Some(__l) = crate::points_generated::P5672.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut session = session;
         let events = std::mem::take(&mut session.events);
         let mut traded = Vec::new();
@@ -468,7 +468,7 @@ impl Game<'_> {
     /// was right after its trade): the statistic, `AbstractVillager.notifyTrade`'s
     /// `villager_trade` trigger, then the mods' `native_trade_with_villager`
     /// for a server's player (when the trader is still in the level).
-    pub(super) fn merchant_traded(&mut self, mob: Option<u32>, offers: &[MerchantOffer]) {
+    pub(super) fn merchant_traded(&mut self, mob: Option<u32>, offers: &[MerchantOffer]) { if let Some(__l) = crate::points_generated::P5671.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for offer in offers {
             self.award_custom_stat("traded_with_villager", 1);
             let merchant = mob.and_then(|id| self.mobs.iter().find(|m| m.id == id));
@@ -484,7 +484,7 @@ impl Game<'_> {
         }
     }
     /// `MerchantMenu.tryMoveItems` for the selected offer (the select trade packet).
-    fn try_move_items(&mut self, index: usize) {
+    fn try_move_items(&mut self, index: usize) { let (index,) = match crate::points_generated::P5670.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         if self.remote.is_some() {
             // ServerboundSelectTradePacket; the server moves the items.
             if let Some(m) = self.station.as_mut().and_then(|s| s.merchant.as_mut()) {
@@ -502,7 +502,7 @@ impl Game<'_> {
     }
     /// Clicks on the offer list; true when one was hit. A press on the
     /// scroller holds it (`MerchantScreen.mouseClicked`).
-    pub(super) fn merchant_click(&mut self, local: (f32, f32)) -> bool {
+    pub(super) fn merchant_click(&mut self, local: (f32, f32)) -> bool { if let Some(__l) = crate::points_generated::P5669.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(m) = self.station.as_mut().and_then(|s| s.merchant.as_mut()) else {
             return false;
         };
@@ -534,7 +534,7 @@ impl Game<'_> {
     /// Space presses it again, key repeats included, so holding Space
     /// refills the payment slots after every trade. Focus stays on the
     /// button through slot clicks (`ContainerEventHandler.mouseClicked`).
-    pub(super) fn merchant_key(&mut self, key: winit::keyboard::KeyCode) -> bool {
+    pub(super) fn merchant_key(&mut self, key: winit::keyboard::KeyCode) -> bool { if let Some(__l) = crate::points_generated::P5668.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use winit::keyboard::KeyCode;
         if !matches!(key, KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space) {
             return false;
@@ -556,7 +556,7 @@ impl Game<'_> {
         true
     }
     /// The offer buttons a controller can focus (GUI origin relative).
-    pub(super) fn merchant_targets(&self) -> Vec<[f32; 4]> {
+    pub(super) fn merchant_targets(&self) -> Vec<[f32; 4]> { if let Some(__l) = crate::points_generated::P5667.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(m) = self.station.as_ref().and_then(|s| s.merchant.as_ref()) else {
             return Vec::new();
         };
@@ -566,7 +566,7 @@ impl Game<'_> {
             .collect()
     }
     /// `MerchantScreen.mouseDragged`: the held scroller follows the cursor.
-    pub(super) fn merchant_drag(&mut self) {
+    pub(super) fn merchant_drag(&mut self) { if let Some(__l) = crate::points_generated::P5666.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(size) = self
             .renderer
             .as_ref()
@@ -582,7 +582,7 @@ impl Game<'_> {
             m.scroll = drag_scroll(y, m.session.offers.len());
         }
     }
-    pub(super) fn merchant_scroll(&mut self, d: f32) {
+    pub(super) fn merchant_scroll(&mut self, d: f32) { let (d,) = match crate::points_generated::P5665.get() { Some(__l) => { let mut __a = (d,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (d,) };
         let Some(m) = self.station.as_mut().and_then(|s| s.merchant.as_mut()) else {
             return;
         };
@@ -592,7 +592,7 @@ impl Game<'_> {
         }
     }
     /// `MerchantScreen` rendering.
-    pub(super) fn draw_merchant(&mut self, batch: &mut HudBatch) -> bool {
+    pub(super) fn draw_merchant(&mut self, batch: &mut HudBatch) -> bool { if let Some(__l) = crate::points_generated::P5664.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (ox, oy) = self.inventory_origin(batch);
         let local = (self.cursor.0 - ox, self.cursor.1 - oy);
         let Some(m) = self.station.as_ref().and_then(|s| s.merchant.as_ref()) else {

@@ -12,14 +12,14 @@ use horizon_client::{command_block::Mode, text::Text};
 use horizon_protocol::packets::play::{self, Serverbound as S};
 
 impl Game<'_> {
-    fn command_cart_mut(&mut self, id: u32) -> Option<&mut Minecart> {
+    fn command_cart_mut(&mut self, id: u32) -> Option<&mut Minecart> { let (id,) = match crate::points_generated::P958.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         self.carts
             .iter_mut()
             .find(|c| c.id == id && c.kind == CartKind::CommandBlock)
     }
     /// `MinecartCommandBase.onUpdated`: the cart's command and last output go
     /// into its synched data (`DATA_ID_COMMAND_NAME`, `DATA_ID_LAST_OUTPUT`).
-    fn cart_command_updated(&mut self, id: u32) {
+    fn cart_command_updated(&mut self, id: u32) { let (id,) = match crate::points_generated::P957.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Some(c) = self.command_cart_mut(id) {
             c.synced_command = c.command.command.clone();
             c.synced_output = c.command.last_output_string();
@@ -27,7 +27,7 @@ impl Game<'_> {
     }
     /// `BaseCommandBlock.performCommand` for the cart: false when it already
     /// ran this game tick.
-    pub(super) fn perform_cart_command(&mut self, id: u32) -> bool {
+    pub(super) fn perform_cart_command(&mut self, id: u32) -> bool { let (id,) = match crate::points_generated::P956.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let game_time = self.world.game_time;
         let rules_work = self.ui.rules.bool("command_blocks_work");
         let Some(c) = self.command_cart_mut(id) else {
@@ -76,7 +76,7 @@ impl Game<'_> {
     /// `CloseableCommandBlockSource.sendSystemMessage` for the cart: its last
     /// output stamped with the time, then `onUpdated`. Nothing when it does
     /// not track output (`CommandSource.NULL`).
-    pub(super) fn cart_command_output(&mut self, id: u32, message: Text) {
+    pub(super) fn cart_command_output(&mut self, id: u32, message: Text) { let (id,) = match crate::points_generated::P955.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(c) = self.command_cart_mut(id) else {
             return;
         };
@@ -89,7 +89,7 @@ impl Game<'_> {
     /// `CommandSourceStack.sendSuccess` from a command minecart: its output
     /// when `send_command_feedback`, and `broadcastToAdmins` when
     /// `command_block_output`.
-    pub(super) fn cart_command_success(&mut self, id: u32, message: Text, broadcast: bool) {
+    pub(super) fn cart_command_success(&mut self, id: u32, message: Text, broadcast: bool) { let (id,broadcast,) = match crate::points_generated::P954.get() { Some(__l) => { let mut __a = (id,broadcast,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,broadcast,) };
         let Some(name) = self
             .command_cart_mut(id)
             .filter(|c| c.command.track_output)
@@ -108,7 +108,7 @@ impl Game<'_> {
 
     /// `LocalPlayer.openMinecartCommandBlock`: the editor over the cart's
     /// command (`MinecartCommandBlockEditScreen`).
-    pub(super) fn open_cart_command_block(&mut self, id: u32) {
+    pub(super) fn open_cart_command_block(&mut self, id: u32) { let (id,) = match crate::points_generated::P953.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(block) = self
             .carts
             .iter()
@@ -122,7 +122,7 @@ impl Game<'_> {
     /// The edit screen's Done for a cart (`populateAndSendPacket`, then
     /// `onDone` clears the last output of a cart that no longer tracks it): a
     /// server's client sends the packet, the window's own world applies it.
-    pub(super) fn set_command_minecart(&mut self, id: u32, s: &CommandBlockScreen) {
+    pub(super) fn set_command_minecart(&mut self, id: u32, s: &CommandBlockScreen) { let (id,) = match crate::points_generated::P952.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if !self.can_use_game_master_blocks() {
             self.system_message(Text::translate("advMode.notAllowed", &[]));
             return;
@@ -147,7 +147,7 @@ impl Game<'_> {
         }
     }
     /// `ServerGamePacketListenerImpl.handleSetCommandMinecart` for a guest.
-    pub(super) fn lan_set_command_minecart(&mut self, conn: u32, p: play::SetCommandMinecart) {
+    pub(super) fn lan_set_command_minecart(&mut self, conn: u32, p: play::SetCommandMinecart) { let (conn,) = match crate::points_generated::P951.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
@@ -163,7 +163,7 @@ impl Game<'_> {
     /// What `handleSetCommandMinecart` does once the player may edit: the
     /// command (which resets the success count), output tracking, the cleared
     /// last output, `onUpdated` while command blocks work, and the chat note.
-    pub(super) fn apply_cart_command(&mut self, id: u32, command: String, track_output: bool) {
+    pub(super) fn apply_cart_command(&mut self, id: u32, command: String, track_output: bool) { let (id,track_output,) = match crate::points_generated::P950.get() { Some(__l) => { let mut __a = (id,track_output,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,track_output,) };
         let enabled = self.ui.rules.bool("command_blocks_work");
         let Some(c) = self.command_cart_mut(id) else {
             return;

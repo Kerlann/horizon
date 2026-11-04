@@ -73,7 +73,7 @@ const BAN_REASON: &str = "Hate speech in chat (Horizon chat filter)";
 
 impl Game<'_> {
     /// The hub's events from a filtered text: `ChatFiltered` carried out here, the others logged.
-    pub(super) fn chat_filter_events(&mut self, events: Vec<HostEvent>) {
+    pub(super) fn chat_filter_events(&mut self, events: Vec<HostEvent>) { if let Some(__l) = crate::points_generated::P869.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for event in events {
             match event {
                 HostEvent::ChatFiltered {
@@ -99,7 +99,7 @@ impl Game<'_> {
         text: &str,
         count: u32,
         action: Action,
-    ) {
+    ) { let (count,) = match crate::points_generated::P868.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         let now = horizon_chat_filter::now_millis();
         let summary = format!(
             "[chat-filter] Refused {name}'s {} (hit {count}: {})",
@@ -178,7 +178,7 @@ impl Game<'_> {
 
     /// The message arguments of a guest's command (`/msg`, `/me`, `/say`, `/teammsg`...) through the
     /// filter: false when it refused them.
-    pub(super) fn chat_filter_command(&mut self, i: usize, command: &str) -> bool {
+    pub(super) fn chat_filter_command(&mut self, i: usize, command: &str) -> bool { let (i,) = match crate::points_generated::P867.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let Some((filter_on, permission)) = self
             .lan
             .as_ref()
@@ -206,7 +206,7 @@ impl Game<'_> {
     }
 
     /// A guest's text for a sign, an anvil or a book through the filter (`conn`'s guest).
-    pub(super) fn chat_filter_text(&mut self, conn: u32, texts: &[&str], place: Place) -> bool {
+    pub(super) fn chat_filter_text(&mut self, conn: u32, texts: &[&str], place: Place) -> bool { let (conn,) = match crate::points_generated::P866.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(i) = self
             .lan
             .as_ref()
@@ -229,7 +229,7 @@ impl Game<'_> {
 
     /// A mute command from a guest: operators of level 3 (`/ban`'s); vanilla's unknown command for
     /// the others.
-    pub(super) fn guest_mute_command(&mut self, host: &mut LanHost, conn: u32, words: &[&str]) {
+    pub(super) fn guest_mute_command(&mut self, host: &mut LanHost, conn: u32, words: &[&str]) { let (conn,) = match crate::points_generated::P865.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = host.hub.guest(conn) else {
             return;
         };
@@ -261,7 +261,7 @@ impl Game<'_> {
         host: &mut LanHost,
         words: &[&str],
         by: &str,
-    ) -> Vec<Reply> {
+    ) -> Vec<Reply> { if let Some(__l) = crate::points_generated::P864.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let reason = |from: usize| (words.len() > from).then(|| words[from..].join(" "));
         match words {
             ["mutelist"] => {
@@ -310,7 +310,7 @@ impl Game<'_> {
         time: Option<i64>,
         reason: Option<String>,
         by: &str,
-    ) -> Reply {
+    ) -> Reply { if let Some(__l) = crate::points_generated::P863.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // A player here, else one the server has seen (the user cache).
         let user = host
             .hub
@@ -342,7 +342,7 @@ impl Game<'_> {
     }
 
     /// Lifts `name`'s mute, logged; what to answer.
-    pub(super) fn unmute(&mut self, host: &mut LanHost, name: &str, by: &str) -> String {
+    pub(super) fn unmute(&mut self, host: &mut LanHost, name: &str, by: &str) -> String { if let Some(__l) = crate::points_generated::P862.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match host.hub.unmute(name) {
             Some(name) => {
                 if self.options.dedicated.is_some() {

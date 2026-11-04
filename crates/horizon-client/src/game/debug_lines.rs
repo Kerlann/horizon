@@ -38,7 +38,7 @@ pub(super) struct ServerDebug {
 
 impl Game<'_> {
     /// Every enabled entry's lines, by identifier.
-    pub(super) fn debug_entry_lines(&self, d: &mut Displayer, framebuffer: [i32; 2]) {
+    pub(super) fn debug_entry_lines(&self, d: &mut Displayer, framebuffer: [i32; 2]) { let (framebuffer,) = match crate::points_generated::P1500.get() { Some(__l) => { let mut __a = (framebuffer,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (framebuffer,) };
         let reduced = self.reduced_debug_info();
         let mut paths: Vec<&str> = ENTRIES
             .iter()
@@ -212,14 +212,14 @@ impl Game<'_> {
     }
 
     /// The camera's feet (`Entity.blockPosition`).
-    fn debug_feet(&self) -> Option<[i32; 3]> {
+    fn debug_feet(&self) -> Option<[i32; 3]> { if let Some(__l) = crate::points_generated::P1499.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let p = self.player.as_ref()?;
         Some([p.position.x, p.position.y, p.position.z].map(|v| v.floor() as i32))
     }
 
     /// The integrated server's lines when an entry wants them; the request
     /// (the dimension and the feet) goes with it, for the next server tick.
-    fn server_debug(&self, wanted: bool) -> Option<ServerDebug> {
+    fn server_debug(&self, wanted: bool) -> Option<ServerDebug> { let (wanted,) = match crate::points_generated::P1498.get() { Some(__l) => { let mut __a = (wanted,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (wanted,) };
         let server = self.integrated.as_ref()?;
         let at = self
             .debug_feet()
@@ -231,7 +231,7 @@ impl Game<'_> {
 
     /// `DebugEntryBiome`: the client level's biome at the feet, inside the
     /// build height.
-    fn debug_biome_line(&self, d: &mut Displayer) {
+    fn debug_biome_line(&self, d: &mut Displayer) { if let Some(__l) = crate::points_generated::P1497.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some([x, y, z]) = self.debug_feet() else {
             return;
         };
@@ -249,7 +249,7 @@ impl Game<'_> {
     /// area's (smart culling is always on), the render distance, and
     /// `SectionRenderDispatcher.getStats` (the meshes queued; Horizon has
     /// no buffer pool, so no buffer is ever free).
-    fn debug_chunk_render_line(&self, d: &mut Displayer) {
+    fn debug_chunk_render_line(&self, d: &mut Displayer) { if let Some(__l) = crate::points_generated::P1496.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(r) = self.renderer.as_ref() else {
             return;
         };
@@ -266,7 +266,7 @@ impl Game<'_> {
 
     /// `LevelExtractor.entityStatistics`: the mobs drawn last frame of the
     /// level's entities, and the server's simulation distance.
-    fn debug_entity_render_line(&self, d: &mut Displayer) {
+    fn debug_entity_render_line(&self, d: &mut Displayer) { if let Some(__l) = crate::points_generated::P1495.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.player.is_none() {
             return;
         }
@@ -282,7 +282,7 @@ impl Game<'_> {
     }
 
     /// `Level.getEntityCount` over the entities Horizon keeps.
-    fn debug_entity_count(&self) -> usize {
+    fn debug_entity_count(&self) -> usize { if let Some(__l) = crate::points_generated::P1494.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.mobs.iter().filter(|m| !m.removed).count()
             + self.dropped.len()
             + self.orbs.len()
@@ -297,7 +297,7 @@ impl Game<'_> {
 
     /// The sections holding a mob, an item or an orb
     /// (`EntitySectionStorage.count`).
-    fn debug_entity_sections(&self) -> usize {
+    fn debug_entity_sections(&self) -> usize { if let Some(__l) = crate::points_generated::P1493.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let sections: HashSet<[i32; 3]> = self
             .mobs
             .iter()
@@ -322,7 +322,7 @@ impl Game<'_> {
     /// (the chunk storage's size and its loaded chunks, then the entities,
     /// the sections holding them and the chunks that tick them), and the
     /// server level's when this game runs it.
-    fn debug_chunk_source_lines(&self, d: &mut Displayer, server: Option<&ServerDebug>) {
+    fn debug_chunk_source_lines(&self, d: &mut Displayer, server: Option<&ServerDebug>) { if let Some(__l) = crate::points_generated::P1492.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.player.is_none() {
             return;
         }
@@ -345,7 +345,7 @@ impl Game<'_> {
 
     /// `DebugEntryHeightmap`: the client chunk's heightmaps at the feet,
     /// and the server chunk's.
-    fn debug_heightmap_lines(&self, d: &mut Displayer, server: Option<&ServerDebug>) {
+    fn debug_heightmap_lines(&self, d: &mut Displayer, server: Option<&ServerDebug>) { if let Some(__l) = crate::points_generated::P1491.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some([x, _, z]) = self.debug_feet() else {
             return;
         };
@@ -377,7 +377,7 @@ impl Game<'_> {
     /// `Heightmap.getFirstAvailable`: one above the highest block the
     /// heightmap counts. The chunk keeps WORLD_SURFACE; every other type is
     /// at or under it, scanned down from there.
-    pub(super) fn column_height(&self, kind: HeightmapType, x: i32, z: i32) -> i32 {
+    pub(super) fn column_height(&self, kind: HeightmapType, x: i32, z: i32) -> i32 { let (x,z,) = match crate::points_generated::P1490.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,z,) };
         let properties = &self.pack.assets.properties;
         let surface = self
             .world
@@ -392,13 +392,13 @@ impl Game<'_> {
     }
 
     /// `Entity.pick(20, 0, false)` from the camera: the block outline hit.
-    fn debug_block_hit(&self) -> Option<[i32; 3]> {
+    fn debug_block_hit(&self) -> Option<[i32; 3]> { if let Some(__l) = crate::points_generated::P1489.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (origin, dir) = self.aim()?;
         Some(self.clip_ray(origin, dir, LOOKING_AT_RANGE)?.pos)
     }
 
     /// `DebugEntryLookingAt.BlockStateInfo` or `BlockTagInfo`.
-    fn debug_looking_at_block(&self, state: bool) -> Vec<String> {
+    fn debug_looking_at_block(&self, state: bool) -> Vec<String> { let (state,) = match crate::points_generated::P1488.get() { Some(__l) => { let mut __a = (state,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (state,) };
         let Some(pos) = self.debug_block_hit() else {
             return Vec::new();
         };
@@ -420,7 +420,7 @@ impl Game<'_> {
 
     /// `Entity.pick(20, 0, true)` (`ClipContext.Fluid.ANY`): the first fluid
     /// along the view, under its surface, before the block outline hit.
-    fn debug_fluid_hit(&self) -> Option<[i32; 3]> {
+    fn debug_fluid_hit(&self) -> Option<[i32; 3]> { if let Some(__l) = crate::points_generated::P1487.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (origin, dir) = self.aim()?;
         let block = self.clip_ray(origin, dir, LOOKING_AT_RANGE);
         let reach = block.map_or(LOOKING_AT_RANGE, |h| {
@@ -445,7 +445,7 @@ impl Game<'_> {
 
     /// `FluidState`'s registered name and properties at `pos`: a source is
     /// `water`/`lava` with `falling`, a flowing one `flowing_*` with `level`.
-    fn fluid_state(&self, pos: [i32; 3]) -> (String, Vec<(&'static str, String)>) {
+    fn fluid_state(&self, pos: [i32; 3]) -> (String, Vec<(&'static str, String)>) { let (pos,) = match crate::points_generated::P1486.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         use horizon_client::blocks::Fluid;
         let f = self
             .res
@@ -468,7 +468,7 @@ impl Game<'_> {
     }
 
     /// `DebugEntryLookingAt.FluidStateInfo` or `FluidTagInfo`.
-    fn debug_looking_at_fluid(&self, state: bool) -> Vec<String> {
+    fn debug_looking_at_fluid(&self, state: bool) -> Vec<String> { let (state,) = match crate::points_generated::P1485.get() { Some(__l) => { let mut __a = (state,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (state,) };
         let Some(pos) = self.debug_fluid_hit() else {
             return Vec::new();
         };
@@ -487,7 +487,7 @@ impl Game<'_> {
 
     /// `Minecraft.crosshairPickEntity`'s type: the nearest entity under the
     /// crosshair before any block.
-    fn crosshair_entity_type(&self) -> Option<String> {
+    fn crosshair_entity_type(&self) -> Option<String> { if let Some(__l) = crate::points_generated::P1484.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut best: Option<(f64, String)> = None;
         let mut offer = |hit: Option<(f64, String)>| {
             if let Some((distance, kind)) = hit
@@ -531,7 +531,7 @@ impl Game<'_> {
     /// The server thread's half of the debug entries, in the level of
     /// `dim` while it is in place: the server chunk's heightmaps, the local
     /// difficulty, the last spawn state and the chunk source's counts.
-    pub(super) fn server_debug_lines(&self, feet: [i32; 3]) -> ServerDebug {
+    pub(super) fn server_debug_lines(&self, feet: [i32; 3]) -> ServerDebug { let (feet,) = match crate::points_generated::P1483.get() { Some(__l) => { let mut __a = (feet,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (feet,) };
         let [x, y, z] = feet;
         let key = (x >> 4, z >> 4);
         let loaded = self.world.chunks.contains_key(&key);

@@ -34,10 +34,10 @@ impl Game<'_> {
     // ---- /recipe -----------------------------------------------------------
 
     /// Every recipe id of the recipe manager (what `/recipe` resolves and suggests).
-    pub(super) fn learnable_recipes(&self) -> Vec<String> {
+    pub(super) fn learnable_recipes(&self) -> Vec<String> { if let Some(__l) = crate::points_generated::P1264.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.stations().recipe_index.ids().cloned().collect()
     }
-    pub(super) fn cmd_recipe(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_recipe(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1263.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = self.entities(ctx, "targets", true)?;
         let give = id == "recipe.give";
         let recipes: Vec<String> = match ctx.get("recipe") {
@@ -84,7 +84,7 @@ impl Game<'_> {
     /// ServerRecipeBook.addRecipes/removeRecipes for the player in place: how
     /// many recipe book displays changed (a transmute recipe has one per
     /// material count).
-    pub(in crate::game) fn change_recipes(&mut self, give: bool, recipes: &[String]) -> i32 {
+    pub(in crate::game) fn change_recipes(&mut self, give: bool, recipes: &[String]) -> i32 { let (give,) = match crate::points_generated::P1262.get() { Some(__l) => { let mut __a = (give,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (give,) };
         if give {
             return self.award_recipes(recipes) as i32;
         }
@@ -147,7 +147,7 @@ impl Game<'_> {
         }
     }
     /// `DamageCommand.damage`: apply its source and report an accepted hit.
-    pub(super) fn cmd_damage(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_damage(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1261.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = self.entities(ctx, "target", false)?;
         let Some(target) = targets.first().copied() else {
             return Ok(0);
@@ -257,7 +257,7 @@ impl Game<'_> {
     }
 
     /// Retain the mob hit's causing-player connection after the hit is accepted.
-    fn command_damage_mob(&mut self, id: u32, amount: f32, damage: Damage) -> bool {
+    fn command_damage_mob(&mut self, id: u32, amount: f32, damage: Damage) -> bool { let (id,amount,) = match crate::points_generated::P1260.get() { Some(__l) => { let mut __a = (id,amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,amount,) };
         let hurt =
             self.mobs.iter_mut().find(|m| m.id == id).is_some_and(|m| {
                 m.damage(crate::game::entity::damage_level_of!(self), amount, damage)
@@ -283,7 +283,7 @@ impl Game<'_> {
 
     // ---- /rotate and /swing -----------------------------------------------------------
 
-    pub(super) fn cmd_rotate(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_rotate(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1259.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = self.entities(ctx, "target", false)?;
         let Some(t) = targets.first().copied() else {
             return Ok(0);
@@ -336,7 +336,7 @@ impl Game<'_> {
         self.feedback(Text::translate("commands.rotate.success", &[name]));
         Ok(1)
     }
-    pub(super) fn cmd_swing(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_swing(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1258.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = if ctx.get("targets").is_some() {
             self.entities(ctx, "targets", false)?
         } else {
@@ -380,7 +380,7 @@ impl Game<'_> {
 
     // ---- sounds -----------------------------------------------------------------------
 
-    pub(super) fn cmd_playsound(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_playsound(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1257.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Arg::Resource(sound)) = ctx.get("sound").cloned() else {
             return Ok(0);
         };
@@ -462,7 +462,7 @@ impl Game<'_> {
         pitch: f32,
         source: usize,
         seed: i64,
-    ) {
+    ) { let (at,volume,pitch,source,seed,) = match crate::points_generated::P1256.get() { Some(__l) => { let mut __a = (at,volume,pitch,source,seed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,volume,pitch,source,seed,) };
         let guest = match t {
             Target::Guest(conn) => Some(conn),
             _ => self.lan_acting,
@@ -489,7 +489,7 @@ impl Game<'_> {
         targets: &[Target],
         sound: Option<&str>,
         source: Option<usize>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P1255.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let packet = C::StopSound(play::StopSound {
             source: source.map(|s| s as i32),
             sound: sound.map(str::to_owned),
@@ -509,7 +509,7 @@ impl Game<'_> {
             }
         }
     }
-    pub(super) fn cmd_stopsound(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_stopsound(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1254.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = self.entities(ctx, "targets", true)?;
         let source = ctx
             .literals
@@ -539,7 +539,7 @@ impl Game<'_> {
 
     // ---- /particle ----------------------------------------------------------------------
 
-    pub(super) fn cmd_particle(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_particle(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1253.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::particles::{ParticleOptions, ParticleType};
         let Some(Arg::Str(spec)) = ctx.get("name").cloned() else {
             return Ok(0);
@@ -780,7 +780,7 @@ impl Game<'_> {
         let short = attribute.trim_start_matches("minecraft:");
         Text::translate(&format!("attribute.name.{short}"), &[])
     }
-    pub(super) fn cmd_attribute(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_attribute(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1252.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = self.entities(ctx, "target", false)?;
         let Some(target) = targets.first().copied() else {
             return Ok(0);
@@ -1101,7 +1101,7 @@ impl Game<'_> {
         &mut self,
         t: Target,
         attribute: &str,
-    ) -> Option<&mut horizon_world::attributes::entity::EntityAttributes> {
+    ) -> Option<&mut horizon_world::attributes::entity::EntityAttributes> { if let Some(__l) = crate::points_generated::P1251.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Target::Mob(id) = t
             && matches!(attribute, "minecraft:armor" | "minecraft:armor_toughness")
         {
@@ -1127,7 +1127,7 @@ impl Game<'_> {
         attribute: &str,
         (name, description): (&Text, &Text),
         (value_arg, scale, modifier_id, op): (f64, f64, &str, &str),
-    ) -> R<i32> {
+    ) -> R<i32> { if let Some(__l) = crate::points_generated::P1250.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_world::attributes::{Modifier, Operation};
         let no_attribute = || {
             text_error(
@@ -1264,7 +1264,7 @@ impl Game<'_> {
 
     // ---- /ride ----------------------------------------------------------------------------
 
-    pub(super) fn cmd_ride(&mut self, id: &str, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_ride(&mut self, id: &str, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1249.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = self.entities(ctx, "target", false)?;
         let Some(target) = targets.first().copied() else {
             return Ok(0);
@@ -1323,7 +1323,7 @@ impl Game<'_> {
     }
 
     /// Entity.getVehicle: the player's mount, or a mob's.
-    pub(super) fn ride_vehicle(&self, t: Target) -> Option<Target> {
+    pub(super) fn ride_vehicle(&self, t: Target) -> Option<Target> { if let Some(__l) = crate::points_generated::P1248.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let id = match t {
             Target::Player => self.riding?,
             Target::Guest(conn) => self.command_guest(conn)?.vehicle?,
@@ -1341,7 +1341,7 @@ impl Game<'_> {
     /// LivingEntity.stopRiding for a mob: off its vehicle
     /// (Entity.removePassenger), then to where the vehicle lets it out
     /// (LivingEntity.dismountVehicle).
-    pub(in crate::game) fn dismount_mob(&mut self, rider: u32) {
+    pub(in crate::game) fn dismount_mob(&mut self, rider: u32) { let (rider,) = match crate::points_generated::P1247.get() { Some(__l) => { let mut __a = (rider,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (rider,) };
         let Some(i) = self.mobs.iter().position(|m| m.id == rider) else {
             return;
         };
@@ -1372,7 +1372,7 @@ impl Game<'_> {
 
     // ---- /spreadplayers -----------------------------------------------------------------------
 
-    pub(super) fn cmd_spreadplayers(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_spreadplayers(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1246.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let centre = self
             .position_arg(ctx, "center")
             .unwrap_or_else(|| self.source_position());
@@ -1599,7 +1599,7 @@ impl Game<'_> {
         Ok(points.len() as i32)
     }
     /// `SpreadPlayersCommand.Position.getSpawnY`.
-    fn spread_spawn_y(&self, p: [f64; 2], max_y: i32) -> i32 {
+    fn spread_spawn_y(&self, p: [f64; 2], max_y: i32) -> i32 { let (p,max_y,) = match crate::points_generated::P1245.get() { Some(__l) => { let mut __a = (p,max_y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,max_y,) };
         let (x, z) = (p[0].floor() as i32, p[1].floor() as i32);
         let air = |y: i32| {
             let name: &str = &self.res.facts().get(self.world.block(x, y, z)).name;
@@ -1624,7 +1624,7 @@ impl Game<'_> {
         max_y + 1
     }
     /// `SpreadPlayersCommand.Position.isSafe`.
-    fn spread_safe(&self, p: [f64; 2], max_y: i32) -> bool {
+    fn spread_safe(&self, p: [f64; 2], max_y: i32) -> bool { let (p,max_y,) = match crate::points_generated::P1244.get() { Some(__l) => { let mut __a = (p,max_y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,max_y,) };
         let y = self.spread_spawn_y(p, max_y) - 1;
         let (x, z) = (p[0].floor() as i32, p[1].floor() as i32);
         let name = self.res.facts().get(self.world.block(x, y, z)).name.clone();

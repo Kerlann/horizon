@@ -80,7 +80,7 @@ fn matches_name(pattern: &str, name: &str) -> bool {
 }
 
 impl Game<'_> {
-    fn owner_of(&mut self, ctx: &Context, prefix: &str, many: bool) -> R<Vec<Owner>> {
+    fn owner_of(&mut self, ctx: &Context, prefix: &str, many: bool) -> R<Vec<Owner>> { let (many,) = match crate::points_generated::P1162.get() { Some(__l) => { let mut __a = (many,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (many,) };
         let kind = ctx
             .literals
             .iter()
@@ -97,7 +97,7 @@ impl Game<'_> {
         Ok(targets.into_iter().map(Owner::Entity).collect())
     }
     /// The slots a name (or wildcard group) addresses on an owner.
-    pub(in crate::game) fn slots_named(&mut self, owner: &Owner, name: &str) -> Vec<Slot> {
+    pub(in crate::game) fn slots_named(&mut self, owner: &Owner, name: &str) -> Vec<Slot> { if let Some(__l) = crate::points_generated::P1161.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Owner::Entity(Target::Guest(conn)) = *owner {
             let slots = self.for_player(Target::Guest(conn), |g| {
                 g.slots_named(&Owner::Entity(Target::Player), name)
@@ -217,7 +217,7 @@ impl Game<'_> {
         }
         out
     }
-    pub(in crate::game) fn slot_get(&mut self, s: &Slot) -> Option<ItemStack> {
+    pub(in crate::game) fn slot_get(&mut self, s: &Slot) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P1160.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match s {
             Slot::Guest(conn, slot) => self
                 .for_player(Target::Guest(*conn), |g| g.slot_get(slot))
@@ -261,7 +261,7 @@ impl Game<'_> {
     /// one whose `getEquipmentSlotForItem` is this very slot. A stand's
     /// `canUseSlot` refuses body, saddle and the slots its `DisabledSlots`
     /// lock, so such an item is MAINHAND's. Every other slot takes anything.
-    fn equipment_slot_accepts(&self, slot: &Slot, stack: &Option<ItemStack>) -> bool {
+    fn equipment_slot_accepts(&self, slot: &Slot, stack: &Option<ItemStack>) -> bool { if let Some(__l) = crate::points_generated::P1159.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_items::equipment::{BODY, CHEST, FEET, LEGS, MAINHAND, SADDLE};
         let (index, stand) = match slot {
             Slot::Stand(id, i) => (*i, self.armor_stands.iter().find(|a| a.id == *id)),
@@ -287,11 +287,11 @@ impl Game<'_> {
         &mut self,
         slot: &Slot,
         stack: Option<ItemStack>,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P1158.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.equipment_slot_accepts(slot, &stack) && self.slot_set(slot, stack)
     }
     /// Put a stack (or nothing) in a slot; false when the slot cannot take it.
-    pub(in crate::game) fn slot_set(&mut self, s: &Slot, stack: Option<ItemStack>) -> bool {
+    pub(in crate::game) fn slot_set(&mut self, s: &Slot, stack: Option<ItemStack>) -> bool { if let Some(__l) = crate::points_generated::P1157.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match s {
             Slot::Guest(conn, slot) => self
                 .for_player(Target::Guest(*conn), |g| g.slot_set(slot, stack))
@@ -390,7 +390,7 @@ impl Game<'_> {
             },
         }
     }
-    fn owner_holder(&self, o: &Owner) -> Holder {
+    fn owner_holder(&self, o: &Owner) -> Holder { if let Some(__l) = crate::points_generated::P1156.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match o {
             Owner::Entity(t) => Holder {
                 name: String::new(),
@@ -404,10 +404,10 @@ impl Game<'_> {
             },
         }
     }
-    fn stack_name(&self, s: &ItemStack) -> Text {
+    fn stack_name(&self, s: &ItemStack) -> Text { if let Some(__l) = crate::points_generated::P1155.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.stack_display_name(s)
     }
-    fn item_from_input(&self, ctx: &Context) -> R<Option<ItemStack>> {
+    fn item_from_input(&self, ctx: &Context) -> R<Option<ItemStack>> { if let Some(__l) = crate::points_generated::P1154.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(Arg::Item(ItemInput { id, components, .. })) = ctx.get("item").cloned() else {
             return Ok(None);
         };
@@ -444,7 +444,7 @@ impl Game<'_> {
         this: Option<&horizon_client::advancements::EntityView>,
         origin: [f64; 3],
         depth: u32,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { let (origin,depth,) = match crate::points_generated::P1153.get() { Some(__l) => { let mut __a = (origin,depth,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (origin,depth,) };
         use horizon_core::random::RandomSource;
         use serde_json::Value;
         if depth > 16 {
@@ -713,7 +713,7 @@ impl Game<'_> {
     }
     /// `ItemStack.getMaxStackSize`: the max_stack_size component, else the
     /// item's.
-    pub(in crate::game) fn stack_max_size(&self, s: &ItemStack) -> u32 {
+    pub(in crate::game) fn stack_max_size(&self, s: &ItemStack) -> u32 { if let Some(__l) = crate::points_generated::P1152.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(Tag::Int(n)) = s.data().and_then(|d| d.other("minecraft:max_stack_size")) {
             return (*n).clamp(1, 99) as u32;
         }
@@ -721,7 +721,7 @@ impl Game<'_> {
     }
     /// `ResourceOrIdArgument.getItemModifier`: an inline modifier (SNBT) or
     /// a registered one.
-    pub(super) fn item_modifier_arg(&mut self, ctx: &Context, name: &str) -> R<serde_json::Value> {
+    pub(super) fn item_modifier_arg(&mut self, ctx: &Context, name: &str) -> R<serde_json::Value> { if let Some(__l) = crate::points_generated::P1151.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let raw = match ctx.get(name) {
             Some(Arg::Resource(s) | Arg::Str(s)) => s.clone(),
             _ => return Err(err("command.failed", &[])),
@@ -744,7 +744,7 @@ impl Game<'_> {
             .ok_or_else(|| err("argument.item_modifier.unknown", &[&id]))
     }
     /// `/item modify (entity|block) <target> <slot> <modifier>`.
-    pub(super) fn cmd_item_modify(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_item_modify(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1150.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let targets = self.owner_of(ctx, "target", true)?;
         let Some(Arg::Str(slot_name)) = ctx.get("slot").cloned() else {
             return Ok(0);
@@ -839,7 +839,7 @@ impl Game<'_> {
         Ok(total)
     }
     /// `/item replace|fill|override <target> <slots> (with <item> [count] | from <source> <slots>)`.
-    pub(super) fn cmd_item(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn cmd_item(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1149.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mode = ctx
             .literals
             .iter()
@@ -1004,7 +1004,7 @@ impl Game<'_> {
         Ok(total)
     }
     /// `if items` and `if slots`: how many items match / how many slots.
-    pub(super) fn condition_items(&mut self, c: &Context) -> R<(bool, i32)> {
+    pub(super) fn condition_items(&mut self, c: &Context) -> R<(bool, i32)> { if let Some(__l) = crate::points_generated::P1148.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let owners = self.owner_of(c, "source", true)?;
         let Some(Arg::Str(slot_name)) = c.get("slots").cloned() else {
             return Ok((false, 0));

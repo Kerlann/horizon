@@ -6,7 +6,7 @@ use horizon_client::mobs::{equine, llama};
 use horizon_core::random::RandomSource;
 
 impl Game<'_> {
-    fn llama_sound(&mut self, index: usize, sound: &str, volume: f32) {
+    fn llama_sound(&mut self, index: usize, sound: &str, volume: f32) { let (index,volume,) = match crate::points_generated::P2555.get() { Some(__l) => { let mut __a = (index,volume,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,volume,) };
         let at = self.mobs[index].center();
         let pitch = (self.world.random.next_float() - self.world.random.next_float()) * 0.2 + 1.0;
         self.audio
@@ -14,7 +14,7 @@ impl Game<'_> {
     }
     /// `Llama.handleEating`: wheat and hay bales heal, age up a baby, raise
     /// the temper and, from a hay bale, put a tame adult in love.
-    fn feed_llama(&mut self, index: usize, item: &str) -> bool {
+    fn feed_llama(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P2554.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let (age_up, temper, heal) = match item {
             "minecraft:wheat" => (10, 3, 2.0),
             "minecraft:hay_block" => (90, 6, 10.0),
@@ -70,7 +70,7 @@ impl Game<'_> {
     }
     /// `AbstractChestedHorse.mobInteract` and `AbstractHorse.mobInteract` for
     /// llamas and trader llamas. Returns whether the click was used.
-    pub(super) fn interact_llama(&mut self, index: usize, item: &str) -> bool {
+    pub(super) fn interact_llama(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P2553.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         if !m.alive() || Some(m.id) == self.riding {
             return false;
@@ -147,7 +147,7 @@ impl Game<'_> {
         self.trigger_player("minecraft:started_riding");
         true
     }
-    fn is_led_by_trader(&self, index: usize) -> bool {
+    fn is_led_by_trader(&self, index: usize) -> bool { let (index,) = match crate::points_generated::P2552.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         m.species() == horizon_client::mobs::Species::TraderLlama
             && matches!(

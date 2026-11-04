@@ -10,7 +10,7 @@ use mod_api::{LevelRef, NativeSoundSource, ParticleOptions};
 
 impl Game<'_> {
     /// The level's dimension id, for a handle of this open on the server.
-    fn native_level_dimension(&self, level: LevelRef) -> Option<&'static str> {
+    fn native_level_dimension(&self, level: LevelRef) -> Option<&'static str> { if let Some(__l) = crate::points_generated::P3805.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_level_world(level)?;
         [Dim::Overworld, Dim::Nether, Dim::End]
             .into_iter()
@@ -31,7 +31,7 @@ impl Game<'_> {
         source: NativeSoundSource,
         volume: f32,
         pitch: f32,
-    ) -> bool {
+    ) -> bool { let (at,volume,pitch,) = match crate::points_generated::P3804.get() { Some(__l) => { let mut __a = (at,volume,pitch,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,volume,pitch,) };
         self.native_queue_sound(level, sound, at, source, volume, pitch, None)
             .is_some()
     }
@@ -47,7 +47,7 @@ impl Game<'_> {
         volume: f32,
         pitch: f32,
         except: Option<u32>,
-    ) -> Option<&mut NativeSound> {
+    ) -> Option<&mut NativeSound> { let (at,volume,pitch,) = match crate::points_generated::P3803.get() { Some(__l) => { let mut __a = (at,volume,pitch,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,volume,pitch,) };
         let dimension = self.native_level_dimension(level)?;
         if !mod_sound_ok(sound, at, source.index(), volume, pitch) {
             return None;
@@ -83,7 +83,7 @@ impl Game<'_> {
         spread: [f64; 3],
         speed: f64,
         count: i32,
-    ) -> bool {
+    ) -> bool { let (at,spread,speed,count,) = match crate::points_generated::P3802.get() { Some(__l) => { let mut __a = (at,spread,speed,count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,spread,speed,count,) };
         let Some(dimension) = self.native_level_dimension(level) else {
             return false;
         };

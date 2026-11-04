@@ -88,7 +88,7 @@ impl Game<'_> {
     /// `TestInstanceBlockEntity.getBeamSections`: grey while running, green
     /// for a pass, red for a failed required test and orange for an optional
     /// one; each section is one block tall and the last runs to the sky.
-    fn test_instance_beam(&self, e: &BlockEntity) -> Option<Vec<(u32, i32)>> {
+    fn test_instance_beam(&self, e: &BlockEntity) -> Option<Vec<(u32, i32)>> { if let Some(__l) = crate::points_generated::P566.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let BlockEntity::TestInstanceBlock(b) = e else {
             return None;
         };
@@ -110,7 +110,7 @@ impl Game<'_> {
     }
 
     /// The beam color of a `BeaconBeamBlock` (stained glass and panes, the beacon).
-    fn beam_color(&self, name: &str) -> Option<u32> {
+    fn beam_color(&self, name: &str) -> Option<u32> { if let Some(__l) = crate::points_generated::P565.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if name == "minecraft:beacon" {
             return Some(DYE[0]);
         }
@@ -121,12 +121,12 @@ impl Game<'_> {
         DYE_NAMES.iter().position(|d| *d == dye).map(|i| DYE[i])
     }
     /// `getHeight(WORLD_SURFACE)`: above the highest non-air block.
-    pub(super) fn world_surface(&self, x: i32, z: i32) -> i32 {
+    pub(super) fn world_surface(&self, x: i32, z: i32) -> i32 { let (x,z,) = match crate::points_generated::P564.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,z,) };
         self.world
             .world_surface(x, z, |id| self.res.facts().is_air(id))
     }
     /// `BeaconBlockEntity.tick` of the beacon at `key`.
-    pub(super) fn tick_beacon_at(&mut self, key: (i32, i32, i32)) {
+    pub(super) fn tick_beacon_at(&mut self, key: (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P563.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BlockEntity::Beacon(mut b)) = self.world.block_entities.take(&key) else {
             return;
         };
@@ -141,7 +141,7 @@ impl Game<'_> {
     /// `ClientLevel.tickBlockEntities` for beacons: a server's chunk data
     /// carries no beam sections, so the client builds them too; effects,
     /// sounds and the advancement stay with the server.
-    pub(super) fn client_tick_beacons(&mut self) {
+    pub(super) fn client_tick_beacons(&mut self) { if let Some(__l) = crate::points_generated::P562.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let keys: Vec<_> = self
             .world
             .block_entities
@@ -156,7 +156,7 @@ impl Game<'_> {
             self.world.block_entities.put(key, BlockEntity::Beacon(b));
         }
     }
-    fn tick_beacon(&mut self, (x, y, z): (i32, i32, i32), b: &mut Beacon, client: bool) {
+    fn tick_beacon(&mut self, (x, y, z): (i32, i32, i32), b: &mut Beacon, client: bool) { let (client,) = match crate::points_generated::P561.get() { Some(__l) => { let mut __a = (client,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (client,) };
         let mut check = if b.last_check_y < y {
             b.checking.clear();
             b.last_check_y = y - 1;
@@ -223,7 +223,7 @@ impl Game<'_> {
     }
     /// `BeaconBlockEntity.tick` after activating: `CONSTRUCT_BEACON` for a
     /// player in the box `AABB(x, y, z, x, y - 4, z).inflate(10, 5, 10)`.
-    fn beacon_constructed(&mut self, p: [i32; 3], levels: i32) {
+    fn beacon_constructed(&mut self, p: [i32; 3], levels: i32) { let (p,levels,) = match crate::points_generated::P560.get() { Some(__l) => { let mut __a = (p,levels,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (p,levels,) };
         let Some(bb) = self
             .player
             .as_ref()
@@ -243,7 +243,7 @@ impl Game<'_> {
             self.trigger_construct_beacon(levels);
         }
     }
-    pub(super) fn beacon_sound(&mut self, p: [i32; 3], sound: &str) {
+    pub(super) fn beacon_sound(&mut self, p: [i32; 3], sound: &str) { let (p,) = match crate::points_generated::P559.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (p,) };
         let at = [
             f64::from(p[0]) + 0.5,
             f64::from(p[1]) + 0.5,
@@ -252,7 +252,7 @@ impl Game<'_> {
         self.audio.play(sound, Some(at), 1.0, 1.0);
     }
     /// `updateBase`: complete layers of `beacon_base_blocks` below.
-    fn beacon_base(&self, x: i32, y: i32, z: i32) -> i32 {
+    fn beacon_base(&self, x: i32, y: i32, z: i32) -> i32 { let (x,y,z,) = match crate::points_generated::P558.get() { Some(__l) => { let mut __a = (x,y,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,z,) };
         let base = self
             .res
             .items()
@@ -279,10 +279,10 @@ impl Game<'_> {
     }
     /// `applyEffects`: the powers for players within `levels * 10 + 10` (any height above).
     /// `BeaconBlockEntity.applyEffects`: every player in range.
-    fn beacon_effects(&mut self, p: [i32; 3], b: &Beacon) {
+    fn beacon_effects(&mut self, p: [i32; 3], b: &Beacon) { let (p,) = match crate::points_generated::P557.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (p,) };
         self.for_each_player(|g| g.beacon_effects_on_player(p, b));
     }
-    fn beacon_effects_on_player(&mut self, p: [i32; 3], b: &Beacon) {
+    fn beacon_effects_on_player(&mut self, p: [i32; 3], b: &Beacon) { let (p,) = match crate::points_generated::P556.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (p,) };
         let Some(primary) = b.primary.as_deref().and_then(effect_id) else {
             return;
         };
@@ -311,7 +311,7 @@ impl Game<'_> {
         }
     }
     /// Opening the menu shows the beacon's current powers.
-    pub(super) fn beacon_opened(&mut self) {
+    pub(super) fn beacon_opened(&mut self) { if let Some(__l) = crate::points_generated::P555.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(s) = self.station.as_ref().filter(|s| s.kind == Kind::Beacon) else {
             return;
         };
@@ -326,7 +326,7 @@ impl Game<'_> {
             s.beacon = [index(p), index(sec)];
         }
     }
-    fn beacon_levels(&self) -> i32 {
+    fn beacon_levels(&self) -> i32 { if let Some(__l) = crate::points_generated::P554.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(s) = self.station.as_ref() else {
             return 0;
         };
@@ -342,7 +342,7 @@ impl Game<'_> {
     /// Clicks on the power, confirm and cancel buttons.
     /// The effect, upgrade, confirm and cancel buttons a controller can
     /// focus (GUI origin relative).
-    pub(super) fn beacon_targets(&self) -> Vec<[f32; 4]> {
+    pub(super) fn beacon_targets(&self) -> Vec<[f32; 4]> { if let Some(__l) = crate::points_generated::P553.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (ux, uy) = upgrade_button();
         buttons()
             .into_iter()
@@ -351,7 +351,7 @@ impl Game<'_> {
             .map(|(x, y)| [x + SHIFT, y, 22.0, 22.0])
             .collect()
     }
-    pub(super) fn beacon_click(&mut self, local: (f32, f32)) -> bool {
+    pub(super) fn beacon_click(&mut self, local: (f32, f32)) -> bool { if let Some(__l) = crate::points_generated::P552.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let l = (local.0 - SHIFT, local.1);
         let levels = self.beacon_levels();
         let Some(sel) = self.station.as_ref().map(|s| s.beacon) else {
@@ -417,7 +417,7 @@ impl Game<'_> {
         }
         false
     }
-    fn close_beacon_screen(&mut self) {
+    fn close_beacon_screen(&mut self) { if let Some(__l) = crate::points_generated::P551.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.close_container();
         self.set_screen(super::Screen::Playing);
         self.capture(true);
@@ -425,7 +425,7 @@ impl Game<'_> {
     /// `BeaconMenu.updateEffects`: spend the payment and set the powers. On
     /// a server, `BeaconScreen`'s confirm button sends them
     /// (`ServerboundSetBeaconPacket`) and the server's menu does it.
-    fn confirm_beacon(&mut self, sel: [Option<usize>; 2]) {
+    fn confirm_beacon(&mut self, sel: [Option<usize>; 2]) { if let Some(__l) = crate::points_generated::P550.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             let id = |e: Option<usize>| e.and_then(|e| self.remote_effect_network_id(EFFECTS[e].0));
             let (primary, secondary) = (id(sel[0]), id(sel[1]));
@@ -452,7 +452,7 @@ impl Game<'_> {
         self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
     }
     /// `BeaconScreen`: background, labels, payment icons, power buttons.
-    pub(super) fn draw_beacon(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_beacon(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P549.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (ox, oy) = self.inventory_origin(batch);
         let (bx, by) = (ox + SHIFT, oy);
         let local = (self.cursor.0 - bx, self.cursor.1 - by);
@@ -609,7 +609,7 @@ impl Game<'_> {
         camera: glam::DVec3,
         alpha: f64,
         out: &mut Vec<Vertex>,
-    ) {
+    ) { let (alpha,) = match crate::points_generated::P548.get() { Some(__l) => { let mut __a = (alpha,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (alpha,) };
         let Some(s) = self
             .gui
             .atlas

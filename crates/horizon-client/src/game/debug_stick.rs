@@ -39,7 +39,7 @@ impl Game<'_> {
     /// `DebugStickItem.useOn`: a right click cycles the value of the property
     /// in `debug_stick_state` (the first property when none is selected yet).
     /// `Some` is the vanilla result (`SUCCESS`/`FAIL`), `None` another item.
-    pub(super) fn debug_stick_use_on(&mut self, pos: [i32; 3]) -> Result<Option<bool>> {
+    pub(super) fn debug_stick_use_on(&mut self, pos: [i32; 3]) -> Result<Option<bool>> { let (pos,) = match crate::points_generated::P1522.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if !self.held().is_some_and(is_debug_stick) {
             return Ok(None);
         }
@@ -48,7 +48,7 @@ impl Game<'_> {
 
     /// `DebugStickItem.canDestroyBlock`: a left click selects the next
     /// property and never destroys the block.
-    pub(super) fn debug_stick_can_destroy(&mut self, pos: [i32; 3]) -> Result<bool> {
+    pub(super) fn debug_stick_can_destroy(&mut self, pos: [i32; 3]) -> Result<bool> { let (pos,) = match crate::points_generated::P1521.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if !self.held().is_some_and(is_debug_stick) {
             return Ok(true);
         }
@@ -57,7 +57,7 @@ impl Game<'_> {
     }
 
     /// `DebugStickItem.handleInteraction`: whether the interaction succeeded.
-    fn debug_stick_interact(&mut self, pos: [i32; 3], cycle: bool) -> Result<bool> {
+    fn debug_stick_interact(&mut self, pos: [i32; 3], cycle: bool) -> Result<bool> { let (pos,cycle,) = match crate::points_generated::P1520.get() { Some(__l) => { let mut __a = (pos,cycle,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,cycle,) };
         // `Player.canUseGameMasterBlocks`: creative with game-master commands.
         if !self.can_use_game_master_blocks() {
             return Ok(false);
@@ -144,7 +144,7 @@ impl Game<'_> {
     }
 
     /// `DebugStickState.withProperty(block, property)` on the acting hand.
-    fn set_debug_stick_property(&mut self, block: &str, property: &str) {
+    fn set_debug_stick_property(&mut self, block: &str, property: &str) { if let Some(__l) = crate::points_generated::P1519.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(stack) = self.held_mut().as_mut() else {
             return;
         };
@@ -154,7 +154,7 @@ impl Game<'_> {
 
     /// `ServerPlayer.sendOverlayMessage`: the steady player sees it on this
     /// game's HUD; a server client receives it as a packet.
-    fn debug_stick_message(&mut self, message: Text) {
+    fn debug_stick_message(&mut self, message: Text) { if let Some(__l) = crate::points_generated::P1518.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.lan_acting.is_some() {
             self.guest_packets
                 .push(horizon_protocol::packets::play::Clientbound::SystemChat(

@@ -199,7 +199,7 @@ impl Game<'_> {
     /// `minecraft:custom_options` `dialog_list` when it names several. `None`
     /// when the tag is empty: the caller falls back to the server links
     /// button, as vanilla does.
-    fn pause_screen_additions(&self) -> Option<(Text, Tag)> {
+    fn pause_screen_additions(&self) -> Option<(Text, Tag)> { if let Some(__l) = crate::points_generated::P5163.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let registries = &self.remote.as_ref()?.registries;
         let dialogs = registries.registries.get("minecraft:dialog")?;
         let tag = registries
@@ -229,10 +229,10 @@ impl Game<'_> {
     }
 
     /// Singleplayer also has a connection, backed by the integrated server.
-    pub(super) fn external_server(&self) -> bool {
+    pub(super) fn external_server(&self) -> bool { if let Some(__l) = crate::points_generated::P5162.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote.is_some() && self.integrated.is_none()
     }
-    pub(super) fn draw_pause_menu(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_pause_menu(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5161.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let friends = self.friends_view().shown;
         let atlas = &self.gui.atlas;
         let (w, h) = (batch.width, batch.height);
@@ -349,7 +349,7 @@ impl Game<'_> {
             ui::tooltip(batch, atlas, &lines, self.cursor);
         }
     }
-    pub(super) fn execute_pause_action(&mut self, hit: u8) -> Result<()> {
+    pub(super) fn execute_pause_action(&mut self, hit: u8) -> Result<()> { let (hit,) = match crate::points_generated::P5160.get() { Some(__l) => { let mut __a = (hit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (hit,) };
         match hit {
             0 => {
                 self.pause_focus = None;
@@ -387,7 +387,7 @@ impl Game<'_> {
         }
         Ok(())
     }
-    pub(super) fn pause_click(&mut self) -> Result<()> {
+    pub(super) fn pause_click(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P5159.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (w, h) = {
             let size = self
                 .renderer
@@ -436,7 +436,7 @@ impl Game<'_> {
         }
         Ok(())
     }
-    pub(super) fn pause_key(&mut self, key: KeyCode) -> Result<()> {
+    pub(super) fn pause_key(&mut self, key: KeyCode) -> Result<()> { if let Some(__l) = crate::points_generated::P5158.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (w, h) = {
             let size = self
                 .renderer
@@ -570,7 +570,7 @@ impl Game<'_> {
         Ok(())
     }
     /// DeathScreen: gradient, the title at double size, the cause and score.
-    pub(super) fn draw_death_screen(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_death_screen(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P5157.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let atlas = &self.gui.atlas;
         let (w, h) = (batch.width, batch.height);
         // fillGradient(0x60500000 -> 0xA0803030).
@@ -675,7 +675,7 @@ impl Game<'_> {
     }
     /// LocalPlayer.respawn: the player comes back (the death screen's
     /// button, or at once with `immediate_respawn`).
-    pub(super) fn respawn_player(&mut self) -> Result<()> {
+    pub(super) fn respawn_player(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P5156.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.death_focus = None;
         self.ui.death_text = None;
         // LocalPlayer.respawn: KeyMapping.resetToggleKeys.
@@ -683,7 +683,7 @@ impl Game<'_> {
         self.remote_respawn();
         Ok(())
     }
-    pub(super) fn death_click(&mut self) -> Result<()> {
+    pub(super) fn death_click(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P5155.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .ui
             .died_at
@@ -729,7 +729,7 @@ impl Game<'_> {
         }
         self.death_action(hit)
     }
-    pub(super) fn death_key(&mut self, key: KeyCode) -> Result<()> {
+    pub(super) fn death_key(&mut self, key: KeyCode) -> Result<()> { if let Some(__l) = crate::points_generated::P5154.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self
             .ui
             .died_at
@@ -806,7 +806,7 @@ impl Game<'_> {
     }
     /// The confirm screen's answer: yes leaves the world, no respawns
     /// (`DeathScreen.handleExitToTitleScreen`'s callback).
-    pub(super) fn death_confirm_answer(&mut self, yes: bool) -> Result<()> {
+    pub(super) fn death_confirm_answer(&mut self, yes: bool) -> Result<()> { let (yes,) = match crate::points_generated::P5153.get() { Some(__l) => { let mut __a = (yes,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (yes,) };
         self.ui.death_confirm = None;
         if yes {
             self.audio.play_button_click();
@@ -816,7 +816,7 @@ impl Game<'_> {
         }
     }
     /// A death screen button: 0 respawns (or spectates in hardcore), 1 leaves.
-    fn death_action(&mut self, hit: Option<u8>) -> Result<()> {
+    fn death_action(&mut self, hit: Option<u8>) -> Result<()> { if let Some(__l) = crate::points_generated::P5152.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match hit {
             Some(0) => self.respawn_player()?,
             Some(1) => self.close_world()?,

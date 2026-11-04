@@ -12,7 +12,7 @@ use horizon_world::{nbt::Tag, worldgen::generator::JigsawQuery};
 type Pos = (i32, i32, i32);
 
 impl Game<'_> {
-    fn jigsaw_block_mut(&mut self, pos: Pos) -> Option<&mut JigsawBlock> {
+    fn jigsaw_block_mut(&mut self, pos: Pos) -> Option<&mut JigsawBlock> { if let Some(__l) = crate::points_generated::P2162.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.world.block_entities.get_mut(&pos)? {
             BlockEntity::JigsawBlock(b) => Some(b),
             _ => None,
@@ -20,7 +20,7 @@ impl Game<'_> {
     }
 
     /// The block's front facing, from its `orientation` (`JigsawBlock.getFrontFacing`).
-    pub(super) fn jigsaw_front(&self, pos: Pos) -> Option<String> {
+    pub(super) fn jigsaw_front(&self, pos: Pos) -> Option<String> { if let Some(__l) = crate::points_generated::P2161.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let state = self.world.block(pos.0, pos.1, pos.2);
         let orientation = self
             .pack
@@ -34,7 +34,7 @@ impl Game<'_> {
 
     /// `new JigsawBlockEntity(pos, state)`: the joint a block starts with
     /// follows its facing (`StructureTemplate.getDefaultJointType`).
-    pub(super) fn jigsaw_block_placed(&mut self, pos: Pos) {
+    pub(super) fn jigsaw_block_placed(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P2160.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(front) = self.jigsaw_front(pos) else {
             return;
         };
@@ -45,7 +45,7 @@ impl Game<'_> {
 
     /// `handleSetJigsawBlock` for a guest: only a creative player with game
     /// master commands edits the block.
-    pub(super) fn lan_set_jigsaw_block(&mut self, conn: u32, p: play::SetJigsawBlock) {
+    pub(super) fn lan_set_jigsaw_block(&mut self, conn: u32, p: play::SetJigsawBlock) { let (conn,) = match crate::points_generated::P2159.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
@@ -57,7 +57,7 @@ impl Game<'_> {
         });
     }
 
-    fn apply_set_jigsaw_block(&mut self, p: &play::SetJigsawBlock) {
+    fn apply_set_jigsaw_block(&mut self, p: &play::SetJigsawBlock) { if let Some(__l) = crate::points_generated::P2158.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = (p.pos[0], p.pos[1], p.pos[2]);
         let Some(b) = self.jigsaw_block_mut(pos) else {
             return;
@@ -74,7 +74,7 @@ impl Game<'_> {
     }
 
     /// `handleJigsawGenerate` for a guest.
-    pub(super) fn lan_jigsaw_generate(&mut self, conn: u32, p: play::JigsawGenerate) {
+    pub(super) fn lan_jigsaw_generate(&mut self, conn: u32, p: play::JigsawGenerate) { let (conn,) = match crate::points_generated::P2157.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return;
         };
@@ -88,7 +88,7 @@ impl Game<'_> {
 
     /// `JigsawBlockEntity.generate`: the pool is built from the block's
     /// front neighbour, `levels` deep.
-    fn generate_jigsaw_block(&mut self, p: &play::JigsawGenerate) {
+    fn generate_jigsaw_block(&mut self, p: &play::JigsawGenerate) { if let Some(__l) = crate::points_generated::P2156.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = (p.pos[0], p.pos[1], p.pos[2]);
         let Some(BlockEntity::JigsawBlock(b)) = self.world.block_entities.get(&pos) else {
             return;

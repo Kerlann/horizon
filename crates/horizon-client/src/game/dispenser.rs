@@ -309,7 +309,7 @@ pub(super) fn mob_set_slot(m: &mut Mob, slot: Slot, stack: ItemStack) {
 }
 
 impl Game<'_> {
-    fn prop(&self, state: BlockStateId, key: &str) -> Option<String> {
+    fn prop(&self, state: BlockStateId, key: &str) -> Option<String> { if let Some(__l) = crate::points_generated::P1663.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pack
             .assets
             .registry
@@ -323,27 +323,27 @@ impl Game<'_> {
         &self,
         state: BlockStateId,
         props: &[(&str, &str)],
-    ) -> Option<BlockStateId> {
+    ) -> Option<BlockStateId> { if let Some(__l) = crate::points_generated::P1662.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut s = self.pack.assets.registry.state(state)?.clone();
         for (k, v) in props {
             s.properties.insert((*k).to_owned(), (*v).to_owned());
         }
         self.pack.assets.registry.resolve(&s).ok()
     }
-    fn block_at(&self, p: Pos) -> BlockStateId {
+    fn block_at(&self, p: Pos) -> BlockStateId { if let Some(__l) = crate::points_generated::P1661.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world.block(p.0, p.1, p.2)
     }
-    fn dispenser_block_name(&self, p: Pos) -> std::sync::Arc<str> {
+    fn dispenser_block_name(&self, p: Pos) -> std::sync::Arc<str> { if let Some(__l) = crate::points_generated::P1660.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res.facts().get(self.block_at(p)).name.clone()
     }
-    fn in_block_tag(&self, tag: &str, block: &str) -> bool {
+    fn in_block_tag(&self, tag: &str, block: &str) -> bool { if let Some(__l) = crate::points_generated::P1659.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res
             .items()
             .block_tags
             .get(tag)
             .is_some_and(|s| s.contains(block))
     }
-    fn water_at(&self, p: Pos) -> bool {
+    fn water_at(&self, p: Pos) -> bool { if let Some(__l) = crate::points_generated::P1658.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         matches!(
             self.res.behaviours().fluid_kind(self.block_at(p)),
             FluidKind::Water | FluidKind::FlowingWater
@@ -364,7 +364,7 @@ impl Game<'_> {
 
     /// The dispenser level events: 1000 click, 1001 fail, 1002 launch, 1004
     /// firework shoot, 1018 blaze shoot and 2000 smoke shot out of the front.
-    pub(super) fn dispenser_event(&mut self, id: i32, pos: Pos, data: i32) {
+    pub(super) fn dispenser_event(&mut self, id: i32, pos: Pos, data: i32) { let (id,data,) = match crate::points_generated::P1657.get() { Some(__l) => { let mut __a = (id,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,data,) };
         super::dispense_fixture::record(|| format!("L {id} {},{},{} {data}", pos.0, pos.1, pos.2));
         let c = Self::center(pos);
         match id {
@@ -467,7 +467,7 @@ impl Game<'_> {
         facing: Direction,
         stack: ItemStack,
         accuracy: i32,
-    ) {
+    ) { let (accuracy,) = match crate::points_generated::P1656.get() { Some(__l) => { let mut __a = (accuracy,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (accuracy,) };
         let s = step(facing);
         let p = Self::dispense_position(pos, facing, 0.7, [0.0; 3]);
         let mut at = [p.x, p.y, p.z];
@@ -488,7 +488,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         mut stack: ItemStack,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P1655.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let one = ItemStack {
             count: 1,
             ..stack.clone()
@@ -508,7 +508,7 @@ impl Game<'_> {
         pos: [i32; 3],
         facing: Direction,
         stack: ItemStack,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { let (pos,) = match crate::points_generated::P1654.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if !(self.serving.is_some() || self.options.dedicated.is_some())
             || dimension != self.dim.id()
             || !self.world.chunks.contains_key(&(pos[0] >> 4, pos[2] >> 4))
@@ -526,7 +526,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P1653.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let left = self.default_execute(pos, facing, stack);
         self.dispenser_event(CLICK, pos, 0);
         self.dispenser_event(2000, pos, data_value(facing));
@@ -540,7 +540,7 @@ impl Game<'_> {
         facing: Direction,
         mut stack: ItemStack,
         remainder: ItemStack,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P1652.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         stack.count -= 1;
         if stack.count == 0 {
             return Some(remainder);
@@ -583,7 +583,7 @@ impl Game<'_> {
         Some(stack)
     }
     /// `ItemStack.hurtAndBreak(amount)` without an entity.
-    fn hurt_and_break(&mut self, mut stack: ItemStack, amount: u32) -> Option<ItemStack> {
+    fn hurt_and_break(&mut self, mut stack: ItemStack, amount: u32) -> Option<ItemStack> { let (amount,) = match crate::points_generated::P1651.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         let max = self
             .res
             .items()
@@ -608,7 +608,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Option<ItemStack>> {
+    ) -> Result<Option<ItemStack>> { if let Some(__l) = crate::points_generated::P1650.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut answer = None;
         if self.serving.is_some() || self.options.dedicated.is_some() {
             self.native_dispense_item(
@@ -696,7 +696,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1649.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let equippable = self
             .res
             .items()
@@ -732,7 +732,7 @@ impl Game<'_> {
 
     /// Entities whose box overlaps the block at `p`, in the order the level
     /// added them (an entity section keeps insertion order; ids grow with it).
-    fn targets_at(&self, p: Pos) -> Vec<Target> {
+    fn targets_at(&self, p: Pos) -> Vec<Target> { if let Some(__l) = crate::points_generated::P1648.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let block = block_box(p);
         let mut found: Vec<(u32, Target)> = self
             .mobs
@@ -762,7 +762,7 @@ impl Game<'_> {
     /// `EntityType.getYOffset(level, pos, false, box)`: the entity box set on
     /// top of the block (`setPos(x + 0.5, y + 1, z + 0.5)`) falls one block
     /// against the collision shapes overlapping that block alone.
-    fn drop_offset(&self, width: f64, height: f64, p: Pos) -> f64 {
+    fn drop_offset(&self, width: f64, height: f64, p: Pos) -> f64 { let (width,height,) = match crate::points_generated::P1647.get() { Some(__l) => { let mut __a = (width,height,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (width,height,) };
         use horizon_world::{
             block_collision_scan::BlockCollisionScan, collision_context::CollisionContext,
         };
@@ -804,7 +804,7 @@ impl Game<'_> {
         1.0 + amount
     }
     /// `EntityType.spawn(.., pos, reason, tryMoveDown, false)` for a mob.
-    pub(super) fn spawn_mob_at(&mut self, kind: &str, p: Pos, try_move_down: bool) -> Option<u32> {
+    pub(super) fn spawn_mob_at(&mut self, kind: &str, p: Pos, try_move_down: bool) -> Option<u32> { let (try_move_down,) = match crate::points_generated::P1646.get() { Some(__l) => { let mut __a = (try_move_down,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (try_move_down,) };
         let name = if kind.contains(':') {
             kind.to_owned()
         } else {
@@ -829,7 +829,7 @@ impl Game<'_> {
     }
     /// `EquipmentDispenseItemBehavior.dispenseEquipment`: the first living
     /// entity in front that `canEquipWithDispenser` gets one of the item.
-    fn dispense_equipment(&mut self, pos: Pos, facing: Direction, stack: &mut ItemStack) -> bool {
+    fn dispense_equipment(&mut self, pos: Pos, facing: Direction, stack: &mut ItemStack) -> bool { if let Some(__l) = crate::points_generated::P1645.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(info) = self.items().get(&stack.item) else {
             return false;
         };
@@ -947,7 +947,7 @@ impl Game<'_> {
         true
     }
     /// After `EntityType.spawn` / `MobBucketItem.spawn`: `mob.playAmbientSound()`.
-    fn mob_ambient(&mut self, id: u32) -> Result<()> {
+    fn mob_ambient(&mut self, id: u32) -> Result<()> { let (id,) = match crate::points_generated::P1644.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(i) = self.mobs.iter().position(|m| m.id == id) else {
             return Ok(());
         };
@@ -963,7 +963,7 @@ impl Game<'_> {
     /// A mob a bucket emptied: `setFromBucket` keeps it, then it calls out.
     /// Fish and axolotls carry the flag itself (saved as `FromBucket`, read by
     /// `requiresCustomPersistence`); the others stay persistent instead.
-    pub(super) fn mob_placed(&mut self, id: u32) -> Result<()> {
+    pub(super) fn mob_placed(&mut self, id: u32) -> Result<()> { let (id,) = match crate::points_generated::P1643.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
             if matches!(
                 m.species(),
@@ -985,7 +985,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1642.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let kind = stack.item.trim_end_matches("_spawn_egg").to_owned();
         let front = offset(pos, facing);
         let Some(id) = self.spawn_mob_at(&kind, front, facing != Direction::Up) else {
@@ -1007,7 +1007,7 @@ impl Game<'_> {
 
     // ---- ProjectileDispenseBehavior ----
 
-    fn dispense_projectile(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed {
+    fn dispense_projectile(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed { if let Some(__l) = crate::points_generated::P1641.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let item = stack.item.to_string();
         let s = step(facing);
         let dir = [f64::from(s[0]), f64::from(s[1]), f64::from(s[2])];
@@ -1059,7 +1059,7 @@ impl Game<'_> {
         stack: &ItemStack,
         power: f32,
         uncertainty: f32,
-    ) {
+    ) { let (dir,power,uncertainty,) = match crate::points_generated::P1640.get() { Some(__l) => { let mut __a = (dir,power,uncertainty,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (dir,power,uncertainty,) };
         let item = stack.item.to_string();
         let one = ItemStack {
             count: 1,
@@ -1132,7 +1132,7 @@ impl Game<'_> {
 
     // ---- entities placed by items ----
 
-    fn dispense_armor_stand(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed {
+    fn dispense_armor_stand(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed { if let Some(__l) = crate::points_generated::P1639.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let front = offset(pos, facing);
         let foot = Vec3::new(
             f64::from(front.0) + 0.5,
@@ -1153,7 +1153,7 @@ impl Game<'_> {
         (shrink(stack), CLICK)
     }
     /// A tame donkey, mule or llama in front without a chest gets it.
-    fn dispense_chest(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed {
+    fn dispense_chest(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed { if let Some(__l) = crate::points_generated::P1638.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let front = offset(pos, facing);
         for target in self.targets_at(front) {
             let Target::Mob(i) = target else { continue };
@@ -1176,7 +1176,7 @@ impl Game<'_> {
         )
     }
     /// `BoatDispenseItemBehavior`.
-    fn dispense_boat(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed {
+    fn dispense_boat(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed { if let Some(__l) = crate::points_generated::P1637.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((wood, chest)) =
             super::boats::any_boat_wood(&stack.item).map(|(w, c)| (w.to_owned(), c))
         else {
@@ -1225,7 +1225,7 @@ impl Game<'_> {
         (shrink(stack), CLICK)
     }
     /// `MinecartDispenseItemBehavior`.
-    fn dispense_minecart(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed {
+    fn dispense_minecart(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed { if let Some(__l) = crate::points_generated::P1636.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(kind) = super::minecarts::CartKind::from_id(&stack.item) else {
             return (self.dispense_default(pos, facing, stack), CLICK);
         };
@@ -1279,7 +1279,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1635.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let item = stack.item.to_string();
         let target = offset(pos, facing);
         let (content, sound, mob) =
@@ -1328,7 +1328,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1634.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = Self::pos_of(offset(pos, facing));
         let picked =
             self.with_level(|b, level, ticks| b.bucket_pickup(level, ticks, target, false));
@@ -1358,7 +1358,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1633.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = offset(pos, facing);
         let target_pos = Self::pos_of(target);
         let state = self.block_at(target);
@@ -1431,7 +1431,7 @@ impl Game<'_> {
         Ok((Some(stack), event))
     }
     /// `CampfireBlock.canLight || CandleBlock.canLight || CandleCakeBlock.canLight`.
-    pub(super) fn can_light(&self, state: BlockStateId, name: &str) -> bool {
+    pub(super) fn can_light(&self, state: BlockStateId, name: &str) -> bool { if let Some(__l) = crate::points_generated::P1632.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let lit = self.prop(state, "lit");
         let waterlogged = self.prop(state, "waterlogged");
         let dry_unlit = lit.as_deref() == Some("false") && waterlogged.as_deref() == Some("false");
@@ -1446,7 +1446,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         mut stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1631.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = offset(pos, facing);
         let target_pos = Self::pos_of(target);
         let crop = self.bonemeal(target_pos, false, &mut stack);
@@ -1472,7 +1472,7 @@ impl Game<'_> {
         };
         Ok((left, if grown { CLICK } else { FAIL }))
     }
-    fn dispense_tnt(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed {
+    fn dispense_tnt(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed { if let Some(__l) = crate::points_generated::P1630.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.ui.rules.bool("tnt_explodes") {
             set_success("tnt", false);
             return (Some(stack), FAIL);
@@ -1516,7 +1516,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1629.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = offset(pos, facing);
         let free = self.res.facts().is_air(self.block_at(target))
             && target.1 >= self.world.bottom_y() + 2
@@ -1565,7 +1565,7 @@ impl Game<'_> {
     }
     /// `WitherSkullBlock.getOrCreateWitherBase().find(level, pos)`: a soul
     /// sand T for the skull row, in any orientation.
-    fn can_build_wither(&self, head: Pos) -> bool {
+    fn can_build_wither(&self, head: Pos) -> bool { if let Some(__l) = crate::points_generated::P1628.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.find_wither_pattern(
             horizon_client::block_pattern::WITHER_BASE,
             [head.0, head.1, head.2],
@@ -1577,7 +1577,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1627.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = offset(pos, facing);
         if self.res.facts().is_air(self.block_at(target))
             && self.can_spawn_golem([target.0, target.1, target.2])
@@ -1607,7 +1607,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1626.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let front = offset(pos, facing);
         let below_empty = self
             .res
@@ -1656,7 +1656,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1625.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = offset(pos, facing);
         let state = self.block_at(target);
         let name = self.dispenser_block_name(target);
@@ -1694,7 +1694,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1624.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = offset(pos, facing);
         let state = self.block_at(target);
         if &*self.dispenser_block_name(target) == "minecraft:respawn_anchor" {
@@ -1732,7 +1732,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1623.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = offset(pos, facing);
         let sheared = self.shear_beehive(target)? || self.shear_entity(target)?;
         if sheared {
@@ -1742,7 +1742,7 @@ impl Game<'_> {
     }
     /// The bees of a hive a dispenser harvested come out (`BEE_RELEASED`:
     /// not at night nor in the rain), through the front of its old state.
-    fn dispenser_empty_hive(&mut self, target: Pos, old: BlockStateId) {
+    fn dispenser_empty_hive(&mut self, target: Pos, old: BlockStateId) { if let Some(__l) = crate::points_generated::P1622.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let facing = self.prop(old, "facing");
         self.empty_hive(
             [target.0, target.1, target.2],
@@ -1750,7 +1750,7 @@ impl Game<'_> {
             horizon_client::beehive::Release::BeeReleased,
         );
     }
-    fn shear_beehive(&mut self, target: Pos) -> Result<bool> {
+    fn shear_beehive(&mut self, target: Pos) -> Result<bool> { if let Some(__l) = crate::points_generated::P1621.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let state = self.block_at(target);
         let name = self.dispenser_block_name(target);
         let level = self
@@ -1790,7 +1790,7 @@ impl Game<'_> {
         parent: &str,
         table: &str,
         held: Option<&ItemStack>,
-    ) -> Vec<ItemStack> {
+    ) -> Vec<ItemStack> { if let Some(__l) = crate::points_generated::P1620.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match world_items!(self).loot_sequence(parent) {
             Some(sequence) => {
                 let random = self.rand_sequences.get(&sequence, self.level.seed);
@@ -1806,13 +1806,13 @@ impl Game<'_> {
         at: Vec3,
         y_offset: f64,
         stack: ItemStack,
-    ) -> [f64; 3] {
+    ) -> [f64; 3] { let (y_offset,) = match crate::points_generated::P1619.get() { Some(__l) => { let mut __a = (y_offset,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (y_offset,) };
         let v = new_item_motion();
         self.spawn_item(stack, [at.x, at.y + y_offset, at.z], v, 10);
         v
     }
     /// `MushroomCow.shear`: `player` is who sheared it, none for a dispenser.
-    pub(super) fn shear_mooshroom(&mut self, index: usize, player: Option<u128>, tool: &ItemStack) {
+    pub(super) fn shear_mooshroom(&mut self, index: usize, player: Option<u128>, tool: &ItemStack) { let (index,) = match crate::points_generated::P1618.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let old = self.mobs[index].clone();
         let at = old.position;
         let height = f64::from(old.height());
@@ -1865,7 +1865,7 @@ impl Game<'_> {
     }
     /// `ShearsDispenseItemBehavior.tryShearEntity`: the first live, ready
     /// `Shearable` in the block is sheared.
-    pub(super) fn shear_entity(&mut self, target: Pos) -> Result<bool> {
+    pub(super) fn shear_entity(&mut self, target: Pos) -> Result<bool> { if let Some(__l) = crate::points_generated::P1617.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let shears = ItemStack::new("minecraft:shears", 1);
         for t in self.targets_at(target) {
             // Entity.shearOffAllLeashConnections comes first, for any entity.
@@ -1998,7 +1998,7 @@ impl Game<'_> {
     /// `Entity.shearOffAllLeashConnections(null)`: the entity's own lead and
     /// every lead held by it (within a 32 block box around its centre) drop;
     /// a shear game event at the entity and a snip at its block follow.
-    fn shear_off_leashes(&mut self, t: Target) -> bool {
+    fn shear_off_leashes(&mut self, t: Target) -> bool { if let Some(__l) = crate::points_generated::P1616.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use horizon_client::mobs::{Who, leash::Holder};
         let (holder, centre, own) = match t {
             Target::Mob(i) => {
@@ -2060,7 +2060,7 @@ impl Game<'_> {
         true
     }
     /// The brush behaviour: the first armadillo in front that `brushOffScute`s.
-    fn dispense_brush(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed {
+    fn dispense_brush(&mut self, pos: Pos, facing: Direction, stack: ItemStack) -> Dispensed { if let Some(__l) = crate::points_generated::P1615.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = offset(pos, facing);
         let armadillos: Vec<usize> = self
             .targets_at(target)
@@ -2099,7 +2099,7 @@ impl Game<'_> {
     }
     /// `SulfurCubeBlockDispenseItemBehavior.dispenseBlock`: the first sulfur
     /// cube in the block that `equipItem`s the stack swallows one.
-    fn sulfur_cube_swallow(&mut self, target: Pos, stack: &ItemStack) -> bool {
+    fn sulfur_cube_swallow(&mut self, target: Pos, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P1614.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let cubes: Vec<usize> = self
             .targets_at(target)
             .into_iter()
@@ -2143,7 +2143,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1613.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = offset(pos, facing);
         let state = self.block_at(target);
         let name = self.dispenser_block_name(target);
@@ -2189,7 +2189,7 @@ impl Game<'_> {
         pos: Pos,
         facing: Direction,
         stack: ItemStack,
-    ) -> Result<Dispensed> {
+    ) -> Result<Dispensed> { if let Some(__l) = crate::points_generated::P1612.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let target = offset(pos, facing);
         let water = stack.potion() == Some("minecraft:water");
         let name = self.dispenser_block_name(target);

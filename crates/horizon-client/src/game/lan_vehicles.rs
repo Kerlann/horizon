@@ -53,7 +53,7 @@ pub(super) struct WatchedVehicle {
 
 impl Game<'_> {
     /// Where the boat or minecart `id` of this level is.
-    fn watched_vehicle_position(&self, id: u32) -> Option<[f64; 3]> {
+    fn watched_vehicle_position(&self, id: u32) -> Option<[f64; 3]> { let (id,) = match crate::points_generated::P2479.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let at = |v: Vec3| [v.x, v.y, v.z];
         self.boats
             .iter()
@@ -69,7 +69,7 @@ impl Game<'_> {
 
     /// `VehicleMoveEvent` for the boats and minecarts server players ride
     /// (and left less than ten seconds ago): once a tick, after they moved.
-    pub(super) fn tick_vehicle_watch(&mut self) {
+    pub(super) fn tick_vehicle_watch(&mut self) { if let Some(__l) = crate::points_generated::P2478.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let riders: Vec<(u32, u32, u128)> = self.lan.as_ref().map_or_else(Vec::new, |h| {
             h.hub
                 .guests
@@ -147,7 +147,7 @@ impl Game<'_> {
     /// The box of a boat, minecart, armor stand, item frame or painting, and
     /// the point an interact packet's location is measured from (the
     /// client's `remote_object_hit` uses the same points).
-    pub(super) fn object_target(&self, id: i32) -> Option<([f64; 3], [f64; 3], [f64; 3])> {
+    pub(super) fn object_target(&self, id: i32) -> Option<([f64; 3], [f64; 3], [f64; 3])> { let (id,) = match crate::points_generated::P2477.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         let at = |v: Vec3| [v.x, v.y, v.z];
         let centre = |p: [i32; 3]| p.map(|v| f64::from(v) + 0.5);
         if let Some(i) = self.interactions.get(&id) {
@@ -185,7 +185,7 @@ impl Game<'_> {
 
     /// The vehicles the server's players ride: they move with their riders,
     /// not in `tick_boats` and `tick_carts`.
-    pub(super) fn guest_vehicles(&self) -> Vec<u32> {
+    pub(super) fn guest_vehicles(&self) -> Vec<u32> { if let Some(__l) = crate::points_generated::P2476.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.lan.as_ref().map_or_else(Vec::new, |h| {
             h.hub.guests.iter().filter_map(|g| g.vehicle).collect()
         })
@@ -193,7 +193,7 @@ impl Game<'_> {
 
     /// Whether a server player other than the one acting rides `vehicle`
     /// (`Entity.canAddPassenger`: a boat or minecart seats one player here).
-    pub(super) fn ridden_by_guest(&self, vehicle: u32) -> bool {
+    pub(super) fn ridden_by_guest(&self, vehicle: u32) -> bool { let (vehicle,) = match crate::points_generated::P2475.get() { Some(__l) => { let mut __a = (vehicle,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (vehicle,) };
         self.lan.as_ref().is_some_and(|h| {
             h.hub
                 .guests
@@ -204,7 +204,7 @@ impl Game<'_> {
     /// Whether a server player rides `vehicle` (`Entity.isPassenger`: a
     /// passenger does not use a portal on its own, the vehicle carries it
     /// across, `Entity.teleportCrossDimension`).
-    pub(super) fn guest_rides(&self, vehicle: u32) -> bool {
+    pub(super) fn guest_rides(&self, vehicle: u32) -> bool { let (vehicle,) = match crate::points_generated::P2474.get() { Some(__l) => { let mut __a = (vehicle,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (vehicle,) };
         self.lan
             .as_ref()
             .is_some_and(|h| h.hub.guests.iter().any(|g| g.vehicle == Some(vehicle)))
@@ -212,7 +212,7 @@ impl Game<'_> {
 
     /// `Player.rideTick` for a server player, before its moves this tick:
     /// it stays in its seat, steers its minecart, or gets out.
-    pub(super) fn guest_vehicle_tick(&mut self, conn: u32) {
+    pub(super) fn guest_vehicle_tick(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2473.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -303,7 +303,7 @@ impl Game<'_> {
 
     /// After an interaction: a player that got into a vehicle sits in it,
     /// and its last good vehicle position is where the vehicle is.
-    pub(super) fn guest_boarded(&mut self, conn: u32, before: Option<u32>) {
+    pub(super) fn guest_boarded(&mut self, conn: u32, before: Option<u32>) { let (conn,) = match crate::points_generated::P2472.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -370,7 +370,7 @@ impl Game<'_> {
     /// saddled horse its rider drives goes where the client says, unless it
     /// moved too quickly or wrongly; then it stays, and the client is told
     /// where it is.
-    pub(super) fn guest_move_vehicle(&mut self, conn: u32, p: &play::MoveVehicleRequest) {
+    pub(super) fn guest_move_vehicle(&mut self, conn: u32, p: &play::MoveVehicleRequest) { let (conn,) = match crate::points_generated::P2471.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -542,7 +542,7 @@ impl Game<'_> {
     /// boat has two seats, and only its first player passenger drives it. The
     /// window player sits first when it rides; of the server's players it is
     /// the one that got in first.
-    pub(super) fn guest_controls_vehicle(&self, conn: u32, vehicle: u32) -> bool {
+    pub(super) fn guest_controls_vehicle(&self, conn: u32, vehicle: u32) -> bool { let (conn,vehicle,) = match crate::points_generated::P2470.get() { Some(__l) => { let mut __a = (conn,vehicle,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,vehicle,) };
         let Some(host) = self.lan.as_ref() else {
             return false;
         };
@@ -560,7 +560,7 @@ impl Game<'_> {
     /// `handlePaddleBoat`: the paddles of the boat the player controls
     /// (`player.getControlledVehicle()`); a passenger in the second seat moves
     /// no paddle.
-    pub(super) fn guest_paddle_boat(&mut self, conn: u32, paddles: [bool; 2]) {
+    pub(super) fn guest_paddle_boat(&mut self, conn: u32, paddles: [bool; 2]) { let (conn,paddles,) = match crate::points_generated::P2469.get() { Some(__l) => { let mut __a = (conn,paddles,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,paddles,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };

@@ -87,10 +87,10 @@ pub(super) enum AnchorUse {
 }
 
 impl Game<'_> {
-    pub(super) fn is_anchor(&self, state: BlockStateId) -> bool {
+    pub(super) fn is_anchor(&self, state: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P5109.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         &*self.res.facts().get(state).name == "minecraft:respawn_anchor"
     }
-    fn anchor_charges(&self, state: BlockStateId) -> i32 {
+    fn anchor_charges(&self, state: BlockStateId) -> i32 { if let Some(__l) = crate::points_generated::P5108.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pack
             .assets
             .registry
@@ -99,14 +99,14 @@ impl Game<'_> {
             .and_then(|c| c.parse().ok())
             .unwrap_or(0)
     }
-    fn anchor_with_charges(&self, state: BlockStateId, charges: i32) -> Option<BlockStateId> {
+    fn anchor_with_charges(&self, state: BlockStateId, charges: i32) -> Option<BlockStateId> { let (charges,) = match crate::points_generated::P5107.get() { Some(__l) => { let mut __a = (charges,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (charges,) };
         let mut s = self.pack.assets.registry.state(state)?.clone();
         s.properties.insert("charges".into(), charges.to_string());
         self.pack.assets.registry.resolve(&s).ok()
     }
     /// `RespawnAnchorBlock.canSetSpawn`: the `respawn_anchor_works` attribute
     /// (only the Nether's dimension type sets it).
-    pub(super) fn anchor_works(&self) -> bool {
+    pub(super) fn anchor_works(&self) -> bool { if let Some(__l) = crate::points_generated::P5106.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.dim == Dim::Nether
     }
     /// `RespawnAnchorBlock.charge`: one more charge, the block change and the sound.
@@ -115,7 +115,7 @@ impl Game<'_> {
         pos: [i32; 3],
         state: BlockStateId,
         who: Option<Who>,
-    ) -> Result<()> {
+    ) -> Result<()> { let (pos,) = match crate::points_generated::P5105.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let Some(next) = self.anchor_with_charges(state, self.anchor_charges(state) + 1) else {
             return Ok(());
         };
@@ -133,7 +133,7 @@ impl Game<'_> {
     /// `RespawnAnchorBlock.useItemOn`'s test: `held` is glowstone
     /// (`isRespawnFuel`) and the block at `pos` is an anchor that takes another
     /// charge (`canBeCharged`).
-    pub(super) fn anchor_takes(&self, pos: [i32; 3], held: Option<&ItemStack>) -> bool {
+    pub(super) fn anchor_takes(&self, pos: [i32; 3], held: Option<&ItemStack>) -> bool { let (pos,) = match crate::points_generated::P5104.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         held.is_some_and(|s| &*s.item == "minecraft:glowstone")
             && self.is_anchor(state)
@@ -144,7 +144,7 @@ impl Game<'_> {
         &mut self,
         pos: [i32; 3],
         held: Option<&ItemStack>,
-    ) -> Result<AnchorUse> {
+    ) -> Result<AnchorUse> { let (pos,) = match crate::points_generated::P5103.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         if !self.is_anchor(state) {
             return Ok(AnchorUse::Other);
@@ -169,7 +169,7 @@ impl Game<'_> {
     /// The mods' say on a server player's respawn point about to be set to
     /// `pos` in `dim` (`ServerPlayer.setRespawnPosition`, NeoForge's
     /// `PlayerSetSpawnEvent`): true when one canceled.
-    pub(super) fn spawn_point_change(&mut self, dim: Dim, pos: [i32; 3], forced: bool) -> bool {
+    pub(super) fn spawn_point_change(&mut self, dim: Dim, pos: [i32; 3], forced: bool) -> bool { let (pos,forced,) = match crate::points_generated::P5102.get() { Some(__l) => { let mut __a = (pos,forced,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,forced,) };
         let (Some(player), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone())
         else {
             return false;
@@ -181,7 +181,7 @@ impl Game<'_> {
     }
     /// `RespawnAnchorBlock.useWithoutItem` on a charged anchor: outside the
     /// Nether it explodes; inside, it becomes the respawn point.
-    pub(super) fn respawn_anchor_used(&mut self, pos: [i32; 3]) -> Result<()> {
+    pub(super) fn respawn_anchor_used(&mut self, pos: [i32; 3]) -> Result<()> { let (pos,) = match crate::points_generated::P5101.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         if !self.anchor_works() {
             return self.explode_anchor(pos, state);
@@ -226,7 +226,7 @@ impl Game<'_> {
         Ok(())
     }
     /// `RespawnAnchorBlock.isWaterThatWouldFlow`.
-    fn water_would_flow(&self, p: [i32; 3]) -> bool {
+    fn water_would_flow(&self, p: [i32; 3]) -> bool { let (p,) = match crate::points_generated::P5100.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let f = self.res.facts().get(self.world.block(p[0], p[1], p[2]));
         if f.fluid != Fluid::Water {
             return false;
@@ -246,7 +246,7 @@ impl Game<'_> {
     /// `RespawnAnchorBlock.explode`: the anchor goes, then a power 5 fiery
     /// explosion (`badRespawnPointExplosion`, `ExplosionInteraction.BLOCK`)
     /// whose centre resists like water when water would flow into it.
-    fn explode_anchor(&mut self, pos: [i32; 3], _state: BlockStateId) -> Result<()> {
+    fn explode_anchor(&mut self, pos: [i32; 3], _state: BlockStateId) -> Result<()> { let (pos,) = match crate::points_generated::P5099.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.level_set(pos, self.world.air)?;
         let horizontal = [[0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]]
             .into_iter()
@@ -266,7 +266,7 @@ impl Game<'_> {
         self.block_explosion(center, in_water.then_some(pos))
     }
     /// `StrawBedBlock.destroyBed`: the break sound, then the bed is air.
-    pub(super) fn destroy_straw_bed(&mut self, head: [i32; 3]) -> Result<()> {
+    pub(super) fn destroy_straw_bed(&mut self, head: [i32; 3]) -> Result<()> { let (head,) = match crate::points_generated::P5098.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (head,) };
         let center = [
             f64::from(head[0]) + 0.5,
             f64::from(head[1]) + 0.5,
@@ -282,13 +282,13 @@ impl Game<'_> {
     }
     /// `BedRule.destroyOnUse` of the dimension's `bed_rule` and
     /// `straw_bed_rule`: true in the Nether and the End.
-    pub(super) fn beds_destroy_on_use(&self) -> bool {
+    pub(super) fn beds_destroy_on_use(&self) -> bool { if let Some(__l) = crate::points_generated::P5097.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.dim != Dim::Overworld
     }
     /// `AbstractBedBlock.useWithoutItem` where the bed rule destroys on use
     /// (the bed's head at `head`): `BedBlock.destroyOnUse` removes both
     /// halves and explodes; `StrawBedBlock` just falls apart.
-    pub(super) fn destroy_bed_on_use(&mut self, head: [i32; 3]) -> Result<()> {
+    pub(super) fn destroy_bed_on_use(&mut self, head: [i32; 3]) -> Result<()> { let (head,) = match crate::points_generated::P5096.get() { Some(__l) => { let mut __a = (head,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (head,) };
         let state = self.world.block(head[0], head[1], head[2]);
         let name = self.res.facts().get(state).name.clone();
         let center = [
@@ -333,7 +333,7 @@ impl Game<'_> {
         &mut self,
         center: [f64; 3],
         water_at: Option<[i32; 3]>,
-    ) -> Result<()> {
+    ) -> Result<()> { let (center,) = match crate::points_generated::P5095.get() { Some(__l) => { let mut __a = (center,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,) };
         let interaction = self.destroy_type("block_explosion_drop_decay");
         self.server_explode_as(
             center,
@@ -349,7 +349,7 @@ impl Game<'_> {
 
     /// `DismountHelper.nonClimbableShape`: the collision shape, empty for
     /// climbable blocks and open trapdoors.
-    fn non_climbable_shape(&self, p: [i32; 3]) -> VoxelShape {
+    fn non_climbable_shape(&self, p: [i32; 3]) -> VoxelShape { let (p,) = match crate::points_generated::P5094.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let state = self.world.block(p[0], p[1], p[2]);
         let name = &self.res.facts().get(state).name;
         let open_trapdoor = name.ends_with("_trapdoor")
@@ -367,14 +367,14 @@ impl Game<'_> {
     }
     /// `BlockState.getCollisionShape(level, pos)`: the shape under the empty
     /// collision context.
-    pub(super) fn block_collision_shape(&self, p: [i32; 3]) -> VoxelShape {
+    pub(super) fn block_collision_shape(&self, p: [i32; 3]) -> VoxelShape { let (p,) = match crate::points_generated::P5093.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         self.block_collision_shape_in(&self.world, p)
     }
     pub(super) fn block_collision_shape_in(
         &self,
         world: &horizon_client::world::World,
         p: [i32; 3],
-    ) -> VoxelShape {
+    ) -> VoxelShape { let (p,) = match crate::points_generated::P5092.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let state = world.block(p[0], p[1], p[2]);
         let binding = self.collision;
         let mut scene = SceneCollisions {
@@ -393,7 +393,7 @@ impl Game<'_> {
     }
     /// `DismountHelper.canDismountTo(level, entity, box)`: no block collides
     /// with the box and it is inside the world border.
-    pub(super) fn can_dismount_to(&self, bounds: Aabb) -> bool {
+    pub(super) fn can_dismount_to(&self, bounds: Aabb) -> bool { if let Some(__l) = crate::points_generated::P5091.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut scene = SceneCollisions {
             world: &self.world,
             binding: self.collision,
@@ -407,7 +407,7 @@ impl Game<'_> {
         let (lz, hz) = (bounds.min(Axis::Z), bounds.max(Axis::Z) - 1.0e-5);
         self.border.contains(lo, lz) && self.border.contains(hi, hz)
     }
-    pub(super) fn block_in_tag(&self, tag: &str, block: &str) -> bool {
+    pub(super) fn block_in_tag(&self, tag: &str, block: &str) -> bool { if let Some(__l) = crate::points_generated::P5090.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res
             .items()
             .block_tags
@@ -415,7 +415,7 @@ impl Game<'_> {
             .is_some_and(|s| s.contains(block))
     }
     /// `EntityType.isBlockDangerous` for the player.
-    fn dangerous_for_player(&self, p: [i32; 3]) -> bool {
+    fn dangerous_for_player(&self, p: [i32; 3]) -> bool { let (p,) = match crate::points_generated::P5089.get() { Some(__l) => { let mut __a = (p,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,) };
         let state = self.world.block(p[0], p[1], p[2]);
         let name = &*self.res.facts().get(state).name;
         let lit_campfire = (name == "minecraft:campfire" || name == "minecraft:soul_campfire")
@@ -441,7 +441,7 @@ impl Game<'_> {
             || lit_campfire
     }
     /// `DismountHelper.findSafeDismountLocation` for a standing player.
-    fn safe_dismount_location(&self, p: [i32; 3], check_dangerous: bool) -> Option<Vec3> {
+    fn safe_dismount_location(&self, p: [i32; 3], check_dangerous: bool) -> Option<Vec3> { let (p,check_dangerous,) = match crate::points_generated::P5088.get() { Some(__l) => { let mut __a = (p,check_dangerous,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (p,check_dangerous,) };
         if check_dangerous && self.dangerous_for_player(p) {
             return None;
         }
@@ -492,7 +492,7 @@ impl Game<'_> {
     }
     /// `Block.isPossibleToRespawnInThis`: neither solid nor liquid; banners,
     /// signs and pressure plates override it to always.
-    fn possible_to_respawn_in(&self, state: BlockStateId) -> bool {
+    fn possible_to_respawn_in(&self, state: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P5087.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let f = self.res.facts().get(state);
         let name = &*f.name;
         name.ends_with("_banner")
@@ -502,7 +502,7 @@ impl Game<'_> {
     }
     /// `RespawnAnchorBlock.findStandUpPosition`: a safe spot around the
     /// anchor, else any spot.
-    pub(super) fn anchor_stand_up(&self, pos: [i32; 3]) -> Option<Vec3> {
+    pub(super) fn anchor_stand_up(&self, pos: [i32; 3]) -> Option<Vec3> { let (pos,) = match crate::points_generated::P5086.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         for check in [true, false] {
             for d in respawn_offsets() {
                 let p = [pos[0] + d[0], pos[1] + d[1], pos[2] + d[2]];
@@ -518,7 +518,7 @@ impl Game<'_> {
     /// the player faced away from, around it, then on it; a safe spot
     /// first, else any spot (a bunk bed: around it, a block lower, then on
     /// it).
-    pub(super) fn bed_stand_up(&self, pos: [i32; 3], forward: [i32; 3], yaw: f32) -> Option<Vec3> {
+    pub(super) fn bed_stand_up(&self, pos: [i32; 3], forward: [i32; 3], yaw: f32) -> Option<Vec3> { let (pos,forward,yaw,) = match crate::points_generated::P5085.get() { Some(__l) => { let mut __a = (pos,forward,yaw,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,forward,yaw,) };
         // Direction.getClockWise.
         let right = [-forward[2], 0, forward[0]];
         // Direction.isFacingAngle.
@@ -566,14 +566,14 @@ impl Game<'_> {
         let all: Vec<[i32; 2]> = surround.into_iter().chain(above).collect();
         at(pos, &all, true).or_else(|| at(pos, &all, false))
     }
-    pub(super) fn is_bed(&self, state: BlockStateId) -> bool {
+    pub(super) fn is_bed(&self, state: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P5084.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res.facts().get(state).name.ends_with("_bed")
     }
     /// `LivingEntity.stopSleeping`: when the block at `head` is still a bed,
     /// stand at `AbstractBedBlock.findStandUpPosition` (else 0.1 above the
     /// block over the head), turned toward the bed's bottom centre with a
     /// level pitch.
-    pub(super) fn bed_wake_pose(&self, head: [i32; 3], yaw: f32) -> Option<(Vec3, f32)> {
+    pub(super) fn bed_wake_pose(&self, head: [i32; 3], yaw: f32) -> Option<(Vec3, f32)> { let (head,yaw,) = match crate::points_generated::P5083.get() { Some(__l) => { let mut __a = (head,yaw,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (head,yaw,) };
         let state = self.world.block(head[0], head[1], head[2]);
         if !self.is_bed(state) {
             return None;
@@ -589,7 +589,7 @@ impl Game<'_> {
         Some((stand, look_at_yaw(stand, head)))
     }
     /// The bed's `facing`, as a step.
-    pub(super) fn bed_forward(&self, state: BlockStateId) -> [i32; 3] {
+    pub(super) fn bed_forward(&self, state: BlockStateId) -> [i32; 3] { if let Some(__l) = crate::points_generated::P5082.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let facing = self
             .pack
             .assets
@@ -606,7 +606,7 @@ impl Game<'_> {
     /// `BedRule.canSetSpawn` of the bed's rule attribute (`bed_rule`,
     /// `straw_bed_rule`): only the Overworld's beds set the spawn, straw
     /// beds never.
-    pub(super) fn bed_sets_spawn(&self, state: BlockStateId) -> bool {
+    pub(super) fn bed_sets_spawn(&self, state: BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P5081.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.dim == Dim::Overworld && &*self.res.facts().get(state).name != "minecraft:straw_bed"
     }
     /// `ServerPlayer.findRespawnAndUseSpawnBlock` for a config in the loaded
@@ -617,7 +617,7 @@ impl Game<'_> {
         &mut self,
         c: RespawnConfig,
         consume: bool,
-    ) -> Result<Option<(Vec3, f32)>> {
+    ) -> Result<Option<(Vec3, f32)>> { let (consume,) = match crate::points_generated::P5080.get() { Some(__l) => { let mut __a = (consume,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (consume,) };
         let state = self.world.block(c.pos[0], c.pos[1], c.pos[2]);
         if !(self.is_anchor(state)
             && (c.forced || self.anchor_charges(state) > 0)

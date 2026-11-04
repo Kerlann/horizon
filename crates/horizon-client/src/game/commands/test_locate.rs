@@ -55,7 +55,7 @@ fn path_of(dimension: &str) -> &str {
 
 impl Game<'_> {
     /// `TestCommand.locate`.
-    pub(super) fn test_locate(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn test_locate(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1220.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let selected: Vec<String> = match ctx.get("tests") {
             Some(Arg::Str(pattern)) => horizon_client::command::args::select_resources(
                 self.ui.registries.ids("minecraft:test_instance"),
@@ -133,7 +133,7 @@ impl Game<'_> {
     }
 
     /// `outputPlayerCoordinates`.
-    fn output_player_coordinates(&mut self, test_dimensions: &[String]) {
+    fn output_player_coordinates(&mut self, test_dimensions: &[String]) { if let Some(__l) = crate::points_generated::P1219.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(player) = self.player.as_ref() else {
             return;
         };
@@ -176,7 +176,7 @@ impl Game<'_> {
 
     /// `TestCommand.showPos`, but for the highlight the client draws
     /// (`ClientboundGameTestHighlightPosPacket`).
-    pub(super) fn test_show_pos(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn test_show_pos(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1218.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.source_player()?;
         let var = match ctx.get("var") {
             Some(Arg::Str(v)) => v.clone(),
@@ -246,7 +246,7 @@ impl Game<'_> {
     }
 
     /// `TestCommand.createNewStructure`.
-    pub(super) fn test_create(&mut self, ctx: &Context) -> R<i32> {
+    pub(super) fn test_create(&mut self, ctx: &Context) -> R<i32> { if let Some(__l) = crate::points_generated::P1217.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let int = |name: &str, default: i32| match ctx.get(name) {
             Some(Arg::Int(v)) => *v,
             _ => default,
@@ -294,7 +294,7 @@ impl Game<'_> {
 
 impl Game<'_> {
     /// `StructureUtils.createNewEmptyTest`.
-    fn create_empty_test(&mut self, key: &str, at: Pos, size: [i32; 3]) {
+    fn create_empty_test(&mut self, key: &str, at: Pos, size: [i32; 3]) { let (size,) = match crate::points_generated::P1216.get() { Some(__l) => { let mut __a = (size,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (size,) };
         let padding = self.test_def(key).map_or(0, |d: TestDef| d.padding);
         let corner =
             TestInstanceBlock::structure_pos_of([at.0 + padding, at.1 + padding, at.2 + padding]);

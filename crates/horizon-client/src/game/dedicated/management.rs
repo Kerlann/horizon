@@ -49,7 +49,7 @@ fn shown(user: &NameAndId) -> String {
 }
 
 impl Game<'_> {
-    pub(super) fn management(&mut self, state: &mut ServerState, request: &str) -> Value {
+    pub(super) fn management(&mut self, state: &mut ServerState, request: &str) -> Value { if let Some(__l) = crate::points_generated::P1564.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (connection, body) = request.split_once(' ').unwrap_or((request, "{}"));
         let rpc =
             |message: String| log("INFO", &format!("RPC Connection #{connection}: {message}"));
@@ -594,7 +594,7 @@ impl Game<'_> {
     }
 
     /// `addUserBan`, then the banned player, if online, is sent away.
-    fn management_add_ban(&mut self, rpc: &impl Fn(String), state: &ServerState, ban: Ban) {
+    fn management_add_ban(&mut self, rpc: &impl Fn(String), state: &ServerState, ban: Ban) { if let Some(__l) = crate::points_generated::P1563.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let reason = ban.reason.clone().unwrap_or_else(|| {
             Text::translate("multiplayer.disconnect.banned.reason.default", &[]).plain()
         });
@@ -608,7 +608,7 @@ impl Game<'_> {
     }
 
     /// `addIpBan`, then whoever is online from that address is sent away.
-    fn management_ip_ban(&mut self, rpc: &impl Fn(String), state: &ServerState, ban: IpBan) {
+    fn management_ip_ban(&mut self, rpc: &impl Fn(String), state: &ServerState, ban: IpBan) { if let Some(__l) = crate::points_generated::P1562.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         rpc(format!("Add ip '{}' to ban list", ban.user));
         let ip = ban.user.clone();
         state.lists.lock().unwrap().ip_bans.add(ban);
@@ -620,7 +620,7 @@ impl Game<'_> {
 
     /// `PlayerList.op`: the level asked for, else `op-permission-level`; the bypass asked for, else the one
     /// the player had. The commands an online player may run follow (`sync_ops`, after the edit).
-    fn management_add_op(&mut self, rpc: &impl Fn(String), state: &ServerState, op: Op) {
+    fn management_add_op(&mut self, rpc: &impl Fn(String), state: &ServerState, op: Op) { if let Some(__l) = crate::points_generated::P1561.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         rpc(format!("Op '{}'", shown(&op.user)));
         let level = op
             .level
@@ -644,7 +644,7 @@ impl Game<'_> {
     }
 
     /// An `OperatorDto`: the player found, and the level and bypass when given.
-    fn management_op(&self, entry: &Value) -> Option<Op> {
+    fn management_op(&self, entry: &Value) -> Option<Op> { if let Some(__l) = crate::points_generated::P1560.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(Op {
             user: self.management_user(&entry["player"])?,
             level: entry["permissionLevel"].as_i64().map(|l| l as i32),
@@ -653,7 +653,7 @@ impl Game<'_> {
     }
 
     /// `PlayerListService.getPlayer(id, name)`: an online player, by id first; their address.
-    fn management_online(&self, player: &Value) -> Option<(u128, String)> {
+    fn management_online(&self, player: &Value) -> Option<(u128, String)> { if let Some(__l) = crate::points_generated::P1559.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let id = player["id"]
             .as_str()
             .and_then(|s| u128::from_str_radix(s, 16).ok());
@@ -675,7 +675,7 @@ impl Game<'_> {
 
     /// `UserBanDto.toUserBan`: the player found, the source "Management server" unless one is given; the ban
     /// starts now.
-    fn management_ban(&self, entry: &Value) -> Option<Ban> {
+    fn management_ban(&self, entry: &Value) -> Option<Ban> { if let Some(__l) = crate::points_generated::P1558.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let user = self.management_user(&entry["player"])?;
         let source = entry["source"].as_str().unwrap_or("Management server");
         let reason = entry["reason"].as_str().map(str::to_owned);
@@ -689,7 +689,7 @@ impl Game<'_> {
 
     /// `MinecraftPlayerListService.getUser`: by id, the user cache, else the session service; by name, the
     /// user cache, else the profile service (an offline server's offline player).
-    fn management_user(&self, player: &Value) -> Option<NameAndId> {
+    fn management_user(&self, player: &Value) -> Option<NameAndId> { if let Some(__l) = crate::points_generated::P1557.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(id) = player["id"]
             .as_str()
             .and_then(|s| u128::from_str_radix(s, 16).ok())

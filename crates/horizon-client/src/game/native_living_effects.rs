@@ -44,7 +44,7 @@ impl Game<'_> {
     /// the acting player, and a game without a hub keeps its single
     /// player's the same way), any other guest's are their hub record's.
     /// None for another kind.
-    fn native_living_player_effects(&self, t: Target) -> Option<&PlayerEffects> {
+    fn native_living_player_effects(&self, t: Target) -> Option<&PlayerEffects> { if let Some(__l) = crate::points_generated::P3863.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match t {
             Target::Player => Some(&self.potions.effects),
             Target::Guest(conn) if self.lan_acting == Some(conn) => Some(&self.potions.effects),
@@ -67,7 +67,7 @@ impl Game<'_> {
         &mut self,
         living: LivingRef,
         effect: &NativeActiveEffect,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P3862.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(def) = brewing::effect(effect.id) else {
             return false;
         };
@@ -120,7 +120,7 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         effect: &str,
-    ) -> Option<NativeActiveEffect> {
+    ) -> Option<NativeActiveEffect> { if let Some(__l) = crate::points_generated::P3861.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let def = brewing::effect(effect)?;
         match self.native_living_read_target(living)? {
             t @ (Target::Player | Target::Guest(_)) => self
@@ -143,7 +143,7 @@ impl Game<'_> {
     pub(super) fn native_living_effects(
         &self,
         living: LivingRef,
-    ) -> Option<Vec<NativeActiveEffect>> {
+    ) -> Option<Vec<NativeActiveEffect>> { if let Some(__l) = crate::points_generated::P3860.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_living_read_target(living)? {
             t @ (Target::Player | Target::Guest(_)) => self
                 .native_living_player_effects(t)
@@ -160,7 +160,7 @@ impl Game<'_> {
     /// Whether the entity has `effect` (`LivingEntity.hasEffect`). A bare vanilla id reads as
     /// `minecraft:`'s. False for an unknown id, an armor stand, the dragon,
     /// a stale handle or a client.
-    pub(super) fn native_living_potion_affected(&self, living: LivingRef, effect: &str) -> bool {
+    pub(super) fn native_living_potion_affected(&self, living: LivingRef, effect: &str) -> bool { if let Some(__l) = crate::points_generated::P3859.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(def) = brewing::effect(effect) else {
             return false;
         };
@@ -185,7 +185,7 @@ impl Game<'_> {
     /// leaving the same way its expiry takes them. False (and nothing
     /// changes) when the entity has the effect not, or for an unknown id,
     /// an armor stand, the dragon, a stale handle or a client.
-    pub(super) fn native_living_remove_effect(&mut self, living: LivingRef, effect: &str) -> bool {
+    pub(super) fn native_living_remove_effect(&mut self, living: LivingRef, effect: &str) -> bool { if let Some(__l) = crate::points_generated::P3858.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(def) = brewing::effect(effect) else {
             return false;
         };
@@ -208,7 +208,7 @@ impl Game<'_> {
     /// every effect's attribute modifiers and absorption hearts leave with
     /// them. False when the entity has none, or for an armor stand, the
     /// dragon, a stale handle or a client.
-    pub(super) fn native_living_remove_all_effects(&mut self, living: LivingRef) -> bool {
+    pub(super) fn native_living_remove_all_effects(&mut self, living: LivingRef) -> bool { if let Some(__l) = crate::points_generated::P3857.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         match self.native_living_target(living) {
             Some(t @ (Target::Player | Target::Guest(_))) => self
                 .for_player(t, |g| g.remove_player_effects(None))

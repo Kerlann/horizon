@@ -55,7 +55,7 @@ fn env_flag(name: &str, default: bool) -> bool {
 
 impl Game<'_> {
     /// Start sharing the open world.
-    pub(super) fn friends_start(&mut self) -> Result<()> {
+    pub(super) fn friends_start(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P1981.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.friends.is_some() {
             return Ok(());
         }
@@ -114,7 +114,7 @@ impl Game<'_> {
 
     /// Stop sharing: the code ends (direct port closed, router mapping
     /// deleted); the world closes to LAN again if sharing opened it.
-    pub(super) fn friends_stop(&mut self) {
+    pub(super) fn friends_stop(&mut self) { if let Some(__l) = crate::points_generated::P1980.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(mut sharing) = self.friends.take() else {
             return;
         };
@@ -130,14 +130,14 @@ impl Game<'_> {
     }
 
     /// The LAN server is closing: the code goes with it.
-    pub(super) fn friends_lan_closed(&mut self) {
+    pub(super) fn friends_lan_closed(&mut self) { if let Some(__l) = crate::points_generated::P1979.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(mut sharing) = self.friends.take() {
             sharing.host.stop();
         }
     }
 
     /// New codes and sessions, once a tick and while the pause menu is drawn.
-    pub(super) fn tick_friends(&mut self) {
+    pub(super) fn tick_friends(&mut self) { if let Some(__l) = crate::points_generated::P1978.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(sharing) = self.friends.as_mut() else {
             return;
         };
@@ -175,7 +175,7 @@ impl Game<'_> {
         }
     }
 
-    pub(super) fn friends_copy(&mut self) {
+    pub(super) fn friends_copy(&mut self) { if let Some(__l) = crate::points_generated::P1977.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(code) = self.friends.as_ref().and_then(|s| s.code.clone()) else {
             return;
         };
@@ -188,7 +188,7 @@ impl Game<'_> {
 
     /// Play with Friends. The world is paused under it in singleplayer, so
     /// new codes and sessions are read while it is drawn.
-    pub(super) fn draw_friends_screen(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_friends_screen(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P1976.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.tick_friends();
         let view = self.friends_view();
         horizon_client::widgets::begin_screen(|| {
@@ -196,7 +196,7 @@ impl Game<'_> {
         });
         friends_screen::draw(batch, &self.gui.atlas, self.cursor, &view, true);
     }
-    pub(super) fn friends_screen_click(&mut self) {
+    pub(super) fn friends_screen_click(&mut self) { if let Some(__l) = crate::points_generated::P1975.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let view = self.friends_view();
         let Some(action) =
             friends_screen::click(&self.gui.atlas, self.gui_size(), self.cursor, &view)
@@ -229,7 +229,7 @@ impl Game<'_> {
     }
 
     /// What Play with Friends shows.
-    pub(super) fn friends_view(&self) -> FriendsView {
+    pub(super) fn friends_view(&self) -> FriendsView { if let Some(__l) = crate::points_generated::P1974.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let guests = match &self.lan {
             Some(h) => h.hub.guests.iter().map(|g| g.name.clone()).collect(),
             // On the server thread: the other players the server lists.
@@ -283,7 +283,7 @@ impl Game<'_> {
     }
 
     /// `horizon-ctl friends ...`.
-    pub(super) fn friends_control(&mut self, words: &[&str]) -> Result<Option<serde_json::Value>> {
+    pub(super) fn friends_control(&mut self, words: &[&str]) -> Result<Option<serde_json::Value>> { if let Some(__l) = crate::points_generated::P1973.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         use serde_json::json;
         if words[0] != "friends" {
             return Ok(None);

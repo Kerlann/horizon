@@ -386,7 +386,7 @@ impl InputTrace {
 impl Game<'_> {
     /// An agent's control line: input unless it only reads, which still counts
     /// as the agent watching.
-    pub(super) fn note_socket_line(&mut self, line: &str) {
+    pub(super) fn note_socket_line(&mut self, line: &str) { if let Some(__l) = crate::points_generated::P2093.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if is_read_only(line) || is_session_command(line) {
             self.input_trace.agent_activity();
             return;
@@ -403,13 +403,13 @@ impl Game<'_> {
     /// on), the repro shortcuts, or a recording under way. Otherwise every key
     /// and mouse motion skips it, so a player who uses none of them pays
     /// nothing per input event.
-    fn tracing_input(&self) -> bool {
+    fn tracing_input(&self) -> bool { if let Some(__l) = crate::points_generated::P2092.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.control.is_some() || self.settings.extras.repro_keys || self.repro.recording_active()
     }
 
     /// Record an input event and, when a person steps into an agent's run, tell
     /// every watcher once.
-    pub(super) fn note_input(&mut self, origin: InputOrigin, kind: TraceKind) {
+    pub(super) fn note_input(&mut self, origin: InputOrigin, kind: TraceKind) { if let Some(__l) = crate::points_generated::P2091.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !self.tracing_input() {
             return;
         }
@@ -435,7 +435,7 @@ impl Game<'_> {
 
     /// Keep the window events that are input. Agent-made window events are left
     /// out: the control-socket line that caused them is recorded instead.
-    pub(super) fn trace_window_event(&mut self, origin: InputOrigin, event: &WindowEvent) {
+    pub(super) fn trace_window_event(&mut self, origin: InputOrigin, event: &WindowEvent) { if let Some(__l) = crate::points_generated::P2090.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if origin == InputOrigin::Agent || !self.tracing_input() {
             return;
         }

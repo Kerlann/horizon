@@ -16,7 +16,7 @@ use horizon_core::position::BlockPos;
 use horizon_world::registry::BlockStateId;
 
 impl Game<'_> {
-    pub(super) fn tick_block_entities(&mut self) -> Result<()> {
+    pub(super) fn tick_block_entities(&mut self) -> Result<()> { if let Some(__l) = crate::points_generated::P636.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.tick_mount_menu();
         self.tick_craft_table();
         self.tick_container_reach();
@@ -110,7 +110,7 @@ impl Game<'_> {
     /// The boxes are those the level animates: a box opens (`start_open` and
     /// block event 1) before it has one, exactly as vanilla's block entity is
     /// there from the start.
-    fn tick_shulkers(&mut self) -> Vec<super::piston_push::ShulkerPush> {
+    fn tick_shulkers(&mut self) -> Vec<super::piston_push::ShulkerPush> { if let Some(__l) = crate::points_generated::P635.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ticking = self.block_ticking_area();
         let mut pushes = Vec::new();
         let mut gone = Vec::new();
@@ -143,7 +143,7 @@ impl Game<'_> {
     /// Copies the shulker box lids into the world, where the collision queries
     /// read them (`SceneCollisions::shulker_collision_state`), as
     /// `sync_moving_pistons` does for pistons.
-    pub(super) fn sync_shulkers(&mut self) {
+    pub(super) fn sync_shulkers(&mut self) { if let Some(__l) = crate::points_generated::P634.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.world.shulkers.clear();
         self.world
             .shulkers
@@ -152,7 +152,7 @@ impl Game<'_> {
     /// `BlockState.getTicker` of every state, for the block entities ticked
     /// here. A creaking heart keeps its slot while uprooted (see
     /// `tick_creaking_heart`).
-    fn ticking_states(&self) -> Vec<Ticking> {
+    fn ticking_states(&self) -> Vec<Ticking> { if let Some(__l) = crate::points_generated::P633.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let registry = self.pack.assets.registry;
         (0..registry.len())
             .map(|i| {
@@ -198,12 +198,12 @@ impl Game<'_> {
     /// `ServerLevel.shouldTickBlocksAt` in a block-ticking chunk
     /// (`LevelChunk.isTicking`, block coordinates), from every player's
     /// tickets (`update_chunk_tickets`).
-    fn block_ticking_area(&self) -> impl Fn(i32, i32) -> bool + use<> {
+    fn block_ticking_area(&self) -> impl Fn(i32, i32) -> bool + use<> { if let Some(__l) = crate::points_generated::P632.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let levels = self.tickets.levels();
         move |x, z| levels.block_ticking_at(x, z)
     }
     /// `DaylightDetectorBlock.tickEntity` of the detector at `pos`.
-    fn tick_daylight_detector(&mut self, pos: Pos) {
+    fn tick_daylight_detector(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P631.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // It updates every 20 game ticks (the behaviour checks this too).
         if self.world.game_time % 20 != 0 {
             return;
@@ -214,7 +214,7 @@ impl Game<'_> {
     }
     /// `AbstractFurnaceBlockEntity.serverTick` of the furnace at `pos`, and
     /// its block's `lit` following it.
-    fn tick_furnace(&mut self, pos: Pos) -> Result<()> {
+    fn tick_furnace(&mut self, pos: Pos) -> Result<()> { if let Some(__l) = crate::points_generated::P630.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // What the hooks need from before the tick, without cloning stacks: the
         // fuel's id only while the furnace is out (it can light this tick), the
         // input's id (a last item is gone after it smelts) and the result count.

@@ -26,7 +26,7 @@ pub(super) struct GuestMount {
 impl Game<'_> {
     /// `ServerPlayer.openHorseInventory` for mount `mob`: the open menu
     /// closes, the client gets the mount screen and the menu's slots.
-    pub(super) fn lan_open_mount(&mut self, conn: u32, mob: u32) {
+    pub(super) fn lan_open_mount(&mut self, conn: u32, mob: u32) { let (conn,mob,) = match crate::points_generated::P2376.get() { Some(__l) => { let mut __a = (conn,mob,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,mob,) };
         let Some(index) = self.mobs.iter().position(|m| m.id == mob) else {
             return;
         };
@@ -54,7 +54,7 @@ impl Game<'_> {
 
     /// `HorseInventoryMenu` over mount `index`, with the player's inventory
     /// loaded by the caller.
-    fn mount_engine_menu(&self, index: usize, columns: usize) -> Menu {
+    fn mount_engine_menu(&self, index: usize, columns: usize) -> Menu { let (index,columns,) = match crate::points_generated::P2375.get() { Some(__l) => { let mut __a = (index,columns,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (index,columns,) };
         let env = self.menu_env();
         let mut menu = Menu::new(Kind::Mount(columns));
         menu.mount = Some(self.mobs[index].kind.id.to_string());
@@ -69,7 +69,7 @@ impl Game<'_> {
 
     /// The menu's slots (the mount's, then the inventory and the hotbar)
     /// and the carried stack, sent when they changed since the last time.
-    fn lan_send_mount(&mut self, conn: u32) {
+    fn lan_send_mount(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2374.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -116,7 +116,7 @@ impl Game<'_> {
     }
 
     /// A click on the guest's mount window; false for other windows.
-    pub(super) fn lan_mount_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool {
+    pub(super) fn lan_mount_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool { let (conn,) = match crate::points_generated::P2373.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return false;
         };
@@ -160,7 +160,7 @@ impl Game<'_> {
             .map(|k| menu.slot(2 + k).cloned())
             .collect()
     }
-    fn lan_mount_store(&mut self, index: usize, columns: usize, menu: &Menu) {
+    fn lan_mount_store(&mut self, index: usize, columns: usize, menu: &Menu) { let (index,columns,) = match crate::points_generated::P2372.get() { Some(__l) => { let mut __a = (index,columns,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,columns,) };
         let (_, body, _) = self.mount_contents(index);
         let body = body.map(|_| menu.slot(1).cloned());
         let items = Self::lan_store_slots(menu, columns);
@@ -170,7 +170,7 @@ impl Game<'_> {
     /// `AbstractContainerMenu.removed` of the guest's mount menu (`window`;
     /// None closes it whichever it is): the carried stack goes back to the
     /// inventory. False when no such window is open.
-    pub(super) fn lan_mount_closed(&mut self, conn: u32, window: Option<i32>) -> bool {
+    pub(super) fn lan_mount_closed(&mut self, conn: u32, window: Option<i32>) -> bool { let (conn,) = match crate::points_generated::P2371.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return false;
         };
@@ -193,7 +193,7 @@ impl Game<'_> {
 
     /// `AbstractMountInventoryMenu.stillValid`: the mount is alive and within
     /// the entity interaction range (3) plus 4 of the guest's eyes.
-    pub(super) fn lan_mount_valid(&self, g: &horizon_client::lan::guest::Guest, mob: u32) -> bool {
+    pub(super) fn lan_mount_valid(&self, g: &horizon_client::lan::guest::Guest, mob: u32) -> bool { let (mob,) = match crate::points_generated::P2370.get() { Some(__l) => { let mut __a = (mob,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (mob,) };
         let eye = [g.position[0], g.position[1] + g.eye_height(), g.position[2]];
         self.mobs.iter().find(|m| m.id == mob).is_some_and(|m| {
             let (w, h) = (f64::from(m.width()) / 2.0, f64::from(m.height()));
@@ -213,7 +213,7 @@ impl Game<'_> {
     /// mount's and the inventory's slots. Only the level the player is in
     /// checks its menu (`ServerPlayer.tick`): another level ticking has
     /// none of its mobs (#5331).
-    pub(super) fn tick_lan_mount_menus(&mut self) {
+    pub(super) fn tick_lan_mount_menus(&mut self) { if let Some(__l) = crate::points_generated::P2369.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };

@@ -12,7 +12,7 @@ use horizon_core::{position::BlockPos, random::RandomSource};
 
 impl Game<'_> {
     /// The composter's `level` at `pos`, None when it isn't a composter.
-    pub(super) fn composter_level(&self, pos: [i32; 3]) -> Option<i32> {
+    pub(super) fn composter_level(&self, pos: [i32; 3]) -> Option<i32> { let (pos,) = match crate::points_generated::P1273.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let s = self.pack.assets.registry.state(state)?;
         if &*s.name != "minecraft:composter" {
@@ -21,13 +21,13 @@ impl Game<'_> {
         s.properties.get("level")?.parse().ok()
     }
     /// The item's `compostable` layers provider.
-    fn compostable(&self, stack: &ItemStack) -> Option<serde_json::Value> {
+    fn compostable(&self, stack: &ItemStack) -> Option<serde_json::Value> { if let Some(__l) = crate::points_generated::P1272.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.items().get(&stack.item)?.compostable.clone()
     }
     /// `ComposterBlock.addLayer` and level event 1500: the provider is
     /// evaluated in the composter's block-interaction loot context (its
     /// state; the level random), then the layer is added. True when it was.
-    fn composter_add(&mut self, pos: [i32; 3], layers: &serde_json::Value) -> bool {
+    fn composter_add(&mut self, pos: [i32; 3], layers: &serde_json::Value) -> bool { let (pos,) = match crate::points_generated::P1271.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let context = ComputeContext {
             block: Some(pos),
             target: None,
@@ -44,7 +44,7 @@ impl Game<'_> {
     /// `ComposterBlock.useItemOn` with the main-hand stack: true when it
     /// consumed the action (SUCCESS; a full composter falls through to
     /// `useWithoutItem`, which empties it).
-    pub(super) fn use_composter(&mut self, pos: [i32; 3], held: Option<&ItemStack>) -> bool {
+    pub(super) fn use_composter(&mut self, pos: [i32; 3], held: Option<&ItemStack>) -> bool { let (pos,) = match crate::points_generated::P1270.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let Some(level) = self.composter_level(pos) else {
             return false;
         };
@@ -69,7 +69,7 @@ impl Game<'_> {
     }
     /// `ComposterBlock.useItemOn` on a client's level: whether `held` is
     /// compostable and the composter at `pos` below level 8 (SUCCESS).
-    pub(super) fn composter_takes(&self, pos: [i32; 3], held: Option<&ItemStack>) -> bool {
+    pub(super) fn composter_takes(&self, pos: [i32; 3], held: Option<&ItemStack>) -> bool { let (pos,) = match crate::points_generated::P1269.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.composter_level(pos).is_some_and(|level| level < 8)
             && held.is_some_and(|stack| {
                 self.res
@@ -85,7 +85,7 @@ impl Game<'_> {
         pos: [i32; 3],
         mut stack: ItemStack,
         from_above: bool,
-    ) -> Option<ItemStack> {
+    ) -> Option<ItemStack> { let (pos,from_above,) = match crate::points_generated::P1268.get() { Some(__l) => { let mut __a = (pos,from_above,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,from_above,) };
         let Some(level) = self.composter_level(pos) else {
             return Some(stack);
         };
@@ -105,7 +105,7 @@ impl Game<'_> {
     /// composter is emptied, then up to 20 wheat or beetroot seeds go in
     /// (keeping 10 of each kind) until the composter reaches level 7. Level
     /// event 1500 plays once, at the end.
-    pub(super) fn villager_compost_items(&mut self, mob: usize, pos: [i32; 3]) {
+    pub(super) fn villager_compost_items(&mut self, mob: usize, pos: [i32; 3]) { let (mob,pos,) = match crate::points_generated::P1267.get() { Some(__l) => { let mut __a = (mob,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,pos,) };
         let at = BlockPos::new(pos[0], pos[1], pos[2]);
         let Some(mut before) = self.composter_level(pos) else {
             return;
@@ -155,7 +155,7 @@ impl Game<'_> {
     }
     /// `ComposterBlock.insertItem` with a villager's stack: below level 7 a
     /// compostable item is used up and may add a layer.
-    fn villager_insert_item(&mut self, mob: usize, slot: usize, stack: &ItemStack, pos: [i32; 3]) {
+    fn villager_insert_item(&mut self, mob: usize, slot: usize, stack: &ItemStack, pos: [i32; 3]) { let (mob,slot,pos,) = match crate::points_generated::P1266.get() { Some(__l) => { let mut __a = (mob,slot,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,slot,pos,) };
         if self.composter_level(pos).is_none_or(|level| level >= 7) {
             return;
         }
@@ -179,7 +179,7 @@ impl Game<'_> {
     }
     /// `ComposterBlock.handleFill` (level event 1500) on the client: the
     /// fill sound and ten composter particles above the compost.
-    pub(super) fn composter_fill_event(&mut self, pos: BlockPos, success: bool) {
+    pub(super) fn composter_fill_event(&mut self, pos: BlockPos, success: bool) { let (success,) = match crate::points_generated::P1265.get() { Some(__l) => { let mut __a = (success,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (success,) };
         let center = [
             f64::from(pos.x) + 0.5,
             f64::from(pos.y) + 0.5,

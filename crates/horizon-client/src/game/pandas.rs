@@ -15,7 +15,7 @@ use horizon_core::geometry::Vec3;
 
 impl Game<'_> {
     /// `Panda.canPickUpAndEat`'s tag.
-    fn panda_eats_from_ground(&self, item: &str) -> bool {
+    fn panda_eats_from_ground(&self, item: &str) -> bool { if let Some(__l) = crate::points_generated::P4435.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res
             .items()
             .item_tags
@@ -24,7 +24,7 @@ impl Game<'_> {
     }
     /// A panda takes what lies at its feet when its mouth is free, and
     /// looks for food within 6 and 8 blocks for `PandaSitGoal`.
-    pub(super) fn tick_pandas(&mut self) {
+    pub(super) fn tick_pandas(&mut self) { if let Some(__l) = crate::points_generated::P4434.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let griefing = self.ui.rules.bool("mob_griefing");
         for i in 0..self.mobs.len() {
             let m = &self.mobs[i];
@@ -64,7 +64,7 @@ impl Game<'_> {
         }
     }
     /// `Panda.mobInteract` for a click with `item`; whether the click is taken.
-    pub(super) fn interact_panda(&mut self, index: usize, item: &str) -> bool {
+    pub(super) fn interact_panda(&mut self, index: usize, item: &str) -> bool { let (index,) = match crate::points_generated::P4433.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let creative = self.creative;
         let m = &mut self.mobs[index];
         if panda::scared(m) {
@@ -129,7 +129,7 @@ impl Game<'_> {
         true
     }
     /// `Panda.afterSneeze`: the grown pandas within 10 blocks of a cub jump.
-    pub(super) fn panda_sneezed(&mut self, id: u32) {
+    pub(super) fn panda_sneezed(&mut self, id: u32) { let (id,) = match crate::points_generated::P4432.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         let Some(area) = self
             .mobs
             .iter()
@@ -157,7 +157,7 @@ impl Game<'_> {
     }
     /// What a window draws of its pandas: the crumbs of a bite
     /// (`addEatingParticles`) and the sneeze's particle.
-    pub(super) fn panda_effects(&mut self) {
+    pub(super) fn panda_effects(&mut self) { if let Some(__l) = crate::points_generated::P4431.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut bites = Vec::new();
         let mut sneezes = Vec::new();
         for m in self

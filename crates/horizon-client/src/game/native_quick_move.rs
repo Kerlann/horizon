@@ -86,7 +86,7 @@ impl Game<'_> {
     /// player. True when a mod took it: the slot keeps what the mod left and
     /// the guest's client gets the whole menu again. False for every other
     /// click, and for one no mod took, so the game's own routing runs.
-    pub(super) fn lan_mod_quick_move(&mut self, conn: u32, p: &play::ContainerClick) -> bool {
+    pub(super) fn lan_mod_quick_move(&mut self, conn: u32, p: &play::ContainerClick) -> bool { let (conn,) = match crate::points_generated::P4107.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return false;
         };
@@ -182,7 +182,7 @@ impl Game<'_> {
     /// player in place: true when
     /// one took it, the slot then holding what is left of its stack. The
     /// block entity is out of the world during the call.
-    fn mod_menu_quick_move(&mut self, pos: Pos, size: usize, slot: usize, at: MenuSlot) -> bool {
+    fn mod_menu_quick_move(&mut self, pos: Pos, size: usize, slot: usize, at: MenuSlot) -> bool { let (size,slot,) = match crate::points_generated::P4106.get() { Some(__l) => { let mut __a = (size,slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (size,slot,) };
         let Some(BlockEntity::Mod(m)) = self.world.block_entities.get_mut(&pos) else {
             return false;
         };

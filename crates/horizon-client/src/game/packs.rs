@@ -147,7 +147,7 @@ pub(super) fn pack_infos(vanilla: &Path, server: &[Pack]) -> Vec<PackInfo> {
     infos
 }
 impl Game<'_> {
-    pub(super) fn vanilla_root(&self) -> PathBuf {
+    pub(super) fn vanilla_root(&self) -> PathBuf { if let Some(__l) = crate::points_generated::P4352.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.ui.vanilla_root.as_os_str().is_empty() {
             self.options.resources.clone()
         } else {
@@ -156,14 +156,14 @@ impl Game<'_> {
     }
     /// Whether all active packs preserve vanilla's block models. The server
     /// overlay sits above the local selection and must be included too.
-    pub(super) fn model_packs_are_vanilla(&self) -> bool {
+    pub(super) fn model_packs_are_vanilla(&self) -> bool { if let Some(__l) = crate::points_generated::P4351.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.settings.horizon.vanilla_models_with_server_packs(
             self.settings.resource_packs.iter().map(String::as_str),
             self.server_packs.active.iter().map(|pack| pack.id.as_str()),
         )
     }
     /// The leaf mode that is safe for the current local and server packs.
-    pub(super) fn effective_leaf_culling(&self) -> horizon_client::graphics::LeafCullingMode {
+    pub(super) fn effective_leaf_culling(&self) -> horizon_client::graphics::LeafCullingMode { if let Some(__l) = crate::points_generated::P4350.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.settings
             .horizon
             .leaf_culling_effective_with_server_packs(
@@ -173,7 +173,7 @@ impl Game<'_> {
     }
     /// The packs the pack screen offers and the current selection
     /// (`PackSelectionScreen` makes its `PackSelectionModel` from them).
-    pub(super) fn refresh_pack_lists(&mut self) {
+    pub(super) fn refresh_pack_lists(&mut self) { if let Some(__l) = crate::points_generated::P4349.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let infos = pack_infos(&self.vanilla_root(), &self.server_packs.active);
         let browsing = self.settings.extras.pack_browser;
         let o = &mut self.ui.options;
@@ -193,7 +193,7 @@ impl Game<'_> {
     /// the window keeps drawing; `drive_pack_reload` applies it.
     /// Horizon's pack browser: what its worker finished since the last
     /// frame. A pack that landed becomes an entry in the available list.
-    pub(super) fn drive_pack_browser(&mut self) {
+    pub(super) fn drive_pack_browser(&mut self) { if let Some(__l) = crate::points_generated::P4348.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(screen) = &mut self.ui.options.pack_screen else {
             return;
         };
@@ -226,7 +226,7 @@ impl Game<'_> {
             self.ui.options.pack_screen = None;
         }
     }
-    pub(super) fn reload_packs(&mut self) {
+    pub(super) fn reload_packs(&mut self) { if let Some(__l) = crate::points_generated::P4347.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Pack reload updates tail-owned mob metadata. Keep menus responsive
         // until those resources exist, then apply the latest selection once.
         // A reload already under its overlay finishes first (vanilla's
@@ -243,7 +243,7 @@ impl Game<'_> {
     /// a pack selected, all selected packs are dropped and the reload runs
     /// again, with the load-failure toast; with none left to drop, the pack
     /// screen again, with the error.
-    fn selection_reload_failed(&mut self, error: &str) {
+    fn selection_reload_failed(&mut self, error: &str) { if let Some(__l) = crate::points_generated::P4346.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         log::warn!("Horizon: resource reload failed: {error}");
         let all = packs::discover(&self.vanilla_root(), &packs_dir());
         if packs::able_to_clear_any_pack(&all, &self.settings.resource_packs) {
@@ -276,7 +276,7 @@ impl Game<'_> {
     /// worker (`createReload`'s background executor); the frame draws its
     /// progress meanwhile, and the overlay takes no input (`LoadingOverlay`),
     /// so what is held is released (`KeyMapping.releaseAll`).
-    pub(super) fn spawn_pack_reload(&mut self, kind: ReloadKind) -> std::io::Result<()> {
+    pub(super) fn spawn_pack_reload(&mut self, kind: ReloadKind) -> std::io::Result<()> { if let Some(__l) = crate::points_generated::P4345.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.keys.clear();
         self.physical_keys.clear();
         self.left = false;
@@ -321,7 +321,7 @@ impl Game<'_> {
     /// `LoadingOverlay.tick` once the reload is done: the staged pack is
     /// applied on the render thread, and its outcome goes to whoever asked
     /// (`reloadResourcePacks`' callback, or `PackReloadConfig.Callbacks`).
-    pub(super) fn drive_pack_reload(&mut self) {
+    pub(super) fn drive_pack_reload(&mut self) { if let Some(__l) = crate::points_generated::P4344.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((kind, staged)) = self.pack_reload.as_mut().and_then(PackReload::finished) else {
             return;
         };
@@ -344,7 +344,7 @@ impl Game<'_> {
     }
     /// The render-thread half: the renderer on the new pack's textures, then
     /// the swap (`ReloadInstance`'s application listeners).
-    pub(super) fn apply_staged_pack(&mut self, staged: StagedPack) -> horizon_client::Result<()> {
+    pub(super) fn apply_staged_pack(&mut self, staged: StagedPack) -> horizon_client::Result<()> { if let Some(__l) = crate::points_generated::P4343.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let StagedPack {
             root,
             client_applies,

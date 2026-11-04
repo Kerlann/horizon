@@ -28,7 +28,7 @@ impl Game<'_> {
     /// refused: the bulk path sets states only), a run naming a palette entry
     /// or filter past the end, or more than 65536 filters, and nothing is
     /// made.
-    pub(super) fn edit_blocks(&mut self, edit: &BlockEdit) -> Result<u64, String> {
+    pub(super) fn edit_blocks(&mut self, edit: &BlockEdit) -> Result<u64, String> { if let Some(__l) = crate::points_generated::P603.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let parse = |name: &str, testing: bool| -> Result<BlockInput, String> {
             let mut reader = Reader::new(name);
             let b = block::parse(&mut reader, &self.ui.registries, testing)
@@ -116,7 +116,7 @@ impl Game<'_> {
     }
 
     /// Each column's height on `h` as `edit_height` reads it, none where its chunk is not loaded.
-    pub(super) fn surface_heights(&self, columns: &[(i32, i32)], h: Heightmap) -> Vec<Option<i32>> {
+    pub(super) fn surface_heights(&self, columns: &[(i32, i32)], h: Heightmap) -> Vec<Option<i32>> { if let Some(__l) = crate::points_generated::P602.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         loaded_heights(&self.world, columns, |x, z| self.edit_height(h, x, z))
     }
 
@@ -131,7 +131,7 @@ impl Game<'_> {
         h: Heightmap,
         below: u32,
         above: u32,
-    ) -> Result<ColumnBlocks, String> {
+    ) -> Result<ColumnBlocks, String> { let (below,above,) = match crate::points_generated::P601.get() { Some(__l) => { let mut __a = (below,above,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (below,above,) };
         read_size(columns.len(), below, above, self.world.layout().height())?;
         let bases = self.surface_heights(columns, h);
         let facts = self.res.facts();
@@ -170,7 +170,7 @@ impl Game<'_> {
 
     /// One above the highest block of column (x, z) that counts on heightmap `h`, or the bottom of the column (also
     /// where it is not loaded).
-    fn edit_height(&self, h: Heightmap, x: i32, z: i32) -> i32 {
+    fn edit_height(&self, h: Heightmap, x: i32, z: i32) -> i32 { let (x,z,) = match crate::points_generated::P600.get() { Some(__l) => { let mut __a = (x,z,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,z,) };
         let properties = &self.pack.assets.properties;
         column_height(
             &self.world,

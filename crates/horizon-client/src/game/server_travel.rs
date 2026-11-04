@@ -188,7 +188,7 @@ impl Trip {
 }
 
 impl Game<'_> {
-    pub(super) fn gateway_source_chunks(&self) -> Vec<(i32, i32)> {
+    pub(super) fn gateway_source_chunks(&self) -> Vec<(i32, i32)> { if let Some(__l) = crate::points_generated::P5298.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.server_trips
             .iter()
             .filter(|t| t.dim == self.dim)
@@ -197,13 +197,13 @@ impl Game<'_> {
     }
     /// Whether `conn` is between two levels: the server leaves its body
     /// alone until it arrives.
-    pub(super) fn on_server_trip(&self, conn: u32) -> bool {
+    pub(super) fn on_server_trip(&self, conn: u32) -> bool { let (conn,) = match crate::points_generated::P5297.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,) };
         self.server_trips.iter().any(|t| t.conn == conn)
     }
 
     /// Whether a vehicle waits in `dim` for its rider to arrive elsewhere:
     /// that level stays open until it has moved.
-    pub(super) fn vehicle_waits_in(&self, dim: Dim) -> bool {
+    pub(super) fn vehicle_waits_in(&self, dim: Dim) -> bool { if let Some(__l) = crate::points_generated::P5296.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.server_trips
             .iter()
             .any(|t| t.vehicle.is_some() && t.source == dim)
@@ -213,7 +213,7 @@ impl Game<'_> {
     /// the trips into this level, then `Entity.handlePortal` for each player
     /// in it (Nether portals count up their transition time, End portals
     /// take them at once).
-    pub(super) fn tick_server_travel(&mut self) {
+    pub(super) fn tick_server_travel(&mut self) { if let Some(__l) = crate::points_generated::P5295.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.lan.is_none() {
             return;
         }
@@ -252,7 +252,7 @@ impl Game<'_> {
     }
 
     /// Whether this guest's dimension change may start (`native_player_portal`).
-    fn server_player_portal_allowed(&mut self, conn: u32, target: Dim, cause: &str) -> bool {
+    fn server_player_portal_allowed(&mut self, conn: u32, target: Dim, cause: &str) -> bool { let (conn,) = match crate::points_generated::P5294.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return false;
         };
@@ -264,7 +264,7 @@ impl Game<'_> {
     }
 
     /// `Entity.handlePortal` for one player, whose portal state is in place.
-    fn handle_server_portal(&mut self, conn: u32) {
+    fn handle_server_portal(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P5293.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -410,7 +410,7 @@ impl Game<'_> {
     /// a portal (a vehicle's transition time is 0): the riders travel with
     /// it and ride it again on arrival (`Entity.teleportCrossDimension`), so
     /// a rider never waits for its own portal delay.
-    fn carry_riders_through_portals(&mut self) {
+    fn carry_riders_through_portals(&mut self) { if let Some(__l) = crate::points_generated::P5292.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for (vehicle, entry) in self.take_carrying(self.dim) {
             let Some(plan) = self.vehicle_plan(vehicle, entry) else {
                 continue;
@@ -448,7 +448,7 @@ impl Game<'_> {
     }
 
     /// A Nether portal block a player's box is in.
-    fn nether_portal_inside(&self, at: Vec3) -> Option<BlockPos> {
+    fn nether_portal_inside(&self, at: Vec3) -> Option<BlockPos> { if let Some(__l) = crate::points_generated::P5291.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let w = WIDTH / 2.0 - 1.0e-5;
         let lo = [at.x - w, at.y + 1.0e-5, at.z - w];
         let hi = [at.x + w, at.y + HEIGHT - 1.0e-5, at.z + w];
@@ -467,7 +467,7 @@ impl Game<'_> {
     /// The player moves to `target`'s level (opened if nobody was there)
     /// and is told it is there, at the approximate exit, while it loads. The
     /// level whose tick is running is put back in place afterwards.
-    pub(super) fn start_server_trip(&mut self, conn: u32, target: Dim, plan: Option<Plan>) {
+    pub(super) fn start_server_trip(&mut self, conn: u32, target: Dim, plan: Option<Plan>) { let (conn,) = match crate::points_generated::P5290.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -551,7 +551,7 @@ impl Game<'_> {
 
     /// A respawned player waits at its point outside the Overworld for the
     /// level to load around it.
-    pub(super) fn respawn_trip(&mut self, conn: u32, config: RespawnConfig) {
+    pub(super) fn respawn_trip(&mut self, conn: u32, config: RespawnConfig) { let (conn,) = match crate::points_generated::P5289.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let [x, y, z] = config.pos;
         self.server_trips.push(Trip {
             conn,
@@ -574,7 +574,7 @@ impl Game<'_> {
     /// in the level in place: where it stands up, facing the anchor (with
     /// the deplete sound) or the bed; else the point is forgotten, and the
     /// caller tells the player (`Hub::missing_respawn_block`).
-    pub(super) fn resolve_server_respawn(&mut self, config: RespawnConfig) -> Option<(Vec3, f32)> {
+    pub(super) fn resolve_server_respawn(&mut self, config: RespawnConfig) -> Option<(Vec3, f32)> { if let Some(__l) = crate::points_generated::P5288.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let [x, y, z] = config.pos;
         let anchor = self.is_anchor(self.world.block(x, y, z));
         match self.find_respawn_and_use(config, true) {
@@ -609,7 +609,7 @@ impl Game<'_> {
     /// TeleportTransition.createDefault and missingRespawnBlock: the player
     /// waits at the world spawn for its chunks, then PlayerSpawnFinder puts
     /// it on a free column within the respawn radius.
-    pub(super) fn world_spawn_trip(&mut self, conn: u32) {
+    pub(super) fn world_spawn_trip(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P5287.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some([x, y, z]) = self.level.world_spawn else {
             return;
         };
@@ -633,7 +633,7 @@ impl Game<'_> {
 
     /// TeleportTransition.missingRespawnBlock: the world spawn, in the
     /// Overworld.
-    fn respawn_at_world_spawn(&mut self, conn: u32) {
+    fn respawn_at_world_spawn(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P5286.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let at = self.level.world_spawn.map_or(
             self.spawn.map_or([0.5, 80.0, 0.5], |s| [s.x, s.y, s.z]),
             |[x, y, z]| [f64::from(x) + 0.5, f64::from(y), f64::from(z) + 0.5],
@@ -652,7 +652,7 @@ impl Game<'_> {
     /// the End (keeping the player's motion and look): straight to an exact
     /// exit, else once the destination has loaded around the player, who
     /// waits there (its exit is found among those blocks, or built).
-    fn start_gateway_trip(&mut self, conn: u32, gateway: [i32; 3]) {
+    fn start_gateway_trip(&mut self, conn: u32, gateway: [i32; 3]) { let (conn,gateway,) = match crate::points_generated::P5285.get() { Some(__l) => { let mut __a = (conn,gateway,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,gateway,) };
         let Some(i) = self
             .lan
             .as_ref()
@@ -689,7 +689,7 @@ impl Game<'_> {
     /// The trips into the level in place whose destination has loaded
     /// around their target: the exit (the Nether portal found or built, the
     /// End platform, the Overworld's spawn column) and the teleport there.
-    fn arrive_server_trips(&mut self) {
+    fn arrive_server_trips(&mut self) { if let Some(__l) = crate::points_generated::P5284.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut k = 0;
         while k < self.server_trips.len() {
             let trip = &self.server_trips[k];
@@ -843,7 +843,7 @@ impl Game<'_> {
     /// arrives: it keeps its entity id, so the ride is never broken
     /// (`Entity.teleportCrossDimension` recreates the vehicle in the other
     /// dimension, and its passengers ride it again).
-    fn arrive_vehicle(&mut self, source: Dim, id: u32, at: Vec3, yaw: f32) {
+    fn arrive_vehicle(&mut self, source: Dim, id: u32, at: Vec3, yaw: f32) { let (id,yaw,) = match crate::points_generated::P5283.get() { Some(__l) => { let mut __a = (id,yaw,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,yaw,) };
         let motion = self
             .portals
             .carried_motion
@@ -871,7 +871,7 @@ impl Game<'_> {
 
     /// Tells the mods of the teleports a command made inside a level, with
     /// each player's state swapped in: where the move has reached the hub.
-    pub(super) fn flush_teleport_notes(&mut self) {
+    pub(super) fn flush_teleport_notes(&mut self) { if let Some(__l) = crate::points_generated::P5282.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         for note in std::mem::take(&mut self.teleport_notes) {
             let TeleportNote {
                 conn,
@@ -896,7 +896,7 @@ impl Game<'_> {
     /// (`ServerPlayer.teleport` from TeleportCommand): a Respawn packet
     /// keeping all data and the teleport, with no portal sound. The server
     /// leaves the body alone until the level has loaded around it.
-    pub(super) fn run_level_teleports(&mut self) {
+    pub(super) fn run_level_teleports(&mut self) { if let Some(__l) = crate::points_generated::P5281.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.lan.is_none() {
             return;
         }
@@ -965,7 +965,7 @@ impl Game<'_> {
     /// from the level `left` to the one in place, `to`, with their state
     /// swapped in so that the helpers reach them. Nothing is heard when they
     /// did not leave a level, or ended where they started.
-    pub(super) fn tell_mods_changed_dimension(&mut self, conn: u32, left: Option<Dim>, to: Dim) {
+    pub(super) fn tell_mods_changed_dimension(&mut self, conn: u32, left: Option<Dim>, to: Dim) { let (conn,) = match crate::points_generated::P5280.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(from) = left.filter(|from| *from != to) else {
             return;
         };

@@ -10,7 +10,7 @@ use horizon_client::world::World;
 impl Game<'_> {
     /// Guest `conn`'s client ticks since the server's last tick, played again, before the server
     /// moves the guest's own body.
-    pub(super) fn guest_replay(&mut self, conn: u32) {
+    pub(super) fn guest_replay(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P4662.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };

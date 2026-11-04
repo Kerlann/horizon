@@ -36,7 +36,7 @@ fn generic_attributes_into(
 impl Game<'_> {
     /// `getAttributeValue(KNOCKBACK_RESISTANCE)` of a mob: its own value plus
     /// the modifiers of the items it wears or holds in matching slots.
-    pub(super) fn mob_knockback_resistance(&self, m: &Mob) -> f64 {
+    pub(super) fn mob_knockback_resistance(&self, m: &Mob) -> f64 { if let Some(__l) = crate::points_generated::P2320.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let e = &m.extra;
         use horizon_items::equipment::{CHEST, FEET, HEAD, LEGS, MAINHAND, OFFHAND};
         let slots = [
@@ -69,7 +69,7 @@ impl Game<'_> {
     /// Each mob's `gear_knockback_resistance`, for the pushes that read the
     /// mob (`Mob::knockback`, Punch, the mace's smash): worked out for the
     /// mobs that wear or hold something, since the mob does not know items.
-    pub(super) fn refresh_gear_knockback_resistance(&mut self) {
+    pub(super) fn refresh_gear_knockback_resistance(&mut self) { if let Some(__l) = crate::points_generated::P2319.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let values: Vec<Option<f64>> = self
             .mobs
             .iter()
@@ -87,7 +87,7 @@ impl Game<'_> {
 
     /// The registry id of a client-syncable attribute the entity type has
     /// (`AttributeMap.getInstance` is null for the others), by name.
-    fn synced_attribute(&self, entity: &str, name: &str) -> Option<i32> {
+    fn synced_attribute(&self, entity: &str, name: &str) -> Option<i32> { if let Some(__l) = crate::points_generated::P2318.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let catalog = &self.motion.attributes;
         let id = catalog.id(name)?;
         (catalog.attribute(id).syncable && catalog.default_base(entity, id).is_some())
@@ -95,7 +95,7 @@ impl Game<'_> {
     }
 
     /// The type's base value of an attribute, as the instance starts.
-    fn attribute_default(&self, entity: &str, name: &str) -> f64 {
+    fn attribute_default(&self, entity: &str, name: &str) -> f64 { if let Some(__l) = crate::points_generated::P2317.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let catalog = &self.motion.attributes;
         catalog
             .id(name)
@@ -144,7 +144,7 @@ impl Game<'_> {
     /// `LivingEntity.removeFrost`), what finalizeSpawn set, the baby speed
     /// modifier, its effects' modifiers, its equipment's, and what
     /// `/attribute` changed.
-    pub(super) fn mob_attributes(&self, m: &Mob, out: &mut Vec<AttributeSnapshot>) {
+    pub(super) fn mob_attributes(&self, m: &Mob, out: &mut Vec<AttributeSnapshot>) { if let Some(__l) = crate::points_generated::P2316.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let kind = m.kind.id.as_str();
         // Movement speed is synced for nearly every mob, and read up to three
         // times below: looked up once per mob and tick.
@@ -281,7 +281,7 @@ impl Game<'_> {
         &self,
         id: u32,
         equipment: &horizon_items::equipment::Equipment,
-    ) -> Vec<AttributeSnapshot> {
+    ) -> Vec<AttributeSnapshot> { let (id,) = match crate::points_generated::P2315.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (id,) };
         const KIND: &str = "minecraft:armor_stand";
         let mut out = Vec::new();
         if let Some(a) = self.synced_attribute(KIND, "minecraft:movement_speed") {
@@ -304,7 +304,7 @@ impl Game<'_> {
     /// further to blocks and 2 to entities. Its client reads the reach from
     /// these synced modifiers. (The crouching player's waypoint range is
     /// server-side only: lan_waypoints.rs hides it.)
-    pub(super) fn update_player_attributes(&mut self) {
+    pub(super) fn update_player_attributes(&mut self) { if let Some(__l) = crate::points_generated::P2314.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let creative = self.mode_id() == 1;
         let Some(p) = self.player.as_mut() else {
             return;
@@ -344,7 +344,7 @@ impl Game<'_> {
 
     /// The instances `/attribute` created in an entity's generic map
     /// replace the ones derived from its state.
-    fn generic_attributes_of(&self, t: Target, out: &mut Vec<AttributeSnapshot>) {
+    fn generic_attributes_of(&self, t: Target, out: &mut Vec<AttributeSnapshot>) { if let Some(__l) = crate::points_generated::P2313.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if let Some(map) = self.cmds.attributes.get(&t) {
             generic_attributes_into(map, out);
         }

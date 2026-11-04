@@ -12,7 +12,7 @@ use horizon_core::{geometry::Vec3, random::RandomSource};
 impl Game<'_> {
     /// The egg item at the parent (`Sniffer.spawnChildFromBreeding`; the
     /// brain already played the plop and dropped the experience).
-    pub(super) fn lay_sniffer_egg(&mut self, parent: &Mob) {
+    pub(super) fn lay_sniffer_egg(&mut self, parent: &Mob) { if let Some(__l) = crate::points_generated::P5357.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = [parent.position.x, parent.position.y, parent.position.z];
         // new ItemEntity(level, x, y, z, stack): a little random push.
         let vx = self.world.random.next_double() * 0.2 - 0.1;
@@ -25,7 +25,7 @@ impl Game<'_> {
         );
     }
     /// A snifflet where the egg was.
-    pub(super) fn hatch_sniffer(&mut self, pos: [i32; 3]) {
+    pub(super) fn hatch_sniffer(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P5356.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let at = [
             f64::from(pos[0]) + 0.5,
             f64::from(pos[1]) + 0.5,
@@ -45,7 +45,7 @@ impl Game<'_> {
     /// starts digging, `Sniffer.emitDiggingParticles` (block dust and the
     /// block's hit sound between the 1.7th and the 6th second of the
     /// digging animation) and `playSearchingSound`.
-    pub(super) fn tick_sniffer_effects(&mut self) {
+    pub(super) fn tick_sniffer_effects(&mut self) { if let Some(__l) = crate::points_generated::P5355.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Vanilla runs these on each client: a sniffer within 32 blocks of
         // any player in the level (the host and the guests) shows them.
         let players = self.level_players();

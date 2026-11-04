@@ -12,7 +12,7 @@ use mod_api::{NativePlayerExperience, PlayerRef};
 
 impl Game<'_> {
     /// Whether `player` still names the same player on this server.
-    fn native_player_valid(&self, player: PlayerRef) -> bool {
+    fn native_player_valid(&self, player: PlayerRef) -> bool { if let Some(__l) = crate::points_generated::P4068.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player_handle_read(player).is_some()
     }
     /// Runs `f` with `player`'s state in place, when the handle is current
@@ -21,22 +21,22 @@ impl Game<'_> {
         self.native_player_valid(player) && self.native_as_player_handle(player, f)
     }
     /// The acting player's food data, inside `native_player_write`.
-    fn native_food_mut(&mut self) -> Option<&mut horizon_world::food::FoodData> {
+    fn native_food_mut(&mut self) -> Option<&mut horizon_world::food::FoodData> { if let Some(__l) = crate::points_generated::P4067.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.player.as_mut().map(|p| &mut p.health.food)
     }
 
     /// `FoodData.needsFood`: the food level is below 20.
-    pub(super) fn native_player_needs_food(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn native_player_needs_food(&self, player: PlayerRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P4066.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_player_food(player)?.level < 20)
     }
     /// `FoodData.hasEnoughFood`: the food level is above 6, enough to
     /// sprint.
-    pub(super) fn native_player_has_enough_food(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn native_player_has_enough_food(&self, player: PlayerRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P4065.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(self.native_player_food(player)?.level as f32 > 6.0)
     }
     /// `Player.canEat(always)`: an invulnerable player (creative), `always`
     /// (food that can always be eaten) or a food level below 20.
-    pub(super) fn native_player_can_eat(&self, player: PlayerRef, always: bool) -> Option<bool> {
+    pub(super) fn native_player_can_eat(&self, player: PlayerRef, always: bool) -> Option<bool> { let (always,) = match crate::points_generated::P4064.get() { Some(__l) => { let mut __a = (always,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (always,) };
         let invulnerable = self.native_player_abilities(player)?.invulnerable;
         Some(invulnerable || always || self.native_player_needs_food(player)?)
     }
@@ -48,7 +48,7 @@ impl Game<'_> {
         player: PlayerRef,
         nutrition: i32,
         saturation_modifier: f32,
-    ) -> bool {
+    ) -> bool { let (nutrition,saturation_modifier,) = match crate::points_generated::P4063.get() { Some(__l) => { let mut __a = (nutrition,saturation_modifier,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (nutrition,saturation_modifier,) };
         self.native_player_write(player, |game| {
             if let Some(food) = game.native_food_mut() {
                 food.eat(nutrition, saturation_modifier);
@@ -58,7 +58,7 @@ impl Game<'_> {
     /// `Player.causeFoodExhaustion`: adds exhaustion (at most 40), as
     /// sprinting or jumping does. An invulnerable player (creative) or a
     /// spectator gets none, and the call still returns true.
-    pub(super) fn native_player_add_exhaustion(&mut self, player: PlayerRef, amount: f32) -> bool {
+    pub(super) fn native_player_add_exhaustion(&mut self, player: PlayerRef, amount: f32) -> bool { let (amount,) = match crate::points_generated::P4062.get() { Some(__l) => { let mut __a = (amount,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amount,) };
         self.native_player_write(player, |game| {
             if let Some(p) = game.player.as_mut() {
                 p.cause_food_exhaustion(amount);
@@ -67,7 +67,7 @@ impl Game<'_> {
     }
     /// `FoodData.setFoodLevel`: sets the food level as it is, unclamped,
     /// as vanilla does.
-    pub(super) fn native_player_set_food_level(&mut self, player: PlayerRef, level: i32) -> bool {
+    pub(super) fn native_player_set_food_level(&mut self, player: PlayerRef, level: i32) -> bool { let (level,) = match crate::points_generated::P4061.get() { Some(__l) => { let mut __a = (level,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (level,) };
         self.native_player_write(player, |game| {
             if let Some(food) = game.native_food_mut() {
                 food.food = level;
@@ -79,7 +79,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         saturation: f32,
-    ) -> bool {
+    ) -> bool { let (saturation,) = match crate::points_generated::P4060.get() { Some(__l) => { let mut __a = (saturation,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (saturation,) };
         self.native_player_write(player, |game| {
             if let Some(food) = game.native_food_mut() {
                 food.saturation = saturation;
@@ -92,7 +92,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         exhaustion: f32,
-    ) -> bool {
+    ) -> bool { let (exhaustion,) = match crate::points_generated::P4059.get() { Some(__l) => { let mut __a = (exhaustion,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (exhaustion,) };
         self.native_player_write(player, |game| {
             if let Some(food) = game.native_food_mut() {
                 food.exhaustion = exhaustion;
@@ -104,7 +104,7 @@ impl Game<'_> {
     pub(super) fn native_player_experience(
         &self,
         player: PlayerRef,
-    ) -> Option<NativePlayerExperience> {
+    ) -> Option<NativePlayerExperience> { if let Some(__l) = crate::points_generated::P4058.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(match self.player_read_both(player)? {
             super::native_server::PlayerRead::Guest(g) => {
                 NativePlayerExperience::from(mod_api::__private::built::NativePlayerExperience {
@@ -124,7 +124,7 @@ impl Game<'_> {
     }
     /// `Player.getXpNeededForNextLevel`: the points the current level needs
     /// to fill.
-    pub(super) fn native_player_xp_needed_for_next_level(&self, player: PlayerRef) -> Option<i32> {
+    pub(super) fn native_player_xp_needed_for_next_level(&self, player: PlayerRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P4057.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(Experience::needed(
             self.native_player_experience(player)?.level,
         ))
@@ -136,7 +136,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         points: i32,
-    ) -> bool {
+    ) -> bool { let (points,) = match crate::points_generated::P4056.get() { Some(__l) => { let mut __a = (points,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (points,) };
         self.native_player_write(player, |game| {
             let limit = Experience::needed(game.experience.level) as f32;
             let max = (limit - 1.0) / limit;
@@ -155,7 +155,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         levels: i32,
-    ) -> bool {
+    ) -> bool { let (levels,) = match crate::points_generated::P4055.get() { Some(__l) => { let mut __a = (levels,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (levels,) };
         self.native_player_write(player, |game| game.experience.level = levels)
     }
     /// `ExperienceOrb.playerTouch`: Mending repairs the player's damaged
@@ -168,7 +168,7 @@ impl Game<'_> {
         &mut self,
         player: PlayerRef,
         points: u32,
-    ) -> bool {
+    ) -> bool { let (points,) = match crate::points_generated::P4054.get() { Some(__l) => { let mut __a = (points,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (points,) };
         // `Player.giveExperiencePoints` takes an int.
         let Ok(points) = i32::try_from(points) else {
             return false;
@@ -188,7 +188,7 @@ impl Game<'_> {
     /// `Player.giveExperienceLevels`: adds `levels`, or takes them off when
     /// negative, as the anvil and the enchanting table charge with. Below 0
     /// the level, the total and the progress toward the next level are all 0.
-    pub(super) fn native_player_give_levels(&mut self, player: PlayerRef, levels: i32) -> bool {
+    pub(super) fn native_player_give_levels(&mut self, player: PlayerRef, levels: i32) -> bool { let (levels,) = match crate::points_generated::P4053.get() { Some(__l) => { let mut __a = (levels,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (levels,) };
         self.native_player_write(player, |game| game.give_levels(levels))
     }
 }

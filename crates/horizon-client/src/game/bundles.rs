@@ -29,7 +29,7 @@ impl Game<'_> {
     /// A slot a bundle can be selected in: the player's inventory and off hand in any
     /// menu (#4436: a crafting table's, an enchanting table's...), and a container's own
     /// slots. A server only knows those in chest-like menus.
-    fn bundle_slot(&mut self, slot: usize) -> bool {
+    fn bundle_slot(&mut self, slot: usize) -> bool { let (slot,) = match crate::points_generated::P804.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         slot < 36
             || slot == 504
             || ((300..500).contains(&slot)
@@ -39,7 +39,7 @@ impl Game<'_> {
 
     /// `BundleMouseActions.onMouseScrolled`: the wheel over a bundle moves the selection
     /// through the items its tooltip shows. True when the bundle took the wheel.
-    pub(super) fn bundle_scroll(&mut self, x: f64, y: f64) -> bool {
+    pub(super) fn bundle_scroll(&mut self, x: f64, y: f64) -> bool { let (x,y,) = match crate::points_generated::P803.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (x,y,) };
         let Some(slot) = self.inventory_target().0 else {
             return false;
         };
@@ -68,7 +68,7 @@ impl Game<'_> {
     }
 
     /// `BundleMouseActions.toggleSelectedBundleItem`: the stack here and, on a server, there.
-    fn select_bundle(&mut self, slot: usize, index: i32) {
+    fn select_bundle(&mut self, slot: usize, index: i32) { let (slot,index,) = match crate::points_generated::P802.get() { Some(__l) => { let mut __a = (slot,index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,index,) };
         if let Some(stack) = self.slot_mut(slot) {
             toggle_selected(stack, index);
         }
@@ -84,7 +84,7 @@ impl Game<'_> {
     }
 
     /// `BundleMouseActions.unselectedBundleItem` for the bundle in `slot`, if it has a selection.
-    pub(super) fn unselect_bundle(&mut self, slot: usize) {
+    pub(super) fn unselect_bundle(&mut self, slot: usize) { let (slot,) = match crate::points_generated::P801.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         if !self.bundle_slot(slot) {
             return;
         }
@@ -100,7 +100,7 @@ impl Game<'_> {
 
     /// `AbstractContainerScreen.onStopHovering` (and `onClose`): leaving a slot, or the
     /// screen, clears the bundle's selection.
-    pub(super) fn tick_bundle_hover(&mut self) {
+    pub(super) fn tick_bundle_hover(&mut self) { if let Some(__l) = crate::points_generated::P800.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let now = if takes_bundle_wheel(self.screen) {
             self.inventory_target().0
         } else {

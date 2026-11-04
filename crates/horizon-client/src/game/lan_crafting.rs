@@ -114,14 +114,14 @@ fn place_back(menu: &mut Menu, env: &Env, stacks: Vec<ItemStack>) {
 
 impl Game<'_> {
     /// `LocalPlayer.doLimitedCrafting`: whether limited crafting is active.
-    pub fn limited_crafting(&self) -> bool {
+    pub fn limited_crafting(&self) -> bool { if let Some(__l) = crate::points_generated::P2348.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote.as_ref().map_or_else(
             || self.ui.rules.bool("limited_crafting"),
             |r| r.do_limited_crafting,
         )
     }
 
-    pub(super) fn menu_env(&self) -> Env<'_> {
+    pub(super) fn menu_env(&self) -> Env<'_> { if let Some(__l) = crate::points_generated::P2347.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Env {
             player: self
                 .lan_acting_uuid
@@ -242,7 +242,7 @@ impl Game<'_> {
     /// (a mod's menu slot write, at the root commit): the result made again from the grid, with
     /// `native_prepare_item_craft` as a click has it, kept by the guest and their menu. The
     /// client hears it with the tick's inventory sync.
-    pub(super) fn guest_craft_result(&mut self, conn: u32) {
+    pub(super) fn guest_craft_result(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2346.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(g) = self
             .lan
             .as_ref()
@@ -280,7 +280,7 @@ impl Game<'_> {
 
     /// A click on the guest's inventory menu (window 0): `InventoryMenu`,
     /// crafting grid included. False for other windows.
-    pub(super) fn lan_inventory_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool {
+    pub(super) fn lan_inventory_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool { let (conn,) = match crate::points_generated::P2345.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         if p.container != 0 {
             return false;
         }
@@ -341,7 +341,7 @@ impl Game<'_> {
     /// recipe and fuel), `BrewingStandMenu` (one bottle per slot, ingredient and
     /// blaze powder slots) or a content mod's menu type (`Kind::Mod`) over the
     /// block entity's slots. False for other windows.
-    pub(super) fn lan_machine_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool {
+    pub(super) fn lan_machine_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool { let (conn,) = match crate::points_generated::P2344.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return false;
         };
@@ -496,7 +496,7 @@ impl Game<'_> {
         window: i32,
         slot: i32,
         enabled: bool,
-    ) {
+    ) { let (conn,window,slot,enabled,) = match crate::points_generated::P2343.get() { Some(__l) => { let mut __a = (conn,window,slot,enabled,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,window,slot,enabled,) };
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -530,7 +530,7 @@ impl Game<'_> {
         &mut self,
         conn: u32,
         p: &horizon_protocol::packets::recipes::PlaceRecipe,
-    ) {
+    ) { let (conn,) = match crate::points_generated::P2342.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         use horizon_client::menu::place::PostPlace;
         let Some(host) = self.lan.as_ref() else {
             return;
@@ -620,7 +620,7 @@ impl Game<'_> {
     }
 
     /// The guest opened a crafting table (`CraftingTableBlock.getMenuProvider`).
-    pub(super) fn lan_open_crafting(&mut self, conn: u32, pos: [i32; 3]) {
+    pub(super) fn lan_open_crafting(&mut self, conn: u32, pos: [i32; 3]) { let (conn,pos,) = match crate::points_generated::P2341.get() { Some(__l) => { let mut __a = (conn,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,pos,) };
         if !self.guest_may_open(conn, "minecraft:crafting", Some(pos)) {
             return;
         }
@@ -639,7 +639,7 @@ impl Game<'_> {
     }
 
     /// A click on the guest's crafting table window; false for other windows.
-    pub(super) fn lan_crafting_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool {
+    pub(super) fn lan_crafting_click(&mut self, conn: u32, p: &play::ContainerClick) -> bool { let (conn,) = match crate::points_generated::P2340.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return false;
         };
@@ -720,7 +720,7 @@ impl Game<'_> {
 
     /// `CraftingMenu.stillValid`: the block is still a crafting table and the
     /// guest is within reach of it.
-    pub(super) fn lan_table_valid(&self, g: &Guest, pos: [i32; 3]) -> bool {
+    pub(super) fn lan_table_valid(&self, g: &Guest, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P2339.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let name = &self
             .res
             .facts()
@@ -731,7 +731,7 @@ impl Game<'_> {
 
     /// `ServerPlayer.tick`'s `stillValid`: a guest's crafting table closes
     /// once it is gone or out of reach, giving its grid back.
-    pub(super) fn lan_tables_tick(&mut self) {
+    pub(super) fn lan_tables_tick(&mut self) { if let Some(__l) = crate::points_generated::P2338.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -764,7 +764,7 @@ impl Game<'_> {
     }
 
     /// The whole crafting table menu for the client (`sendAllDataToRemote`).
-    fn lan_send_table_content(&mut self, conn: u32) {
+    fn lan_send_table_content(&mut self, conn: u32) { let (conn,) = match crate::points_generated::P2337.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -804,7 +804,7 @@ impl Game<'_> {
     /// dropped. False when no such window is open.
     /// The open crafting table's own slots (result and grid) before the
     /// player's inventory, if the guest has one open.
-    pub(super) fn lan_crafting_table_own_slots(&self, conn: u32) -> Option<usize> {
+    pub(super) fn lan_crafting_table_own_slots(&self, conn: u32) -> Option<usize> { let (conn,) = match crate::points_generated::P2336.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (conn,) };
         let (_, _, menu, _) = self
             .lan
             .as_ref()?
@@ -816,7 +816,7 @@ impl Game<'_> {
         Some(menu.slot_count() - 36)
     }
 
-    pub(super) fn lan_crafting_closed(&mut self, conn: u32, window: Option<i32>) -> bool {
+    pub(super) fn lan_crafting_closed(&mut self, conn: u32, window: Option<i32>) -> bool { let (conn,) = match crate::points_generated::P2335.get() { Some(__l) => { let mut __a = (conn,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (conn,) };
         let Some(host) = self.lan.as_mut() else {
             return false;
         };
@@ -846,14 +846,14 @@ impl Game<'_> {
 
     /// `Inventory.placeItemBackInInventory` of `stacks` for guest `gi`, what
     /// doesn't fit dropped (`clearContainer`).
-    pub(super) fn lan_place_back(&mut self, gi: usize, stacks: Vec<ItemStack>) {
+    pub(super) fn lan_place_back(&mut self, gi: usize, stacks: Vec<ItemStack>) { let (gi,) = match crate::points_generated::P2334.get() { Some(__l) => { let mut __a = (gi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gi,) };
         let mut menu = Menu::new(Kind::Inventory);
         self.guest_menu_op(gi, &mut menu, |menu, env| place_back(menu, env, stacks));
     }
 
     /// A guest left: what their crafting grids and workstation held goes back into their
     /// inventory before it is saved (dropped where they stood if full).
-    pub(super) fn lan_crafting_left(&mut self, g: &mut Guest) {
+    pub(super) fn lan_crafting_left(&mut self, g: &mut Guest) { if let Some(__l) = crate::points_generated::P2333.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // The guest's play state stays: their statistics are awarded and saved
         // after this (`HostEvent::Left`), which removes it.
         let Some(host) = self.lan.as_mut() else {

@@ -64,7 +64,7 @@ impl HiveHost for GameHive<'_, '_> {
 }
 
 impl Game<'_> {
-    fn hive_with_honey(&self, state: BlockStateId, level: i32) -> Option<BlockStateId> {
+    fn hive_with_honey(&self, state: BlockStateId, level: i32) -> Option<BlockStateId> { let (level,) = match crate::points_generated::P585.get() { Some(__l) => { let mut __a = (level,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (level,) };
         let registry = self.pack.assets.registry;
         let mut s = registry.state(state)?.clone();
         s.properties
@@ -72,7 +72,7 @@ impl Game<'_> {
         registry.resolve(&s).ok()
     }
     /// The hive's honey level and front, from its block state.
-    pub(super) fn hive_state(&self, at: [i32; 3]) -> Option<(Option<i32>, [i32; 2])> {
+    pub(super) fn hive_state(&self, at: [i32; 3]) -> Option<(Option<i32>, [i32; 2])> { let (at,) = match crate::points_generated::P584.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,) };
         let state = self.world.block(at[0], at[1], at[2]);
         let name = &self.res.facts().get(state).name;
         if !self
@@ -91,7 +91,7 @@ impl Game<'_> {
     }
     /// `BeehiveBlockEntity.serverTick` of the hive at `key`, after an
     /// emergency exit if fire is beside it (`BeehiveBlock.updateShape`).
-    pub(super) fn tick_beehive(&mut self, key: (i32, i32, i32)) {
+    pub(super) fn tick_beehive(&mut self, key: (i32, i32, i32)) { if let Some(__l) = crate::points_generated::P583.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = [key.0, key.1, key.2];
         let Some((honey, facing)) = self.hive_state(at) else {
             return;
@@ -123,7 +123,7 @@ impl Game<'_> {
     }
     /// `BeehiveBlockEntity.addOccupant` for a bee its `BeeEnterHiveGoal`
     /// sent in: off its lead, its tag stored, the bee gone.
-    pub(super) fn bee_enter_hive(&mut self, mob: u32, at: [i32; 3]) {
+    pub(super) fn bee_enter_hive(&mut self, mob: u32, at: [i32; 3]) { let (mob,at,) = match crate::points_generated::P582.get() { Some(__l) => { let mut __a = (mob,at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (mob,at,) };
         let key = (at[0], at[1], at[2]);
         let Some(i) = self
             .mobs
@@ -165,7 +165,7 @@ impl Game<'_> {
         }
     }
     /// `BeehiveBlockEntity.emptyAllLivingFromHive` with no player about.
-    pub(super) fn empty_hive(&mut self, at: [i32; 3], facing: [i32; 2], status: Release) {
+    pub(super) fn empty_hive(&mut self, at: [i32; 3], facing: [i32; 2], status: Release) { let (at,facing,) = match crate::points_generated::P581.get() { Some(__l) => { let mut __a = (at,facing,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,facing,) };
         let key = (at[0], at[1], at[2]);
         let Some(BlockEntity::Beehive(mut hive)) = self.world.block_entities.take(&key) else {
             return;
@@ -184,7 +184,7 @@ impl Game<'_> {
         mut hive: Beehive,
         honey: Option<i32>,
         facing: [i32; 2],
-    ) {
+    ) { let (at,facing,) = match crate::points_generated::P580.get() { Some(__l) => { let mut __a = (at,facing,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,facing,) };
         let released = hive.release_all(
             at,
             facing,
@@ -210,7 +210,7 @@ impl Game<'_> {
     /// the honeycombs and a glass bottle a honey bottle from a full hive
     /// (honey level 5), then the honey level resets and, unless a campfire
     /// smokes the hive, the bees come out angry. True when it took the click.
-    pub(super) fn use_beehive(&mut self, pos: [i32; 3], held: Option<&ItemStack>) -> Result<bool> {
+    pub(super) fn use_beehive(&mut self, pos: [i32; 3], held: Option<&ItemStack>) -> Result<bool> { let (pos,) = match crate::points_generated::P579.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let Some(held) = held else { return Ok(false) };
         let shears = &*held.item == "minecraft:shears";
         if !shears && &*held.item != "minecraft:glass_bottle" {
@@ -314,7 +314,7 @@ impl Game<'_> {
     /// `BeehiveBlock.angerNearbyBees`: bees within 8 blocks (6 up and down)
     /// without a target go for a random player in the same box, the window's
     /// own or a guest (`None` is the window's player).
-    pub(super) fn anger_nearby_bees(&mut self, at: [i32; 3]) {
+    pub(super) fn anger_nearby_bees(&mut self, at: [i32; 3]) { let (at,) = match crate::points_generated::P578.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let min = Vec3::new(
             f64::from(at[0]) - 8.0,
             f64::from(at[1]) - 6.0,

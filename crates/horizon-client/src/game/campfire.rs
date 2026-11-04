@@ -24,7 +24,7 @@ impl Game<'_> {
     /// whether or not there was room. A client of a server leaves the placing
     /// to the server. Whether the food went in; None when this isn't a
     /// campfire use, so the item's own use runs.
-    pub(super) fn use_on_campfire(&mut self, pos: [i32; 3]) -> Result<Option<bool>> {
+    pub(super) fn use_on_campfire(&mut self, pos: [i32; 3]) -> Result<Option<bool>> { let (pos,) = match crate::points_generated::P808.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         if !is_campfire(&self.res.facts().get(state).name) {
             return Ok(None);
@@ -68,7 +68,7 @@ impl Game<'_> {
     /// when no recipe takes it any more) drops at the block's corner
     /// (`Containers.dropItemStack` at its integer position), then the clients
     /// see the slot empty and a `block_change` goes out.
-    pub(super) fn tick_campfire(&mut self, pos: Pos) -> Result<()> {
+    pub(super) fn tick_campfire(&mut self, pos: Pos) -> Result<()> { if let Some(__l) = crate::points_generated::P807.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let state = self.world.block(pos.0, pos.1, pos.2);
         let lit = self
             .pack
@@ -120,7 +120,7 @@ impl Game<'_> {
     /// turned to `Direction.from2DDataValue((i + facing) % 4)`, laid flat
     /// (90° about X), at a corner and three eighths of its size, drawn as a
     /// FIXED item seeded by the block's position plus the slot.
-    pub(super) fn campfire_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
+    pub(super) fn campfire_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) { if let Some(__l) = crate::points_generated::P806.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         for (key, entity) in &self.world.block_entities {
             let BlockEntity::Campfire(c) = entity else {
                 continue;
@@ -173,7 +173,7 @@ impl Game<'_> {
 
     /// `Containers.dropItemStack(level, x, y, z, stack)` at the block's
     /// integer position.
-    pub(super) fn campfire_drop(&mut self, pos: Pos, stack: ItemStack) {
+    pub(super) fn campfire_drop(&mut self, pos: Pos, stack: ItemStack) { if let Some(__l) = crate::points_generated::P805.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let at = BlockPos::new(pos.0, pos.1, pos.2);
         for piece in
             horizon_world::level::removal::drop_item_stack(&mut self.world.random, at, stack.count)

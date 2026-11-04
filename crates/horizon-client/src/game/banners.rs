@@ -9,7 +9,7 @@ use horizon_client::{
 
 impl Game<'_> {
     /// The pattern textures and tints of the banner at `pos`, bottom first.
-    pub(super) fn banner_layers_at(&self, pos: [i32; 3]) -> Vec<(String, u32)> {
+    pub(super) fn banner_layers_at(&self, pos: [i32; 3]) -> Vec<(String, u32)> { let (pos,) = match crate::points_generated::P547.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let Some(BlockEntity::Banner(b)) = self.world.block_entities.get(&(pos[0], pos[1], pos[2]))
         else {
             return Vec::new();
@@ -17,7 +17,7 @@ impl Game<'_> {
         layer_textures(&self.stations().banners, &b.layers)
     }
     /// The banner at `pos` as a map marker source (`MapBanner.fromWorld`).
-    pub(super) fn map_banner_at(&self, pos: [i32; 3]) -> Option<MapBanner> {
+    pub(super) fn map_banner_at(&self, pos: [i32; 3]) -> Option<MapBanner> { let (pos,) = match crate::points_generated::P546.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         map_banner(
             pos,

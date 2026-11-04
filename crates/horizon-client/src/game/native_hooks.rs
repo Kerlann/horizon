@@ -155,7 +155,7 @@ fn observed_overlay_id(overlays: &[(bool, &'static str)]) -> Option<&'static str
 }
 
 impl Game<'_> {
-    fn observed_screen_view(&self) -> Option<NativeScreenView<'_>> {
+    fn observed_screen_view(&self) -> Option<NativeScreenView<'_>> { if let Some(__l) = crate::points_generated::P3766.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let book = self.book.as_ref().map(super::books::BookScreen::id);
         let overlay = observed_overlay_id(&[
             (self.command_prompt.is_some(), "command_prompt"),
@@ -191,7 +191,7 @@ impl Game<'_> {
     /// it replaces, as NeoForge's `Minecraft.setScreen` does. The same screen
     /// again, a game with no mod listening to either, and a server's or a guest's `Game`
     /// are a plain assignment.
-    pub(super) fn set_screen(&mut self, screen: Screen) {
+    pub(super) fn set_screen(&mut self, screen: Screen) { if let Some(__l) = crate::points_generated::P3765.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.screen == screen {
             return;
         }
@@ -220,7 +220,7 @@ impl Game<'_> {
     /// Whether a change of screen asks the screen hooks: a mod listens to
     /// `screen_opening` or `screen_closing`, on a client's own `Game` (not a
     /// server's, not on a guest's behalf). Otherwise it is a plain assignment.
-    fn screen_hooks_heard(&self) -> bool {
+    fn screen_hooks_heard(&self) -> bool { if let Some(__l) = crate::points_generated::P3764.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (mod_api::__private::listened(mod_api::HookId::ScreenOpening)
             || mod_api::__private::listened(mod_api::HookId::ScreenClosing))
             && self.options.execution_role.is_client()
@@ -235,7 +235,7 @@ impl Game<'_> {
         current: &NativeScreenView<'_>,
         new: &NativeScreenView<'_>,
         closes: bool,
-    ) -> ScreenDecision {
+    ) -> ScreenDecision { let (closes,) = match crate::points_generated::P3763.get() { Some(__l) => { let mut __a = (closes,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (closes,) };
         match self.screen_change(current, new, true, closes) {
             Some(Answered {
                 answer: ScreenOpening::Cancel,
@@ -251,7 +251,7 @@ impl Game<'_> {
     }
     /// What `set_screen` does once the hooks have answered: `screen` opens,
     /// and the mod `owner`'s own screen when one answered `ModScreen`.
-    fn apply_screen(&mut self, screen: Screen, owner: Option<&str>) {
+    fn apply_screen(&mut self, screen: Screen, owner: Option<&str>) { if let Some(__l) = crate::points_generated::P3762.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.screen = screen;
         if let Some(owner) = owner {
             self.native_mod_screen = Some(owner.to_owned());
@@ -276,7 +276,7 @@ impl Game<'_> {
         new: &NativeScreenView<'_>,
         opens: bool,
         closes: bool,
-    ) -> Option<Answered<ScreenOpening>> {
+    ) -> Option<Answered<ScreenOpening>> { let (opens,closes,) = match crate::points_generated::P3761.get() { Some(__l) => { let mut __a = (opens,closes,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (opens,closes,) };
         let mut outcome = None;
         if opens {
             self.native_screen_opening(current, new, &mut outcome);
@@ -292,7 +292,7 @@ impl Game<'_> {
     }
     /// `screen` as the screen hooks see it while it opens or closes: no
     /// renderer (a test, a window not yet up) leaves its rectangle empty.
-    fn screen_change_view(&self, screen: Screen) -> NativeScreenView<'_> {
+    fn screen_change_view(&self, screen: Screen) -> NativeScreenView<'_> { if let Some(__l) = crate::points_generated::P3760.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let rect = match &self.renderer {
             Some(renderer) => self.screen_rect(
                 &HudBatch::new([renderer.config.width, renderer.config.height]),
@@ -318,7 +318,7 @@ impl Game<'_> {
     /// A mod's own screen cannot open now: over the title screen, a book, a
     /// sign editor, a dialog or a prompt, with no player or a
     /// world loading, or on a guest's behalf.
-    fn mod_screen_blocked(&self) -> bool {
+    fn mod_screen_blocked(&self) -> bool { if let Some(__l) = crate::points_generated::P3759.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.title.is_some()
             || self.lan_acting.is_some()
             || self.player.is_none()
@@ -373,7 +373,7 @@ impl Game<'_> {
     }
 
     /// What `observe_screen` compares with the last frame's.
-    fn observed_now(&self) -> Option<ObservedScreen> {
+    fn observed_now(&self) -> Option<ObservedScreen> { if let Some(__l) = crate::points_generated::P3758.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // Only the title's screens and the overlays show over `Screen::Playing`.
         let overlay = self.screen == Screen::Playing;
         self.observed_screen_view().map(|view| ObservedScreen {
@@ -398,7 +398,7 @@ impl Game<'_> {
     /// also sets the title's gate: when no mod listens to the screen hooks
     /// (`screen_hooks_heard`), `set_mode` applies at once. Run after each window
     /// event and control command, and each frame.
-    pub(super) fn settle_title_mode(&mut self) {
+    pub(super) fn settle_title_mode(&mut self) { if let Some(__l) = crate::points_generated::P3757.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let gated = self.screen_hooks_heard();
         let Some(title) = self.title.as_mut() else {
             return;
@@ -428,7 +428,7 @@ impl Game<'_> {
         self.native_screen_init_post(&screen_view_with_id(&none, id));
     }
 
-    pub(super) fn observe_screen(&mut self) {
+    pub(super) fn observe_screen(&mut self) { if let Some(__l) = crate::points_generated::P3756.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.settle_title_mode();
         // Free with no native mod: the snapshot clones the title and menu.
         if mod_api::mods().is_empty() {
@@ -444,7 +444,7 @@ impl Game<'_> {
     /// but after the change: a mod's answer to `screen_opening` cannot keep
     /// them shut. `screen_init_post` follows for every kind, on opening and on
     /// a resize.
-    fn observe_change(&mut self, current: Option<ObservedScreen>) {
+    fn observe_change(&mut self, current: Option<ObservedScreen>) { if let Some(__l) = crate::points_generated::P3755.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let changed = match (&self.observed_screen, &current) {
             (Some(old), Some(new)) => old.id != new.id || old.menu != new.menu,
             (None, None) => false,
@@ -491,7 +491,7 @@ impl GameLevel<'_> {
     /// answer starts with an empty compound. The level is read-only, as
     /// `newBlockEntity` gets no level.
     #[inline(always)]
-    pub(super) fn native_block_entity(&self, block: &str, entity: &mut Option<Compound>) {
+    pub(super) fn native_block_entity(&self, block: &str, entity: &mut Option<Compound>) { if let Some(__l) = crate::points_generated::P3754.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_entity(super::mod_api_host::level_side(self), block, entity);
     }
     /// A hopper at `pos` is about to pick up `count` of `item`. Set `cancel` to leave the dropped stack in the world. Server-side.
@@ -503,7 +503,7 @@ impl GameLevel<'_> {
         item: &str,
         count: u32,
         cancel: &mut bool,
-    ) {
+    ) { let (count,) = match crate::points_generated::P3753.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (count,) };
         mod_api::dispatch_hopper_pickup_item(self, dimension, pos, item, count, cancel);
     }
     /// A broken block is about to drop `experience` points at `pos`. The
@@ -516,7 +516,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         block: &str,
         experience: &mut u32,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3752.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_exp(self, dimension, pos, block, experience);
     }
 
@@ -529,7 +529,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         old: BlockStateId,
         new: BlockStateId,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3751.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_changed(self, dimension, pos, old, new);
     }
 
@@ -545,7 +545,7 @@ impl GameLevel<'_> {
         state: BlockStateId,
         new_state: &mut BlockStateId,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3750.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_fluid_place_block(
             self, dimension, pos, liquid_pos, state, new_state, cancel,
         );
@@ -563,7 +563,7 @@ impl GameLevel<'_> {
         from: i32,
         to: i32,
         cancel: &mut bool,
-    ) {
+    ) { let (from,to,) = match crate::points_generated::P3749.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from,to,) };
         mod_api::dispatch_fluid_level_change(self, dimension, pos, fluid, from, to, cancel);
     }
 
@@ -575,7 +575,7 @@ impl GameLevel<'_> {
         dimension: LevelDimension,
         pos: BlockPos,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3748.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_leaves_decay(self, dimension, pos, cancel);
     }
 
@@ -589,13 +589,13 @@ impl GameLevel<'_> {
         from: i32,
         to: i32,
         cancel: &mut bool,
-    ) {
+    ) { let (from,to,) = match crate::points_generated::P3747.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from,to,) };
         mod_api::dispatch_moisture_change(self, dimension, pos, from, to, cancel);
     }
 
     /// A sponge at `pos` absorbed water and became wet. Server-side.
     #[inline(always)]
-    pub(super) fn native_sponge_absorb(&self, dimension: LevelDimension, pos: BlockPos) {
+    pub(super) fn native_sponge_absorb(&self, dimension: LevelDimension, pos: BlockPos) { if let Some(__l) = crate::points_generated::P3746.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_sponge_absorb(self, dimension, pos);
     }
 
@@ -611,7 +611,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         feature: &mut Option<String>,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3745.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_block_grow_feature(self, dimension, pos, feature, cancel);
     }
 
@@ -625,7 +625,7 @@ impl GameLevel<'_> {
         from: BlockStateId,
         to: BlockStateId,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3744.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_fade(self, dimension, pos, from, to, cancel);
     }
 
@@ -639,7 +639,7 @@ impl GameLevel<'_> {
         from: BlockStateId,
         to: BlockStateId,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3743.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_form(self, dimension, pos, from, to, cancel);
     }
 
@@ -651,7 +651,7 @@ impl GameLevel<'_> {
         dimension: LevelDimension,
         pos: BlockPos,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3742.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_dragon_egg_form(self, dimension, pos, cancel);
     }
 
@@ -670,7 +670,7 @@ impl GameLevel<'_> {
         state: BlockStateId,
         moved: bool,
         updates: &mut Vec<NeighbourUpdate>,
-    ) {
+    ) { let (moved,) = match crate::points_generated::P3741.get() { Some(__l) => { let mut __a = (moved,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (moved,) };
         mod_api::dispatch_affect_neighbors_after_removal(
             self, dimension, pos, state, moved, updates,
         );
@@ -686,7 +686,7 @@ impl GameLevel<'_> {
         state: BlockStateId,
         changed: BlockId,
         moved: bool,
-    ) {
+    ) { let (moved,) = match crate::points_generated::P3740.get() { Some(__l) => { let mut __a = (moved,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (moved,) };
         mod_api::dispatch_neighbor_changed(self, dimension, pos, state, changed, moved);
     }
 
@@ -703,7 +703,7 @@ impl GameLevel<'_> {
         from: BlockPos,
         to: BlockPos,
         canceled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3739.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_spread(self, dimension, kind, from, to, canceled);
     }
 
@@ -719,7 +719,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         cause: &str,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3738.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_ignite(self, dimension, player, pos, cause, cancel);
     }
 
@@ -731,7 +731,7 @@ impl GameLevel<'_> {
         dimension: LevelDimension,
         pos: BlockPos,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3737.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_burn(self, dimension, pos, cancel);
     }
 
@@ -748,7 +748,7 @@ impl GameLevel<'_> {
         state: BlockStateId,
         shape: NativePortalShape,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3736.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_portal_spawn(self, dimension, pos, state, shape, cancel);
     }
 
@@ -770,7 +770,7 @@ impl GameLevel<'_> {
         instrument: &mut NativeNoteInstrument,
         note: &mut i32,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3735.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_note_block_play(
             self,
             dimension,
@@ -794,7 +794,7 @@ impl GameLevel<'_> {
         context: &NativeNoteBlockChange,
         new_note: &mut i32,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3734.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_note_block_change(self, context, new_note, cancel);
     }
 
@@ -807,7 +807,7 @@ impl GameLevel<'_> {
         player: Option<u128>,
         pos: BlockPos,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3733.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_bell_ring(self, dimension, player, pos, cancel);
     }
 
@@ -824,7 +824,7 @@ impl GameLevel<'_> {
         to_level: i32,
         reason: &str,
         cancel: &mut bool,
-    ) {
+    ) { let (from_level,to_level,) = match crate::points_generated::P3732.get() { Some(__l) => { let mut __a = (from_level,to_level,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (from_level,to_level,) };
         mod_api::dispatch_cauldron_level_changed(
             self, dimension, player, pos, from_level, to_level, reason, cancel,
         );
@@ -846,7 +846,7 @@ impl GameLevel<'_> {
         push: &[BlockPos],
         destroy: &[BlockPos],
         canceled: &mut bool,
-    ) {
+    ) { let (direction,) = match crate::points_generated::P3731.get() { Some(__l) => { let mut __a = (direction,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (direction,) };
         mod_api::dispatch_piston_move(self, dimension, piston, direction, push, destroy, canceled);
     }
     /// The redstone signal the block `state` at `pos` gives on its `face`, the
@@ -867,7 +867,7 @@ impl GameLevel<'_> {
         face: Direction,
         direct: bool,
         signal: &mut i32,
-    ) {
+    ) { let (direct,) = match crate::points_generated::P3730.get() { Some(__l) => { let mut __a = (direct,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (direct,) };
         mod_api::dispatch_block_signal(self, dimension, pos, state, face, direct, signal);
     }
 
@@ -875,7 +875,7 @@ impl GameLevel<'_> {
     /// gives a signal, so redstone wire beside it connects to it. Authoritative
     /// servers only.
     #[inline(always)]
-    pub(super) fn native_is_signal_source(&self, state: BlockStateId, source: &mut bool) {
+    pub(super) fn native_is_signal_source(&self, state: BlockStateId, source: &mut bool) { if let Some(__l) = crate::points_generated::P3729.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_is_signal_source(self, state, source);
     }
 
@@ -891,7 +891,7 @@ impl GameLevel<'_> {
         state: BlockStateId,
         direction: Direction,
         check: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3728.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_should_check_weak_power(self, dimension, pos, state, direction, check);
     }
 
@@ -911,7 +911,7 @@ impl GameLevel<'_> {
         state: BlockStateId,
         direction: Option<Direction>,
         connected: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3727.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_should_redstone_wire_connect_to(
             self, dimension, pos, state, direction, connected,
         );
@@ -922,7 +922,7 @@ impl GameLevel<'_> {
     /// level), so they ask `native_analog_output`. Asked from inside the
     /// level's update: answer from `state` alone. Authoritative servers only.
     #[inline(always)]
-    pub(super) fn native_has_analog_output(&self, state: BlockStateId, output: &mut bool) {
+    pub(super) fn native_has_analog_output(&self, state: BlockStateId, output: &mut bool) { if let Some(__l) = crate::points_generated::P3726.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_has_analog_output(self, state, output);
     }
 
@@ -945,7 +945,7 @@ impl GameLevel<'_> {
         state: BlockStateId,
         face: Direction,
         output: &mut i32,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3725.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_analog_output(self, dimension, pos, state, face, output);
     }
 
@@ -964,7 +964,7 @@ impl GameLevel<'_> {
         state: BlockStateId,
         entity: &ModBlockEntity,
         drops: &mut Vec<ItemStack>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3724.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_pre_remove_side_effects(self, pos, state, entity, drops);
     }
 
@@ -985,7 +985,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         state: BlockStateId,
         handled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3723.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_random_tick(
             &mut super::mod_api_host::LevelTicks { level: self, ticks },
             dimension,
@@ -1020,7 +1020,7 @@ impl GameLevel<'_> {
         neighbour_pos: BlockPos,
         neighbour: BlockStateId,
         new: &mut Option<BlockStateId>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3722.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_update_shape(
             &mut super::mod_api_host::LevelTicks { level: self, ticks },
             dimension,
@@ -1049,7 +1049,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         state: BlockStateId,
         survives: &mut Option<bool>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3721.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_can_survive(self, dimension, pos, state, survives);
     }
 
@@ -1068,7 +1068,7 @@ impl GameLevel<'_> {
         ground: BlockStateId,
         ground_pos: BlockPos,
         may: &mut Option<bool>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3720.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_may_place_on(self, dimension, state, ground, ground_pos, may);
     }
 
@@ -1086,7 +1086,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         state: BlockStateId,
         handled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3719.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_tick_block(
             &mut super::mod_api_host::LevelTicks { level: self, ticks },
             dimension,
@@ -1125,7 +1125,7 @@ impl GameLevel<'_> {
         context: &PlacementContext,
         fluid: FluidState,
         answer: &mut Option<Option<BlockStateId>>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3718.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_state_for_placement(self, dimension, state, context, fluid, answer);
     }
 
@@ -1149,7 +1149,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         state: BlockStateId,
         valid: &mut Option<bool>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3717.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_is_valid_bonemeal_target(
             super::mod_api_host::level_side(self),
             dimension,
@@ -1172,7 +1172,7 @@ impl GameLevel<'_> {
         pos: BlockPos,
         state: BlockStateId,
         success: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3716.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_is_bonemeal_success(self, dimension, pos, state, success);
     }
 
@@ -1189,7 +1189,7 @@ impl GameLevel<'_> {
         dimension: LevelDimension,
         pos: BlockPos,
         state: BlockStateId,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3715.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_perform_bonemeal(
             &mut super::mod_api_host::LevelTicks { level: self, ticks },
             dimension,
@@ -1214,7 +1214,7 @@ impl GameLevel<'_> {
         dimension: LevelDimension,
         state: BlockStateId,
         odds: &mut Option<(i32, i32)>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3714.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_fire_odds(self, dimension, state, odds);
     }
 
@@ -1229,7 +1229,7 @@ impl GameLevel<'_> {
         dimension: LevelDimension,
         state: BlockStateId,
         smoke: &mut Option<bool>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3713.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_smoke_source(self, dimension, state, smoke);
     }
 }
@@ -1530,14 +1530,14 @@ impl Game<'_> {
     pub(super) fn native_recipe_book_categories(
         &mut self,
         categories: &mut Vec<RecipeBookCategory>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3712.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_recipe_book_categories(
             super::execution_role::host_side(self),
             categories,
         );
     }
     /// Once a frame, in a world or not, after Horizon's extras.
-    pub(super) fn native_frame(&mut self, elapsed: Duration) {
+    pub(super) fn native_frame(&mut self, elapsed: Duration) { if let Some(__l) = crate::points_generated::P3711.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_frame(self, elapsed);
     }
     /// Client-side evaluation of a mod's namespaced conditional item model property.
@@ -1548,7 +1548,7 @@ impl Game<'_> {
         property: &str,
         stack: &StackView,
         value: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3710.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_item_model_property(self, property, stack, value);
     }
     /// The frame rate this window is about to be held to: Max Framerate after the
@@ -1562,13 +1562,13 @@ impl Game<'_> {
         minimized: bool,
         in_world: bool,
         limit: &mut i32,
-    ) {
+    ) { let (focused,minimized,in_world,) = match crate::points_generated::P3709.get() { Some(__l) => { let mut __a = (focused,minimized,in_world,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (focused,minimized,in_world,) };
         mod_api::dispatch_framerate_limit(self, focused, minimized, in_world, limit);
     }
     /// Render-thread notification after a resource-pack reload has applied successfully.
     /// Atlas, models, renderer and client caches already refer to the new resources.
     /// Selection/F3+T and server-pack reloads share this point; initial startup does not.
-    pub(super) fn native_client_resources_reloaded(&mut self) {
+    pub(super) fn native_client_resources_reloaded(&mut self) { if let Some(__l) = crate::points_generated::P3708.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_client_resources_reloaded(self);
     }
     /// The client made a new level for `dimension` (NeoForge's
@@ -1578,7 +1578,7 @@ impl Game<'_> {
     /// `native_client_level_unload` follows this, as `Minecraft.setLevel`
     /// tells it after the new level is made. Client-side, on the window; the
     /// server's levels have `native_level_load`.
-    pub(super) fn native_client_level_load(&mut self, dimension: &str) {
+    pub(super) fn native_client_level_load(&mut self, dimension: &str) { if let Some(__l) = crate::points_generated::P3707.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_client_level_load(self, dimension);
     }
     /// The client dropped its level for `dimension` (`LevelEvent.Unload`
@@ -1586,14 +1586,14 @@ impl Game<'_> {
     /// dimension's, or on leaving the server. Once for each
     /// `native_client_level_load`. Not told when the game itself quits.
     /// Client-side.
-    pub(super) fn native_client_level_unload(&mut self, dimension: &str) {
+    pub(super) fn native_client_level_unload(&mut self, dimension: &str) { if let Some(__l) = crate::points_generated::P3706.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_client_level_unload(self, dimension);
     }
     /// The client accepted a play login and initialized its level and player
     /// identity (NeoForge's `ClientPlayerNetworkEvent.LoggingIn`). `player_id`
     /// is the server's entity ID. Client-side,
     /// once per connection, including single player.
-    pub(super) fn native_client_player_logging_in(&mut self, player_id: i32, uuid: u128) {
+    pub(super) fn native_client_player_logging_in(&mut self, player_id: i32, uuid: u128) { let (player_id,) = match crate::points_generated::P3705.get() { Some(__l) => { let mut __a = (player_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_id,) };
         mod_api::dispatch_client_player_logging_in(self, player_id, uuid);
     }
     /// Before client disconnect teardown (NeoForge's
@@ -1603,7 +1603,7 @@ impl Game<'_> {
         &mut self,
         player_id: Option<i32>,
         uuid: Option<u128>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3704.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_client_player_logging_out(self, player_id, uuid);
     }
     /// After the client replaces its player on respawn or dimension change
@@ -1615,7 +1615,7 @@ impl Game<'_> {
         uuid: u128,
         died: bool,
         dimension_changed: bool,
-    ) {
+    ) { let (old_id,new_id,died,dimension_changed,) = match crate::points_generated::P3703.get() { Some(__l) => { let mut __a = (old_id,new_id,died,dimension_changed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (old_id,new_id,died,dimension_changed,) };
         mod_api::dispatch_client_player_clone(self, old_id, new_id, uuid, died, dimension_changed);
     }
     /// NeoForge's `ServerChatEvent`: a player's chat message, through their
@@ -1639,7 +1639,7 @@ impl Game<'_> {
         message: &mut Text,
         replies: &mut Vec<Text>,
         cancel: &mut bool,
-    ) {
+    ) { let (player_id,) = match crate::points_generated::P3702.get() { Some(__l) => { let mut __a = (player_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_id,) };
         mod_api::dispatch_server_chat(
             self, player_id, player, username, raw_text, message, replies, cancel,
         );
@@ -1654,7 +1654,7 @@ impl Game<'_> {
         original_message: &str,
         message: &mut String,
         cancel: &mut bool,
-    ) {
+    ) { let (player_id,) = match crate::points_generated::P3701.get() { Some(__l) => { let mut __a = (player_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_id,) };
         mod_api::dispatch_client_chat(
             self,
             player_id,
@@ -1683,17 +1683,17 @@ impl Game<'_> {
         chat_type: Option<&str>,
         message: &mut Text,
         cancel: &mut bool,
-    ) {
+    ) { let (system,overlay,) = match crate::points_generated::P3700.get() { Some(__l) => { let mut __a = (system,overlay,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (system,overlay,) };
         mod_api::dispatch_client_chat_received(
             self, system, overlay, sender, chat_type, message, cancel,
         );
     }
     /// NeoForge's `ClientPauseChangeEvent.Pre`: cancel a proposed pause change.
-    pub(super) fn native_client_pause_change_pre(&mut self, paused: bool, cancel: &mut bool) {
+    pub(super) fn native_client_pause_change_pre(&mut self, paused: bool, cancel: &mut bool) { let (paused,) = match crate::points_generated::P3699.get() { Some(__l) => { let mut __a = (paused,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (paused,) };
         mod_api::dispatch_client_pause_change_pre(self, paused, cancel);
     }
     /// NeoForge's `ClientPauseChangeEvent.Post`: the pause state changed.
-    pub(super) fn native_client_pause_change_post(&mut self, paused: bool) {
+    pub(super) fn native_client_pause_change_post(&mut self, paused: bool) { let (paused,) = match crate::points_generated::P3698.get() { Some(__l) => { let mut __a = (paused,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (paused,) };
         mod_api::dispatch_client_pause_change_post(self, paused);
     }
     /// NeoForge's `ClientPlayerChangeGameTypeEvent`: observe the local player info game type change.
@@ -1703,7 +1703,7 @@ impl Game<'_> {
         player_uuid: u128,
         current_game_type: i32,
         new_game_type: i32,
-    ) {
+    ) { let (player_id,current_game_type,new_game_type,) = match crate::points_generated::P3697.get() { Some(__l) => { let mut __a = (player_id,current_game_type,new_game_type,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_id,current_game_type,new_game_type,) };
         mod_api::dispatch_client_player_change_game_type(
             self,
             player_id,
@@ -1715,7 +1715,7 @@ impl Game<'_> {
     /// Once a tick, in every `Game`: the window's (in single player, on LAN
     /// and on servers), and the server's own (`native_window` is false
     /// there: the single player server thread, a dedicated server).
-    pub(super) fn native_tick(&mut self) {
+    pub(super) fn native_tick(&mut self) { if let Some(__l) = crate::points_generated::P3696.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_tick(super::execution_role::host_side(self));
     }
     /// Before an eligible targeted block's selection outline is built.
@@ -1726,7 +1726,7 @@ impl Game<'_> {
         state: BlockStateId,
         partial: f32,
         canceled: &mut bool,
-    ) {
+    ) { let (pos,partial,) = match crate::points_generated::P3695.get() { Some(__l) => { let mut __a = (pos,partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,partial,) };
         mod_api::dispatch_block_highlight(self, pos, state, partial, canceled);
     }
     /// The world frame's local visual sources. Push requests; Horizon validates
@@ -1735,13 +1735,13 @@ impl Game<'_> {
         &self,
         rims: &mut Vec<NativeBlockRim>,
         lights: &mut Vec<NativeColoredLight>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3694.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_visuals(self, rims, lights);
     }
     /// At most 32 pairs of already-loaded base and transparent overlay sprites.
     /// Per-pixel alpha in the overlay marks full-bright material, without
     /// illuminating the surrounding block or changing gameplay light.
-    pub(super) fn native_emissive(&self, layers: &mut Vec<(&'static str, &'static str)>) {
+    pub(super) fn native_emissive(&self, layers: &mut Vec<(&'static str, &'static str)>) { if let Some(__l) = crate::points_generated::P3693.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_emissive(self, layers);
     }
     /// The world's phases, read-only; `error_text` carries the engine's
@@ -1752,7 +1752,7 @@ impl Game<'_> {
         context: &NativeLifecycleContext,
         phase: WorldPhase,
         error_text: &str,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3692.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_world_lifecycle(self, context, phase, error_text);
     }
     /// The server is about to send its data to the players (NeoForge's
@@ -1767,7 +1767,7 @@ impl Game<'_> {
     /// nothing is sent; push nothing after a load that pushed some and the
     /// clients go back to their own recipes. Server-side (the single
     /// player's integrated server included).
-    pub(super) fn native_datapack_sync(&mut self, recipe_types: &mut Vec<String>) {
+    pub(super) fn native_datapack_sync(&mut self, recipe_types: &mut Vec<String>) { if let Some(__l) = crate::points_generated::P3691.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_datapack_sync(self, recipe_types);
     }
     /// The server's recipes of `recipe_types` arrived (NeoForge's
@@ -1780,7 +1780,7 @@ impl Game<'_> {
     /// the server stopped sending them and the window is back on its own
     /// recipes. A recipe the
     /// window's own recipe book doesn't know has `book_id` -1. Client-side.
-    pub(super) fn native_recipes_received(&mut self, recipe_types: &[String]) {
+    pub(super) fn native_recipes_received(&mut self, recipe_types: &[String]) { if let Some(__l) = crate::points_generated::P3690.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_recipes_received(self, recipe_types);
     }
     /// The server's data tables are built (NeoForge's `TagsUpdatedEvent`
@@ -1793,7 +1793,7 @@ impl Game<'_> {
     /// drop caches derived from the data and to rebind what depends on it.
     /// Server-side (the single player's integrated server included); a client
     /// connected to a server never fires it.
-    pub(super) fn native_server_data_loaded(&mut self, reload: bool) {
+    pub(super) fn native_server_data_loaded(&mut self, reload: bool) { let (reload,) = match crate::points_generated::P3689.get() { Some(__l) => { let mut __a = (reload,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (reload,) };
         mod_api::dispatch_server_data_loaded(self, reload);
     }
     /// The server is assembling its data tables from the world's data packs
@@ -1809,14 +1809,14 @@ impl Game<'_> {
     /// Contributed files sit below the world's own data packs: a pack's file
     /// for the same path still overrides a mod's. Server-side (the single
     /// player's integrated server included).
-    pub(super) fn native_data_pack_files(&mut self, files: &mut Vec<(String, Vec<u8>)>) {
+    pub(super) fn native_data_pack_files(&mut self, files: &mut Vec<(String, Vec<u8>)>) { if let Some(__l) = crate::points_generated::P3688.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_data_pack_files(self, files);
     }
 
     /// Register server data reload listeners after packs are selected. The
     /// host gives registry access at registration, as
     /// `AddServerReloadListenersEvent.getRegistryAccess` does.
-    pub(super) fn native_add_server_reload_listeners(&self, listeners: &mut ServerReloadListeners) {
+    pub(super) fn native_add_server_reload_listeners(&self, listeners: &mut ServerReloadListeners) { if let Some(__l) = crate::points_generated::P3687.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_add_server_reload_listeners(self, listeners);
     }
     /// Register client asset reload listeners before a reload stages its
@@ -1830,7 +1830,7 @@ impl Game<'_> {
     /// `native_client_resources_reloaded`. A listener that returns an error
     /// aborts the reload and keeps every listener's previous assets.
     /// Client-side.
-    pub(super) fn native_add_client_reload_listeners(&self, listeners: &mut ClientReloadListeners) {
+    pub(super) fn native_add_client_reload_listeners(&self, listeners: &mut ClientReloadListeners) { if let Some(__l) = crate::points_generated::P3686.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_add_client_reload_listeners(self, listeners);
     }
     /// The server is assembling its data tables, as for
@@ -1846,7 +1846,7 @@ impl Game<'_> {
     /// overriding an older. Read them with `native_data_map` and
     /// `native_data_map_entries`, in `native_data_maps.rs`. Server-side, not
     /// synced to clients.
-    pub(super) fn native_data_map_types(&mut self, types: &mut Vec<NativeDataMapType>) {
+    pub(super) fn native_data_map_types(&mut self, types: &mut Vec<NativeDataMapType>) { if let Some(__l) = crate::points_generated::P3685.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_data_map_types(self, types);
     }
     /// The server is about to open its worlds: nothing of the world is
@@ -1857,7 +1857,7 @@ impl Game<'_> {
     /// followed by `native_world_lifecycle`'s `WorldOpenReady` or
     /// `WorldOpenFailed`. `dedicated` tells a dedicated server from the single
     /// player one.
-    pub(super) fn native_server_about_to_start(&mut self, dedicated: bool) {
+    pub(super) fn native_server_about_to_start(&mut self, dedicated: bool) { let (dedicated,) = match crate::points_generated::P3684.get() { Some(__l) => { let mut __a = (dedicated,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (dedicated,) };
         mod_api::dispatch_server_about_to_start(self, dedicated);
     }
     /// The server begins an orderly stop (NeoForge's `ServerStoppingEvent`):
@@ -1866,7 +1866,7 @@ impl Game<'_> {
     /// mod can save its own data or tell them. `native_world_lifecycle`'s
     /// `WorldCloseFinal` follows once the worlds are saved. A server whose loop
     /// fails stops without this (`WorldCloseFailed` reports it).
-    pub(super) fn native_server_stopping(&mut self, dedicated: bool) {
+    pub(super) fn native_server_stopping(&mut self, dedicated: bool) { let (dedicated,) = match crate::points_generated::P3683.get() { Some(__l) => { let mut __a = (dedicated,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (dedicated,) };
         mod_api::dispatch_server_stopping(self, dedicated);
     }
     /// The config files native mods keep (NeoForge's `registerConfig`):
@@ -1877,7 +1877,7 @@ impl Game<'_> {
     /// (`Server`); a game reads only its own kinds, so push them all every
     /// time. A file outside `config/`, or one already registered, is skipped.
     ///
-    pub(super) fn native_register_configs(&mut self, configs: &mut Vec<NativeConfig>) {
+    pub(super) fn native_register_configs(&mut self, configs: &mut Vec<NativeConfig>) { if let Some(__l) = crate::points_generated::P3682.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_register_configs(super::execution_role::host_side(self), configs);
     }
     /// A registered config was read (`ModConfigEvent.Loading`): `config`
@@ -1885,7 +1885,7 @@ impl Game<'_> {
     /// convention). Every mod hears every config, so check `mod_id`. Fired
     /// where the config's kind loads (`native_register_configs`), a `Server`
     /// one before `native_server_about_to_start`.
-    pub(super) fn native_config_loading(&mut self, config: &NativeConfigFile) {
+    pub(super) fn native_config_loading(&mut self, config: &NativeConfigFile) { if let Some(__l) = crate::points_generated::P3681.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_config_loading(super::execution_role::host_side(self), config);
     }
     /// A loaded config's file changed on disk (`ModConfigEvent.Reloading`):
@@ -1893,14 +1893,14 @@ impl Game<'_> {
     /// second, on the window and on the server's tick; a file saved with the
     /// same text, removed or unreadable fires nothing and keeps its last
     /// text.
-    pub(super) fn native_config_reloading(&mut self, config: &NativeConfigFile) {
+    pub(super) fn native_config_reloading(&mut self, config: &NativeConfigFile) { if let Some(__l) = crate::points_generated::P3680.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_config_reloading(super::execution_role::host_side(self), config);
     }
     /// A `Server` config is dropped as its server stops
     /// (`ModConfigEvent.Unloading`), after `native_server_stopping`; the next
     /// world reads it again. `Client` and `Common` configs stay until the
     /// game quits.
-    pub(super) fn native_config_unloading(&mut self, config: &NativeConfigFile) {
+    pub(super) fn native_config_unloading(&mut self, config: &NativeConfigFile) { if let Some(__l) = crate::points_generated::P3679.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_config_unloading(self, config);
     }
     /// The authoritative server tick's phases: `ServerTickStart` before any
@@ -1913,22 +1913,22 @@ impl Game<'_> {
         &mut self,
         context: &NativeLifecycleContext,
         phase: ServerTickPhase,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3678.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_server_tick(self, context, phase);
     }
     /// Before an authoritative server level's tick pass. `dimension` is its ID.
-    pub(super) fn native_level_tick_pre(&mut self, dimension: &str) {
+    pub(super) fn native_level_tick_pre(&mut self, dimension: &str) { if let Some(__l) = crate::points_generated::P3677.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_level_tick_pre(self, dimension);
     }
     /// After a successful authoritative server level tick pass.
-    pub(super) fn native_level_tick_post(&mut self, dimension: &str) {
+    pub(super) fn native_level_tick_post(&mut self, dimension: &str) { if let Some(__l) = crate::points_generated::P3676.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_level_tick_post(self, dimension);
     }
     /// The HUD (not drawn under F1), after the minimap: place a box with
     /// `corners.place` (boxes stack away from their edge) and draw it with
     /// `native_fill` and `native_text`. Skip a corner `native_corner_shown`
     /// says is taken.
-    pub(super) fn native_hud(&self, draw: &mut HudBatch, corners: &mut Corners) {
+    pub(super) fn native_hud(&self, draw: &mut HudBatch, corners: &mut Corners) { if let Some(__l) = crate::points_generated::P3675.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_hud(
             self,
             &mut super::mod_api_host::generated::GameDrawContext {
@@ -1960,7 +1960,7 @@ impl Game<'_> {
         layer: &str,
         draw: &mut HudBatch,
         canceled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3674.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_gui_layer_pre(
             self,
             layer,
@@ -1974,7 +1974,7 @@ impl Game<'_> {
     /// After one of vanilla's HUD layers (or after the layer a mod hid), with
     /// the ids of `native_gui_layer_pre`: draw here to put something above
     /// the layer (`RenderGuiLayerEvent.Post`).
-    pub(super) fn native_gui_layer_post(&self, layer: &str, draw: &mut HudBatch) {
+    pub(super) fn native_gui_layer_post(&self, layer: &str, draw: &mut HudBatch) { if let Some(__l) = crate::points_generated::P3673.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_gui_layer_post(
             self,
             layer,
@@ -1997,17 +1997,17 @@ impl Game<'_> {
         kind: &str,
         stack: Option<&ItemStack>,
         claimed: &mut bool,
-    ) {
+    ) { let (entity,) = match crate::points_generated::P3672.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_interact_entity(self, entity, kind, stack, claimed);
     }
     /// The local player left-clicks empty space, with any main-hand stack.
     /// Client-side only; the server does not receive this event.
-    pub(super) fn native_left_click_empty(&mut self) {
+    pub(super) fn native_left_click_empty(&mut self) { if let Some(__l) = crate::points_generated::P3671.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_left_click_empty(self);
     }
     /// The local player right-clicks empty space with an empty `hand`.
     /// Client-side only; the server does not receive this event.
-    pub(super) fn native_right_click_empty(&mut self, hand: Hand) {
+    pub(super) fn native_right_click_empty(&mut self, hand: Hand) { if let Some(__l) = crate::points_generated::P3670.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_right_click_empty(self, hand);
     }
     /// A player left-clicks the block `state` at `pos`, `face` the face hit
@@ -2024,7 +2024,7 @@ impl Game<'_> {
         face: [i32; 3],
         state: BlockStateId,
         canceled: &mut bool,
-    ) {
+    ) { let (pos,face,) = match crate::points_generated::P3669.get() { Some(__l) => { let mut __a = (pos,face,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,face,) };
         mod_api::dispatch_left_click_block(self, pos, face, state, canceled);
     }
     /// A living player's server tick ends (`ServerPlayer.tick`): once a tick
@@ -2032,7 +2032,7 @@ impl Game<'_> {
     /// cooldowns, statistics and advancements. The helpers read that player.
     /// Players still tick under `/tick freeze`; a dead player doesn't, nor
     /// does one killed earlier in the same tick.
-    pub(super) fn native_player_tick(&mut self) {
+    pub(super) fn native_player_tick(&mut self) { if let Some(__l) = crate::points_generated::P3668.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_tick(self);
     }
     /// The player-health HUD rows, once a frame the HUD draws them
@@ -2048,7 +2048,7 @@ impl Game<'_> {
         wi: i32,
         hi: i32,
         draws: &mut Option<Vec<mod_api::hud_layout::GuiDraw>>,
-    ) {
+    ) { let (wi,hi,) = match crate::points_generated::P3667.get() { Some(__l) => { let mut __a = (wi,hi,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (wi,hi,) };
         mod_api::dispatch_health_hud(self, inputs, wi, hi, draws);
     }
     /// A real window key event after handling, including repeats and consumed shortcuts
@@ -2060,7 +2060,7 @@ impl Game<'_> {
         key: &str,
         action: mod_api::KeyAction,
         modifiers: u32,
-    ) {
+    ) { let (modifiers,) = match crate::points_generated::P3666.get() { Some(__l) => { let mut __a = (modifiers,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (modifiers,) };
         mod_api::dispatch_input_key(self, key, action, modifiers);
     }
     /// Raw mouse button input on any screen, before dispatch; cancel skips dispatch and Post.
@@ -2071,11 +2071,11 @@ impl Game<'_> {
         pressed: bool,
         modifiers: u32,
         canceled: &mut bool,
-    ) {
+    ) { let (button,pressed,modifiers,) = match crate::points_generated::P3665.get() { Some(__l) => { let mut __a = (button,pressed,modifiers,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (button,pressed,modifiers,) };
         mod_api::dispatch_mouse_button_pre(self, button, pressed, modifiers, canceled);
     }
     /// An accepted raw button event finished dispatch, including a screen handler's early return.
-    pub(super) fn native_mouse_button_post(&mut self, button: i32, pressed: bool, modifiers: u32) {
+    pub(super) fn native_mouse_button_post(&mut self, button: i32, pressed: bool, modifiers: u32) { let (button,pressed,modifiers,) = match crate::points_generated::P3664.get() { Some(__l) => { let mut __a = (button,pressed,modifiers,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (button,pressed,modifiers,) };
         mod_api::dispatch_mouse_button_post(self, button, pressed, modifiers);
     }
     /// Gameplay scrolling after accumulation, before hotbar/spectator handling.
@@ -2089,7 +2089,7 @@ impl Game<'_> {
         cursor: [f32; 2],
         modifiers: u32,
         canceled: &mut bool,
-    ) {
+    ) { let (scroll,accumulated,buttons,cursor,modifiers,) = match crate::points_generated::P3663.get() { Some(__l) => { let mut __a = (scroll,accumulated,buttons,cursor,modifiers,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (scroll,accumulated,buttons,cursor,modifiers,) };
         mod_api::dispatch_mouse_scrolling(
             self,
             scroll,
@@ -2117,12 +2117,12 @@ impl Game<'_> {
         hand: mod_api::first_person::Hand,
         swing_hand: &mut bool,
         canceled: &mut bool,
-    ) {
+    ) { let (button,) = match crate::points_generated::P3662.get() { Some(__l) => { let mut __a = (button,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (button,) };
         mod_api::dispatch_interaction_key(self, button, key_mapping, hand, swing_hand, canceled);
     }
     /// A command typed or clicked in chat, without its slash, before the
     /// server and Horizon's commands see it: set `ran` when the mod ran it.
-    pub(super) fn native_command(&mut self, command: &str, ran: &mut bool) {
+    pub(super) fn native_command(&mut self, command: &str, ran: &mut bool) { if let Some(__l) = crate::points_generated::P3661.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_command(super::execution_role::host_side(self), command, ran);
     }
     /// The commands `native_command` runs, by name and without their slash:
@@ -2130,7 +2130,7 @@ impl Game<'_> {
     /// again when the server sends its own tree, so the chat box colours,
     /// completes and lists them as the game's own; a name the game already
     /// has keeps that command's behaviour.
-    pub(super) fn native_commands(&mut self, commands: &mut Vec<&'static str>) {
+    pub(super) fn native_commands(&mut self, commands: &mut Vec<&'static str>) { if let Some(__l) = crate::points_generated::P3660.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_commands(self, commands);
     }
     /// Player FOV scale, after vanilla effects and before zoom and easing.
@@ -2140,7 +2140,7 @@ impl Game<'_> {
         player: &mod_api::camera::FovPlayer,
         base: f32,
         modifier: &mut f32,
-    ) {
+    ) { let (base,) = match crate::points_generated::P3659.get() { Some(__l) => { let mut __a = (base,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (base,) };
         mod_api::dispatch_compute_fov_modifier(self, player, base, modifier);
     }
     /// Local player movement input, after reading it and before applying it.
@@ -2150,18 +2150,18 @@ impl Game<'_> {
         strafe: &mut f32,
         jump: &mut bool,
         sneak: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3658.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_movement_input(self, forward, strafe, jump, sneak);
     }
     /// World field of view, after normal calculation and zoom and before projection/Nausea.
     /// Called for world rendering and near-plane overlays; hand/HUD FOV uses its own path.
     /// Only finite values in 1..=179 degrees replace the computed FOV.
-    pub(super) fn native_compute_fov(&self, partial: f32, camera: [f64; 3], degrees: &mut f32) {
+    pub(super) fn native_compute_fov(&self, partial: f32, camera: [f64; 3], degrees: &mut f32) { let (partial,camera,) = match crate::points_generated::P3657.get() { Some(__l) => { let mut __a = (partial,camera,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,camera,) };
         mod_api::dispatch_compute_fov(self, partial, camera, degrees);
     }
     /// The zoom a native mod asks for, applied while playing (the spyglass's
     /// own view wins): set `zoom` when it is none yet.
-    pub(super) fn native_zoom(&self, zoom: &mut Option<NativeZoom>) {
+    pub(super) fn native_zoom(&self, zoom: &mut Option<NativeZoom>) { if let Some(__l) = crate::points_generated::P3656.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_zoom(self, zoom);
     }
     /// Computed world fog RGB, after ordinary effects and before upload. Title panoramas skip it.
@@ -2172,7 +2172,7 @@ impl Game<'_> {
         camera: [f64; 3],
         fog_type: mod_api::fog::FogType,
         rgb: &mut [f32; 3],
-    ) {
+    ) { let (partial,camera,) = match crate::points_generated::P3655.get() { Some(__l) => { let mut __a = (partial,camera,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,camera,) };
         mod_api::dispatch_compute_fog_color(self, partial, camera, fog_type, rgb);
     }
     /// Final world fog, after the computed color hook, ordinary calculations and Horizon's fog
@@ -2184,7 +2184,7 @@ impl Game<'_> {
         camera: [f64; 3],
         fog_type: mod_api::fog::FogType,
         fog: &mut mod_api::fog::FogData,
-    ) {
+    ) { let (partial,camera,) = match crate::points_generated::P3654.get() { Some(__l) => { let mut __a = (partial,camera,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,camera,) };
         mod_api::dispatch_render_fog(self, partial, camera, fog_type, fog);
     }
     /// The camera shake native mods ask for in this frame, `partial` ticks
@@ -2193,7 +2193,7 @@ impl Game<'_> {
     /// `shake`, so several mods' shakes add up. Read while playing only;
     /// Horizon scales the sum by Distortion Effects and bounds it
     /// (`native_shake_matrix`).
-    pub(super) fn native_camera_shake(&self, partial: f32, shake: &mut NativeShake) {
+    pub(super) fn native_camera_shake(&self, partial: f32, shake: &mut NativeShake) { let (partial,) = match crate::points_generated::P3653.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         mod_api::dispatch_camera_shake(self, partial, shake);
     }
     /// Name tag visibility and optional replacement text.
@@ -2204,7 +2204,7 @@ impl Game<'_> {
         vanilla_visible: bool,
         visible: &mut bool,
         text: &mut Option<String>,
-    ) {
+    ) { let (entity_id,vanilla_visible,) = match crate::points_generated::P3652.get() { Some(__l) => { let mut __a = (entity_id,vanilla_visible,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (entity_id,vanilla_visible,) };
         mod_api::dispatch_render_name_tag(self, entity_id, kind, vanilla_visible, visible, text);
     }
     /// Before one first-person hand, item, map or empty arm is drawn
@@ -2216,7 +2216,7 @@ impl Game<'_> {
         &self,
         render: &mut NativeHandRender<'_>,
         canceled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3651.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_render_hand(self, render, canceled);
     }
 
@@ -2237,7 +2237,7 @@ impl Game<'_> {
         left: bool,
         draw: &mut BlockEntityDraw,
         canceled: &mut bool,
-    ) {
+    ) { let (player_entity_id,left,) = match crate::points_generated::P3650.get() { Some(__l) => { let mut __a = (player_entity_id,left,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (player_entity_id,left,) };
         mod_api::dispatch_render_arm(
             self,
             player,
@@ -2257,7 +2257,7 @@ impl Game<'_> {
         pos: [i32; 3],
         stack: &ItemStack,
         canceled: &mut bool,
-    ) {
+    ) { let (entity_id,pos,) = match crate::points_generated::P3649.get() { Some(__l) => { let mut __a = (entity_id,pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (entity_id,pos,) };
         mod_api::dispatch_render_item_in_frame(self, entity_id, pos, stack, canceled);
     }
 
@@ -2270,7 +2270,7 @@ impl Game<'_> {
         mirrored: bool,
         entity: &mod_api::camera::CameraEntity,
         distance: &mut f32,
-    ) {
+    ) { let (partial,mirrored,) = match crate::points_generated::P3648.get() { Some(__l) => { let mut __a = (partial,mirrored,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,mirrored,) };
         mod_api::dispatch_camera_distance(self, partial, mirrored, entity, distance);
     }
     /// Change the colours of `biome` (`minecraft:plains`) on this client: the
@@ -2281,7 +2281,7 @@ impl Game<'_> {
     /// and calls that when the season turns. The dark forest's modifier
     /// still applies to the grass set here; the swamp's noise colours
     /// replace it.
-    pub(super) fn native_biome_colors(&self, biome: &str, colors: &mut BiomeColors) {
+    pub(super) fn native_biome_colors(&self, biome: &str, colors: &mut BiomeColors) { if let Some(__l) = crate::points_generated::P3647.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_biome_colors(self, biome, colors);
     }
     /// Choose this client's music, once a client tick: `music` and `volume`
@@ -2292,7 +2292,7 @@ impl Game<'_> {
     /// `Music::new("mymod:music.spring", 1200, 6000, false)` (the delays in
     /// ticks between songs, and whether it cuts off a different song playing),
     /// None to keep vanilla's quiet, or change `volume` (0 to 1) to fade it.
-    pub(super) fn native_music(&self, music: &mut Option<Music>, volume: &mut f32) {
+    pub(super) fn native_music(&self, music: &mut Option<Music>, volume: &mut f32) { if let Some(__l) = crate::points_generated::P3646.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_music(self, music, volume);
     }
     /// The tracks to play over (or instead of) the music on this client,
@@ -2303,7 +2303,7 @@ impl Game<'_> {
     /// piece from the start, the silent ones at volume 0, and raise them (a
     /// fuller arrangement as a village grows). Their sound events should be
     /// `stream: true` in `sounds.json`.
-    pub(super) fn native_music_layers(&self, layers: &mut Vec<MusicLayer>) {
+    pub(super) fn native_music_layers(&self, layers: &mut Vec<MusicLayer>) { if let Some(__l) = crate::points_generated::P3645.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_music_layers(self, layers);
     }
     /// The values native mods hand their shader packs in this frame,
@@ -2312,11 +2312,11 @@ impl Game<'_> {
     /// pack reads; a mod that bundles its pack as `native-<mod id>` is the
     /// one that pack is for. Asked once a frame while a pack is on; a value
     /// that isn't finite reads as 0 (`native_shader_params_now`).
-    pub(super) fn native_shader_params(&self, partial: f32, params: &mut [[f32; 4]; 8]) {
+    pub(super) fn native_shader_params(&self, partial: f32, params: &mut [[f32; 4]; 8]) { let (partial,) = match crate::points_generated::P3644.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         mod_api::dispatch_shader_params(self, partial, params);
     }
     /// The minimap a native mod shows: set `minimap` when it is none yet.
-    pub(super) fn native_minimap(&self, minimap: &mut Option<NativeMinimap>) {
+    pub(super) fn native_minimap(&self, minimap: &mut Option<NativeMinimap>) { if let Some(__l) = crate::points_generated::P3643.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_minimap(self, minimap);
     }
     /// Register namespaced NBT component types before content loads.
@@ -2377,29 +2377,29 @@ impl Game<'_> {
         mod_api::dispatch_standalone_models(context, models);
     }
     /// Options > Mods lists the native mods: push yours.
-    pub(super) fn native_mods(&mut self, mods: &mut Vec<NativeMod>) {
+    pub(super) fn native_mods(&mut self, mods: &mut Vec<NativeMod>) { if let Some(__l) = crate::points_generated::P3642.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_mods(super::execution_role::host_side(self), mods);
     }
     /// The buttons of mod `mod_id`'s settings page, under its keys: push
     /// their labels when it is yours. Asked again each time the page opens
     /// and after each click.
-    pub(super) fn native_settings(&mut self, mod_id: &str, buttons: &mut Vec<String>) {
+    pub(super) fn native_settings(&mut self, mod_id: &str, buttons: &mut Vec<String>) { if let Some(__l) = crate::points_generated::P3641.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_settings(super::execution_role::host_side(self), mod_id, buttons);
     }
     /// Button `button` of mod `mod_id`'s settings page was clicked.
-    pub(super) fn native_settings_click(&mut self, mod_id: &str, button: usize) {
+    pub(super) fn native_settings_click(&mut self, mod_id: &str, button: usize) { let (button,) = match crate::points_generated::P3640.get() { Some(__l) => { let mut __a = (button,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (button,) };
         mod_api::dispatch_settings_click(self, mod_id, button);
     }
     /// The player did `event` on mod `mod_id`'s panel (`native_panel_items`):
     /// act on it when it is yours.
-    pub(super) fn native_panel_event(&mut self, mod_id: &str, event: &NativePanelEvent) {
+    pub(super) fn native_panel_event(&mut self, mod_id: &str, event: &NativePanelEvent) { if let Some(__l) = crate::points_generated::P3639.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_panel_event(self, mod_id, event);
     }
     /// Whether block `block`'s block entity ticks (`EntityBlock.getTicker`):
     /// set `ticks` when it is yours. Asked for each of the block's states
     /// when a world opens.
     /// Set `ticks` to true to make it tick, and never clear a value an earlier mod or mixin set.
-    pub(super) fn native_block_entity_ticks(&self, block: &str, ticks: &mut bool) {
+    pub(super) fn native_block_entity_ticks(&self, block: &str, ticks: &mut bool) { if let Some(__l) = crate::points_generated::P3638.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_entity_ticks(self, block, ticks);
     }
     /// A `minecraft:post_attack` effect of a mod's own kind, on a mob a
@@ -2418,7 +2418,7 @@ impl Game<'_> {
         data: &serde_json::Value,
         level: u32,
         victim: u32,
-    ) {
+    ) { let (level,victim,) = match crate::points_generated::P3637.get() { Some(__l) => { let mut __a = (level,victim,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (level,victim,) };
         mod_api::dispatch_enchant_effect(self, enchantment, kind, data, level, victim);
     }
     /// The block's storage calls `setChanged` (`Container.setChanged` and
@@ -2440,7 +2440,7 @@ impl Game<'_> {
         level: LevelRef,
         pos: BlockPos,
         state: BlockStateId,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3636.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.contents_changing.contains(&(level, pos)) {
             return;
         }
@@ -2461,7 +2461,7 @@ impl Game<'_> {
         &self,
         block: &str,
         container: &mut Option<ModContainer>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3635.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_entity_container(self, block, container);
     }
     /// Block `block`'s block entity has fluid tanks: set `fluids` when the
@@ -2476,7 +2476,7 @@ impl Game<'_> {
         &self,
         block: &str,
         fluids: &mut Option<ModFluidTanks>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3634.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_entity_fluids(self, block, fluids);
     }
     /// Block `block`'s block entity has an energy buffer
@@ -2492,7 +2492,7 @@ impl Game<'_> {
         &self,
         block: &str,
         energy: &mut Option<ModEnergyBuffer>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3633.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_entity_energy(self, block, energy);
     }
     /// Item `item` (`mod_id:name`) holds items (`Capabilities.Item.ITEM`): set
@@ -2503,7 +2503,7 @@ impl Game<'_> {
     /// `native_item_container_insert`, `native_item_container_extract`, in
     /// `native_item_container.rs`). The contents are kept in the stack's
     /// `minecraft:container`, as a shulker box item keeps them.
-    pub(super) fn native_item_container(&self, item: &str, slots: &mut Option<u32>) {
+    pub(super) fn native_item_container(&self, item: &str, slots: &mut Option<u32>) { if let Some(__l) = crate::points_generated::P3632.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_item_container(self, item, slots);
     }
     /// A server tick of the block entity at `pos`, in vanilla's order among
@@ -2516,7 +2516,7 @@ impl Game<'_> {
     /// dropped. Clients, the window's own in single player included, get
     /// what `native_block_entity_update_tag` gives when its chunk is sent or
     /// its block changes.
-    pub(super) fn native_block_entity_tick(&mut self, pos: [i32; 3], entity: &mut ModBlockEntity) {
+    pub(super) fn native_block_entity_tick(&mut self, pos: [i32; 3], entity: &mut ModBlockEntity) { let (pos,) = match crate::points_generated::P3631.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_block_entity_tick(self, pos, entity);
     }
     /// A consumable's effect of a mod's own kind: the item's `on_consume_effects`
@@ -2525,7 +2525,7 @@ impl Game<'_> {
     /// player is the one consuming, and the game's own effects,
     /// sounds, teleports and drops are open. An unclaimed kind does
     /// nothing.
-    pub(super) fn native_consume_effect(&mut self, kind: &str, data: &serde_json::Value) {
+    pub(super) fn native_consume_effect(&mut self, kind: &str, data: &serde_json::Value) { if let Some(__l) = crate::points_generated::P3630.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_consume_effect(self, kind, data);
     }
     /// What clients get of the block entity at `pos` when its `id` is
@@ -2561,7 +2561,7 @@ impl Game<'_> {
         state: BlockStateId,
         entity: &ModBlockEntity,
         draw: &mut BlockEntityDraw,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3629.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_block_entity_submit(
             self,
             pos,
@@ -2588,7 +2588,7 @@ impl Game<'_> {
         state: BlockStateId,
         entity: &ModBlockEntity,
         bounds: &mut [f32; 6],
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3628.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_block_entity_render_bounding_box(self, pos, block, state, entity, bounds);
     }
     /// Draw the mob `mob` (its id, kind, custom name and the frame's body
@@ -2610,7 +2610,7 @@ impl Game<'_> {
         mob: &NativeMobRender<'_>,
         draw: &mut BlockEntityDraw,
         drawn: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3627.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_mob_submit(
             self,
             mob,
@@ -2625,7 +2625,7 @@ impl Game<'_> {
     /// mod that hooks either hooks this one too and sets `listened` (HEAD,
     /// `*listened = true`). Without it the game poses no player or mob for
     /// them, each frame. Client-side.
-    pub(super) fn native_player_render_listened(&self, listened: &mut bool) {
+    pub(super) fn native_player_render_listened(&self, listened: &mut bool) { if let Some(__l) = crate::points_generated::P3626.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_player_render_listened(self, listened);
     }
     /// Draw the player `player` (`who`: its profile name, and whether it is
@@ -2642,7 +2642,7 @@ impl Game<'_> {
         who: &NativePlayerRender<'_>,
         draw: &mut BlockEntityDraw,
         drawn: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3625.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_player_submit(
             self,
             player,
@@ -2667,7 +2667,7 @@ impl Game<'_> {
         mob: &NativeMobRender<'_>,
         who: Option<&NativePlayerRender<'_>>,
         draw: &mut BlockEntityDraw,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3624.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_mob_layer(
             self,
             mob,
@@ -2694,14 +2694,14 @@ impl Game<'_> {
         &self,
         map: &NativeMapInfo<'_>,
         decorations: &mut Vec<NativeMapDecoration>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3623.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_map_decorations(self, map, decorations);
     }
     /// A menu opens on this client for block `block`, a mod's: set `screen`
     /// when the block is yours, to lay its screen out (`native_screen_draw`
     /// draws it). The server asks it too: a slot it hides is not in the menu
     /// there either, so shift-clicks never fill it.
-    pub(super) fn native_screen(&self, block: &str, screen: &mut Option<NativeScreen>) {
+    pub(super) fn native_screen(&self, block: &str, screen: &mut Option<NativeScreen>) { if let Some(__l) = crate::points_generated::P3622.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_screen(self, block, screen);
     }
     /// Draw block `block`'s screen at `origin` (its top left, GUI pixels),
@@ -2717,7 +2717,7 @@ impl Game<'_> {
         data: &[i32],
         draw: &mut HudBatch,
         origin: [f32; 2],
-    ) {
+    ) { let (origin,) = match crate::points_generated::P3621.get() { Some(__l) => { let mut __a = (origin,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (origin,) };
         mod_api::dispatch_screen_draw(
             self,
             block,
@@ -2741,18 +2741,18 @@ impl Game<'_> {
         current: &NativeScreenView<'_>,
         new: &NativeScreenView<'_>,
         outcome: &mut Option<Answered<ScreenOpening>>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3620.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_screen_opening(self, current, new, outcome);
     }
 
     /// A screen was observed opening or changing rectangle, at most once per frame
     /// (`ScreenEvent.Init.Post`).
-    pub(super) fn native_screen_init_post(&self, screen: &NativeScreenView<'_>) {
+    pub(super) fn native_screen_init_post(&self, screen: &NativeScreenView<'_>) { if let Some(__l) = crate::points_generated::P3619.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_screen_init_post(self, screen);
     }
 
     /// The `screen` that was open is being replaced (`ScreenEvent.Closing`), after `native_screen_opening` let it.
-    pub(super) fn native_screen_closing(&self, screen: &NativeScreenView<'_>) {
+    pub(super) fn native_screen_closing(&self, screen: &NativeScreenView<'_>) { if let Some(__l) = crate::points_generated::P3618.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_screen_closing(self, screen);
     }
     /// The open screen has drawn itself and its tooltips (`Screen.render`,
@@ -2776,7 +2776,7 @@ impl Game<'_> {
         &self,
         draw: &mut HudBatch,
         screen: &NativeScreenView<'_>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3617.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_screen_render_post(
             self,
             &mut super::mod_api_host::generated::GameDrawContext {
@@ -2812,7 +2812,7 @@ impl Game<'_> {
         button: i32,
         modifiers: u32,
         canceled: &mut bool,
-    ) {
+    ) { let (button,modifiers,) = match crate::points_generated::P3616.get() { Some(__l) => { let mut __a = (button,modifiers,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (button,modifiers,) };
         mod_api::dispatch_screen_mouse_button_pressed_pre(
             self, screen, button, modifiers, canceled,
         );
@@ -2835,7 +2835,7 @@ impl Game<'_> {
         button: i32,
         modifiers: u32,
         canceled: &mut bool,
-    ) {
+    ) { let (button,modifiers,) = match crate::points_generated::P3615.get() { Some(__l) => { let mut __a = (button,modifiers,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (button,modifiers,) };
         mod_api::dispatch_screen_mouse_button_released_pre(
             self, screen, button, modifiers, canceled,
         );
@@ -2850,7 +2850,7 @@ impl Game<'_> {
         delta: [f32; 2],
         modifiers: u32,
         canceled: &mut bool,
-    ) {
+    ) { let (button,delta,modifiers,) = match crate::points_generated::P3614.get() { Some(__l) => { let mut __a = (button,delta,modifiers,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (button,delta,modifiers,) };
         mod_api::dispatch_screen_mouse_dragged_pre(
             self, screen, button, delta, modifiers, canceled,
         );
@@ -2885,7 +2885,7 @@ impl Game<'_> {
         scroll: [f64; 2],
         modifiers: u32,
         canceled: &mut bool,
-    ) {
+    ) { let (scroll,modifiers,) = match crate::points_generated::P3613.get() { Some(__l) => { let mut __a = (scroll,modifiers,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (scroll,modifiers,) };
         mod_api::dispatch_screen_mouse_scrolled_pre(self, screen, scroll, modifiers, canceled);
     }
     /// A key went down over the open screen (`ScreenEvent.KeyPressed.Pre`,
@@ -2917,7 +2917,7 @@ impl Game<'_> {
         repeat: bool,
         modifiers: u32,
         canceled: &mut bool,
-    ) {
+    ) { let (repeat,modifiers,) = match crate::points_generated::P3612.get() { Some(__l) => { let mut __a = (repeat,modifiers,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (repeat,modifiers,) };
         mod_api::dispatch_screen_key_pressed_pre(self, screen, key, repeat, modifiers, canceled);
     }
     /// Before an open screen handles a named key's release (same screen gate as key presses).
@@ -2928,7 +2928,7 @@ impl Game<'_> {
         key: &str,
         modifiers: u32,
         canceled: &mut bool,
-    ) {
+    ) { let (modifiers,) = match crate::points_generated::P3611.get() { Some(__l) => { let mut __a = (modifiers,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (modifiers,) };
         mod_api::dispatch_screen_key_released_pre(self, screen, key, modifiers, canceled);
     }
     /// A character was typed at the open screen
@@ -2959,7 +2959,7 @@ impl Game<'_> {
         c: char,
         modifiers: u32,
         canceled: &mut bool,
-    ) {
+    ) { let (c,modifiers,) = match crate::points_generated::P3610.get() { Some(__l) => { let mut __a = (c,modifiers,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (c,modifiers,) };
         mod_api::dispatch_screen_char_typed_pre(self, screen, c, modifiers, canceled);
     }
     /// The open screen as a native mod sees it (`NativeScreenView`): its id,
@@ -2967,7 +2967,7 @@ impl Game<'_> {
     /// rectangle, with the mouse and the partial tick. `screen` is the screen
     /// drawn this frame, which `NativeScreenView.id` comes from. Borrowed:
     /// nothing is copied per frame.
-    pub(super) fn screen_view(&self, batch: &HudBatch, screen: Screen) -> NativeScreenView<'_> {
+    pub(super) fn screen_view(&self, batch: &HudBatch, screen: Screen) -> NativeScreenView<'_> { if let Some(__l) = crate::points_generated::P3609.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         NativeScreenView::from(mod_api::__private::built::NativeScreenView {
             id: screen.id(),
             menu: self.remote_menu_type().filter(|m| !m.is_empty()),
@@ -2983,7 +2983,7 @@ impl Game<'_> {
     /// `world_create`, `multiplayer`, `add_server`…), no menu and no menu
     /// title, the whole window as its rectangle and no slots (no menu is
     /// open). None while no title screen is up.
-    pub(super) fn title_screen_view(&self, batch: &HudBatch) -> Option<NativeScreenView<'_>> {
+    pub(super) fn title_screen_view(&self, batch: &HudBatch) -> Option<NativeScreenView<'_>> { if let Some(__l) = crate::points_generated::P3608.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let title = self.title.as_ref()?;
         Some(NativeScreenView::from(
             mod_api::__private::built::NativeScreenView {
@@ -3000,7 +3000,7 @@ impl Game<'_> {
     /// The open screen's container panel in GUI pixels (`screen`'s, the one
     /// this frame draws), or the whole window for a screen with none
     /// (`NativeScreenView.rect`).
-    pub(super) fn screen_rect(&self, batch: &HudBatch, screen: Screen) -> [f32; 4] {
+    pub(super) fn screen_rect(&self, batch: &HudBatch, screen: Screen) -> [f32; 4] { if let Some(__l) = crate::points_generated::P3607.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if screen != Screen::Inventory && screen != Screen::Creative {
             return [0.0, 0.0, batch.width, batch.height];
         }
@@ -3024,15 +3024,15 @@ impl Game<'_> {
         &self,
         screen: &NativeScreenView<'_>,
         areas: &mut Vec<[f32; 4]>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3606.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_screen_exclusion_areas(self, screen, areas);
     }
-    pub(super) fn track_drag_button(&mut self, button: MouseButton, pressed: bool) {
+    pub(super) fn track_drag_button(&mut self, button: MouseButton, pressed: bool) { let (pressed,) = match crate::points_generated::P3605.get() { Some(__l) => { let mut __a = (pressed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pressed,) };
         // Any release ends the drag, as vanilla's `MouseHandler.onButton` clears `activeButton`:
         // left down, right down, left up sends no drag while right is still held.
         self.drag_button = pressed.then_some(button);
     }
-    pub(super) fn screen_mouse_dragged(&self, previous: (f32, f32)) -> bool {
+    pub(super) fn screen_mouse_dragged(&self, previous: (f32, f32)) -> bool { if let Some(__l) = crate::points_generated::P3604.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.pad_synthetic_input() || self.cursor == previous {
             return false;
         }
@@ -3061,7 +3061,7 @@ impl Game<'_> {
     /// (`Screen::Playing` behind it, so not a book, a sign editor, a server
     /// dialog or a prompt drawn over gameplay), and no connect or world load
     /// is in progress. The one gate they all ask before they fire.
-    pub(super) fn screen_hooks_open(&self) -> bool {
+    pub(super) fn screen_hooks_open(&self) -> bool { if let Some(__l) = crate::points_generated::P3603.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.renderer.is_some()
             && !self.screen_over_playing()
             && !self.remote_loading()
@@ -3073,7 +3073,7 @@ impl Game<'_> {
     /// `partial_tick` is the clock's fraction at this event, not a frame's.
     /// The `HudBatch` built here is only what `screen.rect` needs: the
     /// window's GUI scale, no allocation.
-    pub(super) fn screen_view_now(&self) -> Option<NativeScreenView<'_>> {
+    pub(super) fn screen_view_now(&self) -> Option<NativeScreenView<'_>> { if let Some(__l) = crate::points_generated::P3602.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.screen_hooks_open() {
             return None;
         }
@@ -3089,7 +3089,7 @@ impl Game<'_> {
     /// control socket's `key` command both ask before a screen acts on a key.
     /// False when no screen of the hooks' is open, and for a key with no
     /// vanilla name.
-    pub(super) fn screen_key_pressed(&self, key: KeyCode, repeat: bool) -> bool {
+    pub(super) fn screen_key_pressed(&self, key: KeyCode, repeat: bool) -> bool { let (repeat,) = match crate::points_generated::P3601.get() { Some(__l) => { let mut __a = (repeat,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (repeat,) };
         let Some(name) = keybinds::key_name(key) else {
             return false;
         };
@@ -3106,7 +3106,7 @@ impl Game<'_> {
         );
         canceled
     }
-    pub(super) fn screen_key_released(&self, key: KeyCode) -> bool {
+    pub(super) fn screen_key_released(&self, key: KeyCode) -> bool { if let Some(__l) = crate::points_generated::P3600.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(name) = keybinds::key_name(key) else {
             return false;
         };
@@ -3127,7 +3127,7 @@ impl Game<'_> {
     /// characters are gone and every other one stays, control characters
     /// included (a text box reads Backspace, Delete and the like as keys).
     /// `None` when none of them is left to type.
-    pub(super) fn screen_text_typed(&self, text: &str) -> Option<String> {
+    pub(super) fn screen_text_typed(&self, text: &str) -> Option<String> { if let Some(__l) = crate::points_generated::P3599.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(screen) = self.screen_view_now() else {
             return Some(text.to_owned());
         };
@@ -3146,7 +3146,7 @@ impl Game<'_> {
     /// nothing, and one that moved the focus types into the box it moved to.
     /// Each printable one is offered to `native_screen_char_typed_pre`; the
     /// survivors go to the focused text box, control characters (keys) gone.
-    pub(super) fn screen_chars_typed(&mut self, text: Option<&str>) {
+    pub(super) fn screen_chars_typed(&mut self, text: Option<&str>) { if let Some(__l) = crate::points_generated::P3598.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(text) = text else {
             return;
         };
@@ -3180,7 +3180,7 @@ impl Game<'_> {
         at: [f32; 2],
         right: bool,
         button: &mut Option<i32>,
-    ) {
+    ) { let (at,right,) = match crate::points_generated::P3597.get() { Some(__l) => { let mut __a = (at,right,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,right,) };
         mod_api::dispatch_screen_click(self, block, data, at, right, button);
     }
     /// The tooltip at `at` (as in `native_screen_click`) on block `block`'s
@@ -3192,7 +3192,7 @@ impl Game<'_> {
         data: &[i32],
         at: [f32; 2],
         lines: &mut Vec<String>,
-    ) {
+    ) { let (at,) = match crate::points_generated::P3596.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,) };
         mod_api::dispatch_screen_tooltip(self, block, data, at, lines);
     }
     /// A player pressed a mod container's button (`clickMenuButton`), on
@@ -3203,7 +3203,7 @@ impl Game<'_> {
         context: &mod_api::menu::MenuButtonContext,
         entity: &mut ModBlockEntity,
         carried: &mut Option<ItemStack>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3595.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_menu_button(self, context, entity, carried);
     }
     /// A player shift-clicked slot `slot` of the menu of the mod block
@@ -3237,7 +3237,7 @@ impl Game<'_> {
         slot: usize,
         stack: &mut ItemStack,
         handled: &mut bool,
-    ) {
+    ) { let (pos,container_slots,slot,) = match crate::points_generated::P3594.get() { Some(__l) => { let mut __a = (pos,container_slots,slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,container_slots,slot,) };
         mod_api::dispatch_menu_quick_move(self, pos, entity, container_slots, slot, stack, handled);
     }
     /// The commands native mods add to the server's command tree: push
@@ -3245,7 +3245,7 @@ impl Game<'_> {
     /// server, a LAN host, single player's server thread); every player's
     /// chat box then completes them as vanilla's, within their level. A
     /// name vanilla has is left out.
-    pub(super) fn native_register_commands(&mut self, commands: &mut Vec<NativeCommand>) {
+    pub(super) fn native_register_commands(&mut self, commands: &mut Vec<NativeCommand>) { if let Some(__l) = crate::points_generated::P3593.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_register_commands(self, commands);
     }
     /// A player's command on the server (`Commands.performCommand`),
@@ -3260,7 +3260,7 @@ impl Game<'_> {
         player: &NativeServerPlayer,
         command: &str,
         ran: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3592.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_perform_command(self, player, command, ran);
     }
     /// A player takes an item from an armor stand or puts one on it
@@ -3282,7 +3282,7 @@ impl Game<'_> {
         stand_id: i32,
         slot: &str,
         cancel: &mut bool,
-    ) {
+    ) { let (stand_id,) = match crate::points_generated::P3591.get() { Some(__l) => { let mut __a = (stand_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (stand_id,) };
         mod_api::dispatch_armor_stand_manipulate(self, player, name, stand_id, slot, cancel);
     }
     /// A boat or minecart (`kind`, `minecraft:oak_boat`) moved since the last
@@ -3303,7 +3303,7 @@ impl Game<'_> {
         kind: &str,
         from: [f64; 3],
         to: [f64; 3],
-    ) {
+    ) { let (from,to,) = match crate::points_generated::P3590.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,to,) };
         mod_api::dispatch_vehicle_moved(self, player, kind, from, to);
     }
     /// A player opens one of the game's own menus (`ServerPlayer.openMenu`; the
@@ -3328,7 +3328,7 @@ impl Game<'_> {
         kind: &str,
         pos: Option<[i32; 3]>,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3589.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_container_opened(self, player, name, kind, pos, cancel);
     }
     /// A creative-mode player sets a slot of their inventory from the
@@ -3352,7 +3352,7 @@ impl Game<'_> {
         item: &str,
         count: i32,
         cancel: &mut bool,
-    ) {
+    ) { let (slot,count,) = match crate::points_generated::P3588.get() { Some(__l) => { let mut __a = (slot,count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,count,) };
         mod_api::dispatch_creative_slot(self, player, name, slot, item, count, cancel);
     }
     /// A server player's game mode is about to change (NeoForge's
@@ -3373,7 +3373,7 @@ impl Game<'_> {
         from: i32,
         to: i32,
         cancel: &mut bool,
-    ) {
+    ) { let (from,to,) = match crate::points_generated::P3587.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,to,) };
         mod_api::dispatch_player_game_mode_changed(self, player, name, from, to, cancel);
     }
     /// `player` (`name`) changed dimension (NeoForge's
@@ -3400,7 +3400,7 @@ impl Game<'_> {
         name: &str,
         from: &str,
         to: &str,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3586.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_changed_dimension(self, player, name, from, to);
     }
     /// A player's client started (`flying`) or stopped flying (vanilla's
@@ -3419,12 +3419,12 @@ impl Game<'_> {
         name: &str,
         flying: bool,
         cancel: &mut bool,
-    ) {
+    ) { let (flying,) = match crate::points_generated::P3585.get() { Some(__l) => { let mut __a = (flying,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (flying,) };
         mod_api::dispatch_player_toggle_flight(self, player, name, flying, cancel);
     }
     /// A guest's client changed sneaking in its player input packet, after the hub applied the new state.
     /// The guest's state is swapped in. Server-side.
-    pub(super) fn native_player_toggle_sneak(&mut self, player: u128, name: &str, sneaking: bool) {
+    pub(super) fn native_player_toggle_sneak(&mut self, player: u128, name: &str, sneaking: bool) { let (sneaking,) = match crate::points_generated::P3584.get() { Some(__l) => { let mut __a = (sneaking,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (sneaking,) };
         mod_api::dispatch_player_toggle_sneak(self, player, name, sneaking);
     }
     /// A player finished editing a sign: `ServerGamePacketListenerImpl.updateSignText`
@@ -3451,7 +3451,7 @@ impl Game<'_> {
         front: bool,
         lines: &mut Vec<String>,
         cancel: &mut bool,
-    ) {
+    ) { let (pos,front,) = match crate::points_generated::P3583.get() { Some(__l) => { let mut __a = (pos,front,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,front,) };
         mod_api::dispatch_sign_changed(self, player, name, dimension, pos, front, lines, cancel);
     }
     /// A command a player typed (NeoForge's `CommandEvent`, before
@@ -3473,7 +3473,7 @@ impl Game<'_> {
         command: &str,
         canceled: &mut bool,
         replies: &mut Vec<Text>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3582.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_command(self, player, name, command, replies, canceled);
     }
     /// A command a mod registered, typed on the dedicated server's console
@@ -3484,7 +3484,7 @@ impl Game<'_> {
     /// player-only helpers give nothing; `native_feedback` answers on the
     /// console. A name no mod registered goes to vanilla's dispatcher as
     /// before.
-    pub(super) fn native_perform_console_command(&mut self, command: &str, ran: &mut bool) {
+    pub(super) fn native_perform_console_command(&mut self, command: &str, ran: &mut bool) { if let Some(__l) = crate::points_generated::P3581.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_perform_console_command(self, command, ran);
     }
     /// A server player's ender pearl landed and is about to teleport them
@@ -3507,7 +3507,7 @@ impl Game<'_> {
         target: &mut [f64; 3],
         damage: &mut f32,
         cancel: &mut bool,
-    ) {
+    ) { let (pearl,from,) = match crate::points_generated::P3580.get() { Some(__l) => { let mut __a = (pearl,from,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pearl,from,) };
         mod_api::dispatch_ender_pearl_teleport(
             self, player, name, pearl, from, target, damage, cancel,
         );
@@ -3529,7 +3529,7 @@ impl Game<'_> {
         from: [f64; 3],
         target: &mut [f64; 3],
         cancel: &mut bool,
-    ) {
+    ) { let (from,) = match crate::points_generated::P3579.get() { Some(__l) => { let mut __a = (from,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,) };
         mod_api::dispatch_chorus_fruit_teleport(self, player, name, from, target, cancel);
     }
     /// Armor is about to take durability damage from a hit (NeoForge's
@@ -3551,7 +3551,7 @@ impl Game<'_> {
         source: &HurtSource<'_>,
         entries: &mut Vec<mod_api::NativeArmorHurt>,
         cancel: &mut bool,
-    ) {
+    ) { let (entity,) = match crate::points_generated::P3578.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_armor_hurt(self, player, entity, kind, source, entries, cancel);
     }
     /// A mob is about to destroy a block (NeoForge's `LivingDestroyBlockEvent`):
@@ -3569,7 +3569,7 @@ impl Game<'_> {
         pos: [i32; 3],
         state: BlockStateId,
         cancel: &mut bool,
-    ) {
+    ) { let (entity,pos,) = match crate::points_generated::P3577.get() { Some(__l) => { let mut __a = (entity,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,pos,) };
         mod_api::dispatch_living_destroy_block(self, entity, kind, pos, state, cancel);
     }
     /// A server entity is about to be placed by `/spreadplayers` (NeoForge's
@@ -3589,7 +3589,7 @@ impl Game<'_> {
         from: [f64; 3],
         target: &mut [f64; 3],
         cancel: &mut bool,
-    ) {
+    ) { let (entity,from,) = match crate::points_generated::P3576.get() { Some(__l) => { let mut __a = (entity,from,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,from,) };
         mod_api::dispatch_spread_players_teleport(
             self, dimension, entity, player, from, target, cancel,
         );
@@ -3609,7 +3609,7 @@ impl Game<'_> {
         pos: [f64; 3],
         cause: Option<u32>,
         cancel: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3575.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_vanilla_game_event(self, dimension, event, pos, cause, cancel);
     }
     /// A server player a command teleported (NeoForge's
@@ -3630,7 +3630,7 @@ impl Game<'_> {
         from: [f64; 3],
         to: [f64; 3],
         dimension: &str,
-    ) {
+    ) { let (from,to,) = match crate::points_generated::P3574.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,to,) };
         mod_api::dispatch_player_teleported(self, player, name, from, to, dimension);
     }
     /// A player whose login the server has accepted (NeoForge's
@@ -3652,7 +3652,7 @@ impl Game<'_> {
         name: &str,
         cancel: &mut bool,
         reason: &mut Option<Text>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3573.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_login(self, player, name, reason, cancel);
     }
     /// The command tree a server sends a player (NeoForge's and Paper's
@@ -3674,7 +3674,7 @@ impl Game<'_> {
         player: u128,
         name: &str,
         names: &mut Vec<String>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3572.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_commands_sent(self, player, name, names);
     }
     /// A server player's sprint started or stopped: their client sent
@@ -3685,7 +3685,7 @@ impl Game<'_> {
     /// what the server does: a sprint that ends by itself (a hit's knockback,
     /// hunger, a wall) is not reported. The player's state is swapped in, so
     /// the helpers and `native_tell` work. Once for each change, on a server.
-    pub(super) fn native_player_sprint(&mut self, player: u128, name: &str, sprinting: bool) {
+    pub(super) fn native_player_sprint(&mut self, player: u128, name: &str, sprinting: bool) { let (sprinting,) = match crate::points_generated::P3571.get() { Some(__l) => { let mut __a = (sprinting,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (sprinting,) };
         mod_api::dispatch_player_sprint(self, player, name, sprinting);
     }
     /// A server player's client answered a resource pack in play (vanilla's
@@ -3698,7 +3698,7 @@ impl Game<'_> {
     /// (`resource-pack` in `server.properties`) is answered before the
     /// player has joined, and those answers are not heard. Once for each
     /// answer, on a server.
-    pub(super) fn native_resource_pack_status(&mut self, player: u128, name: &str, status: i32) {
+    pub(super) fn native_resource_pack_status(&mut self, player: u128, name: &str, status: i32) { let (status,) = match crate::points_generated::P3570.get() { Some(__l) => { let mut __a = (status,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (status,) };
         mod_api::dispatch_resource_pack_status(self, player, name, status);
     }
     /// A server player places a hanging entity: an item frame
@@ -3719,7 +3719,7 @@ impl Game<'_> {
         kind: &str,
         pos: [i32; 3],
         cancel: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3569.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_hanging_place(self, player, name, kind, pos, cancel);
     }
     /// An item frame (`minecraft:item_frame`, `minecraft:glow_item_frame`) or
@@ -3738,7 +3738,7 @@ impl Game<'_> {
         kind: &str,
         pos: [i32; 3],
         cancel: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3568.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_hanging_break(self, player, kind, pos, cancel);
     }
     /// A server player empties a bucket at `pos` (`fluid`: `minecraft:water`,
@@ -3757,7 +3757,7 @@ impl Game<'_> {
         pos: [i32; 3],
         fluid: &str,
         cancel: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3567.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_bucket_empty(self, player, name, pos, fluid, cancel);
     }
     /// TNT at `pos` is about to be lit (primed): a flint and steel or a fire
@@ -3776,7 +3776,7 @@ impl Game<'_> {
         player: Option<u128>,
         pos: [i32; 3],
         cancel: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3566.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_tnt_primed(self, player, pos, cancel);
     }
     /// A server player selected a new hotbar slot. The player's state is not swapped in. Set `cancel`
@@ -3788,7 +3788,7 @@ impl Game<'_> {
         from_slot: i32,
         to_slot: i32,
         cancel: &mut bool,
-    ) {
+    ) { let (from_slot,to_slot,) = match crate::points_generated::P3565.get() { Some(__l) => { let mut __a = (from_slot,to_slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from_slot,to_slot,) };
         mod_api::dispatch_player_item_held(self, player, name, from_slot, to_slot, cancel);
     }
     /// A server player picked an item from a block or entity, before it enters the hotbar. `pos` is
@@ -3802,7 +3802,7 @@ impl Game<'_> {
         pos: [i32; 3],
         entity_id: i32,
         cancel: &mut bool,
-    ) {
+    ) { let (from_entity,pos,entity_id,) = match crate::points_generated::P3564.get() { Some(__l) => { let mut __a = (from_entity,pos,entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from_entity,pos,entity_id,) };
         mod_api::dispatch_player_pick_item(self, player, name, from_entity, pos, entity_id, cancel);
     }
     /// A server player tries to sleep in the bed whose head is at `pos`
@@ -3820,7 +3820,7 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         problem: &mut Option<String>,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3563.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_can_player_sleep(self, player, name, pos, problem);
     }
     /// A server player is about to enter a bed after the sleep checks pass. Set `cancel` to keep them
@@ -3831,12 +3831,12 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         cancel: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3562.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_player_bed_enter(self, player, name, pos, cancel);
     }
     /// A server player woke or stood up from the bed at `pos`, after their
     /// sleeping state changed.
-    pub(super) fn native_player_bed_leave(&mut self, player: u128, name: &str, pos: [i32; 3]) {
+    pub(super) fn native_player_bed_leave(&mut self, player: u128, name: &str, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P3561.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_player_bed_leave(self, player, name, pos);
     }
     /// `CanContinueSleepingEvent`: a sleeping living entity's check that it may go on
@@ -3856,7 +3856,7 @@ impl Game<'_> {
         pos: [i32; 3],
         problem: Option<SleepProblem>,
         may_continue: &mut Option<bool>,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3560.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_can_continue_sleeping(
             self,
             entity,
@@ -3879,7 +3879,7 @@ impl Game<'_> {
         pos: [i32; 3],
         result: &mut Option<PhantomSpawnResult>,
         phantoms: &mut Option<i32>,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3559.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_player_spawn_phantoms(self, player, name, pos, phantoms, result);
     }
     /// A server player's book edit or signing packet is about to be applied. `pages` is its page
@@ -3891,7 +3891,7 @@ impl Game<'_> {
         pages: i32,
         signing: bool,
         cancel: &mut bool,
-    ) {
+    ) { let (pages,signing,) = match crate::points_generated::P3558.get() { Some(__l) => { let mut __a = (pages,signing,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pages,signing,) };
         mod_api::dispatch_player_edit_book(self, player, name, pages, signing, cancel);
     }
     /// A player shearing a mob is about to do so. Set `cancel` to leave the mob and shears unchanged.
@@ -3903,7 +3903,7 @@ impl Game<'_> {
         entity_id: i32,
         off_hand: bool,
         cancel: &mut bool,
-    ) {
+    ) { let (entity_id,off_hand,) = match crate::points_generated::P3557.get() { Some(__l) => { let mut __a = (entity_id,off_hand,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity_id,off_hand,) };
         mod_api::dispatch_player_shear_entity(self, player, name, entity_id, off_hand, cancel);
     }
     /// A server player completed an advancement, after progress was recorded.
@@ -3912,7 +3912,7 @@ impl Game<'_> {
         player: u128,
         name: &str,
         advancement: &str,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3556.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_advancement_done(self, player, name, advancement);
     }
     /// A criterion of a server player's advancement was granted or revoked, after its progress changed
@@ -3928,7 +3928,7 @@ impl Game<'_> {
         advancement: &str,
         criterion: &str,
         progress_type: NativeProgressType,
-    ) {
+    ) { let (player_entity_id,) = match crate::points_generated::P3555.get() { Some(__l) => { let mut __a = (player_entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,) };
         mod_api::dispatch_player_advancement_progress(
             self,
             player,
@@ -3950,7 +3950,7 @@ impl Game<'_> {
         stat: &str,
         value: i32,
         cancel: &mut bool,
-    ) {
+    ) { let (value,) = match crate::points_generated::P3554.get() { Some(__l) => { let mut __a = (value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (value,) };
         mod_api::dispatch_player_stat_award(self, player, name, stat_type, stat, value, cancel);
     }
     /// A server player's level is about to change through
@@ -3965,7 +3965,7 @@ impl Game<'_> {
         name: &str,
         levels: &mut i32,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3553.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_xp_level_change(self, player, name, levels, cancel);
     }
     /// A dying mob or player `entity` of `kind` is about to drop `original`
@@ -3982,7 +3982,7 @@ impl Game<'_> {
         original: i32,
         amount: &mut i32,
         cancel: &mut bool,
-    ) {
+    ) { let (entity,original,) = match crate::points_generated::P3552.get() { Some(__l) => { let mut __a = (entity,original,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,original,) };
         mod_api::dispatch_living_experience_drop(
             self,
             entity,
@@ -4024,7 +4024,7 @@ impl Game<'_> {
         recently_hit: bool,
         drops: &mut Vec<NativeItemDrop>,
         cancel: &mut bool,
-    ) {
+    ) { let (entity,recently_hit,) = match crate::points_generated::P3551.get() { Some(__l) => { let mut __a = (entity,recently_hit,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,recently_hit,) };
         mod_api::dispatch_living_drops(
             self,
             entity,
@@ -4061,7 +4061,7 @@ impl Game<'_> {
         original_chance: f32,
         preserved: bool,
         chance: &mut f32,
-    ) {
+    ) { let (entity,recently_hit,original_chance,preserved,) = match crate::points_generated::P3550.get() { Some(__l) => { let mut __a = (entity,recently_hit,original_chance,preserved,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,recently_hit,original_chance,preserved,) };
         mod_api::dispatch_get_equipment_drop_chance(
             self,
             entity,
@@ -4088,7 +4088,7 @@ impl Game<'_> {
         name: &str,
         amount: &mut i32,
         cancel: &mut bool,
-    ) {
+    ) { let (player_entity_id,) = match crate::points_generated::P3549.get() { Some(__l) => { let mut __a = (player_entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,) };
         mod_api::dispatch_player_xp_change(self, player, player_entity_id, name, amount, cancel);
     }
     /// An item cooldown is about to start for a server player. `item` is the item id and `ticks` its
@@ -4101,7 +4101,7 @@ impl Game<'_> {
         item: &str,
         ticks: i32,
         cancel: &mut bool,
-    ) {
+    ) { let (ticks,) = match crate::points_generated::P3548.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         mod_api::dispatch_player_item_cooldown(self, player, name, item, ticks, cancel);
     }
     /// A recipe is about to be unlocked for a server player. Set `cancel` to keep it locked. The
@@ -4112,7 +4112,7 @@ impl Game<'_> {
         name: &str,
         recipe: &str,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3547.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_recipe_discovered(self, player, name, recipe, cancel);
     }
     /// NeoForge's `PlayerSetSpawnEvent`: a server player's respawn point is about to be
@@ -4133,7 +4133,7 @@ impl Game<'_> {
         pos: Option<[i32; 3]>,
         forced: bool,
         cancel: &mut bool,
-    ) {
+    ) { let (player_entity_id,forced,) = match crate::points_generated::P3546.get() { Some(__l) => { let mut __a = (player_entity_id,forced,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,forced,) };
         mod_api::dispatch_player_set_spawn(
             self,
             player,
@@ -4161,7 +4161,7 @@ impl Game<'_> {
         old: NativePermissionLevel,
         new: NativePermissionLevel,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3545.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_permissions_changed(
             self,
             player,
@@ -4184,7 +4184,7 @@ impl Game<'_> {
         name: &str,
         distance: f64,
         multiplier: f32,
-    ) {
+    ) { let (player_entity_id,distance,multiplier,) = match crate::points_generated::P3544.get() { Some(__l) => { let mut __a = (player_entity_id,distance,multiplier,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,distance,multiplier,) };
         mod_api::dispatch_player_flyable_fall(
             self,
             player,
@@ -4205,7 +4205,7 @@ impl Game<'_> {
         to_dimension: &str,
         cause: &str,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3543.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_portal(
             self,
             player,
@@ -4219,7 +4219,7 @@ impl Game<'_> {
     /// A server player launched with a riptide trident, after the velocity,
     /// spin attack and grounded lift have been applied. The player's state is
     /// swapped in. No reply is needed.
-    pub(super) fn native_player_riptide(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_riptide(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3542.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_riptide(self, player, name);
     }
     /// A server player's fishing rod, with `state`: 0 the cast
@@ -4241,7 +4241,7 @@ impl Game<'_> {
         name: &str,
         state: i32,
         cancel: &mut bool,
-    ) {
+    ) { let (state,) = match crate::points_generated::P3541.get() { Some(__l) => { let mut __a = (state,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (state,) };
         mod_api::dispatch_player_fish(self, player, name, state, cancel);
     }
     /// A sculk sensor or shrieker received a vibration for `event` at `pos`.
@@ -4253,7 +4253,7 @@ impl Game<'_> {
         block: &str,
         event: &str,
         cancel: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3540.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_block_receive_game(self, dimension, pos, block, event, cancel);
     }
     /// A dispenser sheared `entity` of kind `kind` at the block in front of
@@ -4264,7 +4264,7 @@ impl Game<'_> {
         pos: [i32; 3],
         entity: u32,
         kind: &str,
-    ) {
+    ) { let (pos,entity,) = match crate::points_generated::P3539.get() { Some(__l) => { let mut __a = (pos,entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,entity,) };
         mod_api::dispatch_block_shear_entity(self, dimension, pos, entity, kind);
     }
     /// A dispenser equipped `item` on the first eligible `target` in front
@@ -4277,20 +4277,20 @@ impl Game<'_> {
         pos: [i32; 3],
         item: &str,
         target: &str,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3538.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_block_dispense_armor(self, dimension, pos, item, target);
     }
     /// A brewing stand at `pos` began brewing `ingredient`, after fuel and the timer were set. Server-side.
-    pub(super) fn native_brewing_start(&mut self, pos: [i32; 3], ingredient: &str) {
+    pub(super) fn native_brewing_start(&mut self, pos: [i32; 3], ingredient: &str) { let (pos,) = match crate::points_generated::P3537.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_brewing_start(self, pos, ingredient);
     }
     /// A brewing stand at `pos` consumed `fuel` and gained brewing fuel. Server-side.
-    pub(super) fn native_brewing_fuel(&mut self, pos: [i32; 3], fuel: &str) {
+    pub(super) fn native_brewing_fuel(&mut self, pos: [i32; 3], fuel: &str) { let (pos,) = match crate::points_generated::P3536.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_brewing_fuel(self, pos, fuel);
     }
     /// A brewing stand finished brewing at `pos`, after its bottle contents
     /// were changed. Server-side.
-    pub(super) fn native_brewing_complete(&mut self, pos: [i32; 3]) {
+    pub(super) fn native_brewing_complete(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P3535.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_brewing_complete(self, pos);
     }
     /// A server player took `stack` from a brewing stand bottle slot
@@ -4301,7 +4301,7 @@ impl Game<'_> {
         player: u128,
         player_entity_id: i32,
         stack: &ItemStack,
-    ) {
+    ) { let (player_entity_id,) = match crate::points_generated::P3534.get() { Some(__l) => { let mut __a = (player_entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,) };
         mod_api::dispatch_player_brewed_potion(self, player, player_entity_id, stack);
     }
     /// A brewing stand at `pos` is about to brew (`PotionBrewEvent.Pre`,
@@ -4316,7 +4316,7 @@ impl Game<'_> {
         pos: [i32; 3],
         stacks: &mut [Option<ItemStack>; 5],
         cancel: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3533.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_potion_brew_pre(self, pos, stacks, cancel);
     }
     /// A brewing stand at `pos` brewed (`PotionBrewEvent.Post`, at the end of
@@ -4329,7 +4329,7 @@ impl Game<'_> {
         &mut self,
         pos: [i32; 3],
         stacks: &mut [Option<ItemStack>; 5],
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3532.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_potion_brew_post(self, pos, stacks);
     }
     /// `FurnaceResultSlot.checkTakeAchievements` ran for a server player at a
@@ -4347,7 +4347,7 @@ impl Game<'_> {
         player_entity_id: i32,
         stack: Option<&ItemStack>,
         amount_removed: u32,
-    ) {
+    ) { let (player_entity_id,amount_removed,) = match crate::points_generated::P3531.get() { Some(__l) => { let mut __a = (player_entity_id,amount_removed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,amount_removed,) };
         mod_api::dispatch_item_smelted(self, player, player_entity_id, stack, amount_removed);
     }
     /// A server player enchanted `item` at an enchanting table
@@ -4361,7 +4361,7 @@ impl Game<'_> {
         player_entity_id: i32,
         item: &ItemStack,
         enchantments: &[(std::sync::Arc<str>, u32)],
-    ) {
+    ) { let (player_entity_id,) = match crate::points_generated::P3530.get() { Some(__l) => { let mut __a = (player_entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,) };
         mod_api::dispatch_player_enchant_item(self, player, player_entity_id, item, enchantments);
     }
     /// An enchanting table at `pos` drew the level of one offer
@@ -4376,23 +4376,23 @@ impl Game<'_> {
         pos: [i32; 3],
         offer: &mod_api::stations::EnchantmentRow<'_>,
         level: &mut i32,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3529.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_enchantment_level_set(self, pos, offer, level);
     }
     /// An item was placed on a campfire at `pos` and began cooking.
-    pub(super) fn native_campfire_start(&mut self, pos: [i32; 3], item: &str) {
+    pub(super) fn native_campfire_start(&mut self, pos: [i32; 3], item: &str) { let (pos,) = match crate::points_generated::P3528.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_campfire_start(self, pos, item);
     }
     /// A block finished cooking `item` into `result` at `pos`.
-    pub(super) fn native_block_cook(&mut self, pos: [i32; 3], item: &str, result: &str) {
+    pub(super) fn native_block_cook(&mut self, pos: [i32; 3], item: &str, result: &str) { let (pos,) = match crate::points_generated::P3527.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_block_cook(self, pos, item, result);
     }
     /// A compostable item was added to the composter at `pos`.
-    pub(super) fn native_compost_item(&mut self, pos: [i32; 3], item: &str) {
+    pub(super) fn native_compost_item(&mut self, pos: [i32; 3], item: &str) { let (pos,) = match crate::points_generated::P3526.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_compost_item(self, pos, item);
     }
     /// A crafter at `pos` completed recipe `recipe`.
-    pub(super) fn native_crafter_craft(&mut self, pos: [i32; 3], recipe: &str) {
+    pub(super) fn native_crafter_craft(&mut self, pos: [i32; 3], recipe: &str) { let (pos,) = match crate::points_generated::P3525.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_crafter_craft(self, pos, recipe);
     }
     /// A server player is about to open an inventory supplied by a block at
@@ -4404,19 +4404,19 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         cancel: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3524.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_inventory_block_start(self, player, name, pos, cancel);
     }
 
     /// A sculk catalyst at `pos` has begun blooming after taking experience.
     /// The catalyst block state has changed. Server-side.
-    pub(super) fn native_sculk_bloom(&mut self, dimension: &str, pos: [i32; 3]) {
+    pub(super) fn native_sculk_bloom(&mut self, dimension: &str, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P3523.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_sculk_bloom(self, dimension, pos);
     }
 
     /// A projectile hit the target block at `pos`, which now has `strength`
     /// output power. Server-side.
-    pub(super) fn native_target_hit(&mut self, dimension: &str, pos: [i32; 3], strength: i32) {
+    pub(super) fn native_target_hit(&mut self, dimension: &str, pos: [i32; 3], strength: i32) { let (pos,strength,) = match crate::points_generated::P3522.get() { Some(__l) => { let mut __a = (pos,strength,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,strength,) };
         mod_api::dispatch_target_hit(self, dimension, pos, strength);
     }
 
@@ -4427,7 +4427,7 @@ impl Game<'_> {
         dimension: &str,
         pos: [i32; 3],
         state: &str,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3521.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_vault_change_state(self, dimension, pos, state);
     }
 
@@ -4437,7 +4437,7 @@ impl Game<'_> {
         dimension: &str,
         pos: [i32; 3],
         item: &str,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3520.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_block_failed_dispense(self, dimension, pos, item);
     }
 
@@ -4448,7 +4448,7 @@ impl Game<'_> {
         dimension: &str,
         pos: [i32; 3],
         active: bool,
-    ) {
+    ) { let (pos,active,) = match crate::points_generated::P3519.get() { Some(__l) => { let mut __a = (pos,active,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,active,) };
         mod_api::dispatch_beacon_state_change(self, dimension, pos, active);
     }
 
@@ -4460,7 +4460,7 @@ impl Game<'_> {
         pos: [i32; 3],
         from: &str,
         to: &str,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3518.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_anvil_damaged(self, dimension, pos, from, to);
     }
 
@@ -4472,7 +4472,7 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         progress: i32,
-    ) {
+    ) { let (pos,progress,) = match crate::points_generated::P3517.get() { Some(__l) => { let mut __a = (pos,progress,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,progress,) };
         mod_api::dispatch_block_break_progress_update(self, player, name, pos, progress);
     }
 
@@ -4483,7 +4483,7 @@ impl Game<'_> {
         pos: [i32; 3],
         state: u32,
         can_harvest: &mut bool,
-    ) {
+    ) { let (player,pos,state,) = match crate::points_generated::P3516.get() { Some(__l) => { let mut __a = (player,pos,state,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player,pos,state,) };
         mod_api::dispatch_player_harvest_check(
             super::execution_role::host_side(self),
             player,
@@ -4502,7 +4502,7 @@ impl Game<'_> {
         original_speed: f32,
         new_speed: &mut f32,
         canceled: &mut bool,
-    ) {
+    ) { let (player,pos,state,original_speed,) = match crate::points_generated::P3515.get() { Some(__l) => { let mut __a = (player,pos,state,original_speed,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player,pos,state,original_speed,) };
         mod_api::dispatch_player_break_speed(
             super::execution_role::host_side(self),
             player,
@@ -4522,13 +4522,13 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         locked: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3514.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_block_lock_check(self, player, name, pos, locked);
     }
 
     /// A server player reset their attack strength by swinging (`handlePunch`). The swing and reset
     /// have already happened. The player's state is not swapped in. Server-side.
-    pub(super) fn native_player_attack_cooldown_reset(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_attack_cooldown_reset(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3513.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_attack_cooldown_reset(self, player, name);
     }
     /// A server player caught a mob in a bucket, after it was removed and the filled bucket was given.
@@ -4539,7 +4539,7 @@ impl Game<'_> {
         name: &str,
         entity_id: i32,
         entity: &str,
-    ) {
+    ) { let (entity_id,) = match crate::points_generated::P3512.get() { Some(__l) => { let mut __a = (entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity_id,) };
         mod_api::dispatch_player_bucket_entity(self, player, name, entity_id, entity);
     }
     /// A server player changed a beacon's selected effects, after they were stored. Empty effect ids
@@ -4551,22 +4551,22 @@ impl Game<'_> {
         pos: [i32; 3],
         primary: &str,
         secondary: &str,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3511.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_player_change_beacon_effect(self, player, name, pos, primary, secondary);
     }
     /// A server player has slept for 100 ticks in a bed and now counts as deeply asleep for the
     /// night-skip check.
-    pub(super) fn native_player_deep_sleep(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_deep_sleep(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3510.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_deep_sleep(self, player, name);
     }
     /// A server player threw an egg, after its projectile was launched and the use was applied.
     /// Server-side.
-    pub(super) fn native_player_egg_throw(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_egg_throw(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3509.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_egg_throw(self, player, name);
     }
     /// A server player used a firework rocket to boost while gliding, after the rocket was launched
     /// and consumed. Server-side.
-    pub(super) fn native_player_elytra_boost(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_elytra_boost(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3508.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_elytra_boost(self, player, name);
     }
     /// A server player put a plant into a flower pot, after the potted block state was stored and the
@@ -4577,7 +4577,7 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         plant: &str,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3507.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_player_flower_pot_manipulate(self, player, name, pos, plant);
     }
     /// A server player inserted a book into a lectern, after the block entity and inventory changed.
@@ -4588,7 +4588,7 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         book: &str,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3506.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_player_insert_lectern_book(self, player, name, pos, book);
     }
     /// A server player took the book from a lectern, after the menu and block entity changed. `book`
@@ -4599,7 +4599,7 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         book: &str,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3505.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_player_take_lectern_book(self, player, name, pos, book);
     }
     /// A server player changed the page of a lectern, after its page and redstone pulse changed.
@@ -4610,7 +4610,7 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         page: i32,
-    ) {
+    ) { let (pos,page,) = match crate::points_generated::P3504.get() { Some(__l) => { let mut __a = (pos,page,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,page,) };
         mod_api::dispatch_player_lectern_page_change(self, player, name, pos, page);
     }
     /// A server player changed an item frame after its contents or rotation changed. `action` is
@@ -4624,7 +4624,7 @@ impl Game<'_> {
         action: &str,
         item: &str,
         rotation: u8,
-    ) {
+    ) { let (entity_id,rotation,) = match crate::points_generated::P3503.get() { Some(__l) => { let mut __a = (entity_id,rotation,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity_id,rotation,) };
         mod_api::dispatch_player_item_frame_change(
             self, player, name, entity_id, action, item, rotation,
         );
@@ -4638,12 +4638,12 @@ impl Game<'_> {
         item: &str,
         repair: u32,
         experience: u32,
-    ) {
+    ) { let (repair,experience,) = match crate::points_generated::P3502.get() { Some(__l) => { let mut __a = (repair,experience,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (repair,experience,) };
         mod_api::dispatch_player_item_mend(self, player, name, item, repair, experience);
     }
     /// A server player completed a villager or wandering trader trade. `entity_id` is the merchant
     /// network id. Server-side.
-    pub(super) fn native_player_trade(&mut self, player: u128, name: &str, entity_id: u32) {
+    pub(super) fn native_player_trade(&mut self, player: u128, name: &str, entity_id: u32) { let (entity_id,) = match crate::points_generated::P3501.get() { Some(__l) => { let mut __a = (entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity_id,) };
         mod_api::dispatch_player_trade(self, player, name, entity_id);
     }
     /// A server player traded with a villager or a wandering trader
@@ -4661,12 +4661,12 @@ impl Game<'_> {
         merchant: u32,
         kind: &str,
         offer: &MerchantOffer,
-    ) {
+    ) { let (merchant,) = match crate::points_generated::P3500.get() { Some(__l) => { let mut __a = (merchant,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (merchant,) };
         mod_api::dispatch_trade_with_villager(self, merchant, kind, offer);
     }
     /// A server player's shield was disabled by a blocked melee hit. The shield cooldown is set
     /// immediately after this call. Server-side.
-    pub(super) fn native_player_shield_disable(&mut self, player: u128, name: &str, ticks: u32) {
+    pub(super) fn native_player_shield_disable(&mut self, player: u128, name: &str, ticks: u32) { let (ticks,) = match crate::points_generated::P3499.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         mod_api::dispatch_player_shield_disable(self, player, name, ticks);
     }
     /// A server player selected a loom pattern, after the loom menu accepted the button. `pattern` is
@@ -4676,7 +4676,7 @@ impl Game<'_> {
         player: u128,
         name: &str,
         pattern: i32,
-    ) {
+    ) { let (pattern,) = match crate::points_generated::P3498.get() { Some(__l) => { let mut __a = (pattern,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pattern,) };
         mod_api::dispatch_player_loom_pattern_select(self, player, name, pattern);
     }
     /// A server player named a mob with a name tag, after its name and persistence changed and the tag
@@ -4687,7 +4687,7 @@ impl Game<'_> {
         name: &str,
         entity_id: u32,
         entity_name: &str,
-    ) {
+    ) { let (entity_id,) = match crate::points_generated::P3497.get() { Some(__l) => { let mut __a = (entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity_id,) };
         mod_api::dispatch_player_name_entity(self, player, name, entity_id, entity_name);
     }
     /// A server player opened a sign for editing, after the editor state was made. `front` selects the
@@ -4698,7 +4698,7 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         front: bool,
-    ) {
+    ) { let (pos,front,) = match crate::points_generated::P3496.get() { Some(__l) => { let mut __a = (pos,front,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,front,) };
         mod_api::dispatch_player_open_sign(self, player, name, pos, front);
     }
     /// A server player picked up an arrow after it was removed and its pickup was applied. `item` is
@@ -4709,7 +4709,7 @@ impl Game<'_> {
         name: &str,
         entity_id: u32,
         item: &str,
-    ) {
+    ) { let (entity_id,) = match crate::points_generated::P3495.get() { Some(__l) => { let mut __a = (entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity_id,) };
         mod_api::dispatch_player_pickup_arrow(self, player, name, entity_id, item);
     }
     /// A server player selected a stonecutter recipe, after the menu accepted
@@ -4719,7 +4719,7 @@ impl Game<'_> {
         player: u128,
         name: &str,
         recipe: i32,
-    ) {
+    ) { let (recipe,) = match crate::points_generated::P3494.get() { Some(__l) => { let mut __a = (recipe,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (recipe,) };
         mod_api::dispatch_player_stonecutter_recipe_select(self, player, name, recipe);
     }
     /// A server player stopped spectating `entity_id`, after their camera returned to the player.
@@ -4728,11 +4728,11 @@ impl Game<'_> {
         player: u128,
         name: &str,
         entity_id: i32,
-    ) {
+    ) { let (entity_id,) = match crate::points_generated::P3493.get() { Some(__l) => { let mut __a = (entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity_id,) };
         mod_api::dispatch_player_stop_spectating_entity(self, player, name, entity_id);
     }
     /// A server applied `velocity` to a player, when syncing changed motion to that player's client.
-    pub(super) fn native_player_velocity(&mut self, player: u128, name: &str, velocity: [f64; 3]) {
+    pub(super) fn native_player_velocity(&mut self, player: u128, name: &str, velocity: [f64; 3]) { let (velocity,) = match crate::points_generated::P3492.get() { Some(__l) => { let mut __a = (velocity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (velocity,) };
         mod_api::dispatch_player_velocity(self, player, name, velocity);
     }
     /// A server player removed an entity's leash, after it was cleared.
@@ -4741,7 +4741,7 @@ impl Game<'_> {
         player: u128,
         name: &str,
         entity_id: u32,
-    ) {
+    ) { let (entity_id,) = match crate::points_generated::P3491.get() { Some(__l) => { let mut __a = (entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity_id,) };
         mod_api::dispatch_player_unleash_entity(self, player, name, entity_id);
     }
     /// A server player toggled an ageable mob's age lock with a golden
@@ -4752,7 +4752,7 @@ impl Game<'_> {
         name: &str,
         entity_id: u32,
         locked: bool,
-    ) {
+    ) { let (entity_id,locked,) = match crate::points_generated::P3490.get() { Some(__l) => { let mut __a = (entity_id,locked,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity_id,locked,) };
         mod_api::dispatch_player_toggle_entity_age_lock(self, player, name, entity_id, locked);
     }
     /// A server player swapped their main and off hands, after both inventory slots changed.
@@ -4762,12 +4762,12 @@ impl Game<'_> {
         player: u128,
         name: &str,
         slot: &str,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3489.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_swap_with_equipment_slot(self, player, name, slot);
     }
     /// A server player filled an empty map, after the filled map and its saved data were created.
     /// Server-side.
-    pub(super) fn native_player_map_filled(&mut self, player: u128, name: &str, map_id: i32) {
+    pub(super) fn native_player_map_filled(&mut self, player: u128, name: &str, map_id: i32) { let (map_id,) = match crate::points_generated::P3488.get() { Some(__l) => { let mut __a = (map_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (map_id,) };
         mod_api::dispatch_player_map_filled(self, player, name, map_id);
     }
     /// A server player is about to travel through an End gateway at `gateway`. Set `cancel` to leave
@@ -4778,7 +4778,7 @@ impl Game<'_> {
         name: &str,
         gateway: [i32; 3],
         cancel: &mut bool,
-    ) {
+    ) { let (gateway,) = match crate::points_generated::P3487.get() { Some(__l) => { let mut __a = (gateway,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gateway,) };
         mod_api::dispatch_player_teleport_end_gateway(self, player, name, gateway, cancel);
     }
     /// A server player's recipe book requested a known recipe be placed in
@@ -4790,7 +4790,7 @@ impl Game<'_> {
         name: &str,
         recipe: &str,
         all: bool,
-    ) {
+    ) { let (all,) = match crate::points_generated::P3486.get() { Some(__l) => { let mut __a = (all,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (all,) };
         mod_api::dispatch_player_recipe_book_click(self, player, name, recipe, all);
     }
     /// A server player's XP orb pickup cooldown changed to `ticks`. It is
@@ -4800,7 +4800,7 @@ impl Game<'_> {
         player: u128,
         name: &str,
         ticks: u32,
-    ) {
+    ) { let (ticks,) = match crate::points_generated::P3485.get() { Some(__l) => { let mut __a = (ticks,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (ticks,) };
         mod_api::dispatch_player_exp_cooldown_change(self, player, name, ticks);
     }
     /// NeoForge's `ClientInformationUpdatedEvent`: a server player's client sent new
@@ -4816,7 +4816,7 @@ impl Game<'_> {
         name: &str,
         old: &mod_api::NativeClientInfo,
         new: &mod_api::NativeClientInfo,
-    ) {
+    ) { let (player_entity_id,) = match crate::points_generated::P3484.get() { Some(__l) => { let mut __a = (player_entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,) };
         mod_api::dispatch_client_information_updated(
             self,
             player,
@@ -4839,7 +4839,7 @@ impl Game<'_> {
         id: &str,
         payload: Option<&Tag>,
         cancel: &mut bool,
-    ) {
+    ) { let (player_entity_id,) = match crate::points_generated::P3483.get() { Some(__l) => { let mut __a = (player_entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,) };
         mod_api::dispatch_custom_click_action(
             self,
             player,
@@ -4861,13 +4861,13 @@ impl Game<'_> {
         entity: u32,
         from: [f64; 3],
         to: [f64; 3],
-    ) {
+    ) { let (entity,from,to,) = match crate::points_generated::P3482.get() { Some(__l) => { let mut __a = (entity,from,to,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,from,to,) };
         mod_api::dispatch_entity_teleport(self, dimension, entity, from, to);
     }
 
     /// A server entity finished its portal wait and is beginning to leave
     /// `dimension` through `pos`. The destination follows the portal rules.
-    pub(super) fn native_entity_portal(&mut self, dimension: &str, entity: u32, pos: [i32; 3]) {
+    pub(super) fn native_entity_portal(&mut self, dimension: &str, entity: u32, pos: [i32; 3]) { let (entity,pos,) = match crate::points_generated::P3481.get() { Some(__l) => { let mut __a = (entity,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,pos,) };
         mod_api::dispatch_entity_portal(self, dimension, entity, pos);
     }
 
@@ -4879,7 +4879,7 @@ impl Game<'_> {
         name: &str,
         entity: u32,
         kind: &str,
-    ) {
+    ) { let (entity,) = match crate::points_generated::P3480.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_projectile_launch(self, player, name, entity, kind);
     }
 
@@ -4891,7 +4891,7 @@ impl Game<'_> {
         name: &str,
         projectile: u32,
         force: f32,
-    ) {
+    ) { let (projectile,force,) = match crate::points_generated::P3479.get() { Some(__l) => { let mut __a = (projectile,force,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (projectile,force,) };
         mod_api::dispatch_entity_shoot_bow(self, player, name, projectile, force);
     }
 
@@ -4906,7 +4906,7 @@ impl Game<'_> {
         hand: Hand,
         has_ammo: bool,
         cancel: &mut bool,
-    ) {
+    ) { let (has_ammo,) = match crate::points_generated::P3478.get() { Some(__l) => { let mut __a = (has_ammo,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (has_ammo,) };
         mod_api::dispatch_arrow_nock(self, player, name, bow, hand, has_ammo, cancel);
     }
 
@@ -4924,7 +4924,7 @@ impl Game<'_> {
         kind: &str,
         weapon: &ItemStack,
         projectile: &mut Option<ItemStack>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3477.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_living_get_projectile(
             super::execution_role::host_side(self),
             player,
@@ -4938,7 +4938,7 @@ impl Game<'_> {
 
     /// A guest's fall flying state changed on the server. The change has
     /// already been applied.
-    pub(super) fn native_entity_toggle_glide(&mut self, player: u128, name: &str, gliding: bool) {
+    pub(super) fn native_entity_toggle_glide(&mut self, player: u128, name: &str, gliding: bool) { let (gliding,) = match crate::points_generated::P3476.get() { Some(__l) => { let mut __a = (gliding,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (gliding,) };
         mod_api::dispatch_entity_toggle_glide(self, player, name, gliding);
     }
 
@@ -4949,17 +4949,17 @@ impl Game<'_> {
         name: &str,
         from: &str,
         to: &str,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3475.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_entity_pose_change(self, player, name, from, to);
     }
 
     /// A dropped item entity was successfully added to the server level.
-    pub(super) fn native_item_spawn(&mut self, entity: u32, item: &str, count: i32, pos: [f64; 3]) {
+    pub(super) fn native_item_spawn(&mut self, entity: u32, item: &str, count: i32, pos: [f64; 3]) { let (entity,count,pos,) = match crate::points_generated::P3474.get() { Some(__l) => { let mut __a = (entity,count,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,count,pos,) };
         mod_api::dispatch_item_spawn(self, entity, item, count, pos);
     }
 
     /// A mob became tamed after its owner and persistent state were set.
-    pub(super) fn native_entity_tame(&mut self, entity: u32, kind: &str, owner: Option<u128>) {
+    pub(super) fn native_entity_tame(&mut self, entity: u32, kind: &str, owner: Option<u128>) { let (entity,) = match crate::points_generated::P3473.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_entity_tame(self, entity, kind, owner);
     }
 
@@ -4976,28 +4976,28 @@ impl Game<'_> {
         entity: u32,
         kind: &str,
         cancel: &mut bool,
-    ) {
+    ) { let (tamer_entity_id,entity,) = match crate::points_generated::P3472.get() { Some(__l) => { let mut __a = (tamer_entity_id,entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (tamer_entity_id,entity,) };
         mod_api::dispatch_animal_tame(self, tamer, tamer_entity_id, entity, kind, cancel);
     }
 
     /// Two mobs completed a breeding action. `child` is absent when vanilla
     /// lays an egg instead of creating a baby.
-    pub(super) fn native_entity_breed(&mut self, parent: u32, partner: u32, child: Option<u32>) {
+    pub(super) fn native_entity_breed(&mut self, parent: u32, partner: u32, child: Option<u32>) { let (parent,partner,) = match crate::points_generated::P3471.get() { Some(__l) => { let mut __a = (parent,partner,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (parent,partner,) };
         mod_api::dispatch_entity_breed(self, parent, partner, child);
     }
 
     /// A furnace at `pos` began cooking `item` (its cooking timer advanced
     /// from zero). Server-side.
-    pub(super) fn native_furnace_start_smelt(&mut self, pos: [i32; 3], item: &str) {
+    pub(super) fn native_furnace_start_smelt(&mut self, pos: [i32; 3], item: &str) { let (pos,) = match crate::points_generated::P3470.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_furnace_start_smelt(self, pos, item);
     }
     /// A furnace at `pos` consumed fuel and began or resumed burning it.
     /// `fuel` is the item consumed from its fuel slot. Server-side.
-    pub(super) fn native_furnace_burn(&mut self, pos: [i32; 3], fuel: &str) {
+    pub(super) fn native_furnace_burn(&mut self, pos: [i32; 3], fuel: &str) { let (pos,) = match crate::points_generated::P3469.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_furnace_burn(self, pos, fuel);
     }
     /// A furnace finished smelting `item` into `result` at `pos`. Server-side.
-    pub(super) fn native_furnace_smelt(&mut self, pos: [i32; 3], item: &str, result: &str) {
+    pub(super) fn native_furnace_smelt(&mut self, pos: [i32; 3], item: &str, result: &str) { let (pos,) = match crate::points_generated::P3468.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_furnace_smelt(self, pos, item, result);
     }
     /// A server player took an output from a furnace at `pos`; `item` is the output item id and
@@ -5009,7 +5009,7 @@ impl Game<'_> {
         pos: [i32; 3],
         item: &str,
         count: u32,
-    ) {
+    ) { let (pos,count,) = match crate::points_generated::P3467.get() { Some(__l) => { let mut __a = (pos,count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,count,) };
         mod_api::dispatch_furnace_extract(self, player, name, pos, item, count);
     }
     /// A server player applied an enchantment at `pos`; `item` is the finished item and `levels` the levels charged. The player's state is not swapped in.
@@ -5020,7 +5020,7 @@ impl Game<'_> {
         pos: [i32; 3],
         item: &ItemStack,
         levels: i32,
-    ) {
+    ) { let (pos,levels,) = match crate::points_generated::P3466.get() { Some(__l) => { let mut __a = (pos,levels,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,levels,) };
         mod_api::dispatch_enchant_item(self, player, name, pos, item, levels);
     }
     /// Enchanting offers were calculated for a server player at `pos`. Change `costs` before they are sent to the menu.
@@ -5030,7 +5030,7 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         costs: &mut [i32; 3],
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3465.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_prepare_item_enchant(self, player, name, pos, costs);
     }
     /// A player took an anvil's result at `pos` (`AnvilCraftEvent.Pre`), before the levels are charged, the inputs used up and the anvil worn. `craft` holds the inputs and the result as they were before. Set `cancel` to refuse the take: the result stays in its slot and the inputs, levels, inventory and cursor are as before the click.
@@ -5041,7 +5041,7 @@ impl Game<'_> {
         pos: [i32; 3],
         craft: &mod_api::menu::AnvilCraft,
         cancel: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3464.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_anvil_craft_pre(self, player, name, pos, craft, cancel);
     }
     /// A player took an anvil's result at `pos` and the levels, inputs and anvil wear are done (`AnvilCraftEvent.Post`); a broken anvil is already air. `craft` holds the inputs and the result as they were before. Not called when `native_anvil_craft_pre` cancelled.
@@ -5051,7 +5051,7 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         craft: &mod_api::menu::AnvilCraft,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3463.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_anvil_craft_post(self, player, name, pos, craft);
     }
     /// An anvil at `pos` made vanilla's result with a left input, for
@@ -5070,7 +5070,7 @@ impl Game<'_> {
         pos: [i32; 3],
         update: &mut mod_api::menu::AnvilUpdate,
         cancel: &mut bool,
-    ) {
+    ) { let (player_entity_id,pos,) = match crate::points_generated::P3462.get() { Some(__l) => { let mut __a = (player_entity_id,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,pos,) };
         mod_api::dispatch_anvil_update(
             super::execution_role::host_side(self),
             player,
@@ -5094,7 +5094,7 @@ impl Game<'_> {
         pos: [i32; 3],
         place: &mut mod_api::menu::GrindstonePlace,
         cancel: &mut bool,
-    ) {
+    ) { let (player_entity_id,pos,) = match crate::points_generated::P3461.get() { Some(__l) => { let mut __a = (player_entity_id,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,pos,) };
         mod_api::dispatch_grindstone_place(self, player, player_entity_id, pos, place, cancel);
     }
     /// The server player `player` (UUID) and `player_entity_id` took a
@@ -5112,7 +5112,7 @@ impl Game<'_> {
         pos: [i32; 3],
         take: &mut mod_api::menu::GrindstoneTake,
         cancel: &mut bool,
-    ) {
+    ) { let (player_entity_id,pos,) = match crate::points_generated::P3460.get() { Some(__l) => { let mut __a = (player_entity_id,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,pos,) };
         mod_api::dispatch_grindstone_take(self, player, player_entity_id, pos, take, cancel);
     }
     /// A smithing result was prepared for a server player at `pos`. Change it before it is sent.
@@ -5122,7 +5122,7 @@ impl Game<'_> {
         name: &str,
         pos: [i32; 3],
         result: &mut Option<ItemStack>,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3459.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_prepare_smithing(self, player, name, pos, result);
     }
     /// A crafting-grid result was prepared for a server player; `pos` is the crafting table, or None for the inventory grid. Change `result` before it is sent.
@@ -5132,7 +5132,7 @@ impl Game<'_> {
         name: &str,
         pos: Option<[i32; 3]>,
         result: &mut Option<ItemStack>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3458.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_prepare_item_craft(self, player, name, pos, result);
     }
     /// A server player selected trade `index` from `villager` in the trading menu.
@@ -5142,7 +5142,7 @@ impl Game<'_> {
         name: &str,
         villager: Option<u32>,
         index: usize,
-    ) {
+    ) { let (index,) = match crate::points_generated::P3457.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         mod_api::dispatch_trade_select(self, player, name, villager, index);
     }
     /// The server changed its weather parameters. `raining` and `thundering`
@@ -5154,7 +5154,7 @@ impl Game<'_> {
         raining: bool,
         thundering: bool,
         cancel: &mut bool,
-    ) {
+    ) { let (raining,thundering,) = match crate::points_generated::P3456.get() { Some(__l) => { let mut __a = (raining,thundering,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (raining,thundering,) };
         mod_api::dispatch_weather_change(self, dimension, raining, thundering, cancel);
     }
 
@@ -5165,7 +5165,7 @@ impl Game<'_> {
         dimension: &str,
         thundering: bool,
         cancel: &mut bool,
-    ) {
+    ) { let (thundering,) = match crate::points_generated::P3455.get() { Some(__l) => { let mut __a = (thundering,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (thundering,) };
         mod_api::dispatch_thunder_change(self, dimension, thundering, cancel);
     }
 
@@ -5178,7 +5178,7 @@ impl Game<'_> {
         pos: [i32; 3],
         cause: &str,
         cancel: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3454.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_lightning_strike(self, player, pos, cause, cancel);
     }
 
@@ -5200,7 +5200,7 @@ impl Game<'_> {
         dimension: &str,
         current: i64,
         new_time: &mut i64,
-    ) {
+    ) { let (current,) = match crate::points_generated::P3453.get() { Some(__l) => { let mut __a = (current,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (current,) };
         mod_api::dispatch_sleep_finished_time(self, dimension, current, new_time);
     }
 
@@ -5224,7 +5224,7 @@ impl Game<'_> {
         child_size: i32,
         count: &mut u32,
         cancel: &mut bool,
-    ) {
+    ) { let (parent,size,child_size,) = match crate::points_generated::P3452.get() { Some(__l) => { let mut __a = (parent,size,child_size,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (parent,size,child_size,) };
         mod_api::dispatch_mob_split(self, parent, kind, size, child_size, count, cancel);
     }
 
@@ -5250,7 +5250,7 @@ impl Game<'_> {
         player_entity_id: Option<i32>,
         kind: &str,
         cancel: &mut bool,
-    ) {
+    ) { let (parent,partner,) = match crate::points_generated::P3451.get() { Some(__l) => { let mut __a = (parent,partner,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (parent,partner,) };
         mod_api::dispatch_baby_entity_spawn(
             self,
             parent,
@@ -5271,7 +5271,7 @@ impl Game<'_> {
         to: i64,
         cause: &str,
         cancel: &mut bool,
-    ) {
+    ) { let (from,to,) = match crate::points_generated::P3450.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,to,) };
         mod_api::dispatch_time_skip(self, dimension, from, to, cause, cancel);
     }
 
@@ -5286,12 +5286,12 @@ impl Game<'_> {
         pos: [i32; 3],
         entries: &mut Vec<SpawnEntry>,
         canceled: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3449.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_potential_spawns(self, dimension, category, pos, entries, canceled);
     }
 
     /// The world's spawn point changed to `pos` and `angle`.
-    pub(super) fn native_spawn_change(&mut self, pos: [i32; 3], angle: [f32; 2]) {
+    pub(super) fn native_spawn_change(&mut self, pos: [i32; 3], angle: [f32; 2]) { let (pos,angle,) = match crate::points_generated::P3448.get() { Some(__l) => { let mut __a = (pos,angle,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,angle,) };
         mod_api::dispatch_spawn_change(self, pos, angle);
     }
 
@@ -5306,18 +5306,18 @@ impl Game<'_> {
         rule: &str,
         value: GameRuleValue,
         actor: Option<&GameRuleActor<'_>>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3447.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_game_rule_changed(self, rule, value, actor);
     }
 
     /// The server world's border bounds changed, either immediately or when
     /// its timed size change was requested.
-    pub(super) fn native_world_border_bounds_changed(&mut self) {
+    pub(super) fn native_world_border_bounds_changed(&mut self) { if let Some(__l) = crate::points_generated::P3446.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_world_border_bounds_changed(self);
     }
 
     /// The server world's border center changed.
-    pub(super) fn native_world_border_center_changed(&mut self) {
+    pub(super) fn native_world_border_center_changed(&mut self) { if let Some(__l) = crate::points_generated::P3445.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_world_border_center_changed(self);
     }
 
@@ -5325,7 +5325,7 @@ impl Game<'_> {
     /// was made for an arrival. `pos` is the lower corner of the Nether
     /// portal rectangle or the End platform origin. The completed blocks are
     /// already in the world.
-    pub(super) fn native_portal_create(&mut self, dimension: &str, pos: [i32; 3]) {
+    pub(super) fn native_portal_create(&mut self, dimension: &str, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P3444.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_portal_create(self, dimension, pos);
     }
 
@@ -5337,7 +5337,7 @@ impl Game<'_> {
         player: u128,
         attempted_pos: [f64; 3],
         canceled: &mut bool,
-    ) {
+    ) { let (attempted_pos,) = match crate::points_generated::P3443.get() { Some(__l) => { let mut __a = (attempted_pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (attempted_pos,) };
         mod_api::dispatch_village_siege(self, dimension, player, attempted_pos, canceled);
     }
 
@@ -5349,25 +5349,25 @@ impl Game<'_> {
         pos: [i32; 3],
         wave: i32,
         raiders: usize,
-    ) {
+    ) { let (raid,pos,wave,raiders,) = match crate::points_generated::P3442.get() { Some(__l) => { let mut __a = (raid,pos,wave,raiders,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (raid,pos,wave,raiders,) };
         mod_api::dispatch_raid_spawn_wave(self, raid, pos, wave, raiders);
     }
 
     /// A raid at `pos` changed to `state` (`triggered`, `victory`, `loss` or
     /// `stopped`).
-    pub(super) fn native_raid_state_change(&mut self, raid: i32, pos: [i32; 3], state: &str) {
+    pub(super) fn native_raid_state_change(&mut self, raid: i32, pos: [i32; 3], state: &str) { let (raid,pos,) = match crate::points_generated::P3441.get() { Some(__l) => { let mut __a = (raid,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (raid,pos,) };
         mod_api::dispatch_raid_state_change(self, raid, pos, state);
     }
 
     /// The server completed a world save cycle. `wait` says chunk writes were
     /// flushed before returning.
-    pub(super) fn native_world_saved(&mut self, wait: bool) {
+    pub(super) fn native_world_saved(&mut self, wait: bool) { let (wait,) = match crate::points_generated::P3440.get() { Some(__l) => { let mut __a = (wait,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (wait,) };
         mod_api::dispatch_world_saved(self, wait);
     }
 
     /// Entities from `chunk` finished loading into the server world. `count`
     /// is the number of saved entity records read.
-    pub(super) fn native_entities_load(&mut self, dimension: &str, chunk: [i32; 2], count: usize) {
+    pub(super) fn native_entities_load(&mut self, dimension: &str, chunk: [i32; 2], count: usize) { let (chunk,count,) = match crate::points_generated::P3439.get() { Some(__l) => { let mut __a = (chunk,count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (chunk,count,) };
         mod_api::dispatch_entities_load(self, dimension, chunk, count);
     }
 
@@ -5378,7 +5378,7 @@ impl Game<'_> {
         dimension: &str,
         chunk: [i32; 2],
         count: usize,
-    ) {
+    ) { let (chunk,count,) = match crate::points_generated::P3438.get() { Some(__l) => { let mut __a = (chunk,count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (chunk,count,) };
         mod_api::dispatch_entities_unload(self, dimension, chunk, count);
     }
 
@@ -5391,18 +5391,18 @@ impl Game<'_> {
         command: &str,
         range: [usize; 2],
         suggestions: &mut Vec<Suggestion>,
-    ) {
+    ) { let (range,) = match crate::points_generated::P3437.get() { Some(__l) => { let mut __a = (range,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (range,) };
         mod_api::dispatch_tab_complete(self, player, name, command, range, suggestions);
     }
 
     /// A server broadcast line is about to be logged and sent. Change `line`
     /// or set `cancel` to drop it.
-    pub(super) fn native_broadcast_message(&self, line: &mut Text, cancel: &mut bool) {
+    pub(super) fn native_broadcast_message(&self, line: &mut Text, cancel: &mut bool) { if let Some(__l) = crate::points_generated::P3436.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_broadcast_message(self, line, cancel);
     }
 
     /// The dedicated server's whitelist changed to `enabled`.
-    pub(super) fn native_whitelist_state_update(&mut self, enabled: bool) {
+    pub(super) fn native_whitelist_state_update(&mut self, enabled: bool) { let (enabled,) = match crate::points_generated::P3435.get() { Some(__l) => { let mut __a = (enabled,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (enabled,) };
         mod_api::dispatch_whitelist_state_update(self, enabled);
     }
 
@@ -5413,7 +5413,7 @@ impl Game<'_> {
         entity: u32,
         kind: &str,
         player: Option<u128>,
-    ) {
+    ) { let (entity,) = match crate::points_generated::P3434.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_entity_enter_love_mode(self, entity, kind, player);
     }
 
@@ -5433,7 +5433,7 @@ impl Game<'_> {
         damage_type: &str,
         attacker: u32,
         cancel: &mut bool,
-    ) {
+    ) { let (entity,attacker,) = match crate::points_generated::P3433.get() { Some(__l) => { let mut __a = (entity,attacker,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,attacker,) };
         mod_api::dispatch_living_death(self, entity, kind, damage_type, attacker, cancel);
     }
 
@@ -5451,7 +5451,7 @@ impl Game<'_> {
         kind: &str,
         outcome: &str,
         cancel: &mut bool,
-    ) {
+    ) { let (entity,) = match crate::points_generated::P3432.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_living_conversion_pre(self, entity, kind, outcome, cancel);
     }
 
@@ -5465,37 +5465,37 @@ impl Game<'_> {
         kind: &str,
         converted: u32,
         converted_kind: &str,
-    ) {
+    ) { let (entity,converted,) = match crate::points_generated::P3431.get() { Some(__l) => { let mut __a = (entity,converted,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,converted,) };
         mod_api::dispatch_living_conversion_post(self, entity, kind, converted, converted_kind);
     }
 
     /// A thrown splash or lingering potion applied its hit effects.
-    pub(super) fn native_potion_splash(&mut self, item: &str, pos: [f64; 3]) {
+    pub(super) fn native_potion_splash(&mut self, item: &str, pos: [f64; 3]) { let (pos,) = match crate::points_generated::P3430.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_potion_splash(self, item, pos);
     }
 
     /// A firework rocket completed its explosion effects.
-    pub(super) fn native_firework_explode(&mut self, entity: u32, pos: [f64; 3], bursts: usize) {
+    pub(super) fn native_firework_explode(&mut self, entity: u32, pos: [f64; 3], bursts: usize) { let (entity,pos,bursts,) = match crate::points_generated::P3429.get() { Some(__l) => { let mut __a = (entity,pos,bursts,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,pos,bursts,) };
         mod_api::dispatch_firework_explode(self, entity, pos, bursts);
     }
 
     /// An experience bottle broke and its experience was awarded.
-    pub(super) fn native_exp_bottle(&mut self, pos: [f64; 3], experience: u32) {
+    pub(super) fn native_exp_bottle(&mut self, pos: [f64; 3], experience: u32) { let (pos,experience,) = match crate::points_generated::P3428.get() { Some(__l) => { let mut __a = (pos,experience,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,experience,) };
         mod_api::dispatch_exp_bottle(self, pos, experience);
     }
 
     /// A player ignited a creeper with an item.
-    pub(super) fn native_creeper_ignite(&mut self, entity: u32, player: u128, item: &str) {
+    pub(super) fn native_creeper_ignite(&mut self, entity: u32, player: u128, item: &str) { let (entity,) = match crate::points_generated::P3427.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_creeper_ignite(self, entity, player, item);
     }
 
     /// Lightning charged a creeper.
-    pub(super) fn native_creeper_power(&mut self, entity: u32, lightning: [f64; 3]) {
+    pub(super) fn native_creeper_power(&mut self, entity: u32, lightning: [f64; 3]) { let (entity,lightning,) = match crate::points_generated::P3426.get() { Some(__l) => { let mut __a = (entity,lightning,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,lightning,) };
         mod_api::dispatch_creeper_power(self, entity, lightning);
     }
 
     /// A mob broke the door at `pos`.
-    pub(super) fn native_entity_break_door(&mut self, entity: u32, kind: &str, pos: [i32; 3]) {
+    pub(super) fn native_entity_break_door(&mut self, entity: u32, kind: &str, pos: [i32; 3]) { let (entity,pos,) = match crate::points_generated::P3425.get() { Some(__l) => { let mut __a = (entity,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,pos,) };
         mod_api::dispatch_entity_break_door(self, entity, kind, pos);
     }
 
@@ -5507,7 +5507,7 @@ impl Game<'_> {
         pos: [i32; 3],
         from: &str,
         to: &str,
-    ) {
+    ) { let (entity,pos,) = match crate::points_generated::P3424.get() { Some(__l) => { let mut __a = (entity,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,pos,) };
         mod_api::dispatch_entity_change_block(self, entity, kind, pos, from, to);
     }
 
@@ -5518,18 +5518,18 @@ impl Game<'_> {
         kind: &str,
         pos: [i32; 3],
         block: &str,
-    ) {
+    ) { let (entity,pos,) = match crate::points_generated::P3423.get() { Some(__l) => { let mut __a = (entity,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,pos,) };
         mod_api::dispatch_entity_enter_block(self, entity, kind, pos, block);
     }
 
     /// A server player finished loading the world around them after joining, respawning or changing
     /// dimension. The guest's state is not swapped in. Server-side.
-    pub(super) fn native_player_client_loaded_world(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_client_loaded_world(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3422.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_client_loaded_world(self, player, name);
     }
     /// A server player released the use-item key before the item finished being used. The guest's
     /// state is not swapped in.
-    pub(super) fn native_player_stop_using_item(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_stop_using_item(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3421.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_stop_using_item(self, player, name);
     }
     /// A server player's recipe book open or filter setting changed. `book`
@@ -5541,14 +5541,14 @@ impl Game<'_> {
         book: i32,
         open: bool,
         filtering: bool,
-    ) {
+    ) { let (book,open,filtering,) = match crate::points_generated::P3420.get() { Some(__l) => { let mut __a = (book,open,filtering,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (book,open,filtering,) };
         mod_api::dispatch_player_recipe_book_settings_change(
             self, player, name, book, open, filtering,
         );
     }
     /// A server player released a drawn bow with `arrow` selected. The guest's
     /// state is not swapped in during packet handling.
-    pub(super) fn native_player_ready_arrow(&mut self, player: u128, name: &str, arrow: &str) {
+    pub(super) fn native_player_ready_arrow(&mut self, player: u128, name: &str, arrow: &str) { if let Some(__l) = crate::points_generated::P3419.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_ready_arrow(self, player, name, arrow);
     }
     /// A server player selected a bundle item in `slot` at `index`. The guest's
@@ -5559,19 +5559,19 @@ impl Game<'_> {
         name: &str,
         slot: i32,
         index: i32,
-    ) {
+    ) { let (slot,index,) = match crate::points_generated::P3418.get() { Some(__l) => { let mut __a = (slot,index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,index,) };
         mod_api::dispatch_player_bundle_item_select(self, player, name, slot, index);
     }
     /// A server player stopped digging `pos` before the block broke, after
     /// the server cleared the dig and sent the block back to the client.
     /// The player's state is not swapped in.
-    pub(super) fn native_block_damage_abort(&mut self, player: u128, name: &str, pos: [i32; 3]) {
+    pub(super) fn native_block_damage_abort(&mut self, player: u128, name: &str, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P3417.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_block_damage_abort(self, player, name, pos);
     }
     /// A hopper at `pos` began an item transfer attempt. This runs after its
     /// cooldown and enabled checks, before pushing or pulling any items.
     /// Server-side, including the single-player server.
-    pub(super) fn native_prepare_hopper_transfer(&mut self, pos: [i32; 3]) {
+    pub(super) fn native_prepare_hopper_transfer(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P3416.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_prepare_hopper_transfer(self, pos);
     }
     /// A hopper is about to move one item between containers, a composter's
@@ -5583,7 +5583,7 @@ impl Game<'_> {
         destination: [i32; 3],
         item: &str,
         cancel: &mut bool,
-    ) {
+    ) { let (source,destination,) = match crate::points_generated::P3415.get() { Some(__l) => { let mut __a = (source,destination,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (source,destination,) };
         mod_api::dispatch_inventory_move_item(self, source, destination, item, cancel);
     }
     /// A hopper selected a container while searching for items to push or
@@ -5593,23 +5593,23 @@ impl Game<'_> {
         hopper: [i32; 3],
         container: Option<[i32; 3]>,
         entity: Option<u32>,
-    ) {
+    ) { let (hopper,) = match crate::points_generated::P3414.get() { Some(__l) => { let mut __a = (hopper,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (hopper,) };
         mod_api::dispatch_hopper_inventory_search(self, hopper, container, entity);
     }
     /// A vault at `pos` is about to eject a loot item.
-    pub(super) fn native_vault_loot(&mut self, pos: [i32; 3], item: &str) {
+    pub(super) fn native_vault_loot(&mut self, pos: [i32; 3], item: &str) { let (pos,) = match crate::points_generated::P3413.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_vault_loot(self, pos, item);
     }
     /// A timed world-border size change finished on the server, after its
     /// final size was applied. Server-side, including the single-player
     /// server.
-    pub(super) fn native_world_border_bounds_change_finish(&mut self) {
+    pub(super) fn native_world_border_bounds_change_finish(&mut self) { if let Some(__l) = crate::points_generated::P3412.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_world_border_bounds_change_finish(self);
     }
 
     /// A server player launched a projectile item, after it was created.
     /// `item` is the projectile's held item.
-    pub(super) fn native_player_launch_projectile(&mut self, player: u128, name: &str, item: &str) {
+    pub(super) fn native_player_launch_projectile(&mut self, player: u128, name: &str, item: &str) { if let Some(__l) = crate::points_generated::P3411.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_launch_projectile(self, player, name, item);
     }
     /// A server explosion is about to happen (`ExplosionEvent.Start`, in
@@ -5622,7 +5622,7 @@ impl Game<'_> {
         &mut self,
         explosion: &NativeExplosionStart<'_>,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3410.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_explosion_start(self, explosion, cancel);
     }
     /// A server player `player` (UUID) and `player_entity_id` reeled in a
@@ -5641,13 +5641,13 @@ impl Game<'_> {
         fished: &NativeItemFished<'_>,
         rod_damage: &mut i32,
         cancel: &mut bool,
-    ) {
+    ) { let (player_entity_id,) = match crate::points_generated::P3409.get() { Some(__l) => { let mut __a = (player_entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (player_entity_id,) };
         mod_api::dispatch_item_fished(self, player, player_entity_id, fished, rod_damage, cancel);
     }
     /// A server explosion is about to begin at `center`, with `radius` (Bukkit's
     /// `ExplosionPrimeEvent`). This is listen-only: the explosion proceeds as
     /// usual. Server-side, including the single-player server.
-    pub(super) fn native_explosion_prime(&mut self, center: [f64; 3], radius: f32) {
+    pub(super) fn native_explosion_prime(&mut self, center: [f64; 3], radius: f32) { let (center,radius,) = match crate::points_generated::P3408.get() { Some(__l) => { let mut __a = (center,radius,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,) };
         mod_api::dispatch_explosion_prime(self, center, radius);
     }
     /// A dropped item entity reached its 6000-tick lifetime and is about to be
@@ -5658,7 +5658,7 @@ impl Game<'_> {
         item: &str,
         count: i32,
         pos: [f64; 3],
-    ) {
+    ) { let (entity,count,pos,) = match crate::points_generated::P3407.get() { Some(__l) => { let mut __a = (entity,count,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,count,pos,) };
         mod_api::dispatch_item_despawn(self, entity, item, count, pos);
     }
     /// A mob is about to drop `count` of `item` at `pos` (Bukkit's
@@ -5669,12 +5669,12 @@ impl Game<'_> {
         item: &str,
         count: i32,
         pos: [f64; 3],
-    ) {
+    ) { let (entity,count,pos,) = match crate::points_generated::P3406.get() { Some(__l) => { let mut __a = (entity,count,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,count,pos,) };
         mod_api::dispatch_entity_drop_item(self, entity, item, count, pos);
     }
     /// A leashed mob's leash was removed, before any lead drop is handled
     /// (Bukkit's `EntityUnleashEvent`).
-    pub(super) fn native_entity_unleash(&mut self, entity: u32, kind: &str) {
+    pub(super) fn native_entity_unleash(&mut self, entity: u32, kind: &str) { let (entity,) = match crate::points_generated::P3405.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_entity_unleash(self, entity, kind);
     }
     /// A vehicle is about to take damage from a player's attack. `kind` is
@@ -5686,34 +5686,34 @@ impl Game<'_> {
         kind: &str,
         damage: &mut f32,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3404.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_vehicle_damage(self, kind, damage, cancel);
     }
     /// A boat or minecart was created at `pos`, after it joined the level.
     /// `kind` is the vehicle type. Server-side.
-    pub(super) fn native_vehicle_create(&mut self, kind: &str, pos: [f64; 3]) {
+    pub(super) fn native_vehicle_create(&mut self, kind: &str, pos: [f64; 3]) { let (pos,) = match crate::points_generated::P3403.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_vehicle_create(self, kind, pos);
     }
     /// A boat or minecart is about to be destroyed at `pos`. TNT minecarts
     /// that prime instead of breaking are not heard. Server-side.
-    pub(super) fn native_vehicle_destroy(&mut self, kind: &str, pos: [f64; 3]) {
+    pub(super) fn native_vehicle_destroy(&mut self, kind: &str, pos: [f64; 3]) { let (pos,) = match crate::points_generated::P3402.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_vehicle_destroy(self, kind, pos);
     }
     /// A guest sent the server's current `PlayerInput` flags, after they were applied to the hub. The guest's state is swapped in. Server-side.
-    pub(super) fn native_player_input(&mut self, player: u128, name: &str, flags: i32) {
+    pub(super) fn native_player_input(&mut self, player: u128, name: &str, flags: i32) { let (flags,) = match crate::points_generated::P3401.get() { Some(__l) => { let mut __a = (flags,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (flags,) };
         mod_api::dispatch_player_input(self, player, name, flags);
     }
     /// A guest's arm swing was handled by the server. `hand` is `mainhand`. Server-side.
-    pub(super) fn native_player_arm_swing(&mut self, player: u128, name: &str, hand: &str) {
+    pub(super) fn native_player_arm_swing(&mut self, player: u128, name: &str, hand: &str) { if let Some(__l) = crate::points_generated::P3400.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_arm_swing(self, player, name, hand);
     }
     /// A guest's accepted movement made the server jump them from the ground. Server-side.
-    pub(super) fn native_player_jump(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_jump(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3399.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_jump(self, player, name);
     }
     /// A guest was disconnected by a server kick, after the hub recorded the rendered `reason`. The guest's state is
     /// swapped in unless they were already removed in the same poll.
-    pub(super) fn native_player_kicked(&mut self, player: u128, name: &str, reason: &str) {
+    pub(super) fn native_player_kicked(&mut self, player: u128, name: &str, reason: &str) { if let Some(__l) = crate::points_generated::P3398.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_kicked(self, player, name, reason);
     }
     /// A server player's experience level changed, after the new level was applied.
@@ -5723,7 +5723,7 @@ impl Game<'_> {
         name: &str,
         from: i32,
         to: i32,
-    ) {
+    ) { let (from,to,) = match crate::points_generated::P3397.get() { Some(__l) => { let mut __a = (from,to,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,to,) };
         mod_api::dispatch_player_level_change(self, player, name, from, to);
     }
     /// A click in a menu a mod opened (`native_open_menu`), which moved
@@ -5739,12 +5739,12 @@ impl Game<'_> {
         slot: i32,
         button: i32,
         mode: i32,
-    ) {
+    ) { let (window,slot,button,mode,) = match crate::points_generated::P3396.get() { Some(__l) => { let mut __a = (window,slot,button,mode,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (window,slot,button,mode,) };
         mod_api::dispatch_menu_clicked(self, uuid, window, slot, button, mode);
     }
     /// A menu a mod opened closed: the player closed it, the server or a mod
     /// opened another, or the player left.
-    pub(super) fn native_menu_closed(&mut self, uuid: u128, window: i32) {
+    pub(super) fn native_menu_closed(&mut self, uuid: u128, window: i32) { let (window,) = match crate::points_generated::P3395.get() { Some(__l) => { let mut __a = (window,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (window,) };
         mod_api::dispatch_menu_closed(self, uuid, window);
     }
     /// `Item.appendHoverText`: an item's own lines in its tooltip, after its
@@ -5754,7 +5754,7 @@ impl Game<'_> {
     /// The stack has its components (`stack.data()`). Asked each frame the
     /// tooltip shows, never for one the stack hides or a crossbow's loaded
     /// projectile.
-    pub(super) fn native_tooltip(&self, stack: &ItemStack, lines: &mut Vec<(Text, u32)>) {
+    pub(super) fn native_tooltip(&self, stack: &ItemStack, lines: &mut Vec<(Text, u32)>) { if let Some(__l) = crate::points_generated::P3394.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_tooltip(self, stack, lines);
     }
     /// `ItemTooltipEvent`: the whole tooltip of `stack` (`ItemStack.getTooltipLines`),
@@ -5775,7 +5775,7 @@ impl Game<'_> {
         advanced: bool,
         creative: bool,
         lines: &mut Vec<(Text, u32)>,
-    ) {
+    ) { let (player_entity_id,advanced,creative,) = match crate::points_generated::P3393.get() { Some(__l) => { let mut __a = (player_entity_id,advanced,creative,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (player_entity_id,advanced,creative,) };
         mod_api::dispatch_item_tooltip(
             self,
             player,
@@ -5805,7 +5805,7 @@ impl Game<'_> {
         elements: &mut Vec<TooltipElement>,
         max_width: &mut i32,
         cancel: &mut bool,
-    ) {
+    ) { let (screen_width,screen_height,) = match crate::points_generated::P3392.get() { Some(__l) => { let mut __a = (screen_width,screen_height,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (screen_width,screen_height,) };
         mod_api::dispatch_render_tooltip_gather_components(
             self,
             stack,
@@ -5824,13 +5824,13 @@ impl Game<'_> {
         background: &mut u32,
         border_top: &mut u32,
         border_bottom: &mut u32,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3391.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_tooltip_color(self, stack, background, border_top, border_bottom);
     }
     /// Client-side image component for this stack's tooltip. Answer its width/height
     /// in GUI pixels; finite positive dimensions reserve space after text and any
     /// vanilla bundle component. None keeps the vanilla tooltip unchanged.
-    pub(super) fn native_tooltip_component(&self, stack: &ItemStack, size: &mut Option<[f32; 2]>) {
+    pub(super) fn native_tooltip_component(&self, stack: &ItemStack, size: &mut Option<[f32; 2]>) { if let Some(__l) = crate::points_generated::P3390.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_tooltip_component(self, stack, size);
     }
     /// Render the measured component at origin, inside the tooltip background.
@@ -5842,7 +5842,7 @@ impl Game<'_> {
         draw: &mut HudBatch,
         origin: [f32; 2],
         size: [f32; 2],
-    ) {
+    ) { let (origin,size,) = match crate::points_generated::P3389.get() { Some(__l) => { let mut __a = (origin,size,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (origin,size,) };
         mod_api::dispatch_tooltip_component_draw(
             self,
             stack,
@@ -5860,7 +5860,7 @@ impl Game<'_> {
     /// (the damage bar, or a bundle's fullness already applied) and may be
     /// replaced (width `0..=13`, colour `rgb`) or set to `None` to hide it.
     /// Asked each frame a stack is drawn. Client-side.
-    pub(super) fn native_item_bar(&self, stack: &ItemStack, bar: &mut Option<(i32, u32)>) {
+    pub(super) fn native_item_bar(&self, stack: &ItemStack, bar: &mut Option<(i32, u32)>) { if let Some(__l) = crate::points_generated::P3388.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_item_bar(self, stack, bar);
     }
     /// The mouse sensitivity and cinematic camera option a grabbed player's
@@ -5872,7 +5872,7 @@ impl Game<'_> {
         player_uuid: u128,
         mouse_sensitivity: &mut f64,
         cinematic_camera_enabled: &mut bool,
-    ) {
+    ) { let (player_entity_id,) = match crate::points_generated::P3387.get() { Some(__l) => { let mut __a = (player_entity_id,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (player_entity_id,) };
         mod_api::dispatch_calculate_player_turn(
             self,
             player_entity_id,
@@ -5892,7 +5892,7 @@ impl Game<'_> {
         x: f32,
         y: f32,
         draw: &mut HudBatch,
-    ) {
+    ) { let (x,y,) = match crate::points_generated::P3386.get() { Some(__l) => { let mut __a = (x,y,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (x,y,) };
         mod_api::dispatch_item_decorations(
             self,
             stack,
@@ -5924,7 +5924,7 @@ impl Game<'_> {
         player: u128,
         player_entity_id: i32,
         claimed: &mut bool,
-    ) {
+    ) { let (pos,face,player_entity_id,) = match crate::points_generated::P3385.get() { Some(__l) => { let mut __a = (pos,face,player_entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,face,player_entity_id,) };
         mod_api::dispatch_use_on(
             self,
             stack,
@@ -5953,7 +5953,7 @@ impl Game<'_> {
         facing: Direction,
         stack: &ItemStack,
         answer: &mut Option<NativeDispensed>,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3384.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_dispense_item(self, dimension, pos, facing, stack, answer);
     }
     /// `BlockBehaviour.useItemOn`: the block's own behaviour, with the
@@ -5965,7 +5965,7 @@ impl Game<'_> {
         state: BlockStateId,
         click: &NativeBlockClick<'_>,
         answer: &mut Option<NativeInteractionResult>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3383.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_use_item_on(self, state, click, answer);
     }
     /// `BlockBehaviour.useWithoutItem`: the captured state's empty-hand method,
@@ -5975,7 +5975,7 @@ impl Game<'_> {
         state: BlockStateId,
         click: &NativeBlockClick<'_>,
         answer: &mut Option<NativeInteractionResult>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3382.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_use_without_item(self, state, click, answer);
     }
     /// A player uses `stack` (right click) with `self.hand`: in the air, or
@@ -5983,7 +5983,7 @@ impl Game<'_> {
     /// starts. Each click reaches it once. Set `claimed` to take the use: the
     /// hand swings and the item's own use doesn't run. Server-side, for every
     /// player of the world; an item on cooldown is never used.
-    pub(super) fn native_use_item(&mut self, stack: &ItemStack, claimed: &mut bool) {
+    pub(super) fn native_use_item(&mut self, stack: &ItemStack, claimed: &mut bool) { if let Some(__l) = crate::points_generated::P3381.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_use_item(self, stack, claimed);
     }
     /// `Item.getUseDuration` of `stack`, in ticks: `duration` arrives with
@@ -5997,7 +5997,7 @@ impl Game<'_> {
     /// Asked when a use starts, each tick a mod's item is in use, and each
     /// frame the hand draws one in use, on both sides. It has no user, as
     /// it is asked so often: answer from the stack alone.
-    pub(super) fn native_use_duration(&self, stack: &ItemStack, duration: &mut i32) {
+    pub(super) fn native_use_duration(&self, stack: &ItemStack, duration: &mut i32) { if let Some(__l) = crate::points_generated::P3380.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_use_duration(self, stack, duration);
     }
     /// `Item.getUseAnimation` of `stack` in use, for the first person hand:
@@ -6007,7 +6007,7 @@ impl Game<'_> {
     /// Asked each frame the hand draws an item in use, for an item with no
     /// pose of its own (bows, crossbows, tridents, brushes and spears keep
     /// theirs). Client-side.
-    pub(super) fn native_use_animation(&self, stack: &ItemStack, animation: &mut UseAnimation) {
+    pub(super) fn native_use_animation(&self, stack: &ItemStack, animation: &mut UseAnimation) { if let Some(__l) = crate::points_generated::P3379.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_use_animation(self, stack, animation);
     }
     /// `Player.canEat` for the food `stack`, from `Consumable.canConsume`
@@ -6015,7 +6015,7 @@ impl Game<'_> {
     /// `can_always_eat`, or hungry). Clear it to refuse the food, set it to
     /// let a full player eat. Both sides (the client starts eating as the
     /// server does), so answer from the stack and the player alone.
-    pub(super) fn native_can_eat(&self, stack: &ItemStack, can_eat: &mut bool) {
+    pub(super) fn native_can_eat(&self, stack: &ItemStack, can_eat: &mut bool) { if let Some(__l) = crate::points_generated::P3378.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_can_eat(self, stack, can_eat);
     }
     /// NeoForge's `LivingEntityUseItemEvent.Start`: `entity` starts using
@@ -6038,7 +6038,7 @@ impl Game<'_> {
         hand: Hand,
         duration: &mut i32,
         canceled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3377.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_living_entity_use_item_start(
             super::execution_role::host_side(self),
             stack,
@@ -6063,7 +6063,7 @@ impl Game<'_> {
         hand: Hand,
         duration: i32,
         result: &mut Option<ItemStack>,
-    ) {
+    ) { let (duration,) = match crate::points_generated::P3376.get() { Some(__l) => { let mut __a = (duration,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (duration,) };
         mod_api::dispatch_living_entity_use_item_finish(
             self, stack, entity, hand, duration, result,
         );
@@ -6095,7 +6095,7 @@ impl Game<'_> {
         hand: Hand,
         duration: &mut i32,
         canceled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3375.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_living_entity_use_item_tick(
             super::execution_role::host_side(self),
             stack,
@@ -6119,7 +6119,7 @@ impl Game<'_> {
         stack: &ItemStack,
         entity: Option<i32>,
         remaining: i32,
-    ) {
+    ) { let (remaining,) = match crate::points_generated::P3374.get() { Some(__l) => { let mut __a = (remaining,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (remaining,) };
         mod_api::dispatch_on_use_tick(
             super::execution_role::host_side(self),
             stack,
@@ -6142,7 +6142,7 @@ impl Game<'_> {
         hand: Hand,
         duration: i32,
         canceled: &mut bool,
-    ) {
+    ) { let (duration,) = match crate::points_generated::P3373.get() { Some(__l) => { let mut __a = (duration,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (duration,) };
         mod_api::dispatch_living_entity_use_item_stop(
             super::execution_role::host_side(self),
             stack,
@@ -6166,7 +6166,7 @@ impl Game<'_> {
         has_ammo: bool,
         charge: &mut i32,
         canceled: &mut bool,
-    ) {
+    ) { let (has_ammo,) = match crate::points_generated::P3372.get() { Some(__l) => { let mut __a = (has_ammo,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (has_ammo,) };
         mod_api::dispatch_arrow_loose(self, stack, has_ammo, charge, canceled);
     }
     /// NeoForge's `CriticalHitEvent`: a player's melee hit on a living
@@ -6185,7 +6185,7 @@ impl Game<'_> {
         vanilla_critical: bool,
         critical: &mut bool,
         damage_multiplier: &mut f32,
-    ) {
+    ) { let (vanilla_critical,) = match crate::points_generated::P3371.get() { Some(__l) => { let mut __a = (vanilla_critical,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (vanilla_critical,) };
         mod_api::dispatch_critical_hit(
             self,
             target_kind,
@@ -6209,7 +6209,7 @@ impl Game<'_> {
         vanilla_sweep: bool,
         sweeping: &mut bool,
         canceled: &mut bool,
-    ) {
+    ) { let (vanilla_sweep,) = match crate::points_generated::P3370.get() { Some(__l) => { let mut __a = (vanilla_sweep,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (vanilla_sweep,) };
         mod_api::dispatch_sweep_attack(
             super::execution_role::host_side(self),
             target,
@@ -6232,7 +6232,7 @@ impl Game<'_> {
         entity: Option<i32>,
         time_left: i32,
         used: &mut bool,
-    ) {
+    ) { let (time_left,) = match crate::points_generated::P3369.get() { Some(__l) => { let mut __a = (time_left,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (time_left,) };
         mod_api::dispatch_release_using(
             super::execution_role::host_side(self),
             stack,
@@ -6250,7 +6250,7 @@ impl Game<'_> {
         state: BlockStateId,
         kind: PathComputationType,
         pathfindable: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3368.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_is_pathfindable(self, state, kind, pathfindable);
     }
     /// `BlockBehaviour.getCloneItemStack`, asked by
@@ -6267,7 +6267,7 @@ impl Game<'_> {
         state: BlockStateId,
         include_data: bool,
         stack: &mut Option<ItemStack>,
-    ) {
+    ) { let (include_data,) = match crate::points_generated::P3367.get() { Some(__l) => { let mut __a = (include_data,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (include_data,) };
         mod_api::dispatch_clone_item_stack(self, dimension, pos, block, state, include_data, stack);
     }
     /// A player breaks the block `state` at `pos`, once the game allowed it
@@ -6281,7 +6281,7 @@ impl Game<'_> {
         pos: [i32; 3],
         state: BlockStateId,
         canceled: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3366.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_destroy_block(self, pos, state, canceled);
     }
     /// A player placed `stack` as the block `state` at `pos`: where
@@ -6293,7 +6293,7 @@ impl Game<'_> {
         stack: &ItemStack,
         pos: [i32; 3],
         state: BlockStateId,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3365.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_place_block(self, stack, pos, state);
     }
     /// A player right clicks a block (NeoForge's
@@ -6318,7 +6318,7 @@ impl Game<'_> {
         use_item: &mut NativeTriState,
         cancellation_result: &mut NativeInteractionResult,
         canceled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3364.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_right_click_block(
             super::execution_role::host_side(self),
             click,
@@ -6337,7 +6337,7 @@ impl Game<'_> {
         phase: UsePhase,
         cancellation_result: &mut NativeInteractionResult,
         canceled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3363.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_use_item_on_block(
             super::execution_role::host_side(self),
             click,
@@ -6354,7 +6354,7 @@ impl Game<'_> {
         click: &NativeItemClick<'_>,
         cancellation_result: &mut NativeInteractionResult,
         canceled: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3362.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_right_click_item(
             super::execution_role::host_side(self),
             click,
@@ -6381,7 +6381,7 @@ impl Game<'_> {
         valid_bonemeal_target: bool,
         successful: &mut bool,
         canceled: &mut bool,
-    ) {
+    ) { let (valid_bonemeal_target,) = match crate::points_generated::P3361.get() { Some(__l) => { let mut __a = (valid_bonemeal_target,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (valid_bonemeal_target,) };
         mod_api::dispatch_bonemeal(
             super::execution_role::host_side(self),
             dimension,
@@ -6405,7 +6405,7 @@ impl Game<'_> {
         dimension: &str,
         center: [f64; 3],
         blocks: &mut Vec<[i32; 3]>,
-    ) {
+    ) { let (center,) = match crate::points_generated::P3360.get() { Some(__l) => { let mut __a = (center,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,) };
         mod_api::dispatch_explosion_detonate(self, dimension, center, blocks);
     }
     /// A tool is about to transform a block. Cancel or replace the final state;
@@ -6417,7 +6417,7 @@ impl Game<'_> {
         tool: &ToolUse,
         final_state: &mut Option<BlockStateId>,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3359.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_block_tool_modification(self, stack, tool, final_state, cancel);
     }
 
@@ -6435,7 +6435,7 @@ impl Game<'_> {
         blocks: &[[i32; 3]],
         entity: Option<u32>,
         knockback_velocity: &mut [f64; 3],
-    ) {
+    ) { let (center,) = match crate::points_generated::P3358.get() { Some(__l) => { let mut __a = (center,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,) };
         mod_api::dispatch_explosion_knockback(
             self,
             dimension,
@@ -6454,7 +6454,7 @@ impl Game<'_> {
         stack: &ItemStack,
         pos: [i32; 3],
         canceled: &mut bool,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3357.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         mod_api::dispatch_fill_bucket(self, stack, pos, canceled);
     }
     /// A player attacks the entity `entity` (`Entity.getId`) of type `kind`
@@ -6470,19 +6470,19 @@ impl Game<'_> {
         kind: &str,
         pos: [f64; 3],
         canceled: &mut bool,
-    ) {
+    ) { let (entity,pos,) = match crate::points_generated::P3356.get() { Some(__l) => { let mut __a = (entity,pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,pos,) };
         mod_api::dispatch_attack_entity(self, entity, kind, pos, canceled);
     }
     /// A message from `player`'s client on `channel` (`mod_id:name`), within
     /// the caps (`native_net.rs`): check `channel`, and treat `data` as the
     /// player's own bytes, checked by nothing. Runs in the tick after it
     /// arrives, with no player's state swapped in. Server-side.
-    pub(super) fn native_net_from_client(&mut self, player: u128, channel: &str, data: &[u8]) {
+    pub(super) fn native_net_from_client(&mut self, player: u128, channel: &str, data: &[u8]) { if let Some(__l) = crate::points_generated::P3355.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_net_from_client(self, player, channel, data);
     }
     /// A message from the server on `channel` (`mod_id:name`), whose `data`
     /// is the sender's own bytes. The window's game only.
-    pub(super) fn native_net_from_server(&mut self, channel: &str, data: &[u8]) {
+    pub(super) fn native_net_from_server(&mut self, channel: &str, data: &[u8]) { if let Some(__l) = crate::points_generated::P3354.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_net_from_server(self, channel, data);
     }
     /// `dimension`'s level opened on the server (NeoForge's `LevelEvent.Load`,
@@ -6492,7 +6492,7 @@ impl Game<'_> {
     /// others open when someone first goes there (a player, a portal, an
     /// `execute in` command), with the level in place. Once for each open:
     /// `native_level_unload` follows. Server-side.
-    pub(super) fn native_level_load(&mut self, dimension: &str) {
+    pub(super) fn native_level_load(&mut self, dimension: &str) { if let Some(__l) = crate::points_generated::P3353.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_level_load(self, dimension);
     }
     /// `dimension`'s level has loaded the saved chunk tickets of `controller`
@@ -6508,7 +6508,7 @@ impl Game<'_> {
         dimension: &str,
         controller: TicketController,
         validation: &mut mod_api::mod_chunk_tickets::TicketValidation,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3352.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_validate_tickets(self, dimension, controller, validation);
     }
     /// `dimension`'s level closed (NeoForge's `LevelEvent.Unload`, posted after
@@ -6519,14 +6519,14 @@ impl Game<'_> {
     /// `WorldCloseFinal`, and when its open or its loop fails, before
     /// `WorldOpenFailed` or `WorldCloseFailed`. Once for each
     /// `native_level_load`. Don't read its blocks. Server-side.
-    pub(super) fn native_level_unload(&mut self, dimension: &str) {
+    pub(super) fn native_level_unload(&mut self, dimension: &str) { if let Some(__l) = crate::points_generated::P3351.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_level_unload(self, dimension);
     }
     /// `dimension`'s level was saved (NeoForge's `LevelEvent.Save`, in
     /// `ServerLevel.save`): its level data, chunks and entities, by the
     /// autosave, `/save-all`, a pause, a closing level or the server
     /// stopping; each level of a world save in turn. Server-side.
-    pub(super) fn native_level_save(&mut self, dimension: &str) {
+    pub(super) fn native_level_save(&mut self, dimension: &str) { if let Some(__l) = crate::points_generated::P3350.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_level_save(self, dimension);
     }
     /// The server's difficulty changed, from `from` to `to` (`peaceful`,
@@ -6535,7 +6535,7 @@ impl Game<'_> {
     /// dedicated server's management and a test environment's difficulty all
     /// go through, and it is told only when the difficulty is another one. It
     /// only hears: the change has already happened. Server-side.
-    pub(super) fn native_difficulty_changed(&mut self, from: &str, to: &str) {
+    pub(super) fn native_difficulty_changed(&mut self, from: &str, to: &str) { if let Some(__l) = crate::points_generated::P3349.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_difficulty_changed(self, from, to);
     }
     /// Chunk `chunk` (`[x, z]`, in chunks) of `dimension` came into the world
@@ -6549,7 +6549,7 @@ impl Game<'_> {
     /// change the world from a later tick. The chunks around the spawn come
     /// before `WorldOpenReady`. Not told of a chunk a client receives.
     /// Server-side.
-    pub(super) fn native_chunk_load(&mut self, dimension: &str, chunk: [i32; 2], new: bool) {
+    pub(super) fn native_chunk_load(&mut self, dimension: &str, chunk: [i32; 2], new: bool) { let (chunk,new,) = match crate::points_generated::P3348.get() { Some(__l) => { let mut __a = (chunk,new,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (chunk,new,) };
         mod_api::dispatch_chunk_load(self, dimension, chunk, new);
     }
     /// Chunk `chunk` of `dimension` left the world (NeoForge's
@@ -6558,14 +6558,14 @@ impl Game<'_> {
     /// this hook aren't saved: as in vanilla, the chunk is saved before it unloads.
     /// Not told when the world closes, which `native_world_lifecycle` tells.
     /// Server-side.
-    pub(super) fn native_chunk_unload(&mut self, dimension: &str, chunk: [i32; 2]) {
+    pub(super) fn native_chunk_unload(&mut self, dimension: &str, chunk: [i32; 2]) { let (chunk,) = match crate::points_generated::P3347.get() { Some(__l) => { let mut __a = (chunk,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (chunk,) };
         mod_api::dispatch_chunk_unload(self, dimension, chunk);
     }
     /// `player` (`name`) joined the game (NeoForge's
     /// `PlayerLoggedInEvent`): placed in the world and listed in
     /// `native_server_players`, so `native_net_send_to_player` reaches them.
     /// Once a join, with no player's state swapped in. Server-side.
-    pub(super) fn native_player_logged_in(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_logged_in(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3346.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_logged_in(self, player, name);
     }
     /// `player` (`name`) left the game (NeoForge's `PlayerLoggedOutEvent`), by
@@ -6574,7 +6574,7 @@ impl Game<'_> {
     /// left `native_server_players`, except when the server stops, which tells
     /// before it saves, with them still listed and able to get a last message.
     /// Server-side.
-    pub(super) fn native_player_logged_out(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_logged_out(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3345.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_logged_out(self, player, name);
     }
     /// Before a new server level selects its initial world spawn
@@ -6584,14 +6584,14 @@ impl Game<'_> {
         position: &mut [i32; 3],
         rotation: &mut [f32; 2],
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3344.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_create_spawn_position(self, position, rotation, cancel);
     }
     /// `player` (`name`) respawned (NeoForge's `PlayerRespawnEvent`): at the
     /// end of `PlayerList.respawn`, once they are placed and their health,
     /// food and experience reset, with their state swapped in. Once for each
     /// death that ends in a respawn, on a server; not for the End-exit one.
-    pub(super) fn native_player_respawned(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_respawned(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3343.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_respawned(self, player, name);
     }
     /// A player was saved to the world's store (NeoForge's
@@ -6611,7 +6611,7 @@ impl Game<'_> {
         player: u128,
         name: &str,
         directory: &std::path::Path,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3342.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_save_to_file(self, player, name, directory);
     }
     /// A player was loaded from the world's save (NeoForge's
@@ -6627,7 +6627,7 @@ impl Game<'_> {
         player: u128,
         name: &str,
         directory: &std::path::Path,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3341.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_load_from_file(self, player, name, directory);
     }
     /// A player's data was copied to their new player (NeoForge's
@@ -6637,7 +6637,7 @@ impl Game<'_> {
     /// old and the new player share `player`. Heard before the new player is
     /// placed, on a server, with no player's state swapped in. Not
     /// cancellable.
-    pub(super) fn native_player_clone(&mut self, player: u128, name: &str, was_death: bool) {
+    pub(super) fn native_player_clone(&mut self, player: u128, name: &str, was_death: bool) { let (was_death,) = match crate::points_generated::P3340.get() { Some(__l) => { let mut __a = (was_death,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (was_death,) };
         mod_api::dispatch_player_clone(self, player, name, was_death);
     }
     /// The number of players with the mod container at `pos` of `dimension`
@@ -6655,7 +6655,7 @@ impl Game<'_> {
         pos: [i32; 3],
         viewers: u32,
         previous: u32,
-    ) {
+    ) { let (pos,viewers,previous,) = match crate::points_generated::P3339.get() { Some(__l) => { let mut __a = (pos,viewers,previous,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,viewers,previous,) };
         mod_api::dispatch_mod_container_viewers(self, dimension, pos, viewers, previous);
     }
     /// `player` (`name`) pressed the swap-hands key: heard before the main and
@@ -6668,7 +6668,7 @@ impl Game<'_> {
     /// Once for each press, on a server. Not heard: the same swap made in an
     /// open inventory (hovering a slot and pressing the key, a menu click) and
     /// the host of a LAN world.
-    pub(super) fn native_player_swap_hands(&mut self, player: u128, name: &str, cancel: &mut bool) {
+    pub(super) fn native_player_swap_hands(&mut self, player: u128, name: &str, cancel: &mut bool) { if let Some(__l) = crate::points_generated::P3338.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_swap_hands(self, player, name, cancel);
     }
     /// `player` (`name`) opened a menu (NeoForge's `PlayerContainerEvent.Open`,
@@ -6690,7 +6690,7 @@ impl Game<'_> {
         dimension: &str,
         menu: &str,
         pos: Option<[i32; 3]>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3337.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_container_open(self, player, name, dimension, menu, pos);
     }
     /// `player` (`name`) closed the menu `native_player_container_open` told
@@ -6710,7 +6710,7 @@ impl Game<'_> {
         dimension: &str,
         menu: &str,
         pos: Option<[i32; 3]>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3336.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_container_close(self, player, name, dimension, menu, pos);
     }
     /// A client started tracking an entity (NeoForge's
@@ -6730,7 +6730,7 @@ impl Game<'_> {
         entity: u32,
         uuid: u128,
         kind: &str,
-    ) {
+    ) { let (entity,) = match crate::points_generated::P3335.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_player_start_tracking(self, player, name, entity, uuid, kind);
     }
     /// A client stopped tracking an entity (NeoForge's
@@ -6749,7 +6749,7 @@ impl Game<'_> {
         entity: u32,
         uuid: u128,
         kind: &str,
-    ) {
+    ) { let (entity,) = match crate::points_generated::P3334.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_player_stop_tracking(self, player, name, entity, uuid, kind);
     }
     /// Whether a mod listens to the mobs' `native_living_equipment_change`: a
@@ -6758,7 +6758,7 @@ impl Game<'_> {
     /// equipment each tick, and mobs are not told (armor stands still are). A
     /// mob that ticks once it is set counts from empty. Asked once a tick, after
     /// the mobs' tick. Server-side.
-    pub(super) fn native_living_equipment_listened(&mut self, listened: &mut bool) {
+    pub(super) fn native_living_equipment_listened(&mut self, listened: &mut bool) { if let Some(__l) = crate::points_generated::P3333.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_living_equipment_listened(self, listened);
     }
     /// A mob's or an armor stand's equipment slot took a different stack
@@ -6778,14 +6778,14 @@ impl Game<'_> {
         slot: &str,
         from: Option<&ItemStack>,
         to: Option<&ItemStack>,
-    ) {
+    ) { let (entity,) = match crate::points_generated::P3332.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_living_equipment_change(self, entity, kind, slot, from, to);
     }
     /// `player` died: where `ServerPlayer.die` starts, with the death
     /// message's key when the game knows it (`death.attack.lava`; none for a
     /// message it builds from the combat). It only hears. Server-side, for
     /// every player of the world, whether death messages are shown or not.
-    pub(super) fn native_player_died(&mut self, player: u128, cause: Option<&str>) {
+    pub(super) fn native_player_died(&mut self, player: u128, cause: Option<&str>) { if let Some(__l) = crate::points_generated::P3331.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_died(self, player, cause);
     }
     /// A new mob of `kind` joined `dimension` at `pos`: `natural` when the
@@ -6801,7 +6801,7 @@ impl Game<'_> {
         kind: &str,
         pos: [f64; 3],
         natural: bool,
-    ) {
+    ) { let (pos,natural,) = match crate::points_generated::P3330.get() { Some(__l) => { let mut __a = (pos,natural,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,natural,) };
         mod_api::dispatch_mob_spawned(self, dimension, kind, pos, natural);
     }
     /// An entity leaves the server level `dimension` (NeoForge's
@@ -6815,7 +6815,7 @@ impl Game<'_> {
     /// tells every kind `native_entity_join_level` does (`kind` is the type), each
     /// once, when the game next notices it gone (the tick or action that removed
     /// it). Check `kind`. Server-side.
-    pub(super) fn native_entity_leave_level(&mut self, dimension: &str, entity: u32, kind: &str) {
+    pub(super) fn native_entity_leave_level(&mut self, dimension: &str, entity: u32, kind: &str) { let (entity,) = match crate::points_generated::P3329.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_entity_leave_level(self, dimension, entity, kind);
     }
     /// An entity joins the server level `dimension` (NeoForge's
@@ -6844,7 +6844,7 @@ impl Game<'_> {
         pos: [f64; 3],
         loaded_from_disk: bool,
         canceled: &mut bool,
-    ) {
+    ) { let (entity,pos,loaded_from_disk,) = match crate::points_generated::P3328.get() { Some(__l) => { let mut __a = (entity,pos,loaded_from_disk,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,pos,loaded_from_disk,) };
         mod_api::dispatch_entity_join_level(
             self,
             dimension,
@@ -6877,7 +6877,7 @@ impl Game<'_> {
         vehicle_kind: &str,
         mounting: bool,
         canceled: &mut bool,
-    ) {
+    ) { let (entity,vehicle,mounting,) = match crate::points_generated::P3327.get() { Some(__l) => { let mut __a = (entity,vehicle,mounting,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,vehicle,mounting,) };
         mod_api::dispatch_entity_mount(
             self,
             dimension,
@@ -6893,7 +6893,7 @@ impl Game<'_> {
     /// that hooks them hooks this one too and sets `listened` (HEAD, `*listened = true`).
     /// Without it the game tells no entity's tick, and keeps no list of them. Asked once for
     /// each family (mobs, items, minecarts, boats) each tick. Server-side.
-    pub(super) fn native_entity_tick_listened(&mut self, listened: &mut bool) {
+    pub(super) fn native_entity_tick_listened(&mut self, listened: &mut bool) { if let Some(__l) = crate::points_generated::P3326.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_entity_tick_listened(self, listened);
     }
     /// An entity of type `kind` (`minecraft:zombie`, `minecraft:item`) with ID `entity` is
@@ -6912,14 +6912,14 @@ impl Game<'_> {
         entity: u32,
         kind: &str,
         canceled: &mut bool,
-    ) {
+    ) { let (entity,) = match crate::points_generated::P3325.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_entity_tick_pre(self, dimension, entity, kind, canceled);
     }
     /// The entity `entity` of type `kind` ticked in the server level `dimension` (NeoForge's
     /// `EntityTickEvent.Post`): for each entity `native_entity_tick_pre` let through, after it
     /// ticked, also one that died or was removed in its tick. Mobs and items hear their Posts
     /// once the whole family has ticked; minecarts and boats right after their own tick. Server-side.
-    pub(super) fn native_entity_tick_post(&mut self, dimension: &str, entity: u32, kind: &str) {
+    pub(super) fn native_entity_tick_post(&mut self, dimension: &str, entity: u32, kind: &str) { let (entity,) = match crate::points_generated::P3324.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_entity_tick_post(self, dimension, entity, kind);
     }
     /// Whether the experience orb `into` takes the orb `from` in (vanilla's
@@ -6939,7 +6939,7 @@ impl Game<'_> {
         into_value: u32,
         from_value: u32,
         can_merge: &mut bool,
-    ) {
+    ) { let (into,from,into_value,from_value,) = match crate::points_generated::P3323.get() { Some(__l) => { let mut __a = (into,from,into_value,from_value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (into,from,into_value,from_value,) };
         mod_api::dispatch_experience_orb_can_merge(
             self, dimension, into, from, into_value, from_value, can_merge,
         );
@@ -6955,7 +6955,7 @@ impl Game<'_> {
         from: u32,
         from_value: u32,
         canceled: &mut bool,
-    ) {
+    ) { let (into,from,from_value,) = match crate::points_generated::P3322.get() { Some(__l) => { let mut __a = (into,from,from_value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (into,from,from_value,) };
         mod_api::dispatch_experience_orb_merge(self, dimension, into, from, from_value, canceled);
     }
     /// A totem of undying saved the server player `player` (`name`): their
@@ -6968,7 +6968,7 @@ impl Game<'_> {
     /// `native_acting_player`, `native_tell` and the item helpers reach them.
     /// Once for each totem, on a server; the host of a LAN world's totem is
     /// not heard.
-    pub(super) fn native_player_totem(&mut self, player: u128, name: &str) {
+    pub(super) fn native_player_totem(&mut self, player: u128, name: &str) { if let Some(__l) = crate::points_generated::P3321.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_totem(self, player, name);
     }
     /// The item `item` of the server player `player` (`name`) broke in `slot`
@@ -6983,12 +6983,12 @@ impl Game<'_> {
         name: &str,
         item: &str,
         slot: &str,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3320.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_player_destroy_item(self, player, name, item, slot);
     }
     /// `player`'s melee blow killed the mob `entity` of `kind` (other deaths
     /// aren't told yet). It only hears, after the blow landed. Server-side.
-    pub(super) fn native_mob_killed(&mut self, player: u128, entity: u32, kind: &str) {
+    pub(super) fn native_mob_killed(&mut self, player: u128, entity: u32, kind: &str) { let (entity,) = match crate::points_generated::P3319.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_mob_killed(self, player, entity, kind);
     }
     /// A block broke or a mob died, and `drops` are the items about to drop, in
@@ -7012,7 +7012,7 @@ impl Game<'_> {
         &mut self,
         context: &NativeLootDrops<'_>,
         drops: &mut Vec<ItemStack>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3318.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_loot_drops(self, context, drops);
     }
     /// The item `item` of a server player is about to lose `amount` points of
@@ -7032,13 +7032,13 @@ impl Game<'_> {
         item: &str,
         amount: &mut i32,
         cancel: &mut bool,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3317.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_item_damaged(self, player, name, item, amount, cancel);
     }
     /// `player` threw `count` of `item` (`Player.drop`: the drop key, a
     /// menu's throw...), not what scatters when they die. It only hears.
     /// Server-side.
-    pub(super) fn native_item_dropped(&mut self, player: u128, item: &str, count: u32) {
+    pub(super) fn native_item_dropped(&mut self, player: u128, item: &str, count: u32) { let (count,) = match crate::points_generated::P3316.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         mod_api::dispatch_item_dropped(self, player, item, count);
     }
     /// `player` is about to take `count` of `item` from the ground
@@ -7050,7 +7050,7 @@ impl Game<'_> {
         item: &str,
         count: u32,
         canceled: &mut bool,
-    ) {
+    ) { let (count,) = match crate::points_generated::P3315.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         mod_api::dispatch_item_picked_up(self, player, item, count, canceled);
     }
     /// A dropped item reaches its lifetime on the server (`ItemEntity.tick`,
@@ -7063,7 +7063,7 @@ impl Game<'_> {
         entity: u32,
         stack: &ItemStack,
         extra_life: &mut i32,
-    ) {
+    ) { let (entity,) = match crate::points_generated::P3314.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_item_expire(self, entity, stack, extra_life);
     }
     /// A player took a crafting grid's result (`ResultSlot.onTake`, NeoForge's
@@ -7074,7 +7074,7 @@ impl Game<'_> {
     /// crafting table, on the integrated server and a dedicated server, guests
     /// included, and not for a stonecutter's, a smithing table's or a
     /// furnace's result. Server-side.
-    pub(super) fn native_item_crafted(&mut self, player: u128, recipe: &str, stack: &ItemStack) {
+    pub(super) fn native_item_crafted(&mut self, player: u128, recipe: &str, stack: &ItemStack) { if let Some(__l) = crate::points_generated::P3313.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_item_crafted(self, player, recipe, stack);
     }
     /// The food level of the server player `player` (`name`) is about to change
@@ -7094,14 +7094,14 @@ impl Game<'_> {
         from: i32,
         to: &mut i32,
         cancel: &mut bool,
-    ) {
+    ) { let (from,) = match crate::points_generated::P3312.get() { Some(__l) => { let mut __a = (from,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,) };
         mod_api::dispatch_food_level_changed(self, player, name, from, to, cancel);
     }
     /// Whether a mod hears `native_experience_orb_pickup`: set `listened`
     /// (a HEAD injection), or the server skips swapping the player in for it,
     /// and with this empty the pickup costs nothing more without mods.
     /// Server-side.
-    pub(super) fn native_experience_orb_pickup_listened(&mut self, listened: &mut bool) {
+    pub(super) fn native_experience_orb_pickup_listened(&mut self, listened: &mut bool) { if let Some(__l) = crate::points_generated::P3311.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_experience_orb_pickup_listened(self, listened);
     }
     /// Before `player` picks up orb `orb` in `dimension`. Mutations to `value`
@@ -7116,7 +7116,7 @@ impl Game<'_> {
         value: &mut u32,
         count: &mut u32,
         canceled: &mut bool,
-    ) {
+    ) { let (orb,) = match crate::points_generated::P3310.get() { Some(__l) => { let mut __a = (orb,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (orb,) };
         mod_api::dispatch_experience_orb_pickup(
             self, player, dimension, orb, value, count, canceled,
         );
@@ -7132,7 +7132,7 @@ impl Game<'_> {
         stack: &ItemStack,
         experience: u32,
         repair: &mut u32,
-    ) {
+    ) { let (experience,) = match crate::points_generated::P3309.get() { Some(__l) => { let mut __a = (experience,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (experience,) };
         mod_api::dispatch_mending_repair(self, player, stack, experience, repair);
     }
     /// A player's hit landed on the mob `entity` of type `kind`
@@ -7140,7 +7140,7 @@ impl Game<'_> {
     /// before the post-attack enchantments and the weapon's wear. It only
     /// hears. Another player as the target isn't told yet. Server-side, for
     /// every player of the world (the helpers read the acting one).
-    pub(super) fn native_hurt_enemy(&mut self, stack: &ItemStack, entity: u32, kind: &str) {
+    pub(super) fn native_hurt_enemy(&mut self, stack: &ItemStack, entity: u32, kind: &str) { let (entity,) = match crate::points_generated::P3308.get() { Some(__l) => { let mut __a = (entity,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (entity,) };
         mod_api::dispatch_hurt_enemy(self, stack, entity, kind);
     }
     /// A server tick of the stack a player carries in `slot`: where
@@ -7153,7 +7153,7 @@ impl Game<'_> {
     /// player's client gets the change. This runs often, so check the item
     /// first. Server-side, for every living player of the world (the helpers
     /// read the acting one).
-    pub(super) fn native_inventory_tick(&mut self, slot: i32, selected: bool) {
+    pub(super) fn native_inventory_tick(&mut self, slot: i32, selected: bool) { let (slot,selected,) = match crate::points_generated::P3307.get() { Some(__l) => { let mut __a = (slot,selected,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,selected,) };
         mod_api::dispatch_inventory_tick(self, slot, selected);
     }
     /// A player's equipment slot `slot` (`head`, `chest`, `legs`, `feet`,
@@ -7162,7 +7162,7 @@ impl Game<'_> {
     /// before the equip sound. It only hears. Never for a spectator.
     /// Server-side, for every player of the world (the helpers read the
     /// acting one).
-    pub(super) fn native_on_equip(&mut self, slot: &str, new: Option<&ItemStack>) {
+    pub(super) fn native_on_equip(&mut self, slot: &str, new: Option<&ItemStack>) { if let Some(__l) = crate::points_generated::P3306.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         mod_api::dispatch_on_equip(self, slot, new);
     }
     /// `MobEffect.shouldApplyEffectTickThisTick` for a content mod's effect
@@ -7176,7 +7176,7 @@ impl Game<'_> {
         tick_count: i32,
         amplifier: i32,
         apply: &mut bool,
-    ) {
+    ) { let (tick_count,amplifier,) = match crate::points_generated::P3305.get() { Some(__l) => { let mut __a = (tick_count,amplifier,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (tick_count,amplifier,) };
         mod_api::dispatch_should_apply_effect_tick_this_tick(
             self, effect, tick_count, amplifier, apply,
         );
@@ -7203,7 +7203,7 @@ impl Game<'_> {
         food: Option<NativePlayerFood>,
         changes: &mut Vec<EffectTickChange>,
         keep: &mut bool,
-    ) {
+    ) { let (amplifier,health,max_health,) = match crate::points_generated::P3304.get() { Some(__l) => { let mut __a = (amplifier,health,max_health,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (amplifier,health,max_health,) };
         mod_api::dispatch_apply_effect_tick(
             self, effect, dimension, entity, amplifier, holder, health, max_health, food, changes,
             keep,
@@ -7217,7 +7217,7 @@ impl Game<'_> {
         effect: &str,
         entity: Option<i32>,
         amplifier: i32,
-    ) {
+    ) { let (amplifier,) = match crate::points_generated::P3303.get() { Some(__l) => { let mut __a = (amplifier,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amplifier,) };
         mod_api::dispatch_on_effect_added(self, effect, entity, amplifier);
     }
     /// NeoForge's `MobEffectEvent.Added`, vanilla's `MobEffect.onEffectStarted`:
@@ -7229,7 +7229,7 @@ impl Game<'_> {
         effect: &str,
         entity: Option<i32>,
         amplifier: i32,
-    ) {
+    ) { let (amplifier,) = match crate::points_generated::P3302.get() { Some(__l) => { let mut __a = (amplifier,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (amplifier,) };
         mod_api::dispatch_mob_effect_added(self, effect, entity, amplifier);
     }
     /// NeoForge's `LivingShieldBlockEvent`: entity `entity` of type `kind`
@@ -7285,7 +7285,7 @@ impl Game<'_> {
     /// then does the tick keep the copy of each flying projectile that a
     /// canceled impact flies on from, so a game without such a mod pays
     /// nothing. Server-side.
-    pub(super) fn native_hears_projectile_impacts(&self, hears: &mut bool) {
+    pub(super) fn native_hears_projectile_impacts(&self, hears: &mut bool) { if let Some(__l) = crate::points_generated::P3301.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         mod_api::dispatch_hears_projectile_impacts(self, hears);
     }
     /// A projectile hit something (NeoForge's `ProjectileImpactEvent`, posted
@@ -7320,7 +7320,7 @@ impl Game<'_> {
         face: [i32; 3],
         at: [f64; 3],
         canceled: &mut bool,
-    ) {
+    ) { let (projectile,owner,block,face,at,) = match crate::points_generated::P3300.get() { Some(__l) => { let mut __a = (projectile,owner,block,face,at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (projectile,owner,block,face,at,) };
         mod_api::dispatch_projectile_impact(
             self,
             dimension,
@@ -7592,7 +7592,7 @@ impl Game<'_> {
     /// `health::knockback_from` that, while a native mod listens, also records what the attacker
     /// holds (the player's selected and off-hand stacks, a mob's main hand) for
     /// `living_knockback`. A nested scope for the same attacker keeps what the outer recorded.
-    pub(super) fn knockback_scope(&self, attacker: i32) -> impl Drop + use<> {
+    pub(super) fn knockback_scope(&self, attacker: i32) -> impl Drop + use<> { let (attacker,) = match crate::points_generated::P3299.get() { Some(__l) => { let mut __a = (attacker,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (attacker,) };
         use horizon_client::health::{knockback_attacker, knockback_from_holding, knockback_held};
         if mod_api::mods().is_empty() {
             return knockback_from_holding(attacker, [None, None]);
@@ -7614,7 +7614,7 @@ impl Game<'_> {
     }
     /// [`Self::knockback_scope`] for the attacker a damage source names: the player, a mob, or
     /// (none) whoever the enclosing scope already names.
-    pub(super) fn knockback_scope_for(&self, attacker: Option<Who>) -> impl Drop + use<> {
+    pub(super) fn knockback_scope_for(&self, attacker: Option<Who>) -> impl Drop + use<> { if let Some(__l) = crate::points_generated::P3298.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.knockback_scope(match attacker {
             Some(Who::Player) => self.player.as_ref().map_or(0, |p| p.entity_id),
             Some(Who::Mob(id)) => id as i32,
@@ -7856,7 +7856,7 @@ impl GameLevel<'_> {
         source: usize,
         volume: f32,
         pitch: f32,
-    ) -> bool {
+    ) -> bool { let (at,source,volume,pitch,) = match crate::points_generated::P3297.get() { Some(__l) => { let mut __a = (at,source,volume,pitch,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,source,volume,pitch,) };
         if !self.native_authoritative || !mod_sound_ok(sound, at, source, volume, pitch) {
             return false;
         }
@@ -7895,7 +7895,7 @@ impl GameLevel<'_> {
         spread: [f64; 3],
         speed: f64,
         count: i32,
-    ) -> bool {
+    ) -> bool { let (at,spread,speed,count,) = match crate::points_generated::P3296.get() { Some(__l) => { let mut __a = (at,spread,speed,count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,spread,speed,count,) };
         let state_ok = |id| self.registry.state(id).is_some();
         if !self.native_authoritative
             || !mod_particles_ok(options, state, state_ok, at, spread, speed)
@@ -7935,7 +7935,7 @@ impl GameLevel<'_> {
         key: &str,
         value: &str,
         flags: i32,
-    ) -> bool {
+    ) -> bool { let (pos,flags,) = match crate::points_generated::P3295.get() { Some(__l) => { let mut __a = (pos,flags,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,flags,) };
         if !self.native_authoritative {
             return false;
         }
@@ -7950,7 +7950,7 @@ impl GameLevel<'_> {
     /// `EntityBlock.newBlockEntity` of block `name`: a declared mod type
     /// starts with the data `native_block_entity` gives, a mod's sign, else
     /// Horizon's own. The one place both whole-block write paths make it.
-    pub(super) fn new_block_entity(&self, name: &str) -> Option<BlockEntity> {
+    pub(super) fn new_block_entity(&self, name: &str) -> Option<BlockEntity> { if let Some(__l) = crate::points_generated::P3294.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut nbt = None;
         if horizon_client::block_entity_types::type_for(name).is_some() {
             self.native_block_entity(name, &mut nbt);
@@ -7972,7 +7972,7 @@ impl GameLevel<'_> {
         pos: [i32; 3],
         state: BlockStateId,
         flags: i32,
-    ) -> bool {
+    ) -> bool { let (pos,flags,) = match crate::points_generated::P3293.get() { Some(__l) => { let mut __a = (pos,flags,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,flags,) };
         if !self.native_authoritative
             || !self.world.is_loaded_at(pos[0], pos[1], pos[2])
             || self.registry.state(state).is_none()
@@ -8003,7 +8003,7 @@ impl GameLevel<'_> {
         pos: [i32; 3],
         block: &str,
         delay: i32,
-    ) -> bool {
+    ) -> bool { let (pos,delay,) = match crate::points_generated::P3292.get() { Some(__l) => { let mut __a = (pos,delay,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,delay,) };
         let Some(state) = self.registry.default_state(block) else {
             return false;
         };
@@ -8026,7 +8026,7 @@ impl GameLevel<'_> {
         pos: [i32; 3],
         fluid: &str,
         delay: i32,
-    ) -> bool {
+    ) -> bool { let (pos,delay,) = match crate::points_generated::P3291.get() { Some(__l) => { let mut __a = (pos,delay,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,delay,) };
         let Some(kind) = FluidKind::from_name(fluid) else {
             return false;
         };
@@ -8045,14 +8045,14 @@ impl GameLevel<'_> {
         state: BlockStateId,
         key: &str,
         value: &str,
-    ) -> Option<BlockStateId> {
+    ) -> Option<BlockStateId> { if let Some(__l) = crate::points_generated::P3290.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         with_property(self.registry, state, key, value)
     }
     /// The block `state` is a state of (`BlockState.getBlock()`): its name,
     /// `mymod:cable`. `native_state_for_placement` is asked for every block
     /// placed and given the block's default state: compare this with your
     /// block to answer only for it. None for an unknown state.
-    pub(super) fn native_state_block(&self, state: BlockStateId) -> Option<&str> {
+    pub(super) fn native_state_block(&self, state: BlockStateId) -> Option<&str> { if let Some(__l) = crate::points_generated::P3289.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.registry.state(state).map(|s| &*s.name)
     }
     /// This level's own random (vanilla's `Level.random`): the stream
@@ -8062,7 +8062,7 @@ impl GameLevel<'_> {
     /// isn't the server's copy.
     pub(super) fn native_level_random(
         &mut self,
-    ) -> Option<&mut horizon_core::random::LegacyRandom> {
+    ) -> Option<&mut horizon_core::random::LegacyRandom> { if let Some(__l) = crate::points_generated::P3288.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_authoritative.then_some(&mut self.world.random)
     }
 }
@@ -8132,7 +8132,7 @@ fn put_block_entity(world: &mut horizon_client::world::World, pos: [i32; 3], ent
 impl Game<'_> {
     /// The id of the item in the slot under the pointer on the open container screen
     /// (`AbstractContainerScreen.getHoveredSlot().getItem()`), None over no slot or an empty one.
-    pub(super) fn native_screen_hovered_item(&self) -> Option<String> {
+    pub(super) fn native_screen_hovered_item(&self) -> Option<String> { if let Some(__l) = crate::points_generated::P3287.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let size = self
             .renderer
             .as_ref()
@@ -8146,11 +8146,11 @@ impl Game<'_> {
     pub(super) fn native_attachments(
         &mut self,
         holder: Holder,
-    ) -> AttachmentResult<&mut Attachments> {
+    ) -> AttachmentResult<&mut Attachments> { if let Some(__l) = crate::points_generated::P3286.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.attachment_map(holder)
     }
     /// Read a loaded, light-emitting block. No implicit chunk loading.
-    pub(super) fn native_lit_block_name(&self, pos: [i32; 3]) -> Option<&str> {
+    pub(super) fn native_lit_block_name(&self, pos: [i32; 3]) -> Option<&str> { let (pos,) = match crate::points_generated::P3285.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.world
             .chunks
             .contains_key(&(pos[0].div_euclid(16), pos[2].div_euclid(16)))
@@ -8163,7 +8163,7 @@ impl Game<'_> {
             .map(|f| f.name.as_ref())
     }
     /// A small local vanilla particle; caller should rate-limit emission.
-    pub(super) fn native_flame_particle(&mut self, at: [f64; 3], soul: bool) {
+    pub(super) fn native_flame_particle(&mut self, at: [f64; 3], soul: bool) { let (at,soul,) = match crate::points_generated::P3284.get() { Some(__l) => { let mut __a = (at,soul,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,soul,) };
         use horizon_client::particles::{ParticleOptions, ParticleType};
         if !self.native_window() || at.iter().any(|v| !v.is_finite()) {
             return;
@@ -8185,7 +8185,7 @@ impl Game<'_> {
     /// Whether the player left mod `mod_id` on in Options > Mods. A mod
     /// turned off does nothing (check this first in each hook) until the
     /// launcher's next build leaves it out.
-    pub(super) fn native_on(&self, mod_id: &str) -> bool {
+    pub(super) fn native_on(&self, mod_id: &str) -> bool { if let Some(__l) = crate::points_generated::P3283.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         !self.settings.mods.disabled.contains(mod_id)
     }
     /// Sets a block in the current authoritative level through `Level.setBlock`.
@@ -8199,7 +8199,7 @@ impl Game<'_> {
         pos: [i32; 3],
         state: BlockStateId,
         flags: i32,
-    ) -> bool {
+    ) -> bool { let (pos,flags,) = match crate::points_generated::P3282.get() { Some(__l) => { let mut __a = (pos,flags,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,flags,) };
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
             || self.pack.assets.registry.state(state).is_none()
@@ -8217,7 +8217,7 @@ impl Game<'_> {
     /// a client's copy of the world and for another dimension. A mod's
     /// explosive, launcher or machine reads it in its block entity's tick to
     /// go off or switch on.
-    pub(super) fn native_neighbor_signal(&mut self, dimension: &str, pos: [i32; 3]) -> i32 {
+    pub(super) fn native_neighbor_signal(&mut self, dimension: &str, pos: [i32; 3]) -> i32 { let (pos,) = match crate::points_generated::P3281.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
         {
@@ -8230,25 +8230,25 @@ impl Game<'_> {
     /// (`Level.getRainLevel` and `Level.getThunderLevel`): what a solar panel
     /// or a wind turbine reads. Both 0 in the Nether and the End, which have
     /// no weather (`Level.canHaveWeather`).
-    pub(super) fn native_weather(&self) -> (f32, f32) {
+    pub(super) fn native_weather(&self) -> (f32, f32) { if let Some(__l) = crate::points_generated::P3280.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.weather_levels(1.0)
     }
     /// The world's time of day in ticks (`Level.getOverworldClockTime`), the
     /// same as `native_clock`'s `day_time`; it keeps counting past 24000, so
     /// take it modulo 24000 for the hour.
-    pub(super) fn native_day_time(&self) -> i64 {
+    pub(super) fn native_day_time(&self) -> i64 { if let Some(__l) = crate::points_generated::P3279.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.world.day_time
     }
     /// The lowest block y and the height of the world in place
     /// (`LevelHeightAccessor.getMinY` and `getHeight`): how deep a quarry or a
     /// miner may dig.
-    pub(super) fn native_world_height(&self) -> (i32, i32) {
+    pub(super) fn native_world_height(&self) -> (i32, i32) { if let Some(__l) = crate::points_generated::P3278.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         (self.world.shape.min_y, self.world.shape.height)
     }
     /// The most of the item `item` one slot holds (`Item.getDefaultMaxStackSize`),
     /// or `None` for an unknown item: for a mod's container that fills or
     /// merges stacks itself.
-    pub(super) fn native_max_stack_size(&self, item: &str) -> Option<u32> {
+    pub(super) fn native_max_stack_size(&self, item: &str) -> Option<u32> { if let Some(__l) = crate::points_generated::P3277.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.res.items().get(item).map(|i| i.max_stack)
     }
     /// The random of the server level `level` names: vanilla's `Level.random`
@@ -8261,7 +8261,7 @@ impl Game<'_> {
     /// client of a server, for a stale handle and for a level not open: the
     /// Nether and the End open when someone first goes there and close after
     /// 300 ticks with nobody in them (`close_idle_levels`).
-    pub(super) fn native_level_random(&mut self, level: LevelRef) -> Option<&mut LegacyRandom> {
+    pub(super) fn native_level_random(&mut self, level: LevelRef) -> Option<&mut LegacyRandom> { if let Some(__l) = crate::points_generated::P3276.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_level_world(level)?;
         if level.dimension() == self.dim.id() {
             Some(&mut self.world.random)
@@ -8282,7 +8282,7 @@ impl Game<'_> {
         dimension: &str,
         min: [f64; 3],
         max: [f64; 3],
-    ) -> Vec<NativeItemEntity> {
+    ) -> Vec<NativeItemEntity> { let (min,max,) = match crate::points_generated::P3275.get() { Some(__l) => { let mut __a = (min,max,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (min,max,) };
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
         {
@@ -8310,7 +8310,7 @@ impl Game<'_> {
         dimension: &str,
         id: u32,
         stack: ItemStack,
-    ) -> bool {
+    ) -> bool { let (id,) = match crate::points_generated::P3274.get() { Some(__l) => { let mut __a = (id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,) };
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
         {
@@ -8337,7 +8337,7 @@ impl Game<'_> {
         pos: [i32; 3],
         key: &str,
         value: &str,
-    ) -> bool {
+    ) -> bool { let (pos,) = match crate::points_generated::P3273.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         self.native_set_block_property_with(pos, key, value, flags::UPDATE_ALL)
     }
     /// `native_set_block_property` with `Level.setBlock`'s `flags`, as a
@@ -8351,7 +8351,7 @@ impl Game<'_> {
         key: &str,
         value: &str,
         flags: i32,
-    ) -> bool {
+    ) -> bool { let (pos,flags,) = match crate::points_generated::P3272.get() { Some(__l) => { let mut __a = (pos,flags,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,flags,) };
         // As `native_set_block`: a window that isn't a server holds a copy.
         if self.serving.is_none() && self.options.dedicated.is_none() {
             return false;
@@ -8373,7 +8373,7 @@ impl Game<'_> {
         &mut self,
         dimension: &str,
         pos: [i32; 3],
-    ) -> bool {
+    ) -> bool { let (pos,) = match crate::points_generated::P3271.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
         {
@@ -8393,7 +8393,7 @@ impl Game<'_> {
         &mut self,
         dimension: &str,
         pos: [i32; 3],
-    ) -> bool {
+    ) -> bool { let (pos,) = match crate::points_generated::P3270.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
         {
@@ -8452,7 +8452,7 @@ impl Game<'_> {
     /// entities). Call it when what clients show changed (a machine started),
     /// not for every tick's progress: a menu's data slots carry that. Nothing
     /// happens for an unloaded block.
-    pub(super) fn native_block_entity_sync(&mut self, pos: [i32; 3]) {
+    pub(super) fn native_block_entity_sync(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P3269.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         if !self.world.loaded(pos[0], pos[2]) {
             return;
         }
@@ -8461,18 +8461,18 @@ impl Game<'_> {
         }
     }
     /// The applied client pause state, not whether a pause screen is open.
-    pub(super) fn native_is_paused(&self) -> bool {
+    pub(super) fn native_is_paused(&self) -> bool { if let Some(__l) = crate::points_generated::P3268.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pause
     }
     /// Playing, with nothing over the world: keys and zoom apply.
-    pub(super) fn native_playing(&self) -> bool {
+    pub(super) fn native_playing(&self) -> bool { if let Some(__l) = crate::points_generated::P3267.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.screen == Screen::Playing
             && self.title.is_none()
             && self.sign_edit.is_none()
             && self.book.is_none()
     }
     /// This `Game` is the window's, not a server's.
-    pub(super) fn native_window(&self) -> bool {
+    pub(super) fn native_window(&self) -> bool { if let Some(__l) = crate::points_generated::P3266.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.options.execution_role == ExecutionRole::Client
     }
     /// Plays sound event `sound` (`minecraft:entity.generic.explode`, or a
@@ -8490,7 +8490,7 @@ impl Game<'_> {
         volume: f32,
         pitch: f32,
         delay: i32,
-    ) -> bool {
+    ) -> bool { let (at,volume,pitch,delay,) = match crate::points_generated::P3265.get() { Some(__l) => { let mut __a = (at,volume,pitch,delay,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,volume,pitch,delay,) };
         if !self.native_window() || !local_sound_ok(sound, at, volume, pitch, delay) {
             return false;
         }
@@ -8515,20 +8515,20 @@ impl Game<'_> {
     /// Whether a box in `corner` shows: F3's debug screen takes both top
     /// corners (its left and right columns), and a bottom corner while one
     /// of its charts is drawn there.
-    pub(super) fn native_corner_shown(&self, corner: Corner) -> bool {
+    pub(super) fn native_corner_shown(&self, corner: Corner) -> bool { if let Some(__l) = crate::points_generated::P3264.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let charts = self.debug_charts.corners(!self.has_singleplayer_server());
         !debug_takes(corner, self.debug, charts)
     }
     /// The GUI's size in GUI pixels, width then height.
-    pub(super) fn native_size(&self, draw: &HudBatch) -> [f32; 2] {
+    pub(super) fn native_size(&self, draw: &HudBatch) -> [f32; 2] { if let Some(__l) = crate::points_generated::P3263.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         [draw.width, draw.height]
     }
     /// The width of `text` in GUI pixels.
-    pub(super) fn native_text_width(&self, text: &str) -> f32 {
+    pub(super) fn native_text_width(&self, text: &str) -> f32 { if let Some(__l) = crate::points_generated::P3262.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         HudBatch::text_width(&self.gui.atlas, text)
     }
     /// A rectangle in GUI pixels, `argb` (0x78000000 is the extras' box).
-    pub(super) fn native_fill(&self, batch: &mut HudBatch, rect: [f32; 4], argb: u32) {
+    pub(super) fn native_fill(&self, batch: &mut HudBatch, rect: [f32; 4], argb: u32) { let (rect,argb,) = match crate::points_generated::P3261.get() { Some(__l) => { let mut __a = (rect,argb,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (rect,argb,) };
         let [x, y, w, h] = rect;
         let [a, r, g, b] = argb.to_be_bytes();
         batch.fill(&self.gui.atlas, x, y, w, h, rgba(r, g, b, a));
@@ -8540,7 +8540,7 @@ impl Game<'_> {
     /// `MOD_IMAGE_SIZE`; false when it is not that
     /// size. The upload costs a texture patch of the image, so send one when the
     /// image changed, not every frame.
-    pub(super) fn native_mod_image(&mut self, width: u32, height: u32, rgba: &[u8]) -> bool {
+    pub(super) fn native_mod_image(&mut self, width: u32, height: u32, rgba: &[u8]) -> bool { let (width,height,) = match crate::points_generated::P3260.get() { Some(__l) => { let mut __a = (width,height,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (width,height,) };
         let Some(rect) = self
             .gui
             .atlas
@@ -8575,7 +8575,7 @@ impl Game<'_> {
         src: [f32; 4],
         dst: [f32; 4],
         tint: Option<u32>,
-    ) -> bool {
+    ) -> bool { let (src,dst,) = match crate::points_generated::P3259.get() { Some(__l) => { let mut __a = (src,dst,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (src,dst,) };
         let Some(mut r) = self.gui.atlas.sprites.get(name).copied() else {
             return false;
         };
@@ -8596,7 +8596,7 @@ impl Game<'_> {
         item: &str,
         at: [f32; 2],
         size: f32,
-    ) -> bool {
+    ) -> bool { let (at,size,) = match crate::points_generated::P3258.get() { Some(__l) => { let mut __a = (at,size,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,size,) };
         if self.res.items().get(item).is_none() {
             return false;
         }
@@ -8614,7 +8614,7 @@ impl Game<'_> {
         stack: &ItemStack,
         at: [f32; 2],
         size: f32,
-    ) -> bool {
+    ) -> bool { let (at,size,) = match crate::points_generated::P3257.get() { Some(__l) => { let mut __a = (at,size,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,size,) };
         // GuiGraphicsExtractor.item and itemDecorations draw nothing for an
         // empty stack.
         if &*stack.item == "minecraft:air" || stack.count == 0 {
@@ -8639,7 +8639,7 @@ impl Game<'_> {
         model: &str,
         at: [f32; 2],
         size: f32,
-    ) -> bool {
+    ) -> bool { let (at,size,) = match crate::points_generated::P3256.get() { Some(__l) => { let mut __a = (at,size,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,size,) };
         if self.res.items().get(item).is_none() {
             return false;
         }
@@ -8657,7 +8657,7 @@ impl Game<'_> {
     }
     /// A quad of corners `points` (in order round it) in GUI pixels, `argb`:
     /// a wedge, a slanted bar, what `native_fill`'s rectangles can't draw.
-    pub(super) fn native_quad(&self, batch: &mut HudBatch, points: [[f32; 2]; 4], argb: u32) {
+    pub(super) fn native_quad(&self, batch: &mut HudBatch, points: [[f32; 2]; 4], argb: u32) { let (argb,) = match crate::points_generated::P3255.get() { Some(__l) => { let mut __a = (argb,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (argb,) };
         let [a, r, g, b] = argb.to_be_bytes();
         batch.fill_quad(&self.gui.atlas, points, rgba(r, g, b, a));
     }
@@ -8673,7 +8673,7 @@ impl Game<'_> {
     /// loads, and anywhere but the window's own client (the server thread, a
     /// dedicated server). A gamepad can close it (B, Start) but not click on
     /// it: its clicks don't reach the mouse hooks.
-    pub(super) fn native_mod_screen_open(&mut self, mod_id: &str) -> bool {
+    pub(super) fn native_mod_screen_open(&mut self, mod_id: &str) -> bool { if let Some(__l) = crate::points_generated::P3254.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // What `screen_hooks_open` would refuse over the world: the mod's
         // screen would be up with no hook to draw or click it.
         let blocked = self.renderer.is_none() || self.mod_screen_blocked();
@@ -8691,20 +8691,20 @@ impl Game<'_> {
         self.native_mod_screen() == Some(mod_id)
     }
     /// Closes mod `mod_id`'s own screen, if it is open.
-    pub(super) fn native_mod_screen_close(&mut self, mod_id: &str) {
+    pub(super) fn native_mod_screen_close(&mut self, mod_id: &str) { if let Some(__l) = crate::points_generated::P3253.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.native_mod_screen().is_some_and(|id| id == mod_id) {
             self.close_mod_screen();
         }
     }
     /// The mod whose own screen is open, if one is (Escape, or another screen
     /// replacing it, closes it).
-    pub(super) fn native_mod_screen(&self) -> Option<&str> {
+    pub(super) fn native_mod_screen(&self) -> Option<&str> { if let Some(__l) = crate::points_generated::P3252.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_mod_screen
             .as_deref()
             .filter(|_| self.screen == Screen::Mod)
     }
     /// A mod's own screen closes (Escape, or `native_mod_screen_close`).
-    pub(super) fn close_mod_screen(&mut self) {
+    pub(super) fn close_mod_screen(&mut self) { if let Some(__l) = crate::points_generated::P3251.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.screen == Screen::Mod {
             self.set_screen(Screen::Playing);
             if self.screen == Screen::Mod {
@@ -8717,27 +8717,27 @@ impl Game<'_> {
     }
     /// The open menu's title (the block's name, or the one it was given),
     /// as plain text.
-    pub(super) fn native_screen_title(&self) -> Option<String> {
+    pub(super) fn native_screen_title(&self) -> Option<String> { if let Some(__l) = crate::points_generated::P3250.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.remote_menu_title().map(|t| t.plain())
     }
     /// The block at `pos` (`mymod:cable`; air where nothing is loaded).
-    pub(super) fn native_block(&self, pos: [i32; 3]) -> String {
+    pub(super) fn native_block(&self, pos: [i32; 3]) -> String { let (pos,) = match crate::points_generated::P3249.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         self.res.facts().get(state).name.to_string()
     }
     /// The most recently extracted world frame's camera, if one exists.
-    pub(super) fn native_camera(&self) -> Option<NativeCamera> {
+    pub(super) fn native_camera(&self) -> Option<NativeCamera> { if let Some(__l) = crate::points_generated::P3248.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_camera_frame.clone()
     }
     /// Collision boxes in block-local coordinates with an empty collision context.
-    pub(super) fn native_block_collision(&self, pos: [i32; 3]) -> Vec<[f64; 6]> {
+    pub(super) fn native_block_collision(&self, pos: [i32; 3]) -> Vec<[f64; 6]> { let (pos,) = match crate::points_generated::P3247.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.native_block_collision_in(&self.world, pos)
     }
     pub(super) fn native_block_collision_in(
         &self,
         world: &horizon_client::world::World,
         pos: [i32; 3],
-    ) -> Vec<[f64; 6]> {
+    ) -> Vec<[f64; 6]> { let (pos,) = match crate::points_generated::P3246.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         self.block_collision_shape_in(world, pos)
             .boxes()
             .iter()
@@ -8750,7 +8750,7 @@ impl Game<'_> {
     }
     /// Property `key` of the block at `pos` (a machine's `facing`), if it
     /// has one.
-    pub(super) fn native_block_property(&self, pos: [i32; 3], key: &str) -> Option<String> {
+    pub(super) fn native_block_property(&self, pos: [i32; 3], key: &str) -> Option<String> { let (pos,) = match crate::points_generated::P3245.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         self.pack
             .assets
@@ -8762,7 +8762,7 @@ impl Game<'_> {
     }
     /// The window's width and height in physical pixels, independent of GUI
     /// scale; none on a server or when no window exists.
-    pub(super) fn native_physical_window_size(&self) -> Option<[u32; 2]> {
+    pub(super) fn native_physical_window_size(&self) -> Option<[u32; 2]> { if let Some(__l) = crate::points_generated::P3244.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let size = self.window.as_ref()?.inner_size();
         Some([size.width, size.height])
     }
@@ -8773,7 +8773,7 @@ impl Game<'_> {
     /// non-finite one is dropped. A mod that lays out its own panels
     /// (a recipe viewer) keeps them clear of these. Client-side; empty with
     /// no screen up.
-    pub(super) fn native_screen_exclusion(&self) -> Vec<[f32; 4]> {
+    pub(super) fn native_screen_exclusion(&self) -> Vec<[f32; 4]> { if let Some(__l) = crate::points_generated::P3243.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(view) = self.observed_screen_view() else {
             return Vec::new();
         };
@@ -8787,7 +8787,7 @@ impl Game<'_> {
         areas
     }
     /// The areas the game itself draws beside the open screen's window.
-    fn screen_own_exclusion(&self, batch: &HudBatch) -> Vec<[f32; 4]> {
+    fn screen_own_exclusion(&self, batch: &HudBatch) -> Vec<[f32; 4]> { if let Some(__l) = crate::points_generated::P3242.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut areas = Vec::new();
         match self.screen {
             Screen::Creative => {
@@ -8814,11 +8814,11 @@ impl Game<'_> {
         areas
     }
     /// Where the mouse is, in GUI pixels.
-    pub(super) fn native_cursor(&self) -> [f32; 2] {
+    pub(super) fn native_cursor(&self) -> [f32; 2] { if let Some(__l) = crate::points_generated::P3241.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         [self.cursor.0, self.cursor.1]
     }
     /// The size of sprite `name` in its own pixels, if there is one.
-    pub(super) fn native_sprite_size(&self, name: &str) -> Option<[f32; 2]> {
+    pub(super) fn native_sprite_size(&self, name: &str) -> Option<[f32; 2]> { if let Some(__l) = crate::points_generated::P3240.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let r = self.gui.atlas.sprites.get(name)?;
         Some([r.w as f32, r.h as f32])
     }
@@ -8830,14 +8830,14 @@ impl Game<'_> {
         at: [f32; 2],
         rgb: u32,
         shadow: bool,
-    ) {
+    ) { let (at,rgb,shadow,) = match crate::points_generated::P3239.get() { Some(__l) => { let mut __a = (at,rgb,shadow,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (at,rgb,shadow,) };
         let [x, y] = at;
         let [_, r, g, b] = rgb.to_be_bytes();
         let color = rgba(r, g, b, 0xFF);
         batch.text_styled(&self.gui.atlas, &Text::literal(text), x, y, color, shadow);
     }
     /// The player, in a world.
-    pub(super) fn native_player(&self) -> Option<NativePlayer> {
+    pub(super) fn native_player(&self) -> Option<NativePlayer> { if let Some(__l) = crate::points_generated::P3238.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let p = self.player.as_ref()?;
         Some(NativePlayer {
             x: p.position.x,
@@ -8852,7 +8852,7 @@ impl Game<'_> {
     /// time and time of day as the server last sent them
     /// (`ClientboundSetTimePacket`), advanced each tick between packets; none
     /// on the title screen.
-    pub(super) fn native_clock(&self) -> Option<NativeClock> {
+    pub(super) fn native_clock(&self) -> Option<NativeClock> { if let Some(__l) = crate::points_generated::P3237.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player.is_some().then_some(NativeClock {
             game_time: self.world.game_time,
             day_time: self.world.day_time,
@@ -8860,16 +8860,16 @@ impl Game<'_> {
     }
     /// The frame counter: frames in the last second, the slowest frame and
     /// the 1% low of the last 5 seconds, in frames per second.
-    pub(super) fn native_frame_rate(&self) -> (u32, u32, u32) {
+    pub(super) fn native_frame_rate(&self) -> (u32, u32, u32) { if let Some(__l) = crate::points_generated::P3236.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.frame_reading()
     }
     /// Attack and use clicks in the last second.
-    pub(super) fn native_clicks(&mut self) -> (u32, u32) {
+    pub(super) fn native_clicks(&mut self) -> (u32, u32) { if let Some(__l) = crate::points_generated::P3235.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.mouse_reading().0
     }
     /// A vanilla mapping (`key.forward`, `key.jump`, `key.attack`…): whether
     /// it is held, and its key's label as Controls shows it.
-    pub(super) fn native_mapping(&mut self, name: &str) -> Option<(bool, String)> {
+    pub(super) fn native_mapping(&mut self, name: &str) -> Option<(bool, String)> { if let Some(__l) = crate::points_generated::P3234.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let &(_, key) = MAPPINGS.iter().find(|m| m.0 == name)?;
         let label = keybinds::display_name(self.settings.keys.get(name)).plain();
         let down = match key {
@@ -8881,7 +8881,7 @@ impl Game<'_> {
     /// The key the player chose for a mod's key `name`, else `default`
     /// (`key.keyboard.z`), as the WebAssembly mods' keys were kept
     /// (`key.<mod id>.<name>` in `horizon-mods.txt`).
-    pub(super) fn native_mod_key(&self, mod_id: &str, name: &str, default: &str) -> String {
+    pub(super) fn native_mod_key(&self, mod_id: &str, name: &str, default: &str) -> String { if let Some(__l) = crate::points_generated::P3233.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let chosen = self
             .settings
             .mods
@@ -8891,7 +8891,7 @@ impl Game<'_> {
         chosen.map_or(default, String::as_str).to_owned()
     }
     /// A line in chat from the client.
-    pub(super) fn native_chat(&mut self, text: &str) {
+    pub(super) fn native_chat(&mut self, text: &str) { if let Some(__l) = crate::points_generated::P3232.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let focused = self.screen == Screen::Chat;
         let line = Text::literal(text);
         let atlas = &self.gui.atlas;
@@ -8905,13 +8905,13 @@ impl Game<'_> {
     /// `datapacks/` is in that world's folder (`saves/<world>/datapacks`).
     /// The folder the game runs in (`--player-dir` moves a player's options
     /// and servers only, not the instance). Nothing is created.
-    pub(super) fn native_instance_dir(&self) -> PathBuf {
+    pub(super) fn native_instance_dir(&self) -> PathBuf { if let Some(__l) = crate::points_generated::P3231.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Self::game_dir()
     }
     /// A native mod's own folder: `horizon-mods/.horizon-mod-data/<id>/`,
     /// where the WebAssembly mod of the same id kept its storage, so a
     /// player's settings carry over. Not created here.
-    pub(super) fn native_data_dir(&self, mod_id: &str) -> PathBuf {
+    pub(super) fn native_data_dir(&self, mod_id: &str) -> PathBuf { if let Some(__l) = crate::points_generated::P3230.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Self::mod_data_root().join(mod_id)
     }
     pub(super) fn mod_data_root() -> PathBuf {
@@ -8920,11 +8920,11 @@ impl Game<'_> {
             .join(".horizon-mod-data")
     }
     /// A mod's setting `key` (one file per key in `native_data_dir`).
-    pub(super) fn native_setting(&self, mod_id: &str, key: &str) -> Option<String> {
+    pub(super) fn native_setting(&self, mod_id: &str, key: &str) -> Option<String> { if let Some(__l) = crate::points_generated::P3229.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         horizon_world::native_load_context::read_setting(&self.native_data_dir(mod_id), key)
     }
     /// Keeps a mod's setting `key`.
-    pub(super) fn native_set_setting(&self, mod_id: &str, key: &str, value: &str) {
+    pub(super) fn native_set_setting(&self, mod_id: &str, key: &str, value: &str) { if let Some(__l) = crate::points_generated::P3228.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let dir = self.native_data_dir(mod_id);
         let _ = fs::create_dir_all(&dir).and_then(|()| fs::write(dir.join(key), value));
     }
@@ -8941,7 +8941,7 @@ impl Game<'_> {
     /// player's clicks, searches and keys over items come back as
     /// `native_panel_event`. The panel is the last mod's to show one; empty
     /// items and no recipe page take yours away.
-    pub(super) fn native_panel_items(&mut self, mod_id: &str, items: Vec<NativeStack>) {
+    pub(super) fn native_panel_items(&mut self, mod_id: &str, items: Vec<NativeStack>) { if let Some(__l) = crate::points_generated::P3227.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.panel.show_items(mod_id, items);
     }
     /// Shows these recipes in the panel instead of its items, as many as
@@ -8956,7 +8956,7 @@ impl Game<'_> {
         tabs: Vec<NativeStack>,
         tab: u32,
         views: Vec<NativeRecipeView>,
-    ) {
+    ) { let (tab,) = match crate::points_generated::P3226.get() { Some(__l) => { let mut __a = (tab,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (tab,) };
         let page = RecipePage::new(title, tabs, tab, views);
         self.panel.show_recipes(mod_id, page);
     }
@@ -8972,7 +8972,7 @@ impl Game<'_> {
     /// single-player window included, sees vanilla's and the content mods' recipes,
     /// not the world's data packs', unless a mod had the server send it the type
     /// (`native_datapack_sync`).
-    pub(super) fn native_recipes_of_type(&self, kind: &str) -> &[RecipeFile] {
+    pub(super) fn native_recipes_of_type(&self, kind: &str) -> &[RecipeFile] { if let Some(__l) = crate::points_generated::P3225.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.outside_world() {
             return &[];
         }
@@ -8981,7 +8981,7 @@ impl Game<'_> {
     /// The validated category and icon of a custom recipe type, or None for
     /// an undeclared/invalid type, before resources load, or outside a world.
     /// Rebuilt when the recipe table changes. Does not unlock any recipes.
-    pub(super) fn native_recipe_book_category(&mut self, kind: &str) -> Option<RecipeBookCategory> {
+    pub(super) fn native_recipe_book_category(&mut self, kind: &str) -> Option<RecipeBookCategory> { if let Some(__l) = crate::points_generated::P3224.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.outside_world() || self.res.rest.get().is_none() {
             return None;
         }
@@ -8992,7 +8992,7 @@ impl Game<'_> {
     /// whether a stack fits. Items the game doesn't know are left out; None
     /// when nothing is left (an unknown or empty tag, for one) and outside a
     /// world.
-    pub(super) fn native_recipe_ingredient(&self, json: &serde_json::Value) -> Option<Ingredient> {
+    pub(super) fn native_recipe_ingredient(&self, json: &serde_json::Value) -> Option<Ingredient> { if let Some(__l) = crate::points_generated::P3223.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.outside_world() {
             return None;
         }
@@ -9022,7 +9022,7 @@ impl Game<'_> {
     /// `minecraft:`), `count` (1 by default, up to 99) and `components`. None
     /// without an `id`, for an item the game doesn't know or a count outside
     /// that, and outside a world.
-    pub(super) fn native_recipe_result(&self, json: &serde_json::Value) -> Option<ItemStack> {
+    pub(super) fn native_recipe_result(&self, json: &serde_json::Value) -> Option<ItemStack> { if let Some(__l) = crate::points_generated::P3222.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.outside_world() {
             return None;
         }
@@ -9035,7 +9035,7 @@ impl Game<'_> {
     /// No world is open: a client without a player (the title screen). A
     /// server's `Game` (the server thread, a dedicated server, a LAN host)
     /// has no player of its own, and is always in its world.
-    fn outside_world(&self) -> bool {
+    fn outside_world(&self) -> bool { if let Some(__l) = crate::points_generated::P3221.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.player.is_none() && self.options.execution_role.is_client()
     }
     /// Every item and recipe the game knows, made once (the same for every
@@ -9043,13 +9043,13 @@ impl Game<'_> {
     /// mods' and vanilla's), with the server's recipes of the types a mod had
     /// it send (`native_datapack_sync`) in their place; made again when those
     /// arrive (`native_recipes_received`).
-    pub(super) fn native_recipes(&mut self) -> Option<Arc<NativeRecipes>> {
+    pub(super) fn native_recipes(&mut self) -> Option<Arc<NativeRecipes>> { if let Some(__l) = crate::points_generated::P3220.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.player.as_ref()?;
         self.made_recipes()
     }
     /// The `book_id`s of the recipes the player's recipe book holds now
     /// (the server's book on a server); empty outside a world.
-    pub(super) fn native_known_recipes(&mut self) -> Arc<[i32]> {
+    pub(super) fn native_known_recipes(&mut self) -> Arc<[i32]> { if let Some(__l) = crate::points_generated::P3219.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player.is_none() {
             return Arc::from([]);
         }
@@ -9060,7 +9060,7 @@ impl Game<'_> {
     /// crafting table's. `all` places as many as the items allow, as with
     /// Shift. Refused while no such screen is open and for a recipe the
     /// player's book doesn't hold; one missing items shows as a ghost.
-    pub(super) fn native_place_recipe(&mut self, book_id: i32, all: bool) -> Result<(), String> {
+    pub(super) fn native_place_recipe(&mut self, book_id: i32, all: bool) -> Result<(), String> { let (book_id,all,) = match crate::points_generated::P3218.get() { Some(__l) => { let mut __a = (book_id,all,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (book_id,all,) };
         self.recipe_place(book_id, all)
     }
     /// Presses button `button` of the open menu, as a click on one of its
@@ -9071,7 +9071,7 @@ impl Game<'_> {
     /// input on a menu's screen where `native_screen_click` doesn't come — a
     /// key, the wheel. No sound: that is the screen's. Err while no menu the
     /// server opened is open.
-    pub(super) fn native_click_menu_button(&self, button: i32) -> Result<(), String> {
+    pub(super) fn native_click_menu_button(&self, button: i32) -> Result<(), String> { let (button,) = match crate::points_generated::P3217.get() { Some(__l) => { let mut __a = (button,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (button,) };
         let Some(container) = self
             .remote
             .as_ref()
@@ -9091,7 +9091,7 @@ impl Game<'_> {
     /// (`minecraft:diamond`) as taking it from the creative inventory does
     /// (`ServerboundSetCreativeModeSlot`): the selected slot first, then the
     /// hotbar, then the inventory. The count is cut to one stack.
-    pub(super) fn native_give(&mut self, item: &str, count: u32) -> Result<(), String> {
+    pub(super) fn native_give(&mut self, item: &str, count: u32) -> Result<(), String> { let (count,) = match crate::points_generated::P3216.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         self.recipe_give(item, count)
     }
 }
@@ -9141,7 +9141,7 @@ impl Game<'_> {
         pos: BlockPos,
         by_player: bool,
         stack: &mut ItemStack,
-    ) -> Option<bool> {
+    ) -> Option<bool> { let (by_player,) = match crate::points_generated::P3215.get() { Some(__l) => { let mut __a = (by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (by_player,) };
         if !mod_api::__private::listened(mod_api::HookId::Bonemeal) {
             return None;
         }
@@ -9172,7 +9172,7 @@ impl Game<'_> {
     /// The player clicking, as the block-use hooks name them: the acting
     /// player's UUID and entity id on a server, this client's own player on
     /// a client.
-    pub(super) fn native_clicker(&mut self) -> (u128, i32) {
+    pub(super) fn native_clicker(&mut self) -> (u128, i32) { if let Some(__l) = crate::points_generated::P3214.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return (self.own_uuid(), self.own_entity_id());
         }
@@ -9188,7 +9188,7 @@ impl Game<'_> {
         hit: &super::Hit,
         hand: Hand,
         stack: Option<&ItemStack>,
-    ) -> BlockClickAnswer {
+    ) -> BlockClickAnswer { if let Some(__l) = crate::points_generated::P3213.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (mut use_block, mut use_item) = (NativeTriState::Default, NativeTriState::Default);
         if !mod_api::__private::listened(mod_api::HookId::RightClickBlock) {
             return BlockClickAnswer::Go {
@@ -9221,7 +9221,7 @@ impl Game<'_> {
         hand: Hand,
         stack: Option<&ItemStack>,
         phase: UsePhase,
-    ) -> Option<NativeInteractionResult> {
+    ) -> Option<NativeInteractionResult> { if let Some(__l) = crate::points_generated::P3212.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !mod_api::__private::listened(mod_api::HookId::UseItemOnBlock) {
             return None;
         }
@@ -9250,7 +9250,7 @@ impl Game<'_> {
         &mut self,
         hand: Hand,
         stack: &ItemStack,
-    ) -> Option<NativeInteractionResult> {
+    ) -> Option<NativeInteractionResult> { if let Some(__l) = crate::points_generated::P3211.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if !mod_api::__private::listened(mod_api::HookId::RightClickItem)
             || self.entity_targeted()
             || self.pick().is_some()
@@ -9288,7 +9288,7 @@ impl Game<'_> {
         hit: &super::Hit,
         hand: Hand,
         stack: Option<&'a ItemStack>,
-    ) -> NativeBlockClick<'a> {
+    ) -> NativeBlockClick<'a> { if let Some(__l) = crate::points_generated::P3210.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (player, player_entity_id) = self.native_clicker();
         NativeBlockClick::from(mod_api::__private::built::NativeBlockClick {
             side: if self.remote.is_some() {
@@ -9312,14 +9312,14 @@ impl Game<'_> {
         name: &str,
         value: GameRuleValue,
         actor: Option<&GameRuleActor<'_>>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3209.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if mod_api::__private::listened(mod_api::HookId::GameRuleChanged) {
             self.native_game_rule_changed(&["minecraft:", name].concat(), value, actor);
         }
     }
     /// `MobSplitEvent` for the dying cube mob `m`, which made `count`
     /// children: how many to spawn.
-    pub(super) fn mob_split_count(&mut self, m: &horizon_client::mobs::Mob, count: u32) -> u32 {
+    pub(super) fn mob_split_count(&mut self, m: &horizon_client::mobs::Mob, count: u32) -> u32 { let (count,) = match crate::points_generated::P3208.get() { Some(__l) => { let mut __a = (count,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (count,) };
         if !mod_api::__private::listened(mod_api::HookId::MobSplit) {
             return count;
         }
@@ -9336,7 +9336,7 @@ impl Game<'_> {
         index: usize,
         tamer: u128,
         tamer_entity_id: i32,
-    ) -> bool {
+    ) -> bool { let (index,tamer_entity_id,) = match crate::points_generated::P3207.get() { Some(__l) => { let mut __a = (index,tamer_entity_id,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,tamer_entity_id,) };
         if !mod_api::__private::listened(mod_api::HookId::AnimalTame) {
             return false;
         }
@@ -9347,7 +9347,7 @@ impl Game<'_> {
         cancel
     }
     /// `entity_tame` for the pet at `index`, just tamed by its owner.
-    pub(super) fn pet_tamed(&mut self, index: usize) {
+    pub(super) fn pet_tamed(&mut self, index: usize) { let (index,) = match crate::points_generated::P3206.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         let (entity, kind) = (m.id, mob_kind(m));
         let owner = m
@@ -9358,7 +9358,7 @@ impl Game<'_> {
     }
     /// The acting player as the hook points name one: the guest whose turn
     /// it is, else the host.
-    pub(super) fn native_acting_id(&mut self) -> u128 {
+    pub(super) fn native_acting_id(&mut self) -> u128 { if let Some(__l) = crate::points_generated::P3205.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         horizon_client::lan::playerdata::ints_uuid(self.acting_player_uuid())
     }
     /// The mods' say on a broken block's drops (`native_loot_drops`).
@@ -9370,7 +9370,7 @@ impl Game<'_> {
         tool: Option<&ItemStack>,
         explosion: Option<f32>,
         drops: &mut Vec<ItemStack>,
-    ) {
+    ) { let (pos,) = match crate::points_generated::P3204.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let items = match &self.world_tables {
             Some(tables) => &tables.items,
             None => self.res.items(),
@@ -9402,7 +9402,7 @@ impl Game<'_> {
         player: Option<u128>,
         tool: Option<&ItemStack>,
         drops: &mut Vec<ItemStack>,
-    ) {
+    ) { let (origin,) = match crate::points_generated::P3203.get() { Some(__l) => { let mut __a = (origin,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (origin,) };
         let context = NativeLootDrops::from(mod_api::__private::built::NativeLootDrops {
             table,
             dimension: self.dim.id(),
@@ -9418,14 +9418,14 @@ impl Game<'_> {
         drops.retain(|stack| stack.count > 0 && &*stack.item != "minecraft:air");
     }
     /// Whether a native mod keeps the acting player from taking `stack`.
-    pub(super) fn native_pickup_refused(&mut self, stack: &ItemStack) -> bool {
+    pub(super) fn native_pickup_refused(&mut self, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P3202.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let player = self.native_acting_id();
         let mut canceled = false;
         self.native_item_picked_up(player, &stack.item, stack.count, &mut canceled);
         canceled
     }
     /// Tells the mods of the chunks that came into this level.
-    pub(super) fn native_chunks_loaded(&mut self) {
+    pub(super) fn native_chunks_loaded(&mut self) { if let Some(__l) = crate::points_generated::P3201.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let loaded = std::mem::take(&mut self.world.loaded_chunks);
         if self.remote.is_some() {
             return;
@@ -9439,7 +9439,7 @@ impl Game<'_> {
     pub(super) fn native_chunks_unloaded(
         &mut self,
         unloaded: &[std::sync::Arc<horizon_client::chunk::Chunk>],
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3200.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.remote.is_some() {
             return;
         }
@@ -9450,7 +9450,7 @@ impl Game<'_> {
     }
     /// The players still here leave with the server (`PlayerList.removeAll`):
     /// the mods hear it once, whichever path closes it.
-    pub(super) fn native_players_leaving(&mut self) {
+    pub(super) fn native_players_leaving(&mut self) { if let Some(__l) = crate::points_generated::P3199.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(host) = self.lan.as_mut() else {
             return;
         };
@@ -9471,7 +9471,7 @@ impl Game<'_> {
         self.flush_native_net();
     }
     /// The mobs from index `from` on are new in the world.
-    pub(super) fn native_mobs_joined(&mut self, from: usize, natural: bool) {
+    pub(super) fn native_mobs_joined(&mut self, from: usize, natural: bool) { let (from,natural,) = match crate::points_generated::P3198.get() { Some(__l) => { let mut __a = (from,natural,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (from,natural,) };
         // A mod can keep a mob out; it is then taken out and not told of.
         self.native_joins_flush(false, 0);
         for i in from..self.mobs.len() {
@@ -9481,20 +9481,20 @@ impl Game<'_> {
         }
     }
     /// The acting player's blow killed mob `index`.
-    pub(super) fn native_kill_event(&mut self, index: usize) {
+    pub(super) fn native_kill_event(&mut self, index: usize) { let (index,) = match crate::points_generated::P3197.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let (entity, kind) = (self.mobs[index].id, mob_kind(&self.mobs[index]));
         let player = self.native_acting_id();
         self.native_mob_killed(player, entity, &kind);
     }
     /// The acting player's hit landed on mob `index`, holding `stack`.
-    pub(super) fn native_hurt_enemy_event(&mut self, stack: &ItemStack, index: usize) {
+    pub(super) fn native_hurt_enemy_event(&mut self, stack: &ItemStack, index: usize) { let (index,) = match crate::points_generated::P3196.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let mob = &self.mobs[index];
         let kind = ["minecraft:", mob.kind.id.trim_start_matches("minecraft:")].concat();
         self.native_hurt_enemy(stack, mob.id, &kind);
     }
     /// `Inventory.tick` for the acting player: each carried stack goes through
     /// `native_inventory_tick`.
-    pub(super) fn native_inventory_ticks(&mut self) {
+    pub(super) fn native_inventory_ticks(&mut self) { if let Some(__l) = crate::points_generated::P3195.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.player.is_none() {
             return;
         }
@@ -9507,7 +9507,7 @@ impl Game<'_> {
         }
         self.native_slot_tick(-106, false);
     }
-    fn native_slot_tick(&mut self, slot: i32, selected: bool) {
+    fn native_slot_tick(&mut self, slot: i32, selected: bool) { let (slot,selected,) = match crate::points_generated::P3194.get() { Some(__l) => { let mut __a = (slot,selected,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,selected,) };
         if self.native_carried_slot(slot).is_none_or(|s| s.is_none()) {
             return;
         }
@@ -9520,7 +9520,7 @@ impl Game<'_> {
     }
     /// The slot a player's carried stack is in, by `native_inventory_tick`'s
     /// numbers: none for another number.
-    pub(super) fn native_carried_slot(&mut self, slot: i32) -> Option<&mut Option<ItemStack>> {
+    pub(super) fn native_carried_slot(&mut self, slot: i32) -> Option<&mut Option<ItemStack>> { let (slot,) = match crate::points_generated::P3193.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         match slot {
             0.. if (slot as usize) < self.inventory.len() => self.inventory.get_mut(slot as usize),
             100..=103 => self.armor.get_mut(103 - slot as usize),
@@ -9532,7 +9532,7 @@ impl Game<'_> {
     /// native mod's, made as a write of the level creates it
     /// (`GameLevel::new_block_entity`). Only a declared mod type builds the
     /// level.
-    pub(super) fn new_block_entity(&mut self, name: &str) -> Option<BlockEntity> {
+    pub(super) fn new_block_entity(&mut self, name: &str) -> Option<BlockEntity> { if let Some(__l) = crate::points_generated::P3192.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if horizon_client::block_entity_types::type_for(name).is_none() {
             return block_entity_for_block(
                 self.pack.assets.registry,
@@ -9545,7 +9545,7 @@ impl Game<'_> {
     }
     /// The containers of the mod blocks' block entities, by block state
     /// (`native_block_entity_container`), checked.
-    pub(super) fn native_containers(&self) -> FxHashMap<u32, Arc<ModContainer>> {
+    pub(super) fn native_containers(&self) -> FxHashMap<u32, Arc<ModContainer>> { if let Some(__l) = crate::points_generated::P3191.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let registry = self.pack.assets.registry;
         let mut by_block: FxHashMap<String, Option<Arc<ModContainer>>> = FxHashMap::default();
         let mut out = FxHashMap::default();
@@ -9579,7 +9579,7 @@ impl Game<'_> {
     }
     /// The fluid tanks of the mod blocks' block entities, by block state
     /// (`native_block_entity_fluids`), checked as the containers are.
-    pub(super) fn native_fluid_tables(&self) -> FxHashMap<u32, Arc<ModFluidTanks>> {
+    pub(super) fn native_fluid_tables(&self) -> FxHashMap<u32, Arc<ModFluidTanks>> { if let Some(__l) = crate::points_generated::P3190.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let registry = self.pack.assets.registry;
         let mut by_block: FxHashMap<String, Option<Arc<ModFluidTanks>>> = FxHashMap::default();
         let mut out = FxHashMap::default();
@@ -9615,7 +9615,7 @@ impl Game<'_> {
     }
     /// The energy buffers of the mod blocks' block entities, by block state
     /// (`native_block_entity_energy`), checked as the containers are.
-    pub(super) fn native_energy_tables(&self) -> FxHashMap<u32, Arc<ModEnergyBuffer>> {
+    pub(super) fn native_energy_tables(&self) -> FxHashMap<u32, Arc<ModEnergyBuffer>> { if let Some(__l) = crate::points_generated::P3189.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let registry = self.pack.assets.registry;
         let mut by_block: FxHashMap<String, Option<Arc<ModEnergyBuffer>>> = FxHashMap::default();
         let mut out = FxHashMap::default();
@@ -9642,14 +9642,14 @@ impl Game<'_> {
         out
     }
     /// Whether a native mod's block `name` has a ticking block entity.
-    pub(super) fn native_ticks(&self, name: &str) -> bool {
+    pub(super) fn native_ticks(&self, name: &str) -> bool { if let Some(__l) = crate::points_generated::P3188.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut ticks = false;
         self.native_block_entity_ticks(name, &mut ticks);
         ticks
     }
     /// A mod block's container at `key` opens its menu: its slots grown to
     /// the menu's. False for any other block.
-    pub(super) fn open_mod_menu(&mut self, key: Pos) -> bool {
+    pub(super) fn open_mod_menu(&mut self, key: Pos) -> bool { if let Some(__l) = crate::points_generated::P3187.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let state = self.world.block(key.0, key.1, key.2).0;
         let Some(c) = self.world.block_entities.mod_container(state) else {
             return false;
@@ -9672,7 +9672,7 @@ impl Game<'_> {
     /// openers are the guests (but not a spectator, `BarrelBlockEntity.startOpen`),
     /// the host's own player, and the copper golems that opened it
     /// (`chest_openers`).
-    pub(super) fn tick_mod_container_viewers(&mut self) {
+    pub(super) fn tick_mod_container_viewers(&mut self) { if let Some(__l) = crate::points_generated::P3186.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut now: HashMap<(i32, i32, i32), u32> = HashMap::new();
         let mut open = |game: &Self, pos: (i32, i32, i32), n: u32| {
             if n > 0 && game.mod_menu_at(pos).is_some() {
@@ -9705,7 +9705,7 @@ impl Game<'_> {
         }
     }
     /// The menu type of the mod container at `key`, if it has one.
-    pub(super) fn mod_menu_at(&self, key: Pos) -> Option<&'static str> {
+    pub(super) fn mod_menu_at(&self, key: Pos) -> Option<&'static str> { if let Some(__l) = crate::points_generated::P3185.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let state = self.world.block(key.0, key.1, key.2).0;
         let c = self.world.block_entities.mod_container(state)?;
         mod_menu(c.menu.as_deref()?).map(|(menu, _)| menu)
@@ -9713,7 +9713,7 @@ impl Game<'_> {
     /// The container slots (of `size`) that the mod's screen for the block at
     /// `pos` does not show: the server's menu does not have them either, so a
     /// shift-click never moves an item where the player cannot see it.
-    pub(super) fn native_hidden_slots(&self, pos: Pos, size: usize) -> Vec<usize> {
+    pub(super) fn native_hidden_slots(&self, pos: Pos, size: usize) -> Vec<usize> { let (size,) = match crate::points_generated::P3184.get() { Some(__l) => { let mut __a = (size,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (size,) };
         if self.mod_menu_at(pos).is_none() {
             return Vec::new();
         }
@@ -9740,7 +9740,7 @@ impl Game<'_> {
         target: Option<Pos>,
         window: i32,
         menu: &str,
-    ) {
+    ) { let (window,) = match crate::points_generated::P3183.get() { Some(__l) => { let mut __a = (window,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (window,) };
         self.mod_screen = None;
         let Some(t) = target else {
             return;
@@ -9777,14 +9777,14 @@ impl Game<'_> {
         }
     }
     /// The mod screen showing now, if any.
-    fn shown_native_screen(&self) -> Option<&OpenNativeScreen> {
+    fn shown_native_screen(&self) -> Option<&OpenNativeScreen> { if let Some(__l) = crate::points_generated::P3182.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.mod_screen
             .as_ref()
             .filter(|s| self.screen == Screen::Inventory && self.container == Some(s.key))
     }
     /// A data slot of window `window`'s menu (`ContainerSetData`); false
     /// when no mod screen is showing for that window.
-    pub(super) fn native_screen_data(&mut self, window: i32, id: i16, value: i16) -> bool {
+    pub(super) fn native_screen_data(&mut self, window: i32, id: i16, value: i16) -> bool { let (window,id,value,) = match crate::points_generated::P3181.get() { Some(__l) => { let mut __a = (window,id,value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (window,id,value,) };
         if self.shown_native_screen().is_none() {
             return false;
         }
@@ -9795,15 +9795,15 @@ impl Game<'_> {
     /// Whether a mod's screen is open for the current menu: it places its own
     /// container slots and the player's inventory, so the stock layout of the
     /// vanilla menu underneath stands back (`slot_position`).
-    pub(super) fn native_screen_shown(&self) -> bool {
+    pub(super) fn native_screen_shown(&self) -> bool { if let Some(__l) = crate::points_generated::P3180.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.shown_native_screen().is_some()
     }
     /// The open mod screen's height.
-    pub(super) fn native_screen_height(&self) -> Option<f32> {
+    pub(super) fn native_screen_height(&self) -> Option<f32> { if let Some(__l) = crate::points_generated::P3179.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.shown_native_screen().map(|s| s.screen.height)
     }
     /// Where the open mod screen puts container slot `slot`.
-    pub(super) fn native_screen_slot(&self, slot: usize) -> Option<(f32, f32)> {
+    pub(super) fn native_screen_slot(&self, slot: usize) -> Option<(f32, f32)> { let (slot,) = match crate::points_generated::P3178.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let s = self.shown_native_screen()?;
         s.screen
             .slots
@@ -9813,7 +9813,7 @@ impl Game<'_> {
             .map(|p| (p[0], p[1]))
     }
     /// The container slots the open mod screen shows (300.. ids).
-    pub(super) fn native_screen_slots(&self) -> Option<Vec<usize>> {
+    pub(super) fn native_screen_slots(&self) -> Option<Vec<usize>> { if let Some(__l) = crate::points_generated::P3177.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let s = self.shown_native_screen()?;
         let shown = s.screen.slots.iter().enumerate();
         Some(
@@ -9825,26 +9825,26 @@ impl Game<'_> {
     }
     /// How many of those slots `native_screen_slots` lists, without building
     /// it (`Game::slot_count` asks every frame).
-    pub(super) fn native_screen_slot_count(&self) -> Option<usize> {
+    pub(super) fn native_screen_slot_count(&self) -> Option<usize> { if let Some(__l) = crate::points_generated::P3176.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let s = self.shown_native_screen()?;
         Some(s.screen.slots.iter().filter(|p| p.is_some()).count())
     }
     /// The first row of the player's inventory on the open mod screen.
-    pub(super) fn native_screen_inventory_y(&self) -> Option<f32> {
+    pub(super) fn native_screen_inventory_y(&self) -> Option<f32> { if let Some(__l) = crate::points_generated::P3175.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.shown_native_screen().map(|s| s.screen.inventory_y)
     }
     /// The open mod screen's inventory's left column.
-    pub(super) fn native_screen_inventory_x(&self) -> Option<f32> {
+    pub(super) fn native_screen_inventory_x(&self) -> Option<f32> { if let Some(__l) = crate::points_generated::P3174.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.shown_native_screen().map(|s| s.screen.inventory_x)
     }
     /// The open mod screen's width.
-    pub(super) fn native_screen_width(&self) -> Option<f32> {
+    pub(super) fn native_screen_width(&self) -> Option<f32> { if let Some(__l) = crate::points_generated::P3173.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.shown_native_screen().map(|s| s.screen.width)
     }
     /// The open mod screen: a plain panel with its slots' frames, the mod's
     /// drawing over it, then the title and the inventory's label. False when
     /// none is showing.
-    pub(super) fn draw_native_screen(&self, batch: &mut HudBatch, ox: f32, oy: f32) -> bool {
+    pub(super) fn draw_native_screen(&self, batch: &mut HudBatch, ox: f32, oy: f32) -> bool { let (ox,oy,) = match crate::points_generated::P3172.get() { Some(__l) => { let mut __a = (ox,oy,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (ox,oy,) };
         let Some(s) = self.shown_native_screen() else {
             return false;
         };
@@ -9897,7 +9897,7 @@ impl Game<'_> {
         true
     }
     /// The tick of the mod block entity at `pos`.
-    pub(super) fn tick_mod_block_entity(&mut self, pos: Pos) {
+    pub(super) fn tick_mod_block_entity(&mut self, pos: Pos) { if let Some(__l) = crate::points_generated::P3171.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(BlockEntity::Mod(m)) = self.world.block_entities.get_mut(&pos) else {
             return;
         };
@@ -9929,7 +9929,7 @@ impl Game<'_> {
         pos: Pos,
         mut taken: ModBlockEntity,
         items: &[Option<ItemStack>],
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3170.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(BlockEntity::Mod(m)) = self.world.block_entities.get_mut(&pos)
             && m.id().is_empty()
         {
@@ -9960,7 +9960,7 @@ impl Game<'_> {
         &mut self,
         context: mod_api::menu::MenuButtonContext,
         carried: &mut Option<ItemStack>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P3169.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let pos = (context.pos[0], context.pos[1], context.pos[2]);
         if self.mod_menu_at(pos).is_none() {
             return;
@@ -9978,7 +9978,7 @@ impl Game<'_> {
     }
     /// The cursor from the open mod screen's top left, with its block and
     /// data, for its press and tooltip hooks.
-    fn native_screen_at(&self) -> Option<(String, Vec<i32>, [f32; 2])> {
+    fn native_screen_at(&self) -> Option<(String, Vec<i32>, [f32; 2])> { if let Some(__l) = crate::points_generated::P3168.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let s = self.shown_native_screen()?;
         let r = self.renderer.as_ref()?;
         let batch = HudBatch::new([r.config.width, r.config.height]);
@@ -9988,7 +9988,7 @@ impl Game<'_> {
     }
     /// A press on the open mod screen's own button (`native_screen_click`)
     /// goes to the server as a menu button click (true).
-    pub(super) fn native_screen_press(&mut self, right: bool) -> bool {
+    pub(super) fn native_screen_press(&mut self, right: bool) -> bool { let (right,) = match crate::points_generated::P3167.get() { Some(__l) => { let mut __a = (right,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (right,) };
         if self.inventory_target().0.is_some() {
             return false;
         }
@@ -10006,7 +10006,7 @@ impl Game<'_> {
         true
     }
     /// The open mod screen's tooltip under the cursor (`native_screen_tooltip`).
-    pub(super) fn draw_native_screen_tooltip(&mut self, batch: &mut HudBatch) {
+    pub(super) fn draw_native_screen_tooltip(&mut self, batch: &mut HudBatch) { if let Some(__l) = crate::points_generated::P3166.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Over no item: an empty slot still gets the mod's hint (which fuel it takes).
         // A carried stack hides only slot tooltips, as AbstractContainerScreen's;
         // the screen's other parts keep theirs, as a vanilla widget's tooltip does.
@@ -10026,7 +10026,7 @@ impl Game<'_> {
         self.draw_tooltip_lines(batch, &lines, self.cursor.0, self.cursor.1);
     }
     /// Options > Mods' rows for the native mods, after the others.
-    pub(super) fn list_native_mods(&mut self) {
+    pub(super) fn list_native_mods(&mut self) { if let Some(__l) = crate::points_generated::P3165.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut mods = Vec::new();
         self.native_mods(&mut mods);
         let native = self.mods.native.clone();
@@ -10058,7 +10058,7 @@ impl Game<'_> {
     }
     /// A click on button `button` of native mod `i`'s page (its index in
     /// Options > Mods), and the page's labels after it.
-    pub(super) fn native_settings_event(&mut self, i: usize, button: usize) {
+    pub(super) fn native_settings_event(&mut self, i: usize, button: usize) { let (i,button,) = match crate::points_generated::P3164.get() { Some(__l) => { let mut __a = (i,button,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,button,) };
         let Some(id) = self.settings.mods.installed.get(i).map(|m| m.id.clone()) else {
             return;
         };
@@ -10067,7 +10067,7 @@ impl Game<'_> {
     }
     /// Native mod `i`'s page opened: its labels asked again, so that they
     /// follow the language (and the mod's state) since the list was made.
-    pub(super) fn native_settings_refresh(&mut self, i: usize) {
+    pub(super) fn native_settings_refresh(&mut self, i: usize) { let (i,) = match crate::points_generated::P3163.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let Some(id) = self.settings.mods.installed.get(i).map(|m| m.id.clone()) else {
             return;
         };
@@ -10079,7 +10079,7 @@ impl Game<'_> {
         }
     }
     /// Deliver a non-repeat key press to the native panel.
-    pub(super) fn native_panel_key_event(&mut self, key: KeyCode, pressed: bool, repeat: bool) {
+    pub(super) fn native_panel_key_event(&mut self, key: KeyCode, pressed: bool, repeat: bool) { let (pressed,repeat,) = match crate::points_generated::P3162.get() { Some(__l) => { let mut __a = (pressed,repeat,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pressed,repeat,) };
         if pressed
             && !repeat
             && let Some(name) = keybinds::key_name(key)
@@ -10094,7 +10094,7 @@ impl Game<'_> {
         &mut self,
         button: i32,
         hand: mod_api::first_person::Hand,
-    ) -> Option<bool> {
+    ) -> Option<bool> { let (button,) = match crate::points_generated::P3161.get() { Some(__l) => { let mut __a = (button,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (button,) };
         let key_mapping = match button {
             0 => "key.attack",
             1 => "key.use",
@@ -10105,14 +10105,14 @@ impl Game<'_> {
         canceled.then_some(swing_hand)
     }
     /// A native mod's command.
-    pub(super) fn client_mod_command(&mut self, command: &str) -> bool {
+    pub(super) fn client_mod_command(&mut self, command: &str) -> bool { if let Some(__l) = crate::points_generated::P3160.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let mut ran = false;
         self.native_command(command, &mut ran);
         ran
     }
     /// The zoom in effect while playing (a native mod's); the spyglass's own
     /// view wins.
-    pub(super) fn native_zoom_now(&self) -> Option<NativeZoom> {
+    pub(super) fn native_zoom_now(&self) -> Option<NativeZoom> { if let Some(__l) = crate::points_generated::P3159.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if !self.native_playing() || self.scoping() {
             return None;
         }
@@ -10133,7 +10133,7 @@ impl Game<'_> {
     }
     /// The pose of native mods' camera shake in this frame (`native_camera_shake`),
     /// none while not playing.
-    pub(super) fn native_shake_matrix(&self, partial: f32) -> glam::Mat4 {
+    pub(super) fn native_shake_matrix(&self, partial: f32) -> glam::Mat4 { let (partial,) = match crate::points_generated::P3158.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         if !self.native_playing() {
             return glam::Mat4::IDENTITY;
         }
@@ -10147,13 +10147,13 @@ impl Game<'_> {
 
     /// What native mods hand shader packs in this frame (`native_shader_params`),
     /// with values that aren't finite as 0.
-    pub(super) fn native_shader_params_now(&self, partial: f32) -> [[f32; 4]; 8] {
+    pub(super) fn native_shader_params_now(&self, partial: f32) -> [[f32; 4]; 8] { let (partial,) = match crate::points_generated::P3157.get() { Some(__l) => { let mut __a = (partial,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (partial,) };
         let mut params = [[0.0; 4]; 8];
         self.native_shader_params(partial, &mut params);
         finite_params(params)
     }
     /// The minimap a native mod shows.
-    pub(super) fn native_minimap_now(&self) -> Option<NativeMinimap> {
+    pub(super) fn native_minimap_now(&self) -> Option<NativeMinimap> { if let Some(__l) = crate::points_generated::P3156.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut minimap = None;
         self.native_minimap(&mut minimap);
         minimap.map(|m| NativeMinimap {

@@ -16,7 +16,7 @@ use mod_api::__private::game::*;
 use mod_api::{EntityRef, MenuRef, MenuSlotBacking, PlayerRef};
 
 impl Game<'_> {
-    fn native_client_menu_name(&self, menu: MenuRef) -> Option<&str> {
+    fn native_client_menu_name(&self, menu: MenuRef) -> Option<&str> { if let Some(__l) = crate::points_generated::P3918.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let remote = self.remote.as_ref().filter(|remote| remote.logged_in)?;
         let epoch = self.native_lifecycle.epoch()?;
         (menu.fields().player.fields().entity.epoch() == epoch
@@ -35,12 +35,12 @@ impl Game<'_> {
     }
 
     /// The local player in a logged-in client world.
-    pub(super) fn native_local_player(&self) -> Option<PlayerRef> {
+    pub(super) fn native_local_player(&self) -> Option<PlayerRef> { if let Some(__l) = crate::points_generated::P3917.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let remote = self.remote.as_ref().filter(|remote| remote.logged_in)?;
         self.native_player_ref(remote.profile)
     }
 
-    fn native_menu_guest(&self, menu: MenuRef) -> Option<&Guest> {
+    fn native_menu_guest(&self, menu: MenuRef) -> Option<&Guest> { if let Some(__l) = crate::points_generated::P3916.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let super::native_server::PlayerRead::Guest(guest) =
             self.player_handle_read(menu.fields().player)?
         else {
@@ -71,7 +71,7 @@ impl Game<'_> {
     /// A player's current supported menu. Refuses crafting tables, merchants,
     /// workstations, lecterns, mounts and menus with hidden slots; also refuses
     /// clients, stale players and players whose state is swapped out.
-    pub(super) fn native_menu_ref(&self, player: PlayerRef) -> Option<MenuRef> {
+    pub(super) fn native_menu_ref(&self, player: PlayerRef) -> Option<MenuRef> { if let Some(__l) = crate::points_generated::P3915.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.remote.is_some() {
             let remote = self.remote.as_ref()?;
             (self.native_local_player()? == player).then_some(())?;
@@ -100,14 +100,14 @@ impl Game<'_> {
     }
 
     /// Container id (0 for the player's inventory menu).
-    pub(super) fn native_menu_container_id(&self, menu: MenuRef) -> Option<i32> {
+    pub(super) fn native_menu_container_id(&self, menu: MenuRef) -> Option<i32> { if let Some(__l) = crate::points_generated::P3914.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_menu_guest(menu)?;
         Some(menu.fields().window)
     }
 
     /// Registry menu type; the inventory menu has no MenuType in vanilla.
     /// The outer None means an unavailable menu.
-    pub(super) fn native_menu_kind(&self, menu: MenuRef) -> Option<Option<String>> {
+    pub(super) fn native_menu_kind(&self, menu: MenuRef) -> Option<Option<String>> { if let Some(__l) = crate::points_generated::P3913.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let guest = self.native_menu_guest(menu)?;
         match &guest.menu {
             Some(m) => Some(Some(
@@ -122,7 +122,7 @@ impl Game<'_> {
     }
 
     /// Number of slots in AbstractContainerMenu.slots.
-    pub(super) fn native_menu_slot_count(&self, menu: MenuRef) -> Option<usize> {
+    pub(super) fn native_menu_slot_count(&self, menu: MenuRef) -> Option<usize> { if let Some(__l) = crate::points_generated::P3912.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.remote.is_some() {
             let name = self.native_client_menu_name(menu)?;
             return Some((0..).map_while(|slot| Self::menu_slot(name, slot)).count());
@@ -139,7 +139,7 @@ impl Game<'_> {
         &self,
         menu: MenuRef,
         slot: usize,
-    ) -> Option<MenuSlotBacking> {
+    ) -> Option<MenuSlotBacking> { let (slot,) = match crate::points_generated::P3911.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let guest = self.native_menu_guest(menu)?;
         let Some(open) = &guest.menu else {
             return match slot {
@@ -188,7 +188,7 @@ impl Game<'_> {
 
     /// Full stack at a menu index. Outer None means unavailable or out of
     /// range; Some(None) means an empty slot.
-    pub(super) fn native_menu_slot(&self, menu: MenuRef, slot: usize) -> Option<Option<ItemStack>> {
+    pub(super) fn native_menu_slot(&self, menu: MenuRef, slot: usize) -> Option<Option<ItemStack>> { let (slot,) = match crate::points_generated::P3910.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         if self.remote.is_some() {
             let name = self.native_client_menu_name(menu)?;
             let index = Self::menu_slot(name, i32::try_from(slot).ok()?)?;
@@ -220,14 +220,14 @@ impl Game<'_> {
         menu: MenuRef,
         slot: usize,
         stack: &ItemStack,
-    ) -> Option<u32> {
+    ) -> Option<u32> { let (slot,) = match crate::points_generated::P3909.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let rules = self.native_menu_rules(menu, slot)?;
         Some(rules.slot_holds(&self.menu_env(), slot, stack))
     }
 
     /// Whether menu slot `slot` gives up what it holds (`Slot.mayPickup`): bound armour stays
     /// on outside creative.
-    pub(super) fn native_menu_slot_gives(&self, menu: MenuRef, slot: usize) -> Option<bool> {
+    pub(super) fn native_menu_slot_gives(&self, menu: MenuRef, slot: usize) -> Option<bool> { let (slot,) = match crate::points_generated::P3908.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         let rules = self.native_menu_rules(menu, slot)?;
         Some(rules.slot_gives(&self.menu_env(), slot))
     }
@@ -236,7 +236,7 @@ impl Game<'_> {
     /// inventory menu, a furnace's, brewing stand's, crafter's or content mod's menu over its
     /// block entity, a shulker box's, or a plain container of the menu's size. None for a slot
     /// with no backing (`native_menu_slot_backing`), and for one the model hasn't.
-    fn native_menu_rules(&self, menu: MenuRef, slot: usize) -> Option<Box<Menu>> {
+    fn native_menu_rules(&self, menu: MenuRef, slot: usize) -> Option<Box<Menu>> { let (slot,) = match crate::points_generated::P3907.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (slot,) };
         self.native_menu_slot_backing(menu, slot)?;
         let guest = self.native_menu_guest(menu)?;
         let (kind, disabled) = match &guest.menu {
@@ -282,7 +282,7 @@ impl Game<'_> {
         &mut self,
         menu: MenuRef,
         slot: usize,
-    ) -> Option<&mut Option<ItemStack>> {
+    ) -> Option<&mut Option<ItemStack>> { let (slot,) = match crate::points_generated::P3906.get() { Some(__l) => { let mut __a = (slot,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (slot,) };
         let backing = self.native_menu_slot_backing(menu, slot)?;
         let mut guests = self
             .lan
@@ -302,7 +302,7 @@ impl Game<'_> {
     }
 
     /// Carried (cursor) stack; outer None means unavailable.
-    pub(super) fn native_menu_carried(&self, menu: MenuRef) -> Option<Option<ItemStack>> {
+    pub(super) fn native_menu_carried(&self, menu: MenuRef) -> Option<Option<ItemStack>> { if let Some(__l) = crate::points_generated::P3905.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.remote.is_some() {
             self.native_client_menu_name(menu)?;
             return Some(self.carried.clone());

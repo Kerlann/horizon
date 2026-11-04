@@ -132,7 +132,7 @@ fn tick_summary(r: &Recording, window_s: f64) -> (Value, Value, Value) {
 
 impl Game<'_> {
     /// The level in place and the parked ones: their chunks and their entities by type.
-    fn report_levels(&self) -> Value {
+    fn report_levels(&self) -> Value { if let Some(__l) = crate::points_generated::P1566.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let mut levels = Vec::new();
         let here = |dim: Dim,
                     world: &horizon_client::world::World,
@@ -169,7 +169,7 @@ impl Game<'_> {
     }
 
     /// The report of a finished recording: written to `reports/` in the server's folder, its summary logged.
-    pub(super) fn finish_report(&mut self, r: Recording, view: (u32, u32), max_players: usize) {
+    pub(super) fn finish_report(&mut self, r: Recording, view: (u32, u32), max_players: usize) { let (max_players,) = match crate::points_generated::P1565.get() { Some(__l) => { let mut __a = (max_players,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (max_players,) };
         if !r.spans_were_on {
             spans::enable(false);
         }

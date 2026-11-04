@@ -10,7 +10,7 @@ use horizon_client::{
 use horizon_core::random::RandomSource;
 
 impl Game<'_> {
-    pub(super) fn tick_allays(&mut self) {
+    pub(super) fn tick_allays(&mut self) { if let Some(__l) = crate::points_generated::P518.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let griefing = self.ui.rules.bool("mob_griefing");
         // The playing jukeboxes, found at the first allay: no allay starts
         // or stops one, and the block entities run into the thousands.
@@ -136,7 +136,7 @@ impl Game<'_> {
         }
     }
     /// The UUID of the player an allay likes (`LIKED_PLAYER`).
-    fn allay_liked_uuid(&self, i: usize) -> [i32; 4] {
+    fn allay_liked_uuid(&self, i: usize) -> [i32; 4] { let (i,) = match crate::points_generated::P517.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         // An allay saved before its player was kept belongs to the host.
         self.mobs[i]
             .extra
@@ -149,7 +149,7 @@ impl Game<'_> {
     /// found by UUID among the host and the guests of the level (the window
     /// is a guest on the server thread), when they are not a spectator and
     /// within 64 blocks.
-    fn allay_liked_player(&self, i: usize) -> Option<horizon_core::geometry::Vec3> {
+    fn allay_liked_player(&self, i: usize) -> Option<horizon_core::geometry::Vec3> { let (i,) = match crate::points_generated::P516.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (i,) };
         let m = &self.mobs[i];
         if !m.extra.tame {
             return None;
@@ -172,7 +172,7 @@ impl Game<'_> {
     /// `GoAndGiveItemsToTarget` / `AllayAi.throwItem`: within 3 blocks of
     /// the deposit, one item a tick, each restarting the three-second pause
     /// before it picks anything up again.
-    fn allay_deliver(&mut self, i: usize) {
+    fn allay_deliver(&mut self, i: usize) { let (i,) = match crate::points_generated::P515.get() { Some(__l) => { let mut __a = (i,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (i,) };
         let m = &self.mobs[i];
         if m.extra.ints[1] <= 0 {
             return;
@@ -251,7 +251,7 @@ impl Game<'_> {
     }
     /// `Allay.mobInteract`: duplicate when dancing with an amethyst shard,
     /// take the held item, or hand back what it holds.
-    pub(super) fn interact_allay(&mut self, index: usize, item: Option<&ItemStack>) -> bool {
+    pub(super) fn interact_allay(&mut self, index: usize, item: Option<&ItemStack>) -> bool { let (index,) = match crate::points_generated::P514.get() { Some(__l) => { let mut __a = (index,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,) };
         let m = &self.mobs[index];
         if m.species() != Species::Allay || !m.alive() {
             return false;

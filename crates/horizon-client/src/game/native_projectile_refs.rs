@@ -24,7 +24,7 @@ enum Backing {
 }
 
 impl Game<'_> {
-    fn native_projectile_backing(&self, projectile: ProjectileRef) -> Option<Backing> {
+    fn native_projectile_backing(&self, projectile: ProjectileRef) -> Option<Backing> { if let Some(__l) = crate::points_generated::P4097.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_target(projectile.entity())? {
             Target::Projectile(id) => (self.creatures.projectiles.iter())
                 .position(|p| p.id == id)
@@ -41,14 +41,14 @@ impl Game<'_> {
 
     /// The index in the projectile list: None for a trident a player threw,
     /// a rocket or a stale handle, which have no arrow state, kind or acceleration.
-    fn native_projectile_index(&self, projectile: ProjectileRef) -> Option<usize> {
+    fn native_projectile_index(&self, projectile: ProjectileRef) -> Option<usize> { if let Some(__l) = crate::points_generated::P4096.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_projectile_backing(projectile)? {
             Backing::List(i) => Some(i),
             _ => None,
         }
     }
 
-    fn native_projectile(&self, projectile: ProjectileRef) -> Option<&Projectile> {
+    fn native_projectile(&self, projectile: ProjectileRef) -> Option<&Projectile> { if let Some(__l) = crate::points_generated::P4095.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.creatures
             .projectiles
             .get(self.native_projectile_index(projectile)?)
@@ -57,14 +57,14 @@ impl Game<'_> {
     /// Narrows an entity to a projectile: one in the projectile list, a trident
     /// a player threw or a firework rocket. None for another kind, a stale
     /// handle or a client.
-    pub(super) fn native_projectile_ref(&self, entity: EntityRef) -> Option<ProjectileRef> {
+    pub(super) fn native_projectile_ref(&self, entity: EntityRef) -> Option<ProjectileRef> { if let Some(__l) = crate::points_generated::P4094.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let projectile = ProjectileRef::new(entity);
         self.native_projectile_backing(projectile)
             .map(|_| projectile)
     }
 
     /// The owner a target names, as a resolved entity in the level in place.
-    fn native_owner_entity(&self, target: Target) -> Option<EntityRef> {
+    fn native_owner_entity(&self, target: Target) -> Option<EntityRef> { if let Some(__l) = crate::points_generated::P4093.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if self.target_level(target) != self.dim {
             return None;
         }
@@ -74,7 +74,7 @@ impl Game<'_> {
 
     /// `Projectile.getOwner`: the owner as a resolved entity. None for no
     /// owner, one that is gone or in another level, or a stale handle.
-    pub(super) fn native_projectile_owner(&self, projectile: ProjectileRef) -> Option<EntityRef> {
+    pub(super) fn native_projectile_owner(&self, projectile: ProjectileRef) -> Option<EntityRef> { if let Some(__l) = crate::points_generated::P4092.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let target = match self.native_projectile_backing(projectile)? {
             Backing::List(i) => {
                 let uuid = self.creatures.projectiles[i].owner_uuid?;
@@ -95,7 +95,7 @@ impl Game<'_> {
 
     /// The owner fields for `Projectile.setOwner(owner)`. None for an owner
     /// that is stale or not a player or mob: Horizon keeps only those.
-    fn native_projectile_owner_fields(&mut self, owner: Option<EntityRef>) -> Option<OwnerFields> {
+    fn native_projectile_owner_fields(&mut self, owner: Option<EntityRef>) -> Option<OwnerFields> { if let Some(__l) = crate::points_generated::P4091.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(owner) = owner else {
             return Some((None, None, None));
         };
@@ -111,7 +111,7 @@ impl Game<'_> {
 
     /// `Projectile.setOwner` on the thing a handle names. False when the
     /// owner does not fit: a trident a player threw always has a player owner.
-    fn native_projectile_apply_owner(&mut self, backing: Backing, fields: OwnerFields) -> bool {
+    fn native_projectile_apply_owner(&mut self, backing: Backing, fields: OwnerFields) -> bool { if let Some(__l) = crate::points_generated::P4090.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let (who, _, guest) = fields;
         match backing {
             Backing::List(i) => {
@@ -143,7 +143,7 @@ impl Game<'_> {
         &mut self,
         projectile: ProjectileRef,
         owner: Option<EntityRef>,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4089.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(backing) = self.native_projectile_backing(projectile) else {
             return false;
         };
@@ -172,7 +172,7 @@ impl Game<'_> {
         new_owner: Option<EntityRef>,
         by_attack: bool,
         power: [f64; 3],
-    ) -> bool {
+    ) -> bool { let (by_attack,power,) = match crate::points_generated::P4088.get() { Some(__l) => { let mut __a = (by_attack,power,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (by_attack,power,) };
         let Some(backing) = self.native_projectile_backing(projectile) else {
             return false;
         };
@@ -232,7 +232,7 @@ impl Game<'_> {
     pub(super) fn native_projectile_pickup(
         &self,
         projectile: ProjectileRef,
-    ) -> Option<NativeArrowPickup> {
+    ) -> Option<NativeArrowPickup> { if let Some(__l) = crate::points_generated::P4087.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         Some(
             match self.native_projectile(projectile)?.arrow.as_ref()?.pickup {
                 Pickup::Disallowed => NativeArrowPickup::Disallowed,
@@ -248,7 +248,7 @@ impl Game<'_> {
         &mut self,
         projectile: ProjectileRef,
         pickup: NativeArrowPickup,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P4086.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(index) = self.native_projectile_index(projectile) else {
             return false;
         };
@@ -265,7 +265,7 @@ impl Game<'_> {
     }
 
     /// `AbstractArrow.getBaseDamage`, for an arrow (a trident's is fixed).
-    pub(super) fn native_projectile_base_damage(&self, projectile: ProjectileRef) -> Option<f64> {
+    pub(super) fn native_projectile_base_damage(&self, projectile: ProjectileRef) -> Option<f64> { if let Some(__l) = crate::points_generated::P4085.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_projectile(projectile)?.kind {
             ProjectileKind::Arrow { base_damage, .. } => Some(base_damage),
             _ => None,
@@ -278,7 +278,7 @@ impl Game<'_> {
         &mut self,
         projectile: ProjectileRef,
         damage: f64,
-    ) -> bool {
+    ) -> bool { let (damage,) = match crate::points_generated::P4084.get() { Some(__l) => { let mut __a = (damage,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (damage,) };
         let Some(index) = self.native_projectile_index(projectile) else {
             return false;
         };
@@ -294,7 +294,7 @@ impl Game<'_> {
     }
 
     /// `AbstractArrow.isCritArrow`, for an arrow.
-    pub(super) fn native_projectile_critical(&self, projectile: ProjectileRef) -> Option<bool> {
+    pub(super) fn native_projectile_critical(&self, projectile: ProjectileRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P4083.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let p = self.native_projectile(projectile)?;
         matches!(p.kind, ProjectileKind::Arrow { .. }).then(|| p.critical())
     }
@@ -305,7 +305,7 @@ impl Game<'_> {
         &mut self,
         projectile: ProjectileRef,
         critical: bool,
-    ) -> bool {
+    ) -> bool { let (critical,) = match crate::points_generated::P4082.get() { Some(__l) => { let mut __a = (critical,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (critical,) };
         let Some(index) = self.native_projectile_index(projectile) else {
             return false;
         };

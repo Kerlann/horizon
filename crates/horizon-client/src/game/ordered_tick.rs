@@ -72,7 +72,7 @@ fn find_join<T: Joined>(list: &[T], join: JoinSeq) -> Option<usize> {
 
 impl Game<'_> {
     /// A level tick starts: what has joined so far ticks this tick.
-    pub(super) fn begin_ordered_ticks(&mut self) {
+    pub(super) fn begin_ordered_ticks(&mut self) { if let Some(__l) = crate::points_generated::P4342.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let firsts = [
             first_join(&self.armor_stands),
             first_join(&self.boats),
@@ -102,7 +102,7 @@ impl Game<'_> {
 
     /// Ticks, one at a time in join order, every orb, primed TNT and falling
     /// block that joined before `cut` and has not ticked this tick.
-    pub(super) fn run_ordered_ticks(&mut self, cut: JoinSeq, late: bool) -> Result<()> {
+    pub(super) fn run_ordered_ticks(&mut self, cut: JoinSeq, late: bool) -> Result<()> { let (late,) = match crate::points_generated::P4341.get() { Some(__l) => { let mut __a = (late,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (late,) };
         let mut first_error = None;
         let mut followed = None;
         let mut events = false;
@@ -209,7 +209,7 @@ impl Game<'_> {
 
     /// Before a batch of another kind ticks: the three kinds' entities that
     /// joined before everything still to tick in the batches from this one on.
-    pub(super) fn ordered_before(&mut self, batch: Batch) -> Result<()> {
+    pub(super) fn ordered_before(&mut self, batch: Batch) -> Result<()> { if let Some(__l) = crate::points_generated::P4340.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let cut = self.ordered.suffix_min[batch as usize];
         if cut == JoinSeq::MAX {
             return Ok(());

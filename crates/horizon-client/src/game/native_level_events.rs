@@ -32,7 +32,7 @@ impl GameLevel<'_> {
     /// the behaviour raises. False off an authoritative server, or for an
     /// event that carries a block state (see `native_level_level_event`)
     /// when `data` isn't one.
-    pub(super) fn native_level_event(&mut self, id: i32, pos: [i32; 3], data: i32) -> bool {
+    pub(super) fn native_level_event(&mut self, id: i32, pos: [i32; 3], data: i32) -> bool { let (id,pos,data,) = match crate::points_generated::P3810.get() { Some(__l) => { let mut __a = (id,pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,pos,data,) };
         if !self.native_authoritative || !level_event_data_ok(id, data, self.facts.states.len()) {
             return false;
         }
@@ -59,7 +59,7 @@ impl Game<'_> {
         id: i32,
         pos: [i32; 3],
         data: i32,
-    ) -> bool {
+    ) -> bool { let (id,pos,data,) = match crate::points_generated::P3809.get() { Some(__l) => { let mut __a = (id,pos,data,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (id,pos,data,) };
         if !self.native_level_in_place(level) {
             return false;
         }
@@ -78,7 +78,7 @@ impl Game<'_> {
         level: LevelRef,
         event: &str,
         at: [f64; 3],
-    ) -> bool {
+    ) -> bool { let (at,) = match crate::points_generated::P3808.get() { Some(__l) => { let mut __a = (at,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,) };
         let Some(event) = horizon_client::sculk::intern(event) else {
             return false;
         };
@@ -101,7 +101,7 @@ impl Game<'_> {
         radius: f32,
         fire: bool,
         interaction: NativeExplosionInteraction,
-    ) -> bool {
+    ) -> bool { let (center,radius,fire,) = match crate::points_generated::P3807.get() { Some(__l) => { let mut __a = (center,radius,fire,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (center,radius,fire,) };
         if !self.native_level_in_place(level) {
             return false;
         }
@@ -124,7 +124,7 @@ impl Game<'_> {
         level: LevelRef,
         at: [f64; 3],
         visual_only: bool,
-    ) -> bool {
+    ) -> bool { let (at,visual_only,) = match crate::points_generated::P3806.get() { Some(__l) => { let mut __a = (at,visual_only,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (at,visual_only,) };
         if !self.native_level_in_place(level) || !in_bounds(at) {
             return false;
         }

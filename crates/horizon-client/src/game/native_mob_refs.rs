@@ -30,7 +30,7 @@ pub(super) struct PlayerFacts {
 
 impl Game<'_> {
     /// A player target's game mode, liveness, invulnerability ability and uuid.
-    pub(super) fn native_player_facts(&self, target: Target) -> Option<PlayerFacts> {
+    pub(super) fn native_player_facts(&self, target: Target) -> Option<PlayerFacts> { if let Some(__l) = crate::points_generated::P3990.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match target {
             Target::Guest(conn) => {
                 let g = self.command_guest(conn)?;
@@ -67,7 +67,7 @@ enum MobFlag {
 
 impl Game<'_> {
     /// `Mob.asValidTarget` and the modeled `canAttack` overrides.
-    fn native_mob_valid_target(&self, mob: &Mob, target: Target) -> bool {
+    fn native_mob_valid_target(&self, mob: &Mob, target: Target) -> bool { if let Some(__l) = crate::points_generated::P3989.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if mob.species() == Species::Warden {
             return self.native_warden_valid_target(mob, target);
         }
@@ -120,7 +120,7 @@ impl Game<'_> {
         }
     }
     /// `Warden.canTargetEntity`, which overrides the usual `Mob.canAttack`.
-    fn native_warden_valid_target(&self, mob: &Mob, target: Target) -> bool {
+    fn native_warden_valid_target(&self, mob: &Mob, target: Target) -> bool { if let Some(__l) = crate::points_generated::P3988.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         use horizon_core::geometry::Axis;
         let (bounds, team) = match target {
             Target::Mob(id) => {
@@ -173,7 +173,7 @@ impl Game<'_> {
     /// The entity as a vanilla Mob: a mob or the ender dragon. Players, armor
     /// stands, stale handles and clients are rejected. Mobs taken out for
     /// ticking are unavailable (a #29 follow-up).
-    pub(super) fn native_mob_ref(&self, entity: EntityRef) -> Option<MobRef> {
+    pub(super) fn native_mob_ref(&self, entity: EntityRef) -> Option<MobRef> { if let Some(__l) = crate::points_generated::P3987.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_target(entity)? {
             Target::Mob(_) | Target::Dragon(_) => Some(MobRef::new(entity)),
             _ => None,
@@ -185,7 +185,7 @@ impl Game<'_> {
     /// unavailable mob or player binding, or a target without a living handle
     /// read as None. The dragon reads what a mod set, while it stays a valid
     /// target (`EnderDragon.canAttack`); its flight never sets one.
-    pub(super) fn native_mob_target(&self, mob: MobRef) -> Option<LivingRef> {
+    pub(super) fn native_mob_target(&self, mob: MobRef) -> Option<LivingRef> { if let Some(__l) = crate::points_generated::P3986.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return self.native_dragon_target(mob.entity());
         };
@@ -213,7 +213,7 @@ impl Game<'_> {
     /// Invalid targets are refused (false, mob unchanged); vanilla instead
     /// stores `asValidTarget(target)`, clearing the target when it is invalid.
     /// False also means a stale handle, client, or an unavailable mob/player.
-    pub(super) fn native_mob_set_target(&mut self, mob: MobRef, target: Option<LivingRef>) -> bool {
+    pub(super) fn native_mob_set_target(&mut self, mob: MobRef, target: Option<LivingRef>) -> bool { if let Some(__l) = crate::points_generated::P3985.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return self.native_dragon_set_target(mob.entity(), target);
         };
@@ -273,7 +273,7 @@ impl Game<'_> {
     }
 
     /// The mob flag a handle names: a mob's, or the dragon's own.
-    fn native_mob_flag(&self, mob: MobRef, flag: MobFlag) -> Option<bool> {
+    fn native_mob_flag(&self, mob: MobRef, flag: MobFlag) -> Option<bool> { if let Some(__l) = crate::points_generated::P3984.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         match self.native_entity_target(mob.entity())? {
             Target::Mob(id) => {
                 let mob = self.mobs.iter().find(|m| m.id == id)?;
@@ -292,7 +292,7 @@ impl Game<'_> {
             _ => None,
         }
     }
-    fn native_mob_set_flag(&mut self, mob: MobRef, flag: MobFlag, value: bool) -> bool {
+    fn native_mob_set_flag(&mut self, mob: MobRef, flag: MobFlag, value: bool) -> bool { let (value,) = match crate::points_generated::P3983.get() { Some(__l) => { let mut __a = (value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (value,) };
         let slot = match self.native_entity_target(mob.entity()) {
             Some(Target::Mob(id)) => {
                 self.mobs
@@ -314,25 +314,25 @@ impl Game<'_> {
 
     /// `Mob.isAggressive`, the synced mob flag (the dragon's reaches its
     /// clients as `DATA_MOB_FLAGS_ID`).
-    pub(super) fn native_mob_is_aggressive(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn native_mob_is_aggressive(&self, mob: MobRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3982.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_mob_flag(mob, MobFlag::Aggressive)
     }
 
     /// `Mob.setAggressive`. False for an unavailable mob.
-    pub(super) fn native_mob_set_aggressive(&mut self, mob: MobRef, value: bool) -> bool {
+    pub(super) fn native_mob_set_aggressive(&mut self, mob: MobRef, value: bool) -> bool { let (value,) = match crate::points_generated::P3981.get() { Some(__l) => { let mut __a = (value,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (value,) };
         self.native_mob_set_flag(mob, MobFlag::Aggressive, value)
     }
 
     /// `Mob.isPersistenceRequired`. The dragon never despawns
     /// (`EnderDragon.checkDespawn` is empty), but keeps and saves the flag
     /// (`PersistenceRequired`).
-    pub(super) fn native_mob_persistence_required(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn native_mob_persistence_required(&self, mob: MobRef) -> Option<bool> { if let Some(__l) = crate::points_generated::P3980.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.native_mob_flag(mob, MobFlag::Persistent)
     }
 
     /// `Mob.setPersistenceRequired`, which sets the flag and cannot clear it.
     /// False for an unavailable mob.
-    pub(super) fn native_mob_set_persistence_required(&mut self, mob: MobRef) -> bool {
+    pub(super) fn native_mob_set_persistence_required(&mut self, mob: MobRef) -> bool { if let Some(__l) = crate::points_generated::P3979.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         self.native_mob_set_flag(mob, MobFlag::Persistent, true)
     }
 }

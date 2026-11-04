@@ -378,7 +378,7 @@ fn snapshot_cell(value: f64) -> Option<i32> {
 }
 
 impl Game<'_> {
-    pub(super) fn prepare_entity_culling(&mut self, camera: glam::DVec3) {
+    pub(super) fn prepare_entity_culling(&mut self, camera: glam::DVec3) { if let Some(__l) = crate::points_generated::P1837.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // Spans tell the pack's passes which entities are hidden; without them, nothing changes.
         self.pack_shadow_casters = match (&self.renderer, &self.pack_ids) {
             (Some(r), Some(_)) => r.pack_shadow_casters(),
@@ -437,7 +437,7 @@ impl Game<'_> {
     /// Use complete generated geometry so equipment, animation and custom
     /// models cannot stick out of an assumed collision-sized culling box.
     /// Returns this entity's occlusion result, including retained shadow casters.
-    pub(super) fn cull_entity_vertices(&self, vertices: &mut Vec<Vertex>, start: usize) -> bool {
+    pub(super) fn cull_entity_vertices(&self, vertices: &mut Vec<Vertex>, start: usize) -> bool { let (start,) = match crate::points_generated::P1836.get() { Some(__l) => { let mut __a = (start,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (start,) };
         if let Some(culler) = &self.entity_culler {
             let hidden = culler.hidden(vertices, start, |pos| self.occluder_ready(pos));
             // A shader pack's shadow pass still draws what the camera cannot see.
@@ -469,7 +469,7 @@ impl Game<'_> {
         hidden
     }
 
-    fn async_proof_is_current(&self, proof: &OcclusionProof) -> bool {
+    fn async_proof_is_current(&self, proof: &OcclusionProof) -> bool { if let Some(__l) = crate::points_generated::P1835.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         for (key, expected) in &proof.chunks {
             let Some(current) = self.world.chunks.get(key) else {
                 return false;
@@ -488,7 +488,7 @@ impl Game<'_> {
         })
     }
 
-    fn occluder_ready(&self, pos: [i32; 3]) -> bool {
+    fn occluder_ready(&self, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P1834.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let state = self.world.block(pos[0], pos[1], pos[2]);
         if !opaque(self.res.facts().get(state)) {
             return false;
@@ -505,7 +505,7 @@ impl Game<'_> {
             && !self.pending_uploads.iter().any(|(key, _)| *key == section)
     }
 
-    pub(super) fn finish_async_entity_culling(&mut self) {
+    pub(super) fn finish_async_entity_culling(&mut self) { if let Some(__l) = crate::points_generated::P1833.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if let Some(culler) = &mut self.async_entity_culler {
             culler.finish_frame(&self.world, self.res.facts());
         }
@@ -518,7 +518,7 @@ impl Game<'_> {
     /// at 20 or more. The render distance is the client setting, capped by
     /// the server's view distance when connected
     /// (Options.getEffectiveRenderDistance).
-    pub(super) fn view_scale(&self) -> f64 {
+    pub(super) fn view_scale(&self) -> f64 { if let Some(__l) = crate::points_generated::P1832.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let distance = match &self.remote {
             Some(r) => self.settings.render_distance.min(r.view_distance),
             None => self.settings.render_distance,
@@ -554,7 +554,7 @@ impl Game<'_> {
         range: f64,
         lo: glam::DVec3,
         hi: glam::DVec3,
-    ) -> bool {
+    ) -> bool { let (range,) = match crate::points_generated::P1831.get() { Some(__l) => { let mut __a = (range,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (range,) };
         if (position - camera).length_squared() >= range * range {
             return false;
         }
@@ -748,7 +748,7 @@ impl Game<'_> {
         height: f64,
         range: f64,
         grow: f64,
-    ) -> bool {
+    ) -> bool { let (alpha,width,height,range,grow,) = match crate::points_generated::P1830.get() { Some(__l) => { let mut __a = (alpha,width,height,range,grow,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (alpha,width,height,range,grow,) };
         let p = previous.lerp(position, alpha);
         let half = glam::DVec3::new(width / 2.0 + grow, grow, width / 2.0 + grow);
         let lo = p - half;

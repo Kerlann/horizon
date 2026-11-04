@@ -80,7 +80,7 @@ fn picked_item<'a>(
 
 impl Game<'_> {
     /// The block entity at `key` as vanilla saves it, with its custom name.
-    fn saved_block_entity(&self, key: (i32, i32, i32)) -> Option<Tag> {
+    fn saved_block_entity(&self, key: (i32, i32, i32)) -> Option<Tag> { if let Some(__l) = crate::points_generated::P645.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let entity = self.world.block_entities.get(&key)?;
         let block = &self
             .res
@@ -103,7 +103,7 @@ impl Game<'_> {
         key: (i32, i32, i32),
         entity: &BlockEntity,
         tag: &Tag,
-    ) -> bool {
+    ) -> bool { if let Some(__l) = crate::points_generated::P644.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if matches!(entity, BlockEntity::Banner(_) | BlockEntity::Sign(_)) {
             return false;
         }
@@ -120,7 +120,7 @@ impl Game<'_> {
 
     /// `BlockState.getCloneItemStack` of the block at `pos`, then, with
     /// `include_data`, `ServerGamePacketListenerImpl.addBlockDataToItem`.
-    pub(super) fn picked_stack(&self, pos: [i32; 3], include_data: bool) -> Option<ItemStack> {
+    pub(super) fn picked_stack(&self, pos: [i32; 3], include_data: bool) -> Option<ItemStack> { let (pos,include_data,) = match crate::points_generated::P643.get() { Some(__l) => { let mut __a = (pos,include_data,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,include_data,) };
         let mut stack = self.clone_stack(pos, include_data)?;
         if include_data {
             self.add_block_data(pos, &mut stack);
@@ -131,7 +131,7 @@ impl Game<'_> {
     /// `ServerGamePacketListenerImpl.addBlockDataToItem`: the block entity at
     /// `pos`, if any, onto `stack` (`BlockItem.setBlockEntityData`, then
     /// `ItemStack.applyComponents(collectComponents())`).
-    pub(super) fn add_block_data(&self, pos: [i32; 3], stack: &mut ItemStack) {
+    pub(super) fn add_block_data(&self, pos: [i32; 3], stack: &mut ItemStack) { let (pos,) = match crate::points_generated::P642.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         if let Some(saved) = self.saved_block_entity((pos[0], pos[1], pos[2])) {
             apply_patch(stack, block_entity_item::pick(&saved));
         }
@@ -139,7 +139,7 @@ impl Game<'_> {
 
     /// `BlockState.getCloneItemStack` of the block at `pos`: the item alone,
     /// with what the block itself puts on it; `include_data` as vanilla passes it.
-    pub(super) fn clone_stack(&self, pos: [i32; 3], include_data: bool) -> Option<ItemStack> {
+    pub(super) fn clone_stack(&self, pos: [i32; 3], include_data: bool) -> Option<ItemStack> { let (pos,include_data,) = match crate::points_generated::P641.get() { Some(__l) => { let mut __a = (pos,include_data,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,include_data,) };
         let key = (pos[0], pos[1], pos[2]);
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let facts = self.res.facts().get(state);
@@ -230,7 +230,7 @@ impl Game<'_> {
     /// `ShulkerBoxBlock.playerWillDestroy`: a Creative player's filled box is
     /// one item at the block center, with collectComponents and the default pickup delay.
     /// This direct spawn intentionally does not use the block_drops gamerule.
-    pub(super) fn drop_creative_shulker(&mut self, pos: [i32; 3]) {
+    pub(super) fn drop_creative_shulker(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P640.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let key = (pos[0], pos[1], pos[2]);
         let filled = matches!(self.world.block_entities.get(&key), Some(BlockEntity::Chest(items))
             if items.iter().flatten().any(|s| s.count > 0));
@@ -260,7 +260,7 @@ impl Game<'_> {
         pos: [i32; 3],
         state: BlockStateId,
         stack: &ItemStack,
-    ) -> Result<BlockStateId> {
+    ) -> Result<BlockStateId> { let (pos,) = match crate::points_generated::P639.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let Some(Tag::Compound(saved)) =
             stack.data().and_then(|d| d.other("minecraft:block_state"))
         else {
@@ -292,7 +292,7 @@ impl Game<'_> {
     /// block it predicts at `pos`: the block entity takes the stack's
     /// components but not its `block_entity_data` (`updateCustomBlockEntityTag`
     /// returns on a client), so a copied sign's editor opens with its text (#8102).
-    pub(super) fn apply_predicted_item(&mut self, pos: [i32; 3], stack: &ItemStack) {
+    pub(super) fn apply_predicted_item(&mut self, pos: [i32; 3], stack: &ItemStack) { let (pos,) = match crate::points_generated::P638.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let mut stack = stack.clone();
         if stack.data().is_some() {
             stack
@@ -310,7 +310,7 @@ impl Game<'_> {
         pos: [i32; 3],
         stack: &ItemStack,
         game_master: bool,
-    ) {
+    ) { let (pos,game_master,) = match crate::points_generated::P637.get() { Some(__l) => { let mut __a = (pos,game_master,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,game_master,) };
         let key = (pos[0], pos[1], pos[2]);
         self.pending.banner.remove(&pos);
         let Some(saved) = self.saved_block_entity(key) else {

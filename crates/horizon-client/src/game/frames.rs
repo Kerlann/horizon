@@ -93,7 +93,7 @@ fn center(f: &ItemFrame) -> [f64; 3] {
 impl Game<'_> {
     /// `ItemFrame.survives` (not fixed): no collision, a solid block behind
     /// (or a diode for wall frames), no overlapping hanging entity.
-    fn frame_survives(&self, f: &ItemFrame) -> bool {
+    fn frame_survives(&self, f: &ItemFrame) -> bool { if let Some(__l) = crate::points_generated::P1972.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         if f.fixed {
             return true;
         }
@@ -128,7 +128,7 @@ impl Game<'_> {
     /// Asks the mods whether the acting guest may place a hanging entity
     /// of type `kind` at `pos` (`native_hanging_place`): true when one
     /// cancelled it. A game's own player is not asked.
-    pub(super) fn hanging_place_cancelled(&mut self, kind: &str, pos: [i32; 3]) -> bool {
+    pub(super) fn hanging_place_cancelled(&mut self, kind: &str, pos: [i32; 3]) -> bool { let (pos,) = match crate::points_generated::P1971.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let (Some(uuid), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone()) else {
             return false;
         };
@@ -145,7 +145,7 @@ impl Game<'_> {
         kind: &str,
         pos: [i32; 3],
         by_player: bool,
-    ) -> bool {
+    ) -> bool { let (pos,by_player,) = match crate::points_generated::P1970.get() { Some(__l) => { let mut __a = (pos,by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,by_player,) };
         let player = if by_player {
             let Some(uuid) = self.lan_acting_uuid else {
                 return false;
@@ -159,7 +159,7 @@ impl Game<'_> {
         cancel
     }
     /// `ItemFrameItem.useOn`.
-    pub(super) fn place_item_frame(&mut self, hit: &Hit, stack: &ItemStack) -> bool {
+    pub(super) fn place_item_frame(&mut self, hit: &Hit, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P1969.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let glow = match &*stack.item {
             "minecraft:item_frame" => false,
             "minecraft:glow_item_frame" => true,
@@ -215,7 +215,7 @@ impl Game<'_> {
         true
     }
     /// The frame under the crosshair within reach and its distance.
-    pub(super) fn frame_hit(&self) -> Option<(usize, f64)> {
+    pub(super) fn frame_hit(&self) -> Option<(usize, f64)> { if let Some(__l) = crate::points_generated::P1968.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (eye, dir) = self.aim()?;
         let reach: f64 = self.entity_reach;
         let mut best: Option<(usize, f64)> = None;
@@ -241,7 +241,7 @@ impl Game<'_> {
         }
         best
     }
-    pub(super) fn block_distance(&self) -> Option<f64> {
+    pub(super) fn block_distance(&self) -> Option<f64> { if let Some(__l) = crate::points_generated::P1967.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         self.pick_unfiltered().map(|h| {
             let eye = self.aim().map(|(eye, _)| eye).unwrap_or_default();
             (0..3)
@@ -251,12 +251,12 @@ impl Game<'_> {
         })
     }
     /// Nearer than the targeted block?
-    pub(super) fn before_block(&self, distance: f64) -> bool {
+    pub(super) fn before_block(&self, distance: f64) -> bool { let (distance,) = match crate::points_generated::P1966.get() { Some(__l) => { let mut __a = (distance,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (distance,) };
         self.block_distance().is_none_or(|block| block > distance)
     }
     /// `ItemFrame.interact` for the frame under the crosshair, or the one a
     /// guest's interact packet named.
-    pub(super) fn interact_frame(&mut self, target: Option<InteractTarget>) -> bool {
+    pub(super) fn interact_frame(&mut self, target: Option<InteractTarget>) -> bool { if let Some(__l) = crate::points_generated::P1965.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((i, d)) = (match target {
             Some(t) => Self::named_entity(&self.item_frames, t.id, |f| f.id).map(|i| (i, 0.0)),
             None => self.frame_hit(),
@@ -303,7 +303,7 @@ impl Game<'_> {
         true
     }
     /// `ItemFrame.hurtServer` from the player: the item comes out first.
-    pub(super) fn attack_frame(&mut self) -> bool {
+    pub(super) fn attack_frame(&mut self) -> bool { if let Some(__l) = crate::points_generated::P1964.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((i, d)) = self.frame_hit() else {
             return false;
         };
@@ -367,12 +367,12 @@ impl Game<'_> {
     }
     /// `ItemFrame.setItem` / `setRotation`: `updateNeighbourForOutputSignal`, so
     /// the comparators reading the frame take its new signal.
-    fn frame_output_changed(&mut self, pos: [i32; 3]) {
+    fn frame_output_changed(&mut self, pos: [i32; 3]) { let (pos,) = match crate::points_generated::P1963.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (pos,) };
         let at = BlockPos::new(pos[0], pos[1], pos[2]);
         self.with_level(|b, level, ticks| b.update_neighbour_for_output_signal(level, ticks, at));
     }
     /// `ItemFrame.dropItem`: the frame (when breaking) and the held item.
-    fn drop_frame_items(&mut self, f: &ItemFrame, with_frame: bool, by_player: bool) {
+    fn drop_frame_items(&mut self, f: &ItemFrame, with_frame: bool, by_player: bool) { let (with_frame,by_player,) = match crate::points_generated::P1962.get() { Some(__l) => { let mut __a = (with_frame,by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (with_frame,by_player,) };
         // The framed map forgets the frame, except when the drops are off and
         // something caused the break (`removeFramedMap` runs only for a null
         // `causedBy` then).
@@ -425,7 +425,7 @@ impl Game<'_> {
         blast: [f64; 3],
         diameter: f64,
         interaction: super::explosion::BlockInteraction,
-    ) {
+    ) { let (blast,diameter,) = match crate::points_generated::P1961.get() { Some(__l) => { let mut __a = (blast,diameter,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (blast,diameter,) };
         if self.blast_spares_decorations(interaction) {
             return;
         }
@@ -455,7 +455,7 @@ impl Game<'_> {
         }
     }
     /// BlockAttachedEntity.tick for frames.
-    pub(super) fn tick_item_frames(&mut self) {
+    pub(super) fn tick_item_frames(&mut self) { if let Some(__l) = crate::points_generated::P1960.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
         let mut i = 0;
@@ -485,7 +485,7 @@ impl Game<'_> {
         }
     }
     /// ItemFrameRenderer: the frame model, then the item half size on its face.
-    pub(super) fn frame_geometry(&mut self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
+    pub(super) fn frame_geometry(&mut self, camera: glam::DVec3, out: &mut Vec<Vertex>) { if let Some(__l) = crate::points_generated::P1959.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let sprites = &self.gui.atlas.sprites;
         let mut maps: Vec<(i32, glam::Mat4, u32)> = Vec::new();
         let mut items: Vec<(ItemStack, u32, glam::Mat4, u8)> = Vec::new();

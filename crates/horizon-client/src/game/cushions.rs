@@ -75,7 +75,7 @@ impl Game<'_> {
     /// `BlockBehaviour.Properties.isSuffocating` of a state: the block's
     /// explicit predicate, else `causes_suffocation` with a full collision
     /// shape.
-    pub(super) fn state_suffocating(&self, state: horizon_world::registry::BlockStateId) -> bool {
+    pub(super) fn state_suffocating(&self, state: horizon_world::registry::BlockStateId) -> bool { if let Some(__l) = crate::points_generated::P1450.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let facts = self.res.facts().get(state);
         let name = facts.name.as_ref();
         // Blocks' explicit predicates, then the default causes_suffocation/full-shape rule.
@@ -119,7 +119,7 @@ impl Game<'_> {
         state: horizon_world::registry::BlockStateId,
         pos: [i32; 3],
         near_plane: Aabb,
-    ) -> bool {
+    ) -> bool { let (pos,) = match crate::points_generated::P1449.get() { Some(__l) => { let mut __a = (pos,); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); __a } None => (pos,) };
         let name = self.res.facts().get(state).name.as_ref();
         if name == "minecraft:snow" {
             return self
@@ -144,7 +144,7 @@ impl Game<'_> {
 
 impl Game<'_> {
     /// The cushion under the crosshair, its distance and the hit point.
-    pub(super) fn cushion_hit(&self) -> Option<(usize, f64, [f64; 3])> {
+    pub(super) fn cushion_hit(&self) -> Option<(usize, f64, [f64; 3])> { if let Some(__l) = crate::points_generated::P1448.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let (eye, dir) = self.aim()?;
         let reach: f64 = self.entity_reach;
         let mut best: Option<(usize, f64, [f64; 3])> = None;
@@ -159,12 +159,12 @@ impl Game<'_> {
         best
     }
 
-    pub(super) fn cushion_survives(&self, c: &Cushion) -> bool {
+    pub(super) fn cushion_survives(&self, c: &Cushion) -> bool { if let Some(__l) = crate::points_generated::P1447.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         horizon_client::cushion::survives(&PlacementWorld(self), aabb(c.bounds()))
     }
 
     /// `Cushion.destroyIfInFire`: a fire-tagged block inside the deflated box.
-    fn cushion_in_fire(&self, c: &Cushion) -> bool {
+    fn cushion_in_fire(&self, c: &Cushion) -> bool { if let Some(__l) = crate::points_generated::P1446.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let bounds = aabb(c.bounds()).next_deflated();
         blocks_in(bounds).any(|p| {
             let facts = self.res.facts().get(self.world.block(p[0], p[1], p[2]));
@@ -176,7 +176,7 @@ impl Game<'_> {
     /// checks too: on the top face only, at the click's height above the
     /// clicked block (or the replaceable block itself). The position and
     /// spawn box of a cushion that may go there.
-    pub(super) fn cushion_spawn(&self, hit: &Hit) -> Option<(Vec3, Aabb)> {
+    pub(super) fn cushion_spawn(&self, hit: &Hit) -> Option<(Vec3, Aabb)> { if let Some(__l) = crate::points_generated::P1445.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         // CushionItem.recalculateContextForSpecialCollisionShapes: open containers
         // (cauldrons, hoppers and composters) use the collision ray's actual height.
         let mut adjusted = Hit {
@@ -238,7 +238,7 @@ impl Game<'_> {
 
     /// `CushionItem.useOn`: spawn the cushion where `cushion_spawn` allows,
     /// unless another cushion is in the way.
-    pub(super) fn place_cushion(&mut self, hit: &Hit, stack: &ItemStack) -> bool {
+    pub(super) fn place_cushion(&mut self, hit: &Hit, stack: &ItemStack) -> bool { if let Some(__l) = crate::points_generated::P1444.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(info) = self.items().get(&stack.item).cloned() else {
             return false;
         };
@@ -311,7 +311,7 @@ impl Game<'_> {
 
     /// `Cushion.interact`: sit down unless sneaking or already occupied. The
     /// cushion under the crosshair, or the one a guest's interact packet named.
-    pub(super) fn interact_cushion(&mut self, target: Option<InteractTarget>) -> bool {
+    pub(super) fn interact_cushion(&mut self, target: Option<InteractTarget>) -> bool { if let Some(__l) = crate::points_generated::P1443.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((i, d, _)) = (match target {
             Some(t) => {
                 Self::named_entity(&self.cushions, t.id, |c| c.id).map(|i| (i, 0.0, [0.0; 3]))
@@ -362,7 +362,7 @@ impl Game<'_> {
     }
 
     /// `Cushion.hurtServer` from a player: killed, then the item dropped.
-    pub(super) fn attack_cushion(&mut self) -> bool {
+    pub(super) fn attack_cushion(&mut self) -> bool { if let Some(__l) = crate::points_generated::P1442.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some((i, d, _)) = self.cushion_hit() else {
             return false;
         };
@@ -381,7 +381,7 @@ impl Game<'_> {
 
     /// `Cushion.dropItem`: the break sound and particles, then the coloured
     /// item unless drops are off or the breaker has infinite materials.
-    pub(super) fn break_cushion(&mut self, index: usize, by_player: bool) {
+    pub(super) fn break_cushion(&mut self, index: usize, by_player: bool) { let (index,by_player,) = match crate::points_generated::P1441.get() { Some(__l) => { let mut __a = (index,by_player,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (index,by_player,) };
         let c = self.cushions.remove(index);
         let p = c.position;
         self.world.modified.insert((c.pos[0] >> 4, c.pos[2] >> 4));
@@ -408,7 +408,7 @@ impl Game<'_> {
     }
 
     /// `Cushion.showBreakingParticles`: ten of the matching wool block.
-    fn cushion_break_particles(&mut self, c: &Cushion) {
+    fn cushion_break_particles(&mut self, c: &Cushion) { if let Some(__l) = crate::points_generated::P1440.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let name = format!("minecraft:{}_wool", c.color_name());
         let Some(state) = self.pack.assets.registry.default_state(&name) else {
             return;
@@ -435,7 +435,7 @@ impl Game<'_> {
     }
 
     /// `BlockAttachedEntity.tick`: survive and burn checks after the post-increment reaches 100.
-    pub(super) fn tick_cushions(&mut self) {
+    pub(super) fn tick_cushions(&mut self) { if let Some(__l) = crate::points_generated::P1439.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let ticking = self.entity_ticking_area();
         let mut i = 0;
         while i < self.cushions.len() {
@@ -463,7 +463,7 @@ impl Game<'_> {
     /// `LivingEntity.stopRiding` off a cushion: `dismountVehicle` beside it,
     /// and `Cushion.removePassenger`'s get-up sound for a rider that left
     /// rather than one whose cushion was killed.
-    pub(super) fn get_up_from_cushion(&mut self, c: &Cushion) {
+    pub(super) fn get_up_from_cushion(&mut self, c: &Cushion) { if let Some(__l) = crate::points_generated::P1438.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         if self.riding == Some(c.id) && !self.native_may_leave(c.id) {
             return;
         }
@@ -488,7 +488,7 @@ impl Game<'_> {
     /// rider's and the vehicle's heights, then the free spot nearest there
     /// (`findFreePosition` within the rider's own box). No get-up sound:
     /// `Cushion.removePassenger` plays none once the cushion is removed.
-    pub(super) fn dismount_removed_vehicle(&mut self, vehicle_y: f64) {
+    pub(super) fn dismount_removed_vehicle(&mut self, vehicle_y: f64) { let (vehicle_y,) = match crate::points_generated::P1437.get() { Some(__l) => { let mut __a = (vehicle_y,); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); __a } None => (vehicle_y,) };
         self.riding = None;
         let border = self.border_bounds();
         let b = self.res.behaviours();
@@ -527,7 +527,7 @@ impl Game<'_> {
     }
 
     /// `Player.rideTick` on a cushion: hold the seat, and get up on sneak.
-    pub(super) fn tick_cushion_riding(&mut self, keys: super::Keys) -> bool {
+    pub(super) fn tick_cushion_riding(&mut self, keys: super::Keys) -> bool { if let Some(__l) = crate::points_generated::P1436.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(&mut *self, &mut __a)); }
         let Some(c) = self
             .cushions
             .iter()
@@ -556,7 +556,7 @@ impl Game<'_> {
         &self,
         camera: glam::DVec3,
         out: &mut Vec<mod_api::render::Vertex>,
-    ) {
+    ) { if let Some(__l) = crate::points_generated::P1435.get() { let mut __a = (); mod_api::point::fire(__l, |__f| __f(self, &mut __a)); }
         let Some(model) = self.cushion_model.as_ref() else {
             return;
         };
