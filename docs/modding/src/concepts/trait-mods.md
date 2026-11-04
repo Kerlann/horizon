@@ -77,18 +77,13 @@ and in the server thread's log line, with the `horizon-mod.toml` id. Each entry 
 `entry::main_with` must bind its id and hooks together: `ModEntry::new("example", example::hooks())`.
 The ordered list is `Mods = Arc<[ModEntry]>`; there is no separate naming step or unnamed entry.
 Before installation, `mod_api::mods()` still returns an empty list. Parts retain their registering mod's
-id for startup errors and hook panics. The game stops. A trait injection's panic names its mod and
-the generated method (`inject_<mod>_<method>`); render hooks are not named yet.
+id for startup errors and hook panics. The game stops. A point listener's panic names its mod and
+method; render hooks are not named yet.
 
-A code mod may declare its own injection in the trait as a rare escape hatch; the form, its generated method and its
-limits are in [Injections](../injections.md).
+A code mod may listen at the game's injection points as a rare escape hatch, through `impl Points`; the form
+and its limits are in [Injections](../injections.md).
 
-The launcher and catalog build scripts share `horizon-mod-api-gen` for trait, event and helper generation.
-The launcher stages declarations in `.horizon-mod-api-injections.json`; Cargo consumes them through
-`HORIZON_MOD_API_INJECTIONS`. The declarations stay with cached mixin output, and generated Rust lives
-only in Cargo's `OUT_DIR`. A player build does not edit generated Rust in the source tree or run rustfmt.
-
-A linked trait mod implements `mod_api::Hooks`. Mixin injections run first.
+A linked trait mod implements `mod_api::Hooks`. Helper injections run first.
 An injection that returns early skips trait mods. A claimed cancellation also skips trait mods.
 Otherwise, trait mods run in their supplied order. The first `Cancel` stops dispatch.
 For replacement hooks, the first `Some` wins. Collection hooks call every mod. Receiverless hooks have no `Host`.
@@ -161,7 +156,7 @@ The renderer module re-exports the game's wgpu types.
 
 ### The typed API from mixin code
 
-A helper or trait injection can use the typed API: bind the game or the `Host` and call attachments and handles. The
+A helper injection can use the typed API: bind the game or the `Host` and call attachments and handles. The
 worked examples, and which shape to choose, are in [Injections](../injections.md#make-your-injection-convertible).
 
 A catalog hook's trait method, event and return make up its `hook_version` contract

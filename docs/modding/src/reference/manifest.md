@@ -55,7 +55,8 @@ refuse the manifest. Code adds `[native]`:
 
 An injection has a unique, nonempty `id` and a `kind`; it selects exactly one of `hook` or `target`, and
 exactly one of `helper` or `trait_method`. A helper is a selected `.rs` file under `src/`, or `build.rs`.
-See [Injections](../injections.md) for the fields, bindings and trait injections, and
+A `trait_method` listens at a point's `HEAD` or `RETURN`, takes `target`, and has no helper fields.
+See [Injections](../injections.md) for the fields, bindings and point injections, and
 [Native mods](../how-to/native-mods.md#named-hook-points) for the named hook contracts.
 
 A module has a unique, nonempty `id` (one id space with the injections), a `file` naming the game source
