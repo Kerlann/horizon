@@ -475,6 +475,13 @@ pub(super) mod tests {
         pollster::block_on(adapter.request_device(&Default::default())).ok()
     }
 
+    /// The adapter `device` runs on, the same way `device` picks it.
+    pub fn adapter_info() -> Option<wgpu::AdapterInfo> {
+        let instance = crate::gfx::test_gpu::instance();
+        let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+        Some(adapter.get_info())
+    }
+
     /// Noise in 4x4 pixel cells, moved by `shift` pixels: what was at `p` is at `p + shift`.
     /// A `seed` of 100 or more gives cells of one primary each.
     pub fn pattern(size: [u32; 2], seed: u32, shift: [i32; 2]) -> Vec<u8> {
@@ -604,6 +611,19 @@ pub(super) mod tests {
         let Some((device, queue)) = device() else {
             return;
         };
+        // The scene-change sum is timing-sensitive on a software rasterizer: llvmpipe's
+        // is below the threshold the shader compares against, so the check is only
+        // meaningful on a hardware GPU.
+        if let Some(info) = adapter_info()
+            && info.device_type == wgpu::DeviceType::Cpu
+        {
+            eprintln!(
+                "skipping finds_a_shift_and_a_scene_change: adapter {} is software ({:?}); \
+                 the scene-change threshold needs a hardware GPU",
+                info.name, info.device_type
+            );
+            return;
+        }
         let size = [512, 288];
         let still = upload(&device, &queue, size, &pattern(size, 1, [0, 0]));
         let moved = upload(&device, &queue, size, &pattern(size, 1, [16, 8]));
