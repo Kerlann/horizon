@@ -38,7 +38,6 @@
 //!
 //! API 385 adds per-stack conditional item model properties (`native_item_model_property`).
 //!
-//! API 384 adds a host-aware player-weapon damage hook (`native_living_incoming_damage_v2`), leaving v1 compatible.
 //!
 //! API 383 adds living_knockback_v2: raw knockback with the attacker's entity id and held items, including armor-stand sweeps.
 //!
@@ -7171,27 +7170,6 @@ impl Game<'_> {
     /// one, while the narrator still says the original. Set `cancel` and it
     /// doesn't show: a delayed message lets the next one through. Lines the
     /// client adds itself and validation errors are not told. Client-side.
-    /// API @API:client_chat_received@.
-    pub(super) fn native_client_chat_received(
-        &mut self,
-        system: bool,
-        overlay: bool,
-        sender: u128,
-        chat_type: Option<&str>,
-        message: &mut Text,
-        cancel: &mut bool,
-    ) {
-        mod_api::dispatch_client_chat_received(
-            self,
-            mod_api::mods(),
-            system,
-            overlay,
-            sender,
-            chat_type,
-            message,
-            cancel,
-        );
-    }
 
     /// The dedicated server's whitelist changed to `enabled`. 305.
     pub(super) fn native_whitelist_state_update(&mut self, enabled: bool) {
@@ -9199,62 +9177,12 @@ impl Game<'_> {
     /// still counts as landed (`EnderDragon.hurt` returns true whatever
     /// `reallyHurt` did: the arrow is spent, the melee effects run). It runs
     /// on the thread that ticks the world (the server thread): state shared with render thread hooks needs synchronising.
-    /// No `self`: the game is in the middle of the hit. API 50.
-    pub(super) fn native_living_incoming_damage(
-        entity: i32,
-        kind: &str,
-        damage_type: &str,
-        causing: i32,
-        direct: i32,
-        amount: &mut f32,
-        canceled: &mut bool,
-    ) {
-        mod_api::dispatch_living_incoming_damage(
-            mod_api::mods(),
-            entity,
-            kind,
-            damage_type,
-            causing,
-            direct,
-            amount,
-            canceled,
-        );
-    }
     /// A player's weapon hit on a mob, before `Mob::damage_with` borrows the
     /// victim: melee, sweep and spear hits, including LAN guests. Unlike v1,
     /// this has a host and snapshots of the weapon, victim position/view and
     /// DamageSource position. The acting player's network id is `causing`
     /// (also the direct entity). Weapon enchantments include their levels.
     /// Runs after the victim's invulnerability check (an invulnerable or dead victim fires nothing) and before v1; cancellation refuses
-    /// delivery. Other damage routes still only fire v1. API 384.
-    pub(super) fn native_living_incoming_damage_v2(
-        &mut self,
-        entity: i32,
-        kind: &str,
-        damage_type: &str,
-        causing: i32,
-        source_position: Option<[f64; 3]>,
-        victim_position: [f64; 3],
-        victim_view: [f64; 3],
-        weapon: Option<&ItemStack>,
-        amount: &mut f32,
-        canceled: &mut bool,
-    ) {
-        mod_api::dispatch_living_incoming_damage_v2(
-            self,
-            mod_api::mods(),
-            entity,
-            kind,
-            damage_type,
-            causing,
-            source_position,
-            victim_position,
-            victim_view,
-            weapon,
-            amount,
-            canceled,
-        );
-    }
     /// `LivingEntity.knockback` is about to push entity `entity` of type `kind`
     /// (`minecraft:zombie`, `minecraft:player`) `strength` away from the direction (`x`, `z`),
     /// on the raw strength, before the entity's knockback resistance takes its share and its motion

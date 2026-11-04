@@ -436,12 +436,6 @@ impl Game<'_> {
     pub(super) fn native_entity_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
         self.target_position(self.native_entity_read_target(entity)?)
     }
-    /// The block the entity's position is in (`Entity.blockPosition`).
-    /// The entity's position (`Entity.position`): its feet, the middle of
-    /// its box for a painting or an item frame. API 373.
-    pub(super) fn native_entity_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
-        self.target_position(self.native_entity_target(entity)?)
-    }
     /// The block the entity's position is in (`Entity.blockPosition`). API
     /// 373.
     pub(super) fn native_entity_block_position(&self, entity: EntityRef) -> Option<[i32; 3]> {

@@ -7,7 +7,10 @@ use std::{
     collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, Weak},
+    sync::{
+        Arc, Mutex, Weak,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 /// An immutable default-component snapshot. Kept only while a resource load
