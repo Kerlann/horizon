@@ -611,19 +611,15 @@ pub(super) mod tests {
         let Some((device, queue)) = device() else {
             return;
         };
-        // The scene-change sum is timing-sensitive on a software rasterizer: llvmpipe's
-        // is below the threshold the shader compares against, so the check is only
-        // meaningful on a hardware GPU.
-        if let Some(info) = adapter_info()
-            && info.device_type == wgpu::DeviceType::Cpu
-        {
-            eprintln!(
-                "skipping finds_a_shift_and_a_scene_change: adapter {} is software ({:?}); \
-                 the scene-change threshold needs a hardware GPU",
-                info.name, info.device_type
-            );
-            return;
-        }
+        // The history bit compares the divergence sum against an absolute 0.45, and a
+        // software rasterizer's rounding lands below it (0.345 measured on llvmpipe
+        // 15.0.6) where hardware clears it. The sum itself is barrier-correct, so the
+        // divergence is asserted relatively below — the dark frame clearly above the
+        // still one — and only the absolute-threshold bit checks need a hardware GPU.
+        // Diverges from upstream: llvmpipe bit-check skip, see the upstream issue named
+        // in the PR.
+        let software_adapter =
+            adapter_info().is_some_and(|i| i.device_type == wgpu::DeviceType::Cpu);
         let size = [512, 288];
         let still = upload(&device, &queue, size, &pattern(size, 1, [0, 0]));
         let moved = upload(&device, &queue, size, &pattern(size, 1, [16, 8]));
@@ -650,6 +646,8 @@ pub(super) mod tests {
             inside.len(),
             &inside[..8]
         );
+        // The detector's answer: its divergence sum (slot 0, a bit-cast f32) and its
+        // history bits (slot 1, one per frame, the newest at bit 0).
         let scd = |device: &wgpu::Device, queue: &wgpu::Queue, flow: &OpticalFlow| {
             let mut encoder = device.create_command_encoder(&Default::default());
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -663,11 +661,33 @@ pub(super) mod tests {
             buffer.slice(..).map_async(wgpu::MapMode::Read, |_| {});
             device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
             let bytes = buffer.slice(..).get_mapped_range().unwrap().to_vec();
-            u32::from_le_bytes(bytes[4..8].try_into().unwrap())
+            (
+                f32::from_le_bytes(bytes[0..4].try_into().unwrap()),
+                u32::from_le_bytes(bytes[4..8].try_into().unwrap()),
+            )
         };
-        assert_eq!(scd(&device, &queue, &flow) & 0xf, 0);
+        // A still frame after itself diverges little; the history bit that crosses
+        // the absolute 0.45 threshold is checked only on a hardware GPU.
+        let (still_sum, still_bits) = scd(&device, &queue, &flow);
+        if !software_adapter {
+            assert_eq!(still_bits & 0xf, 0);
+        }
         run(&device, &queue, &mut flow, &other, false);
-        assert_eq!(scd(&device, &queue, &flow) & 1, 1);
+        // The much darker frame's divergence is clearly above the still one's,
+        // whatever the adapter's rounding.
+        let (dark_sum, dark_bits) = scd(&device, &queue, &flow);
+        assert!(
+            dark_sum > still_sum + 0.1,
+            "dark {dark_sum} must clearly exceed still {still_sum}"
+        );
+        if !software_adapter {
+            assert_eq!(dark_bits & 1, 1);
+        } else {
+            eprintln!(
+                "skipping the absolute-0.45 history-bit checks: {} is a software adapter",
+                adapter_info().map(|i| i.name).unwrap_or_default()
+            );
+        }
         assert!(vectors(&device, &queue, &flow).iter().all(|v| *v == [0, 0]));
     }
 }
