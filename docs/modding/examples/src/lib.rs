@@ -50,7 +50,7 @@ pub fn quick_move(host: &mut dyn mod_api::ClientHost, slot: usize) -> bool {
 
 /// The same counter as a point injection: `trait_method = "tick"` at the head of
 /// `Game::tick`, listened to by the mod's `impl Points`.
-mod at_a_point {
+pub mod at_a_point {
     use super::count;
     use mod_api::{Hooks, HostSide, points::Points, points::TickArgs};
 
