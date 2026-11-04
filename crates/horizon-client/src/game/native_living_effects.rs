@@ -277,10 +277,11 @@ impl Game<'_> {
                     })
                     .map(|(name, _)| *name)
                     .collect();
+                // The refused removals keep their effects; the rest go.
                 self.mobs
                     .iter_mut()
                     .find(|m| m.id == id)
-                    .is_some_and(|m| m.retain_effects(|e| !keep.contains(&e.0)))
+                    .is_some_and(|m| m.retain_effects(|e| keep.contains(&e.0)))
             }
             _ => false,
         }
