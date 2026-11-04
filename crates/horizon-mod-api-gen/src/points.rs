@@ -28,6 +28,9 @@ pub struct GamePoint {
     listener: String,
     #[serde(skip)]
     record_item: String,
+    /// Its `Points` methods, `PointId` variants and dispatchers ([`point_shape::Shape::api_items`]).
+    #[serde(skip)]
+    api: [String; 3],
 }
 
 /// The `#[point]` methods of `Game`, in `game.rs` and under `game/`, by name. Two with one name
@@ -55,8 +58,10 @@ pub fn game_points(root: &Path) -> Result<Vec<GamePoint>, String> {
         let shape =
             point_shape::shape(tokens, &method.sig).map_err(|e| format!("{target}: {e}"))?;
         let record_item = shape.record_item(&target).to_string();
+        let api = shape.api_items(&target);
         let point = GamePoint {
             record_item,
+            api: [api.0.to_string(), api.1.to_string(), api.2.to_string()],
             target,
             side: shape.side.name(),
             host: match (shape.mutable, shape.side) {
@@ -81,7 +86,6 @@ pub fn game_points(root: &Path) -> Result<Vec<GamePoint>, String> {
                 point_shape::Returns::Value(_) => "result",
                 point_shape::Returns::Opaque => "none",
             },
-
             name: shape.name,
         };
         if let Some(other) = points.get(&point.name) {
@@ -95,9 +99,9 @@ pub fn game_points(root: &Path) -> Result<Vec<GamePoint>, String> {
     Ok(points.into_values().collect())
 }
 
-/// The game's `points` module: a private head and return slot per point, and the one exported
-/// table of them, so a Windows DLL spends one export on all of them.
-pub fn slots(points: &[GamePoint]) -> String {
+/// The game's `points` module: a private head and return slot per point, and `attach_installed`,
+/// which fills each slot an installed mod subscribes to with `mod_api`'s dispatcher for it.
+pub(crate) fn slots(points: &[GamePoint]) -> String {
     let ident = |name: String| syn::Ident::new(&name, proc_macro2::Span::call_site());
     let slots: Vec<_> = points
         .iter()
@@ -115,24 +119,66 @@ pub fn slots(points: &[GamePoint]) -> String {
         let target = &point.target;
         quote!(pub(crate) static #slot: Point<#listener> = Point::new(#target, Place::#at);)
     });
-    let all = slots.iter().map(|(slot, ..)| slot);
+    let attach = slots.iter().map(|(slot, point, at)| {
+        let listener: proc_macro2::TokenStream =
+            point.listener.parse().expect("generated listener type");
+        let method = match at.to_string().as_str() {
+            "Head" => point.name.clone(),
+            _ => format!("{}_return", point.name),
+        };
+        let dispatcher = ident(format!("dispatch_{method}"));
+        let method = ident(method);
+        quote! {
+            if mod_api::__private::point_listened(mod_api::points::#method) {
+                let listener: #listener = mod_api::points::#dispatcher;
+                #slot.attach(Box::new(vec![listener])).expect("a slot is filled once, with its own type");
+            }
+        }
+    });
     quote! {
         use mod_api::__private::point::{Attach, Place, Point};
         pub(crate) use mod_api::points::*;
         #(#statics)*
-        /// Every slot, for the launcher's generated `main` to fill by target and place.
-        pub static POINTS: &[&(dyn Attach + Sync)] = &[#(&#all),*];
+        /// Fills each slot an installed mod subscribes to, once, after the mods are installed.
+        pub(crate) fn attach_installed() {
+            #(#attach)*
+        }
     }
     .to_string()
 }
 
-/// `mod_api::points`: each point's record, the type its listeners take.
-pub fn records(points: &[GamePoint]) -> String {
-    points
-        .iter()
-        .map(|point| point.record_item.as_str())
-        .collect::<Vec<_>>()
-        .join("\n")
+/// `mod_api::points`: each point's record, the type its listeners take, and the `Points` trait a
+/// mod implements to listen, with its `PointId`s and the dispatchers the game's slots hold.
+pub(crate) fn records(points: &[GamePoint]) -> String {
+    let parse = |code: &str| {
+        code.parse::<proc_macro2::TokenStream>()
+            .expect("generated points")
+    };
+    let records = points.iter().map(|point| parse(&point.record_item));
+    let methods = points.iter().map(|point| parse(&point.api[0]));
+    let variants = points.iter().map(|point| parse(&point.api[1]));
+    let dispatch = points.iter().map(|point| parse(&point.api[2]));
+    let count = points.len() * 2;
+    quote! {
+        #(#records)*
+        /// A point's place: each point's head and return, in the order of [`Points`]' methods.
+        #[doc(hidden)]
+        #[repr(usize)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum PointId { #(#variants)* }
+        pub(crate) const POINT_COUNT: usize = #count;
+        /// The game's injection points a mod listens to (#589): one method per point's head and
+        /// return, each a no-op until the mod overrides it. Implement it with
+        /// `#[mod_api::horizon_mod]`, return it from [`Hooks::points`](crate::Hooks::points), and
+        /// name each method in a `[[native.injection]]` with the point's function as `target`.
+        pub trait Points: Send + Sync {
+            #[doc(hidden)]
+            fn subscribed(&self) -> &'static [Option<PointId>];
+            #(#methods)*
+        }
+        #(#dispatch)*
+    }
+    .to_string()
 }
 
 #[cfg(test)]
@@ -263,7 +309,12 @@ mod tests {
                 ("tick", "horizon_client::game::Game<'_>::tick"),
             ]
         );
-        assert!(slots(&points).contains("POINTS"));
+        assert!(slots(&points).contains("attach_installed"));
+        let api = records(&points);
+        assert!(
+            api.contains("fn remote_tick_return") && api.contains("dispatch_tick"),
+            "{api}"
+        );
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

@@ -79,6 +79,26 @@ impl<F: Send + Sync + 'static> Attach for Point<F> {
     }
 }
 
+/// Whether `list` holds `name`, at compile time: the launcher's generated `main` checks each
+/// point injection's method against the mod's `__HORIZON_POINTS` with it.
+pub const fn lists(list: &[&str], name: &str) -> bool {
+    let mut i = 0;
+    while i < list.len() {
+        let (a, b) = (list[i].as_bytes(), name.as_bytes());
+        if a.len() == b.len() {
+            let mut j = 0;
+            while j < a.len() && a[j] == b[j] {
+                j += 1;
+            }
+            if j == a.len() {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 /// Calls `call` with each attached listener, out of the pointed function's own code.
 #[cold]
 #[inline(never)]
@@ -112,5 +132,12 @@ mod tests {
             POINT.attach(Box::new(Vec::<Listener>::new())),
             Err(AttachError::Filled)
         );
+    }
+
+    #[test]
+    fn lists_finds_a_name_at_compile_time() {
+        const LIST: &[&str] = &["tick", "tick_return"];
+        const _: () = assert!(lists(LIST, "tick_return"));
+        assert!(!lists(LIST, "tic") && !lists(LIST, "ticks") && !lists(&[], "tick"));
     }
 }

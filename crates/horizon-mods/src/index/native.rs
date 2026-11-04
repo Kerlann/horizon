@@ -10,10 +10,10 @@ pub const PREBUILT_REPO: &str = "arismoko/horizon";
 /// The release tag before a prebuilt game's Horizon commit.
 pub const PREBUILT_TAG: &str = "prebuilt-";
 
-/// Every prebuilt archive's name starts with this, as `prebuilt-game.yml` names it. The `v1` is the
+/// Every prebuilt archive's name starts with this, as `prebuilt-game.yml` names it. The `v2` is the
 /// archive's layout, the one the launcher reads: a release made before it has no archive by this
 /// name, so its commit builds from source. Bump it with the workflow when the layout changes.
-pub const PREBUILT_ARCHIVE: &str = "horizon-prebuilt-v1-";
+pub const PREBUILT_ARCHIVE: &str = "horizon-prebuilt-v2-";
 
 /// The prebuilt game's archive for a rustc host target.
 pub fn prebuilt_archive(host: &str, server: bool) -> String {

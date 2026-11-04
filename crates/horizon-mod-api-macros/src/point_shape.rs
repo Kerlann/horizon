@@ -164,6 +164,19 @@ fn scalar(ty: &Type) -> bool {
     matches!(ty, Type::Path(_)) && api_typed(ty)
 }
 
+/// `tick_return` as `TickReturn`.
+fn camel(name: &str) -> String {
+    name.split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            chars
+                .next()
+                .map(|first| first.to_ascii_uppercase().to_string() + chars.as_str())
+                .unwrap_or_default()
+        })
+        .collect()
+}
+
 /// Whether the API can carry `ty` to a listener: a scalar, or `&str`.
 fn api_typed(ty: &Type) -> bool {
     const SCALARS: [&str; 15] = [
@@ -195,18 +208,7 @@ impl Shape {
 
     /// The record its listeners get, in `mod_api::points`: `TickArgs` for `tick`.
     pub fn record(&self) -> syn::Ident {
-        let camel: String = self
-            .name
-            .split('_')
-            .map(|word| {
-                let mut chars = word.chars();
-                chars
-                    .next()
-                    .map(|first| first.to_ascii_uppercase().to_string() + chars.as_str())
-                    .unwrap_or_default()
-            })
-            .collect();
-        syn::Ident::new(&format!("{camel}Args"), Span::call_site())
+        syn::Ident::new(&format!("{}Args", camel(&self.name)), Span::call_site())
     }
 
     /// Whether the record borrows (a `&str` parameter).
@@ -275,6 +277,64 @@ impl Shape {
                 }
             }
         }
+    }
+
+    /// The `Points` methods for this point (its head, then its return), their `PointId` variants and
+    /// the dispatchers that run every subscribed mod's method: generated into `mod_api::points`.
+    pub fn api_items(&self, target: &str) -> (TokenStream, TokenStream, TokenStream) {
+        let record = self.record();
+        let record = if self.borrows() {
+            quote!(#record<'_>)
+        } else {
+            quote!(#record)
+        };
+        let host = match (self.mutable, self.side) {
+            (false, _) => quote!(&dyn crate::Host),
+            (true, Side::Server) => quote!(&mut dyn crate::ServerHost),
+            (true, Side::Client) => quote!(&mut dyn crate::ClientHost),
+            (true, Side::Both) => quote!(crate::HostSide<'_>),
+        };
+        let (binding, reborrow) = match (self.mutable, self.side) {
+            (false, _) => (quote!(host), quote!(host)),
+            (true, Side::Both) => (quote!(mut host), quote!(host.reborrow())),
+            (true, _) => (quote!(host), quote!(&mut *host)),
+        };
+        let (mut methods, mut variants, mut dispatch) = (quote!(), quote!(), quote!());
+        for (method, place) in [
+            (
+                self.name.clone(),
+                "head: before its body runs, with the arguments it was called with",
+            ),
+            (
+                format!("{}_return", self.name),
+                "return: after its body, with the value it returns",
+            ),
+        ] {
+            let method = syn::Ident::new(&method, Span::call_site());
+            let variant = syn::Ident::new(&camel(&method.to_string()), Span::call_site());
+            let dispatcher = syn::Ident::new(&format!("dispatch_{method}"), Span::call_site());
+            let doc = format!("`{target}`'s {place}.");
+            let name = method.to_string();
+            methods.extend(quote! {
+                #[doc = #doc]
+                fn #method(&self, host: #host, args: &mut #record) {
+                    let _ = (host, args);
+                }
+            });
+            variants.extend(quote!(#variant,));
+            dispatch.extend(quote! {
+                #[doc(hidden)]
+                pub fn #dispatcher(#binding: #host, args: &mut #record) {
+                    for points in super::entered_points(PointId::#variant, #name) {
+                        points.#method(#reborrow, args);
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_upper_case_globals)]
+                pub const #method: Option<PointId> = Some(PointId::#variant);
+            });
+        }
+        (methods, variants, dispatch)
     }
 
     /// The listener's function type.

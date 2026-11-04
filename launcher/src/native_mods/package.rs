@@ -67,10 +67,17 @@ pub(super) fn tool_manifest(bundle: &Bundle) -> Result<(), String> {
             bundle.native().horizon.clone().into(),
         )])),
     );
-    if !bundle.native().injection.is_empty() {
+    // A point injection is the launcher's, not horizon-mixins' ([`super::inject`]).
+    let helpers: Vec<_> = bundle
+        .native()
+        .injection
+        .iter()
+        .filter(|injection| injection.trait_method.is_none())
+        .collect();
+    if !helpers.is_empty() {
         manifest.insert(
             "injection".into(),
-            toml::Value::try_from(&bundle.native().injection).map_err(|e| e.to_string())?,
+            toml::Value::try_from(&helpers).map_err(|e| e.to_string())?,
         );
     }
     if !bundle.native().module.is_empty() {

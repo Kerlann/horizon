@@ -297,6 +297,26 @@ impl Manifest {
                         ));
                     }
                 }
+                // A trait method listens at a point (`mod_api::points::Points`): at its head or
+                // return, with the point's own record, so nothing else of a mixin applies.
+                if injection.trait_method.is_some()
+                    && (injection.hook.is_some()
+                        || !matches!(injection.kind, InjectionKind::Head | InjectionKind::Return)
+                        || injection.cancellable
+                        || !injection.bindings.is_empty()
+                        || injection.argument.is_some()
+                        || injection.selector.is_some()
+                        || injection.ordinal.is_some()
+                        || injection.require.is_some()
+                        || injection.slice.is_some()
+                        || injection.variable.is_some()
+                        || injection.result.is_some())
+                {
+                    return Err(format!(
+                        "{MANIFEST}: injection {}: a trait_method listens at the HEAD or RETURN of the point its `target` names, and takes the point's record: no `hook` (a hook is its own Hooks method), bindings, cancellable, argument, selector, ordinal, require, slice, variable or result (cancel through the record's `cancel`); use a helper for the rest",
+                        injection.id
+                    ));
+                }
             }
             for module in &native.module {
                 if module.id.is_empty() || !ids.insert(&module.id) {
@@ -975,6 +995,35 @@ capabilities = ["registries"]
         );
         for unsupported in ["unexpected = true", "[[native.post_build]]\nbin = 'bake'"] {
             assert!(Manifest::parse(&format!("{EXAMPLE}{native}{unsupported}\n")).is_err());
+        }
+    }
+
+    #[test]
+    fn a_trait_method_listens_at_a_points_head_or_return_only() {
+        let native = format!(
+            "[native]\ngame = '26.3'\nhorizon = '{}'\nmixins = '{}'\n",
+            "a".repeat(40),
+            "b".repeat(40)
+        );
+        let injection = |rest: &str| {
+            format!(
+                "{EXAMPLE}{native}[[native.injection]]\nid = 'tick'\ntarget = \"horizon_client::game::Game<'_>::tick\"\ntrait_method = 'tick'\n{rest}"
+            )
+        };
+        for ok in ["kind = 'HEAD'\n", "kind = 'RETURN'\n"] {
+            Manifest::parse(&injection(ok)).unwrap();
+        }
+        for refused in [
+            "kind = 'MODIFY_ARG'\n",
+            "kind = 'HEAD'\ncancellable = true\n",
+            "kind = 'HEAD'\nselector = 'x'\n",
+            "kind = 'HEAD'\nbindings = [{ name = 'a', ty = 'i32', value = 'a' }]\n",
+        ] {
+            let error = Manifest::parse(&injection(refused)).unwrap_err();
+            assert!(
+                error.contains("injection tick") && error.contains("helper"),
+                "{refused}: {error}"
+            );
         }
     }
 

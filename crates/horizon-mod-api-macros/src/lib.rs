@@ -56,6 +56,7 @@ fn expand(mut implementation: ItemImpl, export: bool) -> TokenStream {
     let (render, part) = match name.to_string().as_str() {
         "Hooks" => (false, None),
         "RenderHooks" => (true, None),
+        "Points" => return expand_points(implementation),
         "BlockPart" => (false, Some("block_subscribed")),
         "BlockEntityPart" => (false, Some("block_entity_subscribed")),
         "ItemPart" => (false, Some("item_subscribed")),
@@ -115,6 +116,32 @@ fn expand(mut implementation: ItemImpl, export: bool) -> TokenStream {
         quote!()
     };
     quote!(#implementation #export).into()
+}
+
+/// `#[horizon_mod]` on `impl Points`: its subscriptions, and `__HORIZON_POINTS`, the methods it
+/// overrides, which the launcher's generated `main` checks each slot injection against.
+fn expand_points(mut implementation: ItemImpl) -> TokenStream {
+    let mut methods = Vec::new();
+    let mut cfgs = Vec::new();
+    for item in &implementation.items {
+        if let ImplItem::Fn(method) = item {
+            methods.push(method.sig.ident.clone());
+            cfgs.push(cfg_attributes(method));
+        }
+    }
+    implementation.items.push(syn::parse_quote! {
+        fn subscribed(&self) -> &'static [Option<mod_api::points::PointId>] {
+            &[#(#(#cfgs)* mod_api::points::#methods),*]
+        }
+    });
+    let names = methods.iter().map(|method| method.to_string());
+    quote! {
+        #implementation
+        /// The injection-point methods this mod overrides (its `impl Points`).
+        #[doc(hidden)]
+        pub const __HORIZON_POINTS: &[&str] = &[#(#(#cfgs)* #names),*];
+    }
+    .into()
 }
 
 /// Mark a trait mod or its renderer and derive its hook subscriptions.

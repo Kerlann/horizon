@@ -35,6 +35,8 @@ LINK_ARG = "cargo:rustc-link-arg-bin=horizon-client="
 # cargo passes their folders to rustc, a plain rustc gets them from here (`-L native=OUT/native`).
 NATIVE = "native"
 NATIVE_SUFFIXES = (".a", ".lib")
+# The game's injection points, from its build script's output: the launcher routes mods' point injections by it.
+POINTS = "points.json"
 
 
 def run(command: list[str], **kwargs) -> str:
@@ -98,6 +100,7 @@ def build(out: Path, server: bool) -> None:
         if source is not None:
             shutil.copy2(source, out / name)
     game = next(script for script in scripts if script["package_id"].split("#")[0].endswith("/horizon-client"))
+    shutil.copy2(Path(game["out_dir"]) / POINTS, out / POINTS)
     output = Path(game["out_dir"]).parent / "output"
     link_args = [line[len(LINK_ARG):] for line in output.read_text().splitlines() if line.startswith(LINK_ARG)]
     files = {str(path.relative_to(out).as_posix()): sha256(path) for path in sorted(out.rglob("*")) if path.is_file()}
@@ -125,7 +128,7 @@ def check(out: Path) -> None:
     """Only compiler outputs: a stray asset, vanilla file or anything else fails the build."""
     stray = [
         path for path in out.rglob("*")
-        if path.is_file() and not (path.parent == out and path.name in CARRIED)
+        if path.is_file() and not (path.parent == out and (path.name in CARRIED or path.name == POINTS))
         and not (path.parent == out / "deps" and path.name.endswith(SUFFIXES))
         and not (path.parent == out / NATIVE and path.name.endswith(NATIVE_SUFFIXES))
     ]

@@ -4,7 +4,7 @@
 //! anything runs: a mod set the prebuilt game can't serve, or a revision with no prebuilt
 //! release, builds from source, and the build log says why. A prebuilt build that fails is an
 //! error like any other build's, never retried from source.
-use super::{api, dependencies, Profile, Target};
+use super::{api, dependencies, inject, Profile, Target};
 use crate::i18n::{tr, trf};
 use crate::rust_toolchain::{self, Toolchain};
 use horizon_mods::index::native;
@@ -25,7 +25,7 @@ const UNPACKED_LIMIT: u64 = 8 << 30;
 /// Why a build compiles the game from source instead of using the prebuilt game.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum SourceReason {
-    /// A mod has `[[native.injection]]` or modules: they change the game's own code.
+    /// A mod has a helper `[[native.injection]]` or a module: they change the game's own code.
     Injections { mod_id: String },
     /// A mod has a build script, which the prebuilt route doesn't run.
     BuildScript { mod_id: String },
@@ -39,6 +39,8 @@ pub(super) enum SourceReason {
     Host,
     /// The prebuilt game's release couldn't be downloaded.
     Download { why: String },
+    /// A point injection's target isn't a point in the prebuilt game.
+    NotAPoint { why: String },
     /// No prebuilt game was released for this revision and target.
     NoRelease { revision: String },
 }
@@ -71,6 +73,10 @@ impl std::fmt::Display for SourceReason {
             }
             Self::Download { why } => trf(
                 "the prebuilt game couldn't be downloaded ({why}), so the game builds from source",
+                &[("why", why)],
+            ),
+            Self::NotAPoint { why } => trf(
+                "{why}, so the game builds from source and makes it a point",
                 &[("why", why)],
             ),
             Self::NoRelease { revision } => trf(
@@ -139,6 +145,26 @@ pub(super) fn refusal(projects: &[api::Project<'_>], profile: Profile) -> Option
         }
         None
     })
+}
+
+/// Whether the prebuilt `game` has a point at each of `injections`' targets: a target that isn't
+/// one builds from source, which makes it one. A method that isn't its point's is an error on
+/// any route, naming the injection.
+pub(super) fn serves_points(
+    game: &Path,
+    injections: &[inject::PointInjection],
+) -> Result<Result<(), SourceReason>, String> {
+    if injections.is_empty() {
+        return Ok(Ok(()));
+    }
+    let points = inject::listed(&game.join(inject::POINTS))?;
+    match inject::check(injections, &points) {
+        Ok(()) => Ok(Ok(())),
+        Err(error @ inject::PointError::NotAPoint { .. }) => Ok(Err(SourceReason::NotAPoint {
+            why: error.to_string(),
+        })),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 /// The prebuilt game for `revision` and `target`, downloaded and checked once, then kept in the
@@ -539,10 +565,10 @@ mod tests {
         let name = native::prebuilt_archive("x86_64-unknown-linux-gnu", true);
         assert_eq!(
             name,
-            "horizon-prebuilt-v1-x86_64-unknown-linux-gnu-server.tar.gz"
+            "horizon-prebuilt-v2-x86_64-unknown-linux-gnu-server.tar.gz"
         );
         let listing =
-            format!("AB12  horizon-prebuilt-v1-x86_64-unknown-linux-gnu.tar.gz\ncd34 *{name}\n");
+            format!("AB12  horizon-prebuilt-v2-x86_64-unknown-linux-gnu.tar.gz\ncd34 *{name}\n");
         assert_eq!(expected_sum(&listing, &name).as_deref(), Some("cd34"));
         assert_eq!(expected_sum(&listing, "horizon-prebuilt-x.tar.gz"), None);
     }

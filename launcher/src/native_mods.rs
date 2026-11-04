@@ -459,8 +459,15 @@ impl Bundle {
             .expect("validated code package")
     }
 
+    /// Whether horizon-mixins changes the game's source for it: a helper injection or a module.
+    /// A `trait_method` injection listens at a point instead ([`inject`]).
     fn needs_mixins(&self) -> bool {
-        !(self.native().injection.is_empty() && self.native().module.is_empty())
+        !self.native().module.is_empty()
+            || self
+                .native()
+                .injection
+                .iter()
+                .any(|injection| injection.trait_method.is_none())
     }
 }
 
@@ -1300,13 +1307,6 @@ fn cargo(rust: &Toolchain, dir: &Path, subcommand: &str) -> Command {
         cmd.arg("--config").arg(config);
     }
     cmd.arg("--manifest-path").arg(dir.join("Cargo.toml"));
-    // Only this stage's declarations apply, never a path inherited from the launcher's shell.
-    let injections = dir.join(inject::INPUT);
-    if injections.is_file() {
-        cmd.env(inject::ENV, injections);
-    } else {
-        cmd.env_remove(inject::ENV);
-    }
     cmd
 }
 
@@ -1524,6 +1524,10 @@ fn pipeline(
         .map(api::Project::read)
         .collect::<Result<_, _>>()
         .map_err(|error| error.to_string())?;
+    let point_injections: Vec<_> = ordered
+        .iter()
+        .flat_map(|bundle| inject::of(&bundle.manifest))
+        .collect();
     let revision = match &built_on {
         Some(about) => about.horizon.clone(),
         None => revision_of(base)?,
@@ -1578,9 +1582,12 @@ fn pipeline(
     } else {
         let game = match prebuilt::refusal(&projects, profile) {
             Some(reason) => Err(reason),
-            None => prebuilt::fetch(&revision, target, || {
+            None => match prebuilt::fetch(&revision, target, || {
                 progress(Step::PrebuiltGame(revision.clone()))
-            })?,
+            })? {
+                Ok(game) => prebuilt::serves_points(&game, &point_injections)?.map(|()| game),
+                Err(reason) => Err(reason),
+            },
         };
         game.map_err(|reason| log_warning(&reason.to_string())).ok()
     };
@@ -1667,8 +1674,7 @@ fn pipeline(
             } else {
                 let tool = tool(&rust, &mixins, &progress)?;
                 let mixin_input = real.join("mixins.incoming");
-                let tool_mods = stage_mixins(&ordered, &mixin_input)?;
-                let injections = inject::prepare(&tool_mods, &source, &ordered)?;
+                stage_mixins(&ordered, &mixin_input)?;
                 progress(Step::Mixins);
                 let result = run(
                     apply(&rust, &tool, &source, &mixin_input, &fresh),
@@ -1677,7 +1683,6 @@ fn pipeline(
                 );
                 let _ = fs::remove_dir_all(&mixin_input);
                 result.map_err(blame)?;
-                inject::stage(&fresh, &injections)?;
                 let parent = snapshot.parent().ok_or("invalid cache path")?;
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
                 let partial = parent.join(format!(".{key}.partial"));
@@ -1689,6 +1694,17 @@ fn pipeline(
         } else {
             sync(&source, &fresh)?;
         }
+        // Each point injection's function becomes a point in the staged game, as it is in a
+        // prebuilt one, so the mods' `impl Points` compiles the same on both routes.
+        inject::mark(&fresh, &point_injections)?;
+        let staged_points = horizon_mod_api_gen::points::game_points(&fresh)?
+            .into_iter()
+            .map(|point| inject::ListedPoint {
+                name: point.name,
+                target: point.target,
+            })
+            .collect::<Vec<_>>();
+        inject::check(&point_injections, &staged_points).map_err(|e| e.to_string())?;
         if !mods.is_empty() {
             // Offline metadata resolves all targets, including packages not fetched for this host.
             let mut fetch = cargo(&rust, &source, "fetch");
@@ -2537,20 +2553,13 @@ mod tests {
             }
         }
         let mods = bundles(&incoming).unwrap();
-        assert!(!mods[1].needs_mixins());
-        assert!(mods[0].needs_mixins() && mods[2].needs_mixins());
+        // A point injection (`trait_method`) is the launcher's: it never reaches horizon-mixins.
+        assert!(mods[0].needs_mixins());
+        assert!(!mods[1].needs_mixins() && !mods[2].needs_mixins());
         let input = root.join("mixins");
-        let tool_mods = stage_mixins(&mods, &input).unwrap();
-        let injections = inject::prepare(&tool_mods, &root, &mods).unwrap();
-        assert_eq!(injections.len(), 1);
-        assert!(!input.join("plain").exists());
+        stage_mixins(&mods, &input).unwrap();
+        assert!(!input.join("plain").exists() && !input.join("trait_injection").exists());
         assert!(input.join("ordinary").join(MANIFEST).is_file());
-        assert!(input
-            .join("trait_injection/horizon-trait-injection-0.rs")
-            .is_file());
-        let manifest = fs::read_to_string(input.join("trait_injection").join(MANIFEST)).unwrap();
-        assert!(manifest.contains("horizon-trait-injection-0.rs"));
-        assert!(!manifest.contains("trait_method"));
         assert!(mods
             .iter()
             .all(|bundle| !bundle.dir.join(MANIFEST).exists()));
@@ -2890,37 +2899,6 @@ mod tests {
             record_key(Target::Server, Profile::Release),
             "server-release"
         );
-    }
-
-    #[test]
-    fn staged_cargo_uses_only_its_own_injections_including_cached_output() {
-        let d = dir("injection-env");
-        let fresh = d.join("fresh");
-        let snapshot = d.join("snapshot");
-        let stage = d.join("stage");
-        fs::create_dir_all(&fresh).unwrap();
-        let rust = Toolchain {
-            dir: d.join("rust"),
-        };
-        let env = |dir: &Path| {
-            cargo(&rust, dir, "build")
-                .get_envs()
-                .find(|(key, _)| *key == inject::ENV)
-                .map(|(_, value)| value.map(std::ffi::OsStr::to_owned))
-        };
-        assert_eq!(env(&stage), Some(None));
-        inject::stage(&fresh, &[]).unwrap();
-        sync(&fresh, &snapshot).unwrap();
-        sync(&snapshot, &stage).unwrap();
-        assert_eq!(fs::read(stage.join(inject::INPUT)).unwrap(), b"[]");
-        assert_eq!(
-            env(&stage),
-            Some(Some(stage.join(inject::INPUT).into_os_string()))
-        );
-        fs::remove_file(fresh.join(inject::INPUT)).unwrap();
-        sync(&fresh, &stage).unwrap();
-        assert_eq!(env(&stage), Some(None));
-        fs::remove_dir_all(d).unwrap();
     }
 
     /// The server build (docs/server.md): compiled headless off the same source, with its own

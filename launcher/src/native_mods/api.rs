@@ -33,9 +33,15 @@ pub(super) fn main_rs(template: &str, mods: &[&horizon_mods::Manifest]) -> Strin
         "    horizon_mods::runtime::BuiltMod {{ id: {:?}, version: {:?}, side: horizon_mods::Side::{:?} }},\n",
         m.id, m.version, m.side,
     )).collect::<String>();
+    let checks = mods
+        .iter()
+        .enumerate()
+        .map(|(i, m)| super::inject::main_checks(i, &super::inject::of(m)))
+        .collect::<String>();
     template
         .replace("/* MOD_ENTRIES */", &entries)
         .replace("/* BUILT_MODS */", &inventory)
+        + &checks
 }
 
 /// Parsed once from the pipeline's immutable incoming copy, then reused for staging.

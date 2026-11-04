@@ -10,6 +10,11 @@ pub fn install(mods: Mods) {
     crate::install(mods);
 }
 
+/// Whether an installed mod listens at `point` (the game fills that slot).
+pub fn point_listened(point: Option<points::PointId>) -> bool {
+    crate::point_listened(point)
+}
+
 /// Whether an installed mod subscribes to `hook`.
 pub fn listened(hook: HookId) -> bool {
     crate::listened(hook)

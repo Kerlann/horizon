@@ -63,7 +63,7 @@ jobs:
     env:
       # v<layout>: the launcher asks only for the archive layout it reads (prebuilt_archive in
       # crates/horizon-mods/src/index/native.rs); bump both when the folder's layout changes.
-      ARCHIVE: horizon-prebuilt-v1-${{ matrix.target }}${{ matrix.server && '-server' || '' }}.tar.gz
+      ARCHIVE: horizon-prebuilt-v2-${{ matrix.target }}${{ matrix.server && '-server' || '' }}.tar.gz
     steps:
       - uses: actions/checkout@v4
         with:

@@ -47,3 +47,32 @@ pub fn quick_move(host: &mut dyn mod_api::ClientHost, slot: usize) -> bool {
     menu.click(host, &[mod_api::MenuClick::QuickMove { slot }])
 }
 // ANCHOR_END: menu_quick_move
+
+/// The same counter as a point injection: `trait_method = "tick"` at the head of
+/// `Game::tick`, listened to by the mod's `impl Points`.
+mod at_a_point {
+    use super::count;
+    use mod_api::{Hooks, HostSide, points::Points, points::TickArgs};
+
+    #[derive(Default)]
+    struct Mod;
+
+    // ANCHOR: points
+    #[mod_api::horizon_mod]
+    impl Points for Mod {
+        fn tick(&self, host: HostSide<'_>, _: &mut TickArgs) {
+            // `tick` is a point on both sides; the counter lives on the server's level.
+            if let HostSide::Server(host) = host {
+                let _ = count(host);
+            }
+        }
+    }
+
+    #[mod_api::horizon_mod]
+    impl Hooks for Mod {
+        fn points(&self) -> Option<&dyn Points> {
+            Some(self)
+        }
+    }
+    // ANCHOR_END: points
+}

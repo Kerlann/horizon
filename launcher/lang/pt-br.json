@@ -1188,5 +1188,6 @@
     "{mod} depends on the crate {crate}, so the game builds from source": "{mod} depends on the crate {crate}, so the game builds from source",
     "{mod} has a build script, so the game builds from source": "{mod} has a build script, so the game builds from source",
     "{mod} injects into the game's code, so the game builds from source": "{mod} injects into the game's code, so the game builds from source",
-    "{mod} uses Cargo features, so the game builds from source": "{mod} uses Cargo features, so the game builds from source"
+    "{mod} uses Cargo features, so the game builds from source": "{mod} uses Cargo features, so the game builds from source",
+    "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point"
 }
