@@ -27,7 +27,7 @@ RESULT = re.compile(r"^test (\S+) \.\.\. (ok|FAILED)$")
 SUMMARY = re.compile(r"^test result: ")
 PANIC = re.compile(r"^thread '([^']+)'.* panicked at (\S+):$")
 # Packages whose integration tests (`tests/*.rs`) run too, beside their library tests.
-INTEGRATION_TESTS = {"horizon-client"}
+INTEGRATION_TESTS = {"horizon-client", "horizon-world"}
 ICD_DIRS = ("/usr/share/vulkan/icd.d", "/etc/vulkan/icd.d")
 
 
