@@ -1083,7 +1083,8 @@ impl Ticker<'_, '_, '_, '_> {
         self.st.fire_ticks = fire_ticks;
         if extinguished {
             // Entity.playEntityOnFireExtinguishedSound: keep the entity RNG order.
-            let pitch = 1.6 + (self.p.entity_random().next_float() - self.p.entity_random().next_float()) * 0.4;
+            let pitch = 1.6
+                + (self.p.entity_random().next_float() - self.p.entity_random().next_float()) * 0.4;
             self.st.events.push(ArrowEvent::Sound {
                 sound: ArrowSound::Extinguish,
                 volume: 0.7,
