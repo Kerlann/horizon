@@ -165,6 +165,7 @@ pub(crate) fn records(points: &[GamePoint]) -> String {
         #[doc(hidden)]
         #[repr(usize)]
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[non_exhaustive]
         pub enum PointId { #(#variants)* }
         pub(crate) const POINT_COUNT: usize = #count;
         /// The game's injection points a mod listens to (#589): one method per point's head and
