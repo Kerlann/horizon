@@ -494,7 +494,7 @@ impl Game<'_> {
             &mut draw.vertices,
         );
     }
-    /// The width of `text` in font pixels, as [`Self::native_draw_text`] draws it, to centre a
+    /// The width of `text` in font pixels, as `native_draw_text` draws it, to centre a
     /// line (`Font.width`).
     pub(super) fn native_draw_text_width(&self, _draw: &BlockEntityDraw, text: &str) -> f32 {
         horizon_client::hud::HudBatch::text_width(&self.gui.atlas, text)
