@@ -31,4 +31,34 @@ pub trait Helpers {
         target = "horizon_client::game::native_block_states::Game<'_>::native_block_item"
     )]
     fn block_item();
+    #[helper(
+        side = "both",
+        backend = true,
+        target = "horizon_client::game::native_block_states::Game<'_>::native_block_state_replaceable"
+    )]
+    fn block_state_replaceable();
+    #[helper(
+        side = "both",
+        backend = true,
+        target = "horizon_client::game::native_block_states::Game<'_>::native_block_state_destroy_speed"
+    )]
+    fn block_state_destroy_speed();
+    #[helper(
+        side = "both",
+        backend = true,
+        target = "horizon_client::game::native_block_states::Game<'_>::native_block_state_sound"
+    )]
+    fn block_state_sound();
+    #[helper(
+        side = "both",
+        backend = true,
+        target = "horizon_client::game::native_block_states::Game<'_>::native_block_state_has_block_entity"
+    )]
+    fn block_state_has_block_entity();
+    #[helper(
+        side = "both",
+        backend = true,
+        target = "horizon_client::game::native_block_states::Game<'_>::native_block_states_of"
+    )]
+    fn block_states_of();
 }
