@@ -284,7 +284,6 @@ mod native_projectiles;
 mod native_quick_move;
 mod native_raid_refs;
 mod native_recipes;
-mod native_reload_listeners;
 mod native_render_visibility;
 mod native_server;
 mod native_shaders;
@@ -486,7 +485,6 @@ pub use native_data_maps::NativeDataMapType;
 pub use native_falling::NativeFalling;
 pub use native_hooks::{NativeClock, NativeShake, PhantomSpawnResult, SleepProblem};
 pub use native_mob_draw::{NativeMobRender, NativePlayerRender};
-pub use native_reload_listeners::NativeReloadListener;
 pub use native_server::NativeExperienceOrb;
 pub use native_world_columns::NativeColumnBlocks;
 pub use native_world_edit::{NativeBlockEdit, NativeBlockRun, NativeHeightmap};
@@ -13176,9 +13174,6 @@ impl Game<'_> {
         if self.remote.is_none() {
             self.read_raids();
         }
-        // The mods' own data folders, then TagsUpdatedEvent (SERVER_DATA_LOAD):
-        // the world's data is in, before its chunks and players are.
-        self.native_reload_listeners();
         self.native_server_data_loaded(false);
         self.sync_recipe_content();
         reset_world_progress(&mut self.adv, &mut self.stats);
@@ -20982,7 +20977,6 @@ impl Game<'_> {
             &overlay,
         ));
         self.adv.reset_tree();
-        self.native_reload_listeners();
         self.native_server_data_loaded(true);
     }
 
