@@ -4628,10 +4628,10 @@ mod ravager_noai_tests {
                     mob.extra.counter = initial.0;
                     mob.extra.counter2 = initial.1;
                     mob.extra.anim_ticks = initial.2;
-                    let mut random = horizon_core::random::LegacyRandom::new(0);
+                    let mut test_level = crate::health::TestLevel::new(0);
                     let mut events = Vec::new();
                     for elapsed in 1..=22 {
-                        tick(&mut mob, w, &mut random, &mut events);
+                        tick(&mut mob, w, &mut test_level.level(), &mut events);
                         let attack = if initial.0 > 0 {
                             (initial.0 - elapsed).max(0)
                         } else {
