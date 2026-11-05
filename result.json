@@ -1,0 +1,1 @@
+{"status":"blocked","notes":"Not implemented: main still limits the notification to content effects, and effect additions also bypass the shared path through direct player and mob writes. Completing this safely requires routing those paths through a common server-side notification with the correct LivingRef; no PR was opened and no checks were run."}
