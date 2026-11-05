@@ -265,7 +265,16 @@ fn wasm_update_waits_for_the_player() {
     .unwrap();
     let first = index_of(&[("1.0.0", GAME, &old)]);
     let p = first.project("ruby").unwrap();
-    install_version(&first, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
+    install_version_guarded(
+        &first,
+        true,
+        p,
+        &p.versions[0],
+        &home,
+        &|_| Ok(()),
+        &|_, _| {},
+    )
+    .unwrap();
     let index = index_of(&[("1.1.0", GAME, &new), ("1.0.0", GAME, &old)]);
     let report = run_with(&index, true, &home, &PLAY, &|_, _| {});
     assert!(report.updated.is_empty(), "{report:?}");
