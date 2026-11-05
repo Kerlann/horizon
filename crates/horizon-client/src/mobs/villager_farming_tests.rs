@@ -195,6 +195,7 @@ fn farmer_plants_a_declared_items_block() {
         resources(),
         &[],
         true,
+        true,
         |world, reg| put(world, 0, 0, reg.default_state("fieldtest:soil").unwrap()),
         |w, types| {
             let mut m = farmer(types);

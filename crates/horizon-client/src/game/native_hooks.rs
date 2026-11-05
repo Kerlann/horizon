@@ -3125,7 +3125,7 @@ impl Game<'_> {
     /// is in GUI pixels. `native_camera` is this frame's world camera (None on
     /// the panorama). `gui_hidden` is the F1 setting; `focused` is window focus.
     /// A mod decides whether its foreground indicator respects those flags.
-    /// Client only; the host is read-only. API @API:gui_render_post@.
+    /// Client only; the host is read-only.
     pub(super) fn native_gui_render_post(
         &self,
         batch: &mut HudBatch,

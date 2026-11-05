@@ -6,8 +6,12 @@
 //! host, and every world change they cause reaches all players through the
 //! block log, the level events and the entity tracker.
 use super::{
-    Dim, Game, GuestUse, Hit, InteractTarget, Mining, Screen, lan_crafting::MenuRemoval,
-    level_sounds::LevelSound, respawn_anchor::RespawnConfig,
+    Dim, Game, GuestUse, Hit, InteractTarget, Mining, Screen,
+    building_players::{BuildingPlayer, BuildingPlayers},
+    lan::LanHost,
+    lan_crafting::MenuRemoval,
+    level_sounds::LevelSound,
+    respawn_anchor::RespawnConfig,
 };
 use horizon_client::{
     command::vanilla,
@@ -127,6 +131,8 @@ pub(super) struct GuestPlay {
     pub(super) respawn_requested: bool,
     /// `Player.takeXpDelay`: ticks until the next orb can be taken.
     xp_delay: u32,
+    /// This player entity's age and level-up sound cooldown.
+    level_up_sound: horizon_client::entities::LevelUpSound,
     /// What last killed the guest outright (`/kill`): the death message's key.
     death_cause: Option<String>,
     /// The equipment modifiers on the guest's attributes (`apply_equipment`)
@@ -189,6 +195,7 @@ pub(super) struct GuestSwap {
     /// The host's command permission, swapped for the guest's for its turn.
     permission: u8,
     xp: Experience,
+    level_up_sound: horizon_client::entities::LevelUpSound,
     host_keys: horizon_client::held::HeldKeys,
     screen: Screen,
     host_sign: Option<super::sign_edit::SignEditor>,
@@ -242,6 +249,8 @@ pub(super) struct GuestSwap {
     ),
     /// Whether the outer turn is a fake player.
     acting_fake: bool,
+    /// That turn's other-player building boxes.
+    building_boxes: BuildingPlayers,
     /// That turn's `known_movement`.
     known_movement: Vec3,
     /// The packets queued for that guest.
@@ -345,6 +354,26 @@ fn direction(face: i32) -> [i32; 3] {
     }
 }
 
+/// The hub's current bodies, across dimensions. A borrowed ancestor's
+/// live body takes precedence over this saved state until its turn returns.
+fn building_players(host: &LanHost) -> Vec<BuildingPlayer> {
+    host.hub
+        .guests
+        .iter()
+        .map(|g| BuildingPlayer {
+            conn: Some(g.conn),
+            dimension: Dim::from_id(&g.dimension),
+            bounds: (g.participates_in_player_simulation()
+                && g.placed
+                && g.loaded
+                && !g.dead
+                && !g.spectator())
+            .then(|| g.bounds()),
+            borrowed: false,
+        })
+        .collect()
+}
+
 impl Game<'_> {
     /// Run `f` as the guest `conn`: the host's player state is swapped for theirs.
     /// Returns `None` if the guest is missing or already active in a nested turn.
@@ -362,7 +391,7 @@ impl Game<'_> {
         conn: u32,
         f: impl FnOnce(&mut Self) -> R,
     ) -> Result<R, TurnRefused> {
-        let swap = self.enter_guest_at(gi, conn)?;
+        let swap = self.enter_guest_at(gi, conn, self.dim)?;
         super::dedicated::crash_fixture("guest", || {
             self.lan
                 .as_ref()
@@ -417,12 +446,37 @@ impl Game<'_> {
     /// stays in `self.lan`, so the guest can reach other players. Guest turns
     /// can nest: the acting guest and their queued packets are restored.
     pub(super) fn enter_guest(&mut self, conn: u32) -> Option<GuestSwap> {
+        self.enter_guest_in_dimension(conn, self.dim)
+    }
+
+    /// Enter a guest after changing levels: the outer body is still in
+    /// `outer_dimension`, not necessarily the level now in place.
+    pub(super) fn enter_guest_in_dimension(
+        &mut self,
+        conn: u32,
+        outer_dimension: Dim,
+    ) -> Option<GuestSwap> {
         let i = self.guest_index(conn)?;
-        self.enter_guest_at(i, conn).ok()
+        self.enter_guest_at(i, conn, outer_dimension).ok()
     }
 
     /// `enter_guest` for the guest at `i`, which must be `conn`.
-    fn enter_guest_at(&mut self, i: usize, conn: u32) -> Result<GuestSwap, TurnRefused> {
+    fn enter_guest_at(
+        &mut self,
+        i: usize,
+        conn: u32,
+        outer_dimension: Dim,
+    ) -> Result<GuestSwap, TurnRefused> {
+        let outer = BuildingPlayer {
+            conn: self.lan_acting,
+            dimension: outer_dimension,
+            bounds: self
+                .player
+                .as_ref()
+                .filter(|p| !self.lan_acting_fake && !self.spectator() && !p.health.dead_or_dying())
+                .map(PlayerMotion::bounds),
+            borrowed: true,
+        };
         let Some(host) = self.lan.as_mut() else {
             return Err(TurnRefused::Gone);
         };
@@ -433,6 +487,9 @@ impl Game<'_> {
         if self.lan_guest_swaps.contains(&conn) {
             return Err(TurnRefused::Nested);
         }
+        let other_boxes =
+            self.lan_building_boxes
+                .for_turn(conn, Some(outer), building_players(host));
         self.lan_guest_swaps.push(conn);
         // `ServerPlayer.permissions()`: the guest's own command level for its
         // turn, so game-master checks see it (not the host's).
@@ -524,7 +581,8 @@ impl Game<'_> {
         motion.flying_speed = abilities.flying_speed;
         // FireworkRocketItem.use boosts only a gliding player.
         motion.fall_flying = g.fall_flying;
-        motion.invulnerable = abilities.invulnerable;
+        // A player frozen for a hand-over must keep its saved record unchanged.
+        motion.invulnerable = abilities.invulnerable || g.handover.is_some();
         // `ServerPlayer.isInvulnerableTo`'s connection term, as of now.
         motion.client_loaded = g.client_loaded();
         let _ = motion.set_health(g.health, false);
@@ -564,6 +622,7 @@ impl Game<'_> {
                 total: g.xp_total,
             },
         );
+        let level_up_sound = std::mem::replace(&mut self.level_up_sound, play.level_up_sound);
         // The host's held keys stay theirs: the guest holds only sneak, and a
         // screen the guest opens (`keys.clear()`) leaves the host walking.
         let host_keys = std::mem::take(&mut self.keys);
@@ -698,6 +757,7 @@ impl Game<'_> {
         self.update_totem_ready();
         self.entity_reach = self.interaction_range("minecraft:entity_interaction_range", 3.0, 5.0);
         self.block_reach = self.interaction_range("minecraft:block_interaction_range", 4.5, 5.0);
+        let building_boxes = std::mem::replace(&mut self.lan_building_boxes, other_boxes);
         Ok(GuestSwap {
             conn,
             i,
@@ -715,6 +775,7 @@ impl Game<'_> {
             block_reach,
             permission,
             xp,
+            level_up_sound,
             host_keys,
             screen,
             host_sign,
@@ -764,6 +825,7 @@ impl Game<'_> {
             cooldown_events,
             player_sounds,
             combat: host_combat,
+            building_boxes,
         })
     }
 
@@ -829,6 +891,7 @@ impl Game<'_> {
             block_reach,
             permission,
             xp,
+            level_up_sound,
             host_keys,
             screen,
             host_sign,
@@ -867,6 +930,7 @@ impl Game<'_> {
             marks,
             death_cause,
             combat,
+            building_boxes,
             acting,
             acting_fake,
             known_movement,
@@ -984,6 +1048,7 @@ impl Game<'_> {
         ) = acting;
         self.lan_acting_fake = acting_fake;
         self.known_movement = known_movement;
+        self.lan_building_boxes = building_boxes;
         play.death_cause = std::mem::replace(&mut self.ui.death_cause, death_cause);
         // An ender chest the guest opened: the menu shows their inventory
         // itself (lan_open_container), not a stand-in block entity.
@@ -1104,6 +1169,7 @@ impl Game<'_> {
                 .insert(key, BlockEntity::Chest(self.ender_items.clone()));
             self.ender_open = Some(key);
         }
+        play.level_up_sound = std::mem::replace(&mut self.level_up_sound, level_up_sound);
         let new_xp = std::mem::replace(&mut self.experience, xp);
         g.xp_level = new_xp.level;
         g.xp_progress = new_xp.progress;
@@ -1273,6 +1339,12 @@ impl Game<'_> {
         }
         // The turn's teleports are in the hub now: the mods hear them.
         self.flush_teleport_notes();
+        // An inner turn can move, kill, or change the mode of a hub-owned body.
+        if let (Some(actor), Some(host)) = (self.lan_acting, self.lan.as_ref()) {
+            self.lan_building_boxes =
+                self.lan_building_boxes
+                    .for_turn(actor, None, building_players(host));
+        }
     }
 
     /// `ServerLevel.broadcastDamageEvent` for a guest that took an unblocked hit.
@@ -4277,6 +4349,7 @@ impl Game<'_> {
         // empty: the mods hear each worn item again from empty (`native_players_equipment`).
         if let Some(play) = host.play.get_mut(&conn) {
             play.equipment_heard = None;
+            play.level_up_sound = Default::default();
         }
         // PlayerList.respawn: a server's player comes back in its respawn
         // point's level: the Overworld, where the world spawn and beds are,
@@ -4511,6 +4584,18 @@ impl Game<'_> {
         self.tick_player_menus();
         self.native_players_equipment();
         self.announce_guest_advancements();
+        // Entity.commonTick belongs to each player, including spectators and
+        // players whose client has not loaded yet, not to the server clock.
+        if let Some(host) = self.lan.as_mut() {
+            for g in &host.hub.guests {
+                if g.participates_in_player_simulation()
+                    && host.hub.here(g)
+                    && !self.server_trips.iter().any(|t| t.is(g.conn))
+                {
+                    host.play.entry(g.conn).or_default().level_up_sound.tick();
+                }
+            }
+        }
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -4677,9 +4762,16 @@ impl Game<'_> {
                 host.hub.flush_progress(conn);
             }
             self.guest_dig_feedback(conn);
-            self.guest_pickups(gi);
-            self.guest_arrows(gi);
-            self.guest_orbs(gi);
+            // A hand-over freezes this player's inventory until its record is released.
+            if self
+                .lan
+                .as_ref()
+                .is_some_and(|host| host.hub.guests[gi].handover.is_none())
+            {
+                self.guest_pickups(gi);
+                self.guest_arrows(gi);
+                self.guest_orbs(gi);
+            }
             self.guest_die(gi, conn);
         }
     }

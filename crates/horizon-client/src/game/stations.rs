@@ -1068,13 +1068,7 @@ impl Game<'_> {
         }
         self.experience.add_levels(levels);
         let level = self.experience.level;
-        if levels > 0 && level % 5 == 0 && self.ticks > self.last_level_up + 100 {
-            self.last_level_up = self.ticks;
-            let volume = if level > 30 { 1.0 } else { level as f32 / 30.0 };
-            let at = self.eye_position();
-            self.audio
-                .play("minecraft:entity.player.levelup", at, volume * 0.75, 1.0);
-        }
+        self.play_level_up(levels, level);
     }
     /// `Player.onEnchantmentPerformed`: the cost leaves the level directly, not
     /// through `giveExperienceLevels`, and the mods hear of the level change.
@@ -1082,6 +1076,17 @@ impl Game<'_> {
         let old_level = self.experience.level;
         self.experience.add_levels(-cost);
         self.native_player_level_changed(old_level);
+    }
+    /// `Player.giveExperienceLevels`: all players near its feet hear the sound.
+    pub(super) fn play_level_up(&mut self, amount: i32, level: i32) {
+        if let Some(volume) = self.level_up_sound.give_levels(amount, level) {
+            let at = self
+                .player
+                .as_ref()
+                .map(|p| [p.position.x, p.position.y, p.position.z]);
+            self.audio
+                .play("minecraft:entity.player.levelup", at, volume, 1.0);
+        }
     }
     /// Whether the result slot may be taken (`mayPickup`).
     fn may_take_result(&self) -> bool {
