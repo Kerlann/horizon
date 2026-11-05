@@ -52,6 +52,15 @@ fn ingredient(v: &Value) -> Option<Ingredient> {
     }
 }
 
+/// The recipes by id in vanilla's registration order (path, then namespace),
+/// the order `RecipeManager` numbers groups and lists the stonecutter's
+/// recipes in, and so the order the host's own tables keep.
+fn registration_order<V>(all: &BTreeMap<String, V>) -> Vec<&V> {
+    let mut ordered: Vec<_> = all.iter().collect();
+    ordered.sort_by_cached_key(|(id, _)| horizon_client::crafting::registration_key(id));
+    ordered.into_iter().map(|(_, v)| v).collect()
+}
+
 /// The network copy's recipes: every recipe file and overlay recipe, each
 /// ingredient object — NeoForge's shapes, a brewing slot's item predicate —
 /// replaced by the flat item list the crafting copy resolves it to. The
@@ -88,7 +97,7 @@ pub(super) fn network_recipes(
     // RecipeManager.unpackRecipeInfo's group numbers, while the files are
     // still parsed.
     let mut groups = HashMap::new();
-    for r in all.values() {
+    for r in registration_order(&all) {
         if let Some(g) = r["group"].as_str().filter(|g| !g.is_empty()) {
             let next = groups.len() as i32;
             groups.entry(g.to_owned()).or_insert(next);
@@ -187,8 +196,8 @@ pub fn update_recipes(
     // The copy is already filtered and swapped (`network_recipes`); the
     // filters never run twice, so one swap cannot feed a later one again.
     // Parsing every recipe takes about a millisecond.
-    let chosen: Vec<Value> = all
-        .values()
+    let chosen: Vec<Value> = registration_order(all)
+        .into_iter()
         .filter_map(|text| serde_json::from_str::<Value>(text).ok())
         .collect();
     let tags: BTreeMap<&str, &[i32]> = sync

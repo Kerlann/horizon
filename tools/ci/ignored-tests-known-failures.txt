@@ -6,6 +6,9 @@
 # graphics adapter: it runs, and must pass, only where the runner has a Vulkan driver.
 
 # Parity harness steps.
+horizon-client-lib arrows::client_tests::client_arrow_parity_fixture tools/test_client_arrow_parity.py harness
+horizon-client-lib mobs::shulker::space_tests::shulker_space_parity_fixture tools/test_shulker_space_parity.py harness
+horizon-client-lib save::loot_tests::opened_loot_parity_fixture tools/test_opened_loot_parity.py harness
 horizon-client game::dragon::tests::dragon_render_parity_fixture tools/test_dragon_render_parity.py harness
 horizon-client game::entity_model_loading_tests::entity_model_document_benchmark ENTITY_MODEL_BENCH_DOCUMENT harness
 horizon-client-lib entity_nbt::equipment_tests::write_fixtures HORIZON_WRITE_FIXTURES harness

@@ -1463,6 +1463,9 @@ mod tests {
     fn a_synced_boost_starts_the_client_timer() {
         use horizon_client::mobs::MobTypes;
         use horizon_core::geometry::trig::Mth;
+        use horizon_world::native_load_context::{
+            DataLoadOrigin, LoadContext, LoadInputs, LoopSide,
+        };
         use std::{fs, sync::Arc};
 
         let root = std::env::temp_dir().join(format!("horizon-boost-sync-{}", std::process::id()));
@@ -1480,6 +1483,13 @@ mod tests {
         let mut types = MobTypes::load(&root).unwrap();
         fs::remove_dir_all(root).unwrap();
 
+        let context = LoadContext::new(
+            DataLoadOrigin::ClientPreload,
+            Arc::new(LoadInputs::new(Default::default(), Default::default())),
+            [],
+        )
+        .loop_context(LoopSide::Client, []);
+
         // ItemBasedSteering: nextInt(841) + 140, and 1.15 in boostFactor.
         const TOTAL: i32 = 140;
         const FACTOR: f32 = 1.15;
@@ -1490,7 +1500,7 @@ mod tests {
             let t = Arc::new(types.types.remove(kind).unwrap());
             let mut m = Mob::new(1, t, horizon_core::geometry::Vec3::ZERO, 0.0);
             m.attrs.speed = 0.25;
-            m.extra.saddled = true;
+            m.extra.set_saddled(true);
             m.extra.counter = 5;
             m.extra.counter2 = 3;
             // The next entry (pig variant, strider suffocating) is not the boost.
@@ -1503,7 +1513,7 @@ mod tests {
                 steer: true,
                 ..Default::default()
             });
-            equine::ridden_step(&mut m);
+            equine::ridden_step(&mut m, &context);
             // tickBoost post-increments, then boostFactor reads boostTime 1.
             let boost = 1.0 + FACTOR * (1.0_f32 / TOTAL as f32 * std::f32::consts::PI).msin();
             let expected = (0.25_f64 * steer) as f32 * boost;

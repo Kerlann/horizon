@@ -6159,6 +6159,7 @@ impl Game<'_> {
         if running {
             self.tick_particles();
         }
+        self.tick_frame_visuals(running);
         // Under `HORIZON_STILL` they wait for the world too: endermen's and blazes' particles
         // draw on the particles' random, and effects count down, on every tick a frozen
         // client runs, as many as the run took to get there.
@@ -7112,6 +7113,7 @@ impl Game<'_> {
                     border,
                     &self.res.motion().fluids,
                     &self.loop_context,
+                    &mut |_, _| {},
                 );
                 // `tick` set `previous` to the stepped position: keep the
                 // pre-step one, as `xo` is in vanilla.
@@ -9600,6 +9602,9 @@ impl Game<'_> {
             return;
         }
         if let Some(command) = message.strip_prefix('/') {
+            if self.studio_command(command) {
+                return;
+            }
             self.send_command(command);
         } else {
             self.send_signed_chat(message);
@@ -11255,6 +11260,9 @@ fn client_has_level(logged_in: bool, reconfiguring: Option<u64>) -> bool {
 mod interaction_event_tests;
 
 #[cfg(test)]
+mod native_entity_tests;
+
+#[cfg(test)]
 mod tests {
     /// `ClientChatReceivedEvent`: a mod's replacement is the line the chat
     /// shows, a cancelled system line never shows, and a cancelled message
@@ -12384,8 +12392,9 @@ mod tests {
     }
 
     use super::{
-        boat_interact_passes, chat_after_event, hold_server_fire, item_frame_interact_passes,
-        keep_client_state, remote_object_swings, remote_use_swings, synced_local_use,
+        boat_interact_passes, chat_after_event, client_has_level, hold_server_fire,
+        item_frame_interact_passes, keep_client_state, remote_object_swings, remote_use_swings,
+        synced_local_use,
     };
 
     #[test]

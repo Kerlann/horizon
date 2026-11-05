@@ -815,6 +815,7 @@ pub(super) mod audience_tests {
                 sender: PlayerSender::new(tx, Arc::default()),
                 latency: Arc::default(),
                 address: ([127, 0, 0, 1], 1).into(),
+                expected: false,
             },
             1,
             [0.0, 100.0, 0.0],

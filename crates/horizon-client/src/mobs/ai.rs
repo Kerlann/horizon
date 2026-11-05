@@ -698,6 +698,7 @@ pub fn tick(
             farm::chicken_egg_step(m, events);
         }
         if m.species() == Species::Allay {
+            super::allay::passive_heal(m, w.loop_context);
             super::allay::update_duplication_cooldown(m);
         }
         if horse {
@@ -707,6 +708,10 @@ pub fn tick(
         // attack/stun/roar, including the stun-to-roar transition.
         if m.species() == Species::Ravager {
             super::ravager::ai_step(m, w, events);
+        }
+        if m.species() == Species::Pufferfish {
+            // Pufferfish.aiStep's mob contacts run even when serverAiStep is skipped.
+            aquatic::sting_touching_mobs(m, w, events);
         }
     } else {
         ai_step(m, w, level, events);
@@ -2465,11 +2470,17 @@ pub fn walk_target_value(m: &Mob, w: &MobWorld, p: [i32; 3]) -> f32 {
     0.0
 }
 /// Species damage filters (LivingEntity.hurtServer overrides).
-pub fn accepts_damage(m: &mut Mob, source: &Damage, _amount: f32) -> bool {
+pub fn accepts_damage(
+    m: &mut Mob,
+    source: &Damage,
+    _amount: f32,
+    player_uuid: Option<[i32; 4]>,
+) -> bool {
     match m.species() {
         Species::Breeze => super::breeze::accepts_damage(m, source),
-        // Allay.hurtServer: its liked player cannot hurt it.
-        Species::Allay if m.extra.tame && source.attacker == Some(Who::Player) => false,
+        Species::Allay => {
+            !player_uuid.is_some_and(|uuid| super::allay::is_liked_player(m, source.attacker, uuid))
+        }
         Species::Creaking => super::creaking::accepts_damage(m, source),
         Species::Wither => super::wither::accepts(m, source.kind, source.attacker, false),
         Species::Warden => super::warden::accepts_damage(m, source),
@@ -5103,6 +5114,52 @@ mod iron_golem_push_tests {
         }
         for ((kind, hand, modifier), (base, hit)) in cases.iter().zip(got) {
             assert_eq!(hit, Some(base + modifier), "{kind} holding {hand:?}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod allay_healing_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn allays_heal_on_tenth_ticks_without_enabling_noai_work() {
+        let ran = crate::mobs::world::with_test_world(&[], |w, types| {
+            for no_ai in [true, false] {
+                for initial in [10.0_f32, 19.5, 20.0] {
+                    let kind = Arc::new(types.types["minecraft:allay"].clone());
+                    let mut mob = Mob::new(1, kind, Vec3::new(16.5, 101.0, 16.5), 0.0);
+                    mob.no_ai = no_ai;
+                    mob.no_gravity = true;
+                    mob.persistent = true;
+                    mob.health = initial;
+                    mob.extra.ints[2] = 37;
+                    mob.extra.ints[3] = 41;
+                    mob.extra.egg_time = 30;
+                    assert_eq!(mob.attrs.max_health, 20.0);
+                    assert_eq!(mob.age, 0);
+                    let mut test_level = crate::health::TestLevel::new(0);
+                    let mut level = test_level.level();
+                    let mut events = Vec::new();
+                    for elapsed in 1..=20 {
+                        assert!(tick(&mut mob, w, &mut level, &mut events));
+                        assert_eq!(mob.age, elapsed);
+                        assert_eq!(
+                            mob.health,
+                            (initial + (elapsed / 10) as f32).min(20.0),
+                            "NoAI={no_ai}, initial={initial}, tick={elapsed}"
+                        );
+                        assert_eq!(mob.extra.egg_time, 30 - elapsed as i32);
+                        let skipped = if no_ai { 0 } else { elapsed as i32 };
+                        assert_eq!(mob.extra.ints[2], 37 - skipped);
+                        assert_eq!(mob.extra.ints[3], 41 - skipped);
+                    }
+                }
+            }
+        });
+        if !ran {
+            eprintln!("Prepared mob data unavailable; Allay tick coverage did not run");
         }
     }
 }

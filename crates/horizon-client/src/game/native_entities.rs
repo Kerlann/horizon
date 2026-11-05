@@ -488,6 +488,7 @@ mod tests {
                     drop_chance: 1.0,
                     fixed: false,
                     invisible: false,
+                    custom_name: None,
                     check_interval: 0,
                 });
                 let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);

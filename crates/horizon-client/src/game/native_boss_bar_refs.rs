@@ -296,6 +296,7 @@ mod tests {
                 sender: PlayerSender::new(tx, Arc::new(AtomicUsize::new(0))),
                 latency: Arc::new(AtomicI32::new(0)),
                 address: "127.0.0.1:1".parse().unwrap(),
+                expected: false,
             },
             conn as i32,
             [0.0; 3],

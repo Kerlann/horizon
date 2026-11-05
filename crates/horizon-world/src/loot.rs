@@ -2335,7 +2335,8 @@ mod location_check_biome_tests {
         )
         .unwrap();
         fs::write(root.join("items.json"), "{}").unwrap();
-        let data = LootData::load(&root, &PackOverlay { files: packs }).unwrap();
+        let defaults = crate::item_defaults::read(&root).unwrap();
+        let data = LootData::load(&root, &PackOverlay { files: packs }, &defaults).unwrap();
         let _ = fs::remove_dir_all(&root);
         data
     }

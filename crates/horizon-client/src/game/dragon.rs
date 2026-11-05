@@ -5040,6 +5040,8 @@ mod tests {
     /// not a full hit, so it does not push either.
     #[test]
     fn a_melee_hit_knocks_a_flying_dragon_and_not_a_perched_one() {
+        let mut test_level = horizon_client::health::TestLevel::new(0);
+        let level = &mut test_level.level();
         let from = Vec3::new(3.0, 70.0, 4.0);
         let velocity = Vec3::new(1.0, -0.3, 0.5);
         let power = f64::from(0.4_f32);
@@ -5048,26 +5050,26 @@ mod tests {
         let mut perched = dragon(Phase::Scanning { time: 0 });
         perched.velocity = velocity;
         assert_eq!(
-            perched.hurt_from(0, 9.0, HIT, false, Some(from)),
+            perched.hurt_from(level, 0, 9.0, HIT, false, Some(from)),
             Hurt::Landed { full: true }
         );
         assert_eq!(perched.velocity, velocity);
 
         let mut taking_off = dragon(Phase::Flaming { ticks: 0 });
         taking_off.velocity = velocity;
-        taking_off.hurt_from(0, 60.0, HIT, false, Some(from));
+        taking_off.hurt_from(level, 0, 60.0, HIT, false, Some(from));
         assert!(matches!(taking_off.phase, Phase::Takeoff { .. }));
         assert_eq!(taking_off.velocity, velocity);
 
         let mut flying = dragon(flying());
         flying.velocity = velocity;
         assert_eq!(
-            flying.hurt_from(0, 9.0, HIT, false, Some(from)),
+            flying.hurt_from(level, 0, 9.0, HIT, false, Some(from)),
             Hurt::Landed { full: true }
         );
         assert_eq!(flying.velocity, pushed);
         assert_eq!(
-            flying.hurt_from(0, 20.0, HIT, false, Some(from)),
+            flying.hurt_from(level, 0, 20.0, HIT, false, Some(from)),
             Hurt::Landed { full: false }
         );
         assert_eq!(flying.velocity, pushed);

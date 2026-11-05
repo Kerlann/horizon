@@ -419,10 +419,23 @@ mod tests {
                 let at = [2.0, 64.0, 2.0];
 
                 // The tick's sounds, at their positions.
-                game.audio.capture = Some(vec![
-                    ("minecraft:block.chest.locked".into(), at, 1.0, 1.0),
-                    ("minecraft:entity.pig.ambient".into(), at, 1.0, 1.0),
-                ]);
+                game.audio.capture = Some(
+                    [
+                        "minecraft:block.chest.locked",
+                        "minecraft:entity.pig.ambient",
+                    ]
+                    .into_iter()
+                    .map(|event| horizon_client::audio::CapturedSound {
+                        event: event.into(),
+                        position: at,
+                        volume: 1.0,
+                        pitch: 1.0,
+                        source: SoundSource::Blocks as usize,
+                        entity: None,
+                        except_entity: None,
+                    })
+                    .collect(),
+                );
                 game.lan_broadcast_effects();
                 let got = packets(&rx);
                 assert_eq!(got.len(), 1, "the pig is cancelled");

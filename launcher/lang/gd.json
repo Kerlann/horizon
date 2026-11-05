@@ -1074,5 +1074,6 @@
   "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (no .mcp.json ann am pròiseact)",
   "← All servers": "← A h-uile frithealaiche",
-  "← Newer": "← Nas ùire"
+  "← Newer": "← Nas ùire",
+  "{file} unpacks to more than {limit}: it isn't imported.": "{file} unpacks to more than {limit}: it isn't imported."
 }

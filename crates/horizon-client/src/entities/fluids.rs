@@ -465,6 +465,7 @@ mod tests {
             None,
             &fluids,
             crate::test_resources::server_loop_context(),
+            &mut |_, _| {},
         ));
         assert_eq!(still.position.x, at.x);
         assert_eq!(still.velocity.x, 0.0);
@@ -480,6 +481,7 @@ mod tests {
             None,
             &fluids,
             crate::test_resources::server_loop_context(),
+            &mut |_, _| {},
         ));
         // Current pushes the orb, then underwater and air drag each widen
         // their float constants before multiplying the double motion.
@@ -498,6 +500,7 @@ mod tests {
                 None,
                 &fluids,
                 crate::test_resources::server_loop_context(),
+                &mut |_, _| {},
             );
         }
         assert!(carried.position.x > at.x + 0.5);

@@ -53,6 +53,7 @@ pub(in crate::game) fn with_guests(test: impl FnOnce(&mut super::Game<'_>)) {
                     sender: PlayerSender::new(tx, Arc::new(AtomicUsize::new(0))),
                     latency: Arc::new(AtomicI32::new(0)),
                     address: "127.0.0.1:1".parse().unwrap(),
+                    expected: false,
                 },
                 id as i32,
                 [3.0, 64.0, 5.0],

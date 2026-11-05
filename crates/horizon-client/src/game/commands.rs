@@ -4535,14 +4535,14 @@ mod fake_travel_tests {
             let (fake, real) = (conn(2), conn(1));
             let to_nether = |game: &mut super::super::Game<'_>, conn| {
                 game.as_guest(conn, |g| {
-                    g.teleport_across(Target::Player, Dim::Nether, [0.0, 64.0, 0.0], None)
+                    g.teleport_across(Target::Player, Dim::Nether, [0.0, 64.0, 0.0], None, false)
                 })
             };
             // Taken (true), so no same-level teleport stands in for it, and nothing queued.
-            assert_eq!(to_nether(game, fake), Some(true));
+            assert!(matches!(to_nether(game, fake), Some(Ok(true))));
             assert!(game.level_teleports.is_empty());
             // A real player's goes on the queue as before.
-            assert_eq!(to_nether(game, real), Some(true));
+            assert!(matches!(to_nether(game, real), Some(Ok(true))));
             assert_eq!(game.level_teleports.len(), 1);
         });
     }

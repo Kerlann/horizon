@@ -7,7 +7,24 @@ from tools.ci import nightly_set as ns
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 10, 29, 12, tzinfo=timezone.utc)
-LIST = ns.read_reviewers("kacpherek\nrdbtCVS\n")
+# Fixture accounts: the decision is by numeric ID, so each test login has one. Ludovic's real ID may not be filled in
+# yet (tools/ci/resolve_reviewer_ids.py), so tests use their own unless it is.
+LUDOVIC_ID = ns.OWNER_ID or 1
+ns.OWNER_ID = LUDOVIC_ID
+cc.ns.OWNER_ID = LUDOVIC_ID  # the script's own import of nightly_set
+IDS = {"ludovic111": LUDOVIC_ID, "kacpherek": 101, "rdbtcvs": 102, "levzzz5154": 104}
+
+
+def actor(login):
+    return ns.Actor(login, IDS.get(login.lower(), 9999))
+
+
+def listing(*lines):
+    """A reviewers file: `kacpherek` becomes `101 kacpherek`; other lines stay as written."""
+    return ns.read_reviewers("".join((f"{IDS[l.lower()]} {l}" if l.lower() in IDS else l) + "\n" for l in lines))
+
+
+LIST = listing("kacpherek", "rdbtCVS")
 
 
 def thread(state="open", holders=(), pr=False, locked=False):
@@ -39,7 +56,7 @@ class Fake:
 
 def do(text, api=None, login="newcomer", reviewers=LIST, n=5):
     api = api or Fake()
-    return cc.run(api, cc.parse(text), login, n, reviewers), api
+    return cc.run(api, cc.parse(text), actor(login), n, reviewers), api
 
 
 class ParseTests(unittest.TestCase):

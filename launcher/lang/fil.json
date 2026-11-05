@@ -1074,5 +1074,6 @@
   "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (o .mcp.json sa isang proyekto)",
   "← All servers": "← Lahat ng mga server",
-  "← Newer": "← Mas bago"
+  "← Newer": "← Mas bago",
+  "{file} unpacks to more than {limit}: it isn't imported.": "{file} unpacks to more than {limit}: it isn't imported."
 }

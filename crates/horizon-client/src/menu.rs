@@ -1465,10 +1465,9 @@ impl Menu {
         };
     }
 
-    /// `Item.onCraftedBy` of a taken cartography result
-    /// (`MapItem.onCraftedPostProcess`): the post processing goes, and on a
-    /// level with maps the stack names the scaled or locked copy.
-    fn map_crafted(env: &Env, stack: &mut ItemStack) {
+    /// `MapItem.onCraftedPostProcess`, shared by menu takes and system crafting:
+    /// remove the directive and name the level's scaled or locked saved copy.
+    pub fn map_crafted(maps: Option<&dyn Maps>, stack: &mut ItemStack) {
         if &*stack.item != "minecraft:filled_map" {
             return;
         }
@@ -1477,7 +1476,7 @@ impl Menu {
         };
         stack.data_mut().map_post_processing = None;
         let id = stack.data().and_then(|d| d.map_id);
-        if let (Some(maps), Some(id)) = (env.maps, id)
+        if let (Some(maps), Some(id)) = (maps, id)
             && let Some(new) = maps.derive(id, post == 1)
         {
             stack.data_mut().map_id = Some(new);
@@ -2225,7 +2224,7 @@ impl Menu {
         let mut result = self.try_remove(env, s, amount, max_amount)?;
         self.on_take(env, s, &result);
         if self.slots[s].role == Role::CartoResult {
-            Self::map_crafted(env, &mut result);
+            Self::map_crafted(env.maps, &mut result);
         }
         Some(result)
     }
@@ -2636,7 +2635,7 @@ impl Menu {
                 after_take = true;
                 if index == 2 {
                     // onCraftedBy edits the result in its slot first.
-                    Self::map_crafted(env, &mut stack);
+                    Self::map_crafted(env.maps, &mut stack);
                     self.containers[RESULT][0] = Some(stack.clone());
                     if !self.move_to(env, &mut stack, 3, 39, true) {
                         return None;
@@ -3119,7 +3118,7 @@ impl Menu {
                 copy.count = Self::max_stack(env, stack);
                 // The cartography result's safeClone runs onCraftedBy.
                 if self.slots[slot_index as usize].role == Role::CartoResult {
-                    Self::map_crafted(env, &mut copy);
+                    Self::map_crafted(env.maps, &mut copy);
                 }
                 self.carried = Some(copy);
             }
@@ -3225,7 +3224,7 @@ impl Menu {
                         self.on_take(env, s, &taken);
                         if self.slots[s].role == Role::CartoResult {
                             // onTake's onCraftedBy edits the carried stack.
-                            Self::map_crafted(env, &mut taken);
+                            Self::map_crafted(env.maps, &mut taken);
                             self.carried = Some(taken);
                         }
                     }
@@ -3259,7 +3258,7 @@ impl Menu {
                             self.on_take(env, s, &taken);
                             if self.slots[s].role == Role::CartoResult {
                                 // onCraftedBy edits the taken stack, not the carried one.
-                                Self::map_crafted(env, &mut taken);
+                                Self::map_crafted(env.maps, &mut taken);
                             }
                         }
                     } else {
@@ -3288,7 +3287,7 @@ impl Menu {
                     if self.slots[target].role == Role::CartoResult
                         && let Some(stack) = self.containers[PLAYER][inv_slot].as_mut()
                     {
-                        Self::map_crafted(env, stack);
+                        Self::map_crafted(env.maps, stack);
                     }
                 }
             }

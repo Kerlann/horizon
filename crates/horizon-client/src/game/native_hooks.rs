@@ -9094,13 +9094,33 @@ impl Game<'_> {
         } else {
             [None, None]
         };
-        Attack { attacker, held }
+        let player_uuid = if self
+            .player
+            .as_ref()
+            .is_some_and(|p| p.entity_id == attacker)
+        {
+            self.owner_damage_uuid()
+        } else {
+            self.lan
+                .as_ref()
+                .and_then(|host| host.hub.guests.iter().find(|g| g.entity_id == attacker))
+                .map(|g| horizon_client::lan::playerdata::uuid_ints(g.uuid))
+        };
+        Attack {
+            attacker,
+            held,
+            player_uuid,
+        }
     }
     /// [`Self::attack_of`] for the attacker a damage source names: the player, a mob, or (none)
     /// the attack the enclosing [`Self::with_attack`] lends.
     pub(super) fn attack_of_who(&self, attacker: Option<Who>) -> Attack {
         match attacker {
-            Some(Who::Player) => self.attack_of(self.player.as_ref().map_or(0, |p| p.entity_id)),
+            Some(Who::Player) => {
+                let mut attack = self.attack_of(self.player.as_ref().map_or(0, |p| p.entity_id));
+                attack.player_uuid = self.owner_damage_uuid();
+                attack
+            }
             Some(Who::Mob(id)) => self.attack_of(id as i32),
             None => self.current_attack(),
         }
@@ -13296,6 +13316,7 @@ mod tests {
                 },
                 &Attack {
                     attacker: 7,
+                    player_uuid: None,
                     held: Default::default(),
                 },
             );

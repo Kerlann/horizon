@@ -1074,5 +1074,6 @@
   "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (или .mcp.json в проект)",
   "← All servers": "← Всички сървъри",
-  "← Newer": "← По-нови"
+  "← Newer": "← По-нови",
+  "{file} unpacks to more than {limit}: it isn't imported.": "{file} unpacks to more than {limit}: it isn't imported."
 }

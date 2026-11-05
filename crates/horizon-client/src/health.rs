@@ -419,6 +419,8 @@ pub type Held = [Option<crate::items::ItemStack>; 2];
 pub struct Attack {
     /// The attacking entity's id, 0 for none.
     pub attacker: i32,
+    /// The verified causing player's UUID, when the attacker is a player.
+    pub player_uuid: Option<[i32; 4]>,
     /// What it holds, or none when it is not known (no native mod listens: the game only
     /// records it then).
     pub held: Held,
@@ -426,6 +428,7 @@ pub struct Attack {
 /// The attack of a hit nobody started: environment damage, falls, a level built outside a hit.
 pub static NO_ATTACK: Attack = Attack {
     attacker: 0,
+    player_uuid: None,
     held: [None, None],
 };
 impl Attack {
@@ -1506,6 +1509,7 @@ mod tests {
         let sword = crate::items::ItemStack::new("minecraft:iron_sword", 1);
         let attack = Attack {
             attacker: 7,
+            player_uuid: None,
             held: [Some(sword.clone()), None],
         };
         assert_eq!(attack.weapon_of(7), Some(&sword));

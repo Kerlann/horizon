@@ -172,17 +172,24 @@ impl Game<'_> {
                             .get_or_insert_with(super::dispenser::entity_random)
                             .next_float()
                     };
-                    let stays = o.tick(
-                        &self.world,
-                        self.res.facts(),
-                        self.collision,
-                        target,
-                        self.remote.is_none(),
-                        &mut next_float,
-                        Some(self.border.geometry()),
-                        &self.res.motion().fluids,
-                        &self.loop_context,
-                    );
+                    let stays = {
+                        let audio = &mut self.audio;
+                        let mut on_sound = |pos: [f64; 3], pitch: f32| {
+                            audio.play("minecraft:entity.generic.burn", Some(pos), 0.4, pitch);
+                        };
+                        o.tick(
+                            &self.world,
+                            self.res.facts(),
+                            self.collision,
+                            target,
+                            self.remote.is_none(),
+                            &mut next_float,
+                            Some(self.border.geometry()),
+                            &self.res.motion().fluids,
+                            &self.loop_context,
+                            &mut on_sound,
+                        )
+                    };
                     // PowderSnowBlock.entityInside during the move, before an
                     // orb that is done is removed.
                     let snow = (o.previous, o.position, o.bounds(), o.velocity);

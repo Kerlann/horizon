@@ -1074,5 +1074,6 @@
   "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (ose .mcp.json në një projekt)",
   "← All servers": "← Të gjithë serverët",
-  "← Newer": "← Më të reja"
+  "← Newer": "← Më të reja",
+  "{file} unpacks to more than {limit}: it isn't imported.": "{file} unpacks to more than {limit}: it isn't imported."
 }

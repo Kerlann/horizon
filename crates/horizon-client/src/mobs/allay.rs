@@ -24,6 +24,11 @@ pub mod interaction;
 // spinning (1).
 pub const HOLD: usize = 0;
 pub const SPIN: usize = 1;
+/// `Allay.isLikedPlayer`: compare the supplied verified player UUID with
+/// the live liked-player memory; identity is supplied by the Game context.
+pub fn is_liked_player(m: &Mob, attacker: Option<super::Who>, uuid: [i32; 4]) -> bool {
+    attacker == Some(super::Who::Player) && m.extra.tame && m.extra.owner == Some(uuid)
+}
 /// `Allay.VibrationUser.VIBRATION_EVENT_LISTENER_RANGE`.
 const LISTENER_RADIUS: i64 = 16;
 
@@ -417,9 +422,7 @@ pub fn travel(
 }
 /// `Allay.aiStep` / `tick`: healing, cooldowns, the hold and spin clocks.
 pub fn ai_step(m: &mut Mob, w: &MobWorld) {
-    if m.alive() && m.age.is_multiple_of(10) {
-        m.heal(w.loop_context, 1.0);
-    }
+    passive_heal(m, w.loop_context);
     for i in [2, 3] {
         if m.extra.ints[i] > 0 {
             m.extra.ints[i] -= 1;
@@ -427,6 +430,12 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld) {
     }
     update_duplication_cooldown(m);
     animate(m);
+}
+/// `Allay.aiStep`: server-side healing runs independently of the AI gate.
+pub fn passive_heal(m: &mut Mob, context: &horizon_world::native_load_context::LoopContext) {
+    if m.alive() && m.age.is_multiple_of(10) {
+        m.heal(context, 1.0);
+    }
 }
 /// `Allay.updateDuplicationCooldown`: the server decrements positive counters,
 /// independently of the AI goal gate.

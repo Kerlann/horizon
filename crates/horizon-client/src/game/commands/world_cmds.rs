@@ -3,7 +3,7 @@
 use super::{Arg, Context, Game, R, Target, err, wrap_degrees};
 use crate::game::living_attributes::AttributeWrite;
 use horizon_client::{
-    mobs::{Damage, DamageKind, Who, finalize},
+    mobs::{Damage, DamageKind, MobEvent, Who, finalize},
     scoreboard_cmd::{Holder, Tracker},
     settings::SOUND_SOURCES,
     text::Text,
@@ -12,6 +12,24 @@ use horizon_core::random::RandomSource;
 use horizon_protocol::packets::play::{self, Clientbound as C};
 use horizon_world::attribute_map::ValueKind;
 use horizon_world::nbt::Tag;
+
+/// Queue bookkeeping for synchronous command damage, preserving prior requests
+/// and unrelated events. The existing game policy handles each extracted request.
+fn take_new_reinforcements(events: &mut Vec<MobEvent>, queued: usize) -> Vec<(u32, Who)> {
+    let mut requests = Vec::new();
+    let mut index = 0;
+    events.retain(|event| {
+        let new = index >= queued;
+        index += 1;
+        if new && let MobEvent::Reinforcements { mob, target } = event {
+            requests.push((*mob, *target));
+            false
+        } else {
+            true
+        }
+    });
+    requests
+}
 
 fn num(n: impl std::fmt::Display) -> Text {
     Text::literal(n.to_string())
@@ -364,12 +382,23 @@ impl Game<'_> {
         true
     }
 
-    /// Retain the mob hit's causing-player connection after the hit is accepted.
+    /// `DamageCommand.damage`: retain the accepted hit's player context and run
+    /// `Zombie.hurtServer`'s reinforcement requests before the command returns.
     fn command_damage_mob(&mut self, id: u32, amount: f32, damage: Damage) -> bool {
-        let hurt =
-            self.mobs.iter_mut().find(|m| m.id == id).is_some_and(|m| {
-                m.damage(crate::game::entity::damage_level_of!(self), amount, damage)
-            });
+        let attack = self.attack_of_who(damage.attacker);
+        let mut reinforcements = Vec::new();
+        let hurt = self.mobs.iter_mut().find(|m| m.id == id).is_some_and(|m| {
+            let queued = m.outbox.len();
+            let hurt = m.damage(
+                crate::game::entity::damage_level_of!(self, &attack),
+                amount,
+                damage,
+            );
+            if hurt {
+                reinforcements = take_new_reinforcements(&mut m.outbox, queued);
+            }
+            hurt
+        });
         if hurt {
             self.resolve_player_responsible(id, damage);
             if damage.attacker == Some(Who::Player) {
@@ -385,6 +414,9 @@ impl Game<'_> {
                     }
                 }
             }
+        }
+        for (mob, target) in reinforcements {
+            self.call_reinforcements(mob, target);
         }
         hurt
     }
@@ -1861,8 +1893,110 @@ fn command_operation(ctx: &Context) -> horizon_world::attributes::Operation {
 }
 
 #[cfg(test)]
+mod allay_owner_damage_tests {
+    use crate::game::native_entity_refs::tests::with_game_at;
+    use horizon_client::mobs::{Damage, Mob};
+    use horizon_core::geometry::Vec3;
+
+    #[test]
+    fn allay_owner_adapters_compare_the_actual_player_uuid() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.local/horizon-client")
+            .join(horizon_core::VANILLA_VERSION);
+        if !root.join("entity-types.json").exists() {
+            eprintln!("Prepared resources unavailable; Allay Game damage coverage did not run");
+            return;
+        }
+        with_game_at(root, |game| {
+            game.build_registries();
+            let actual = [101, 102, 103, 104];
+            let other = [10, 20, 30, 40];
+            game.level.player_uuid = Some(actual);
+            game.lan_acting_uuid = Some(horizon_client::lan::playerdata::ints_uuid(actual));
+            assert_eq!(game.owner_damage_uuid(), Some(actual));
+            game.lan_acting_uuid = Some(horizon_client::lan::playerdata::ints_uuid(other));
+            assert_eq!(
+                game.owner_damage_uuid(),
+                None,
+                "a guest is not the owner route"
+            );
+            game.lan_acting_uuid = None;
+            game.level.player_uuid = None;
+            assert_eq!(
+                game.owner_damage_uuid(),
+                None,
+                "no invented UUID for an unknown source"
+            );
+            game.level.player_uuid = Some(actual);
+            game.lan_acting_uuid = Some(horizon_client::lan::playerdata::ints_uuid(actual));
+            let kind = game.res.mob_types().get("minecraft:allay").unwrap().clone();
+            let before = game.world.game_time;
+            for melee in [true, false] {
+                for liked in [Some(actual), None, Some(other)] {
+                    game.mobs.clear();
+                    let mut mob = Mob::new(1, kind.clone(), Vec3::new(22.5, 101.0, 22.5), 0.0);
+                    mob.no_ai = true;
+                    mob.extra.tame = liked.is_some();
+                    mob.extra.owner = liked;
+                    assert_eq!((mob.health, mob.hurt_time), (20.0, 0));
+                    game.mobs.push(mob);
+                    let source = Damage::player([20.5, 102.0, 20.5]);
+                    let accepted = if melee {
+                        game.hurt_by_player(0, 2.0, source)
+                    } else {
+                        game.command_damage_mob(1, 2.0, source)
+                    };
+                    let expected = liked != Some(actual);
+                    assert_eq!(accepted, expected, "melee={melee}, liked={liked:?}");
+                    assert_eq!(game.mobs[0].health, if expected { 18.0 } else { 20.0 });
+                    assert_eq!(game.mobs[0].extra.owner, liked);
+                    assert_eq!(game.world.game_time, before);
+                }
+            }
+        });
+    }
+}
+
+#[cfg(test)]
 mod tests {
-    use super::{look_at, playsound_placement};
+    use super::{look_at, playsound_placement, take_new_reinforcements};
+    use horizon_client::mobs::{MobEvent, Who};
+
+    #[test]
+    fn command_reinforcements_leave_prior_requests_and_other_events_queued() {
+        let request = |mob| MobEvent::Reinforcements {
+            mob,
+            target: Who::Player,
+        };
+        let mut events = vec![request(1), MobEvent::Sound("before", [0.; 3], 1., 1.)];
+        let queued = events.len();
+        events.extend([
+            request(2),
+            MobEvent::Sound("after", [0.; 3], 1., 1.),
+            request(3),
+        ]);
+        assert_eq!(
+            take_new_reinforcements(&mut events, queued),
+            [(2, Who::Player), (3, Who::Player)]
+        );
+        assert!(matches!(
+            events.as_slice(),
+            [
+                MobEvent::Reinforcements { mob: 1, .. },
+                MobEvent::Sound("before", ..),
+                MobEvent::Sound("after", ..)
+            ]
+        ));
+        assert!(take_new_reinforcements(&mut events, queued).is_empty());
+        assert_eq!(events.len(), 3);
+    }
+
+    #[test]
+    fn command_reinforcements_tolerate_a_damage_handler_clearing_its_outbox() {
+        let mut events = vec![MobEvent::Sound("after", [0.; 3], 1., 1.)];
+        assert!(take_new_reinforcements(&mut events, 4).is_empty());
+        assert_eq!(events.len(), 1);
+    }
 
     fn assert_angle(got: f32, want: f32) {
         assert!((got - want).abs() < 1.0e-4, "{got} is not {want}");

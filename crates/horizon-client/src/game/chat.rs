@@ -35,11 +35,9 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
 };
 
-/// `base` with the commands native mods own (`native_commands`) added: each a
-/// literal that takes the rest of the line as it was typed, run by
-/// `native_command` (`Dispatcher::with_mod_commands`), so the chat box colours
-/// and completes them as it does the game's own.
-#[cfg(test)]
+/// `base` with extra client-local commands added: each a literal taking the
+/// rest of the line as typed (`Dispatcher::with_mod_commands`), so the chat
+/// box colours and completes them as it does the game's own.
 pub(super) fn with_native_commands(
     base: &horizon_client::command::Dispatcher,
     names: &[&str],
@@ -89,7 +87,7 @@ impl Game<'_> {
             &tree,
             horizon_client::command::MOD_COMMAND,
         );
-        tree_with_mods
+        with_native_commands(&tree_with_mods, &["studio"])
     }
 }
 
@@ -1936,6 +1934,23 @@ mod tests {
             |name| vanilla.find(name).is_some(),
         );
         assert_eq!(problems.len(), 1);
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn studio_is_in_the_client_chat_tree_without_a_mod_registering_it() {
+        super::super::native_entity_refs::tests::with_game(|game| {
+            let tree = game.chat_tree_for(None);
+            let reg = Registries::default();
+            assert!(tree.find("studio").is_some());
+            assert_eq!(
+                tree.parse("studio start", &reg).executable().unwrap().1,
+                horizon_client::command::MOD_COMMAND
+            );
+            let parse = tree.parse("stu", &reg);
+            let offered = tree.client_suggestions(&parse, 3, &reg).1;
+            assert!(offered.iter().any(|s| s.text == "studio"));
+        });
     }
 
     /// A native mod's command is in the tree the chat box uses (#456): known

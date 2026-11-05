@@ -76,10 +76,10 @@ def parse(body: str) -> Command | None:
     return Command(verb, who.group(1))
 
 
-def is_team(login: str, reviewers: ns.Reviewers, repo: str) -> bool:
-    """The repository owner, Ludovic, or a listed reviewer while the list isn't paused."""
-    return (login.lower() == repo.split("/")[0].lower() or ns.is_owner(login)
-            or (login.lower() in reviewers.logins and not reviewers.paused))
+def is_team(actor: ns.Actor, reviewers: ns.Reviewers, repo: str) -> bool:
+    """The repository owner or an account trusted by numeric ID."""
+    return (actor.login.lower() == repo.split("/")[0].lower() or ns.is_owner(actor)
+            or (reviewers.listed(actor.id) and not reviewers.paused))
 
 
 def assignees(issue: dict) -> list[str]:
@@ -167,8 +167,10 @@ class Api:
             cursor = page["pageInfo"]["endCursor"]
 
 
-def run(api, cmd: Command, login: str, number: int, reviewers: ns.Reviewers) -> str | None:
-    """Does the command; returns the comment to post, or None when a 👍 says it. Raises Refused for a refusal."""
+def run(api, cmd: Command, actor: ns.Actor, number: int, reviewers: ns.Reviewers) -> str | None:
+    """Does the command; returns the comment to post, or None when a 👍 says it. Raises Refused for a refusal.
+    Claims are GitHub assignees, so they are held by login; who may act for others is decided by ID."""
+    login = actor.login
     issue = api.issue(number)
     if issue is None:
         raise Refused("There is no such issue.")
@@ -193,7 +195,7 @@ def run(api, cmd: Command, login: str, number: int, reviewers: ns.Reviewers) -> 
             raise Refused("GitHub didn't assign you; nothing changed.")
         return None
     who = cmd.who or login
-    if who.lower() != login.lower() and not is_team(login, reviewers, api.repo):
+    if who.lower() != login.lower() and not is_team(actor, reviewers, api.repo):
         raise Refused(f"Only the repository owner, Ludovic and the trusted reviewers in `{ns.REVIEWERS}` "
                       "release someone else's claim.")
     if who.lower() not in held:
@@ -213,8 +215,12 @@ def command() -> int:
         cmd = parse(body)
         if cmd is None:
             return 0
+        try:
+            actor = ns.actor_from_env()
+        except ns.Refused as e:
+            raise Refused(str(e)) from e
         reviewers = ns.read_reviewers(Path(ns.REVIEWERS).read_text())
-        text = run(api, cmd, login, number, reviewers)
+        text = run(api, cmd, actor, number, reviewers)
     except Refused as e:
         text = f"{PREFIX}refused, {e} (asked by @{safe(login)})"
     except RuntimeError as e:

@@ -122,6 +122,7 @@ fn the_bridge_names_the_attacker_and_what_it_holds() {
         };
         let by_seven = Attack {
             attacker: 7,
+            player_uuid: None,
             held: Default::default(),
         };
         for pushed in [
@@ -146,6 +147,7 @@ fn the_bridge_names_the_attacker_and_what_it_holds() {
         push(Hurting::ArmorStand(12, source(0)), &by_seven);
         let sword = Attack {
             attacker: 7,
+            player_uuid: None,
             held: [Some(ItemStack::new("minecraft:iron_sword", 1)), None],
         };
         push(Hurting::Player(12, source(0)), &sword);
@@ -290,6 +292,7 @@ fn the_attack_scope_nests_restores_and_a_guest_swap_hides_it() {
                         assert_eq!(game.current_attack(), NO_ATTACK, "the outer attack leaked");
                         let inner = Attack {
                             attacker: 9,
+                            player_uuid: None,
                             held: Default::default(),
                         };
                         game.with_attack(inner.clone(), |game| {

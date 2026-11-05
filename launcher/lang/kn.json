@@ -1074,5 +1074,6 @@
   "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (ಅಥವಾ ಯೋಜನೆಯಲ್ಲಿ .mcp.json)",
   "← All servers": "← ಎಲ್ಲಾ ಸರ್ವರ್‌ಗಳು",
-  "← Newer": "← ಹೊಸದು"
+  "← Newer": "← ಹೊಸದು",
+  "{file} unpacks to more than {limit}: it isn't imported.": "{file} unpacks to more than {limit}: it isn't imported."
 }
