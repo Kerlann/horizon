@@ -14,6 +14,9 @@ impl Points for Tick {
 
 struct Quiet;
 
+#[mod_api::__subscriptions]
+impl mod_api::Hooks for Quiet {}
+
 impl Points for Quiet {
     fn subscribed(&self) -> &'static [Option<PointId>] {
         &[]
@@ -46,6 +49,14 @@ impl Points for SelfStop {
 
 #[test]
 fn one_list_registered_sealed_and_stopped() {
+    mod_api::__private::install(
+        ["tick_mod", "raw_mod", "stopped_early", "self_stopping"]
+            .into_iter()
+            .map(|id| mod_api::ModEntry::new(id, Box::new(Quiet)))
+            .collect(),
+    );
+    assert!(mod_api::__private::set_mod_on("tick_mod", false));
+    assert!(mod_api::__private::set_mod_on("raw_mod", false));
     assert_eq!(register("tick_mod", &Tick), Ok(()));
     assert_eq!(register("tick_mod", &Quiet), Err(RegisterError::Twice));
     assert_eq!(register("quiet_mod", &Quiet), Ok(()));
@@ -75,6 +86,11 @@ fn one_list_registered_sealed_and_stopped() {
     assert!(!POINTS[raw].load(Ordering::Acquire));
     let (mut heard, mut raw_heard) = (0, 0);
     mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
+    mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |_| raw_heard += 1);
+    assert_eq!((heard, raw_heard), (0, 0), "disabled before sealing");
+    assert!(mod_api::__private::set_mod_on("tick_mod", true));
+    assert!(mod_api::__private::set_mod_on("raw_mod", true));
+    mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
     let mut order = Vec::new();
     mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |kind| {
         match kind {
@@ -91,11 +107,44 @@ fn one_list_registered_sealed_and_stopped() {
     });
     assert_eq!(order, ["typed", "erased", "typed"]);
     assert_eq!((heard, raw_heard), (1, 3));
-    stop("tick_mod");
-    stop("raw_mod");
+    assert!(mod_api::__private::set_mod_on("tick_mod", false));
     mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
     mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |_| raw_heard += 1);
-    assert_eq!((heard, raw_heard), (1, 3), "stopped mods are skipped");
+    assert_eq!(
+        (heard, raw_heard),
+        (1, 6),
+        "only the API listener is disabled"
+    );
+    assert!(mod_api::__private::set_mod_on("raw_mod", false));
+    mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
+    mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |_| raw_heard += 1);
+    assert_eq!(
+        (heard, raw_heard),
+        (1, 6),
+        "all raw listener kinds are disabled"
+    );
+    assert!(mod_api::__private::set_mod_on("tick_mod", true));
+    assert!(mod_api::__private::set_mod_on("raw_mod", true));
+    mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
+    mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |_| raw_heard += 1);
+    assert_eq!(
+        (heard, raw_heard),
+        (2, 9),
+        "listeners resume without resealing"
+    );
+    stop("tick_mod");
+    stop("raw_mod");
+    for id in ["tick_mod", "raw_mod", "stopped_early", "self_stopping"] {
+        assert!(mod_api::__private::set_mod_on(id, false));
+        assert!(mod_api::__private::set_mod_on(id, true));
+    }
+    mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
+    mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |_| raw_heard += 1);
+    assert_eq!(
+        (heard, raw_heard),
+        (2, 9),
+        "an enable switch cannot undo a stop"
+    );
 }
 
 #[test]

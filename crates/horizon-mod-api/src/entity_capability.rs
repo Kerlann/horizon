@@ -86,6 +86,7 @@ impl EntityRef {
     /// [`ENTITY_ENERGY`] and [`ENTITY_FLUIDS`]): the first provider to answer, of those mods registered for its type
     /// `before_game`, the game's own, and the mods' others, each in registration order. None for
     /// a stale handle and for an entity outside the level in place: no provider is asked for one.
+    /// Disabled mods' providers are skipped until their mod is re-enabled.
     pub fn capability<T: ?Sized + 'static, C: Copy + 'static>(
         self,
         host: &mut dyn ServerHost,

@@ -8,6 +8,16 @@ pub fn set_mod_on(id: &str, on: bool) -> bool {
     crate::set_mod_on(id, on)
 }
 
+/// Resolve a listener's owner once at load, for dispatch through [`mod_index_on`].
+pub fn mod_index(id: &str) -> Option<usize> {
+    crate::mods().iter().position(|entry| entry.id == id)
+}
+
+/// Whether a resolved listener's owner is currently enabled.
+pub fn mod_index_on(index: usize) -> bool {
+    crate::mod_index_on(index)
+}
+
 /// The installed mod `id`'s hooks, for the game to hand its other faces (its `impl Points`) on.
 pub fn hooks_of(id: &str) -> Option<&'static dyn Hooks> {
     crate::mods()
