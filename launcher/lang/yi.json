@@ -1122,5 +1122,10 @@
   "{version} is not installed": "{version} איז נישט אינסטאַלירן",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (אָדער .mcp.json אין אַ פּרויעקט)",
   "← All servers": "← אַלע סערווערס",
-  "← Newer": "← נייַער"
+  "← Newer": "← נייַער",
+  "Update registry mods automatically": "Update registry mods automatically",
+  "At start and before you play, what you installed from Horizon's registry moves to its newest version for this game. Never inside a modpack, and an update that would remove blocks or items waits for you.": "At start and before you play, what you installed from Horizon's registry moves to its newest version for this game. Never inside a modpack, and an update that would remove blocks or items waits for you.",
+  "{title} wasn't updated: {error}": "{title} wasn't updated: {error}",
+  "Updated automatically: {list}.": "Updated automatically: {list}.",
+  "{title} {version} waits for you: it no longer has {ids}, which your worlds may use. Update it on the Mods page when you're ready.": "{title} {version} waits for you: it no longer has {ids}, which your worlds may use. Update it on the Mods page when you're ready."
 }

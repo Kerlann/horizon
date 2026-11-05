@@ -708,6 +708,7 @@ impl Launcher {
         this.load_profile_heads();
         this.load_auth_statuses(true);
         this.fetch_startup_releases();
+        this.mods_auto_update();
         this.fetch_links();
         if home::getting_ready_preview() {
             this.preparing = true;
@@ -1774,8 +1775,23 @@ impl Launcher {
         self.play_pressed = Some(Instant::now());
         let tx = self.tx.clone();
         let offline_without_owner = self.settings.dev_offline;
+        let auto = self
+            .selected_instance()
+            .filter(|_| self.settings.auto_updates_mods() && self.starting_pack.is_none())
+            .map(|i| mods_page::AutoTarget {
+                instance: i.clone(),
+                level: Some(backend::mod_api_level(&tag)),
+                natives: false,
+            });
+        let mods_tx = self.mods.tx.clone();
         std::thread::spawn(move || {
             backend::complete_assets(&tag);
+            if let Some(auto) = auto {
+                let (lines, _) = mods_page::auto_update(&[auto]);
+                if !lines.is_empty() {
+                    let _ = mods_tx.send(mods_page::Event::AutoUpdated(lines, Vec::new()));
+                }
+            }
             let session = account::session_for_game(&backend::game_home(), offline_without_owner);
             let _ = tx.send(Msg::Session(session));
         });

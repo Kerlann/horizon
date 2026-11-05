@@ -17,6 +17,7 @@
       "license": "MIT",
       "source": "https://github.com/horizon-rust/horizon",
       "icon": "https://horizon-rust.github.io/horizon-mods/icons/coords_hud.png",
+      "categories": ["utility"],
       "key": "RWS/AoT50ekAULLFG7HiTPTE4eTQEONCCMbKsPE7JBxt3XJ37BY4w7bp",
       "versions": [
         {
@@ -43,6 +44,7 @@
       "kind": "modpack",
       "name": "Cozy",
       "summary": "Coordinates and a calm render distance.",
+      "description": "Coordinates HUD with a calm render distance, played together as one profile.",
       "authors": [
         "Horizon"
       ],
@@ -51,6 +53,8 @@
       ],
       "license": "MIT",
       "source": "https://github.com/horizon-rust/horizon-mods",
+      "icon": "https://horizon-rust.github.io/horizon-mods/icons/cozy.png",
+      "categories": ["lightweight"],
       "versions": [
         {
           "version": "1.0.0",
@@ -78,6 +82,7 @@
       "kind": "shader",
       "name": "Soft Glow",
       "summary": "A post-processing pass over the world.",
+      "description": "A soft bloom drawn over the world after it renders, in Horizon's own shader format.",
       "authors": [
         "Horizon"
       ],
@@ -86,6 +91,8 @@
       ],
       "license": "MIT",
       "source": "https://github.com/horizon-rust/horizon-mods",
+      "icon": "https://horizon-rust.github.io/horizon-mods/icons/glow.png",
+      "categories": ["bloom"],
       "versions": [
         {
           "version": "1.0.0",
