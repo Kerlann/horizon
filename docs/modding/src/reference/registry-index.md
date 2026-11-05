@@ -41,7 +41,7 @@ Level: preview ([API stability](../../../api/stability.md)). Schema 1.
 | `owners` | GitHub logins allowed to publish updates. |
 | `license`, `source` | An SPDX expression and an `https://` address of the source code: both required. |
 | `icon` | `https://`, optional. |
-| `categories` | Up to 3 from the kind’s category list. |
+| `categories` | 1 to 3 from the kind’s category list for a listed project. |
 | `tags` | Up to 10 lowercase tags. |
 | `screenshots` | Up to 8 HTTPS PNG or JPEG addresses. |
 | `key` | The author's [minisign](https://jedisct1.github.io/minisign/) public key. When set, every version must be signed with it; an update signed with another key is refused. Absent: the project is unsigned and the launcher says so. |
@@ -110,10 +110,10 @@ repo = "horizon-rust/coords-hud" # GitHub owner/name: its releases are its versi
 owners = ["ludovic111"]          # GitHub logins responsible for the project
 owner_ids = [12345678]           # their numeric GitHub IDs: these decide who an owner is (a login can change hands)
 key = "RWT..."                   # optional: the minisign public key every version is signed with
-icon = "icons/coords_hud.png"    # optional: square PNG, 64–1024 pixels, at most 256 KiB, or https://
-categories = ["utility"]         # up to 3 from the kind’s list
+icon = "icons/coords_hud.png"    # required: square PNG, 64–1024 pixels, at most 256 KiB, in the registry
+categories = ["utility"]         # required: 1 to 3 from the kind’s list
 tags = ["hud", "coordinates"]    # up to 10 lowercase tags
-screenshots = ["screenshots/coords_hud/1.png"] # up to 8 PNG/JPEG files, or https://
+screenshots = ["screenshots/coords_hud/1.png"] # up to 8 PNG/JPEG files in the registry
 # The page. Each field may instead come from horizon-registry.toml in the repo (below); these win.
 name = "Coordinates HUD"
 summary = "One line, at most 160 characters."
