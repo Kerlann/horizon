@@ -1716,7 +1716,11 @@ impl Game<'_> {
         if self.boats[i].items.iter().any(Option::is_some) {
             return;
         }
-        let loot = crate::structure_blocks::loot_data(&self.options.resources, &self.pack_files());
+        let loot = crate::structure_blocks::loot_data(
+            &self.options.resources,
+            &self.pack_files(),
+            self.res.item_defaults(),
+        );
         let b = &self.boats[i];
         let at = Vec3::new(b.position.x, b.position.y, b.position.z);
         let biome = self.biome_name_at(at).unwrap_or_default();

@@ -466,6 +466,7 @@ mod tests {
                     yaw: 0.0,
                     color: 0,
                     check_interval: 0,
+                    custom_name: None,
                 });
                 game.paintings.push(horizon_client::entities::Painting {
                     join: Default::default(),

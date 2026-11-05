@@ -615,6 +615,7 @@ mod tests {
     #[test]
     fn a_named_cushion_drops_with_its_name() {
         let c = Cushion {
+            join: Default::default(),
             id: 1,
             position: Vec3::ZERO,
             pos: [0, 64, 0],
