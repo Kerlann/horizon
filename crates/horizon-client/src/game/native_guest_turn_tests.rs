@@ -491,3 +491,77 @@ fn another_guest_follows_a_vehicle_teleported_during_a_turn() {
         .unwrap();
     });
 }
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn a_mounted_guests_turn_publishes_its_teleport_without_dismounting() {
+    use super::native_sound_refs::tests::packets;
+    use horizon_protocol::packets::play::{Clientbound as C, relative};
+
+    with_guests(|game| {
+        let horse = game.res.mob_types().get("minecraft:horse").unwrap().clone();
+        game.mobs
+            .push(Mob::new(42, horse, Vec3::new(3.0, 64.0, 5.0), 0.0));
+        // Ordinary seating sends no teleport. A passenger transition does,
+        // even to the same position; an unmounted command keeps its relative axes.
+        for (vehicle, teleported, destination) in [
+            (Some(42), false, [10.0, 70.0, -4.0]),
+            (Some(42), true, [10.0, 70.0, -4.0]),
+            (Some(42), true, [3.0, 64.84375, 5.0]),
+            (None, true, [10.0, 70.0, -4.0]),
+        ] {
+            game.lan
+                .as_mut()
+                .unwrap()
+                .hub
+                .guest_mut(13)
+                .unwrap()
+                .vehicle = vehicle;
+            if vehicle.is_some() {
+                game.guest_boarded(13, None);
+            }
+            let (tx, rx) = std::sync::mpsc::channel();
+            game.lan.as_mut().unwrap().hub.guest_mut(13).unwrap().sender =
+                PlayerSender::new(tx, Arc::default());
+            game.as_guest(13, |game| {
+                // The body left by a passenger transition, before the guest
+                // turn publishes it back to the hub and the connection.
+                let body = game.player.as_mut().unwrap();
+                body.position = Vec3::new(destination[0], destination[1], destination[2]);
+                body.teleported = teleported;
+                body.teleported_delta = [true, false, true];
+                game.yaw = 120.0;
+                game.pitch = -15.0;
+            })
+            .unwrap();
+            let guest = game.lan.as_ref().unwrap().hub.guest(13).unwrap();
+            assert_eq!(guest.vehicle, vehicle);
+            let mut positions = Vec::new();
+            for packet in packets(&rx) {
+                match packet {
+                    C::PlayerPosition(packet) => positions.push(packet),
+                    C::SetPassengers(_) => panic!("a passenger transition must not dismount"),
+                    _ => {}
+                }
+            }
+            assert_eq!(positions.len(), usize::from(teleported), "{vehicle:?}");
+            if teleported {
+                let packet = &positions[0];
+                assert_eq!(packet.position, destination);
+                assert_eq!(packet.delta, [0.0; 3]);
+                assert_eq!([packet.yaw, packet.pitch], [120.0, -15.0]);
+                let expected = if vehicle.is_some() {
+                    relative::DELTA_X | relative::DELTA_Y | relative::DELTA_Z
+                } else {
+                    relative::DELTA_X | relative::DELTA_Z
+                };
+                assert_eq!(packet.relatives, expected);
+                assert_eq!(guest.position, destination);
+                assert_eq!(
+                    guest.awaiting_teleport,
+                    Some((packet.teleport, destination))
+                );
+            }
+        }
+    });
+}

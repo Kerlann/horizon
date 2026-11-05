@@ -1368,9 +1368,13 @@ impl Game<'_> {
         let key = (i32::MAX - 15, super::minecarts::CART_KEY_Y, b.id as i32);
         let at = [b.position.x, b.position.y, b.position.z];
         let items = b.items.clone();
-        self.world
-            .block_entities
-            .insert(key, horizon_client::containers::BlockEntity::Chest(items));
+        // `startOpen` shares one container, it does not reset it: a stand-in
+        // another player's menu is still editing over stays as it is.
+        if !self.world.block_entities.contains_key(&key) {
+            self.world
+                .block_entities
+                .insert(key, horizon_client::containers::BlockEntity::Chest(items));
+        }
         self.container = Some(key);
         self.set_screen(super::Screen::Inventory);
         self.capture(false);

@@ -2501,6 +2501,11 @@ for a stale handle, a client, the dragon, and a mob whose copy is held out — n
 `Host` is not there yet: change goals in `entity_join`, which fires for a loaded chunk's mobs too. Goals are not saved,
 as in vanilla: after a reload the mob has its species' set again, and a mod's `entity_join` adds its own back.
 
+These methods reuse built-in goal kinds; they do not define arbitrary goal callbacks or run at construction's
+`Mob.registerGoals` moment. [Custom mob goals at construction](https://github.com/arismoko/horizon/issues/1077)
+tracks a typed goal registrar and callbacks on `MobRef` and Parts, shared by native and wasm mods. NeoForge has
+no bus event at this moment. The upstream raw-`Mob` `register_goals` interface is not part of this fork's API.
+
 ### Mobs drawn by a mod
 
 `crates/horizon-client/src/game/native_mob_draw.rs`: `native_mob_submit(mob, draw, drawn)` (client) is asked once a frame for

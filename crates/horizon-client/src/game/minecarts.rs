@@ -2239,9 +2239,13 @@ impl Game<'_> {
         self.unpack_cart_loot(i);
         let c = self.carts[i].clone();
         let key = (i32::MAX - 15, CART_KEY_Y, c.id as i32);
-        self.world
-            .block_entities
-            .insert(key, BlockEntity::Chest(c.items.clone()));
+        // `startOpen` shares one container, it does not reset it: a stand-in
+        // another player's menu is still editing over stays as it is.
+        if !self.world.block_entities.contains_key(&key) {
+            self.world
+                .block_entities
+                .insert(key, BlockEntity::Chest(c.items.clone()));
+        }
         self.container = Some(key);
         self.set_screen(super::Screen::Inventory);
         self.capture(false);

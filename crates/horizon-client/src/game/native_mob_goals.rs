@@ -221,11 +221,11 @@ impl Game<'_> {
             } else {
                 mobs[index].ai.goals = selector;
             }
+            mobs::apply_brain_events(&mut mobs, &mut level, &mut events, 0);
             removed
         };
         drop(w);
         lent.give_back(&mut self.world);
-        mobs::apply_brain_events(&mut mobs, &mut events, 0);
         self.mobs = mobs;
         self.handle_mob_events(events).ok();
         removed
