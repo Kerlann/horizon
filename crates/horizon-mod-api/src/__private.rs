@@ -3,6 +3,11 @@
 //! (`game`). None of it is part of the API a mod is written against.
 use crate::*;
 
+/// Switch an installed mod's dispatches on or off, returning whether it was found.
+pub fn set_mod_on(id: &str, on: bool) -> bool {
+    crate::set_mod_on(id, on)
+}
+
 /// The installed mod `id`'s hooks, for the game to hand its other faces (its `impl Points`) on.
 pub fn hooks_of(id: &str) -> Option<&'static dyn Hooks> {
     crate::mods()

@@ -195,11 +195,11 @@ fn native_switch_skips_and_resumes_subscribed_hooks() {
         || {
             assert_eq!(mod_ids().collect::<Vec<_>>(), ["counter"]);
             dispatch_client_tick_pre(&mut HostDouble);
-            assert!(set_mod_on("counter", false));
+            assert!(__private::set_mod_on("counter", false));
             dispatch_client_tick_pre(&mut HostDouble);
-            assert!(set_mod_on("counter", true));
+            assert!(__private::set_mod_on("counter", true));
             dispatch_client_tick_pre(&mut HostDouble);
-            assert!(!set_mod_on("missing", false));
+            assert!(!__private::set_mod_on("missing", false));
         },
     );
     assert_eq!(count.load(Ordering::Relaxed), 2);
