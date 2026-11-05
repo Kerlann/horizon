@@ -166,6 +166,10 @@ pub fn install(
         .ok_or_else(|| format!("{} has no version this game can install", p.name))?;
     let relative = format!("{}/{id}.hmod", crate::mod_list::DIR);
     let target = home.join(&relative);
+    // Share the launcher's lock for the whole transaction, not just the final
+    // write: otherwise either process can save a snapshot from before an install.
+    let _lock = horizon_mods::install_lock::lock_home(home)
+        .map_err(|e| format!("cannot lock mod browser in {}: {e}", home.display()))?;
     let mut list = Installed::load(home);
     let ours = list.position(id);
     let old_file = ours.and_then(|i| list.entries[i]["file"].as_str().map(str::to_owned));

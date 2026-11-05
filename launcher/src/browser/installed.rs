@@ -104,8 +104,10 @@ impl Installed {
             .unwrap_or_default()
     }
 
+    /// Atomically publishes the list. Mutating callers must hold `lock_home`
+    /// from before `load` through this save, not just while writing the file.
     pub fn save(&self, home: &Path) -> Result<(), String> {
-        let _lock = super::lock_home(home);
+        let _lock = super::lock_home(home).map_err(|e| e.to_string())?;
         static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let path = home.join(MANIFEST);
@@ -216,7 +218,7 @@ pub fn install(
     home: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Vec<Entry>, String> {
-    let _lock = super::lock_home(home);
+    let _lock = super::lock_home(home).map_err(|e| e.to_string())?;
     if project.source == SourceId::Horizon {
         return super::horizon::install(project, home, progress);
     }
@@ -242,7 +244,7 @@ pub(super) fn put(
     folder: &dyn Fn(Kind) -> &'static str,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Vec<Entry>, String> {
-    let _lock = super::lock_home(home);
+    let _lock = super::lock_home(home).map_err(|e| e.to_string())?;
     let mut installed = Installed::load(home);
     let mut done = Vec::new();
     for step in steps {
@@ -312,7 +314,7 @@ pub(super) fn put(
 
 /// Removes what the browser installed for `name` (a project id or slug): its file and its entry.
 pub fn remove(home: &Path, name: &str) -> Result<Entry, String> {
-    let _lock = super::lock_home(home);
+    let _lock = super::lock_home(home).map_err(|e| e.to_string())?;
     let mut installed = Installed::load(home);
     let entry = installed
         .lookup(name)

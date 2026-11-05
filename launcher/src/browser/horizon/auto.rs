@@ -210,7 +210,13 @@ fn restore(home: &Path, kept: &Kept) -> Result<(), String> {
 /// At start: each file an earlier launcher replaced is dropped when its update finished, put back
 /// when it didn't.
 pub fn recover(home: &Path) {
-    let _lock = crate::browser::lock_home(home);
+    let _lock = match crate::browser::lock_home(home) {
+        Ok(guard) => guard,
+        Err(e) => {
+            eprintln!("Cannot lock mod browser in {}: {e}", home.display());
+            return;
+        }
+    };
     let me = std::process::id();
     let (mut mine, earlier): (Vec<Kept>, Vec<Kept>) =
         kept_list(home).into_iter().partition(|k| k.pid == me);
@@ -278,7 +284,15 @@ pub(super) fn run_with(
     ctx: &Context,
     progress: &dyn Fn(&str, f32),
 ) -> Report {
-    let _lock = crate::browser::lock_home(home);
+    let _lock = match crate::browser::lock_home(home) {
+        Ok(guard) => guard,
+        Err(e) => {
+            return Report {
+                failed: vec![e.to_string()],
+                ..Report::default()
+            };
+        }
+    };
     recover(home);
     let pending: BTreeSet<String> = kept_list(home)
         .into_iter()
@@ -318,7 +332,7 @@ fn update(
     home: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Option<String>, String> {
-    let _lock = crate::browser::lock_home(home);
+    let _lock = crate::browser::lock_home(home).map_err(|e| e.to_string())?;
     let list = installed::Installed::load(home);
     let Some(current) = list.find(entry.source, &entry.project) else {
         return Ok(None);

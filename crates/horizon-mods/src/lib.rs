@@ -6,6 +6,7 @@ pub mod game_identity;
 pub mod icon;
 #[cfg(feature = "index")]
 pub mod index;
+pub mod install_lock;
 pub mod internals;
 pub mod manifest;
 pub mod mod_list;
