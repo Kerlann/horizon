@@ -248,6 +248,36 @@ fn updates_holds_and_keeps_the_replaced_file_until_the_next_start() {
 }
 
 #[test]
+fn wasm_update_waits_for_the_player() {
+    let dir = scratch("auto-wasm");
+    let home = dir.join("home");
+    let old = ruby(&dir, "1.0.0", &["lamp"], &[]);
+    let module = b"\0asm\x01\0\0\0";
+    let manifest = format!(
+        "{MANIFEST}version = \"1.1.0\"\n[wasm]\nsha512 = \"{}\"\ntoolchain = \"1.99.1\"\nbuilt_with = \"test\"\n",
+        horizon_mods::manifest::sha512_of(module)
+    );
+    let new = dir.join("ruby-1.1.0.hmod");
+    fs::write(
+        &new,
+        horizon_mods::Package::write_files(&manifest, &[("mod.wasm", module)]).unwrap(),
+    )
+    .unwrap();
+    let first = index_of(&[("1.0.0", GAME, &old)]);
+    let p = first.project("ruby").unwrap();
+    install_version(&first, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
+    let index = index_of(&[("1.1.0", GAME, &new), ("1.0.0", GAME, &old)]);
+    let report = run_with(&index, true, &home, &PLAY, &|_, _| {});
+    assert!(report.updated.is_empty(), "{report:?}");
+    assert_eq!(report.held.len(), 1, "{report:?}");
+    assert_eq!(
+        installed_ruby(&home),
+        ("1.0.0".into(), fs::read(&old).unwrap())
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn an_update_cut_short_is_rolled_back_at_the_next_start() {
     let dir = scratch("auto-rollback");
     let home = dir.join("home");
