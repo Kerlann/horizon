@@ -101,10 +101,9 @@ one after the other; one that fails is named and doesn't stop the others.
 **Automatic updates** (Settings > Game > **Update registry mods automatically**, on by default): when the launcher
 starts (every Horizon instance) and before Play (the instance it starts), what was installed from Horizon's registry
 moves to its newest version for the Minecraft that version is for and the Horizon that plays it
-(`Index::installable`), checked as an install is (`browser::horizon::auto`). Native mods are never updated or rebuilt automatically. Also never
-updated automatically: a modpack's profile (its `.hpack` pins each mod by SHA-256; the pack updates as a whole when the
-player asks), native mods of an instance that keeps a Nightly or a native build made on one, data packs (they live in a
-world), a version for another Minecraft, and anything older than what is installed. A content mod (`.hmod`) whose new version no longer has a block, item, entity, effect, menu or creative tab
+(`Index::installable`), checked as an install is (`browser::horizon::auto`). Native mods are never updated or rebuilt
+automatically. Also excluded: a modpack's profile (its `.hpack` pins each mod by SHA-256; the pack updates as a whole
+when the player asks), data packs (they live in a world), a version for another Minecraft, and anything older than what is installed. A content mod (`.hmod`) whose new version no longer has a block, item, entity, effect, menu or creative tab
 of the installed one waits for the player, and the page names what it would drop. The file an update replaces is kept
 in `mod-browser/replaced/` until the next start, which puts it back if the update was cut short.
 
