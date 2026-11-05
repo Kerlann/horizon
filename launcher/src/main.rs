@@ -1781,15 +1781,14 @@ impl Launcher {
             .map(|i| mods_page::AutoTarget {
                 instance: i.clone(),
                 level: Some(backend::mod_api_level(&tag)),
-                natives: false,
             });
         let mods_tx = self.mods.tx.clone();
         std::thread::spawn(move || {
             backend::complete_assets(&tag);
             if let Some(auto) = auto {
-                let (lines, _) = mods_page::auto_update(&[auto]);
+                let lines = mods_page::auto_update(&[auto]);
                 if !lines.is_empty() {
-                    let _ = mods_tx.send(mods_page::Event::AutoUpdated(lines, Vec::new()));
+                    let _ = mods_tx.send(mods_page::Event::AutoUpdated(lines));
                 }
             }
             let session = account::session_for_game(&backend::game_home(), offline_without_owner);

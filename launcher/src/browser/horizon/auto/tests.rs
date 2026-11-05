@@ -64,7 +64,6 @@ fn index_of(versions: &[(&str, &str, &Path)]) -> Index {
 const PLAY: Context = Context {
     in_pack: false,
     level: 100,
-    natives: true,
 };
 
 /// The browser's entry for `ruby` at `version`.
@@ -124,24 +123,10 @@ fn updates_forward_on_the_same_game_only() {
         file: "horizon-native-mods/ruby.hnmod".into(),
         ..entry("1.0.0")
     };
-    let pinned = Context {
-        natives: false,
-        ..PLAY
-    };
     assert_eq!(
         to(&native, &PLAY),
-        Some("1.2.0".into()),
-        "then built again before Play"
-    );
-    assert_eq!(
-        to(&native, &pinned),
         None,
-        "pinned to a Nightly, or before Play"
-    );
-    assert_eq!(
-        to(&entry("1.0.0"), &pinned),
-        Some("1.2.0".into()),
-        "content mods still do"
+        "native mods require an explicit update"
     );
     let data = installed::Entry {
         kind: Kind::DataPack,

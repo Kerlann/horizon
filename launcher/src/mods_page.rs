@@ -52,9 +52,8 @@ pub(super) enum Event {
     About(HashMap<String, Vec<String>>),
     /// Registry files taken down that the launcher turned off.
     TakenDown(Vec<String>),
-    /// What the automatic updates did (`horizon::auto`), and the instances (ids) whose native
-    /// mods moved on: their game is built again before it plays.
-    AutoUpdated(Vec<String>, Vec<String>),
+    /// What the automatic updates did (`horizon::auto`).
+    AutoUpdated(Vec<String>),
     /// A project page's part, an image or a filter's values (`mods_project`).
     Loaded(super::mods_project::Loaded),
     /// The palette's registry mods for its search of that number.
@@ -398,8 +397,7 @@ impl Launcher {
                     m.about.extend(about);
                     m.results_list.reset();
                 }
-                Event::AutoUpdated(lines, rebuild) => {
-                    let _ = rebuild;
+                Event::AutoUpdated(lines) => {
                     if !lines.is_empty() {
                         m.message = Some(Ok(lines.join("\n")));
                         m.installed = installed::Installed::load(&m.home()).entries;
@@ -532,15 +530,14 @@ impl Launcher {
             .iter()
             .map(|i| AutoTarget {
                 level: self.version_of(i).map(|tag| backend::mod_api_level(tag)),
-                natives: false,
                 instance: i.clone(),
             })
             .collect();
         let tx = self.mods.tx.clone();
         std::thread::spawn(move || {
-            let (lines, rebuild) = auto_update(&list);
-            if !lines.is_empty() || !rebuild.is_empty() {
-                let _ = tx.send(Event::AutoUpdated(lines, rebuild));
+            let lines = auto_update(&list);
+            if !lines.is_empty() {
+                let _ = tx.send(Event::AutoUpdated(lines));
             }
         });
     }
@@ -1704,19 +1701,16 @@ impl Launcher {
     }
 }
 
-/// An instance whose registry projects may update: the mod API level of the game it plays, and
-/// whether its native mods may (`horizon::auto::Context`).
+/// An instance whose registry projects may update and its game's mod API level.
 pub(super) struct AutoTarget {
     pub(super) instance: instances::Instance,
     pub(super) level: Option<u32>,
-    pub(super) natives: bool,
 }
 
 /// Updates the registry projects of `targets`: Horizon's own instances only, never a modpack's
-/// profile, whose pack pins its mods. What happened, for the page's notice, and the instances
-/// whose native mods were updated.
-pub(super) fn auto_update(targets: &[AutoTarget]) -> (Vec<String>, Vec<String>) {
-    let (mut lines, mut rebuild) = (Vec::new(), Vec::new());
+/// profile, whose pack pins its mods. Returns what happened for the page's notice.
+pub(super) fn auto_update(targets: &[AutoTarget]) -> Vec<String> {
+    let mut lines = Vec::new();
     for t in targets {
         let i = &t.instance;
         let pack = i.id.starts_with("pack:") || i.id.starts_with("port:");
@@ -1726,16 +1720,12 @@ pub(super) fn auto_update(targets: &[AutoTarget]) -> (Vec<String>, Vec<String>) 
         let ctx = horizon::auto::Context {
             in_pack: horizon::auto::in_pack(&i.home),
             level,
-            natives: t.natives,
         };
         if let Some(report) = horizon::auto::run(&i.home, &ctx, &|_, _| {}) {
             lines.extend(report.lines());
-            if report.rebuild {
-                rebuild.push(i.id.clone());
-            }
         }
     }
-    (lines, rebuild)
+    lines
 }
 
 /// Where a kind's tab searches first: Horizon's registry for mods and shader packs, Modrinth for

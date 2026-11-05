@@ -5,9 +5,7 @@
 //!
 //! - a game folder inside a modpack's profile: the pack pins its mods by SHA-256 and updates as a
 //!   whole, when the player asks;
-//! - a native mod (`.hnmod`) when the instance's build is pinned to a Nightly, or before Play
-//!   (only the start's run updates them: the launcher rebuilds the game with them before it
-//!   plays, [`Report::rebuild`]);
+//! - a native mod, which is updated and rebuilt only when the player asks;
 //! - a data pack: it lives in a world, not in the browser's list;
 //! - a version for another Minecraft than the one installed, a newer version that needs a newer
 //!   Horizon, and anything older than what is installed.
@@ -39,12 +37,10 @@ pub enum Decision<'a> {
     Skip,
 }
 
-/// The game folder's place: inside a modpack's profile, the mod API level of the game, and
-/// whether its native mods may update (no Nightly pin, and a build can follow).
+/// The game folder's place and the mod API level of the game.
 pub struct Context {
     pub in_pack: bool,
     pub level: u32,
-    pub natives: bool,
 }
 
 /// What an automatic update did: `Title version` updated, what waits for the player and why,
@@ -54,8 +50,6 @@ pub struct Report {
     pub updated: Vec<String>,
     pub held: Vec<String>,
     pub failed: Vec<String>,
-    /// A native mod was updated: the game is built again before it plays.
-    pub rebuild: bool,
 }
 
 impl Report {
@@ -81,8 +75,7 @@ pub fn in_pack(home: &Path) -> bool {
 
 /// Whether `entry` updates automatically, and to what.
 pub fn decide<'a>(index: &'a Index, entry: &installed::Entry, ctx: &Context) -> Decision<'a> {
-    let native = crate::native_status::is_native_file(&entry.file);
-    let skip_native = native && !ctx.natives;
+    let skip_native = crate::native_status::is_native_file(&entry.file);
     if entry.source != SourceId::Horizon
         || ctx.in_pack
         || skip_native
@@ -103,7 +96,7 @@ pub fn decide<'a>(index: &'a Index, entry: &installed::Entry, ctx: &Context) -> 
     };
     let same_game = p.versions[now].game == target.game;
     let native_next = p.kind == index::Kind::NativeMod;
-    if next >= now || !same_game || needs_port(target) || (native_next && !ctx.natives) {
+    if next >= now || !same_game || needs_port(target) || native_next {
         return Decision::Skip;
     }
     Decision::Update(target)
@@ -261,7 +254,6 @@ pub(super) fn run_with(
         let p = index.project(&entry.project).expect("decide found it");
         match update(index, local, p, v, &entry, home, progress) {
             Ok(None) => {
-                report.rebuild |= p.kind == index::Kind::NativeMod;
                 report.updated.push(format!("{} {}", p.name, v.version));
             }
             Ok(Some(why)) => report.held.push(why),
