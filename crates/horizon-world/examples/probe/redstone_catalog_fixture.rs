@@ -5,7 +5,7 @@
 //! prints. Comparator levels of containers and lecterns come from the oracle
 //! (`analog`): nothing here moves items.
 use horizon_core::{
-    geometry::{Direction, Vec3},
+    geometry::{BlockHit, Direction, Vec3},
     position::{BlockPos, ChunkPos},
     random::LegacyRandom,
 };
@@ -194,12 +194,17 @@ impl Run<'_> {
                 can_eat: false,
                 game_master: false,
             };
+            let state = self.level.block_state(pos);
             self.behaviours.use_without_item(
                 &mut self.level,
                 &mut self.ticks,
-                pos,
-                Direction::Up,
-                hit,
+                state,
+                BlockHit {
+                    block: pos,
+                    direction: Direction::Up,
+                    location: hit,
+                    inside: false,
+                },
                 player,
             );
         }
