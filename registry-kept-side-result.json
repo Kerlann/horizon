@@ -1,0 +1,13 @@
+{
+  "ready": false,
+  "audit": "/box/shared/upstream-sync/batch-c8eee9842f/registry-kept-side-audit.md",
+  "summary": "Independent audit complete at exact writer commit 1aaf399d38ef8d59e6885456df3334d5098a6d96. Empty assigned registry scope is fully covered; service, index and CLI trees exactly preserve fork baseline. Read all four new client registry/browser files and their tests, completing the writer's supplemental coverage. No source edits. Integrated writer tree is not source-ready because cross-area browser wiring, removed API calls and incompatible fixtures remain. No builds, tests or runtime proof.",
+  "unread": [],
+  "defects": [
+    "Cross-area game/render: incoming browser modules are undeclared/unexported, current ModsState has no jobs field, and existing browser event/drive callers reference them. Adapt current fork state and Clone semantics rather than copying upstream state wholesale.",
+    "Cross-area client registry: mod_registry.rs:115 uses removed horizon_mods::api_level::LEVEL and a third Index::installable argument; lines 101-106 retain prohibited needs_port filtering and stale code-mod policy. Canonical installable takes project and game only.",
+    "Cross-area client tests: mod_registry/tests.rs:20 passes the removed None argument to Package::write_files; line 56 uses zoom-1.hnmod, rejected by the current native-mod .hmod extension rule. Preserve existing behavioral assertions while adapting fixtures.",
+    "Cross-area client install: mod_registry.rs:214 replaces the previous package before manifest save at line 230, leaving mismatched bytes/version on save failure without rollback or recovery record. Integrator should account for this new explicit-update failure path using established recovery behavior where applicable.",
+    "Cross-area persisted-path diagnostic: Installed::version_of trusts a JSON file path for home.join(file).exists(), unlike the launcher's validated installation-path boundary; this can produce a false installed badge. This is not an arbitrary-write or deletion finding."
+  ]
+}
