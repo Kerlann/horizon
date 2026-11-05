@@ -2971,7 +2971,8 @@ wear of falling blocks, anvils and stalactites on players and equipped mobs.
 The callback runs after incoming-damage and blocking listeners, before the
 helmet's 25% damage reduction and before the hurt cooldown check. The event
 contains a `Head` entry, with `damage` and `new_damage` in durability points
-(`max(1, damage / 4)`, truncated). Return `Flow::Cancel` to keep the helmet's
+(`max(1, damage / 4)`); the final wear is truncated after listeners run.
+Return `Flow::Cancel` to keep the helmet's
 durability, or change `new_damage` (zero also prevents wear). Neither choice
 removes the helmet's protection or cancels the health hit. Ordinary armor
 wear later in the same hit remains a separate equipment operation.
