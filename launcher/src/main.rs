@@ -1777,15 +1777,16 @@ impl Launcher {
         let offline_without_owner = self.settings.dev_offline;
         let auto = self
             .selected_instance()
-            .filter(|_| self.settings.auto_updates_mods() && self.starting_pack.is_none())
+            .filter(|_| self.starting_pack.is_none())
             .map(|i| mods_page::AutoTarget {
                 instance: i.clone(),
             });
         let mods_tx = self.mods.tx.clone();
+        let auto_enabled = self.settings.auto_updates_mods();
         std::thread::spawn(move || {
             backend::complete_assets(&tag);
             if let Some(auto) = auto {
-                let lines = mods_page::auto_update(&[auto]);
+                let lines = mods_page::auto_update(&[auto], auto_enabled);
                 if !lines.is_empty() {
                     let _ = mods_tx.send(mods_page::Event::AutoUpdated(lines));
                 }

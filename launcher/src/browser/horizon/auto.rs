@@ -242,11 +242,21 @@ fn keep(home: &Path, entry: &installed::Entry) -> Result<Kept, String> {
 }
 
 /// Updates every installed registry project of game folder `home` that [`decide`] says, by the
-/// index (fetched at most every ten minutes); None when it can't be read.
-pub fn run(home: &Path, ctx: &Context, progress: &dyn Fn(&str, f32)) -> Option<Report> {
+/// index (fetched at most every ten minutes); None when updates are disabled or it can't be read.
+/// An interrupted update is recovered first, even when updates are disabled or offline.
+pub fn run(
+    home: &Path,
+    ctx: &Context,
+    enabled: bool,
+    progress: &dyn Fn(&str, f32),
+) -> Option<Report> {
     // The start's run and Play's never touch a folder at once.
     static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
+    recover(home);
+    if !enabled {
+        return None;
+    }
     let index = super::index().ok()?;
     Some(run_with(&index, super::local(), home, ctx, progress))
 }

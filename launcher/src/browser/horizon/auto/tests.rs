@@ -393,7 +393,7 @@ fn an_update_cut_short_is_rolled_back_at_the_next_start() {
     k.pid = 0;
     save_kept(&home, &[k]).unwrap();
     fs::write(home.join(&old.file), b"half").unwrap();
-    recover(&home);
+    assert!(run(&home, &PLAY, false, &|_, _| {}).is_none());
     assert_eq!(
         installed_ruby(&home),
         ("1.0.0".into(), fs::read(&v1).unwrap())

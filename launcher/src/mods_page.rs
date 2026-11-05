@@ -521,9 +521,7 @@ impl Launcher {
     /// At start, with the setting on: every Horizon instance's registry projects update on a
     /// thread ([`auto_update`]), the selected instance's list read again after.
     pub(super) fn mods_auto_update(&mut self) {
-        if !self.settings.auto_updates_mods() {
-            return;
-        }
+        let enabled = self.settings.auto_updates_mods();
         let list: Vec<AutoTarget> = self
             .instances
             .list
@@ -534,7 +532,7 @@ impl Launcher {
             .collect();
         let tx = self.mods.tx.clone();
         std::thread::spawn(move || {
-            let lines = auto_update(&list);
+            let lines = auto_update(&list, enabled);
             if !lines.is_empty() {
                 let _ = tx.send(Event::AutoUpdated(lines));
             }
@@ -1707,7 +1705,7 @@ pub(super) struct AutoTarget {
 
 /// Updates the registry projects of `targets`: Horizon's own instances only, never a modpack's
 /// profile, whose pack pins its mods. Returns what happened for the page's notice.
-pub(super) fn auto_update(targets: &[AutoTarget]) -> Vec<String> {
+pub(super) fn auto_update(targets: &[AutoTarget], enabled: bool) -> Vec<String> {
     let mut lines = Vec::new();
     for t in targets {
         let i = &t.instance;
@@ -1718,7 +1716,7 @@ pub(super) fn auto_update(targets: &[AutoTarget]) -> Vec<String> {
         let ctx = horizon::auto::Context {
             in_pack: horizon::auto::in_pack(&i.home),
         };
-        if let Some(report) = horizon::auto::run(&i.home, &ctx, &|_, _| {}) {
+        if let Some(report) = horizon::auto::run(&i.home, &ctx, enabled, &|_, _| {}) {
             lines.extend(report.lines());
         }
     }
