@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Guztiak dauka lehenetsitako bat: markatu EULA eta Sortu lagunek soilik bizirauteko mundu bat egiten du. Geroago alda dezakezu dena, zerbitzariaren Ezarpenak fitxatik.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Instalatzen duzun guztia {instance} instantziara doa. Aukeratu ezkerrean beste instantzia bat hura betetzeko.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Esperimentala. Fidagarritzat dituzun mod natiboak joko propio batean konpilatzen ditu.",
   "Export": "Esportatu",
   "Export the server outside the launcher's managed folders.": "Esportatu zerbitzaria abiarazlearen kudeatutako karpetetatik kanpo.",
   "Export to share": "Esportatu partekatzeko",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

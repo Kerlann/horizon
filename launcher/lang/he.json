@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "לכל דבר יש ברירת מחדל: סמן את ה-EULA וצור יוצר עולם הישרדות לחברים בלבד. אתה יכול לשנות את הכל מאוחר יותר, מהכרטיסייה הגדרות של השרת.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "כל מה שתתקין ייכנס אל {instance}. בחר מופע אחר משמאל כדי למלא אותו.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "ניסיוני. בונה את המודים הנייטיב שאתה סומך עליהם למשחק נפרד משלהם.",
   "Export": "ייצוא",
   "Export the server outside the launcher's managed folders.": "ייצא את השרת מחוץ לתיקיות המנוהלות של המשגר.",
   "Export to share": "ייצא לשיתוף",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

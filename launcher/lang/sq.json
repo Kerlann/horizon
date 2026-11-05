@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Çdo gjë ka një parazgjedhje: shënoni EULA dhe Krijo krijon një botë mbijetese vetëm për miq. Mund t'i ndryshoni të gjitha më vonë, nga skeda e cilësimeve të serverit.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Gjithçka që instaloni shkon në {instance}. Zgjidhni një instancë tjetër në të majtë për ta mbushur atë.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Eksperimentale. Ndërton modet native që u besoni në një lojë më vete.",
   "Export": "Eksporto",
   "Export the server outside the launcher's managed folders.": "Eksporto serverin jashtë dosjeve të menaxhuara të lëshuesit.",
   "Export to share": "Eksporto për të ndarë",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

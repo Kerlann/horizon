@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Viskas turi numatytuosius nustatymus: pažymėkite EULA ir Sukurti sukursite tik draugams skirtą išgyvenimo pasaulį. Visa tai galėsite pakeisti vėliau serverio skirtuke Nustatymai.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Viskas, ką įdiegsi, pateks į {instance}. Kairėje pasirink kitą egzempliorių, kad pildytum jį.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Eksperimentinė funkcija. Tavo patikimus vietinius modus surenka į atskirą žaidimą.",
   "Export": "Eksportuoti",
   "Export the server outside the launcher's managed folders.": "Eksportuokite serverį už paleidimo priemonės valdomų aplankų.",
   "Export to share": "Eksportuoti ir bendrinti",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

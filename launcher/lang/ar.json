@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "لكل شيء قيمة افتراضية: ضع علامة على EULA واضغط إنشاء ليُصنع عالم بقاء للأصدقاء فقط. يمكنك تغيير كل ذلك لاحقًا من تبويب إعدادات الخادم.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "كل ما تثبّته يذهب إلى {instance}. اختر نسخة أخرى على اليسار لملئها.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "تجريبي. يبني الإضافات الأصلية التي تثق بها في لعبة خاصة بها.",
   "Export": "تصدير",
   "Export the server outside the launcher's managed folders.": "تصدير الخادم خارج المجلدات التي يديرها المشغل.",
   "Export to share": "تصدير للمشاركة",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

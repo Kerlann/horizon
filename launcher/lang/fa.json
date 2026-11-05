@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "همه چیز یک پیش فرض دارد: EULA را علامت بزنید و Create یک دنیای بقا فقط برای دوستان ایجاد می کند. می‌توانید بعداً، از تب تنظیمات سرور، همه آن را تغییر دهید.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "هر چه نصب کنید به {instance} می‌رود. برای پر کردن نمونهٔ دیگر، آن را از سمت چپ انتخاب کنید.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "آزمایشی. مدهای بومی مورد اعتمادتان را در یک بازی جداگانه می‌سازد.",
   "Export": "صادرات",
   "Export the server outside the launcher's managed folders.": "سرور را خارج از پوشه‌های مدیریت شده راه‌انداز صادر کنید.",
   "Export to share": "صادرات برای اشتراک گذاری",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

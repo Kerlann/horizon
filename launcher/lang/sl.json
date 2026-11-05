@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Vse ima privzeto: obkljukajte EULA in Create naredi svet preživetja samo za prijatelje. Vse to lahko pozneje spremenite na zavihku Nastavitve strežnika.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Vse, kar namestite, gre v {instance}. Na levi izberite drug primerek, da napolnite tega.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Poskusno. Nativne modifikacije, ki jim zaupate, zgradi v lastno igro.",
   "Export": "Izvozi",
   "Export the server outside the launcher's managed folders.": "Izvozite strežnik izven upravljanih map zaganjalnika.",
   "Export to share": "Izvozi za skupno rabo",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

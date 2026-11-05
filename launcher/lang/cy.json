@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Mae gan bopeth ddiofyn: ticiwch yr EULA ac mae Create yn gwneud byd goroesi ffrindiau yn unig. Gallwch newid y cyfan yn nes ymlaen, o dab Gosodiadau'r gweinydd.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Mae popeth rydych chi'n ei osod yn mynd i {instance}. Dewiswch enghraifft arall ar y chwith i lenwi honno.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Arbrofol. Yn adeiladu'r mods brodorol rydych chi'n ymddiried ynddyn nhw yn gêm ar wahân.",
   "Export": "Allforio",
   "Export the server outside the launcher's managed folders.": "Allforio'r gweinydd y tu allan i ffolderi a reolir gan y lansiwr.",
   "Export to share": "Allforio i rannu",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

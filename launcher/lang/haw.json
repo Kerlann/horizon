@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "He paʻamau nā mea a pau: koho i ka EULA a hana ʻo Create i kahi honua ola hoaloha wale nō. Hiki iā ʻoe ke hoʻololi i nā mea a pau ma hope, mai ka ʻaoʻao ʻaoʻao o ke kikowaena.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Komo nā mea a pau āu e hoʻokomo ai i {instance}. E koho i kekahi laʻana ʻē aʻe ma ka hema no ka hoʻopiha ʻana i kēlā.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Hoʻokolohua. Hoʻokumu i nā mods maoli āu e hilinaʻi nei i kahi pāʻani no lākou iho.",
   "Export": "Hoʻokuʻu aku",
   "Export the server outside the launcher's managed folders.": "E hoʻokuʻu aku i ke kikowaena ma waho o nā waihona mālama ʻia o ka mea hoʻolaha.",
   "Export to share": "Hoʻokuʻu aku e kaʻana like",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

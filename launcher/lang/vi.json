@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Mọi thứ đều có mặc định: đánh dấu vào EULA và Tạo tạo nên một thế giới sinh tồn chỉ dành cho bạn bè. Bạn có thể thay đổi tất cả sau này, từ tab Cài đặt của máy chủ.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Mọi thứ bạn cài đặt sẽ vào {instance}. Chọn một phiên bản khác bên trái để cài vào phiên bản đó.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Thử nghiệm. Biên dịch các mod gốc bạn tin tưởng thành một bản game riêng.",
   "Export": "Xuất khẩu",
   "Export the server outside the launcher's managed folders.": "Xuất máy chủ ra ngoài các thư mục được quản lý của trình khởi chạy.",
   "Export to share": "Xuất để chia sẻ",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

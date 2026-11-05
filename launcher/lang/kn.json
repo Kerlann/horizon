@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "ಪ್ರತಿಯೊಂದಕ್ಕೂ ಡೀಫಾಲ್ಟ್ ಇದೆ: EULA ಅನ್ನು ಟಿಕ್ ಮಾಡಿ ಮತ್ತು ಸ್ನೇಹಿತರು-ಮಾತ್ರ ಬದುಕುಳಿಯುವ ಜಗತ್ತನ್ನು ರಚಿಸಿ. ಸರ್ವರ್‌ನ ಸೆಟ್ಟಿಂಗ್‌ಗಳ ಟ್ಯಾಬ್‌ನಿಂದ ನೀವು ಎಲ್ಲವನ್ನೂ ನಂತರ ಬದಲಾಯಿಸಬಹುದು.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "ನೀವು ಸ್ಥಾಪಿಸುವ ಎಲ್ಲವೂ {instance} ಗೆ ಹೋಗುತ್ತದೆ. ಬೇರೆಯದನ್ನು ತುಂಬಲು ಎಡಭಾಗದಲ್ಲಿ ಇನ್ನೊಂದು ನಿದರ್ಶನವನ್ನು ಆಯ್ಕೆಮಾಡಿ.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "ಪ್ರಾಯೋಗಿಕ. ನೀವು ನಂಬುವ ಸ್ಥಳೀಯ ಮೋಡ್‌ಗಳನ್ನು ತಮ್ಮದೇ ಆದ ಆಟವಾಗಿ ನಿರ್ಮಿಸುತ್ತದೆ.",
   "Export": "ರಫ್ತು ಮಾಡಿ",
   "Export the server outside the launcher's managed folders.": "ಲಾಂಚರ್‌ನ ನಿರ್ವಹಿಸಿದ ಫೋಲ್ಡರ್‌ಗಳ ಹೊರಗೆ ಸರ್ವರ್ ಅನ್ನು ರಫ್ತು ಮಾಡಿ.",
   "Export to share": "ಹಂಚಿಕೊಳ್ಳಲು ರಫ್ತು ಮಾಡಿ",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

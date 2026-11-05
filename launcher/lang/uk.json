@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Усе має типове значення: позначте EULA, і «Створити» зробить світ виживання лише для друзів. Усе можна змінити пізніше на вкладці «Налаштування» сервера.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Усе, що ви встановлюєте, потрапляє до {instance}. Виберіть ліворуч інший екземпляр, щоб наповнити його.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Експериментально. Збирає нативні моди, яким ви довіряєте, в окрему гру.",
   "Export": "Експортувати",
   "Export the server outside the launcher's managed folders.": "Експортуйте сервер позаду папок, которыmi керує лаунчер.",
   "Export to share": "Експорт для поширення",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Alt hevur eitt forsett: merk EULA og Create ger ein yvirlivilsisheim, sum bert er fyri vinir. Tú kanst broyta alt seinni, frá flipanum Innstillingar á ambætaranum.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Alt tú setur upp fer inn í {instance}. Vel eitt annað dømi til vinstru at fylla tað.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Royndar. Byggir upprunaligu mods tú hevur álit á til eitt spæl av sínum egna.",
   "Export": "Útflutningur",
   "Export the server outside the launcher's managed folders.": "Útflyt ambætaran uttanfyri umsitin mappurnar hjá sjósetaranum.",
   "Export to share": "Útflyt til at deila",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

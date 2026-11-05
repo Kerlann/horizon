@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Totul are o valoare implicită: bifați EULA și Create face o lume de supraviețuire numai pentru prieteni. Puteți schimba totul mai târziu, din fila Setări a serverului.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Tot ce instalezi ajunge în {instance}. Alege altă instanță din stânga ca s-o umpli pe aceea.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Experimental. Construiește modurile native în care ai încredere într-un joc separat.",
   "Export": "Exportați",
   "Export the server outside the launcher's managed folders.": "Exportați serverul în afara folderelor gestionate ale lansatorului.",
   "Export to share": "Exportați pentru a partaja",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

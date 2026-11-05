@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Tha bunait bunaiteach aig a h-uile dad: cuir strìochag san EULA agus cruthaich saoghal mairsinn le caraidean a-mhàin. Faodaidh tu a h-uile càil atharrachadh nas fhaide air adhart, bho taba Settings an fhrithealaiche.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Thèid gach rud a stàlaicheas tu ann an {instance}. Tagh eisimpleir eile air an taobh chlì gus an tè sin a lìonadh.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Deuchainneach. Togail na mòdan dùthchasach anns a bheil earbsa agad ann an geama aca fhèin.",
   "Export": "Às-mhalairt",
   "Export the server outside the launcher's managed folders.": "Às-mhalairt am frithealaiche taobh a-muigh pasganan stiùirichte an lannsair.",
   "Export to share": "Às-mhalairt airson roinneadh",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Visam ir noklusējuma vērtība: atzīmējiet EULA, un Izveidot izveidos tikai draugiem paredzētu izdzīvošanas pasauli. To visu varēsit mainīt vēlāk servera cilnē Iestatījumi.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Viss, ko instalējat, nonāk instancē {instance}. Lai papildinātu citu instanci, izvēlieties to kreisajā pusē.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Eksperimentāls. Uzticamos nātīvos modus sabūvē atsevišķā spēlē.",
   "Export": "Eksportēt",
   "Export the server outside the launcher's managed folders.": "Eksportējiet serveri ārpus palaišanas programmas pārvaldītajām mapēm.",
   "Export to share": "Eksportēt, lai kopīgotu",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

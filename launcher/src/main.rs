@@ -1354,11 +1354,11 @@ impl Launcher {
                 Msg::Updates(Err(e)) => self.update_error = Some(e),
                 Msg::NativePlanned(result) => match result {
                     Ok(planned) => {
-                        let prebuilt = matches!(planned.route, native_mods::Route::Prebuilt(_));
+                        let start = !planned.needs_source_build();
                         if let Some(pending) = &mut self.native_pending {
                             pending.planned = Some(planned);
                         }
-                        if prebuilt {
+                        if start {
                             self.start_native_build();
                         } else {
                             self.native_step = None;

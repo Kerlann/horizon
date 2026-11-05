@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "हर चीज़ का डिफ़ॉल्ट है: EULA पर टिक करें और बनाएँ सिर्फ़ दोस्तों वाली सर्वाइवल दुनिया बनाएगा। यह सब बाद में सर्वर के सेटिंग्स टैब से बदल सकते हैं।",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "आप जो भी इंस्टॉल करते हैं वह {instance} में जाता है। उसे भरने के लिए बाईं ओर कोई दूसरा इंस्टेंस चुनें।",
-  "Experimental. Builds the native mods you trust into a game of their own.": "प्रयोगात्मक। जिन नेटिव मॉड पर आप भरोसा करते हैं, उन्हें उनके अपने गेम में बनाता है।",
   "Export": "निर्यात करें",
   "Export the server outside the launcher's managed folders.": "ल लॉन्चर के प्रबंधित फ़ोल्डरों के बाहर सर्वर निर्यात करें।",
   "Export to share": "साझा करने के लिए निर्यात करें",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

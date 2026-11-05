@@ -1371,6 +1371,14 @@ pub struct Planned {
     revision: String,
     mods: BTreeMap<String, String>,
     target: Target,
+    cached: bool,
+}
+
+impl Planned {
+    /// Whether this attempt needs the player's consent to compile the game.
+    pub fn needs_source_build(&self) -> bool {
+        !self.cached && matches!(self.route, Route::Source(_))
+    }
 }
 
 /// Decide the build route off the UI thread. Downloading is necessary to check points.json.
@@ -1391,24 +1399,31 @@ pub fn plan(base: &str, folder: &Path, target: Target) -> Result<Planned, String
         .iter()
         .map(|b| Ok((b.manifest.id.clone(), mod_hash(b)?)))
         .collect::<Result<_, String>>()?;
-    let route = route_for(&mods, prebuilt::fetch(&revision, target, || {})?)?;
+    let mixins = mixins_revision(&mods)?;
+    let version = version_for(&revision, &mixins, target, &mods)?;
+    let cached = target.directory(&version).join(".installed").is_file();
+    let route = route_for(&mods, || prebuilt::fetch(&revision, target, || {}))?;
     Ok(Planned {
         route,
         revision,
         target,
         mods: hashes,
+        cached,
     })
 }
 
 /// Resolve all reasons together, including global unavailability and required dependents.
-fn route_for(mods: &[Bundle], game: Result<PathBuf, SourceReason>) -> Result<Route, String> {
+fn route_for(
+    mods: &[Bundle],
+    fetch: impl FnOnce() -> Result<Result<PathBuf, SourceReason>, String>,
+) -> Result<Route, String> {
     let projects = mods
         .iter()
         .map(api::Project::read)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     let mut why = prebuilt::refusal(&projects);
-    let game = match game {
+    let game = match fetch()? {
         Ok(game) => game,
         Err(reason) => {
             why.push(Why {
@@ -1455,6 +1470,17 @@ fn route_for(mods: &[Bundle], game: Result<PathBuf, SourceReason>) -> Result<Rou
         why.extend(more);
     }
     Ok(Route::Source(why))
+}
+
+fn mixins_revision(mods: &[Bundle]) -> Result<String, String> {
+    newest(
+        mods,
+        "horizon-mixins",
+        |b| Some(&b.native().mixins),
+        || Ok(MIXINS_REV.into()),
+        Some(MIXINS_REV),
+        |r| committed("horizon-rust/horizon-mixins", r),
+    )
 }
 
 /// A local estimate only; build timings never leave the computer.
@@ -1589,14 +1615,7 @@ fn pipeline(
         None => e,
     }
     };
-    let mixins = newest(
-        &mods,
-        "horizon-mixins",
-        |b| Some(&b.native().mixins),
-        || Ok(MIXINS_REV.into()),
-        Some(MIXINS_REV),
-        |r| committed("horizon-rust/horizon-mixins", r),
-    )?;
+    let mixins = mixins_revision(&mods)?;
     let version = version_for(&revision, &mixins, target, &mods)?;
     let now = Record {
         horizon: revision.clone(),
@@ -1615,8 +1634,14 @@ fn pipeline(
     if planned.target != target || planned.revision != revision || planned.mods != now.mods {
         return Err(tr("The mods changed after planning. Start the build again.").into());
     }
+    if planned.cached && !exists {
+        return Err(
+            tr("The installed build was removed after planning. Start the build again.").into(),
+        );
+    }
     let prebuilt = match planned.route {
-        Route::Prebuilt(game) => Some(game),
+        Route::Prebuilt(game) if !exists => Some(game),
+        Route::Prebuilt(_) => None,
         Route::Source(why) => {
             for why in why {
                 log_warning(&why.reason.to_string());
@@ -2226,7 +2251,7 @@ mod tests {
             ),
             route_bundle("dependencies", "another", "libc='0.2'", ""),
         ];
-        let Route::Source(why) = route_for(&mods, Ok(dir("route-game"))).unwrap() else {
+        let Route::Source(why) = route_for(&mods, || Ok(Ok(dir("route-game")))).unwrap() else {
             panic!("source required");
         };
         let ids: std::collections::BTreeSet<_> = why
@@ -2265,7 +2290,7 @@ mod tests {
                 why: "offline".into(),
             },
         ] {
-            let Route::Source(why) = route_for(&mods, Err(reason.clone())).unwrap() else {
+            let Route::Source(why) = route_for(&mods, || Ok(Err(reason.clone()))).unwrap() else {
                 panic!("source required");
             };
             assert!(why.contains(&Why {
@@ -2282,7 +2307,7 @@ mod tests {
     fn api_only_mods_use_the_checked_prebuilt_without_source_reasons() {
         let mods = vec![route_bundle("prebuilt", "plain", "", "")];
         let game = dir("route-prebuilt");
-        let Route::Prebuilt(selected) = route_for(&mods, Ok(game.clone())).unwrap() else {
+        let Route::Prebuilt(selected) = route_for(&mods, || Ok(Ok(game.clone()))).unwrap() else {
             panic!("prebuilt required");
         };
         assert_eq!(selected, game);

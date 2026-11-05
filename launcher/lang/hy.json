@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Ամեն ինչ ունի լռելյայն. նշեք EULA-ն և Create-ը ստեղծում է միայն ընկերների համար գոյատևման աշխարհ: Դուք կարող եք փոխել այն ավելի ուշ՝ սերվերի Կարգավորումների ներդիրից:",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Ձեր տեղադրած ամեն ինչ հայտնվում է {instance}-ում։ Ձախից ընտրեք մեկ այլ օրինակ՝ այն լրացնելու համար։",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Փորձնական։ Ձեր վստահած նատիվ մոդերը կառուցում է առանձին խաղի մեջ։",
   "Export": "Արտահանում",
   "Export the server outside the launcher's managed folders.": "Արտահանեք սերվերը գործարկողի կառավարվող պանակներից դուրս:",
   "Export to share": "Արտահանել՝ կիսվելու համար",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "一切都有默认值:勾选 EULA,点创建就会生成仅限好友的生存世界。之后都可以在服务器的设置标签页中修改。",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "你安装的所有内容都会进入 {instance}。在左侧选择另一个实例来填充它。",
-  "Experimental. Builds the native mods you trust into a game of their own.": "实验性。将你信任的原生模组构建进一个单独的游戏。",
   "Export": "导出",
   "Export the server outside the launcher's managed folders.": "将服务器导出到启动器管理的文件夹之外。",
   "Export to share": "导出以分享",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

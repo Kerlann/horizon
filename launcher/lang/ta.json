@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "எல்லாவற்றுக்கும் இயல்புநிலை உள்ளது: EULA ஐ டிக் செய்து, நண்பர்கள் மட்டுமே உயிர்வாழும் உலகத்தை உருவாக்குங்கள். சேவையகத்தின் அமைப்புகள் தாவலில் இருந்து நீங்கள் அனைத்தையும் பின்னர் மாற்றலாம்.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "நீங்கள் நிறுவும் அனைத்தும் {instance}-க்குச் செல்லும். வேறொரு நிகழ்வை நிரப்ப, இடதுபுறத்தில் அதைத் தேர்ந்தெடுக்கவும்.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "சோதனை நிலை. நீங்கள் நம்பும் நேட்டிவ் மோட்களைத் தனி கேமாக உருவாக்குகிறது.",
   "Export": "ஏற்றுமதி",
   "Export the server outside the launcher's managed folders.": "துவக்கியின் நிர்வகிக்கப்பட்ட கோப்புறைகளுக்கு வெளியே சேவையகத்தை ஏற்றுமதி செய்யவும்.",
   "Export to share": "பகிர்வதற்கு ஏற்றுமதி செய்யுங்கள்",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Yonke into inokuzenzakalelayo: phawula okuthi EULA futhi Dala kwenza umhlaba osinde wabangane kuphela. Ungakushintsha konke kamuva, kusukela kuthebhu Yezilungiselelo zeseva.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Yonke into oyifakayo iya kokuthi {instance}. Khetha esinye isenzakalo kwesokunxele ukuze ugcwalise leso.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Okokuhlola. Yakha amamodi omdabu owathembayo abe yigeyimu yawo.",
   "Export": "Thekelisa",
   "Export the server outside the launcher's managed folders.": "Khipha iseva ngaphandle kwamafolda aphethwe isiqalisi.",
   "Export to share": "Khipha ukuze wabelane",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "ทุกอย่างมีค่าเริ่มต้น: ทำเครื่องหมายที่ EULA และ Create สร้างโลกแห่งการเอาชีวิตรอดเฉพาะเพื่อนเท่านั้น คุณสามารถเปลี่ยนแปลงทั้งหมดได้ในภายหลังจากแท็บการตั้งค่าของเซิร์ฟเวอร์",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "ทุกอย่างที่คุณติดตั้งจะไปอยู่ใน {instance} เลือกอินสแตนซ์อื่นทางซ้ายเพื่อติดตั้งลงในอินสแตนซ์นั้น",
-  "Experimental. Builds the native mods you trust into a game of their own.": "ทดลอง สร้างม็อดเนทีฟที่คุณเชื่อถือเป็นเกมแยกต่างหาก",
   "Export": "ส่งออก",
   "Export the server outside the launcher's managed folders.": "ส่งออกเซิร์ฟเวอร์ไปนอกโฟลเดอร์ที่ได้รับการจัดการของตัวเรียกใช้งาน",
   "Export to share": "ส่งออกเพื่อแบ่งปัน",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

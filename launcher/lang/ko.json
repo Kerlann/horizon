@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "모든 항목에 기본값이 있습니다. EULA에 체크하고 만들기를 누르면 친구 전용 서바이벌 월드가 생깁니다. 나중에 서버의 설정 탭에서 모두 바꿀 수 있습니다.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "설치하는 모든 것은 {instance}에 들어갑니다. 다른 인스턴스를 채우려면 왼쪽에서 고르세요.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "실험 기능. 신뢰하는 네이티브 모드를 전용 게임으로 빌드합니다.",
   "Export": "내보내기",
   "Export the server outside the launcher's managed folders.": "런처가 관리하는 폴더 외부로 서버를 내보냅니다.",
   "Export to share": "공유를 위해 내보내기",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

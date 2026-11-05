@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Ĉio havas defaŭlton: marku la EULA kaj Krei faras nur amikan postvivan mondon. Vi povas ŝanĝi ĉion poste, de la langeto Agordoj de la servilo.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Ĉio, kion vi instalas, iras en {instance}. Elektu alian instancon maldekstre por plenigi tiun.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Eksperimenta. Konstruas la indiĝenajn modifojn, kiujn vi fidas, en propran ludon.",
   "Export": "Eksporto",
   "Export the server outside the launcher's managed folders.": "Eksportu la servilon ekster la administritaj dosierujoj de la lanĉilo.",
   "Export to share": "Eksportu por dividi",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

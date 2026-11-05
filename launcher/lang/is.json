@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Allt er sjálfgefið: merktu við ESBLA og Create býr til heim sem er aðeins vinir. Þú getur breytt öllu seinna, frá Stillingar flipanum á netþjóninum.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Allt sem þú setur upp fer í {instance}. Veldu annað tilvik til vinstri til að fylla það.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Tilraun. Smíðar innfæddu mods sem þú treystir í sérstakan leik.",
   "Export": "Útflutningur",
   "Export the server outside the launcher's managed folders.": "Flyttu út netþjóninn út fyrir stýrðar möppur ræsiforritsins.",
   "Export to share": "Flytja út til að deila",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

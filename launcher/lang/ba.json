@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Барыһы ла ғәҙәттәгесә: EULA тамғаһын ҡуйығыҙ һәм Create дуҫтар өсөн генә йәшәү донъяһын булдыра. Һеҙ уны бөтәһен дә үҙгәртә аласыз, һуңыраҡ, сервер&#8217;s Настройки өлөшөнән.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Һеҙ ҡуйған бөтә нәмә {instance} инә. Һул яҡтағы икенсе осраҡты һайлап, шул осраҡты тултырырға.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Эксперименталь. Төҙөү туған модтар һеҙ ышанаһығыҙ, үҙ уйынға.",
   "Export": "Экспорт",
   "Export the server outside the launcher's managed folders.": "Серверҙы экспортлау ситендә стартер&#8217;ы идара итеүсе папкалар.",
   "Export to share": "Экспортлау өсөн бүлешергә",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

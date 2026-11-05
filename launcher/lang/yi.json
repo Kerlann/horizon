@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "אַלץ האט אַ פעליקייַט: טיקען די EULA און שאַפֿן מאכט אַ פרענדז-בלויז ניצל וועלט. איר קענט טוישן אַלץ שפּעטער, פֿון די סעטטינגס קוויטל פון די סערווער.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "אַלץ וואָס איר אינסטאַלירט גייט אין {instance}. קלײַבט אויס אַן אַנדער אינסטאַנץ פֿון לינקס כּדי אָנצופֿילן יענע.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "עקספּערימענטאַל. בויען די געבוירן מאָדס איר צוטרוי אין אַ שפּיל פון זייער אייגן.",
   "Export": "עקספּאָרט",
   "Export the server outside the launcher's managed folders.": "אַרויספירן דעם סערווער אַרויס די געראטן פאָלדערס פון די לאָנטשער.",
   "Export to share": "אַרויספירן צו טיילן",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

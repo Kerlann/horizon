@@ -419,8 +419,8 @@ The CLI prints the source-build reasons and builds without a prompt. Native code
 
 In the window: install a native mod from the Mods page, into the instance picked on the left ("Installs into
 {instance}", shown even with one instance). The first one shows a trust notice once (native mods aren't sandboxed; the
-first build downloads Rust; most mods use the prebuilt game, while a full source build takes several minutes); `mods install` prints it too. Each
-installed native mod's row says "Installed in {instance}" and has **Open folder** (`<instance>/horizon-native-mods/`).
+first build downloads Rust; most mods use the prebuilt game, while a full source build takes several minutes);
+`mods install` prints it too. Each installed native mod's row says "Installed in {instance}" and has **Open folder** (`<instance>/horizon-native-mods/`).
 The installed list has a **Native build of {instance}** row for the instance picked on the left, never another's:
 
 - A badge: **Not built** (the version it plays isn't a `native-*` build), **Needs rebuild** (the `mods` in its
@@ -572,8 +572,8 @@ environment.
 **Build status.** Before it starts, the build says which case it is: "Up to date (no build needed)",
 "Incremental rebuild: mods X, Y" (or "Horizon commit a to b", "horizon-mixins"; compared with the last build in that
 target's record, kept in `native/built.json`) or "First build: the whole game (several minutes)". While compiling it shows the
-crate, crates done of the total (Cargo's own progress), and the time taken; afterwards "Built in 42 s (incremental)". The window shows it in the Native mods row, `native-build` prints each step with its time on standard
-error; `native/build.log` keeps Cargo's output without the progress bar.
+crate, crates done of the total (Cargo's own progress), and the time taken; afterwards "Built in 42 s (incremental)".
+The window shows it in the Native mods row, `native-build` prints each step with its time on standard error; `native/build.log` keeps Cargo's output without the progress bar.
 
 Measured 2026-10-30 on Linux (x86_64 desktop), Zoom 2.0.0 and FPS Counter 2.0.0 on Nightly `6f8c7a0`, the `fast`
 profile, the launcher at nice 19 with `CARGO_BUILD_JOBS=10` (an empty launcher home: Rust, the crates and the

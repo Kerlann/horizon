@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Har bir narsaning standarti bor: EULA belgisini qo'ying va Yaratish faqat do'stlar uchun omon qolish dunyosini yaratadi. Bularning barchasini keyinroq serverning Sozlamalar ko‘rinishida o‘zgartirishingiz mumkin.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "O'rnatgan hamma narsangiz {instance} ichiga tushadi. Boshqasini to'ldirish uchun chapdan boshqa nusxani tanlang.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Tajribaviy. Ishongan mahalliy modlaringizni alohida o'yinga yig'adi.",
   "Export": "Eksport",
   "Export the server outside the launcher's managed folders.": "Serverni ishga tushirgichning boshqariladigan papkalaridan tashqariga eksport qiling.",
   "Export to share": "Ulashish uchun eksport qiling",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

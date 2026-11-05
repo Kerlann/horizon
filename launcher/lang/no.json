@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Alt har en standard: Merk av for EULA og Create lager en overlevelsesverden for kun venner. Du kan endre alt senere, fra serverens Innstillinger-fane.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Alt du installerer, havner i {instance}. Velg en annen instans til venstre for å fylle den.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Eksperimentell. Bygger de native modsene du stoler på inn i et eget spill.",
   "Export": "Eksporter",
   "Export the server outside the launcher's managed folders.": "Eksporter serveren utenfor startprogrammets administrerte mapper.",
   "Export to share": "Eksporter for å dele",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

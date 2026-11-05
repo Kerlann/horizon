@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Alles heeft een standaard: vink de EULA aan en Create maakt een overlevingswereld die alleen voor vrienden toegankelijk is. U kunt dit allemaal later wijzigen via het tabblad Instellingen van de server.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Alles wat je installeert gaat naar {instance}. Kies links een andere instantie om die te vullen.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Experimenteel. Bouwt de native mods die je vertrouwt in een eigen spel.",
   "Export": "Exporteren",
   "Export the server outside the launcher's managed folders.": "Exporteer de server buiten de beheerde mappen van het opstartprogramma.",
   "Export to share": "Exporteren om te delen",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

@@ -5,8 +5,7 @@
 //!
 //! Not in the mockup, kept in its patterns: the appearance, the Home background, the logs folder
 //! and the applications menu (rows under About's tiles), the AI clients and the hidden developer
-//! options. The mockup's Native mods switch is the
-//! native mods are enabled per package.
+//! options. Native mods are enabled per package on the Mods page, not by a global switch.
 
 use super::*;
 use crate::glass_ui::{self as ui, white};

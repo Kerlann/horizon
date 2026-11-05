@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Allt har en standard: markera EULA och Skapa skapar en överlevnadsvärld som bara är vänner. Du kan ändra allt senare, från serverns flik Inställningar.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Allt du installerar hamnar i {instance}. Välj en annan instans till vänster för att fylla den.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Experimentellt. Bygger de native-moddar du litar på till ett eget spel.",
   "Export": "Exportera",
   "Export the server outside the launcher's managed folders.": "Exportera servern utanför startprogrammets hanterade mappar.",
   "Export to share": "Exportera för att dela",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

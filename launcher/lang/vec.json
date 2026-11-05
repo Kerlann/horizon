@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Tuto el ga un default: segna el EULA e Create el fa un mondo de sopravivensa soło pa amighi. Te pol canbiar tuto dopo, dała scheda Inpostasion del server.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Tutto ciò che installate va in {instance}. Scegli n’altra istansa a sinistra pa inpienìrla.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Sperimentałe. El fa i mod nativi che te te fidi in un zogo proprio.",
   "Export": "Esportasion",
   "Export the server outside the launcher's managed folders.": "Esporta el server fora dałe cartełe gestìe dal lansador.",
   "Export to share": "Esporta par condividere",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

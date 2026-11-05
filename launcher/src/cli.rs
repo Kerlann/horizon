@@ -1275,21 +1275,16 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 Some(folder) => folder,
                 None => native_mods::installed_mods(&target.home)?,
             };
-            let built = native_mods::build(
-                &base,
-                &folder,
-                &target,
-                native_mods::plan(&base, &folder, native_mods::Target::Client)?,
-                steps,
-            )
-            .map_err(|e| match e.starts_with(native_mods::MISMATCH) {
-                true => trf(
-                    "{error} Run `cargo horizon-mod update --horizon {commit}` in each mod's \
+            let built = native_mods::plan(&base, &folder, native_mods::Target::Client)
+                .and_then(|planned| native_mods::build(&base, &folder, &target, planned, steps))
+                .map_err(|e| match e.starts_with(native_mods::MISMATCH) {
+                    true => trf(
+                        "{error} Run `cargo horizon-mod update --horizon {commit}` in each mod's \
                         folder to pin it to this game, then build again.",
-                    &[("error", &e), ("commit", &base)],
-                ),
-                false => e,
-            })?;
+                        &[("error", &e), ("commit", &base)],
+                    ),
+                    false => e,
+                })?;
             println!(
                 "{built} built and selected for its instance ({:.0} s).",
                 started.elapsed().as_secs_f64()

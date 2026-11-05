@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Wax kastaa waxay leeyihiin cillad: sax EULA oo Abuur waxay ka dhigtaa adduun badbaado saaxiibo-kaliya. Waxaad ka bedeli kartaa dhammaan mar dambe, laga bilaabo tab Settings server-ka.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Wax kasta oo aad rakibto waxay galayaan {instance}. Bidix ka dooro nuqul kale si aad kaas u buuxiso.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Tijaabo. Mod-yada native ee aad aaminsan tahay wuxuu ka dhisaa ciyaar u gaar ah.",
   "Export": "Dhoofinta",
   "Export the server outside the launcher's managed folders.": "Ka Dhoofi Seerfarka ka baxsan faylalka la maamulo ee bilawga",
   "Export to share": "Dhoofinta si loo wadaago",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }

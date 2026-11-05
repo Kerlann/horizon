@@ -223,7 +223,6 @@
   "Esc": "Esc",
   "Everything has a default: tick the EULA and Create makes a friends-only survival world. You can change all of it later, from the server's Settings tab.": "Omne defaltam habet: tick theEULAet crea amicos solum superstes mundi facit. Totum illud postea mutare potes, ex Optionum ministri tab.",
   "Everything you install goes into {instance}. Pick another instance on the left to fill that one.": "Omnia quae instituis in {instance} eunt. Aliam instantiam a sinistra elige ut illam impleas.",
-  "Experimental. Builds the native mods you trust into a game of their own.": "Experimentalis. Patrios mods confidis in lusus suos.",
   "Export": "Exportare",
   "Export the server outside the launcher's managed folders.": "Servo exportare extra folders tractatores launcher.",
   "Export to share": "Ad participes export",
@@ -1097,5 +1096,6 @@
     "These mods need a full game build": "These mods need a full game build",
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
-    "Play without them": "Play without them"
+    "Play without them": "Play without them",
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
 }
