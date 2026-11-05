@@ -56,7 +56,7 @@ pub struct Entry {
     /// Defaults to the repository's address.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source: String,
-    /// `icons/<id>.png` in the registry repository, or an `https://` address, required before listing.
+    /// `icons/<id>.png` in the registry repository, required before the project is listed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
     /// 1 to 3 of the kind's categories ([`rules::categories`]).
@@ -65,8 +65,7 @@ pub struct Entry {
     /// Free-form, lowercase, at most 10.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
-    /// At most 8, in order: `screenshots/<id>/<name>.png|.jpg` in the registry repository, or
-    /// `https://` addresses.
+    /// At most 8, in order: `screenshots/<id>/<name>.png|.jpg` in the registry repository.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub screenshots: Vec<String>,
     /// The author's minisign public key.
