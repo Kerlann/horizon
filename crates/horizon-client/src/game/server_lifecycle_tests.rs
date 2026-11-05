@@ -6,7 +6,10 @@ use std::sync::{Arc, Mutex};
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn every_started_server_stops_and_saves_even_when_startup_or_ticks_fail() {
-    struct Log(Arc<Mutex<Vec<&'static str>>>);
+    struct Log(
+        Arc<Mutex<Vec<&'static str>>>,
+        Arc<std::sync::atomic::AtomicBool>,
+    );
     #[mod_api::__subscriptions]
     impl Hooks for Log {
         fn server_starting(&self, _: &mut dyn ServerHost, _: &mut mod_api::ServerStartingEvent) {
@@ -14,6 +17,9 @@ fn every_started_server_stops_and_saves_even_when_startup_or_ticks_fail() {
         }
         fn server_stopping(&self, _: &mut dyn ServerHost, _: &mut mod_api::ServerStoppingEvent) {
             self.0.lock().unwrap().push("stopping");
+            if self.1.load(std::sync::atomic::Ordering::Relaxed) {
+                panic!("stopping listener failed");
+            }
         }
         fn world_saved(&self, _: &mut dyn ServerHost, _: &mut mod_api::WorldSavedEvent) {
             self.0.lock().unwrap().push("saved");
@@ -23,8 +29,13 @@ fn every_started_server_stops_and_saves_even_when_startup_or_ticks_fail() {
         }
     }
     let log = Arc::new(Mutex::new(Vec::new()));
+    let panic_stopping = Arc::new(std::sync::atomic::AtomicBool::new(false));
     with_mods(
-        vec![ModEntry::new("log", Box::new(Log(log.clone())))].into(),
+        vec![ModEntry::new(
+            "log",
+            Box::new(Log(log.clone(), panic_stopping.clone())),
+        )]
+        .into(),
         || {
             for dedicated in [false, true] {
                 for case in [
@@ -34,9 +45,14 @@ fn every_started_server_stops_and_saves_even_when_startup_or_ticks_fail() {
                     "panic",
                     "save-error",
                     "unopened",
+                    "stopping-panic",
                     "before-start",
                 ] {
                     log.lock().unwrap().clear();
+                    panic_stopping.store(
+                        case == "stopping-panic",
+                        std::sync::atomic::Ordering::Relaxed,
+                    );
                     with_game(|game| {
                         game.options.execution_role = if dedicated {
                             ExecutionRole::DedicatedServer
@@ -54,9 +70,10 @@ fn every_started_server_stops_and_saves_even_when_startup_or_ticks_fail() {
                             horizon_client::save::LevelShape::OVERWORLD,
                         ));
                         game.level.name = "lifecycle final save".into();
-                        if !matches!(case, "unopened" | "before-start") {
+                        if case != "before-start" {
                             game.session_lock =
                                 Some(horizon_client::save::SessionLock::acquire(&root).unwrap());
+                            game.server_world_adopted = case != "unopened";
                         }
                         if case == "unopened" {
                             // A failed open must not overwrite an existing, unreadable save.

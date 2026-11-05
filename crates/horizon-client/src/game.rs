@@ -3028,6 +3028,7 @@ struct Game<'a> {
     /// Must precede session_lock: dropping the writer drains writes while the world is locked.
     player_autosaves: horizon_client::lan::playerdata::Autosaves,
     session_lock: Option<horizon_client::save::SessionLock>,
+    server_world_adopted: bool,
     audio: Audio,
     /// The side, registries and mod settings of this game's resource generation, which
     /// its menus lend to the hooks they fire inside a loop; rebuilt by `refresh_loop_context`.
@@ -13550,6 +13551,7 @@ impl Game<'_> {
         // The ride the player's file names, once the vehicle is in the world.
         self.pending_vehicle = level.root_vehicle;
         self.level = level;
+        self.server_world_adopted = true;
         // ServerRecipeBook.loadUntrusted: recipes the manager does not have are dropped.
         let index = &world_stations!(self).recipe_index;
         let book = &mut self.level.recipe_book;
@@ -13799,6 +13801,7 @@ impl Game<'_> {
         self.server_loot.set(None);
         self.server_items = None;
         self.session_lock = None;
+        self.server_world_adopted = false;
         self.world_icon = None;
         horizon_client::crash::clear_detail("World");
         self.debug_charts.reset();
@@ -20491,6 +20494,7 @@ impl<'a> Game<'a> {
             level,
             player_autosaves: Default::default(),
             session_lock: None,
+            server_world_adopted: false,
             audio,
             loop_context: Arc::new(res.core.item_data.context().loop_context(loop_side, [])),
             damage_hooks: native_hooks::DAMAGE_HOOKS,
