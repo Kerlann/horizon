@@ -643,9 +643,7 @@ impl Game<'_> {
                 "close_menu" => {
                     let (conn, _, window) = self.harness_owner_menu()?;
                     self.in_owner_level(|g| -> Result<()> {
-                        let mut host = g.lan.take().ok_or("close menu: no hub")?;
                         g.lan_guest_packet(
-                            &mut host,
                             conn,
                             horizon_protocol::packets::play::Serverbound::ContainerClose(
                                 horizon_protocol::packets::play::ContainerClose {
@@ -653,7 +651,6 @@ impl Game<'_> {
                                 },
                             ),
                         );
-                        g.lan = Some(host);
                         Ok(())
                     })?;
                 }
