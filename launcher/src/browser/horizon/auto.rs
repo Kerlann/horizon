@@ -200,12 +200,13 @@ fn restore(home: &Path, kept: &Kept) -> Result<(), String> {
 /// when it didn't.
 pub fn recover(home: &Path) {
     let me = std::process::id();
-    let (mine, earlier): (Vec<Kept>, Vec<Kept>) =
+    let (mut mine, earlier): (Vec<Kept>, Vec<Kept>) =
         kept_list(home).into_iter().partition(|k| k.pid == me);
-    for k in &earlier {
-        if !finished(home, k) {
-            if let Err(e) = restore(home, k) {
+    for k in earlier {
+        if !finished(home, &k) {
+            if let Err(e) = restore(home, &k) {
                 eprintln!("Couldn't put {} back: {e}", k.entry.title);
+                mine.push(k);
                 continue;
             }
         }

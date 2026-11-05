@@ -326,6 +326,43 @@ fn backup_paths_stay_in_the_backup_folder() {
 }
 
 #[test]
+fn failed_restore_keeps_its_record_for_retry() {
+    let dir = scratch("auto-restore-retry");
+    let home = dir.join("home");
+    let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
+    let index = index_of(&[("1.0.0", GAME, &v1)]);
+    let p = index.project("ruby").unwrap();
+    install_version_guarded(
+        &index,
+        true,
+        p,
+        &p.versions[0],
+        &home,
+        &|_| Ok(()),
+        &|_, _| {},
+    )
+    .unwrap();
+    let entry = installed::Installed::load(&home).entries.remove(0);
+    let mut kept = keep(&home, &entry).unwrap();
+    kept.pid = 0;
+    save_kept(&home, &[kept.clone()]).unwrap();
+    let target = entry.path(&home).unwrap();
+    fs::remove_file(&target).unwrap();
+    fs::create_dir(&target).unwrap();
+    recover(&home);
+    assert_eq!(kept_list(&home).len(), 1);
+    assert!(home.join(&kept.copy).is_file());
+    fs::remove_dir(target).unwrap();
+    recover(&home);
+    assert_eq!(
+        installed_ruby(&home),
+        ("1.0.0".into(), fs::read(v1).unwrap())
+    );
+    assert!(kept_list(&home).is_empty());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn an_update_cut_short_is_rolled_back_at_the_next_start() {
     let dir = scratch("auto-rollback");
     let home = dir.join("home");
