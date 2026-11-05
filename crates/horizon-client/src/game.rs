@@ -13922,16 +13922,28 @@ impl Game<'_> {
             .as_mut()
             .map(|p| std::mem::take(&mut p.helmet_wear))
             .unwrap_or_default();
+        let mut applied = None;
         for wear in pending {
-            if self.armor[0].as_ref() != Some(&wear.stack) {
+            let Some(stack) = self.armor[0]
+                .as_ref()
+                .filter(|stack| wear.applies_to(stack, applied.as_ref()))
+                .cloned()
+            else {
                 continue;
-            }
+            };
             let (updated, broken) =
-                self.damage_stack(&wear.stack, wear.amount.min(i32::MAX as u32) as i32, true);
-            if self.armor[0].as_ref() != Some(&wear.stack) {
+                self.damage_stack(&stack, wear.amount.min(i32::MAX as u32) as i32, true);
+            if self.armor[0].as_ref() != Some(&stack) {
                 continue;
             }
             self.armor[0] = updated;
+            applied =
+                self.armor[0]
+                    .clone()
+                    .map(|after| horizon_client::health::HelmetWearApplied {
+                        before: wear.stack,
+                        after,
+                    });
             if let Some(stack) = broken {
                 self.player_equipment_broke(
                     horizon_world::player_inventory::EquipmentSlot::Head,

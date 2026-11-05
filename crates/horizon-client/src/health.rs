@@ -265,6 +265,25 @@ pub struct HelmetWear {
     /// Durability points before Unbreaking and item-damage listeners.
     pub amount: u32,
 }
+/// The last successful write in a batch of head-wear decisions.
+/// Later decisions can still name its original stack, not yet written when they ran.
+pub struct HelmetWearApplied {
+    /// The equipment snapshot the decision saw.
+    pub before: crate::items::ItemStack,
+    /// The piece after the durability pipeline applied that decision.
+    pub after: crate::items::ItemStack,
+}
+impl HelmetWear {
+    /// Accept the observed piece or its own preceding write, never an unrelated replacement.
+    pub fn applies_to(
+        &self,
+        stack: &crate::items::ItemStack,
+        applied: Option<&HelmetWearApplied>,
+    ) -> bool {
+        self.stack == *stack
+            || applied.is_some_and(|last| last.before == self.stack && last.after == *stack)
+    }
+}
 impl DamageLevel<'_> {
     /// `hurtHelmet`'s head-only `doHurtEquipment`, shared by player and mob hits.
     /// The hook runs inside hurtServer, even when the cooldown later refuses the hit.

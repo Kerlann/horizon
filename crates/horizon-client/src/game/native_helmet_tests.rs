@@ -110,6 +110,24 @@ fn falling_helmet_wear_honors_cancel_edits_guards_and_cooldown_ordering() {
                 if id == 821009 {
                     game.armor[0] = Some(ItemStack::new("minecraft:diamond_helmet", 1));
                 }
+                if id == 821002 {
+                    // Both decisions precede one write-back; the cooldown refuses health,
+                    // not hurtHelmet. The first wear must not invalidate the second.
+                    assert!(
+                        !game
+                            .player
+                            .as_mut()
+                            .unwrap()
+                            .hurt(
+                                damage_level_of!(game),
+                                &game.motion.health,
+                                rules,
+                                source,
+                                8.0
+                            )
+                            .unwrap()
+                    );
+                }
                 game.wear_armor(&[]);
                 match id {
                     821001 => {
@@ -119,23 +137,6 @@ fn falling_helmet_wear_honors_cancel_edits_guards_and_cooldown_ordering() {
                     }
                     821002 => {
                         assert!(hurt);
-                        assert_eq!(game.armor[0].as_ref().unwrap().damage, 7);
-                        // hurtHelmet precedes the cooldown: this refused hit still wears.
-                        assert!(
-                            !game
-                                .player
-                                .as_mut()
-                                .unwrap()
-                                .hurt(
-                                    damage_level_of!(game),
-                                    &game.motion.health,
-                                    rules,
-                                    source,
-                                    8.0
-                                )
-                                .unwrap()
-                        );
-                        game.wear_armor(&[]);
                         assert_eq!(game.armor[0].as_ref().unwrap().damage, 14);
                         assert_eq!(
                             game.player
@@ -183,20 +184,30 @@ fn falling_helmet_wear_honors_cancel_edits_guards_and_cooldown_ordering() {
                     8.0,
                     Damage::of(DamageKind::FallingAnvil)
                 ));
+                if id == 821004 {
+                    assert!(!mob.damage(
+                        damage_level_of!(game),
+                        8.0,
+                        Damage::of(DamageKind::FallingAnvil)
+                    ));
+                }
                 let events = std::mem::take(&mut mob.outbox);
                 game.mobs.push(mob);
                 game.handle_mob_events(events).unwrap();
                 let mob = game.mobs.iter().find(|m| m.id == id).unwrap();
                 assert_eq!(
                     mob.item_by_slot(EquipmentSlot::Head).unwrap().damage,
-                    if id == 821003 { 0 } else { 7 }
+                    if id == 821003 { 0 } else { 14 }
                 );
             }
         })
     });
     assert_eq!(
         *heard.lock().unwrap(),
-        [821001, 821002, 821002, 821008, 821009, 821003, 821004].map(|entity| Wear {
+        [
+            821001, 821002, 821002, 821008, 821009, 821003, 821004, 821004
+        ]
+        .map(|entity| Wear {
             entity,
             player: (!matches!(entity, 821003 | 821004)).then_some(821),
             slot: EquipmentSlot::Head,

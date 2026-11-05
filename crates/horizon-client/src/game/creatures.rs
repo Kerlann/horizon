@@ -2350,6 +2350,7 @@ impl Game<'_> {
     pub(super) fn handle_mob_events(&mut self, events: Vec<MobEvent>) -> Result<()> {
         // The mobs whose `BreakBlock` the game applied in this batch, for `IfBroke`.
         let mut broke: Vec<u32> = Vec::new();
+        let mut helmet_writes = horizon_client::fast_hash::FxHashMap::default();
         for e in events {
             match e {
                 MobEvent::BubbleColumnParticles { pos } => {
@@ -2382,20 +2383,31 @@ impl Game<'_> {
                     let Some(m) = self.mobs.iter().find(|m| m.id == mob) else {
                         continue;
                     };
-                    if m.item_by_slot(EquipmentSlot::Head).as_ref() != Some(&wear.stack) {
+                    let Some(stack) = m
+                        .item_by_slot(EquipmentSlot::Head)
+                        .filter(|stack| wear.applies_to(stack, helmet_writes.get(&mob)))
+                    else {
                         continue;
-                    }
+                    };
                     let at = [m.position.x, m.position.y, m.position.z];
-                    let (updated, broken) = self.damage_stack(
-                        &wear.stack,
-                        wear.amount.min(i32::MAX as u32) as i32,
-                        false,
-                    );
+                    let (updated, broken) =
+                        self.damage_stack(&stack, wear.amount.min(i32::MAX as u32) as i32, false);
                     let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob) else {
                         continue;
                     };
-                    if m.item_by_slot(EquipmentSlot::Head).as_ref() != Some(&wear.stack) {
+                    if m.item_by_slot(EquipmentSlot::Head).as_ref() != Some(&stack) {
                         continue;
+                    }
+                    if let Some(after) = updated.as_ref() {
+                        helmet_writes.insert(
+                            mob,
+                            horizon_client::health::HelmetWearApplied {
+                                before: wear.stack,
+                                after: after.clone(),
+                            },
+                        );
+                    } else {
+                        helmet_writes.remove(&mob);
                     }
                     m.set_equipment_stack(EquipmentSlot::Head as usize, updated);
                     if broken.is_some() {
