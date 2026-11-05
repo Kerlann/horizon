@@ -147,8 +147,7 @@ impl Game<'_> {
     /// Each frame: what the browser's worker finished.
     pub(super) fn drive_mod_browser(&mut self) {
         let installed = self
-            .mods
-            .jobs
+            .mod_jobs
             .poll(&mut self.ui.options.mod_browser, &mut self.settings.mods);
         if installed {
             self.settings.save(&Self::options_path());

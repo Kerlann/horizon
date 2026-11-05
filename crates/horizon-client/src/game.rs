@@ -223,6 +223,7 @@ mod mob_index;
 mod mob_looting;
 mod mob_sounds;
 mod mod_api_host;
+mod mod_browser;
 pub(crate) mod mods;
 mod mount_menu;
 mod mounts;
@@ -420,6 +421,7 @@ mod test_environments;
 mod test_instance_edit;
 mod test_instances;
 mod text_displays;
+mod tick_profile;
 mod titles;
 mod tnt;
 mod totem;
@@ -3459,6 +3461,8 @@ struct Game<'a> {
     pvp: pvp::PvpState,
     /// Horizon mods (`game/mods.rs`), none running unless turned on.
     mods: mods::ModsState,
+    /// The options screen's content-mod registry worker.
+    mod_jobs: mod_browser::Jobs,
     /// Every item and recipe, for mods (`game/native_recipes.rs`), made once.
     recipe_tables: native_recipes::RecipeTables,
     /// The item panel beside container screens (`game/native_panel.rs`).
@@ -13325,6 +13329,21 @@ impl Game<'_> {
         };
         self.server_explode(center, radius, interaction, fire)
     }
+    /// `SulfurCube.tickFuse`: `ExplosionInteraction.TNT` (the
+    /// tnt_explosion_drop_decay rule) with mobGriefing, `NONE` without.
+    fn explode_sulfur_cube(
+        &mut self,
+        source: Option<u32>,
+        center: [f64; 3],
+        radius: f32,
+    ) -> Result<()> {
+        let interaction = if !self.can_entity_grief(source) {
+            explosion::BlockInteraction::Keep
+        } else {
+            self.destroy_type("tnt_explosion_drop_decay")
+        };
+        self.server_explode(center, radius, interaction, false)
+    }
     /// Copies of a save batch carrying its live block entities and save data.
     fn with_entities<'a>(
         &self,
@@ -18043,7 +18062,7 @@ impl Game<'_> {
             KeyCode::KeyE
                 if self.screen == Screen::Creative && self.creative_screen.tab().search => {}
             KeyCode::KeyE => match self.screen {
-                Screen::Playing if self.spectator() => {}
+                Screen::Playing if self.spectator() || self.in_portal_transition() => {}
                 Screen::Playing => {
                     // handleKeybinds: the number keys select before key.inventory.
                     self.select_queued_hotbar();
@@ -20953,6 +20972,7 @@ impl<'a> Game<'a> {
             extras: Default::default(),
             pvp: Default::default(),
             mods: mod_sources,
+            mod_jobs: Default::default(),
             recipe_tables: Default::default(),
             panel: Default::default(),
             native_shaders: Default::default(),
