@@ -351,6 +351,8 @@ mod tests {
             pub enum KeyAction {}
             pub struct NativeArmorHurt;
             #[derive(Clone, Copy)]
+            pub enum ToastKind {}
+            #[derive(Clone, Copy)]
             pub struct ArmPose;
             #[derive(Clone, Copy, Debug, PartialEq, Eq)]
             pub enum EffectApplicable {
