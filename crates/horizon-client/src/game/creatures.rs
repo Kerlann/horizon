@@ -674,7 +674,8 @@ impl Game<'_> {
                 position: None,
             };
             let mut cancel = false;
-            self.native_armor_hurt(None, id, &kind, &hit, &mut entries, &mut cancel);
+            super::native_hooks::HitLevel(super::entity::damage_level_of!(self).reborrow())
+                .native_armor_hurt(None, id, &kind, &hit, &mut entries, &mut cancel);
             if cancel {
                 return;
             }

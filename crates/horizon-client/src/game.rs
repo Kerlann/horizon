@@ -13983,7 +13983,7 @@ impl Game<'_> {
                 position: None,
             };
             let mut cancel = false;
-            self.native_armor_hurt(
+            native_hooks::HitLevel(entity::damage_level_of!(self).reborrow()).native_armor_hurt(
                 Some(uuid),
                 player,
                 "minecraft:player",
