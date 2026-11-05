@@ -96,24 +96,14 @@ fn fetch_text(at: &str) -> Result<String, String> {
     Ok(text)
 }
 
-/// Whether version `v` is a `.hmod` with code: the game doesn't run those any
-/// more, and the launcher neither lists nor installs them (`needs_port`).
-fn needs_port(v: &Version) -> bool {
-    v.file.name.ends_with(".hmod")
-        && v.capabilities
-            .iter()
-            .any(|c| *c != horizon_mods::Capability::Registries)
-}
-
-/// The version of content mod `p` this game installs: the newest for this
-/// Minecraft version that wasn't taken down and has no code.
+/// The version of mod `p` this game installs: the newest for this Minecraft
+/// version that wasn't taken down. Native packages pin an exact game build
+/// and are installed through the launcher, never upgraded by this browser.
 pub fn installable<'a>(index: &Index, p: &'a Project) -> Option<&'a Version> {
     if p.kind != Kind::Mod {
         return None;
     }
-    index
-        .installable(p, GAME, horizon_mods::api_level::LEVEL)
-        .filter(|v| !needs_port(v))
+    index.installable(p, GAME)
 }
 
 /// The registry's projects the browser offers, most downloaded first: content
@@ -179,6 +169,21 @@ pub fn install(
     let mut list = Installed::load(home);
     let ours = list.position(id);
     let old_file = ours.and_then(|i| list.entries[i]["file"].as_str().map(str::to_owned));
+    // A registry project can change kind. Inspect the installed flat package,
+    // not its folder or the current index, before even the same-version shortcut.
+    if let Some(file) = &old_file {
+        let path = home.join(file);
+        if path.exists() {
+            let package = horizon_mods::Package::read(&path)
+                .map_err(|e| format!("cannot inspect installed {}: {e}", p.name))?;
+            if package.is_native() {
+                return Err(format!(
+                    "{} is a native mod pinned to its game build: use the launcher to change it",
+                    p.name
+                ));
+            }
+        }
+    }
     if let Some(i) = ours
         && list.entries[i]["version"].as_str() == Some(v.version.as_str())
         && target.exists()
