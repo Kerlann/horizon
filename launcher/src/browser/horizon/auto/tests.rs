@@ -352,6 +352,12 @@ fn failed_restore_keeps_its_record_for_retry() {
     recover(&home);
     assert_eq!(kept_list(&home).len(), 1);
     assert!(home.join(&kept.copy).is_file());
+    let v2 = ruby(&dir, "1.1.0", &["lamp", "brick"], &[]);
+    let newer = index_of(&[("1.1.0", GAME, &v2), ("1.0.0", GAME, &v1)]);
+    let report = run_with(&newer, true, &home, &PLAY, &|_, _| {});
+    assert!(report.updated.is_empty());
+    assert_eq!(kept_list(&home).len(), 1);
+    assert!(home.join(&kept.copy).is_file());
     fs::remove_dir(target).unwrap();
     recover(&home);
     assert_eq!(

@@ -257,8 +257,16 @@ pub(super) fn run_with(
     progress: &dyn Fn(&str, f32),
 ) -> Report {
     recover(home);
+    let pending: BTreeSet<String> = kept_list(home)
+        .into_iter()
+        .filter(|kept| kept.pid != std::process::id())
+        .map(|kept| kept.entry.project)
+        .collect();
     let mut report = Report::default();
     for entry in installed::Installed::load(home).entries {
+        if pending.contains(&entry.project) {
+            continue;
+        }
         let Decision::Update(v) = decide(index, &entry, ctx) else {
             continue;
         };
