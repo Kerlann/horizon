@@ -20,7 +20,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PROFILE = "fast"
+PROFILE = "release"
 # What rustc writes for a dylib or proc macro on each OS, plus metadata and the MinGW import libraries.
 SUFFIXES = (".rmeta", ".so", ".dll", ".dll.a", ".dylib")
 IDENTITY = "horizon-prebuilt.json"

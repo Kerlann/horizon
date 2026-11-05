@@ -6,7 +6,7 @@
 //! Not in the mockup, kept in its patterns: the appearance, the Home background, the logs folder
 //! and the applications menu (rows under About's tiles), the AI clients and the hidden developer
 //! options. The mockup's Native mods switch is the
-//! native mods' build profile here: they are always on.
+//! native mods are enabled per package.
 
 use super::*;
 use crate::glass_ui::{self as ui, white};
@@ -208,55 +208,6 @@ impl Launcher {
         )
     }
 
-    /// The Game card's Native mods row. The mockup has an on/off switch; native mods are always
-    /// on here, so the row picks the profile they build with, as the Mods page does.
-    fn native_mods_row(&mut self, cx: &mut Context<Self>) -> Div {
-        let t = self.theme;
-        let profile = native_mods::Profile::chosen(&self.settings);
-        let picker = segments(
-            "settings-native-profile",
-            &[
-                (native_mods::Profile::Performance, "Performance build"),
-                (native_mods::Profile::Dev, "Dev build"),
-                (native_mods::Profile::Release, "Release build"),
-            ],
-            profile,
-            &t,
-            {
-                let this = cx.entity().downgrade();
-                move |choice, _, cx| {
-                    let _ = this.update(cx, |this, cx| {
-                        this.settings.native_profile = Some(choice);
-                        this.native_done = None;
-                        this.save_settings();
-                        cx.notify();
-                    });
-                }
-            },
-        );
-        let said = match profile {
-            native_mods::Profile::Performance => tr("The everyday build for playing with mods"),
-            native_mods::Profile::Dev => tr(
-                "For developing a mod: about 6× faster to rebuild a mod edit, game logic up to about twice as slow",
-            ),
-            native_mods::Profile::Release => {
-                tr("Release build: slower to build, slightly faster game")
-            }
-        };
-        ui::setting_row(
-            tr("Native mods"),
-            Some(
-                div()
-                    .child(format!(
-                        "{} {said}.",
-                        tr("Experimental. Builds the native mods you trust into a game of their own.")
-                    ))
-                    .into_any_element(),
-            ),
-            Some(picker.into_any_element()),
-        )
-    }
-
     /// About's three tiles (the mockup's `AboutTile`s): Horizon and its update, the launcher and
     /// its own, and the data folder.
     fn about_tiles(
@@ -395,9 +346,7 @@ impl Launcher {
             ))
             .child(self.reset_look_row(cx));
         let network = card().child(self.proxy_row(n, cx));
-        let game = card()
-            .child(self.game_args_row(n, cx))
-            .child(self.native_mods_row(cx));
+        let game = card().child(self.game_args_row(n, cx));
         let ai = card()
             .child(self.no_ai_row(n, cx))
             .children(self.agents_section(cx));

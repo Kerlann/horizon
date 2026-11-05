@@ -1603,7 +1603,9 @@ impl Launcher {
                 &[("instance", other.map_or("", |i| i.name.as_str()))],
             )));
         }
-        let idle = self.native_step.is_none() && self.native_confirm.is_none();
+        let idle = self.native_step.is_none()
+            && self.native_confirm.is_none()
+            && self.native_pending.is_none();
         let can_build =
             idle && (error.is_some() || matches!(state, State::NotBuilt | State::Outdated));
         let mut right = div()
@@ -1619,45 +1621,6 @@ impl Launcher {
                 }),
             ));
         }
-        let profile = native_mods::Profile::chosen(&self.settings);
-        let picker = segments(
-            "native-profile",
-            &[
-                (native_mods::Profile::Performance, "Performance build"),
-                (native_mods::Profile::Dev, "Dev build"),
-                (native_mods::Profile::Release, "Release build"),
-            ],
-            profile,
-            &t,
-            {
-                let this = cx.entity().downgrade();
-                move |choice, _, cx| {
-                    let _ = this.update(cx, |this, cx| {
-                        this.settings.native_profile = Some(choice);
-                        this.native_done = None;
-                        this.save_settings();
-                        cx.notify();
-                    });
-                }
-            },
-        );
-        let said = match profile {
-            native_mods::Profile::Performance => tr("The everyday build for playing with mods"),
-            native_mods::Profile::Dev => tr(
-                "For developing a mod: about 6× faster to rebuild a mod edit, game logic up to about twice as slow",
-            ),
-            native_mods::Profile::Release => {
-                tr("Release build: slower to build, slightly faster game")
-            }
-        };
-        detail = detail.child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .child(picker)
-                .child(said),
-        );
         if let Some(mods) = &self.native_confirm {
             detail = detail.child(self.native_warning(mods, cx));
         }

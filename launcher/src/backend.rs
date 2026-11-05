@@ -3148,6 +3148,7 @@ pub enum Msg {
     PackDone(Result<Box<crate::modpacks::Imported>, String>),
     /// Where the native-mods build is (`native_mods::Step::label`).
     NativeProgress(String),
+    NativePlanned(Result<crate::native_mods::Planned, String>),
     /// The native-mods build ended: the version built, or why not.
     Native(Result<String, String>),
     /// An imported game build is installed (`build_import::import`): its version, or why not.
@@ -3361,9 +3362,6 @@ pub struct Settings {
     /// Native mods are always on: an older file's `native_mods` switch is ignored.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub native_mods_noticed: bool,
-    /// The profile native builds compile with (`native_mods::Profile::chosen`); none is the default.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub native_profile: Option<crate::native_mods::Profile>,
     /// Developer options (hidden: seven clicks on the sidebar's launcher version reveal them):
     /// offline names play without an account that owns the game, in the window only
     /// (`account::Accounts::play_as_with`, `account::launch_for_game`). Never a download: the game still

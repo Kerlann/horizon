@@ -202,6 +202,13 @@ enum Load<T> {
 
 const LOG_LINES: usize = 2000;
 
+struct NativePending {
+    base: String,
+    folder: std::path::PathBuf,
+    instance: instances::Instance,
+    planned: Option<native_mods::Planned>,
+}
+
 struct Launcher {
     theme: Theme,
     page: Page,
@@ -252,10 +259,12 @@ struct Launcher {
     /// When the running native build started, and the whole seconds last drawn (the status shows
     /// the time it has taken).
     native_started: Option<(Instant, u64)>,
-    /// How the last native build ended ("Built in 42 s (fast, incremental)", or "Up to date").
+    /// How the last native build ended ("Built in 42 s (incremental)", or "Up to date").
     native_done: Option<String>,
     native_error: Option<String>,
     native_confirm: Option<Result<Vec<native_mods::Bundle>, String>>,
+    native_pending: Option<NativePending>,
+    native_play_after: bool,
     /// The instance (id) the build under way, or the last one's error, is for.
     native_for: Option<String>,
     /// What each installed native build was made from, by version. A build's version names its
@@ -579,6 +588,8 @@ impl Launcher {
             native_done: None,
             native_error: None,
             native_confirm: None,
+            native_pending: None,
+            native_play_after: false,
             native_for: None,
             native_builds: Default::default(),
             native_log: Default::default(),
@@ -936,14 +947,88 @@ impl Launcher {
         self.native_step = Some(tr("Starting the build").into());
         self.native_started = Some((Instant::now(), 0));
         self.native_done = None;
-        let profile = native_mods::Profile::chosen(&self.settings);
+        self.native_pending = Some(NativePending {
+            base,
+            folder,
+            instance,
+            planned: None,
+        });
+        self.plan_native();
+    }
+
+    fn plan_native(&mut self) {
+        let Some(pending) = &self.native_pending else {
+            return;
+        };
+        self.native_step = Some(tr("Checking whether these mods need a full game build").into());
+        let (base, folder) = (pending.base.clone(), pending.folder.clone());
         let tx = self.tx.clone();
         std::thread::spawn(move || {
-            let result = native_mods::build(&base, &folder, &instance, profile, |step| {
-                let _ = tx.send(Msg::NativeProgress(step.label()));
-            });
+            let _ = tx.send(Msg::NativePlanned(native_mods::plan(
+                &base,
+                &folder,
+                native_mods::Target::Client,
+            )));
+        });
+    }
+
+    fn start_native_build(&mut self) {
+        let Some(pending) = self.native_pending.take() else {
+            return;
+        };
+        let Some(planned) = pending.planned else {
+            return;
+        };
+        self.native_step = Some(tr("Starting the build").into());
+        self.native_started = Some((Instant::now(), 0));
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            let result = native_mods::build(
+                &pending.base,
+                &pending.folder,
+                &pending.instance,
+                planned,
+                |step| {
+                    let _ = tx.send(Msg::NativeProgress(step.label()));
+                },
+            );
             let _ = tx.send(Msg::Native(result));
         });
+    }
+
+    fn native_without_source_mods(&mut self) -> Result<(), String> {
+        let Some(pending) = &mut self.native_pending else {
+            return Ok(());
+        };
+        let Some(native_mods::Planned {
+            route: native_mods::Route::Source(why),
+            ..
+        }) = &pending.planned
+        else {
+            return Ok(());
+        };
+        for id in why
+            .iter()
+            .flat_map(|w| &w.mods)
+            .collect::<std::collections::BTreeSet<_>>()
+        {
+            horizon_launcher::browser::java::set_enabled(&pending.instance.home, id, false)?;
+        }
+        pending.folder = native_mods::installed_mods(&pending.instance.home)?;
+        pending.planned = None;
+        self.native_play_after = true;
+        if native_mods::bundles(&pending.folder)?.is_empty() {
+            // A native version still contains its old compiled-in mods. Select its plain base.
+            let base = native_mods::about(&pending.base).map_or(pending.base.clone(), |a| a.base);
+            instances::edit(&pending.instance.id, |meta| {
+                meta.version = Some(base.clone())
+            })?;
+            self.native_pending = None;
+            let _ = self.tx.send(Msg::Native(Ok(base)));
+        } else {
+            self.plan_native();
+        }
+        Ok(())
     }
 
     fn fetch_releases(&mut self) {
@@ -1267,6 +1352,28 @@ impl Launcher {
                     }
                 }
                 Msg::Updates(Err(e)) => self.update_error = Some(e),
+                Msg::NativePlanned(result) => match result {
+                    Ok(planned) => {
+                        let prebuilt = matches!(planned.route, native_mods::Route::Prebuilt(_));
+                        if let Some(pending) = &mut self.native_pending {
+                            pending.planned = Some(planned);
+                        }
+                        if prebuilt {
+                            self.start_native_build();
+                        } else {
+                            self.native_step = None;
+                            self.native_started = None;
+                        }
+                    }
+                    Err(error) => {
+                        self.native_pending = None;
+                        self.native_step = None;
+                        self.native_started = None;
+                        self.native_play_after = false;
+                        self.native_log_preflight(&error);
+                        self.native_error = Some(error);
+                    }
+                },
                 Msg::NativeProgress(step) => self.native_step = Some(step),
                 Msg::Native(result) => {
                     // The last step of a build that worked says how it went.
@@ -1279,7 +1386,12 @@ impl Launcher {
                     self.native_log.stale = true;
                     if let Err(e) = result {
                         self.native_error = Some(e);
+                    } else if self.native_play_after
+                        && self.native_for.as_deref() == Some(instances::selected().id.as_str())
+                    {
+                        self.play();
                     }
+                    self.native_play_after = false;
                 }
                 Msg::LauncherProgress(p) => {
                     if let SelfUpdate::Downloading(_, f) = &mut self.self_update {
@@ -3857,7 +3969,7 @@ impl Launcher {
             .child(div().text_color(t.danger).child(tr("These mods will run with full access to your computer").to_string()))
             .child(tr("They can read, change or delete your files, and use your accounts and network, like any program you run. Build them only if you trust their authors: the Mods page names them.").to_string())
             .child(trf("Mods: {mods}", &[("mods", &list)]))
-            .child(tr("The build compiles the game: 20 to 30 minutes and a few GB of disk the first time (it downloads Rust), a few minutes after that.").to_string());
+            .child(tr("Most mods build against the prebuilt game in seconds; a few need a full game build, which the launcher asks about next.").to_string());
         let mut buttons = div().flex().gap(px(8.)).mt(px(4.));
         if mods.is_ok() {
             buttons = buttons.child(
@@ -3881,6 +3993,115 @@ impl Launcher {
                 },
             )),
         ))
+    }
+
+    fn native_recompile_modal(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+        let pending = self.native_pending.as_ref()?;
+        let native_mods::Route::Source(why) = &pending.planned.as_ref()?.route else {
+            return None;
+        };
+        let t = self.theme;
+        let mut reasons = div()
+            .id("native-source-reasons")
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .max_h(px(300.))
+            .overflow_y_scroll();
+        for why in why {
+            for id in &why.mods {
+                reasons = reasons.child(trf(
+                    "{mod}: {reason}",
+                    &[("mod", id), ("reason", &why.reason.to_string())],
+                ));
+            }
+        }
+        let estimate = native_mods::source_estimate(native_mods::Target::Client);
+        let buttons = div()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .child(
+                button(
+                    "native-source-build",
+                    trf("Build now · {estimate}", &[("estimate", &estimate)]),
+                    Kind::Primary,
+                    &t,
+                )
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.start_native_build();
+                    cx.notify();
+                })),
+            )
+            .child(
+                button(
+                    "native-source-disable",
+                    "Play without them",
+                    Kind::Secondary,
+                    &t,
+                )
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    if let Err(error) = this.native_without_source_mods() {
+                        this.native_pending = None;
+                        this.native_play_after = false;
+                        this.native_error = Some(error);
+                    }
+                    cx.notify();
+                })),
+            )
+            .child(
+                button("native-source-cancel", "Cancel", Kind::Ghost, &t).on_click(cx.listener(
+                    |this, _: &ClickEvent, _, cx| {
+                        this.native_pending = None;
+                        this.native_play_after = false;
+                        cx.notify();
+                    },
+                )),
+            );
+        let plate = if t.glass {
+            glass_ui::dialog_plate(28.)
+        } else {
+            div().bg(t.well).border_2().border_color(t.outline)
+        };
+        let card = plate
+            .occlude()
+            .flex()
+            .flex_col()
+            .gap(px(18.))
+            .p(px(24.))
+            .w(px(620.))
+            .max_w_full()
+            .child(
+                div()
+                    .text_size(px(22.))
+                    .child(tr("These mods need a full game build").to_string()),
+            )
+            .child(reasons)
+            .child(buttons);
+        Some(
+            div()
+                .id("native-recompile-modal")
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .p(px(24.))
+                .occlude()
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_scroll(|_, _, cx| cx.stop_propagation())
+                .child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .size_full()
+                        .bg(gpui::black().opacity(0.65)),
+                )
+                .child(card),
+        )
     }
 
     /// Settings' Game arguments row: the extra arguments the game starts with, kept in
@@ -5165,6 +5386,9 @@ impl Render for Launcher {
         }
         if t.glass {
             root = root.children(self.toast_float());
+        }
+        if let Some(dialog) = self.native_recompile_modal(cx) {
+            root = root.child(dialog);
         }
         if let Some(palette) = self.palette_overlay(window, cx) {
             root = root.child(palette);

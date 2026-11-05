@@ -4,7 +4,7 @@
 //! anything runs: a mod set the prebuilt game can't serve, or a revision with no prebuilt
 //! release, builds from source, and the build log says why. A prebuilt build that fails is an
 //! error like any other build's, never retried from source.
-use super::{api, dependencies, inject, Profile, Target};
+use super::{api, dependencies, inject, Target, Why};
 use crate::i18n::{tr, trf};
 use crate::rust_toolchain::{self, Toolchain};
 use horizon_mods::index::native;
@@ -17,14 +17,14 @@ use std::process::Command;
 const IDENTITY: &str = "horizon-prebuilt.json";
 const TEMPLATE: &str = "native_main.rs.template";
 const SUMS: &str = "SHA256SUMS";
-/// The `fast` profile the prebuilt game is built with: the mods' code matches the game's.
+/// The `release` profile the prebuilt game is built with: the mods' code matches the game's.
 const OPT_LEVEL: &str = "opt-level=3";
 /// The archive's largest plausible unpacked size: a corrupt or hostile archive stops there.
 const UNPACKED_LIMIT: u64 = 8 << 30;
 
 /// Why a build compiles the game from source instead of using the prebuilt game.
-#[derive(Debug, PartialEq, Eq)]
-pub(super) enum SourceReason {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SourceReason {
     /// A mod has a helper `[[native.injection]]` or a module: they change the game's own code.
     Injections { mod_id: String },
     /// A mod has a build script, which the prebuilt route doesn't run.
@@ -33,8 +33,8 @@ pub(super) enum SourceReason {
     Features { mod_id: String },
     /// A mod depends on a crate other than the mod API and other mods.
     Crate { mod_id: String, krate: String },
-    /// The player chose a profile other than the prebuilt game's `performance` (`fast`).
-    Profile { profile: &'static str },
+    /// A required dependency needs a source build.
+    Dependency { mod_id: String },
     /// No prebuilt game for this computer.
     Host,
     /// The prebuilt game's release couldn't be downloaded.
@@ -64,9 +64,9 @@ impl std::fmt::Display for SourceReason {
                 "{mod} depends on the crate {crate}, so the game builds from source",
                 &[("mod", mod_id), ("crate", krate)],
             ),
-            Self::Profile { profile } => trf(
-                "the {profile} profile builds the game from source; the prebuilt game is performance only",
-                &[("profile", profile)],
+            Self::Dependency { mod_id } => trf(
+                "requires {mod}, which needs a full game build",
+                &[("mod", mod_id)],
             ),
             Self::Host => {
                 tr("no prebuilt game for this computer, so the game builds from source").into()
@@ -88,63 +88,66 @@ impl std::fmt::Display for SourceReason {
     }
 }
 
-/// The first reason `projects` can't build against the prebuilt game with `profile`, or `None`
-/// when they can: the profile is `performance`, the one the game is prebuilt with, and each mod is
-/// a crate that depends on the mod API (with its default features) and on other mods, with no
-/// injections, build script or features of its own.
-pub(super) fn refusal(projects: &[api::Project<'_>], profile: Profile) -> Option<SourceReason> {
-    if profile != Profile::Performance {
-        return Some(SourceReason::Profile {
-            profile: profile.name(),
-        });
+/// Every mod that cannot build against the prebuilt game, with its first blocking reason.
+pub(super) fn refusal(projects: &[api::Project<'_>]) -> Vec<Why> {
+    projects
+        .iter()
+        .filter_map(|project| {
+            let reason = project_refusal(project);
+            reason.map(|reason| Why {
+                mods: vec![project.bundle.manifest.id.clone()],
+                reason,
+            })
+        })
+        .collect()
+}
+
+fn project_refusal(project: &api::Project<'_>) -> Option<SourceReason> {
+    let mod_id = || project.bundle.manifest.id.clone();
+    if project.bundle.needs_mixins() {
+        return Some(SourceReason::Injections { mod_id: mod_id() });
     }
-    projects.iter().find_map(|project| {
-        let mod_id = || project.bundle.manifest.id.clone();
-        if project.bundle.needs_mixins() {
-            return Some(SourceReason::Injections { mod_id: mod_id() });
-        }
-        let cargo = &project.cargo;
-        let package = cargo.get("package");
-        let has_script = package.and_then(|p| p.get("build")).is_some()
-            || project.bundle.dir.join("build.rs").is_file()
-            || cargo
-                .get("build-dependencies")
-                .and_then(toml::Value::as_table)
-                .is_some_and(|t| !t.is_empty());
-        if has_script {
-            return Some(SourceReason::BuildScript { mod_id: mod_id() });
-        }
-        if cargo
-            .get("features")
+    let cargo = &project.cargo;
+    let package = cargo.get("package");
+    let has_script = package.and_then(|p| p.get("build")).is_some()
+        || project.bundle.dir.join("build.rs").is_file()
+        || cargo
+            .get("build-dependencies")
             .and_then(toml::Value::as_table)
-            .is_some_and(|t| !t.is_empty())
-        {
-            return Some(SourceReason::Features { mod_id: mod_id() });
-        }
-        for (_, dependencies) in project.dependency_tables() {
-            for (key, value) in dependencies {
-                let krate = value
-                    .get("package")
-                    .and_then(toml::Value::as_str)
-                    .unwrap_or(key);
-                if krate != api::API_PACKAGE {
-                    return Some(SourceReason::Crate {
-                        mod_id: mod_id(),
-                        krate: krate.to_owned(),
-                    });
-                }
-                let own_features = value
-                    .get("features")
-                    .and_then(toml::Value::as_array)
-                    .is_some_and(|f| !f.is_empty())
-                    || value.get("default-features").and_then(toml::Value::as_bool) == Some(false);
-                if own_features {
-                    return Some(SourceReason::Features { mod_id: mod_id() });
-                }
+            .is_some_and(|t| !t.is_empty());
+    if has_script {
+        return Some(SourceReason::BuildScript { mod_id: mod_id() });
+    }
+    if cargo
+        .get("features")
+        .and_then(toml::Value::as_table)
+        .is_some_and(|t| !t.is_empty())
+    {
+        return Some(SourceReason::Features { mod_id: mod_id() });
+    }
+    for (_, dependencies) in project.dependency_tables() {
+        for (key, value) in dependencies {
+            let krate = value
+                .get("package")
+                .and_then(toml::Value::as_str)
+                .unwrap_or(key);
+            if krate != api::API_PACKAGE {
+                return Some(SourceReason::Crate {
+                    mod_id: mod_id(),
+                    krate: krate.to_owned(),
+                });
+            }
+            let own_features = value
+                .get("features")
+                .and_then(toml::Value::as_array)
+                .is_some_and(|f| !f.is_empty())
+                || value.get("default-features").and_then(toml::Value::as_bool) == Some(false);
+            if own_features {
+                return Some(SourceReason::Features { mod_id: mod_id() });
             }
         }
-        None
-    })
+    }
+    None
 }
 
 /// Whether the prebuilt `game` has a point at each of `injections`' targets: a target that isn't
@@ -153,18 +156,25 @@ pub(super) fn refusal(projects: &[api::Project<'_>], profile: Profile) -> Option
 pub(super) fn serves_points(
     game: &Path,
     injections: &[inject::PointInjection],
-) -> Result<Result<(), SourceReason>, String> {
+) -> Result<Vec<Why>, String> {
     if injections.is_empty() {
-        return Ok(Ok(()));
+        return Ok(Vec::new());
     }
     let points = inject::listed(&game.join(inject::POINTS))?;
-    match inject::check(injections, &points) {
-        Ok(()) => Ok(Ok(())),
-        Err(error @ inject::PointError::NotAPoint { .. }) => Ok(Err(SourceReason::NotAPoint {
-            why: error.to_string(),
-        })),
-        Err(error) => Err(error.to_string()),
+    let mut refused = Vec::new();
+    for injection in injections {
+        match inject::check(std::slice::from_ref(injection), &points) {
+            Ok(()) => {}
+            Err(error @ inject::PointError::NotAPoint { .. }) => refused.push(Why {
+                mods: vec![injection.mod_id.clone()],
+                reason: SourceReason::NotAPoint {
+                    why: error.to_string(),
+                },
+            }),
+            Err(error) => return Err(error.to_string()),
+        }
     }
+    Ok(refused)
 }
 
 /// The prebuilt game for `revision` and `target`, downloaded and checked once, then kept in the
@@ -499,23 +509,10 @@ mod tests {
         )
         .unwrap();
         let bundle = super::super::bundle_in(&dir).unwrap().unwrap();
-        refusal(
-            &[api::Project::read(&bundle).unwrap()],
-            Profile::Performance,
-        )
-    }
-
-    #[test]
-    fn only_the_performance_profile_takes_the_prebuilt_game() {
-        for profile in [Profile::Dev, Profile::Release] {
-            assert_eq!(
-                refusal(&[], profile),
-                Some(SourceReason::Profile {
-                    profile: profile.name()
-                })
-            );
-        }
-        assert_eq!(refusal(&[], Profile::Performance), None);
+        refusal(&[api::Project::read(&bundle).unwrap()])
+            .into_iter()
+            .next()
+            .map(|why| why.reason)
     }
 
     #[test]
@@ -560,6 +557,38 @@ mod tests {
         ] {
             assert_eq!(refusal_of(cargo), Some(reason), "{cargo}");
         }
+    }
+
+    #[test]
+    fn point_refusals_name_every_affected_mod_and_wrong_methods_still_fail() {
+        let game = super::super::tests::dir("point-refusals");
+        fs::write(
+            game.join(inject::POINTS),
+            r#"[{"name":"tick","target":"Game::tick"}]"#,
+        )
+        .unwrap();
+        let point = |mod_id: &str, target: &str, method: &str| inject::PointInjection {
+            mod_id: mod_id.into(),
+            id: "test".into(),
+            target: target.into(),
+            method: method.into(),
+            at_return: false,
+        };
+        let injections = [
+            point("a", "Game::missing_a", "missing_a"),
+            point("b", "Game::missing_b", "missing_b"),
+            point("c", "Game::tick", "tick"),
+        ];
+        let refused = serves_points(&game, &injections).unwrap();
+        assert_eq!(
+            refused.iter().flat_map(|w| &w.mods).collect::<Vec<_>>(),
+            [&"a".to_string(), &"b".to_string()]
+        );
+        assert!(refused
+            .iter()
+            .all(|w| matches!(&w.reason, SourceReason::NotAPoint { .. })));
+        let error = serves_points(&game, &[point("c", "Game::tick", "wrong")]).unwrap_err();
+        assert!(error.contains("Points::tick"), "{error}");
     }
 
     #[test]

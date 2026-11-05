@@ -1,5 +1,5 @@
 //! Reusable, immutable mixin output. API packages are staged after this snapshot.
-use super::{Bundle, Profile};
+use super::Bundle;
 use sha2::{Digest, Sha256};
 use std::{
     fs,
@@ -12,12 +12,7 @@ fn field(hash: &mut Sha256, bytes: &[u8]) {
 }
 
 /// Hash all mixin inputs but not an API crate that mixins do not read.
-pub(super) fn key(
-    revision: &str,
-    mixins: &str,
-    profile: Profile,
-    mods: &[Bundle],
-) -> Result<String, String> {
+pub(super) fn key(revision: &str, mixins: &str, mods: &[Bundle]) -> Result<String, String> {
     let mut hash = Sha256::new();
     for part in [
         // Bump when launcher generation or validation changes the snapshot's contents.
@@ -25,8 +20,6 @@ pub(super) fn key(
         super::STAGING,
         revision,
         mixins,
-        // The Cargo profile: `Performance` and `Dev` stage the same source.
-        profile.cargo().0,
         super::rust_toolchain::VERSION,
     ] {
         field(&mut hash, part.as_bytes());

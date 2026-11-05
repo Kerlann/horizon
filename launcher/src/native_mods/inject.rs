@@ -285,13 +285,8 @@ mod tests {
             "[[injection]]\nid = 'hook'\ntarget = 'horizon_client::game::tick'\nkind = 'HEAD'\nhelper = 'src/lib.rs'\n",
         );
         let key = || {
-            super::super::inject_cache::key(
-                "revision",
-                "mixins",
-                super::super::Profile::Performance,
-                std::slice::from_ref(&bundle),
-            )
-            .unwrap()
+            super::super::inject_cache::key("revision", "mixins", std::slice::from_ref(&bundle))
+                .unwrap()
         };
         let before = key();
         fs::write(root.join("src/lib.rs"), "fn changed() {}\n").unwrap();
@@ -317,7 +312,6 @@ mod tests {
         let a = super::super::version_for(
             "0123456789012345678901234567890123456789",
             "mixins",
-            super::super::Profile::Performance,
             super::super::Target::Client,
             &[first.clone(), second.clone()],
         )
@@ -325,7 +319,6 @@ mod tests {
         let b = super::super::version_for(
             "0123456789012345678901234567890123456789",
             "mixins",
-            super::super::Profile::Performance,
             super::super::Target::Client,
             &[second, first],
         )
