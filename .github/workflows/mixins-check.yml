@@ -20,8 +20,9 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: mixins-check-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # One run per PR, and one for main: a newer main push supersedes an older one's run.
+  group: mixins-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   mixins-check:
     runs-on: ubuntu-latest

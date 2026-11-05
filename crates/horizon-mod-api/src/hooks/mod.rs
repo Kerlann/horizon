@@ -267,6 +267,7 @@ mod screen_input_post;
 mod screen_opening;
 mod screen_preedit_effects;
 mod screen_render_stages;
+mod screenshot;
 mod send_chat;
 mod send_packet;
 mod server_chat;

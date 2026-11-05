@@ -306,8 +306,6 @@ impl Game<'_> {
         if by_player && self.creative {
             return true;
         }
-        // HangingEntity.spawnAtLocation: 0.15 out from the wall.
-        let s = p.step().map(f64::from);
         let stack = ItemStack {
             item: Arc::from("minecraft:painting"),
             count: 1,
@@ -316,7 +314,7 @@ impl Game<'_> {
         };
         self.spawn_item(
             stack,
-            [at[0] + s[0] * 0.15, at[1], at[2] + s[2] * 0.15],
+            super::frames::hanging_drop_position(at, p.step()),
             [0.0; 3],
             10,
         );

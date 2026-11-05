@@ -17,7 +17,7 @@ use horizon_client::{
     mesher::Vertex,
     mobs::{Damage, DamageKind, Who},
     particles::{ParticleOptions, ParticleType},
-    projectiles::ProjectileKind,
+    projectiles::{Projectile, ProjectileKind},
     text::Text,
 };
 use horizon_core::position::BlockPos;
@@ -932,18 +932,26 @@ impl Dragon {
 /// The source `reallyHurt` takes from a hit `by` the player of that entity
 /// id: `DamageSources.explosion(crystal, player)` is `player_explosion` with
 /// a player behind it, who is the causing entity, and the direct one of a
-/// melee hit (a projectile's direct entity isn't known here).
+/// melee hit. A projectile is the direct entity only when the damage type
+/// names one; `magic()` (an ownerless wither skull) does not.
 fn hurt_source(
     kind: DamageKind,
     by: Option<i32>,
-    direct: Option<&ProjectileKind>,
+    direct: Option<&Projectile>,
 ) -> HurtSource<'static> {
     let causing = by.unwrap_or(0);
-    let melee = direct.is_none() && super::creatures::melee(kind);
+    let damage_type = super::creatures::damage_type(kind, by.is_some());
+    let projectile = direct
+        .filter(|_| horizon_client::health::names_its_projectile(damage_type))
+        .map(|p| p.id as i32);
     HurtSource {
-        damage_type: super::creatures::damage_type(kind, by.is_some()),
+        damage_type,
         causing,
-        direct: if melee { causing } else { 0 },
+        direct: projectile.unwrap_or(if super::creatures::melee(kind) {
+            causing
+        } else {
+            0
+        }),
         position: None,
     }
 }
@@ -1436,7 +1444,7 @@ impl Game<'_> {
         amount: f32,
         by_player: bool,
         kind: DamageKind,
-        direct: Option<&ProjectileKind>,
+        direct: Option<&Projectile>,
     ) -> Hurt {
         if id >= CRYSTAL_IDS {
             // EndCrystal.hurtServer: false while invulnerable and for fire
@@ -1476,7 +1484,7 @@ impl Game<'_> {
         counts: bool,
         by: Option<FightWho>,
         kind: DamageKind,
-        direct: Option<&ProjectileKind>,
+        direct: Option<&Projectile>,
     ) -> Hurt {
         let by_id = by.map(|who| self.fight_entity(who));
         let source = counts.then(|| hurt_source(kind, by_id, direct));
@@ -1489,7 +1497,15 @@ impl Game<'_> {
         let was_down = d.down();
         let (cooldown, last_hurt) = (d.invulnerable, d.last_hurt);
         let level = super::entity::damage_level_of!(self, scoped);
-        let hurt = d.hurt_part_from(level, part, damage, source, kind, direct, from);
+        let hurt = d.hurt_part_from(
+            level,
+            part,
+            damage,
+            source,
+            kind,
+            direct.map(|p| &p.kind),
+            from,
+        );
         // LivingEntity.hurtServer: damage that is applied sets lastHurtByPlayer
         // (100 ticks); a hit the damage cooldown absorbs returns before that.
         if counts
@@ -5309,9 +5325,15 @@ mod tests {
         };
         let melee = source(DamageKind::PlayerAttack, Some(12), None);
         assert_eq!(melee, ("minecraft:player_attack", 12, 12));
-        let arrow = ProjectileKind::Trident;
+        let mut arrow = Projectile::new(ProjectileKind::Trident, Vec3::ZERO, None);
+        arrow.id = 37;
         let shot = source(DamageKind::Arrow, Some(12), Some(&arrow));
-        assert_eq!(shot, ("minecraft:arrow", 12, 0));
+        assert_eq!(shot, ("minecraft:arrow", 12, 37));
+        let skull = source(DamageKind::WitherSkull, Some(12), Some(&arrow));
+        assert_eq!(skull, ("minecraft:wither_skull", 12, 37));
+        // DamageSources.magic(): an ownerless skull names no direct entity.
+        let magic = source(DamageKind::Magic, None, Some(&arrow));
+        assert_eq!(magic, ("minecraft:magic", 0, 0));
         let blast = source(DamageKind::Explosion, Some(12), None);
         assert_eq!(blast, ("minecraft:player_explosion", 12, 0));
         let blast = source(DamageKind::Explosion, None, None);

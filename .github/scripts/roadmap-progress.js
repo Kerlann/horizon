@@ -8,12 +8,18 @@ module.exports = async ({ github, issues, core }) => {
   const OWNER = 'arismoko', REPO = 'horizon', NUMBER = 1, ISSUE = 771;
   const START = '<!-- progress:start -->', END = '<!-- progress:end -->';
 
-  const proj = (await github.graphql(`query($o:String!,$n:Int!){user(login:$o){projectV2(number:$n){id
+  const q = async (query, vars) => {
+    for (let i = 0; ; i++) {
+      try { return await github.graphql(query, vars); }
+      catch (e) { if (i >= 4 || !/50[234]|timeout|something went wrong/i.test(`${e.status} ${e.message}`)) throw e; await new Promise(r => setTimeout(r, 5000 * (i + 1))); }
+    }
+  };
+  const proj = (await q(`query($o:String!,$n:Int!){user(login:$o){projectV2(number:$n){id
     field(name:"Phase"){... on ProjectV2SingleSelectField{options{name}}}}}}`, { o: OWNER, n: NUMBER })).user.projectV2;
   const phases = new Map(proj.field.options.map(o => [o.name, { done: 0, total: 0 }]));
   const none = { done: 0, total: 0 };
   for (let after = null; ;) {
-    const page = (await github.graphql(`query($id:ID!,$a:String){node(id:$id){... on ProjectV2{items(first:100,after:$a){
+    const page = (await q(`query($id:ID!,$a:String){node(id:$id){... on ProjectV2{items(first:50,after:$a){
       pageInfo{hasNextPage endCursor}
       nodes{content{__typename}
         s:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}

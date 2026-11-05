@@ -1018,8 +1018,8 @@ use mod_api::{
     GameRuleActor, InteractionKey, LivingRef, NativeCamera, NativeCommand, NativeDispensed,
     NativeHandRender, NativeKeyMapping, NativeLifecycleContext, NativeNoteBlockChange,
     NativeProgressType, NativeServerPlayer, PathComputationType, Placement, PlayerRef,
-    RecipeBookCategory, ScreenOpening, ServerReloadListeners, ServerTickPhase, TicketController,
-    ToolUse, WorldPhase,
+    RecipeBookCategory, ScreenOpening, ScreenshotImage, ServerReloadListeners, ServerTickPhase,
+    TicketController, ToolUse, WorldPhase,
 };
 use mod_api::{
     AttachmentStore, BonemealSource, ChunkRef, FluidStack, GameRuleValue, LandingWrite, LevelRef,
@@ -2801,6 +2801,17 @@ impl Game<'_> {
     ) {
         self.fire_client_chat_received(system, overlay, sender, chat_type, message, cancel);
     }
+    /// An F2 frame is read back; mods may change its image, cancel, rename it or replace its line.
+    pub(super) fn native_screenshot(
+        &mut self,
+        image: &mut ScreenshotImage,
+        file_name: &mut String,
+        message: &mut Option<Text>,
+        cancel: &mut bool,
+    ) {
+        self.fire_screenshot(image, file_name, message, cancel);
+    }
+
     /// `ToastAddEvent`: admit one client toast before it enters a visible queue.
     pub(super) fn native_toast_add(
         &self,
@@ -8977,7 +8988,9 @@ impl HitLevel<'_> {
     /// invulnerable or dead entity, fire on a fire-resistant one), is about to hurt entity
     /// `entity` of type `kind` (`minecraft:zombie`, `minecraft:player`) by `source`: its damage
     /// type (`minecraft:fall`), causing entity (`DamageSource.getEntity`: the shooter of an
-    /// arrow), direct entity (`getDirectEntity`: the arrow), 0 for none or not known, and
+    /// arrow), direct entity (`getDirectEntity`: the projectile's entity id when the
+    /// damage type names one, on a player, mob or ender dragon; 0 for `magic()` and any
+    /// other source with no direct entity, even during that projectile's impact), and
     /// where it comes from (`getSourcePosition`). `victim` is where the entity stands and
     /// looks, and `weapon` the direct entity's weapon (`getWeaponItem`) when it is known.
     /// `container` holds the damage before any reduction: change its `new_damage`, or the
@@ -9172,6 +9185,7 @@ impl Game<'_> {
         Attack {
             attacker,
             held,
+            projectile: None,
             player_uuid,
         }
     }
@@ -9307,19 +9321,25 @@ fn hurt_server_args<'a>(hurting: Hurting<'a>, attack: &Attack) -> (i32, &'a str,
     }
 }
 /// A mob's damage as its `DamageSource`: the causing entity is known when it
-/// is a mob, or the player whose attack the level lends, and is the direct one too
-/// when it deals the damage itself.
+/// is a mob, or the player whose attack the level lends. The direct entity is
+/// the attacker in melee, or the projectile when this damage type names one
+/// (`arrow`, `wither_skull`). `magic()` does not, even during the impact.
 fn mob_source(damage: &Damage, attack: &Attack) -> HurtSource<'static> {
     let causing = match damage.attacker {
         Some(Who::Mob(id)) => id as i32,
         Some(Who::Player) => attack.attacker,
         None => 0,
     };
+    let damage_type = super::creatures::source_damage_type(*damage);
     let melee = super::creatures::melee(damage.kind);
     HurtSource {
-        damage_type: super::creatures::source_damage_type(*damage),
+        damage_type,
         causing,
-        direct: if melee { causing } else { 0 },
+        direct: if melee {
+            causing
+        } else {
+            attack.projectile_direct(damage_type)
+        },
         position: damage.from,
     }
 }
@@ -13353,6 +13373,7 @@ mod tests {
                 },
                 &Attack {
                     attacker: 7,
+                    projectile: None,
                     player_uuid: None,
                     held: Default::default(),
                 },
@@ -13363,6 +13384,30 @@ mod tests {
         assert_eq!(source(K::MobAttack, zombie), ("minecraft:mob_attack", 3, 3));
         assert_eq!(source(K::Thorns, zombie), ("minecraft:thorns", 3, 3));
         assert_eq!(source(K::Arrow, zombie), ("minecraft:arrow", 3, 0));
+        let during = |kind| {
+            let s = mob_source(
+                &Damage {
+                    kind,
+                    attacker: zombie,
+                    from: None,
+                    attacker_species: None,
+                },
+                &Attack {
+                    attacker: 7,
+                    projectile: Some(912),
+                    player_uuid: None,
+                    held: Default::default(),
+                },
+            );
+            (s.damage_type, s.direct)
+        };
+        // The impact's projectile is the direct entity only when the type names it.
+        assert_eq!(during(K::Arrow), ("minecraft:arrow", 912));
+        assert_eq!(during(K::WitherSkull), ("minecraft:wither_skull", 912));
+        assert_eq!(during(K::IndirectMagic), ("minecraft:indirect_magic", 912));
+        // magic() and a blast do not, even while that projectile's attack is in scope.
+        assert_eq!(during(K::Magic), ("minecraft:magic", 0));
+        assert_eq!(during(K::Explosion), ("minecraft:player_explosion", 0));
         let blast = source(K::Explosion, zombie);
         assert_eq!(blast, ("minecraft:player_explosion", 3, 0));
         // A player behind a mob's hit is the one whose attack the level lends; a fall has no

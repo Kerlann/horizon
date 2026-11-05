@@ -266,6 +266,7 @@ mod tests {
     use serde_json::{Map, Value};
     use stubs::*;
     struct Text;
+    struct ScreenshotImage;
     #[derive(Debug, PartialEq)]
     struct NativeZoom(u32);
     enum Flow {

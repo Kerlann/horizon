@@ -4097,10 +4097,11 @@ impl Game<'_> {
         let owner = self.combat.projectile_owner.take();
         // The mob that caused the hit, else the attack the caller landed it in (a projectile's
         // owner, another player's blow): `combat.attack`, read through `current_attack`.
-        let attack = match attacker.or(owner) {
+        let mut attack = match attacker.or(owner) {
             Some(id) => self.attack_of(id as i32),
             None => self.current_attack(),
         };
+        attack.projectile = self.combat.attack().projectile;
         if let Some(a) = attacker.or(owner) {
             self.note_attacker(damage_type, a);
         }
@@ -4155,7 +4156,7 @@ impl Game<'_> {
                 let source = HurtSource {
                     damage_type,
                     causing,
-                    direct: 0,
+                    direct: attack.projectile_direct(damage_type),
                     position: None,
                 };
                 default_push = Some(([xd, zd], source));
@@ -4203,7 +4204,7 @@ impl Game<'_> {
             let source = HurtSource {
                 damage_type,
                 causing,
-                direct: 0,
+                direct: attack.projectile_direct(damage_type),
                 position: None,
             };
             self.after_block(outcome, (attacker, projectile), source, &attack);
@@ -5020,7 +5021,8 @@ impl Game<'_> {
     }
     /// A projectile's hit, landed in the attack of its owner.
     pub(super) fn projectile_hit(&mut self, p: &Projectile, hit: Hit) -> Result<()> {
-        let attack = self.attack_of_who(p.owner);
+        let mut attack = self.attack_of_who(p.owner);
+        attack.projectile = Some(p.id as i32);
         self.with_attack(attack, |g| g.projectile_hit_landed(p, hit))
     }
     fn projectile_hit_landed(&mut self, p: &Projectile, hit: Hit) -> Result<()> {
@@ -5106,7 +5108,7 @@ impl Game<'_> {
                     amount,
                     by_player,
                     horizon_client::mobs::DamageKind::Arrow,
-                    Some(&p.kind),
+                    Some(p),
                 ) {
                     super::dragon::Hurt::Landed { .. } => EntityHit::Hurt,
                     super::dragon::Hurt::Refused => EntityHit::Refused,
@@ -5132,7 +5134,7 @@ impl Game<'_> {
                 }
                 _ => horizon_client::mobs::DamageKind::Thrown,
             };
-            self.hit_special(id, amount, by_player, kind, Some(&p.kind));
+            self.hit_special(id, amount, by_player, kind, Some(p));
             // ThrowableProjectile.onHit goes on after onHitEntity: a pearl
             // still takes its owner to where it broke (into the crystal's
             // blast), an egg still hatches, a snowball still breaks. A large

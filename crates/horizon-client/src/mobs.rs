@@ -2931,6 +2931,8 @@ pub fn apply_brain_events(
                 };
                 let attack = crate::health::Attack {
                     attacker: mob as i32,
+                    // Pufferfish.touch uses DamageSources.sting: the fish, no projectile.
+                    projectile: None,
                     held: [held, None],
                     player_uuid: None,
                 };

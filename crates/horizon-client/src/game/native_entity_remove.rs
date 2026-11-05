@@ -45,7 +45,8 @@ impl Game<'_> {
         }
     }
     /// Drops `stack` at the entity's feet, `y_offset` above
-    /// (`Entity.spawnAtLocation`), moving as a new item does, with the
+    /// (`Entity.spawnAtLocation`), or 0.15 out along a frame or painting's
+    /// horizontal facing (`HangingEntity.spawnAtLocation`), moving as a new item does, with the
     /// default pickup delay: the item entity. None for an empty stack or an
     /// unknown item, a stale handle, a player in another level, or an item a
     /// mod kept out.
@@ -64,7 +65,18 @@ impl Game<'_> {
         {
             return None;
         }
-        let [x, y, z] = self.target_position(target)?;
+        let at = self.target_position(target)?;
+        let [x, y, z] = match target {
+            Target::Frame(id) => {
+                let frame = self.item_frames.iter().find(|frame| frame.id == id)?;
+                super::frames::hanging_drop_position(at, frame.step())
+            }
+            Target::Painting(id) => {
+                let painting = self.paintings.iter().find(|painting| painting.id == id)?;
+                super::frames::hanging_drop_position(at, painting.step())
+            }
+            _ => at,
+        };
         // Found by its id: the hooks the spawn runs may add entities after it.
         let id = self.next_entity + 1;
         self.spawn_at_location(Vec3::new(x, y, z), f64::from(y_offset), stack);
@@ -279,6 +291,60 @@ mod tests {
                     .is_none()
             );
             assert_eq!(game.dropped.len(), before);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn spawn_at_location_offsets_hanging_entities_out_from_the_wall() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::entities::{ItemFrame, Painting};
+        use horizon_client::items::ItemStack;
+        use horizon_core::geometry::Vec3;
+
+        with_game(|game| {
+            for (id, glow, facing) in [(12, false, 5), (13, true, 4)] {
+                game.item_frames.push(ItemFrame {
+                    join: Default::default(),
+                    id,
+                    pos: [0, 64, 0],
+                    facing,
+                    glow,
+                    item: None,
+                    rotation: 0,
+                    drop_chance: 1.0,
+                    fixed: false,
+                    invisible: false,
+                    check_interval: 0,
+                    custom_name: None,
+                });
+            }
+            game.paintings.push(Painting {
+                join: Default::default(),
+                id: 14,
+                pos: [0, 64, 0],
+                facing: 2,
+                variant: "minecraft:kebab".into(),
+                width: 1,
+                height: 1,
+                check_interval: 0,
+            });
+            // East frame, west glow frame, north painting. Expected origins
+            // are the hanging center plus 0.15 facing out and the 0.5 Y offset.
+            for (id, expected) in [
+                (12, Vec3::new(0.18125, 65.0, 0.5)),
+                (13, Vec3::new(0.81875, 65.0, 0.5)),
+                (14, Vec3::new(0.5, 65.0, 0.81875)),
+            ] {
+                let entity = game.native_entity(id).unwrap();
+                let item = entity
+                    .spawn_at_location(game, ItemStack::new("minecraft:carrot", 2), 0.5)
+                    .unwrap();
+                let dropped = game.dropped.iter().find(|d| d.id == item.id()).unwrap();
+                assert_eq!(dropped.position, expected);
+                assert_eq!(dropped.stack.count, 2);
+                assert_eq!(dropped.pickup_delay, 10);
+            }
         });
     }
 

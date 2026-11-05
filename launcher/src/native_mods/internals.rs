@@ -1,6 +1,7 @@
 //! Declared internals and typed raw listeners, shared by both native build routes.
 use super::{api, inject};
 use crate::i18n::trf;
+use horizon_mods::internals::{self, ListedInternal};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -8,18 +9,6 @@ use std::{
 };
 
 pub(super) const INTERNALS: &str = "internals.json";
-
-#[derive(Clone, Debug, serde::Deserialize)]
-pub(super) struct ListedInternal {
-    pub(super) path: String,
-    pub(super) kind: String,
-    #[serde(default)]
-    pub(super) cfg: String,
-    pub(super) signature: String,
-    pub(super) hash: String,
-    #[serde(default)]
-    pub(super) shape_only: bool,
-}
 
 #[derive(Default)]
 pub(super) struct Catalog {
@@ -85,13 +74,29 @@ impl std::fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
+impl From<internals::Error> for Error {
+    fn from(error: internals::Error) -> Self {
+        match error {
+            internals::Error::Missing { mod_id, path } => Self::Missing { mod_id, path },
+            internals::Error::Changed {
+                mod_id,
+                path,
+                signature,
+            } => Self::Changed {
+                mod_id,
+                path,
+                signature,
+            },
+            internals::Error::Gated { mod_id, path } => Self::Gated { mod_id, path },
+        }
+    }
+}
+
 impl Catalog {
     pub(super) fn read(dir: &Path) -> Result<Self, String> {
         let path = dir.join(INTERNALS);
-        let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         Ok(Self {
-            internals: serde_json::from_str(&text)
-                .map_err(|e| format!("{}: {e}", path.display()))?,
+            internals: internals::read(&path)?,
             points: inject::listed(&dir.join(inject::POINTS))?,
         })
     }
@@ -101,36 +106,7 @@ impl Catalog {
             return Ok(());
         };
         for declared in &native.internals {
-            let matching: Vec<_> = self
-                .internals
-                .iter()
-                .filter(|entry| entry.path == declared.path && !entry.shape_only)
-                .collect();
-            if matching.is_empty() {
-                return Err(Error::Missing {
-                    mod_id: manifest.id.clone(),
-                    path: declared.path.clone(),
-                });
-            }
-            if matching
-                .iter()
-                .any(|entry| entry.cfg.is_empty() && entry.hash == declared.hash)
-            {
-                continue;
-            }
-            let Some(entry) = matching.into_iter().find(|entry| entry.cfg.is_empty()) else {
-                return Err(Error::Gated {
-                    mod_id: manifest.id.clone(),
-                    path: declared.path.clone(),
-                });
-            };
-            if entry.hash != declared.hash {
-                return Err(Error::Changed {
-                    mod_id: manifest.id.clone(),
-                    path: declared.path.clone(),
-                    signature: entry.signature.clone(),
-                });
-            }
+            internals::check(&self.internals, &manifest.id, declared)?;
         }
         for injection in inject::raw_of(manifest) {
             if !self.points.iter().any(|point| {

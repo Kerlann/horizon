@@ -88,6 +88,14 @@ fn center(f: &ItemFrame) -> [f64; 3] {
     let (lo, hi) = f.bounds();
     std::array::from_fn(|i| (lo[i] + hi[i]) / 2.0)
 }
+/// `HangingEntity.spawnAtLocation`: drops sit 0.15 out from the wall.
+pub(super) fn hanging_drop_position(center: [f64; 3], step: [i32; 3]) -> [f64; 3] {
+    [
+        center[0] + f64::from(step[0]) * 0.15,
+        center[1],
+        center[2] + f64::from(step[2]) * 0.15,
+    ]
+}
 impl Game<'_> {
     /// `ItemFrame.survives` (not fixed): no collision, a solid block behind
     /// (or a diode for wall frames), no overlapping hanging entity.
@@ -390,9 +398,8 @@ impl Game<'_> {
         if !self.ui.rules.bool("entity_drops") || (by_player && self.creative) {
             return;
         }
-        let s = f.step().map(f64::from);
         let c = center(f);
-        let at = [c[0] + s[0] * 0.15, c[1], c[2] + s[2] * 0.15];
+        let at = hanging_drop_position(c, f.step());
         let mut drops = Vec::new();
         if with_frame {
             // `ItemFrame.getFrameItemStackWithData` (glow frames share it).

@@ -20078,15 +20078,19 @@ impl Game<'_> {
                         );
                     }
                     self.clock.end_frame(self.pause);
-                    let mut consumed = false;
+                    let mut consumed = self.ui.screenshot_message.is_some();
                     let finished = self
                         .renderer
                         .as_mut()
-                        .and_then(|r| r.screenshot_result.take());
+                        .and_then(|r| r.screenshot_result.take())
+                        .and_then(|result| match result {
+                            Ok(pending) => self.save_screenshot(pending),
+                            Err(error) => Some(Err(error)),
+                        });
                     if let Some(result) = &finished
                         && self.ui.screenshot_message.is_some()
                     {
-                        self.finish_screenshot(result);
+                        self.finish_screenshot(result, None);
                         consumed = true;
                     }
                     if let Some(result) = &finished

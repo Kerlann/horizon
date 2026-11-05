@@ -111,6 +111,8 @@ pub use config_files::{
 };
 mod tooltip_element;
 pub use tooltip_element::{TooltipElement, TooltipImage, TooltipPlace};
+mod screenshot;
+pub use screenshot::ScreenshotImage;
 mod file_to_id_converter;
 pub use file_to_id_converter::{FileToIdConverter, FileToIdConverterError};
 mod client_reload;

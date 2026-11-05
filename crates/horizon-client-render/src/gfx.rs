@@ -203,6 +203,8 @@ pub mod panorama;
 mod readback;
 mod resident;
 mod reuse;
+mod screenshot;
+pub use screenshot::PendingScreenshot;
 mod stars;
 pub mod submit;
 mod sunrise_fan;
@@ -1440,8 +1442,8 @@ pub struct Renderer {
     started: Instant,
     /// The next frame to write to a PNG path (control socket, F2, world icon).
     pub screenshot: Option<ScreenshotRequest>,
-    /// Outcome of the last screenshot: frame size, or the error.
-    pub screenshot_result: Option<std::result::Result<[u32; 2], String>>,
+    /// Readback outcome: CPU pixels for the game to approve before writing, or an error.
+    pub screenshot_result: Option<std::result::Result<PendingScreenshot, String>>,
     /// Screenshot Quality (Horizon setting): a `scaled` screenshot's frame is this many
     /// times the game's resolution (1, 2, 4 or 8).
     pub screenshot_quality: u32,
@@ -10666,18 +10668,8 @@ impl Renderer {
                 self.screenshot = Some(request);
             } else {
                 self.screenshot_halvings = 0;
-                if let Some(hdr_buffer) = hdr_readback {
-                    let hdr_path = hdr_screenshot_path(&request.path);
-                    match self.write_hdr_screenshot(&hdr_path, &hdr_buffer) {
-                        Ok(()) => log::info!("Saved HDR screenshot to {}", hdr_path.display()),
-                        Err(e) => log::warn!(
-                            "Horizon renderer: HDR screenshot {}: {e}",
-                            hdr_path.display()
-                        ),
-                    }
-                }
                 self.screenshot_result = Some(
-                    self.write_screenshot(&request, &buffer)
+                    self.read_screenshot(&request, &buffer, hdr_readback.as_ref())
                         .map_err(|e| e.to_string()),
                 );
             }
@@ -11239,11 +11231,12 @@ impl Renderer {
         buffer.unmap();
         Ok(pixels)
     }
-    fn write_screenshot(
+    fn read_screenshot(
         &self,
         request: &ScreenshotRequest,
         buffer: &wgpu::Buffer,
-    ) -> Result<[u32; 2]> {
+        hdr_buffer: Option<&wgpu::Buffer>,
+    ) -> Result<PendingScreenshot> {
         let bgra = matches!(
             self.config.format.remove_srgb_suffix(),
             wgpu::TextureFormat::Bgra8Unorm
@@ -11263,41 +11256,25 @@ impl Renderer {
             ),
             None => (self.config.width, self.config.height, pixels),
         };
-        let mut encoder = png::Encoder::new(
-            std::io::BufWriter::new(std::fs::File::create(&request.path)?),
-            width,
-            height,
-        );
-        encoder.set_color(png::ColorType::Rgba);
-        encoder.set_depth(png::BitDepth::Eight);
-        encoder.write_header()?.write_image_data(&pixels)?;
-        Ok([width, height])
-    }
-    /// The HDR10 copy (`Hdr::capture`) as a 16-bit PNG tagged BT.2020 with PQ (cICP, PNG's
-    /// third edition), with the peak and paper white as its content light levels (cLLI), and
-    /// an ICC profile for the programs that don't read cICP (`hdr_icc`).
-    fn write_hdr_screenshot(&self, path: &std::path::Path, buffer: &wgpu::Buffer) -> Result<()> {
-        let Some(hdr) = &self.hdr else {
-            return Ok(());
-        };
-        let pixels = hdr10_to_rgb16(&self.read_frame(buffer)?);
-        let mut info = png::Info::with_size(self.config.width, self.config.height);
-        info.color_type = png::ColorType::Rgb;
-        info.bit_depth = png::BitDepth::Sixteen;
-        info.icc_profile = Some(hdr_icc::profile().into());
-        let encoder =
-            png::Encoder::with_info(std::io::BufWriter::new(std::fs::File::create(path)?), info)?;
-        let mut writer = encoder.write_header()?;
-        // BT.2020 primaries, PQ, RGB, full range.
-        writer.write_chunk(png::chunk::cICP, &[9, 16, 0, 1])?;
-        let nits = |n: f32| ((n * 10_000.0) as u32).to_be_bytes();
-        let peak = hdr.peak.max(hdr.paper_white);
-        writer.write_chunk(
-            png::chunk::cLLI,
-            &[nits(peak), nits(hdr.paper_white.min(peak))].concat(),
-        )?;
-        writer.write_image_data(&pixels)?;
-        Ok(())
+        let hdr = hdr_buffer.zip(self.hdr.as_ref()).and_then(|(buffer, hdr)| {
+            match self.read_frame(buffer) {
+                Ok(pixels) => Some(screenshot::HdrScreenshot {
+                    size: [self.config.width, self.config.height],
+                    pixels: hdr10_to_rgb16(&pixels),
+                    peak: hdr.peak,
+                    paper_white: hdr.paper_white,
+                }),
+                Err(e) => {
+                    log::warn!("Horizon renderer: HDR screenshot readback: {e}");
+                    None
+                }
+            }
+        });
+        Ok(PendingScreenshot {
+            path: request.path.clone(),
+            image: mod_api::ScreenshotImage::new(width, height, pixels),
+            hdr,
+        })
     }
 }
 /// `screenshots/2026-10-28_12.00.00.png` -> `screenshots/2026-10-28_12.00.00-hdr.png`.

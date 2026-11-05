@@ -7,7 +7,7 @@ use super::native_entity_refs::tests::with_game;
 use horizon_client::mobs::{Damage, DamageKind, Mob};
 use horizon_core::{geometry::Vec3, random::RandomSource};
 use mod_api::{
-    self, Hooks, LevelRandomHost, LivingDamagePostEvent, LivingDamagePreEvent,
+    self, Hooks, HurtSource, LevelRandomHost, LivingDamagePostEvent, LivingDamagePreEvent,
     LivingIncomingDamageEvent, Reduction,
 };
 use std::sync::{Arc, Mutex};
@@ -18,7 +18,27 @@ use std::sync::{Arc, Mutex};
 struct Heard {
     pre: Vec<(i32, f32, f32, f32)>,
     post: Vec<(i32, f32)>,
+    sources: Vec<HitSource>,
     side_effects: Vec<(i32, bool)>,
+}
+
+#[derive(Debug, PartialEq)]
+struct HitSource {
+    phase: &'static str,
+    entity: i32,
+    causing: i32,
+    direct: i32,
+}
+
+impl Heard {
+    fn source(&mut self, phase: &'static str, entity: i32, source: &HurtSource<'_>) {
+        self.sources.push(HitSource {
+            phase,
+            entity,
+            causing: source.causing,
+            direct: source.direct,
+        });
+    }
 }
 
 /// The test mod: 225001's incoming hit becomes 4, Pre sets 225003's and 225008's damage to 2,
@@ -32,6 +52,10 @@ impl Hooks for Probe {
         _: &mut dyn LevelRandomHost,
         event: &mut LivingIncomingDamageEvent<'_>,
     ) -> mod_api::Flow {
+        self.0
+            .lock()
+            .unwrap()
+            .source("incoming", event.entity, event.source);
         if event.entity == 225001 {
             event.container.set_new_damage(4.0);
         }
@@ -55,7 +79,9 @@ impl Hooks for Probe {
             container.new_damage(),
             container.reduction(Reduction::Armor),
         );
-        self.0.lock().unwrap().pre.push(heard);
+        let mut log = self.0.lock().unwrap();
+        log.pre.push(heard);
+        log.source("pre", event.entity, event.source);
     }
     fn living_damage_post(
         &self,
@@ -65,6 +91,7 @@ impl Hooks for Probe {
         let heard = (event.entity, event.container.health_damage());
         let mut log = self.0.lock().unwrap();
         log.post.push(heard);
+        log.source("post", event.entity, event.source);
         log.side_effects
             .push((event.entity, event.container.should_cause_side_effects()));
     }
@@ -214,4 +241,71 @@ fn a_game_built_level_has_every_damage_hook() {
         assert!(hooks.incoming.is_some() && hooks.pre.is_some() && hooks.post.is_some());
         assert!(hooks.knockback.is_some() && hooks.totem.is_some() && hooks.shield.is_some());
     });
+}
+
+/// The real projectile hit routes (not hand-built HurtSources) preserve the direct
+/// entity through incoming, pre and post, independently of whether there is a shooter.
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn arrow_hits_name_the_projectile_on_players_mobs_and_the_dragon() {
+    use horizon_client::command::args::GameMode;
+    use horizon_client::health::NO_ATTACK;
+    use horizon_client::mobs::Who;
+    use horizon_client::motion::PlayerMotion;
+    use horizon_client::projectiles::{Hit, Projectile, ProjectileKind};
+
+    for (target, owner, entity, causing) in [
+        (Who::Player, Some(Who::Mob(42)), 7, 42),
+        (Who::Player, None, 7, 0),
+        (Who::Mob(43), Some(Who::Player), 43, 7),
+        (Who::Mob(43), None, 43, 0),
+        (Who::Mob(SPECIAL), Some(Who::Player), 44, 7),
+    ] {
+        let heard = heard(|game| {
+            let mut player = PlayerMotion::new(game.motion, Vec3::ZERO).unwrap();
+            player.entity_id = 7;
+            game.player = Some(player);
+            game.set_game_mode(GameMode::Survival);
+            game.mobs.push(mob(game, 42, "minecraft:skeleton"));
+            game.mobs.push(mob(game, 43, "minecraft:pig"));
+            let mut dragon = Dragon::new(Vec3::ZERO, 0.0, 0);
+            dragon.id = 44;
+            game.dragon = Some(dragon);
+            let mut arrow = Projectile::new(
+                ProjectileKind::Arrow {
+                    base_damage: 2.0,
+                    critical: false,
+                    effect: None,
+                },
+                Vec3::new(0.0, 1.0, 0.5),
+                owner,
+            );
+            arrow.id = 912;
+            arrow.velocity = Vec3::new(0.0, 0.0, -2.0);
+            game.projectile_hit(
+                &arrow,
+                Hit::Entity {
+                    who: target,
+                    at: Vec3::ZERO,
+                },
+            )
+            .unwrap();
+            assert_eq!(game.current_attack(), NO_ATTACK, "projectile scope leaked");
+            match target {
+                Who::Player => assert!(game.player.as_ref().unwrap().health.health() < 20.0),
+                Who::Mob(SPECIAL) => assert!(game.dragon.as_ref().unwrap().health < 200.0),
+                Who::Mob(_) => assert!(game.mobs[1].health < 10.0),
+            }
+        });
+        let expected = ["incoming", "pre", "post"].map(|phase| HitSource {
+            phase,
+            entity,
+            causing,
+            direct: 912,
+        });
+        assert_eq!(
+            heard.sources, expected,
+            "target {target:?}, owner {owner:?}"
+        );
+    }
 }

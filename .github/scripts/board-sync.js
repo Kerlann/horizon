@@ -16,7 +16,8 @@ module.exports = async ({ github, context, core }) => {
   const q = async (query, vars = {}) => {
     for (let i = 0; ; i++) {
       try { return await github.graphql(query, vars); }
-      catch (e) { if (i >= 4 || !/50[234]|timeout/i.test(String(e.status || e.message))) throw e; await new Promise(r => setTimeout(r, 5000 * (i + 1))); }
+      // GraphQL also answers "Something went wrong while executing your query" (no status) on heavy pages.
+      catch (e) { if (i >= 4 || !/50[234]|timeout|something went wrong/i.test(`${e.status} ${e.message}`)) throw e; await new Promise(r => setTimeout(r, 5000 * (i + 1))); }
     }
   };
 
@@ -31,7 +32,7 @@ module.exports = async ({ github, context, core }) => {
   // Board items, keyed by content node id.
   const items = new Map();
   for (let after = null; ;) {
-    const page = (await q(`query($id:ID!,$a:String){node(id:$id){... on ProjectV2{items(first:100,after:$a){
+    const page = (await q(`query($id:ID!,$a:String){node(id:$id){... on ProjectV2{items(first:50,after:$a){
       pageInfo{hasNextPage endCursor}
       nodes{id content{... on Issue{id} ... on PullRequest{id}}
         s:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}

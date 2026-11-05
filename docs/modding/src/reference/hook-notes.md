@@ -449,7 +449,9 @@ requires a farmer at work and `mob_griefing` enabled.
   route, with the hit's level host (its blocks, random and own attachments), the hurt entity's id and type
   (`minecraft:player` for a player), the hit's source (`HurtSource`: the damage type, `minecraft:fall`; the causing
   entity, `causing`, vanilla's `DamageSource.getEntity`: a skeleton for its arrow; the direct entity, `direct`,
-  `getDirectEntity`: the arrow, the attacker itself in melee; and `position`, `getSourcePosition`), the `victim`'s
+  `getDirectEntity`: the projectile's entity id when the damage type names one, for hits on players, mobs and
+  the ender dragon, including an ownerless projectile, or the attacker itself in melee; `magic()` and any other
+  source with no direct entity stay 0 even during that projectile's impact; and `position`, `getSourcePosition`), the `victim`'s
   position and view vector, the direct entity's `weapon` (`getWeaponItem`) when Horizon knows it (a player's or mob's
   melee hit inside its attack), and the hit's `DamageContainer` before any reduction. The entity ids are 0 for none,
   and for the sources listed below that Horizon doesn't track yet. A mod may change the container's new damage or the
@@ -489,15 +491,16 @@ the hit, which doesn't tell every vanilla type apart yet:
 
 The causing and direct entities are 0 for now in these cases:
 
-- A player's direct entity, always
+- A player's direct entity outside a projectile hit, and `magic()` dealt during one (an ownerless wither
+  skull, instant harm from a tipped arrow): vanilla's source names no entity
 - A player's causing entity, except for a mob that shot the projectile, the mob `/damage` names, an evoker that summoned
   the fangs, a slime or magma cube that touched the player, and a mob that exploded (a sulfur cube's is guessed until
   its blast names its source)
-- A mob's causing and direct entities when a player is behind the hit outside the player's own attack (arrows,
-  tridents, blasts, TNT a player lit)
-- A mob's direct entity when it isn't the causing one (a projectile, a blast, a potion)
+- A mob's causing and direct entities when a player is behind a hit outside a scoped attack (for example TNT
+  a player lit); a projectile's hit does run inside its owner's attack
+- A mob's direct entity when it isn't the causing one outside a projectile hit (for example a TNT blast)
 - A falling block on a mob, whose causing and direct entity is the block in vanilla
-- The dragon's direct entity for a projectile or a blast
+- The dragon's direct entity for a blast
 - The dragon's causing player when it isn't the acting one on a LAN guest's turn
 - `/damage` on a mob `by` an entity with a damage type that isn't melee: the direct entity is 0, not that entity
 
@@ -862,6 +865,37 @@ there is no per-particle code hook.
   is behind it. Its fluid layer and block entity are hidden too; light, collision and the server are untouched. It is
   asked once per state when the client joins a world and again when a mod calls `refresh_render_visibility()`, which
   remeshes the loaded terrain. Attach it to vanilla blocks with `block_part_tag`. With no part answering, meshing is unchanged.
+
+### Screenshots
+
+`Hooks::screenshot` is the client-thread counterpart of NeoForge 26.3's
+`ScreenshotEvent`. It runs with a `ClientHost` after F2's GPU readback and before
+any file is written. `event.image` is the in-memory frame (`getImage`): RGBA8,
+top to bottom, `width * height * 4` bytes. Change the pixels, or replace the
+image, and the normal PNG is that image. A buffer whose length is not
+`width * height * 4` writes neither file and shows the translated screenshot
+failure line. The HDR copy is not this image; it stays the read-back frame.
+
+Return `Flow::Cancel` to write neither the normal PNG nor its HDR companion.
+The chat then shows `event.message` when it is set, and otherwise the translated
+cancellation line (`screenshot.failure` with `horizon.screenshot.canceled`).
+
+Change `event.file_name` to a relative path under the player's `screenshots/`
+folder (for example `album/view.png`). Missing parent folders are created.
+Absolute paths, empty, `.` or `..` components, backslashes, drive prefixes, NUL
+and symbolic links, including the HDR destination, are refused with the normal
+translated screenshot failure line. The player may make the screenshots folder
+itself a symlink. As with other local file operations, this does not isolate a
+native mod or defend against a concurrent external filesystem replacement.
+
+`event.message` starts as `None`: after a successful save the game builds the
+normal translated, clickable success line using the final file name. Set it to
+`Some(Text)` to replace that success line. Save errors always show the failure,
+not a listener's success message. A no-op listener preserves ordinary saving.
+With HDR enabled the existing tagged 16-bit copy follows the chosen name as
+`<stem>-hdr.png`; its encoding and best-effort error handling are unchanged.
+The hook does not intercept control-socket captures or automatic world icons.
+It adds no tick work; dispatch runs only when an F2 image has been read back.
 
 ### Server data reload listeners
 
