@@ -580,6 +580,7 @@ impl Game<'_> {
             .collect();
         // A mod with a native version built in says so instead.
         self.list_native_mods();
+        self.sync_native_switches();
         let built = self.mods.native.built();
         let built_mods = native_mods_detail(built);
         if let Some(list) = built_mods {
@@ -590,6 +591,14 @@ impl Game<'_> {
         let unbuilt = not_built(&native_dir, built, &self.settings.mods.installed);
         self.settings.mods.installed.extend(unbuilt);
         self.mods.report_refusals(&mut self.settings.mods.installed);
+    }
+
+    /// Trait mods follow the player's switches from the next canonical dispatch.
+    /// Registration stays intact; native injections check `native_on` themselves.
+    pub(super) fn sync_native_switches(&self) {
+        for id in mod_api::__private::loaded_mods().ids() {
+            mod_api::__private::set_mod_on(id, !self.settings.mods.disabled.contains(id));
+        }
     }
 }
 

@@ -113,7 +113,7 @@ pub fn installable<'a>(index: &Index, p: &'a Project) -> Option<&'a Version> {
 /// mods this game installs, with the version installed in `home` when there is
 /// one.
 pub fn listings(index: &Index, home: &Path) -> Vec<Listing> {
-    let installed = Installed::load(home);
+    let installed = Installed::load(home).unwrap_or_default();
     let mut out: Vec<Listing> = index
         .projects
         .iter()
@@ -169,9 +169,29 @@ pub fn install(
         .ok_or_else(|| format!("{} has no version this game can install", p.name))?;
     let relative = format!("{}/{id}.hmod", crate::mod_list::DIR);
     let target = home.join(&relative);
-    let mut list = Installed::load(home);
+    // The launcher and game share the whole read/modify/write transaction, not
+    // just the final save: neither may commit a stale installed list.
+    let _lock = horizon_mods::install_lock::lock_home(home)
+        .map_err(|e| format!("cannot lock mod browser in {}: {e}", home.display()))?;
+    let mut list = Installed::load(home)?;
     let ours = list.position(id);
     let old_file = ours.and_then(|i| list.entries[i]["file"].as_str().map(str::to_owned));
+    // A project can change kind in the index. Never replace the launcher's
+    // native pin with a content entry, even if its installed file is missing.
+    if (ours.is_some() && old_file.as_deref() != Some(relative.as_str()))
+        || home
+            .join(crate::mod_list::NATIVE_DIR)
+            .join(format!("{id}.hmod"))
+            .exists()
+    {
+        return Err("Install code mods with the launcher, then restart the game".into());
+    }
+    if target.exists() && old_file.as_deref() == Some(relative.as_str()) {
+        let installed = horizon_mods::Package::read(&target)?;
+        if installed.manifest.native.is_some() || installed.manifest.wasm.is_some() {
+            return Err("Install code mods with the launcher, then restart the game".into());
+        }
+    }
     if let Some(i) = ours
         && list.entries[i]["version"].as_str() == Some(v.version.as_str())
         && target.exists()
@@ -270,13 +290,22 @@ struct Installed {
 }
 
 impl Installed {
-    fn load(home: &Path) -> Self {
-        let entries = fs::read_to_string(home.join(MANIFEST))
-            .ok()
-            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
-            .and_then(|v| v.get("entries")?.as_array().cloned())
-            .unwrap_or_default();
-        Self { entries }
+    fn load(home: &Path) -> Result<Self, String> {
+        let path = home.join(MANIFEST);
+        let text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self::default());
+            }
+            Err(error) => return Err(format!("{}: {error}", path.display())),
+        };
+        let value: serde_json::Value =
+            serde_json::from_str(&text).map_err(|error| format!("{}: {error}", path.display()))?;
+        let entries = value["entries"]
+            .as_array()
+            .ok_or_else(|| format!("{}: entries must be an array", path.display()))?
+            .clone();
+        Ok(Self { entries })
     }
 
     fn save(&self, home: &Path) -> Result<(), String> {

@@ -124,6 +124,154 @@ fn an_install_is_checked_then_recorded_as_the_launchers_own() {
 }
 
 #[test]
+fn install_holds_the_shared_lock_through_download_and_releases_it_on_error() {
+    let bytes = ruby("1.0");
+    let index = registry("1.0", &bytes, "file:///ruby.hmod");
+    let home = scratch("transaction-error");
+    let error = install(&index, &home, "ruby", &|_, _| {
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    assert!(horizon_mods::install_lock::try_lock_home(&home).is_none());
+                })
+                .join()
+                .unwrap();
+        });
+        Err("download failed".into())
+    })
+    .unwrap_err();
+    assert_eq!(error, "download failed");
+    assert!(!home.join(MANIFEST).exists());
+    assert!(!home.join("horizon-mods/ruby.hmod").exists());
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                let _guard = horizon_mods::install_lock::try_lock_home(&home).unwrap();
+            })
+            .join()
+            .unwrap();
+    });
+    fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn install_reads_the_manifest_after_the_other_installer_finishes() {
+    let bytes = ruby("1.0");
+    let index = registry("1.0", &bytes, "file:///ruby.hmod");
+    let home = scratch("transaction-read");
+    std::thread::scope(|scope| {
+        let guard = horizon_mods::install_lock::lock_home(&home).unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let target = &home;
+        let registry = &index;
+        let worker = scope.spawn(move || {
+            tx.send(()).unwrap();
+            install(registry, target, "ruby", &serve(bytes)).unwrap();
+        });
+        rx.recv().unwrap();
+        let mut installed = Installed::default();
+        installed.entries.push(serde_json::json!({
+            "source": "modrinth", "project": "pack", "file": "resourcepacks/pack.zip"
+        }));
+        installed.save(&home).unwrap();
+        drop(guard);
+        worker.join().unwrap();
+    });
+    let installed = Installed::load(&home).unwrap();
+    assert_eq!(installed.entries.len(), 2);
+    assert_eq!(installed.entries[0]["project"], "pack");
+    assert!(installed.position("ruby").is_some());
+    fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_lock_error_never_downloads_or_changes_installed_files() {
+    let bytes = ruby("1.0");
+    let index = registry("1.0", &bytes, "file:///ruby.hmod");
+    let home = scratch("lock-error");
+    fs::create_dir(home.join(".mod-browser.lock")).unwrap();
+    let error = install(&index, &home, "ruby", &|_, _| {
+        panic!("lock errors must refuse the operation before downloading")
+    })
+    .unwrap_err();
+    assert!(error.contains("cannot lock mod browser"), "{error}");
+    assert!(!home.join(MANIFEST).exists());
+    assert!(!home.join("horizon-mods").exists());
+    fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_native_pin_is_not_replaced_by_a_content_version_of_the_same_project() {
+    let bytes = ruby("1.1");
+    let index = registry("1.1", &bytes, "file:///ruby.hmod");
+    let home = scratch("native-pin");
+    // A missing native file is still the launcher's pin, not permission for
+    // the game to replace its metadata or switch its kind.
+    let entry = serde_json::json!({
+        "source": "horizon", "project": "ruby", "version": "1.0",
+        "file": "horizon-native-mods/ruby.hmod", "pin": "exact-build"
+    });
+    let manifest = serde_json::json!({ "entries": [entry] }).to_string();
+    fs::write(home.join(MANIFEST), &manifest).unwrap();
+    let error = install(&index, &home, "ruby", &|_, _| {
+        panic!("a native pin must be refused before download")
+    })
+    .unwrap_err();
+    assert!(error.contains("launcher"), "{error}");
+    assert_eq!(fs::read_to_string(home.join(MANIFEST)).unwrap(), manifest);
+    assert!(!home.join("horizon-mods/ruby.hmod").exists());
+    fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn an_unrecognized_managed_entry_is_not_replaced() {
+    let bytes = ruby("1.1");
+    let index = registry("1.1", &bytes, "file:///ruby.hmod");
+    let home = scratch("unknown-entry");
+    let manifest = serde_json::json!({ "entries": [{
+        "source": "horizon", "project": "ruby", "version": "1.0",
+        "pin": "exact-build"
+    }] })
+    .to_string();
+    fs::write(home.join(MANIFEST), &manifest).unwrap();
+    let error = install(&index, &home, "ruby", &|_, _| {
+        panic!("unknown managed metadata must be refused before download")
+    })
+    .unwrap_err();
+    assert!(error.contains("launcher"), "{error}");
+    assert_eq!(fs::read_to_string(home.join(MANIFEST)).unwrap(), manifest);
+    assert!(!home.join("horizon-mods/ruby.hmod").exists());
+    fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn an_unreadable_manifest_is_not_treated_as_an_empty_installation() {
+    let bytes = ruby("1.0");
+    let index = registry("1.0", &bytes, "file:///ruby.hmod");
+    let home = scratch("invalid-manifest");
+    for manifest in ["not json", r#"{"entries": {}}"#] {
+        fs::write(home.join(MANIFEST), manifest).unwrap();
+        let error = install(&index, &home, "ruby", &|_, _| {
+            panic!("an unreadable manifest must be refused before download")
+        })
+        .unwrap_err();
+        assert!(error.contains(MANIFEST), "{error}");
+        assert_eq!(fs::read_to_string(home.join(MANIFEST)).unwrap(), manifest);
+        assert!(!home.join("horizon-mods/ruby.hmod").exists());
+    }
+    fs::remove_file(home.join(MANIFEST)).unwrap();
+    fs::create_dir(home.join(MANIFEST)).unwrap();
+    let error = install(&index, &home, "ruby", &|_, _| {
+        panic!("a manifest read error must be refused before download")
+    })
+    .unwrap_err();
+    assert!(error.contains(MANIFEST), "{error}");
+    assert!(home.join(MANIFEST).is_dir());
+    assert!(!home.join("horizon-mods/ruby.hmod").exists());
+    fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
 fn bytes_other_than_the_index_lists_never_reach_the_mods_folder() {
     let bytes = ruby("1.0");
     let index = registry("1.0", &bytes, "file:///ruby.hmod");
