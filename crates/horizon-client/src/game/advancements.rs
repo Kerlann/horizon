@@ -2492,7 +2492,7 @@ mod tests {
             &settings,
             Instant::now(),
             false,
-            true,
+            crate::game::execution_role::ExecutionRole::IntegratedServer,
             &crate::game::Progress::new(),
             &mut |_, _| unreachable!(),
         )

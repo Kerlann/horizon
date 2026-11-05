@@ -4359,12 +4359,13 @@ impl Game<'_> {
         // The dragon's own random (`Entity.random`), not the level's.
         let seed = super::dispenser::entity_random().next_long();
         let mut dragon = Dragon::new(position, yaw, seed);
+        dragon.join = horizon_client::join_seq::JoinSeq::next();
         dragon.id = self.next_entity + 1;
         self.next_entity += 9;
         let id = dragon.id;
         self.dragon = Some(dragon);
         self.place_dragon_parts();
-        Some(id)
+        self.native_joins_flush(false, id).then_some(id)
     }
 
     /// `handleAddEntity` for `minecraft:ender_dragon`. Its constructor
@@ -4746,6 +4747,83 @@ fn push_seen_with_hurt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "needs prepared resources and an isolated process for native mods"]
+    fn a_spawn_egg_dragon_joins_once_and_a_canceled_spawn_fails() {
+        use mod_api::{EntityJoinLevelEvent, Flow, Hooks, ModEntry, ServerHost};
+        use std::sync::{
+            Arc, Mutex,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        struct Observer {
+            joins: Arc<Mutex<Vec<(u32, bool)>>>,
+            cancel: Arc<AtomicBool>,
+        }
+        #[mod_api::__subscriptions]
+        impl Hooks for Observer {
+            fn entity_join_level(
+                &self,
+                _: &mut dyn ServerHost,
+                event: &mut EntityJoinLevelEvent<'_>,
+            ) -> Flow {
+                if event.kind != "minecraft:ender_dragon" {
+                    return Flow::Continue;
+                }
+                self.joins
+                    .lock()
+                    .unwrap()
+                    .push((event.entity, event.loaded_from_disk));
+                if self.cancel.load(Ordering::Relaxed) {
+                    Flow::Cancel
+                } else {
+                    Flow::Continue
+                }
+            }
+        }
+        let joins = Arc::new(Mutex::new(Vec::new()));
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mods: mod_api::Mods = vec![ModEntry::new(
+            "dragon-joins",
+            Box::new(Observer {
+                joins: joins.clone(),
+                cancel: cancel.clone(),
+            }),
+        )]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                game.dragon = None;
+                game.native_joins_skip();
+                let at = [4.5, 200.0, 4.5];
+                let id = game
+                    .spawn_mob_spawned(
+                        "minecraft:ender_dragon",
+                        at,
+                        super::super::creatures::SpawnSite::Finalizing(
+                            horizon_client::mobs::spawn_rules::Reason::SpawnItemUse,
+                        ),
+                    )
+                    .unwrap();
+                assert_eq!(game.dragon.as_ref().unwrap().id, id);
+                assert_eq!(*joins.lock().unwrap(), vec![(id, false)]);
+                game.native_joins_flush(false, 0);
+                assert_eq!(joins.lock().unwrap().len(), 1, "a join is told only once");
+                assert!(game.spawn_dragon_spawned(at).is_none());
+                assert_eq!(joins.lock().unwrap().len(), 1, "no second dragon joins");
+
+                game.dragon = None;
+                cancel.store(true, Ordering::Relaxed);
+                // The dispenser calls the shared constructor directly.
+                assert!(game.spawn_dragon_spawned(at).is_none());
+                assert!(game.dragon.is_none(), "a refused dragon never stays loaded");
+                game.native_joins_flush(false, 0);
+                assert_eq!(*joins.lock().unwrap(), vec![(id, false), (id + 9, false)]);
+            });
+        });
+    }
+
     #[test]
     fn a_dragon_save_keeps_equipment_only_while_something_is_equipped() {
         use horizon_client::items::ItemStack;
