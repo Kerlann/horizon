@@ -106,8 +106,8 @@ pub struct Extras {
     pub splitscreen_three: u8,
     /// Splitscreen: each player's name in the corner of their view (`splitscreenNames`).
     pub splitscreen_names: bool,
-    /// The wheel over a cycle button in the settings changes it (`CycleButton.mouseScrolled`,
-    /// on by default as vanilla); off, the wheel only scrolls the list.
+    /// The wheel over a cycle button in a settings list changes it (`CycleButton.mouseScrolled`,
+    /// off by default); off, the wheel only scrolls the list, as vanilla's does.
     pub wheel_cycles_settings: bool,
     /// The built-in music tracks the Music page turned off (sound ids): they
     /// leave every pool they play in (`musicOff`, empty by default: vanilla's
@@ -168,7 +168,7 @@ impl Default for Extras {
             splitscreen_two: 0,
             splitscreen_three: 0,
             splitscreen_names: true,
-            wheel_cycles_settings: true,
+            wheel_cycles_settings: false,
             music_off: Vec::new(),
             music_page: false,
             three_d_skin_layers: false,
@@ -260,7 +260,11 @@ impl Extras {
                 "splitscreenTwo" => e.splitscreen_two = value.parse().unwrap_or(0).min(2),
                 "splitscreenThree" => e.splitscreen_three = value.parse().unwrap_or(0).min(2),
                 "splitscreenNames" => e.splitscreen_names = flag(e.splitscreen_names),
-                "wheelCyclesSettings" => e.wheel_cycles_settings = flag(e.wheel_cycles_settings),
+                // A new name: `wheelCyclesSettings` was written as true by every
+                // install while it was the default, so it says nothing of a choice.
+                "wheelCyclesListSettings" => {
+                    e.wheel_cycles_settings = flag(e.wheel_cycles_settings)
+                }
                 "musicOff" => {
                     e.music_off = value
                         .split(',')
@@ -280,7 +284,7 @@ impl Extras {
     }
     pub fn serialize(&self) -> String {
         let mut text = format!(
-            "packBrowser:{}\npregen:{}\nfullbright:{}\ndynamicLights:{}\nzoom:{}\nzoomKey:{}\nzoomLevel:{}\nzoomSmooth:{}\nzoomSensitivity:{}\nlodZoomDetail:{}\nfps:{}\nfpsCorner:{}\nfpsLows:{}\nkeystrokes:{}\nkeystrokesCorner:{}\nkeystrokesCps:{}\nmovedToMods:{}\nminimap:{}\nminimapCorner:{}\nminimapSize:{}\nminimapShape:{}\nminimapZoom:{}\nminimapRotate:{}\nautoReconnect:{}\nuiSoundReserve:{}\nownNameTag:{}\nhideBlockParticles:{}\nmouseTweaks:{}\nmouseTweaksWheel:{}\nsort:{}\nsortKey:{}\nchatAnimation:{}\nchatIndicator:{}\n{}:{}\nagentControl:{}\nreproKeys:{}\ndiscordPresence:{}\nsplitscreen:{}\nsplitscreenTwo:{}\nsplitscreenThree:{}\nsplitscreenNames:{}\nwheelCyclesSettings:{}\nmusicOff:{}\nmusicPage:{}\n{}:{}\n",
+            "packBrowser:{}\npregen:{}\nfullbright:{}\ndynamicLights:{}\nzoom:{}\nzoomKey:{}\nzoomLevel:{}\nzoomSmooth:{}\nzoomSensitivity:{}\nlodZoomDetail:{}\nfps:{}\nfpsCorner:{}\nfpsLows:{}\nkeystrokes:{}\nkeystrokesCorner:{}\nkeystrokesCps:{}\nmovedToMods:{}\nminimap:{}\nminimapCorner:{}\nminimapSize:{}\nminimapShape:{}\nminimapZoom:{}\nminimapRotate:{}\nautoReconnect:{}\nuiSoundReserve:{}\nownNameTag:{}\nhideBlockParticles:{}\nmouseTweaks:{}\nmouseTweaksWheel:{}\nsort:{}\nsortKey:{}\nchatAnimation:{}\nchatIndicator:{}\n{}:{}\nagentControl:{}\nreproKeys:{}\ndiscordPresence:{}\nsplitscreen:{}\nsplitscreenTwo:{}\nsplitscreenThree:{}\nsplitscreenNames:{}\nwheelCyclesListSettings:{}\nmusicOff:{}\nmusicPage:{}\n{}:{}\n",
             bool_text(self.pack_browser),
             bool_text(self.pregen),
             bool_text(self.fullbright),
@@ -582,7 +586,7 @@ impl Item {
             Item::Splitscreen => "horizon.extras.splitscreen.tooltip",
             Item::ChatAnimation => "horizon.extras.chat_animation.tooltip",
             Item::ChatIndicator => "horizon.extras.chat_indicator.tooltip",
-            Item::WheelCyclesSettings => "horizon.extras.wheel_cycles_settings.tooltip",
+            Item::WheelCyclesSettings => "horizon.extras.wheel_cycles_list_settings.tooltip",
             Item::PackBrowser => "horizon.extras.pack_browser.tooltip",
             Item::Pregen => "horizon.extras.pregen.tooltip",
             Item::Pvp(o) => o.description_key(),
@@ -804,6 +808,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_saved_wheel_setting_from_before_the_default_changed_is_dropped() {
+        assert!(!Extras::parse("wheelCyclesSettings:true\n").wheel_cycles_settings);
+        let on = Extras {
+            wheel_cycles_settings: true,
+            ..Extras::default()
+        };
+        assert!(Extras::parse(&on.serialize()).wheel_cycles_settings);
+    }
+
+    #[test]
     fn everything_is_off_by_default_and_round_trips() {
         let d = Extras::default();
         assert!(!d.fullbright && !d.dynamic_lights);
@@ -811,7 +825,7 @@ mod tests {
         assert!(!d.mouse_tweaks && !d.sort && !d.own_name_tag && !d.ui_sound_reserve);
         assert!(!d.hide_block_particles && !d.pregen);
         assert!(!d.music_page && d.music_off.is_empty());
-        assert!(d.discord_presence && d.wheel_cycles_settings);
+        assert!(d.discord_presence && !d.wheel_cycles_settings);
         assert_eq!(Extras::parse(""), d);
         assert_eq!(Extras::parse(&d.serialize()), d);
         let mut e = d.clone();
@@ -855,7 +869,7 @@ mod tests {
         Item::Splitscreen.cycle(&mut e, false);
         assert_eq!(Item::Splitscreen.switch(&e), Some(true));
         Item::WheelCyclesSettings.cycle(&mut e, false);
-        assert_eq!(Item::WheelCyclesSettings.switch(&e), Some(false));
+        assert_eq!(Item::WheelCyclesSettings.switch(&e), Some(true));
         e.music_off = vec![
             "minecraft:music/game/calm1".into(),
             "minecraft:music.menu".into(),
