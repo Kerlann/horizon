@@ -801,6 +801,12 @@ impl Game<'_> {
             items: items.iter().map(|s| host.hub.stack(s)).collect(),
             carried: host.hub.stack(&carried),
         });
+        let anvil_cost = (gs.kind == StationKind::Anvil).then(|| {
+            C::CustomPayload(horizon_protocol::packets::configuration::CustomPayload {
+                channel: horizon_protocol::anvil_cost::CHANNEL.into(),
+                data: horizon_protocol::anvil_cost::encode(gs.window, gs.menu.data[0]),
+            })
+        });
         gs.sent_data.resize(gs.menu.data.len(), i32::MIN);
         let mut data = Vec::new();
         for (k, &v) in gs.menu.data.iter().enumerate() {
@@ -816,6 +822,11 @@ impl Game<'_> {
         host.hub.send_to(conn, &packet);
         host.hub.guests[gi].inventory_told();
         for packet in data {
+            host.hub.send_to(conn, &packet);
+        }
+        // The vanilla data slot is a short; send the full answer after it so
+        // it cannot overwrite the authoritative signed cost on Horizon clients.
+        if let Some(packet) = anvil_cost {
             host.hub.send_to(conn, &packet);
         }
     }

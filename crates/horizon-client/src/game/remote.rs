@@ -3254,6 +3254,15 @@ impl Game<'_> {
             C::CustomPayload(p) if p.channel == horizon_protocol::attachment_sync::CHANNEL => {
                 self.remote_attachment_sync(&p.data);
             }
+            C::CustomPayload(p) if p.channel == horizon_protocol::anvil_cost::CHANNEL => {
+                if let Ok((window, cost)) = horizon_protocol::anvil_cost::decode(&p.data)
+                    && self.remote_station_open(window)
+                    && let Some(station) = self.station.as_mut()
+                    && station.kind == super::stations::Kind::Anvil
+                {
+                    station.anvil.cost = cost;
+                }
+            }
             // A mod menu type's block and its mod's bytes, just before the
             // menu's `OpenScreen`.
             C::CustomPayload(p) if p.channel == horizon_protocol::menu_extra::CHANNEL => {
