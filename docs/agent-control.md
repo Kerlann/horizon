@@ -106,7 +106,7 @@ passes on without checking it).
 | Updates: check and install | Settings | yes | part | yes | yes | MCP could only check |
 | Patch notes, links | Patch notes, footer | yes | yes | yes | yes | |
 | Game log, crash reports | Settings | yes | yes | yes | yes | `logs [--crash]` |
-| Data collection: status, allow, deny, show, delete, send, bug, benchmark upload | Settings > Data | yes | part | yes | yes | sending was missing in MCP; `data_delete` needs `confirm` |
+| Local bug report | (none) | yes | yes | yes | yes | `bug-report` writes a file; nothing is sent |
 | Mod browser: search, check, install, update, remove, list (mods, resource packs, modpacks) | Mods | yes | no | yes | yes | `mods ...`; `mods_remove` needs `confirm` |
 | Modpacks: import, port, play, remove, list | Modpacks | yes | no | yes | yes | `modpack ...`; `modpack_remove` needs `confirm` |
 | Launcher benchmark | (none) | yes | no | yes | yes | |
@@ -254,14 +254,14 @@ turn the switch off.
 - **Confirm what can't be undone.** A command that deletes the player's things requires
   `confirm` and carries the MCP `destructiveHint`. In the game these are `world-delete`, `fill`
   and `setblock` (the table's `DESTRUCTIVE`); in the launcher, `remove`, `modpack remove`,
-  `mods remove`, `servers forget`, `account sign-out` and `data delete` (`cli_tools::DESTRUCTIVE`).
+  `mods remove`, `servers forget` and `account sign-out` (`cli_tools::DESTRUCTIVE`).
   Without `confirm: true` the call is refused and the message says to ask the player. In the game
   CLI the flag is `--confirm`. The launcher CLI asks nothing: a person typing `remove` meant it.
 - **Ask before reaching out.** A command that sends data or reaches other people carries
   `openWorldHint`, and its description says "only when the player asks". In the game these are
-  `connect`, `lan`, `friends`, `chat` and `command`; in the launcher, `data allow`, `data send`,
-  `data bug`, `data benchmark` and `servers create`. `play`'s `join` argument says the same.
-  Telemetry stays opt-in, and only `data allow` turns it on.
+  `connect`, `lan`, `friends`, `chat` and `command`; in the launcher, `servers create` and
+  `share-log`. `play`'s `join` argument says the same. Bug and benchmark reports stay local;
+  there is no telemetry or data collection switch ([Horizon sends nothing](telemetry.md)).
 - **No secrets.** No surface returns tokens, session files, keychain entries or invite secrets
   the player didn't ask to share:
   - accounts are names and UUIDs;

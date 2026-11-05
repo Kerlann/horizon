@@ -136,8 +136,8 @@ jobs:
     timeout-minutes: ${{ matrix.mac && 60 || 40 }}
     env:
       RUSTFLAGS: ${{ matrix.rustflags }}
-      # The release's version, built in (horizon_core::release): --version, user agents, crash reports and
-      # telemetry say it. No version-bump commits.
+      # The release's version, built in (horizon_core::release): --version, user agents and crash reports
+      # say it. No version-bump commits.
       HORIZON_VERSION: ${{ inputs.version }}
       # A nightly's date and commit ("2026-10-28 0c02067"), which the game shows; empty for a release.
       HORIZON_NIGHTLY: ${{ inputs.nightly }}
