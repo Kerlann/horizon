@@ -799,10 +799,10 @@ enum Cmd {
         /// You read the mods' source and trust it with full access to this computer
         #[arg(long)]
         trust_native_code: bool,
-        /// The build profile: performance (the default: incremental, quick to rebuild), dev (quickest
-        /// to rebuild a mod, slow game) or release (thin LTO: slowest to build, slightly faster
-        /// game). Default: the native-profile setting
-        #[arg(long, value_parser = ["performance", "dev", "release"])]
+        /// The build mode: optimized (the default: the prebuilt game when the mods allow it, else
+        /// the game built with the release profile), balanced (built here, quicker to rebuild) or
+        /// developer (quickest to rebuild a mod, slow game). Default: the native-profile setting
+        #[arg(long, value_parser = ["optimized", "balanced", "developer"])]
         profile: Option<String>,
     },
     /// Show a release's patch notes (default: the newest)
@@ -825,9 +825,9 @@ enum Cmd {
     /// violet|blue|teal|green|amber|red|pink|#rrggbb|DEGREES (a named accent, any colour, or any
     /// hue), background PATH (a picture behind Home; "default"
     /// shows Horizon's landscape), native-cache-gib N (combined native compilation cache limit
-    /// in GiB, default 30; 0 disables automatic cleanup), native-profile performance|dev|release (the profile native
-    /// mods build with: performance is incremental, dev rebuilds a mod quickest for a slow game,
-    /// release is slowest to build and slightly faster to play)
+    /// in GiB, default 30; 0 disables automatic cleanup), native-profile optimized|balanced|developer (the build mode native
+    /// mods use: optimized uses the prebuilt game when it can, balanced builds here and rebuilds
+    /// quicker, developer rebuilds a mod quickest for a slow game)
     Settings {
         #[arg(value_parser = SETTING_KEYS)]
         key: Option<String>,
@@ -1082,12 +1082,12 @@ fn set_setting(s: &mut backend::Settings, key: &str, value: &str) -> Result<(), 
             };
         }
         "native-profile" => {
-            // "default", as for the other settings, goes back to `performance`.
+            // "default", as for the other settings, goes back to `optimized`.
             s.native_profile = match value {
                 "default" => None,
                 _ => Some(
                     native_mods::Profile::parse(value)
-                        .ok_or_else(|| format!("{value}: say performance, dev or release"))?,
+                        .ok_or_else(|| format!("{value}: say optimized, balanced or developer"))?,
                 ),
             };
         }
@@ -1184,7 +1184,8 @@ fn json(value: serde_json::Value) {
 }
 
 /// Runs a game process in this terminal and reports how it ended.
-fn attached(mut cmd: Command) -> Result<(), String> {
+fn attached(cmd: Command) -> Result<(), String> {
+    let (mut cmd, _runtime) = backend::prepare_command(cmd)?;
     let status = cmd
         .status()
         .map_err(|e| format!("Could not start {:?}: {e}", cmd.get_program()))?;
@@ -2267,7 +2268,7 @@ fn github_native(
     }
     println!("Build it next: horizon-launcher native-build --trust-native-code");
     println!(
-        "Developing a mod? horizon-launcher settings native-profile dev (or native-build --profile dev): a mod edit rebuilds about 6× faster, while game logic runs up to about twice as slow. Use it while developing, not for playing."
+        "Developing a mod? horizon-launcher settings native-profile developer (or native-build --profile developer): a mod edit rebuilds about 6× faster, while game logic runs up to about twice as slow. Use it while developing, not for playing."
     );
     Ok(())
 }
@@ -3862,7 +3863,7 @@ mod tests {
             "--version",
             "v2026.10.13",
             "--profile",
-            "release",
+            "optimized",
         ])
         .unwrap()
         .command
@@ -3875,7 +3876,7 @@ mod tests {
             }) => {
                 assert_eq!(version.as_deref(), Some("v2026.10.13"));
                 assert!(!update);
-                assert_eq!(profile.as_deref(), Some("release"));
+                assert_eq!(profile.as_deref(), Some("optimized"));
             }
             _ => panic!("expected native-build"),
         }

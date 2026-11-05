@@ -1,0 +1,24 @@
+// How a wasm mod listens at the game's points: one generic interface, whatever the points, so it
+// never grows with them. A record crosses as its fields in order; `subscribed` names each place
+// with its record's shape, which the game checks against its own at load.
+package horizon:mod-points@0.1.0;
+
+interface listeners {
+  /// One field of a point's record: an argument, `cancel`, or `result` (`none` when unset).
+  variant value { none, b(bool), c(char), s(s64), u(u64), f(f64), str(string) }
+
+  /// The host a listener gets: the reading one, the side's writing one, or none (a point below the
+  /// game, with no `Game` behind it).
+  enum host-kind { read, server, client, none }
+
+  /// The places the mod listens at, each its `Points` method's name and its record's shape.
+  subscribed: func() -> list<tuple<string, string>>;
+
+  /// Runs the listener at `place`, an index into `subscribed`, with the record's fields, and
+  /// answers them as the listener left them.
+  fire: func(place: u32, host: host-kind, fields: list<value>) -> list<value>;
+}
+
+world points {
+  export listeners;
+}

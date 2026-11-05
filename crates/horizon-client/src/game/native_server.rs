@@ -1611,6 +1611,7 @@ struct ScopedPlayerState {
     head_yaw: f32,
     on_ground: bool,
     game_mode: i32,
+    previous_game_mode: Option<i32>,
     abilities: PlayerAbilities,
     sneaking: bool,
     sprinting: bool,
@@ -1653,6 +1654,7 @@ impl ScopedPlayerState {
             head_yaw: setup.yaw,
             on_ground: false,
             game_mode: 0,
+            previous_game_mode: None,
             abilities: PlayerAbilities::default(),
             sneaking: setup.secondary_use,
             sprinting: false,
@@ -1678,6 +1680,7 @@ impl ScopedPlayerState {
         std::mem::swap(&mut self.head_yaw, &mut guest.head_yaw);
         std::mem::swap(&mut self.on_ground, &mut guest.on_ground);
         std::mem::swap(&mut self.game_mode, &mut guest.game_mode);
+        std::mem::swap(&mut self.previous_game_mode, &mut guest.previous_game_mode);
         std::mem::swap(&mut self.abilities, &mut guest.abilities);
         std::mem::swap(&mut self.sneaking, &mut guest.sneaking);
         std::mem::swap(&mut self.sprinting, &mut guest.sprinting);
@@ -2636,6 +2639,7 @@ mod fake_action_tests {
             guest.inventory[3] = Some(ItemStack::new("minecraft:emerald", 4));
             guest.offhand = Some(ItemStack::new("minecraft:apple", 2));
             guest.sneaking = true;
+            guest.previous_game_mode = Some(3);
             guest.motion.as_mut().unwrap().shift_key_down = true;
             game.lan
                 .as_mut()
@@ -2678,6 +2682,7 @@ mod fake_action_tests {
                 (guest.yaw, guest.pitch, guest.selected, guest.game_mode),
                 (31.0, 12.0, 3, 1)
             );
+            assert_eq!(guest.previous_game_mode, Some(3));
             assert_eq!(guest.offhand, Some(ItemStack::new("minecraft:apple", 2)));
             assert_eq!(
                 guest.inventory[3],

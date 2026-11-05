@@ -54,6 +54,28 @@ A mod refused at load is named on the Mods page with its reason. A `mod.wasm` bu
 hooks this game doesn't have, or has with another type, names the first such import
 (`horizon:mod-api/host@0.1.0#entity`), so rebuilding against this game's `mod_api` is the fix.
 
+## Listening at points
+
+A wasm mod listens at the game's [points](../injections.md) as a native mod does: the same
+`#[mod_api::horizon_mod] impl mod_points::Points`, and one `[[native.injection]]` per place in
+`horizon-mod.toml`, with no `game` or commit pins beside `[wasm]`. The sample listens at the tick:
+
+```toml
+[[native.injection]]
+id = "count_ticks"
+target = "horizon_client::game::Game<'_>::tick"
+kind = "HEAD"
+trait_method = "tick"
+```
+
+At load the game checks each place the `mod.wasm` fills against this list and against its own points:
+a place the list doesn't name, a listed place the mod doesn't fill, a `target` this game has no point
+at, or a point whose record changed since the mod was built refuses the mod and names the place. A
+listener changes its record's fields (`cancel`, `result`, the arguments) as a native one does, and the
+game takes them back when it returns. Only `trait_method` injections go beside `[wasm]`: a `helper`
+needs a native mod. A point call costs about as much as a hook call (a few hundred nanoseconds on a
+release build), and a place nobody listens at costs nothing.
+
 ## Calls into the game
 
 A wasm mod reaches the game through the same `mod_api` as a native one, and each call crosses

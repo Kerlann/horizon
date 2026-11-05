@@ -1609,7 +1609,7 @@ impl B {
                     cx.events.push(MobEvent::Breed {
                         parent: m.id,
                         partner: id,
-                        llama: None,
+                        equine: None,
                         parent_variant: None,
                         experience: super::BreedExperience::Deferred,
                     });

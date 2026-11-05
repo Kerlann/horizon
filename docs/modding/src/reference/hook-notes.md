@@ -189,7 +189,9 @@ requires a farmer at work and `mob_griefing` enabled.
 
 - Breaking and placing a block, on the server for every player: `native_break_block` hears a player break a
   block once the game allowed it (`ServerPlayerGameMode.destroyBlock`) and may cancel it, which keeps the block and its
-  drops; `native_entity_place` (`EntityPlaceEvent`, `EntityMultiPlaceEvent`) hears a block placed from an item
+  drops. Set `exp_to_drop` to `Some(amount)` to replace the vanilla XP sample later, after item drops are prepared;
+  `None` retains vanilla sampling. The subsequent `block_drops` event can edit the resulting experience or cancel
+  the drops, and disabled block drops suppress both items and XP. `native_entity_place` (`EntityPlaceEvent`, `EntityMultiPlaceEvent`) hears a block placed from an item
   (`BlockItem.place`), an enderman putting its block down or a snow golem's trail, before it is written, and may cancel it:
   nothing is placed and the stack is kept. For a player, `placed_against` is the state next to the primary placed
   block opposite the clicked face, even when the clicked block is replaceable; for mobs it is the state below.
@@ -744,7 +746,7 @@ or transactions. Declarations still go on each event or registrar.
 
 - Redstone signals as a block reads them, on a level handle (`LevelRef`) on a server, through the game's own `SignalGetter`, mods' `block_signal` and `should_check_weak_power` parts included: `level.signal(host, pos, direction)` (`getSignal`, how strongly the block at `pos` powers its neighbour on the `direction` side, conducted power included), `level.direct_signal(host, pos, direction)` (`getDirectSignal`, the strong power alone), `level.direct_signal_to(host, pos)` (`getDirectSignalTo`), `level.best_neighbor_signal(host, pos)` (`getBestNeighborSignal`, the strongest power reaching `pos`, as a dispenser or a piston reads it) and `level.has_neighbor_signal(host, pos)` (`hasNeighborSignal`, stopping at the first powered side). Each costs what the game's own call does. They take `&mut dyn ServerHost`, not `&dyn Host`: the signal path asks mods' parts, which get the level as their host, and only a write borrow of the game builds it. They read the level in place: None (or false) for another level, a stale handle or a client.
 
-- `native_weather()` (rain and thunder levels, 0 in the Nether and the End), `native_day_time()`, `native_world_height()` (min y and height) and `native_max_stack_size(item)`, with `level.brightness(host, layer, pos)` for light and `level.is_raining_at(host, pos)` for rain at a position: what a mod's solar panel, wind turbine, quarry or own container needs without reaching into Horizon's internals.
+- `level.weather(host)` (rain and thunder levels, 0 in the Nether and the End), `native_day_time()`, `level.height(host)` (min y and height) and `native_max_stack_size(item)`, with `level.brightness(host, layer, pos)` for light and `level.is_raining_at(host, pos)` for rain at a position: what a mod's solar panel, wind turbine, quarry or own container needs without reaching into Horizon's internals.
 
 - Giving a whole stack (damage, name, enchantments kept) to any player from a server hook: `insert_any` into
   the player's [`ENTITY_ITEMS`](../concepts/trait-mods.md#an-entitys-items) handler places it as `Inventory.add` does, and answers how many went.
@@ -2216,15 +2218,24 @@ handle, an entity the client doesn't track and a level it doesn't show:
   level the server has loaded, not only the one in place. A block in a chunk that isn't loaded or a `y` outside
   the world's height reads as `None`. `level.brightness(host, LightLayer::Block | Sky, pos)` reads the stored light
   (`getBrightness`) the same way, as the game's own light query holds it, and is `None` where the block read is.
+  `level.height(host)` (`LevelHeightAccessor.getMinY`, `getHeight`) also works with `&dyn Host` in client
+  hooks, including render, screen and mouse hooks. Obtain the handle with `host.level(dimension)`; on a
+  client only its current dimension is available, after login. It reads that client's synchronized level
+  shape, without loading chunks or allocating. A stale handle, logout or a different dimension returns
+  `None`, not guessed Overworld bounds. On a server it still reads parked loaded levels as well.
   `level.fluid_state(host, pos)` reads the fluid there the same way.
   `level.fluid_flow(host, pos)` (`FluidState.getFlow`) reads its current as a `Vec3`, through the function that pushes
   entities, so a `fluid_flow` listener's change is what it reads: zero where no fluid flows, `None` where the block read
   is. It reads on a client too, from the client's own copy of the level. It costs what one entity's push by that block
   does: up to twelve block reads around `pos` (the four neighbours and below them; falling fluid also checks
   their faces), with no allocation, plus the `fluid_flow` listeners.
+- `level.weather(host)` reads rain and thunder levels on **both sides**, using the shared `Host` from server,
+  render, screen or mouse hooks. It returns `Some((rain, thunder))`, each 0.0 to 1.0, at partial tick 1.0
+  (`Level.getRainLevel` / `getThunderLevel`, with thunder scaled by rain). Both are 0 where the level cannot have
+  weather. A server can read any open level, including parked levels; a client reads only its current synchronized
+  level after login. Stale handles and unavailable levels return `None`; the read never loads a level.
 - `level.seed(host)`, `difficulty` (`"normal"`, as `/difficulty` names it), `game_rule(host, "keep_inventory")` (a
-  `GameRuleValue`, `Bool` or `Int`; None for an unknown rule), `weather` (rain and thunder levels, 0.0 to 1.0; both 0
-  where the level has no weather), `is_raining` and `is_thundering` read its world settings.
+  `GameRuleValue`, `Bool` or `Int`; None for an unknown rule), `is_raining` and `is_thundering` read its server settings.
   `level.is_raining_at(host, pos)` (`Level.isRainingAt`) asks about one position of any open level: it rains there, the
   position has full sky light with nothing motion-blocking or fluid above it, and its biome's precipitation at that
   height is rain (not snow or none). It is `None` where the block read is, an unloaded chunk or a `y` outside the
@@ -2991,3 +3002,11 @@ The callback receives `&mut dyn LevelRandomHost`: the hit's level random and
 level attachments, not a full game host. Unbreaking and the existing item
 wear listeners are applied during equipment write-back, as for other armor
 wear. A piece replaced before write-back is not worn by the old decision.
+
+### Structure template snapshots
+
+`ServerHost::structure_template(id, at, rotation, mirror)` reads a template without placing it.
+It searches the world's saved templates before data packs and returns the rotated size and blocks
+in vanilla placement order, with each transformed state and its saved block-entity data. It uses
+the palette selected at `at`; processors and entities are not included. Invalid or missing names
+return `None`. A builder can retain this snapshot and place its blocks over time.

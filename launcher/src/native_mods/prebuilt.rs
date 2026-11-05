@@ -17,7 +17,8 @@ use std::process::Command;
 const IDENTITY: &str = "horizon-prebuilt.json";
 const TEMPLATE: &str = "native_main.rs.template";
 const SUMS: &str = "SHA256SUMS";
-/// The `fast` profile the prebuilt game is built with: the mods' code matches the game's.
+/// The optimization level of the `release` profile the prebuilt game is built with: the mods' code
+/// matches the game's.
 const OPT_LEVEL: &str = "opt-level=3";
 /// The archive's largest plausible unpacked size: a corrupt or hostile archive stops there.
 const UNPACKED_LIMIT: u64 = 8 << 30;
@@ -33,14 +34,12 @@ pub(super) enum SourceReason {
     Features { mod_id: String },
     /// A mod depends on a crate other than the mod API and other mods.
     Crate { mod_id: String, krate: String },
-    /// The player chose a profile other than the prebuilt game's `performance` (`fast`).
+    /// The player chose a profile other than Optimized, the one the prebuilt game is built with.
     Profile { profile: &'static str },
     /// No prebuilt game for this computer.
     Host,
     /// The prebuilt game's release couldn't be downloaded.
     Download { why: String },
-    /// A point injection's target isn't a point in the prebuilt game.
-    NotAPoint { why: String },
     /// No prebuilt game was released for this revision and target.
     NoRelease { revision: String },
 }
@@ -65,7 +64,7 @@ impl std::fmt::Display for SourceReason {
                 &[("mod", mod_id), ("crate", krate)],
             ),
             Self::Profile { profile } => trf(
-                "the {profile} profile builds the game from source; the prebuilt game is performance only",
+                "{profile} builds the game on this computer; only Optimized uses the prebuilt game",
                 &[("profile", profile)],
             ),
             Self::Host => {
@@ -73,10 +72,6 @@ impl std::fmt::Display for SourceReason {
             }
             Self::Download { why } => trf(
                 "the prebuilt game couldn't be downloaded ({why}), so the game builds from source",
-                &[("why", why)],
-            ),
-            Self::NotAPoint { why } => trf(
-                "{why}, so the game builds from source and makes it a point",
                 &[("why", why)],
             ),
             Self::NoRelease { revision } => trf(
@@ -89,16 +84,21 @@ impl std::fmt::Display for SourceReason {
 }
 
 /// The first reason `projects` can't build against the prebuilt game with `profile`, or `None`
-/// when they can: the profile is `performance`, the one the game is prebuilt with, and each mod is
+/// when they can: the profile is `optimized`, the one the game is prebuilt with, and each mod is
 /// a crate that depends on the mod API (with its default features) and on other mods, with no
 /// injections, build script or features of its own.
 pub(super) fn refusal(projects: &[api::Project<'_>], profile: Profile) -> Option<SourceReason> {
-    if profile != Profile::Performance {
+    if profile != Profile::Optimized {
         return Some(SourceReason::Profile {
             profile: profile.name(),
         });
     }
-    projects.iter().find_map(|project| {
+    projects.iter().find_map(project_refusal)
+}
+
+/// Why `project` alone can't build against the prebuilt game, or `None` when it can.
+pub(super) fn project_refusal(project: &api::Project<'_>) -> Option<SourceReason> {
+    {
         let mod_id = || project.bundle.manifest.id.clone();
         if project.bundle.needs_mixins() {
             return Some(SourceReason::Injections { mod_id: mod_id() });
@@ -127,7 +127,7 @@ pub(super) fn refusal(projects: &[api::Project<'_>], profile: Profile) -> Option
                     .get("package")
                     .and_then(toml::Value::as_str)
                     .unwrap_or(key);
-                if krate != api::API_PACKAGE {
+                if !api::PACKAGES.iter().any(|(package, _)| *package == krate) {
                     return Some(SourceReason::Crate {
                         mod_id: mod_id(),
                         krate: krate.to_owned(),
@@ -144,27 +144,21 @@ pub(super) fn refusal(projects: &[api::Project<'_>], profile: Profile) -> Option
             }
         }
         None
-    })
+    }
 }
 
-/// Whether the prebuilt `game` has a point at each of `injections`' targets: a target that isn't
-/// one builds from source, which makes it one. A method that isn't its point's is an error on
-/// any route, naming the injection.
+/// Checks `injections` against the prebuilt `game`'s points. A target that isn't a point is an
+/// error on any route, as is a method that isn't its point's: the source route stages the same
+/// points.
 pub(super) fn serves_points(
     game: &Path,
     injections: &[inject::PointInjection],
-) -> Result<Result<(), SourceReason>, String> {
+) -> Result<(), String> {
     if injections.is_empty() {
-        return Ok(Ok(()));
+        return Ok(());
     }
     let points = inject::listed(&game.join(inject::POINTS))?;
-    match inject::check(injections, &points) {
-        Ok(()) => Ok(Ok(())),
-        Err(error @ inject::PointError::NotAPoint { .. }) => Ok(Err(SourceReason::NotAPoint {
-            why: error.to_string(),
-        })),
-        Err(error) => Err(error.to_string()),
-    }
+    inject::check(injections, &points).map_err(|error| error.to_string())
 }
 
 /// The prebuilt game for `revision` and `target`, downloaded and checked once, then kept in the
@@ -319,11 +313,18 @@ fn check_identity(dir: &Path, revision: &str, host: &str, target: Target) -> Res
     }
 }
 
-/// The library file a crate named `krate` left in `deps`: its metadata, or the game's own dylib.
+/// The library file a crate named `krate` left in `deps`: its metadata, or its own dylib.
 fn library(deps: &Path, krate: &str) -> Result<PathBuf, String> {
-    let game = ["so", "dll", "dylib"]
+    // A cached target can still contain metadata from an earlier static build. Prefer the dylib:
+    // callers installing runtime libraries need its code, not a stale metadata-only artifact.
+    let dylib = ["so", "dll", "dylib"]
         .iter()
-        .flat_map(|ext| [format!("lib{krate}.{ext}"), format!("{krate}.{ext}")]);
+        .flat_map(|ext| [format!("lib{krate}.{ext}"), format!("{krate}.{ext}")])
+        .map(|name| deps.join(name))
+        .find(|path| path.is_file());
+    if let Some(path) = dylib {
+        return Ok(path);
+    }
     let prefix = format!("lib{krate}-");
     fs::read_dir(deps)
         .map_err(|e| e.to_string())?
@@ -331,8 +332,7 @@ fn library(deps: &Path, krate: &str) -> Result<PathBuf, String> {
         .map(|entry| entry.path())
         .find(|path| {
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            (name.starts_with(&prefix) && name.ends_with(".rmeta"))
-                || game.clone().any(|g| g == name)
+            name.starts_with(&prefix) && name.ends_with(".rmeta")
         })
         .ok_or_else(|| trf("The prebuilt game has no {crate}.", &[("crate", krate)]))
 }
@@ -394,6 +394,10 @@ pub(super) fn compile(
     fs::create_dir_all(out).map_err(|e| e.to_string())?;
     let deps = game.join("deps");
     let api_library = library(&deps, "mod_api")?;
+    let mut libraries = std::collections::HashMap::new();
+    for (_, name) in api::PACKAGES {
+        libraries.insert(name, library(&deps, name)?);
+    }
     let mut rlibs: std::collections::HashMap<&str, PathBuf> = std::collections::HashMap::new();
     for &index in &resolution.order {
         let project = &projects[index];
@@ -418,9 +422,9 @@ pub(super) fn compile(
         cmd.args(["--crate-type", "rlib", "--crate-name", &krate])
             .arg("-C")
             .arg(format!("metadata={id}"));
-        for api in project.api_dependencies() {
+        for (name, package) in project.api_dependencies() {
             cmd.arg("--extern")
-                .arg(format!("{api}={}", api_library.display()));
+                .arg(format!("{name}={}", libraries[package].display()));
         }
         for dependency in &declared[index] {
             let Some(rlib) = rlibs.get(dependency.id.as_str()) else {
@@ -481,7 +485,14 @@ pub(super) fn compile(
     }
     cmd.arg("-o").arg(&binary).arg(&main);
     super::run(cmd, "Linking the game", |_| {})?;
-    Ok((binary, vec![game_library, standard_library(rust)?]))
+    Ok((
+        binary,
+        vec![
+            game_library,
+            library(&deps, "horizon_mod_wasm")?,
+            standard_library(rust)?,
+        ],
+    ))
 }
 
 #[cfg(test)]
@@ -499,15 +510,32 @@ mod tests {
         )
         .unwrap();
         let bundle = super::super::bundle_in(&dir).unwrap().unwrap();
-        refusal(
-            &[api::Project::read(&bundle).unwrap()],
-            Profile::Performance,
-        )
+        refusal(&[api::Project::read(&bundle).unwrap()], Profile::Optimized)
     }
 
     #[test]
-    fn only_the_performance_profile_takes_the_prebuilt_game() {
-        for profile in [Profile::Dev, Profile::Release] {
+    fn runtime_dylib_is_found_for_installation() {
+        let dir = super::super::tests::dir("prebuilt-runtime-dylib");
+        let stale = dir.join("libhorizon_mod_wasm-old.rmeta");
+        fs::write(&stale, []).unwrap();
+        for name in [
+            "libhorizon_mod_wasm.so",
+            "horizon_mod_wasm.dll",
+            "libhorizon_mod_wasm.dylib",
+        ] {
+            let path = dir.join(name);
+            fs::write(&path, []).unwrap();
+            assert_eq!(library(&dir, "horizon_mod_wasm").unwrap(), path);
+            fs::remove_file(path).unwrap();
+        }
+        assert_eq!(library(&dir, "horizon_mod_wasm").unwrap(), stale);
+        fs::remove_file(stale).unwrap();
+        assert!(library(&dir, "horizon_mod_wasm").is_err());
+    }
+
+    #[test]
+    fn only_the_optimized_profile_takes_the_prebuilt_game() {
+        for profile in [Profile::Developer, Profile::Balanced] {
             assert_eq!(
                 refusal(&[], profile),
                 Some(SourceReason::Profile {
@@ -515,7 +543,7 @@ mod tests {
                 })
             );
         }
-        assert_eq!(refusal(&[], Profile::Performance), None);
+        assert_eq!(refusal(&[], Profile::Optimized), None);
     }
 
     #[test]
@@ -567,10 +595,10 @@ mod tests {
         let name = native::prebuilt_archive("x86_64-unknown-linux-gnu", true);
         assert_eq!(
             name,
-            "horizon-prebuilt-v2-x86_64-unknown-linux-gnu-server.tar.gz"
+            "horizon-prebuilt-v3-x86_64-unknown-linux-gnu-server.tar.gz"
         );
         let listing =
-            format!("AB12  horizon-prebuilt-v2-x86_64-unknown-linux-gnu.tar.gz\ncd34 *{name}\n");
+            format!("AB12  horizon-prebuilt-v3-x86_64-unknown-linux-gnu.tar.gz\ncd34 *{name}\n");
         assert_eq!(expected_sum(&listing, &name).as_deref(), Some("cd34"));
         assert_eq!(expected_sum(&listing, "horizon-prebuilt-x.tar.gz"), None);
     }

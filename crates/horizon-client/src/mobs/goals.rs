@@ -2312,11 +2312,10 @@ impl Goal for Breed {
         );
         self.love_time += 1;
         if self.love_time >= reduced(60) && m.distance_sqr(p.position) < 9.0 {
-            let llama = super::llama::is_llama(m.species())
-                .then(|| Box::new(super::llama::breed_offspring(m, &p)));
+            let equine = super::equine::breed_offspring(m, &p).map(Box::new);
             let parent_variant =
                 super::draws_parent_variant(m.species()).then(|| m.random.next_boolean());
-            let experience = if (llama.is_some() || parent_variant.is_some())
+            let experience = if (equine.is_some() || parent_variant.is_some())
                 && !cx.w.asks_baby_spawn
                 && !super::orb_after_child(m.species())
             {
@@ -2337,7 +2336,7 @@ impl Goal for Breed {
             cx.events.push(MobEvent::Breed {
                 parent: m.id,
                 partner: p.id,
-                llama,
+                equine,
                 parent_variant,
                 experience,
             });
@@ -3063,6 +3062,7 @@ mod breeding_variant_tests {
                 "minecraft:chicken",
                 "minecraft:fox",
                 "minecraft:cat",
+                "minecraft:wolf",
             ] {
                 let kind = Arc::new(types.types[id].clone());
                 let partner =

@@ -112,7 +112,11 @@ pub(super) fn wanted(
                     })?,
                     None => key,
                 };
-                if package == "horizon-mod-api" && path == "../../crates/horizon-mod-api" {
+                // The game's own packages, at the path `api::stage` rewrites them to.
+                if super::api::PACKAGES
+                    .iter()
+                    .any(|(game, _)| package == *game && path == format!("../../crates/{game}"))
+                {
                     continue;
                 }
                 validate_sibling_path(
@@ -660,11 +664,17 @@ checksum = "def"
         let declared = BTreeMap::from([("bake", BTreeSet::from(["other"]))]);
         assert!(super::wanted(stage.root(), &declared).is_ok());
         let root = stage.root().join(DIR).join("bake/Cargo.toml");
-        for (path, valid) in [
-            ("../../crates/horizon-mod-api", true),
-            ("../../other/horizon-mod-api", false),
+        for (package, path, valid) in [
+            ("horizon-mod-api", "../../crates/horizon-mod-api", true),
+            (
+                "horizon-mod-points",
+                "../../crates/horizon-mod-points",
+                true,
+            ),
+            ("horizon-mod-api", "../../other/horizon-mod-api", false),
+            ("horizon-mod-points", "../../crates/horizon-mod-api", false),
         ] {
-            fs::write(&root, format!("[package]\nname='bake'\nversion='1'\n[dependencies]\napi={{package='horizon-mod-api',path='{path}'}}\n")).unwrap();
+            fs::write(&root, format!("[package]\nname='bake'\nversion='1'\n[dependencies]\napi={{package='{package}',path='{path}'}}\n")).unwrap();
             assert_eq!(super::wanted(stage.root(), &BTreeMap::new()).is_ok(), valid);
         }
     }

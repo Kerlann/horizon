@@ -439,7 +439,7 @@ impl GameLevel<'_> {
                 &mut self.world.random,
             ),
         };
-        let dropped = self.block_dropped(pos, state, None, tool.as_ref(), drops);
+        let dropped = self.block_dropped(pos, state, None, tool.as_ref(), drops, None);
         for item in dropped.items {
             if let Some(kept) = self.drop_into.as_mut() {
                 kept.push(item.stack);
@@ -477,6 +477,7 @@ impl GameLevel<'_> {
         breaker: Option<u128>,
         tool: Option<&ItemStack>,
         stacks: Vec<ItemStack>,
+        exp_to_drop: Option<u32>,
     ) -> BlockDrops {
         let at = [pos.x, pos.y, pos.z];
         let mut items: Vec<NativeItemDrop> = stacks
@@ -492,9 +493,11 @@ impl GameLevel<'_> {
         // amount; a spawner's experience ignores the tool.
         let name = self.facts.get(state).name.clone();
         let silk = tool.is_some_and(|tool| tool.enchantment_level("minecraft:silk_touch") > 0);
-        let mut experience = removal::break_experience(&mut self.world.random, &name)
-            .filter(|_| !silk || &*name == "minecraft:spawner")
-            .unwrap_or(0);
+        let mut experience = exp_to_drop.unwrap_or_else(|| {
+            removal::break_experience(&mut self.world.random, &name)
+                .filter(|_| !silk || &*name == "minecraft:spawner")
+                .unwrap_or(0)
+        });
         let mut canceled = false;
         if self.native_authoritative {
             self.native_block_drops(mod_api::__private::BlockDropsCall {
@@ -879,26 +882,37 @@ mod tests {
             let dirt = registry.default_state("minecraft:dirt").unwrap();
             let ore = registry.default_state("minecraft:diamond_ore").unwrap();
             let pos = BlockPos::new(1, 64, 2);
-            let break_of = |game: &mut Game<'_>, state, item| {
+            let break_of = |game: &mut Game<'_>, state, item, exp_to_drop| {
                 game.world.random = LegacyRandom::new(7);
                 let dropped = game.with_level(|_, level, _| {
-                    level.block_dropped(pos, state, None, None, vec![ItemStack::new(item, 1)])
+                    level.block_dropped(
+                        pos,
+                        state,
+                        None,
+                        None,
+                        vec![ItemStack::new(item, 1)],
+                        exp_to_drop,
+                    )
                 });
                 (dropped, game.world.random.next_int())
             };
-            let (plain_ore, ore_after) = break_of(game, ore, "minecraft:diamond");
-            let (plain_dirt, dirt_after) = break_of(game, dirt, "minecraft:dirt");
+            let (plain_ore, ore_after) = break_of(game, ore, "minecraft:diamond", None);
+            let (plain_dirt, dirt_after) = break_of(game, dirt, "minecraft:dirt", None);
+            let (overridden, _) = break_of(game, ore, "minecraft:diamond", Some(17));
+            assert_eq!(overridden.experience, 17);
             assert_eq!(plain_dirt.items.len(), 1);
             let mods: mod_api::Mods =
                 vec![mod_api::ModEntry::new("block-drops", Box::new(DropsMod))].into();
             mod_api::testing::with_mods(mods, || {
-                let (heard, after) = break_of(game, ore, "minecraft:diamond");
+                let (heard, after) = break_of(game, ore, "minecraft:diamond", None);
                 assert_eq!(after, ore_after);
                 assert_eq!(heard.items.len(), 1);
                 assert_eq!(heard.items[0].position, plain_ore.items[0].position);
                 assert_eq!(heard.experience, plain_ore.experience + 2);
                 assert!(!heard.canceled);
-                let (taken, after) = break_of(game, dirt, "minecraft:dirt");
+                let (overridden, _) = break_of(game, ore, "minecraft:diamond", Some(17));
+                assert_eq!(overridden.experience, 19);
+                let (taken, after) = break_of(game, dirt, "minecraft:dirt", None);
                 assert_eq!(after, dirt_after);
                 assert!(taken.canceled && taken.items.is_empty() && taken.experience == 0);
             });

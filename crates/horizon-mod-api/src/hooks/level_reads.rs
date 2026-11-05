@@ -37,8 +37,11 @@ pub trait Helpers {
         target = "horizon_client::game::native_level_refs::Game<'_>::native_level_brightness"
     )]
     fn level_brightness();
+    /// The level's lowest block y and height (`LevelHeightAccessor.getMinY`, `getHeight`).
+    /// Reads any loaded server level or the client's current level; None for a stale
+    /// handle, before client login, or for a dimension unavailable on this side.
     #[helper(
-        side = "server",
+        side = "both",
         receiver = "level",
         target = "horizon_client::game::native_level_refs::Game<'_>::native_level_height"
     )]

@@ -86,7 +86,7 @@ pub fn kind_of(path: &Path) -> Option<Kind> {
         "hmod" if index::native::holds(path) => Some(Kind::NativeMod),
         "hmod" => Some(Kind::Mod),
         "hpack" => Some(Kind::Modpack),
-        "zip" => Some(Kind::ResourcePack),
+        "zip" => Some(horizon_mods::index::zip_kind(path)),
         "hshader" => Some(Kind::Shader),
         _ => None,
     }

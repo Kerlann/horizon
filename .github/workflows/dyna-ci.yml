@@ -74,7 +74,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          if [ "$EVENT" = push ] || git diff --name-only "$BASE_SHA...$HEAD_SHA" | grep -qE '^(crates/(horizon-mod-api|horizon-mod-api-gen|horizon-mod-wasm|horizon-mods)/|Cargo\.lock$)'; then
+          if [ "$EVENT" = push ] || git diff --name-only "$BASE_SHA...$HEAD_SHA" | grep -qE '^(crates/(horizon-mod-api|horizon-mod-api-gen|horizon-mod-api-macros|horizon-mod-point-shape|horizon-mod-points|horizon-mod-wasm|horizon-mods)/|Cargo\.lock$)'; then
             echo wasm=true >> "$GITHUB_OUTPUT"
           else
             echo wasm=false >> "$GITHUB_OUTPUT"
@@ -161,6 +161,8 @@ jobs:
             .
             docs/modding/examples/wasm-hello -> target/horizon-mod
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: The mod API and the points crate build for wasm32
+        run: cargo +1.99.1 check -p horizon-mod-api -p horizon-mod-points --target wasm32-unknown-unknown
       - name: Build the sample to mod.wasm, and the std member the game ships
         run: |
           cargo +stable build -p cargo-horizon-mod -p xtask
@@ -181,6 +183,21 @@ jobs:
             (cd "$HORIZON_WASM_GROUPS/$mod" && "$GITHUB_WORKSPACE/target/debug/cargo-horizon-mod" horizon-mod build --wasm)
           done
           cargo +stable test -p horizon-mod-wasm --test groups -- --ignored
+      - name: Native and wasm listeners at one point, in the installed order
+        env:
+          HORIZON_WASM_POINTS: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/points
+          HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
+        run: |
+          (cd "$HORIZON_WASM_POINTS/chat_tail" && "$GITHUB_WORKSPACE/target/debug/cargo-horizon-mod" horizon-mod build --wasm)
+          cargo +stable test -p horizon-mod-wasm --test points -- --ignored
+      - name: A listener refused with its library keeps nothing of their group
+        env:
+          HORIZON_WASM_GROUPS: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/groups
+          HORIZON_WASM_POINTS: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/points
+          HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
+        run: |
+          (cd "$HORIZON_WASM_POINTS/lib_tail" && "$GITHUB_WORKSPACE/target/debug/cargo-horizon-mod" horizon-mod build --wasm)
+          cargo +stable test -p horizon-mod-wasm --test refused_points -- --ignored
       - name: The mod API's WIT, and what this change does to it
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -237,7 +254,7 @@ jobs:
         env:
           HORIZON_WASM_BENCH: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/bench/target/horizon-mod/bench_mod.hmod
           HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
-        run: cargo +stable test --release -p horizon-mod-wasm --test bench -- --ignored --nocapture
+        run: cargo +stable test --release -p horizon-mod-wasm --test bench -- --ignored --nocapture --test-threads=1
 
   verify:
     needs: changes

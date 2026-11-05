@@ -178,6 +178,9 @@ pub(super) struct GuestSwap {
     selected: usize,
     mode: horizon_client::command::args::GameMode,
     creative: bool,
+    /// The previous game mode of the turn this one nests in: each player's
+    /// own (`ServerPlayerGameMode.previousGameModeForPlayer`).
+    previous_mode: Option<horizon_client::command::args::GameMode>,
     /// The abilities of the turn this one nests in.
     abilities: Option<horizon_client::lan::abilities::PlayerAbilities>,
     /// The host's cached interaction ranges, restored after the guest turn.
@@ -543,8 +546,12 @@ impl Game<'_> {
         let (mode, creative) = (self.mode, self.creative);
         let outer_abilities = self.acting_abilities.replace(g.abilities);
         let (entity_reach, block_reach) = (self.entity_reach, self.block_reach);
-        let game_mode = g.game_mode;
+        let (game_mode, guest_previous) = (g.game_mode, g.previous_game_mode);
         self.set_mode_raw(game_mode);
+        let previous_mode = std::mem::replace(
+            &mut self.previous_mode,
+            guest_previous.map(super::game_mode::mode_from_id),
+        );
         let Some(host) = self.lan.as_mut() else {
             unreachable!("LanHost dropped inside a guest turn; closes are deferred");
         };
@@ -702,6 +709,7 @@ impl Game<'_> {
             selected,
             mode,
             creative,
+            previous_mode,
             abilities: outer_abilities,
             entity_reach,
             block_reach,
@@ -815,6 +823,7 @@ impl Game<'_> {
             selected,
             mode,
             creative,
+            previous_mode: outer_previous,
             abilities: outer_abilities,
             entity_reach,
             block_reach,
@@ -1032,6 +1041,7 @@ impl Game<'_> {
         // players already in the vehicle, which is what tells its
         // `getControllingPassenger` apart from this one's.
         let new_mode = self.mode_id();
+        let turn_previous = std::mem::replace(&mut self.previous_mode, outer_previous);
         let turn_abilities = std::mem::replace(&mut self.acting_abilities, outer_abilities);
         let Some(host) = self.lan.as_mut() else {
             unreachable!("LanHost dropped inside a guest turn; closes are deferred");
@@ -1196,9 +1206,12 @@ impl Game<'_> {
             host.hub
                 .set_game_mode(conn, new_mode, &self.world, Some(self.collision));
         }
+        // The turn's previous mode, as `Game::set_mode` kept it: the mode left
+        // by the turn's last change, when it changed more than once.
+        let g = &mut host.hub.guests[i];
+        g.previous_game_mode = turn_previous.map(super::game_mode::mode_id_of);
         // The turn's abilities: a mode change made in it set the flags first
         // (`Game::set_mode`), then a mod's writes won, as in vanilla.
-        let g = &mut host.hub.guests[i];
         if let Some(now) = turn_abilities
             && now != g.abilities
         {

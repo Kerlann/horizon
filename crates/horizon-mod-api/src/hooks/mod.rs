@@ -276,6 +276,7 @@ mod should_redstone_wire_connect_to;
 mod sound_events;
 mod sound_refs;
 mod spread_players_teleport;
+mod structure_template;
 mod sweep_attack;
 mod tag_fluid_reads;
 mod teleport_command;

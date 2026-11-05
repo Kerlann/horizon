@@ -41,9 +41,8 @@ impl Host for World {
 
 impl ServerHost for World {}
 
-#[test]
-#[ignore = "needs the group mods built to mod.wasm (CI's wasm-mods job)"]
-fn a_library_capability_is_answered_in_its_group_and_nowhere_else() {
+/// The built group mods, and the std member.
+fn built() -> ([horizon_mod_wasm::WasmPackage; 4], Vec<u8>) {
     let path = |var: &str| std::path::PathBuf::from(std::env::var(var).expect(var));
     let folder = path("HORIZON_WASM_GROUPS");
     let std_member = std::fs::read(path("HORIZON_WASM_STD")).unwrap();
@@ -54,6 +53,61 @@ fn a_library_capability_is_answered_in_its_group_and_nowhere_else() {
             module: horizon_mods::Package::read_wasm(&package).unwrap(),
         }
     });
+    (packages, std_member)
+}
+
+#[test]
+#[ignore = "needs the group mods built to mod.wasm (CI's wasm-mods job)"]
+fn a_library_refused_over_a_point_takes_its_dependents_with_it() {
+    let (mut packages, std_member) = built();
+    // The library lists a point this game doesn't have.
+    let wasm = packages[0].manifest.wasm.as_ref().unwrap();
+    packages[0].manifest = horizon_mods::manifest::Manifest::parse(&format!(
+        "id = \"counter_lib\"\nname = \"Counter library\"\nversion = \"1.0.0\"\napi = \"0.2\"\n\
+         capabilities = [\"registries\"]\n\n[wasm]\nsha512 = \"{}\"\ntoolchain = \"{}\"\n\n\
+         [[native.injection]]\nid = \"gone\"\ntarget = \"horizon_client::game::Game<'_>::gone\"\n\
+         kind = \"HEAD\"\ntrait_method = \"gone\"\n",
+        wasm.sha512(),
+        wasm.toolchain()
+    ))
+    .unwrap();
+    let loaded = horizon_mod_wasm::load(
+        &horizon_mod_wasm::RuntimeConfig::default(),
+        &std_member,
+        packages.into(),
+    );
+    let mut refused: Vec<(&str, String)> = loaded
+        .refused
+        .iter()
+        .map(|(id, why)| {
+            let why = match why {
+                horizon_mod_wasm::Refusal::NoSuchPoint { .. } => "no such point".to_owned(),
+                horizon_mod_wasm::Refusal::DependencyRefused { dependency } => {
+                    format!("needs {dependency}")
+                }
+                why => why.to_string(),
+            };
+            (id.as_str(), why)
+        })
+        .collect();
+    refused.sort();
+    assert_eq!(
+        refused,
+        [
+            ("alpha", "needs counter_lib".to_owned()),
+            ("beta", "needs counter_lib".to_owned()),
+            ("counter_lib", "no such point".to_owned()),
+        ]
+    );
+    // Only gamma, of the other group, is installed, and nothing listens at points.
+    assert_eq!(loaded.mods.len(), 1);
+    assert!(loaded.listening.is_empty());
+}
+
+#[test]
+#[ignore = "needs the group mods built to mod.wasm (CI's wasm-mods job)"]
+fn a_library_capability_is_answered_in_its_group_and_nowhere_else() {
+    let (packages, std_member) = built();
     let loaded = horizon_mod_wasm::load(
         &horizon_mod_wasm::RuntimeConfig::default(),
         &std_member,

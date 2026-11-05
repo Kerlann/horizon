@@ -1,8 +1,8 @@
 //! Point injections (#589): a `trait_method` injection listens at a game function's injection
-//! point through the mod's `impl mod_api::points::Points`, at its head or its return, with no
-//! source of its own spliced into the game. On the prebuilt route the game already has the point
-//! (its `points.json`); on the source route the launcher marks the function `#[point]` in the
-//! staged copy, so the mod compiles the same way on both.
+//! point through the mod's `impl mod_points::Points`, at its head or its return, with no
+//! source of its own spliced into the game. Every `Game` method the staging pass admits is a
+//! point, on both routes: the prebuilt game was staged before it was built, and the source route
+//! runs the revision's own pass on its copy; `points.json` lists them.
 use horizon_mods::manifest::InjectionKind;
 use std::{fs, path::Path};
 
@@ -119,75 +119,6 @@ pub(super) fn listed(path: &Path) -> Result<Vec<ListedPoint>, String> {
     serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// The attribute the source route marks a target with: `both` sides, as the launcher can't know
-/// a function's side; a listener there takes `HostSide`.
-const POINT: &str = "#[horizon_mod_api_macros::point(side = \"both\")]";
-
-/// Marks each target of `injections` that isn't already a point `#[point]` in the staged game at
-/// `stage`, so its `Points` methods exist when the mod API builds. A target is a `Game` method
-/// named by its module path, as a hook's `target` is.
-pub(super) fn mark(stage: &Path, injections: &[PointInjection]) -> Result<(), String> {
-    for injection in injections {
-        let (path, method) = injection
-            .target
-            .strip_prefix("horizon_client::game::")
-            .and_then(|rest| rest.rsplit_once("::"))
-            .filter(|(path, _)| path.ends_with("Game<'_>"))
-            .ok_or_else(|| {
-                format!(
-                    "{}: injection {}: {} isn't a Game method; only Game methods take points yet",
-                    injection.mod_id, injection.id, injection.target
-                )
-            })?;
-        let module = path.trim_end_matches("Game<'_>").trim_end_matches("::");
-        let file = match module {
-            "" => stage.join("crates/horizon-client/src/game.rs"),
-            module => stage
-                .join("crates/horizon-client/src/game")
-                .join(format!("{}.rs", module.replace("::", "/"))),
-        };
-        let source = fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
-        let lines: Vec<&str> = source.lines().collect();
-        let header = format!("fn {method}(");
-        let found: Vec<usize> = (0..lines.len())
-            .filter(|&i| {
-                let line = lines[i].trim_start();
-                let line = line
-                    .strip_prefix("pub(crate) ")
-                    .or_else(|| line.strip_prefix("pub(super) "))
-                    .or_else(|| line.strip_prefix("pub "))
-                    .unwrap_or(line);
-                line.starts_with(&header)
-            })
-            .collect();
-        let [at] = found[..] else {
-            return Err(format!(
-                "{}: injection {}: {} has {} functions named {method}; a point needs exactly one",
-                injection.mod_id,
-                injection.id,
-                file.display(),
-                found.len()
-            ));
-        };
-        if lines[at.saturating_sub(1)].contains("::point(") {
-            continue;
-        }
-        let indent = &lines[at][..lines[at].len() - lines[at].trim_start().len()];
-        let mut out = String::with_capacity(source.len() + 64);
-        for (i, line) in lines.iter().enumerate() {
-            if i == at {
-                out.push_str(indent);
-                out.push_str(POINT);
-                out.push('\n');
-            }
-            out.push_str(line);
-            out.push('\n');
-        }
-        fs::write(&file, out).map_err(|e| format!("{}: {e}", file.display()))?;
-    }
-    Ok(())
-}
-
 /// The generated `main.rs`'s check, at compile time, that mod `index` overrides each point method
 /// its injections name: a typed error naming the injection, not a silent no-op.
 pub(super) fn main_checks(index: usize, injections: &[PointInjection]) -> String {
@@ -195,10 +126,10 @@ pub(super) fn main_checks(index: usize, injections: &[PointInjection]) -> String
         .iter()
         .map(|injection| {
             format!(
-                "const _: () = assert!(mod_api::__private::point::lists(mod_{index}::__HORIZON_POINTS, {:?}), {:?});\n",
+                "const _: () = assert!(horizon_client::entry::point_listed(mod_{index}::__HORIZON_POINTS, {:?}), {:?});\n",
                 injection.method,
                 format!(
-                    "{}: injection {} names Points::{}, which the mod's #[mod_api::horizon_mod] impl Points doesn't override",
+                    "{}: injection {} names Points::{}, which the mod's #[mod_api::horizon_mod] impl mod_points::Points doesn't override",
                     injection.mod_id, injection.id, injection.method
                 )
             )
@@ -288,7 +219,7 @@ mod tests {
             super::super::inject_cache::key(
                 "revision",
                 "mixins",
-                super::super::Profile::Performance,
+                super::super::Profile::Balanced,
                 std::slice::from_ref(&bundle),
             )
             .unwrap()
@@ -317,7 +248,7 @@ mod tests {
         let a = super::super::version_for(
             "0123456789012345678901234567890123456789",
             "mixins",
-            super::super::Profile::Performance,
+            super::super::Profile::Balanced,
             super::super::Target::Client,
             &[first.clone(), second.clone()],
         )
@@ -325,7 +256,7 @@ mod tests {
         let b = super::super::version_for(
             "0123456789012345678901234567890123456789",
             "mixins",
-            super::super::Profile::Performance,
+            super::super::Profile::Balanced,
             super::super::Target::Client,
             &[second, first],
         )
@@ -372,32 +303,6 @@ mod tests {
                 injection: Box::new(injection(other, "use_with_hand", false))
             })
         );
-    }
-
-    #[test]
-    fn the_source_route_marks_a_target_once() {
-        let root = super::super::tests::dir("inject-mark");
-        let game = root.join("crates/horizon-client/src/game");
-        fs::create_dir_all(&game).unwrap();
-        fs::write(
-            game.join("hand.rs"),
-            "impl Game<'_> {\n    /// Use.\n    pub(super) fn use_with_hand(&mut self) {}\n    fn use_with_hands(&self) {}\n}\n",
-        )
-        .unwrap();
-        let use_hand = injection(
-            "horizon_client::game::hand::Game<'_>::use_with_hand",
-            "use_with_hand",
-            false,
-        );
-        mark(&root, &[use_hand.clone(), use_hand.clone()]).unwrap();
-        let marked = fs::read_to_string(game.join("hand.rs")).unwrap();
-        assert_eq!(marked.matches("::point(").count(), 1, "{marked}");
-        assert!(marked.contains("/// Use.\n    #[horizon_mod_api_macros::point(side = \"both\")]\n    pub(super) fn use_with_hand"));
-        let free = injection("horizon_world::loot::load", "load", false);
-        assert!(mark(&root, &[free])
-            .unwrap_err()
-            .contains("isn't a Game method"));
-        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

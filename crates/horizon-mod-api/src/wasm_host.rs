@@ -144,7 +144,8 @@ impl Default for Budgets {
 }
 
 /// A group's store data: its limits; the hosts of the call in progress are on the thread.
-pub(crate) struct State {
+// exhaustive: its fields are private
+pub struct State {
     limits: wasmtime::StoreLimits,
 }
 
@@ -351,8 +352,24 @@ impl Drop for Entered<'_> {
     }
 }
 
+/// How many linked groups are alive.
+static LIVE_GROUPS: AtomicUsize = AtomicUsize::new(0);
+
+/// How many linked groups are alive: a group refused at load is gone once its load returns, its
+/// store and memory with it.
+pub fn live_groups() -> usize {
+    LIVE_GROUPS.load(Ordering::Relaxed)
+}
+
+impl Drop for Group {
+    fn drop(&mut self) {
+        LIVE_GROUPS.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 impl Group {
     fn new(store: Store<State>, budgets: Budgets) -> Self {
+        LIVE_GROUPS.fetch_add(1, Ordering::Relaxed);
         Self {
             store: Mutex::new(store),
             running: AtomicU64::new(0),
@@ -407,6 +424,7 @@ impl Group {
 /// One wasm mod of a group, as its calls run: its group, its exports and its id.
 struct Running {
     group: Arc<Group>,
+    instance: Instance,
     exports: glue::ModExports,
     id: &'static str,
     /// The indexes of its handlers the game no longer holds, for the mod to drop at its next
@@ -772,7 +790,7 @@ pub fn instantiate(
     component: &Component,
     members: &[Member],
     budgets: Budgets,
-) -> Result<Vec<crate::ModEntry>, LoadError> {
+) -> Result<Vec<Instantiated>, LoadError> {
     let mut linker = Linker::<State>::new(engine);
     glue::Mod::add_to_linker::<State, wasmtime::component::HasSelf<State>>(&mut linker, |s| s)
         .expect("the game's own imports are defined once");
@@ -795,6 +813,7 @@ pub fn instantiate(
     for (id, exports) in found {
         let module = Arc::new(Running {
             group: group.clone(),
+            instance,
             exports,
             id,
             released: Mutex::new(Vec::new()),
@@ -803,12 +822,111 @@ pub fn instantiate(
             m.horizon_mod_api_hooks().call_subscribed(store)
         });
         let hooks = WasmMod {
-            module,
+            module: module.clone(),
             subscribed: hook_ids(names),
         };
-        entries.push(crate::ModEntry::new(id, Box::new(hooks)));
+        entries.push(Instantiated {
+            entry: crate::ModEntry::new(id, Box::new(hooks)),
+            exports: Exports(module),
+        });
     }
     Ok(entries)
+}
+
+/// A member of an instantiated group: the mod entry to install, and its handle for the exports
+/// other crates add to its world.
+// exhaustive: `instantiate` makes each
+pub struct Instantiated {
+    /// The mod's hooks, to install.
+    pub entry: crate::ModEntry,
+    /// Its other exports.
+    pub exports: Exports,
+}
+
+/// A member's handle for the exports another crate adds to the mod's world (the points crate's
+/// listeners): found by name and type, and called as hook calls with the call's host in the frame,
+/// within the group's limits. A trap stops the group as for any call.
+// exhaustive: its field is private
+#[derive(Clone)]
+pub struct Exports(Arc<Running>);
+
+/// The host of a call through [`Exports`]: the reading one, or a side's writing one.
+#[non_exhaustive]
+pub enum CallHost<'a> {
+    /// A reading call's host.
+    Read(&'a dyn crate::Host),
+    /// A server call's writing host.
+    Server(&'a mut dyn crate::ServerHost),
+    /// A client call's writing host.
+    Client(&'a mut dyn crate::ClientHost),
+    /// A call with no host: the mod's imports that need one trap.
+    None,
+}
+
+impl Exports {
+    /// The mod's id.
+    pub fn id(&self) -> &'static str {
+        self.0.id
+    }
+
+    /// The member's function `function` of its exported interface `interface`
+    /// (`<prefix>-<interface>`), with the game's type for it.
+    pub fn func<P, R>(
+        &self,
+        interface: &str,
+        function: &str,
+    ) -> Result<wasmtime::component::TypedFunc<P, R>, LoadError>
+    where
+        P: wasmtime::component::ComponentNamedList + wasmtime::component::Lower,
+        R: wasmtime::component::ComponentNamedList + wasmtime::component::Lift,
+    {
+        let named = format!("{interface}#{function}");
+        let mut store = self.0.group.store.lock().unwrap_or_else(|e| e.into_inner());
+        let instance = &self.0.instance;
+        let found = instance
+            .get_export_index(&mut *store, None, interface)
+            .and_then(|interface| {
+                instance.get_export_index(&mut *store, Some(&interface), function)
+            })
+            .ok_or_else(|| LoadError::MissingExport(named.clone()))?;
+        instance
+            .get_typed_func(&mut *store, found)
+            .map_err(|e| LoadError::ChangedExport(named, e.to_string()))
+    }
+
+    /// Runs `f` as one hook call with `host`: `None` when it didn't run (refused, or a trap,
+    /// which stops the group).
+    pub fn call<T>(
+        &self,
+        host: CallHost<'_>,
+        f: impl FnOnce(&mut Store<State>) -> wasmtime::Result<T>,
+    ) -> Option<T> {
+        let mut frame = Frame::default();
+        match host {
+            CallHost::Read(h) => frame.host(h),
+            CallHost::Server(h) => frame.server_host_mut(h),
+            CallHost::Client(h) => frame.client_host_mut(h),
+            CallHost::None => {}
+        }
+        self.0
+            .call_or(frame, Call::Hook, || None, |_, store| f(store).map(Some))
+    }
+
+    /// Runs `f` as the group's load-phase call, with no host: for the checks the game makes of
+    /// a member once, at load.
+    pub fn load<T>(&self, f: impl FnOnce(&mut Store<State>) -> wasmtime::Result<T>) -> Option<T> {
+        self.0.call_or(
+            Frame::default(),
+            Call::Load,
+            || None,
+            |_, store| f(store).map(Some),
+        )
+    }
+
+    /// Whether a trap stopped the member's group.
+    pub fn stopped(&self) -> bool {
+        self.0.group.poisoned.load(Ordering::Relaxed)
+    }
 }
 
 #[allow(

@@ -3383,11 +3383,11 @@ impl Game<'_> {
                 MobEvent::Breed {
                     parent,
                     partner,
-                    llama,
+                    equine,
                     parent_variant,
                     experience,
                 } => {
-                    let child = self.breed(parent, partner, llama, parent_variant, experience);
+                    let child = self.breed(parent, partner, equine, parent_variant, experience);
                     self.native_entity_breed(parent, partner, child);
                 }
                 MobEvent::LockGaze { mob, partner } => {
@@ -3707,7 +3707,7 @@ impl Game<'_> {
         &mut self,
         parent: u32,
         partner: u32,
-        llama: Option<Box<horizon_client::mobs::llama::Offspring>>,
+        equine: Option<Box<horizon_client::mobs::equine::Offspring>>,
         parent_variant: Option<bool>,
         experience: horizon_client::mobs::BreedExperience,
     ) -> Option<u32> {
@@ -3782,9 +3782,8 @@ impl Game<'_> {
                 }
             }
         } else {
-            // Mooshroom draws its own coin in getOffspringVariant.
-            p.species() != Species::Mooshroom
-                && self.world.random.next_int_bound(2).unwrap_or(0) == 0
+            // Other species either draw their own variants or do not need a coin.
+            false
         };
         // Axolotl.getBreedOffspring: useRareVariant (one in 1200) makes it blue,
         // else either parent's variant. The draws come from the mother's random.
@@ -3880,38 +3879,14 @@ impl Game<'_> {
                 };
                 child.extra.screaming = parent_screams || self.world.random.next_double() < 0.02;
             }
-            // A llama's baby was drawn in the parent's tick.
-            if let Some(o) = llama {
-                horizon_client::mobs::llama::apply_offspring(child, &o);
+            // Inheritance was drawn synchronously in the breeding goal,
+            // before the parent's later same-tick aiStep rolls.
+            if let Some(o) = equine {
+                horizon_client::mobs::equine::apply_offspring(child, &o);
                 break 'offspring;
             }
-            if horizon_client::mobs::equine::is_equine(p.species()) {
-                let other = q.clone().unwrap_or_else(|| p.clone());
-                let mut r = self.world.random.clone();
-                horizon_client::mobs::equine::inherit(child, &p, &other, &mut r);
-                if horizon_client::mobs::llama::is_llama(p.species()) {
-                    horizon_client::mobs::llama::offspring(child, &p, &other, &mut r);
-                }
-                // Horse.getBreedOffspring: coat from either parent or new.
-                if p.species() == Species::Horse && other.species() == Species::Horse {
-                    let c = r.next_int_bound(9).unwrap_or(0);
-                    child.extra.variant = if c < 4 {
-                        p.extra.variant
-                    } else if c < 8 {
-                        other.extra.variant
-                    } else {
-                        r.next_int_bound(7).unwrap_or(0) as u8
-                    };
-                    let mk = r.next_int_bound(5).unwrap_or(0);
-                    child.extra.variant2 = if mk < 2 {
-                        p.extra.variant2
-                    } else if mk < 4 {
-                        other.extra.variant2
-                    } else {
-                        r.next_int_bound(5).unwrap_or(0) as u8
-                    };
-                }
-                self.world.random = r;
+            // Camel.getBreedOffspring creates a camel with default attributes.
+            if horizon_client::mobs::camel::is_camel(p.species()) {
                 break 'offspring;
             }
             if p.species() == Species::Cat {
@@ -9000,6 +8975,250 @@ mod shulker_arrow_tests {
 mod breeding_tests {
     use super::*;
     use mod_api::ServerHost;
+
+    use horizon_client::mobs::{
+        BreedExperience,
+        finalize::{Attr, set_base},
+        goals::{Breed, Cx, Goal},
+    };
+    use horizon_core::random::{LegacyRandom, RandomSource};
+
+    /// Isolate the goal's stream from earlier tick work, but leave the actual
+    /// Breed, subsequent aiStep and queued Game event handling in the route.
+    #[derive(Clone, Debug)]
+    struct SeededBreed {
+        goal: Breed,
+        seed: i64,
+    }
+    impl Goal for SeededBreed {
+        fn box_clone(&self) -> Box<dyn Goal> {
+            Box::new(self.clone())
+        }
+        fn flags(&self) -> u8 {
+            self.goal.flags()
+        }
+        fn can_use(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {
+            self.goal.can_use(m, cx)
+        }
+        fn can_continue(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {
+            self.goal.can_continue(m, cx)
+        }
+        fn tick(&mut self, m: &mut Mob, cx: &mut Cx) {
+            m.random = LegacyRandom::new(self.seed);
+            self.goal.tick(m, cx);
+        }
+    }
+    struct Bred {
+        child: Mob,
+        next_random: i32,
+        experience: BreedExperience,
+    }
+    fn tick_breeding(
+        game: &mut Game<'_>,
+        parent_kind: &str,
+        partner_kind: &str,
+        seed: i64,
+        mob_drops: bool,
+    ) -> Bred {
+        game.mobs.clear();
+        game.ui.rules.set(
+            "mob_drops",
+            horizon_client::gamerules::Value::Bool(mob_drops),
+        );
+        let base = game.next_entity;
+        game.next_entity += 2;
+        let mut parent = Mob::new(
+            base + 1,
+            game.res.mob_types().get(parent_kind).unwrap().clone(),
+            Vec3::new(0.0, 64.0, 0.0),
+            0.0,
+        );
+        let mut partner = Mob::new(
+            base + 2,
+            game.res.mob_types().get(partner_kind).unwrap().clone(),
+            Vec3::new(1.0, 64.0, 0.0),
+            0.0,
+        );
+        parent.persistent = true;
+        parent.extra.in_love = 600;
+        partner.extra.in_love = 600;
+        parent.extra.tame = true;
+        partner.extra.tame = true;
+        parent.extra.variant = 1;
+        partner.extra.variant = 2;
+        parent.extra.variant2 = 1;
+        partner.extra.variant2 = if horizon_client::mobs::llama::is_llama(partner.species()) {
+            4
+        } else {
+            2
+        };
+        set_base(&mut parent, Attr::MaxHealth, 20.0);
+        set_base(&mut partner, Attr::MaxHealth, 28.0);
+        set_base(&mut parent, Attr::MovementSpeed, 0.2);
+        set_base(&mut partner, Attr::MovementSpeed, 0.3);
+        parent.health = 20.0;
+        partner.health = 28.0;
+        parent.extra.vector[0] = 0.5;
+        partner.extra.vector[0] = 0.9;
+        // The camel's client animation delay must not add an unrelated draw.
+        parent.extra.ints[0] = 1000;
+        parent.ai.targets.clear();
+        parent.ai.goals.clear();
+        parent.ai.goals.add(
+            2,
+            SeededBreed {
+                goal: Breed::new(1.0),
+                seed,
+            },
+        );
+        let others = [partner.seen(None)];
+        let mut events = Vec::new();
+        let mut test_level = horizon_client::health::TestLevel::new(321);
+        let mut experience = None;
+        {
+            let world = MobWorld {
+                others: &others,
+                mob_drops,
+                ..game.mob_world_base(&[])
+            };
+            assert!(!world.asks_baby_spawn);
+            for _ in 0..200 {
+                // No floor in this fixture: keep the pair in breeding range.
+                parent.position = Vec3::new(0.0, 64.0, 0.0);
+                parent.tick(&world, &mut test_level.level(), &mut events);
+                experience = events.iter().find_map(|event| match event {
+                    MobEvent::Breed { experience, .. } => Some(*experience),
+                    _ => None,
+                });
+                if experience.is_some() {
+                    break;
+                }
+                events.clear();
+            }
+        }
+        let experience = experience.expect("the goal must breed");
+        let tick_random = parent.random.state();
+        game.mobs.extend([parent, partner]);
+        game.handle_mob_events(events).unwrap();
+        let parent = game.mobs.iter_mut().find(|m| m.id == base + 1).unwrap();
+        assert_eq!(
+            parent.random.state(),
+            tick_random,
+            "Game must not redraw inheritance"
+        );
+        let next_random = parent.random.next_int();
+        let child = game.mobs.iter().find(|m| m.extra.age < 0).unwrap().clone();
+        Bred {
+            child,
+            next_random,
+            experience,
+        }
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn equine_breeding_inheritance_precedes_same_tick_healing_and_grazing() {
+        super::super::native_entity_refs::tests::with_game(|game| {
+            // java.util.Random(42), Horse/Donkey/Llama.getBreedOffspring,
+            // then XP, then AbstractHorse.aiStep's nextInt(900)/nextInt(300)
+            // (llamas only heal). The attributes use stocks (20,.5,.2) and (28,.9,.3).
+            for (parent, partner) in [
+                ("minecraft:horse", "minecraft:horse"),
+                ("minecraft:donkey", "minecraft:donkey"),
+                ("minecraft:horse", "minecraft:donkey"),
+                ("minecraft:donkey", "minecraft:horse"),
+                ("minecraft:llama", "minecraft:llama"),
+                ("minecraft:trader_llama", "minecraft:llama"),
+            ] {
+                let result = tick_breeding(game, parent, partner, 42, true);
+                let horse = parent == "minecraft:horse" && partner == parent;
+                let llama = horizon_client::mobs::llama::is_llama(result.child.species());
+                assert_eq!(
+                    result.child.extra.variant,
+                    if horse {
+                        5
+                    } else if llama {
+                        1
+                    } else {
+                        0
+                    }
+                );
+                assert_eq!(
+                    result.child.extra.variant2,
+                    if horse {
+                        2
+                    } else if llama {
+                        4
+                    } else {
+                        0
+                    }
+                );
+                let expected = if horse {
+                    [24.8238468170166, 0.5886834847817017, 0.3030804447968077]
+                } else {
+                    [24.91461181640625, 0.7668932765979051, 0.22812363785863735]
+                };
+                let actual = [
+                    f64::from(result.child.attrs.max_health),
+                    result.child.extra.vector[0],
+                    result.child.attrs.speed,
+                ];
+                for (actual, expected) in actual.into_iter().zip(expected) {
+                    assert!(
+                        (actual - expected).abs() < 1e-12,
+                        "{parent}/{partner}: {actual} != {expected}"
+                    );
+                }
+                assert_eq!(
+                    result.experience,
+                    BreedExperience::Drawn(Some(if horse || llama { 2 } else { 1 }))
+                );
+                assert_eq!(
+                    result.next_random,
+                    if horse {
+                        -1_074_144_810
+                    } else if llama {
+                        1_888_925_827
+                    } else {
+                        652_655_727
+                    },
+                    "{parent}/{partner}"
+                );
+                if parent != partner && !llama {
+                    assert_eq!(result.child.species(), Species::Mule);
+                }
+                if parent == "minecraft:trader_llama" {
+                    assert!(result.child.persistent);
+                }
+            }
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn wolf_breeding_selects_either_coat_from_the_parent_stream() {
+        super::super::native_entity_refs::tests::with_game(|game| {
+            // Different coats, both nextBoolean outcomes, followed by nextInt(7).
+            for (seed, coat, xp, next) in [(42, 1, 6, -1_360_544_799), (4096, 2, 4, -916_162_618)] {
+                let result = tick_breeding(game, "minecraft:wolf", "minecraft:wolf", seed, true);
+                assert_eq!(result.child.extra.variant, coat);
+                assert_eq!(result.experience, BreedExperience::Drawn(Some(xp)));
+                assert_eq!(result.next_random, next);
+            }
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn camel_breeding_leaves_the_parent_stream_unchanged() {
+        super::super::native_entity_refs::tests::with_game(|game| {
+            let kind = "minecraft:camel";
+            let result = tick_breeding(game, kind, kind, 42, false);
+            assert_eq!(result.next_random, -1_170_105_035); // Random(42).nextInt(), no inheritance.
+            assert_eq!(result.child.attrs.max_health, result.child.kind.max_health);
+            assert_eq!(result.child.attrs.speed, result.child.kind.speed);
+        });
+    }
 
     #[test]
     #[ignore = "needs prepared resources"]

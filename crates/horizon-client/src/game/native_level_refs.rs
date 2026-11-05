@@ -1,8 +1,7 @@
-//! A level's blocks and time for native server mods, through a `LevelRef`
-//! (docs/modding/src/how-to/native-mods.md, "Entity and level handles", #7387). They read any
-//! level the server has loaded, the one in place or another, and return
-//! `None` (or `false`) on a client, for a handle of an earlier open, or for a
-//! block in a chunk that isn't loaded.
+//! A level's blocks, height and time through a `LevelRef`
+//! (docs/modding/src/how-to/native-mods.md, "Entity and level handles", #7387). Server reads
+//! reach any loaded level; both-side reads also reach the client's current level.
+//! A handle of an earlier open or an unloaded block reads `None` (or `false`).
 use super::Game;
 use horizon_client::{streaming::Streaming, world::World};
 use horizon_core::{
@@ -400,9 +399,11 @@ impl Game<'_> {
             .then(|| world_brightness(world, layer, pos))
     }
     /// The lowest block `y` and the height of the level
-    /// (`LevelHeightAccessor.getMinY`, `getHeight`). API 381.
+    /// (`LevelHeightAccessor.getMinY`, `getHeight`). Reads any loaded server level
+    /// or the client's current level. None for a stale handle, before client login,
+    /// or for a dimension unavailable on this side. Does not load chunks. API 381.
     pub(super) fn native_level_height(&self, level: LevelRef) -> Option<(i32, i32)> {
-        self.native_level_world(level)
+        self.native_level_read_world(level)
             .map(|w| (w.shape.min_y, w.shape.height))
     }
     /// The ticks the server has run (`Level.getGameTime`), shared by every
@@ -424,6 +425,51 @@ mod tests {
     use super::super::{Dim, native_entity_refs::tests::with_game};
     use horizon_core::position::BlockPos;
     use mod_api::{ChunkRef, LevelRef, LightLayer, NativeWorldEpoch};
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn height_reads_server_levels_and_the_joined_client_level() {
+        use super::super::execution_role::ExecutionRole;
+        use horizon_client::chunk::LevelShape;
+        use horizon_protocol::connection::Pipe;
+        use mod_api::Host;
+
+        with_game(|game| {
+            let overworld = game.level("minecraft:overworld").unwrap();
+            let nether = LevelRef::new(overworld.epoch(), "minecraft:the_nether");
+            assert_eq!(overworld.height(game), Some((-64, 384)));
+            assert_eq!(nether.height(game), None, "not opened yet");
+            game.enter_level(Dim::Nether).unwrap();
+            assert_eq!(nether.height(game), Some((0, 256)));
+            assert_eq!(overworld.height(game), Some((-64, 384)), "parked level");
+            game.enter_level(Dim::Overworld).unwrap();
+
+            game.options.execution_role = ExecutionRole::Client;
+            game.options.dedicated = None;
+            let (client, _server) = Pipe::pair();
+            game.connect_local(client, "HeightReadTest").unwrap();
+            assert!(game.level("minecraft:overworld").is_none());
+            assert_eq!(overworld.height(game), None, "not logged in");
+            game.remote.as_mut().unwrap().logged_in = true;
+            game.world.shape = LevelShape::new(-128, 512, 512, true, false).unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
+            let host: &dyn Host = game;
+            assert_eq!(level.height(host), Some((-128, 512)), "client's own shape");
+            assert_eq!(
+                nether.height(host),
+                None,
+                "parked server level is not visible"
+            );
+            assert!(host.level("minecraft:the_nether").is_none());
+            let stale = LevelRef::new(
+                NativeWorldEpoch::new(level.epoch().get() + 1),
+                level.dimension(),
+            );
+            assert_eq!(stale.height(host), None);
+            game.remote.as_mut().unwrap().logged_in = false;
+            assert_eq!(level.height(game), None, "logged out");
+        });
+    }
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]

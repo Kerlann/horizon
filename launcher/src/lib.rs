@@ -53,4 +53,7 @@ pub mod tailscale;
 pub mod themes;
 pub mod uninstall_aside;
 pub mod update_handoff;
+pub mod update_recovery;
+#[cfg(windows)]
+mod windows_runtime;
 pub mod worlds;

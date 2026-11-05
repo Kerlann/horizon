@@ -2,12 +2,16 @@
 //! native mod too.
 // ANCHOR: mod
 use mod_api::{
-    Flow, Hooks, ItemPart, Registrar, RegistrationContext, ServerChatEvent, ServerHost, Text,
-    UseItemEvent,
+    Flow, Hooks, HostSide, ItemPart, Registrar, RegistrationContext, ServerChatEvent, ServerHost,
+    Text, UseItemEvent,
 };
+use mod_points::{Points, TickArgs};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Default)]
-pub struct Mod;
+pub struct Mod {
+    ticks: AtomicU64,
+}
 
 /// Sticks announce each use.
 struct Stick;
@@ -29,6 +33,21 @@ impl Hooks for Mod {
     fn server_chat(&self, _host: &mut dyn ServerHost, event: &mut ServerChatEvent<'_>) -> Flow {
         *event.message = Text::literal(format!("{} (via mod.wasm)", event.raw_text));
         Flow::Continue
+    }
+}
+
+/// Listens at the game's tick, a point its `horizon-mod.toml` names: every 200 server ticks it
+/// says so in chat.
+#[mod_api::horizon_mod]
+impl Points for Mod {
+    fn tick(&self, host: HostSide<'_>, _args: &mut TickArgs) {
+        let HostSide::Server(host) = host else {
+            return;
+        };
+        let ticks = self.ticks.fetch_add(1, Ordering::Relaxed) + 1;
+        if ticks % 200 == 0 {
+            host.broadcast(Text::literal(format!("hello_wasm: {ticks} server ticks")));
+        }
     }
 }
 // ANCHOR_END: mod

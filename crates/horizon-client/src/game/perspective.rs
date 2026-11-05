@@ -256,7 +256,6 @@ fn wrap(d: f32) -> f32 {
 }
 impl Game<'_> {
     /// `key.togglePerspective`.
-    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn cycle_camera(&mut self) {
         let previous = self.camera_type;
         self.camera_type = self.camera_type.cycle();
@@ -596,7 +595,6 @@ impl Game<'_> {
     /// agent's `turn`.
     /// The model's old pitch is the player's `xRotO`, which the turn moves
     /// with `xRot` (`turn_rotation`).
-    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn turn_player(&mut self, xo: f64, yo: f64) {
         let pitch_o = self.player_model.as_ref().map(|m| m.previous_head_pitch);
         let rotation = turn_rotation(self.yaw, self.pitch, pitch_o, xo, yo);

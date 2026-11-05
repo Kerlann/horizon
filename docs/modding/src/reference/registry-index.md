@@ -1,7 +1,7 @@
 # The registry index and `.hpack`
 
 Horizon's registry lists what is made for Horizon and reviewed: content mods (`.hmod`), native mods (`.hmod`,
-[native mods](../how-to/native-mods.md)), modpacks (`.hpack`), resource packs and Horizon shader packs (`.hshader`,
+[native mods](../how-to/native-mods.md)), modpacks (`.hpack`), resource packs, data packs, shaders-folder packs and Horizon shader packs (`.hshader`,
 [shaders.md](../../../shaders.md)). A project is listed by a reviewed pull request in
 [horizon-rust/horizon-mods](https://github.com/horizon-rust/horizon-mods) that links its GitHub repository; its versions are
 the repository's GitHub releases, read and checked by the registry's CI with no pull request and no review per version. The launcher and the
@@ -21,6 +21,7 @@ Level: preview ([API stability](../../../api/stability.md)). Schema 1.
     "id": "coords_hud", "kind": "mod", "name": "Coordinates HUD", "summary": "One line.",
     "description": "Markdown.", "authors": ["Horizon"], "owners": ["ludovic111"],
     "license": "MIT", "source": "https://github.com/...", "icon": "https://...png", "key": "RWT...", "downloads": 1234,
+    "categories": ["utility"], "tags": ["hud"], "screenshots": ["https://...png"],
     "versions": [{
       "version": "0.1.0", "published": "2026-10-24", "changelog": "",
       "api": "0.2", "side": "client", "capabilities": ["registries"], "game": "26.3",
@@ -36,11 +37,14 @@ Level: preview ([API stability](../../../api/stability.md)). Schema 1.
 | --- | --- |
 | `schema` | 1. A reader refuses a higher number with "update Horizon" rather than misread it. |
 | `projects[].id` | `[a-z0-9_]{1,64}`, unique; a mod's is its manifest's `id`. |
-| `kind` | `mod` (content), `native-mod`, `modpack`, `resourcepack`, `shader` (Horizon's own shader packs, not Iris or OptiFine packs). Other kinds (data packs, worlds, themes) may come without a new schema: a reader keeps a kind it doesn't know and doesn't offer it. |
+| `kind` | `mod` (content), `native-mod`, `modpack`, `resourcepack`, `shader` (Horizon `.hshader`), `shaderpack` (a `shaders/`-folder zip), `datapack` (a data-pack zip). Other kinds (worlds, themes) may come without a new schema: a reader keeps a kind it doesn't know and doesn't offer it. |
 | `summary`, `description` | One line for lists; Markdown for the project's page. |
 | `owners` | GitHub logins allowed to publish updates. |
 | `license`, `source` | An SPDX expression and an `https://` address of the source code: both required. |
 | `icon` | `https://`, optional. |
+| `categories` | Up to 3 from the kind’s category list. |
+| `tags` | Up to 10 lowercase tags. |
+| `screenshots` | Up to 8 HTTPS PNG or JPEG addresses. |
 | `key` | The author's [minisign](https://jedisct1.github.io/minisign/) public key. When set, every version must be signed with it; an update signed with another key is refused. Absent: the project is unsigned and the launcher says so. |
 | `versions` | Newest first, at least one. |
 | `downloads` | How many times its files were downloaded, every version together: GitHub's count of each release asset, summed by the publish job, which runs every hour. Absent until a file is downloaded. Read-only: never in an entry. |
@@ -103,12 +107,15 @@ check (`index::inspect`): a mod's API, side and capabilities, a modpack's mods, 
 
 ```toml
 id = "coords_hud"                # the file's name, and the manifest's id
-kind = "mod"                     # mod | native-mod | modpack | resourcepack | shader
+kind = "mod"                     # mod | native-mod | modpack | resourcepack | shader | shaderpack | datapack
 repo = "horizon-rust/coords-hud" # GitHub owner/name: its releases are its versions
 owners = ["ludovic111"]          # GitHub logins responsible for the project
 owner_ids = [12345678]           # their numeric GitHub IDs: these decide who an owner is (a login can change hands)
 key = "RWT..."                   # optional: the minisign public key every version is signed with
-icon = "icons/coords_hud.png"    # optional: a PNG of at most 256 KiB in the repository, or https://
+icon = "icons/coords_hud.png"    # optional: square PNG, 64–1024 pixels, at most 256 KiB, or https://
+categories = ["utility"]         # up to 3 from the kind’s list
+tags = ["hud", "coordinates"]    # up to 10 lowercase tags
+screenshots = ["screenshots/coords_hud/1.png"] # up to 8 PNG/JPEG files, or https://
 # The page. Each field may instead come from horizon-registry.toml in the repo (below); these win.
 name = "Coordinates HUD"
 summary = "One line, at most 160 characters."
@@ -203,11 +210,10 @@ How the repository runs (its workflows are in `.github/workflows/`):
 - **Taking a file down** is a pull request adding it to `revoked.toml`. Removing an entry outright (a test, a project
   nobody installed) fails `registry review` on purpose and needs an administrator's merge.
 
-Kinds open to submissions: `mod` (content only), `native-mod`, `modpack`, `resourcepack`, `shader`. A shader pack (`.hshader`) passes
+Kinds open to submissions: `mod` (content only), `native-mod`, `modpack`, `resourcepack`, `shader`, `shaderpack`, `datapack`. A data pack contains `pack.mcmeta` and `data/`; a shaderpack contains `shaders/` and requires redistribution permission. A Horizon shader pack (`.hshader`) passes
 `horizon_shader_api::check`, the check the game runs before it loads one (`horizon-shader check`, [shaders.md](../../../shaders.md)):
 every stage validated by naga and translated for Vulkan, Metal and DirectX 12; its manifest's id, version and shader
-API line are its facts. Iris and OptiFine packs are for the Modrinth browser. A new kind gets its own check before it
-opens.
+API line are its facts. A new kind gets its own check before it opens.
 
 ## Changelog
 

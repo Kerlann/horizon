@@ -226,7 +226,6 @@ impl Game<'_> {
         }
     }
     /// The field of view in degrees, divided by an instant zoom.
-    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn zoomed_fov_degrees(&self, fov: f32) -> f32 {
         match self.zoom_now() {
             (factor, false, _) => fov / factor,

@@ -110,75 +110,26 @@ pub fn finalize(m: &mut Mob) {
     m.extra.variant = variant as u8;
     m.extra.vector[0] = m.kind.jump_strength;
 }
-/// `Llama.getBreedOffspring` after `setOffspringAttributes`: the strength
-/// (rarely one more) and either parent's coat.
-pub fn offspring(child: &mut Mob, a: &Mob, b: &Mob, r: &mut impl RandomSource) {
-    let top = strength(a).max(strength(b));
-    let mut s = r.next_int_bound(top).unwrap_or(0) + 1;
-    if r.next_float() < 0.03 {
-        s += 1;
-    }
-    child.extra.variant2 = s.clamp(1, 5) as u8;
-    child.extra.variant = if r.next_boolean() {
-        a.extra.variant
-    } else {
-        b.extra.variant
-    };
-    if is_trader(child) {
-        child.persistent = true;
-    }
-}
-/// A llama's baby as `Llama.getBreedOffspring` makes it.
-#[derive(Clone, Debug)]
-pub struct Offspring {
-    pub max_health: f32,
-    pub jump: f64,
-    pub speed: f64,
-    pub strength: u8,
-    pub variant: u8,
-}
 /// `Llama.getBreedOffspring` with `AbstractHorse.setOffspringAttributes`,
 /// drawn from the parent's random with the partner's stock.
-pub fn breed_offspring(m: &mut Mob, partner: &Seen) -> Offspring {
+pub fn breed_offspring(m: &mut Mob, partner: &Seen) -> equine::Offspring {
     // Seen.profession is the partner's strength.
     let top = strength(m).max(i32::from(partner.profession));
-    let (health, jump, speed, own) = (
-        f64::from(m.attrs.max_health),
-        m.extra.vector[0],
-        m.attrs.speed,
-        m.extra.variant,
-    );
+    let attributes = equine::OffspringAttributes::draw(m, partner);
     let r = &mut m.random;
-    let max_health = equine::offspring(health, partner.stats[0], 15.0, 30.0, r) as f32;
-    let jump = equine::offspring(jump, partner.stats[1], 0.4, 1.0, r);
-    let speed = equine::offspring(speed, partner.stats[2], 0.1125, 0.3375, r);
     let mut s = r.next_int_bound(top).unwrap_or(0) + 1;
     if r.next_float() < 0.03 {
         s += 1;
     }
     let variant = if r.next_boolean() {
-        own
+        m.extra.variant
     } else {
         partner.variant
     };
-    Offspring {
-        max_health,
-        jump,
-        speed,
-        strength: s.clamp(1, 5) as u8,
+    equine::Offspring {
+        attributes,
         variant,
-    }
-}
-/// The game makes the baby drawn by `breed_offspring`.
-pub fn apply_offspring(child: &mut Mob, o: &Offspring) {
-    set_base(child, Attr::MaxHealth, f64::from(o.max_health));
-    child.health = o.max_health;
-    child.extra.vector[0] = o.jump;
-    set_base(child, Attr::MovementSpeed, o.speed);
-    child.extra.variant2 = o.strength;
-    child.extra.variant = o.variant;
-    if is_trader(child) {
-        child.persistent = true;
+        variant2: s.clamp(1, 5) as u8,
     }
 }
 /// `LlamaHurtByTargetGoal`: stops hunting right after a spit.
@@ -397,7 +348,7 @@ mod tests {
                         MobEvent::Breed {
                             parent: 1,
                             partner: 2,
-                            llama: Some(_),
+                            equine: Some(_),
                             ..
                         }
                     )),

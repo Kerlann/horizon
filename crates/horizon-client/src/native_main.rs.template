@@ -15,5 +15,8 @@ fn main() {
     let mods: Vec<mod_api::ModEntry> = native_mods! {
 /* MOD_ENTRIES */
     };
-    horizon_client::entry::main_with(mods, BUILT_MODS);
+    let points: &[horizon_client::entry::NativePoints] = &[
+/* MOD_POINTS */
+    ];
+    horizon_client::entry::main_with(mods, points, BUILT_MODS);
 }

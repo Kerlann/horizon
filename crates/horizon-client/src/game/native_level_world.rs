@@ -1,7 +1,7 @@
-//! A level's world settings for native server mods, through a `LevelRef`
-//! (docs/modding/src/how-to/native-mods.md, "Entity and level handles", #7387): the seed, the
-//! difficulty, game rules and weather. They return `None` on a client or for
-//! a handle of an earlier open.
+//! A level's world settings through a `LevelRef`
+//! (docs/modding/src/how-to/native-mods.md, "Entity and level handles", #7387): the seed,
+//! difficulty and game rules on the server, and weather on both sides.
+//! Stale handles return `None`.
 use super::{Dim, Game};
 use horizon_client::command::vanilla::DIFFICULTIES;
 use horizon_client::world::World;
@@ -22,6 +22,10 @@ fn weather_for_level(
     } else {
         (0.0, 0.0)
     }
+}
+
+fn weather_for_world(world: &World, is_end: bool) -> (f32, f32) {
+    weather_for_level(world.shape, is_end, world.weather.levels(1.0))
 }
 
 /// `Level.isRaining` and `isThundering` from the rain and thunder levels.
@@ -112,19 +116,17 @@ impl Game<'_> {
         self.ui.rules.get(r.name)
     }
     /// The rain and thunder levels, each 0.0 to 1.0 (`Level.getRainLevel`,
-    /// `getThunderLevel`): both 0 in a level with no weather, as the Nether
-    /// and the End.
+    /// `getThunderLevel` at partial tick 1.0): both 0 in a level with no weather.
+    /// Reads any open server level or the client's current synchronized level;
+    /// None for a stale handle, an unavailable level or a client not logged in.
     pub(super) fn native_level_weather(&self, level: LevelRef) -> Option<(f32, f32)> {
-        let world = self.native_level_world(level)?;
-        Some(weather_for_level(
-            world.shape,
-            level.dimension() == super::Dim::End.id(),
-            world.weather.levels(1.0),
-        ))
+        let world = self.native_level_read_world(level)?;
+        Some(weather_for_world(world, level.dimension() == Dim::End.id()))
     }
     /// Whether it rains (`Level.isRaining`: a rain level above 0.2).
     pub(super) fn native_level_is_raining(&self, level: LevelRef) -> Option<bool> {
-        Some(weather_flags(self.native_level_weather(level)?).0)
+        let world = self.native_level_world(level)?;
+        Some(weather_flags(weather_for_world(world, level.dimension() == Dim::End.id())).0)
     }
     /// `Level.isRainingAt(pos)` in the level a handle names, the one in place or a parked one:
     /// it rains there and `pos` is under open sky in a biome that rains. None for a stale
@@ -161,7 +163,8 @@ impl Game<'_> {
     }
     /// Whether it thunders (`Level.isThundering`: a thunder level above 0.9).
     pub(super) fn native_level_is_thundering(&self, level: LevelRef) -> Option<bool> {
-        Some(weather_flags(self.native_level_weather(level)?).1)
+        let world = self.native_level_world(level)?;
+        Some(weather_flags(weather_for_world(world, level.dimension() == Dim::End.id())).1)
     }
 }
 
@@ -269,6 +272,49 @@ mod tests {
             });
         });
     }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn weather_read_resolves_levels_and_refuses_stale_or_unavailable_handles() {
+        use super::super::execution_role::ExecutionRole;
+        use mod_api::{LevelRef, NativeWorldEpoch};
+
+        with_game(|game| {
+            let level = game.native_level(game.dim.id()).unwrap();
+            game.world.weather.rain_level = (0.0, 0.5);
+            game.world.weather.thunder_level = (0.0, 0.75);
+            assert_eq!(level.weather(game), Some((0.5, 0.375)));
+            let stale = LevelRef::new(
+                NativeWorldEpoch::new(level.epoch().get() + 1),
+                level.dimension(),
+            );
+            assert_eq!(stale.weather(game), None);
+            let absent = LevelRef::new(level.epoch(), "missing:level");
+            assert_eq!(absent.weather(game), None);
+            // The current world's dimension type, not its id alone, gates weather.
+            game.world.shape.has_ceiling = true;
+            assert_eq!(level.weather(game), Some((0.0, 0.0)));
+            game.options.execution_role = ExecutionRole::Client;
+            assert_eq!(level.weather(game), None, "no logged-in remote level");
+            let (client, _server) = horizon_protocol::connection::Pipe::pair();
+            game.connect_local(client, "WeatherTest").unwrap();
+            assert_eq!(level.weather(game), None, "login has not completed");
+            game.remote.as_mut().unwrap().logged_in = true;
+            game.world.weather.rain_level = (0.0, 0.5);
+            game.world.weather.thunder_level = (0.0, 0.75);
+            assert_eq!(level.weather(game), Some((0.5, 0.375)));
+            let other = LevelRef::new(level.epoch(), "minecraft:the_nether");
+            assert_eq!(
+                other.weather(game),
+                None,
+                "client shows only its current level"
+            );
+            assert_eq!(stale.weather(game), None);
+            // Only the weather pair is a both-side read; the server queries keep their guard.
+            assert_eq!(game.native_level_is_raining(level), None);
+            assert_eq!(game.native_level_is_thundering(level), None);
+        });
+    }
+
     #[test]
     fn weather_requires_skylight_no_ceiling_and_not_end() {
         use horizon_client::chunk::LevelShape;

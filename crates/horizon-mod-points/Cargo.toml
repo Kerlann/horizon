@@ -1,0 +1,33 @@
+[package]
+name = "horizon-mod-points"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "The game's injection points for mods that listen at them: each point's record and the Points trait"
+
+[lib]
+name = "mod_points"
+
+[dependencies]
+horizon-mod-api = { path = "../horizon-mod-api" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "0.46", default-features = false, features = ["macros"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wasmtime = { version = "50", optional = true, default-features = false, features = ["anyhow", "cranelift", "component-model", "runtime", "std"] }
+
+[build-dependencies]
+horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
+
+[dev-dependencies]
+horizon-mod-api-macros = { path = "../horizon-mod-api-macros" }
+
+[features]
+# The game's side of wasm mods' listeners: the forwarding `Points` and the tables it checks a mod's
+# places against. Only the game enables it; a mod compiles none of it.
+wasm-host = ["dep:wasmtime"]
+
+[lints]
+workspace = true

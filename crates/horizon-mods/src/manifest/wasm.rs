@@ -6,13 +6,17 @@ pub const MAX_WASM: u64 = 64 << 20;
 
 /// A wasm mod's `[wasm]` section, written by `cargo horizon-mod build --wasm` (or Portizon),
 /// never by hand: what its one `mod.wasm` is and what it was built and linked against.
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(try_from = "Fields")]
 pub struct Wasm {
     sha512: String,
     toolchain: String,
     linked: std::collections::BTreeMap<String, String>,
     built_with: Option<String>,
+    /// The injection points its `mod.wasm` listens at: the package's `[[native.injection]]`,
+    /// which a wasm mod writes like a native one, without `[native]`'s pins (it builds nothing).
+    #[serde(skip)]
+    pub(crate) points: Vec<super::Injection>,
 }
 
 #[derive(Deserialize)]
@@ -44,6 +48,7 @@ impl TryFrom<Fields> for Wasm {
             toolchain: fields.toolchain,
             linked: fields.linked,
             built_with: fields.built_with,
+            points: Vec::new(),
         })
     }
 }
@@ -111,6 +116,11 @@ impl std::fmt::Display for WasmError {
 impl std::error::Error for WasmError {}
 
 impl Wasm {
+    /// The points its `mod.wasm` listens at, each a `trait_method` at a point's head or return.
+    pub fn points(&self) -> &[super::Injection] {
+        &self.points
+    }
+
     /// The SHA-512 of the package's `mod.wasm`.
     pub fn sha512(&self) -> &str {
         &self.sha512
