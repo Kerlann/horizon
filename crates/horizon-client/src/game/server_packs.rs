@@ -383,6 +383,7 @@ impl Game<'_> {
         let mut notifiers = std::mem::take(&mut self.server_packs.notifiers);
         notifiers.retain_mut(|n| n.poll(|toast| self.add_system_toast(toast)));
         self.server_packs.notifiers = notifiers;
+        self.drive_mod_browser();
         // A reload waits for the world's resources (`reload_packs`).
         if self.rest_loader.is_some() {
             return;
