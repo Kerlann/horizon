@@ -20,27 +20,9 @@ pub(super) struct HookSources {
 /// with more declares its parameters in `hooks/*.rs` and its target takes one `<Name>Call`.
 const MAX_TARGET_PARAMETERS: usize = 7;
 
-/// The hooks whose flat targets already take more than [`MAX_TARGET_PARAMETERS`]. This list only
-/// shrinks and takes no new entries: convert a hook to a carrier and delete its line. A PR that
-/// adds a hook never edits it, so no two PRs collide on it.
-const FLAT_TARGETS_OVER_THE_LIMIT: &[&str] = &[
-    "use_on",
-    "piston_pre",
-    "projectile_impact",
-    "entity_mount",
-    "sign_changed",
-    "cauldron_level_changed",
-    "ender_pearl_teleport",
-    "block_drops",
-    "bonemeal",
-    "item_tooltip",
-    "note_block_play",
-    "player_set_spawn",
-];
-
-/// Refuses a flat target of a new hook that takes more than [`MAX_TARGET_PARAMETERS`].
+/// Refuses a flat target that takes more than [`MAX_TARGET_PARAMETERS`].
 fn target_parameters(name: &str, native: &str, count: usize, carrier: &str) -> Result<(), String> {
-    if count > MAX_TARGET_PARAMETERS && !FLAT_TARGETS_OVER_THE_LIMIT.contains(&name) {
+    if count > MAX_TARGET_PARAMETERS {
         return Err(format!(
             "{name}: {native} takes {count} parameters, more than {MAX_TARGET_PARAMETERS}: declare them on the hook in hooks/*.rs so it takes one {carrier}"
         ));
@@ -435,7 +417,7 @@ pub(super) fn emit(
             let target_path: syn::Path = syn::parse_str(target)
                 .map_err(|error| format!("invalid target for {name}: {error}"))?;
             let receiver = &target_path.segments[target_path.segments.len() - 2].ident;
-            fire.push_str(&format!("impl {receiver}<'_> {{ #[allow(dead_code)] #[inline] pub(super) {signature} {{ mod_api::{call}({passed}); }} }}\n", signature = signature.to_token_stream()));
+            fire.push_str(&format!("impl {receiver}<'_> {{ #[inline] pub(super) {signature} {{ mod_api::{call}({passed}); }} }}\n", signature = signature.to_token_stream()));
             if fill {
                 let passed = sig
                     .inputs
@@ -666,6 +648,5 @@ mod tests {
         assert!(target_parameters("new_hook", "native_new_hook", 7, "NewHookCall").is_ok());
         let refused = target_parameters("new_hook", "native_new_hook", 8, "NewHookCall");
         assert!(refused.unwrap_err().contains("one NewHookCall"));
-        assert!(target_parameters("use_on", "native_use_on", 9, "UseOnCall").is_ok());
     }
 }

@@ -106,18 +106,18 @@ impl Game<'_> {
         };
         let dimension = self.dim.id();
         let mut canceled = false;
-        self.native_projectile_impact(
+        self.native_projectile_impact(mod_api::__private::ProjectileImpactCall {
             dimension,
-            trident,
-            "minecraft:trident",
+            projectile: trident,
+            kind: "minecraft:trident",
             owner,
             entity,
-            &entity_kind,
+            entity_kind: &entity_kind,
             block,
             face,
-            [at.x, at.y, at.z],
-            &mut canceled,
-        );
+            at: [at.x, at.y, at.z],
+            canceled: &mut canceled,
+        });
         canceled
     }
 
@@ -179,18 +179,18 @@ impl Game<'_> {
             };
             let owner = self.native_impact_owner(p);
             let mut stop = false;
-            self.native_projectile_impact(
+            self.native_projectile_impact(mod_api::__private::ProjectileImpactCall {
                 dimension,
-                p.id,
-                projectile_type(p),
+                projectile: p.id,
+                kind: projectile_type(p),
                 owner,
                 entity,
-                &entity_kind,
+                entity_kind: &entity_kind,
                 block,
                 face,
-                [at.x, at.y, at.z],
-                &mut stop,
-            );
+                at: [at.x, at.y, at.z],
+                canceled: &mut stop,
+            });
             canceled.push(stop);
         }
         canceled

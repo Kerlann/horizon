@@ -1322,28 +1322,32 @@ mod tests {
         let mut claimed = false;
         dispatch_use_on(
             &mut host,
-            &ItemStack::default(),
-            [0; 3],
-            [0; 3],
-            Hand,
-            BlockHit,
-            0,
-            0,
-            &mut claimed,
+            calls::UseOnCall {
+                stack: &ItemStack::default(),
+                pos: [0; 3],
+                face: [0; 3],
+                hand: Hand,
+                hit: BlockHit,
+                player: 0,
+                player_entity_id: 0,
+                claimed: &mut claimed,
+            },
         );
         assert!(claimed);
         assert_eq!(*calls.lock().unwrap(), [1]);
         calls.lock().unwrap().clear();
         dispatch_use_on(
             &mut host,
-            &ItemStack::default(),
-            [0; 3],
-            [0; 3],
-            Hand,
-            BlockHit,
-            0,
-            0,
-            &mut claimed,
+            calls::UseOnCall {
+                stack: &ItemStack::default(),
+                pos: [0; 3],
+                face: [0; 3],
+                hand: Hand,
+                hit: BlockHit,
+                player: 0,
+                player_entity_id: 0,
+                claimed: &mut claimed,
+            },
         );
         assert!(calls.lock().unwrap().is_empty());
     }

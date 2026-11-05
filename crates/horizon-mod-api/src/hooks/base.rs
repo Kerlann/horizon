@@ -410,7 +410,16 @@ pub trait Hooks {
         scope = "item",
         key = "stack"
     )]
-    fn use_on();
+    fn use_on(
+        stack: &ItemStack,
+        pos: [i32; 3],
+        face: [i32; 3],
+        hand: Hand,
+        hit: BlockHit,
+        player: u128,
+        player_entity_id: i32,
+        claimed: &mut bool,
+    );
     /// A player uses `stack` (right click) with `self.hand`: in the air, or
     /// on a block once `native_use_on` let it through, where `Item.use`
     /// starts. Each click reaches it once. Set `claimed` to take the use: the
@@ -489,7 +498,15 @@ pub trait Hooks {
         neoforge = "PistonEvent.Pre",
         target = "horizon_client::game::native_hooks::GameLevel<'_>::native_piston_pre"
     )]
-    fn piston_pre();
+    fn piston_pre(
+        dimension: LevelDimension,
+        piston: BlockPos,
+        direction: [i32; 3],
+        extending: bool,
+        push: &[BlockPos],
+        destroy: &[BlockPos],
+        canceled: &mut bool,
+    );
     /// On an authoritative server, the piston at `piston` pushed the blocks at
     /// `push` one step `direction` (`[0, 1, 0]` is up; pulling when it
     /// retracts, `extending` false) and destroyed those at `destroy`
@@ -1956,7 +1973,18 @@ pub trait Hooks {
         neoforge = "ProjectileImpactEvent",
         cancellable = true
     )]
-    fn projectile_impact();
+    fn projectile_impact(
+        dimension: &str,
+        projectile: u32,
+        kind: &str,
+        owner: u32,
+        entity: Option<u32>,
+        entity_kind: &str,
+        block: [i32; 3],
+        face: [i32; 3],
+        at: [f64; 3],
+        canceled: &mut bool,
+    );
     /// An entity mounts or dismounts a vehicle (NeoForge's `EntityMountEvent`, posted from
     /// `Entity.startRiding` and `removeVehicle`): `entity` of type `kind` (`minecraft:player`,
     /// `minecraft:zombie`) in the server level `dimension`, getting on (`mounting`) or off the
@@ -1977,7 +2005,15 @@ pub trait Hooks {
         neoforge = "EntityMountEvent",
         cancellable = true
     )]
-    fn entity_mount();
+    fn entity_mount(
+        dimension: &str,
+        entity: u32,
+        kind: &str,
+        vehicle: u32,
+        vehicle_kind: &str,
+        mounting: bool,
+        canceled: &mut bool,
+    );
     /// A player's click is about to act on what the crosshair points at. `event.key` says which: `Attack` (when an attack is allowed, and each tick a held key keeps digging a block), `Use` (once for each hand tried, main hand first, before the hand's target and item) or `PickBlock` (only with a block or entity aimed at). Cancel to skip the action; a cancelled use also gives the other hand no turn. A cancelled attack or use still swings `event.hand` unless the listener clears `event.swing_hand`. Client side: a single player's window and a server's player.
     #[hook(
         side = "client",
@@ -2304,7 +2340,15 @@ pub trait Hooks {
         neoforge = "none (NeoForge has no sign-editing event)",
         cancellable = true
     )]
-    fn sign_changed();
+    fn sign_changed(
+        player: u128,
+        name: &str,
+        dimension: &str,
+        pos: [i32; 3],
+        front: bool,
+        lines: &mut Vec<String>,
+        cancel: &mut bool,
+    );
     /// Models no blockstate names that this client bakes beside the block
     /// models (NeoForge's `ModelEvent.RegisterStandalone`): push their ids
     /// (`mymod:block/shaft_half`, the model at
@@ -2585,7 +2629,15 @@ pub trait Hooks {
         cancellable = true,
         target = "horizon_client::game::native_hooks::GameLevel<'_>::native_cauldron_level_changed"
     )]
-    fn cauldron_level_changed();
+    fn cauldron_level_changed(
+        dimension: LevelDimension,
+        player: Option<u128>,
+        pos: BlockPos,
+        from_level: i32,
+        to_level: i32,
+        reason: &str,
+        cancel: &mut bool,
+    );
     /// A server player who ate chorus fruit (or another item with the
     /// `teleport_randomly` consume effect) is about to try a random spot
     /// (NeoForge's `EntityTeleportEvent.ItemConsumption`, vanilla's
@@ -2698,7 +2750,15 @@ pub trait Hooks {
         neoforge = "EntityTeleportEvent.EnderPearl",
         cancellable = true
     )]
-    fn ender_pearl_teleport();
+    fn ender_pearl_teleport(
+        player: u128,
+        name: &str,
+        pearl: u32,
+        from: [f64; 3],
+        target: &mut [f64; 3],
+        damage: &mut f32,
+        cancel: &mut bool,
+    );
     /// Entities from `chunk` finished loading into the server world. `count`
     /// is the number of saved entity records read.
     #[hook(

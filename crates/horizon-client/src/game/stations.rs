@@ -2615,15 +2615,15 @@ impl Game<'_> {
         }
         // ItemTooltipEvent, once the tooltip vanilla shows is complete.
         if shown {
-            self.native_item_tooltip(
-                self.own_uuid(),
-                self.own_entity_id(),
+            self.native_item_tooltip(mod_api::__private::ItemTooltipCall {
+                player: self.own_uuid(),
+                player_entity_id: self.own_entity_id(),
                 stack,
-                &display,
+                display: &display,
                 advanced,
                 creative,
-                &mut lines,
-            );
+                lines: &mut lines,
+            });
         }
         lines
     }

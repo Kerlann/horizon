@@ -55,15 +55,15 @@ impl Game<'_> {
         };
         let vehicle_kind = self.native_vehicle_kind(vehicle);
         let mut canceled = false;
-        self.native_entity_mount(
-            self.dim.id(),
+        self.native_entity_mount(mod_api::__private::EntityMountCall {
+            dimension: self.dim.id(),
             entity,
-            &kind,
+            kind: &kind,
             vehicle,
-            &vehicle_kind,
+            vehicle_kind: &vehicle_kind,
             mounting,
-            &mut canceled,
-        );
+            canceled: &mut canceled,
+        });
         !canceled
     }
 

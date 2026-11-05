@@ -134,17 +134,19 @@ pub(crate) fn slots(points: &[GamePoint]) -> String {
                 #slot.attach(Box::new(vec![listener])).expect("a slot is filled once, with its own type");
             }
         }
+        .to_string()
     });
-    quote! {
+    // One `if` per line: the slots attach independently, and tokens on one line read to clippy as
+    // a missing `else`.
+    let attach = attach.collect::<Vec<_>>().join("\n");
+    let items = quote! {
         use mod_api::__private::point::{Attach, Place, Point};
         pub(crate) use mod_api::points::*;
         #(#statics)*
-        /// Fills each slot an installed mod subscribes to, once, after the mods are installed.
-        pub(crate) fn attach_installed() {
-            #(#attach)*
-        }
-    }
-    .to_string()
+    };
+    format!(
+        "{items}\n/// Fills each slot an installed mod subscribes to, once, after the mods are installed.\npub(crate) fn attach_installed() {{\n{attach}\n}}\n"
+    )
 }
 
 /// `mod_api::points`: each point's record, the type its listeners take, and the `Points` trait a
@@ -310,7 +312,10 @@ mod tests {
                 ("tick", "horizon_client::game::Game<'_>::tick"),
             ]
         );
-        assert!(slots(&points).contains("attach_installed"));
+        let slots = slots(&points);
+        assert!(slots.contains("attach_installed"));
+        // Each slot attaches in its own statement: clippy reads `} if` on one line as a missing `else`.
+        assert!(!slots.contains("} if"), "{slots}");
         let api = records(&points);
         assert!(
             api.contains("fn remote_tick_return") && api.contains("dispatch_tick"),

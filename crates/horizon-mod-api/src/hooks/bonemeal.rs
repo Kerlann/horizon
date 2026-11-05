@@ -15,5 +15,16 @@ pub trait Hooks {
         neoforge = "BonemealEvent",
         cancellable = true
     )]
-    fn bonemeal();
+    fn bonemeal(
+        dimension: LevelDimension,
+        player: Option<u128>,
+        player_entity_id: Option<i32>,
+        pos: BlockPos,
+        state: BlockStateId,
+        source: BonemealSource,
+        stack: &mut ItemStack,
+        valid_bonemeal_target: bool,
+        successful: &mut bool,
+        canceled: &mut bool,
+    );
 }

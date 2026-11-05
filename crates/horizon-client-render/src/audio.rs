@@ -1286,6 +1286,29 @@ impl Audio {
         let id = self.engine.add(instance, false);
         self.engine.play_delayed(id, ticks);
     }
+    /// A client mod's sound (`ClientHost::play_local_sound`), as its `SoundPlay` gives it,
+    /// starting `after` sound-engine ticks from now (`SoundEngine.playDelayed`) or at once.
+    pub fn play_mod_sound(&mut self, sound: &mod_api::SoundPlay, after: u32) {
+        let seed = self.random.next_long();
+        if let Some(capture) = self.capture.as_mut().filter(|_| !sound.relative) {
+            capture.push((
+                sound.identifier.clone(),
+                sound.position,
+                sound.volume,
+                sound.pitch,
+            ));
+        }
+        *self.heard.entry(sound.identifier.clone()).or_default() += 1;
+        let mut instance = SoundInstance::from_play(sound, LegacyRandom::new(seed));
+        instance.identifier = crate::sound_events::normalize(&sound.identifier);
+        if after == 0 {
+            self.play_instance(instance, false);
+        } else {
+            self.sync_volumes();
+            let id = self.engine.add(instance, false);
+            self.engine.play_delayed(id, after as i32);
+        }
+    }
     /// `play` for this client only: a sound a packet's handler plays
     /// (`playLocalSound`), which the guests play from that packet themselves.
     pub fn play_unshared(&mut self, event: &str, at: Option<[f64; 3]>, volume: f32, pitch: f32) {
@@ -1491,6 +1514,56 @@ mod tests {
             audio.backend.mixer.lock().unwrap().channels[&1].state,
             State::Initial
         );
+        audio.stop_all();
+    }
+
+    /// A client mod's `SoundPlay` reaches the engine as it says: an interface sound at once,
+    /// at the listener; a positioned, looping one on its own source, queued `after` ticks.
+    #[test]
+    fn a_mod_sound_plays_as_its_sound_play_says() {
+        use mod_api::{SoundPlay, SoundSource};
+        let mut audio = Audio::silent(Path::new("/nonexistent/horizon-test-assets"));
+        audio.engine.registry.add_file(
+            "minecraft",
+            br#"{"ui.button.click":{"sounds":["gui/button"]}}"#,
+            &|_, _| true,
+        );
+        audio.engine.registry.add_file(
+            "mymod",
+            br#"{"boom":{"sounds":["mymod:boom"]}}"#,
+            &|_, _| true,
+        );
+        audio.engine.loaded = true;
+        audio.backend.live = true;
+
+        audio.play_mod_sound(
+            &SoundPlay::ui("minecraft:ui.button.click").with_volume(0.5),
+            0,
+        );
+        let click = audio
+            .engine
+            .instance(1)
+            .expect("the click reached the engine");
+        assert_eq!(click.source, crate::sound_engine::UI);
+        assert_eq!((click.volume, click.pitch), (0.5, 1.0));
+        assert_eq!(click.attenuation, Attenuation::None);
+        assert!(click.relative && !click.looping);
+        assert_eq!(audio.engine.census()["queued"], 0);
+
+        let boom = SoundPlay::at("mymod:boom", SoundSource::Hostile, [1.0, 64.0, 2.0])
+            .with_pitch(1.5)
+            .looping(20);
+        audio.play_mod_sound(&boom, 40);
+        let queued = audio
+            .engine
+            .instance(2)
+            .expect("the boom is held for later");
+        assert_eq!(queued.source, SoundSource::Hostile as usize);
+        assert_eq!(queued.position, [1.0, 64.0, 2.0]);
+        assert_eq!((queued.pitch, queued.delay), (1.5, 20));
+        assert_eq!(queued.attenuation, Attenuation::Linear);
+        assert!(queued.looping && !queued.relative);
+        assert_eq!(audio.engine.census()["queued"], 1, "it waits its 40 ticks");
         audio.stop_all();
     }
 

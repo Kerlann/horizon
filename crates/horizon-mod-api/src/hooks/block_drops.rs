@@ -10,5 +10,14 @@ pub trait Hooks {
         cancellable = true,
         target = "horizon_client::game::native_hooks::GameLevel<'_>::native_block_drops"
     )]
-    fn block_drops();
+    fn block_drops(
+        dimension: LevelDimension,
+        pos: BlockPos,
+        state: BlockStateId,
+        breaker: Option<u128>,
+        tool: Option<&ItemStack>,
+        drops: &mut Vec<NativeItemDrop>,
+        experience: &mut u32,
+        cancel: &mut bool,
+    );
 }

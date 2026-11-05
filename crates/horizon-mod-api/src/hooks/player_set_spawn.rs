@@ -17,5 +17,13 @@ pub trait Hooks {
         neoforge = "PlayerSetSpawnEvent",
         cancellable = true
     )]
-    fn player_set_spawn();
+    fn player_set_spawn(
+        player: u128,
+        player_entity_id: i32,
+        name: &str,
+        dimension: &str,
+        pos: Option<[i32; 3]>,
+        forced: bool,
+        cancel: &mut bool,
+    );
 }

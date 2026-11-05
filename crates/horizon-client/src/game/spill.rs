@@ -489,16 +489,16 @@ impl GameLevel<'_> {
             .unwrap_or(0);
         let mut canceled = false;
         if self.native_authoritative {
-            self.native_block_drops(
-                self.dimension,
+            self.native_block_drops(mod_api::__private::BlockDropsCall {
+                dimension: self.dimension,
                 pos,
                 state,
                 breaker,
                 tool,
-                &mut items,
-                &mut experience,
-                &mut canceled,
-            );
+                drops: &mut items,
+                experience: &mut experience,
+                cancel: &mut canceled,
+            });
             items.retain(|item| &*item.stack.item != "minecraft:air" && item.stack.count > 0);
         }
         if canceled || !self.rules.block_drops {

@@ -11,5 +11,13 @@ pub trait Hooks {
     /// `TooltipFlag`. Asked each frame the tooltip shows, never for one the
     /// stack hides or a crossbow's loaded projectile. Client-side.
     #[hook(side = "client", contract = "listen", neoforge = "ItemTooltipEvent")]
-    fn item_tooltip();
+    fn item_tooltip(
+        player: u128,
+        player_entity_id: i32,
+        stack: &ItemStack,
+        display: &TooltipDisplay<'_>,
+        advanced: bool,
+        creative: bool,
+        lines: &mut Vec<(Text, u32)>,
+    );
 }

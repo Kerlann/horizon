@@ -5496,15 +5496,15 @@ impl Game<'_> {
                         (self.lan_acting_uuid, self.lan_acting_name.clone())
                 {
                     let mut target = [to.x, to.y, to.z];
-                    self.native_ender_pearl_teleport(
-                        uuid,
-                        &name,
-                        p.id,
-                        [from.x, from.y, from.z],
-                        &mut target,
-                        &mut damage,
-                        &mut cancel,
-                    );
+                    self.native_ender_pearl_teleport(mod_api::__private::EnderPearlTeleportCall {
+                        player: uuid,
+                        name: &name,
+                        pearl: p.id,
+                        from: [from.x, from.y, from.z],
+                        target: &mut target,
+                        damage: &mut damage,
+                        cancel: &mut cancel,
+                    });
                     // A target that is not a number keeps the pearl's.
                     if target.iter().all(|v| v.is_finite()) {
                         to = Vec3::new(target[0], target[1], target[2]);

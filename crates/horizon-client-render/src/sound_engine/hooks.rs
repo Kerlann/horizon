@@ -70,6 +70,25 @@ impl SoundInstance {
         .into()
     }
 
+    /// A sound a mod asks for (`ClientHost::play_local_sound`), through the same mapping
+    /// as a `play_sound` edit.
+    pub fn from_play(sound: &SoundPlay, random: horizon_core::random::LegacyRandom) -> Self {
+        let mut instance = Self::new(
+            &sound.identifier,
+            0,
+            1.0,
+            1.0,
+            random,
+            false,
+            0,
+            Attenuation::None,
+            [0.0; 3],
+            true,
+        );
+        instance.apply_play_settings(sound.clone());
+        instance
+    }
+
     /// Take a mod's edits of [`Self::play_settings`]. A new identifier is resolved again
     /// at the play, as every instance is, even one whose sound a caller chose.
     fn apply_play_settings(&mut self, edited: SoundPlay) {

@@ -10,6 +10,7 @@
 # Concepts
 
 - [Trait mods, Parts and attachments](concepts/trait-mods.md)
+- [Where the mod API is going](concepts/design.md)
 
 # How-to
 

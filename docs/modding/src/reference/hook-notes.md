@@ -658,9 +658,10 @@ or transactions. Declarations still go on each event or registrar.
   offset in blocks, which add up across mods and multiply into the view after its bobbing. Horizon scales the sum by
   Distortion Effects and bounds it to 10 degrees and half a block on each axis.
 
-- Client sounds that wait: `native_play_local_sound(sound, at, volume, pitch, delay)` plays a sound event, vanilla's or
-  the mod's own from its `assets/<id>/sounds.json`, for this player only and up to a minute later, so a client mod
-  can time a blast's sound to its shock wave.
+- Client sounds: `ClientHost::play_local_sound(sound, after)` plays a `SoundPlay`, vanilla's event or the mod's own
+  from its `assets/<id>/sounds.json`, for this player only: an interface sound (`SoundPlay::ui`) or one at a place
+  (`SoundPlay::at`), now or up to a minute later, so a client mod can click its own buttons or time a blast's sound
+  to its shock wave.
 
 - Values for a mod's own shader pack: `native_shader_params(partial, params)` asks each frame for eight `vec4`s that
   every stage of a Horizon shader pack reads as `frame.mods`, so a mod can tell the pack it bundles where and when
@@ -2575,13 +2576,25 @@ game runs, for seasons (a golden autumn, a pale winter) or a world that greens a
 
 ### Sounds a client mod plays
 
-`native_play_local_sound(sound, at, volume, pitch, delay)` (client) plays sound event `sound` at `at` for this player only,
-`delay` ticks from now (0 to 1200). The event is vanilla's (`minecraft:entity.generic.explode`) or the mod's own: a content
-mod's `assets/<id>/sounds.json` and `assets/<id>/sounds/*.ogg` load with the rest of its assets. A volume past 1 carries
-farther, as vanilla's attenuation does. A client half that hears from its server half (mod messages) where
-something happened can time the sound to the distance, such as a blast heard when its shock wave reaches the player:
-`delay = distance / speed`. It answers false on a server and for a value out of range; an event the resources lack
-plays nothing.
+`ClientHost::play_local_sound(sound, after)` (client) plays `sound`, a `SoundPlay`, for this player only. Nothing is sent
+to the server, and other players don't hear it. It takes `&self`, so the screen, key and mouse hooks, where interface
+sounds belong, can call it: the sound is queued and starts at the next audio update (once a client tick), `after` ticks
+counted from then (0 to 1200; `SoundEngine.playDelayed`). The answer is exact: the checks run at the call.
+- `SoundPlay::ui(id)` is an interface sound (`SimpleSoundInstance.forUI`): at the listener, on the `Ui` source, not
+  fading with distance, as the game's own button clicks play.
+- `SoundPlay::at(id, source, position)` plays at a place in the client's level, fading with distance. A volume past 1
+  carries farther, as vanilla's attenuation does.
+- `with_volume`, `with_pitch` and `looping(delay)` (repeating, `delay` ticks between repeats: vanilla's
+  `SoundInstance.getDelay`) change either.
+
+It's the same record the `play_sound` hook edits, and it goes through the same mapping into the engine. The event is
+vanilla's (`minecraft:entity.generic.explode`) or the mod's own: a content mod's `assets/<id>/sounds.json` and
+`assets/<id>/sounds/*.ogg` load with the rest of its assets. A client half that hears from its server half (mod
+messages) where something happened can time the sound to the distance, such as a blast heard when its shock wave reaches
+the player: `after = distance / speed`. It answers false on a server and for a value out of range (an event id that
+isn't namespaced, a position or volume that isn't finite, a negative volume, pitch or repeat gap, `after` past 1200);
+an event the resources lack plays nothing. Diverges from upstream: horizon-rust/horizon's `native_play_local_sound` takes
+`(sound, at, volume, pitch, delay)`.
 
 ### Falling blocks
 

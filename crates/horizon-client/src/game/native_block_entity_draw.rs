@@ -796,20 +796,32 @@ mod tests {
         use mod_api::BlockEntityDrawContext;
 
         super::super::native_entity_refs::tests::with_game(|game| {
+            // The server fixture only measures fonts; this test needs drawable glyphs.
+            game.gui.atlas = horizon_client::hud::HudAtlas::build(&game.options.resources).unwrap();
             let mut surface = draw();
             let mut drawn = GameBlockEntityDrawContext {
                 game,
                 surface: &mut surface,
             };
-            let a = drawn.text_width("A");
-            let both = drawn.text_width("AB");
-            assert!(a > 0.0 && both > a);
-            drawn.text("AB", [0.0, 0.0], 0xFF0000);
+            assert_eq!(drawn.text_width("A"), 6.0);
+            assert_eq!(drawn.text_width("AÁ"), 12.0);
+            drawn.text("AÁ", [0.0, 0.0], 0xFF0000);
             assert_eq!(surface.vertices.len(), 8, "a quad per glyph");
-            // The first glyph's lower left corner (0, 8) under the pose's 10-block shift.
-            assert_eq!(surface.vertices[0].pos, [10.0, 8.0, 0.0]);
-            // The second glyph starts one advance of `A` further on.
-            assert_eq!(surface.vertices[4].pos, [10.0 + a, 8.0, 0.0]);
+            // Vanilla's bitmap providers: A is 8x8 with ascent 7; Á is 9x12 with ascent 10.
+            // GlyphBitmap places the top at 7 - ascent; BakedSheetGlyph adds the pen's position.
+            assert_eq!(
+                surface.vertices.iter().map(|v| v.pos).collect::<Vec<_>>(),
+                [
+                    [10.0, 8.0, 0.0],
+                    [18.0, 8.0, 0.0],
+                    [18.0, 0.0, 0.0],
+                    [10.0, 0.0, 0.0],
+                    [16.0, 9.0, 0.0],
+                    [25.0, 9.0, 0.0],
+                    [25.0, -3.0, 0.0],
+                    [16.0, -3.0, 0.0],
+                ]
+            );
             // Red, as a vertex colour stores it (ABGR), opaque.
             assert!(surface.vertices.iter().all(|v| v.color == 0xFF00_00FF));
             assert!(surface.vertices.iter().all(|v| v.light == 0xF0F0));

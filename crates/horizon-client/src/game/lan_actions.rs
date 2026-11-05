@@ -4279,15 +4279,15 @@ impl Game<'_> {
             let g = &host.hub.guests[i];
             let (uuid, id, name) = (g.uuid, g.entity_id, g.name.clone());
             let mut cancel = false;
-            self.native_player_set_spawn(
-                uuid,
-                id,
-                &name,
-                point_level.id(),
-                point,
-                point.is_some(),
-                &mut cancel,
-            );
+            self.native_player_set_spawn(mod_api::__private::PlayerSetSpawnCall {
+                player: uuid,
+                player_entity_id: id,
+                name: &name,
+                dimension: point_level.id(),
+                pos: point,
+                forced: point.is_some(),
+                cancel: &mut cancel,
+            });
             if cancel && let Some(host) = self.lan.as_mut() {
                 host.hub.guests[i].spawn = None;
             }

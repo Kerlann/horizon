@@ -991,7 +991,6 @@ use horizon_client::{
         Victim,
     },
     hud::{HudBatch, rgba},
-    item_tooltip::TooltipDisplay,
     items::ItemStack,
     keybinds,
     lan::menu::Slots,
@@ -1020,24 +1019,25 @@ pub use mod_api::game::{NativeClock, NativeShake, PhantomSpawnResult, SleepProbl
 use mod_api::{
     self, Answered, BlockPlacement, ClientReloadListeners, EnchantmentInfo, EntityRef,
     GameRuleActor, InteractionKey, LivingRef, NativeCamera, NativeCommand, NativeDispensed,
-    NativeHandRender, NativeItemDrop, NativeKeyMapping, NativeLifecycleContext,
-    NativeNoteBlockChange, NativeProgressType, NativeServerPlayer, PathComputationType, Placement,
-    PlayerRef, RecipeBookCategory, ScreenOpening, ServerReloadListeners, ServerTickPhase,
-    TicketController, ToolUse, WorldPhase,
+    NativeHandRender, NativeKeyMapping, NativeLifecycleContext, NativeNoteBlockChange,
+    NativeProgressType, NativeServerPlayer, PathComputationType, Placement, PlayerRef,
+    RecipeBookCategory, ScreenOpening, ServerReloadListeners, ServerTickPhase, TicketController,
+    ToolUse, WorldPhase,
 };
 use mod_api::{
-    AttachmentStore, BlockHit, BonemealSource, ChunkRef, FluidStack, GameRuleValue, LandingWrite,
+    AttachmentStore, BonemealSource, ChunkRef, FluidStack, GameRuleValue, LandingWrite,
     LegacyRandom, LevelRef, LogicalSide, NativeBlockClick, NativeBlockUpdateFlags,
     NativeInteractionResult, NativeItemClick, NativeTriState, NeighbourUpdate, Suggestion,
     TooltipElement, TooltipPlace, UsePhase,
 };
 pub(crate) use mod_api::{
     ClientPacket, ClientPayload, NativeBlockRim, NativeColoredLight, NativeExplosionStart,
-    NativeItemFished, NativeLootDrops, NativeMinimap, NativeMod, NativeNoteInstrument,
-    NativePanelEvent, NativePortalShape, NativeScreen, NativeScreenView, NativeStack, NativeZoom,
+    NativeItemFished, NativeLootDrops, NativeMinimap, NativeMod, NativePanelEvent,
+    NativePortalShape, NativeScreen, NativeScreenView, NativeStack, NativeZoom,
 };
 use mod_api::{
     MobRef, NativeDespawn, NativePermissionLevel, NativeSpawnCheck, NativeSpawnReason, Recipe,
+    SoundPlay,
 };
 use std::{
     collections::HashMap,
@@ -1532,20 +1532,8 @@ impl GameLevel<'_> {
     /// amount, or set `cancel` for no drops, no experience and no
     /// `spawnAfterBreak` effects. Server-side, authoritative levels only.
     #[inline(always)]
-    pub(super) fn native_block_drops(
-        &self,
-        dimension: LevelDimension,
-        pos: BlockPos,
-        state: BlockStateId,
-        breaker: Option<u128>,
-        tool: Option<&ItemStack>,
-        drops: &mut Vec<NativeItemDrop>,
-        experience: &mut u32,
-        cancel: &mut bool,
-    ) {
-        self.fire_block_drops(
-            dimension, pos, state, breaker, tool, drops, experience, cancel,
-        );
+    pub(super) fn native_block_drops(&self, call: mod_api::__private::BlockDropsCall<'_>) {
+        self.fire_block_drops(call);
     }
 
     /// An authoritative server committed a changed state through `Level.setBlock`.
@@ -1869,25 +1857,8 @@ impl GameLevel<'_> {
     /// Set `cancel` and it doesn't play: no sound, no particle, no
     /// `note_block_play` game event. Server-side.
     #[inline(always)]
-    pub(super) fn native_note_block_play(
-        &self,
-        dimension: LevelDimension,
-        player: Option<u128>,
-        player_entity_id: Option<i32>,
-        pos: BlockPos,
-        instrument: &mut NativeNoteInstrument,
-        note: &mut i32,
-        cancel: &mut bool,
-    ) {
-        self.fire_note_block_play(
-            dimension,
-            player,
-            player_entity_id,
-            pos,
-            instrument,
-            note,
-            cancel,
-        );
+    pub(super) fn native_note_block_play(&self, call: mod_api::__private::NoteBlockPlayCall<'_>) {
+        self.fire_note_block_play(call);
     }
 
     /// A player is tuning a note block on the authoritative server, not in
@@ -1924,17 +1895,9 @@ impl GameLevel<'_> {
     #[inline(always)]
     pub(super) fn native_cauldron_level_changed(
         &self,
-        dimension: LevelDimension,
-        player: Option<u128>,
-        pos: BlockPos,
-        from_level: i32,
-        to_level: i32,
-        reason: &str,
-        cancel: &mut bool,
+        call: mod_api::__private::CauldronLevelChangedCall<'_>,
     ) {
-        self.fire_cauldron_level_changed(
-            dimension, player, pos, from_level, to_level, reason, cancel,
-        );
+        self.fire_cauldron_level_changed(call);
     }
 
     /// On an authoritative server, the piston at `piston` is about to push
@@ -1945,19 +1908,8 @@ impl GameLevel<'_> {
     /// structure can't; a sticky piston then retracts without its block, and
     /// clients are sent the blocks rather than the retraction to replay.
     #[inline(always)]
-    pub(super) fn native_piston_pre(
-        &self,
-        dimension: LevelDimension,
-        piston: BlockPos,
-        direction: [i32; 3],
-        extending: bool,
-        push: &[BlockPos],
-        destroy: &[BlockPos],
-        canceled: &mut bool,
-    ) {
-        self.fire_piston_pre(
-            dimension, piston, direction, extending, push, destroy, canceled,
-        );
+    pub(super) fn native_piston_pre(&self, call: mod_api::__private::PistonPreCall<'_>) {
+        self.fire_piston_pre(call);
     }
     /// On an authoritative server, the piston at `piston` pushed the blocks
     /// at `push` one step `direction` and destroyed those at `destroy`:
@@ -4833,17 +4785,8 @@ impl Game<'_> {
     /// (the editor writes into their world directly), and the sign changes
     /// that are no edit of the text (dyeing, glow ink, waxing, `/data`,
     /// `/setblock`, mods' `native_with_mod_block_entity`).
-    pub(super) fn native_sign_changed(
-        &mut self,
-        player: u128,
-        name: &str,
-        dimension: &str,
-        pos: [i32; 3],
-        front: bool,
-        lines: &mut Vec<String>,
-        cancel: &mut bool,
-    ) {
-        self.fire_sign_changed(player, name, dimension, pos, front, lines, cancel);
+    pub(super) fn native_sign_changed(&mut self, call: mod_api::__private::SignChangedCall<'_>) {
+        self.fire_sign_changed(call);
     }
     /// A command a player typed (NeoForge's `CommandEvent`, before
     /// `Commands.performCommand` runs it), without its slash: any command,
@@ -4891,15 +4834,9 @@ impl Game<'_> {
     /// heard by `native_projectile_impact`.
     pub(super) fn native_ender_pearl_teleport(
         &mut self,
-        player: u128,
-        name: &str,
-        pearl: u32,
-        from: [f64; 3],
-        target: &mut [f64; 3],
-        damage: &mut f32,
-        cancel: &mut bool,
+        call: mod_api::__private::EnderPearlTeleportCall<'_>,
     ) {
-        self.fire_ender_pearl_teleport(player, name, pearl, from, target, damage, cancel);
+        self.fire_ender_pearl_teleport(call);
     }
     /// A server player who ate chorus fruit (or another item with the
     /// `teleport_randomly` consume effect) is about to try a random spot
@@ -5504,23 +5441,9 @@ impl Game<'_> {
     /// the player. Server-side.
     pub(super) fn native_player_set_spawn(
         &mut self,
-        player: u128,
-        player_entity_id: i32,
-        name: &str,
-        dimension: &str,
-        pos: Option<[i32; 3]>,
-        forced: bool,
-        cancel: &mut bool,
+        call: mod_api::__private::PlayerSetSpawnCall<'_>,
     ) {
-        self.fire_player_set_spawn(
-            player,
-            player_entity_id,
-            name,
-            dimension,
-            pos,
-            forced,
-            cancel,
-        );
+        self.fire_player_set_spawn(call);
     }
     /// NeoForge's `PermissionsChangedEvent`: the operator list is about to give player
     /// `player` (`name`) the permission level `new` in place of `old`, through `PlayerList.op`
@@ -7193,25 +7116,8 @@ impl Game<'_> {
     /// `advanced` (F3+H) and `creative` (a creative tab's own slot) its
     /// `TooltipFlag`. Asked each frame the tooltip shows, never for one the
     /// stack hides or a crossbow's loaded projectile. Client-side.
-    pub(super) fn native_item_tooltip(
-        &self,
-        player: u128,
-        player_entity_id: i32,
-        stack: &ItemStack,
-        display: &TooltipDisplay<'_>,
-        advanced: bool,
-        creative: bool,
-        lines: &mut Vec<(Text, u32)>,
-    ) {
-        self.fire_item_tooltip(
-            player,
-            player_entity_id,
-            stack,
-            display,
-            advanced,
-            creative,
-            lines,
-        );
+    pub(super) fn native_item_tooltip(&self, call: mod_api::__private::ItemTooltipCall<'_>) {
+        self.fire_item_tooltip(call);
     }
     /// `RenderTooltipEvent.GatherComponents`: the elements of `stack`'s
     /// tooltip (`ItemStack.getTooltipLines` as text lines, then the image
@@ -7335,27 +7241,8 @@ impl Game<'_> {
     /// (`UseOnContext.getClickLocation`, `getClickedFace`, `isInside`) and
     /// `player` (the acting player's UUID) and `player_entity_id` (the server's
     /// entity id),.
-    pub(super) fn native_use_on(
-        &mut self,
-        stack: &ItemStack,
-        pos: [i32; 3],
-        face: [i32; 3],
-        hand: Hand,
-        hit: BlockHit,
-        player: u128,
-        player_entity_id: i32,
-        claimed: &mut bool,
-    ) {
-        self.fire_use_on(
-            stack,
-            pos,
-            face,
-            hand,
-            hit,
-            player,
-            player_entity_id,
-            claimed,
-        );
+    pub(super) fn native_use_on(&mut self, call: mod_api::__private::UseOnCall<'_>) {
+        self.fire_use_on(call);
     }
     /// `DispenserBlock.getDispenseMethod`: choose a behaviour for any item,
     /// including vanilla items, on the authoritative server (not droppers).
@@ -7748,31 +7635,8 @@ impl Game<'_> {
     /// own bone meal Parts and the meal's use: `growCrop` then answers
     /// `successful` (`setSuccessful`), which is `false` unless a mod sets it.
     /// Fired on both sides; changes to `stack` stay.
-    pub(super) fn native_bonemeal(
-        &mut self,
-        dimension: LevelDimension,
-        player: Option<u128>,
-        player_entity_id: Option<i32>,
-        pos: BlockPos,
-        state: BlockStateId,
-        source: BonemealSource,
-        stack: &mut ItemStack,
-        valid_bonemeal_target: bool,
-        successful: &mut bool,
-        canceled: &mut bool,
-    ) {
-        self.fire_bonemeal(
-            dimension,
-            player,
-            player_entity_id,
-            pos,
-            state,
-            source,
-            stack,
-            valid_bonemeal_target,
-            successful,
-            canceled,
-        );
+    pub(super) fn native_bonemeal(&mut self, call: mod_api::__private::BonemealCall<'_>) {
+        self.fire_bonemeal(call);
     }
     /// An explosion at `center` in `dimension` (`minecraft:overworld`) is
     /// about to break `blocks`: `ServerExplosion.explode` with its `toBlow`,
@@ -8323,25 +8187,8 @@ impl Game<'_> {
     /// (`/ride`, a stab). It is not told for a rider whose vehicle was removed from the
     /// level (a boat or minecart destroyed, a broken cushion), nor for riders loaded with a
     /// save. The acting player is the one whose action runs, a guest on a server. Server-side.
-    pub(super) fn native_entity_mount(
-        &mut self,
-        dimension: &str,
-        entity: u32,
-        kind: &str,
-        vehicle: u32,
-        vehicle_kind: &str,
-        mounting: bool,
-        canceled: &mut bool,
-    ) {
-        self.fire_entity_mount(
-            dimension,
-            entity,
-            kind,
-            vehicle,
-            vehicle_kind,
-            mounting,
-            canceled,
-        );
+    pub(super) fn native_entity_mount(&mut self, call: mod_api::__private::EntityMountCall<'_>) {
+        self.fire_entity_mount(call);
     }
     /// Whether a mod listens to `native_entity_tick_pre` and `native_entity_tick_post`: a mod
     /// that hooks them hooks this one too and sets `listened` (HEAD, `*listened = true`).
@@ -8855,29 +8702,9 @@ impl Game<'_> {
     /// `native_hears_projectile_impacts`. Server-side.
     pub(super) fn native_projectile_impact(
         &mut self,
-        dimension: &str,
-        projectile: u32,
-        kind: &str,
-        owner: u32,
-        entity: Option<u32>,
-        entity_kind: &str,
-        block: [i32; 3],
-        face: [i32; 3],
-        at: [f64; 3],
-        canceled: &mut bool,
+        call: mod_api::__private::ProjectileImpactCall<'_>,
     ) {
-        self.fire_projectile_impact(
-            dimension,
-            projectile,
-            kind,
-            owner,
-            entity,
-            entity_kind,
-            block,
-            face,
-            at,
-            canceled,
-        );
+        self.fire_projectile_impact(call);
     }
 
     /// `Block.stepOn` for a mod block, on its authoritative server level.
@@ -10128,26 +9955,21 @@ impl Game<'_> {
     pub(super) fn native_window(&self) -> bool {
         self.options.execution_role == ExecutionRole::Client
     }
-    /// Plays sound event `sound` (`minecraft:entity.generic.explode`, or a
-    /// mod's own from its `assets/<id>/sounds.json`) at `at` for this
-    /// player only, `delay` ticks from now (0 to 1200, a minute): a client
-    /// mod's sound that waits, as thunder heard after the flash or a blast
-    /// heard when its shock wave arrives. `volume` past 1 carries farther,
-    /// as vanilla's attenuation does (16 blocks times the volume). False, with
-    /// nothing played, on a server or for a value out of range; an event the
-    /// resources don't have plays nothing, as vanilla's.
-    pub(super) fn native_play_local_sound(
-        &mut self,
-        sound: &str,
-        at: [f64; 3],
-        volume: f32,
-        pitch: f32,
-        delay: i32,
-    ) -> bool {
-        if !self.native_window() || !local_sound_ok(sound, at, volume, pitch, delay) {
+    /// Plays `sound` for this player only (`SoundPlay`'s event: `minecraft:ui.button.click`,
+    /// or a mod's own from its `assets/<id>/sounds.json`): nothing is sent to the server, and
+    /// other players don't hear it. It takes `&self`, so a screen, key or mouse hook can play
+    /// one: the sound is queued and starts at the next audio update (once a client tick),
+    /// `after` ticks counted from then (0 to 1200, a minute; `SoundEngine.playDelayed`). `SoundPlay::ui` plays it at the listener as an interface sound
+    /// (`SimpleSoundInstance.forUI`); `SoundPlay::at` at a position in the client's level,
+    /// fading with distance (`volume` past 1 carries farther, 16 blocks times the volume), as
+    /// thunder heard after the flash or a blast heard when its shock wave arrives. False,
+    /// with nothing played, on a server or for a value out of range; an event the resources
+    /// don't have plays nothing, as vanilla's.
+    pub(super) fn native_play_local_sound(&self, sound: &SoundPlay, after: u32) -> bool {
+        if !self.native_window() || !local_sound_ok(sound, after) {
             return false;
         }
-        self.audio.play_after(sound, at, volume, pitch, delay);
+        self.mod_sounds.borrow_mut().push((sound.clone(), after));
         true
     }
     /// Draws one vanilla HUD layer between the mods' hooks: `native_gui_layer_pre`
@@ -10939,18 +10761,18 @@ impl Game<'_> {
             (None, None)
         };
         let (mut successful, mut canceled) = (false, false);
-        self.native_bonemeal(
-            self.dim.level(),
+        self.native_bonemeal(mod_api::__private::BonemealCall {
+            dimension: self.dim.level(),
             player,
             player_entity_id,
             pos,
             state,
-            BonemealSource::Interaction,
+            source: BonemealSource::Interaction,
             stack,
-            valid,
-            &mut successful,
-            &mut canceled,
-        );
+            valid_bonemeal_target: valid,
+            successful: &mut successful,
+            canceled: &mut canceled,
+        });
         BonemealAsk {
             crop: canceled.then_some(successful),
             check: Some(check),
@@ -12131,17 +11953,21 @@ fn finite_params(params: [[f32; 4]; 8]) -> [[f32; 4]; 8] {
     params.map(|v| v.map(|x| if x.is_finite() { x } else { 0.0 }))
 }
 
-/// Whether `native_play_local_sound` takes these values: a sound event's id
-/// (`sound_id`, as `native_play_sound` takes), a finite position, a volume
-/// and pitch at or above 0, and a delay of a minute at most.
-fn local_sound_ok(sound: &str, at: [f64; 3], volume: f32, pitch: f32, delay: i32) -> bool {
-    sound_id(sound)
-        && at.iter().all(|v| v.is_finite() && v.abs() <= 30_000_000.0)
-        && volume.is_finite()
-        && volume >= 0.0
-        && pitch.is_finite()
-        && pitch >= 0.0
-        && (0..=1200).contains(&delay)
+/// Whether `native_play_local_sound` takes this sound: a sound event's id (`sound_id`, as
+/// `native_play_sound` takes), a finite position, a volume and pitch at or above 0, a repeat
+/// gap that isn't negative, and a start a minute away at most.
+fn local_sound_ok(sound: &SoundPlay, after: u32) -> bool {
+    sound_id(&sound.identifier)
+        && sound
+            .position
+            .iter()
+            .all(|v| v.is_finite() && v.abs() <= 30_000_000.0)
+        && sound.volume.is_finite()
+        && sound.volume >= 0.0
+        && sound.pitch.is_finite()
+        && sound.pitch >= 0.0
+        && sound.delay >= 0
+        && after <= 1200
 }
 
 /// `v` within `lo..=hi`; `lo` when it is not a number.
@@ -13129,32 +12955,33 @@ mod tests {
     }
 
     /// A client mod's sound needs a namespaced event, finite values and a
-    /// delay of a minute at most.
+    /// start a minute away at most.
     #[test]
     fn a_local_sound_is_checked() {
         use super::local_sound_ok;
-        let at = [0.5, 64.0, 0.5];
-        assert!(local_sound_ok("ironfall:boom_far", at, 8.0, 1.0, 140));
+        use mod_api::{SoundPlay, SoundSource};
+        let at = |id| SoundPlay::at(id, SoundSource::Hostile, [0.5, 64.0, 0.5]);
         assert!(local_sound_ok(
-            "minecraft:entity.generic.explode",
-            at,
-            1.0,
-            1.0,
-            0
+            &at("ironfall:boom_far").with_volume(8.0),
+            140
         ));
-        assert!(!local_sound_ok("boom", at, 1.0, 1.0, 0));
-        assert!(!local_sound_ok("ironfall:", at, 1.0, 1.0, 0));
-        assert!(!local_sound_ok("Ironfall:Boom", at, 1.0, 1.0, 0));
+        assert!(local_sound_ok(&at("minecraft:entity.generic.explode"), 0));
+        assert!(local_sound_ok(
+            &SoundPlay::ui("minecraft:ui.button.click"),
+            1200
+        ));
+        assert!(!local_sound_ok(&at("boom"), 0));
+        assert!(!local_sound_ok(&at("ironfall:"), 0));
+        assert!(!local_sound_ok(&at("Ironfall:Boom"), 0));
+        let nowhere = SoundPlay::at("ironfall:boom", SoundSource::Hostile, [f64::NAN, 0.0, 0.0]);
+        assert!(!local_sound_ok(&nowhere, 0));
+        assert!(!local_sound_ok(&at("ironfall:boom").with_volume(-1.0), 0));
         assert!(!local_sound_ok(
-            "ironfall:boom",
-            [f64::NAN, 0.0, 0.0],
-            1.0,
-            1.0,
+            &at("ironfall:boom").with_pitch(f32::NAN),
             0
         ));
-        assert!(!local_sound_ok("ironfall:boom", at, -1.0, 1.0, 0));
-        assert!(!local_sound_ok("ironfall:boom", at, 1.0, 1.0, 1201));
-        assert!(!local_sound_ok("ironfall:boom", at, 1.0, 1.0, -1));
+        assert!(!local_sound_ok(&at("ironfall:boom").looping(-1), 0));
+        assert!(!local_sound_ok(&at("ironfall:boom"), 1201));
     }
 
     /// `native_play_sound` takes vanilla's and mods' sound ids, nothing else.
@@ -14287,6 +14114,46 @@ mod text_tests {
             assert!(half.iter().all(|v| v.color >> 24 == 0x80));
             // RGB alone, as the API took before, is fully transparent now.
             assert!(drawn(0x00FF_FFFF).is_empty());
+        });
+    }
+}
+
+#[cfg(test)]
+mod local_sound_tests {
+    use mod_api::{
+        ClientHost, Flow, Hooks, ModEntry, RenderGuiPreEvent, SoundPlay, testing::with_mods,
+    };
+
+    struct Mod;
+    #[mod_api::__subscriptions]
+    impl Hooks for Mod {
+        fn render_gui_pre(&self, host: &dyn ClientHost, _: &mut RenderGuiPreEvent) -> Flow {
+            assert!(host.play_local_sound(&SoundPlay::ui("minecraft:ui.button.click"), 0));
+            Flow::Continue
+        }
+    }
+
+    /// A sound a screen hook plays through its read-only host is held, then played by the
+    /// next audio update, before its tick.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_screen_hooks_sound_reaches_audio_at_the_next_update() {
+        let mods: mod_api::Mods = vec![ModEntry::new("click", Box::new(Mod))].into();
+        with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                game.options.execution_role = super::ExecutionRole::Client;
+                game.audio.heard.clear();
+                game.native_render_gui_pre(&mut false);
+                assert_eq!(
+                    game.mod_sounds.borrow().len(),
+                    1,
+                    "held for the audio update"
+                );
+                assert!(!game.audio.heard.contains_key("minecraft:ui.button.click"));
+                game.tick_sound_engine();
+                assert!(game.mod_sounds.borrow().is_empty());
+                assert_eq!(game.audio.heard.get("minecraft:ui.button.click"), Some(&1));
+            });
         });
     }
 }

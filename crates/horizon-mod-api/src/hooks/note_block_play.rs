@@ -17,5 +17,13 @@ pub trait Hooks {
         cancellable = true,
         target = "horizon_client::game::native_hooks::GameLevel<'_>::native_note_block_play"
     )]
-    fn note_block_play();
+    fn note_block_play(
+        dimension: LevelDimension,
+        player: Option<u128>,
+        player_entity_id: Option<i32>,
+        pos: BlockPos,
+        instrument: &mut NativeNoteInstrument,
+        note: &mut i32,
+        cancel: &mut bool,
+    );
 }

@@ -176,7 +176,15 @@ impl Game<'_> {
         };
         let mut cancel = false;
         let id = self.own_entity_id();
-        self.native_player_set_spawn(player, id, &name, dim.id(), Some(pos), forced, &mut cancel);
+        self.native_player_set_spawn(mod_api::__private::PlayerSetSpawnCall {
+            player,
+            player_entity_id: id,
+            name: &name,
+            dimension: dim.id(),
+            pos: Some(pos),
+            forced,
+            cancel: &mut cancel,
+        });
         cancel
     }
     /// `RespawnAnchorBlock.useWithoutItem` on a charged anchor: outside the

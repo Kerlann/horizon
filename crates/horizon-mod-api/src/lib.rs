@@ -742,12 +742,61 @@ pub struct SoundPlay {
     pub position: [f64; 3],
     /// It restarts when it ends.
     pub looping: bool,
-    /// Ticks to wait before it starts.
+    /// Ticks between a looping sound's repeats (`SoundInstance.getDelay`): 0 loops it
+    /// seamlessly, more plays it again that many ticks after it ends.
     pub delay: i32,
     /// How it fades with distance.
     pub attenuation: SoundAttenuation,
     /// It plays at the listener, wherever they move.
     pub relative: bool,
+}
+impl SoundPlay {
+    /// Sound event `identifier` at the listener, not fading with distance, on the interface
+    /// source at volume and pitch 1 (`SimpleSoundInstance.forUI`).
+    pub fn ui(identifier: &str) -> Self {
+        Self {
+            identifier: identifier.to_owned(),
+            source: SoundSource::Ui,
+            volume: 1.0,
+            pitch: 1.0,
+            position: [0.0; 3],
+            looping: false,
+            delay: 0,
+            attenuation: SoundAttenuation::None,
+            relative: true,
+        }
+    }
+    /// Sound event `identifier` at `position` on `source`, fading with distance, at volume
+    /// and pitch 1 (`SimpleSoundInstance`'s positioned constructor).
+    pub fn at(identifier: &str, source: SoundSource, position: [f64; 3]) -> Self {
+        Self {
+            identifier: identifier.to_owned(),
+            source,
+            volume: 1.0,
+            pitch: 1.0,
+            position,
+            looping: false,
+            delay: 0,
+            attenuation: SoundAttenuation::Linear,
+            relative: false,
+        }
+    }
+    /// The same sound at `volume`.
+    pub fn with_volume(self, volume: f32) -> Self {
+        Self { volume, ..self }
+    }
+    /// The same sound at `pitch`.
+    pub fn with_pitch(self, pitch: f32) -> Self {
+        Self { pitch, ..self }
+    }
+    /// The same sound looping, `delay` ticks between its repeats.
+    pub fn looping(self, delay: i32) -> Self {
+        Self {
+            looping: true,
+            delay,
+            ..self
+        }
+    }
 }
 
 /// A playing sound's channel, for `play_sound_source` and
@@ -4794,14 +4843,16 @@ mod tests {
             let hit = top_hit();
             dispatch_use_on(
                 &mut host,
-                &stack,
-                pos,
-                face,
-                Hand::Main,
-                hit,
-                7,
-                41,
-                &mut claimed,
+                calls::UseOnCall {
+                    stack: &stack,
+                    pos,
+                    face,
+                    hand: Hand::Main,
+                    hit,
+                    player: 7,
+                    player_entity_id: 41,
+                    claimed: &mut claimed,
+                },
             );
             assert_eq!(claimed, expected, "{block}");
             let told: Vec<String> = host.lines.iter().map(Text::plain).collect();
@@ -4875,14 +4926,16 @@ mod tests {
         let (pos, face) = ([0; 3], [0, 1, 0]);
         dispatch_use_on(
             &mut host,
-            &stick(),
-            pos,
-            face,
-            Hand::Main,
-            top_hit(),
-            7,
-            41,
-            &mut claimed,
+            calls::UseOnCall {
+                stack: &stick(),
+                pos,
+                face,
+                hand: Hand::Main,
+                hit: top_hit(),
+                player: 7,
+                player_entity_id: 41,
+                claimed: &mut claimed,
+            },
         );
     }
 
@@ -4952,14 +5005,16 @@ mod tests {
         let mut claimed = false;
         dispatch_use_on(
             &mut host,
-            &stick(),
-            [0; 3],
-            [0, 1, 0],
-            Hand::Off,
-            top_hit(),
-            7,
-            41,
-            &mut claimed,
+            calls::UseOnCall {
+                stack: &stick(),
+                pos: [0; 3],
+                face: [0, 1, 0],
+                hand: Hand::Off,
+                hit: top_hit(),
+                player: 7,
+                player_entity_id: 41,
+                claimed: &mut claimed,
+            },
         );
         assert!(!claimed);
         assert!(HEARD_STICK.load(std::sync::atomic::Ordering::SeqCst));
