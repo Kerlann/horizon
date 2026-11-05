@@ -160,6 +160,11 @@ impl<A: HealthAttributes, E: CombatEnvironment<A>> HurtWorld for ServerPlayerCom
         damage: f32,
     ) -> Result<(), Self::Error> {
         HurtWorld::hurt_helmet(self.environment, state, damage)
+            .map_err(ServerDamageError::Environment)?;
+        // A head piece that broke in that call drops its modifiers before
+        // armor and toughness are read for the rest of this hit.
+        self.environment
+            .commit_helmet_attributes(self.attributes)
             .map_err(ServerDamageError::Environment)
     }
     fn resolve_mob(&mut self, state: &mut HurtState<Self::Source>) -> Result<(), Self::Error> {

@@ -2988,6 +2988,7 @@ removes the helmet's protection or cancels the health hit. Ordinary armor
 wear later in the same hit remains a separate equipment operation.
 
 The callback receives `&mut dyn LevelRandomHost`: the hit's level random and
-level attachments, not a full game host. Unbreaking and the existing item
-wear listeners are applied during equipment write-back, as for other armor
-wear. A piece replaced before write-back is not worn by the old decision.
+level attachments, not a full game host. Unbreaking and the item-damage
+listener run before armor, toughness and protection are read for that hit, so
+a head piece that breaks no longer contributes to it. A piece replaced before
+write-back is not worn by the old decision.

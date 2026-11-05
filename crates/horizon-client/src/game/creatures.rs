@@ -1229,7 +1229,8 @@ impl Game<'_> {
                 Some(world_items!(self)),
                 Some(&self.pack.block_registries),
                 &self.damage_hooks,
-            );
+            )
+            .with_enchantments(&world_stations!(self).enchantments);
             let path_changes = horizon_client::mobs::collision_changes(&base, &path_writes);
             // Each mob keeps its snapshot slot all tick; the first slot of an
             // id answers, as a scan would.
@@ -2373,7 +2374,6 @@ impl Game<'_> {
     pub(super) fn handle_mob_events(&mut self, events: Vec<MobEvent>) -> Result<()> {
         // The mobs whose `BreakBlock` the game applied in this batch, for `IfBroke`.
         let mut broke: Vec<u32> = Vec::new();
-        let mut helmet_writes = horizon_client::fast_hash::FxHashMap::default();
         for e in events {
             match e {
                 MobEvent::BubbleColumnParticles { pos } => {
@@ -2402,38 +2402,13 @@ impl Game<'_> {
                 MobEvent::SunProtectionWear { mob } => self.wear_sun_protection(mob),
                 MobEvent::ArmorHurt { mob, amount, kind } => self.hurt_mob_armor(mob, amount, kind),
                 MobEvent::HelmetHurt { mob, wear } => {
-                    use horizon_world::player_inventory::EquipmentSlot;
-                    let Some(m) = self.mobs.iter().find(|m| m.id == mob) else {
-                        continue;
-                    };
-                    let Some(stack) = m
-                        .item_by_slot(EquipmentSlot::Head)
-                        .filter(|stack| wear.applies_to(stack, helmet_writes.get(&mob)))
-                    else {
-                        continue;
-                    };
-                    let at = [m.position.x, m.position.y, m.position.z];
-                    let (updated, broken) =
-                        self.damage_stack(&stack, wear.amount.min(i32::MAX as u32) as i32, false);
-                    let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob) else {
-                        continue;
-                    };
-                    if m.item_by_slot(EquipmentSlot::Head).as_ref() != Some(&stack) {
-                        continue;
-                    }
-                    if let Some(after) = updated.as_ref() {
-                        helmet_writes.insert(
-                            mob,
-                            horizon_client::health::HelmetWearApplied {
-                                before: wear.stack,
-                                after: after.clone(),
-                            },
-                        );
-                    } else {
-                        helmet_writes.remove(&mob);
-                    }
-                    m.set_equipment_stack(EquipmentSlot::Head as usize, updated);
-                    if broken.is_some() {
+                    // Durability was applied inside the hit, before armor. The
+                    // event only carries the break notification.
+                    if wear.broken.is_some() {
+                        let Some(m) = self.mobs.iter().find(|m| m.id == mob) else {
+                            continue;
+                        };
+                        let at = [m.position.x, m.position.y, m.position.z];
                         self.lan_entity_event(mob as i32, 49, at);
                     }
                 }

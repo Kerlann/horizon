@@ -2,7 +2,6 @@
 use super::Game;
 use horizon_client::items::ItemStack;
 use horizon_world::item_durability::{self, DurabilityStack, DurabilityWorld};
-use horizon_world::nbt::Tag;
 use std::convert::Infallible;
 
 struct World<'a, 'g> {
@@ -59,41 +58,8 @@ impl Game<'_> {
         amount: i32,
         player: bool,
     ) -> (Option<ItemStack>, Option<ItemStack>) {
-        let component = |name| stack.data().and_then(|data| data.other(name));
-        let item = self.items().get(&stack.item);
-        let max = match component("minecraft:max_damage") {
-            Some(Tag::Int(value)) => Some(*value),
-            _ => item.and_then(|item| (item.max_damage > 0).then_some(item.max_damage as i32)),
-        };
-        let mut projected = DurabilityStack {
-            count: stack.count as i32,
-            air: &*stack.item == "minecraft:air",
-            max_damage: if component("!minecraft:max_damage").is_some() {
-                None
-            } else {
-                max
-            },
-            damage: if component("!minecraft:damage").is_some() {
-                None
-            } else if component("minecraft:damage").is_some()
-                || item.is_some_and(|item| {
-                    item.components
-                        .iter()
-                        .any(|component| component == "minecraft:damage")
-                })
-            {
-                Some(stack.damage as i32)
-            } else {
-                None
-            },
-            unbreakable: component("!minecraft:unbreakable").is_none()
-                && (component("minecraft:unbreakable").is_some()
-                    || item.is_some_and(|item| {
-                        item.components
-                            .iter()
-                            .any(|component| component == "minecraft:unbreakable")
-                    })),
-        };
+        let mut projected =
+            horizon_client::health::durability_projection(Some(self.items()), stack);
         let mut world = World {
             game: self,
             original: stack,

@@ -69,7 +69,9 @@ fn falling_helmet_wear_honors_cancel_edits_guards_and_cooldown_ordering() {
                 .damage
                 .id("minecraft:falling_anvil")
                 .unwrap();
-            for id in [821001, 821002, 821005, 821006, 821007, 821008, 821009] {
+            for id in [
+                821001, 821002, 821005, 821006, 821007, 821008, 821009, 821010, 821011, 821012,
+            ] {
                 let mut player = PlayerMotion::new(game.motion, Vec3::ZERO).unwrap();
                 player.entity_id = id;
                 player.client_loaded = true;
@@ -77,16 +79,45 @@ fn falling_helmet_wear_honors_cancel_edits_guards_and_cooldown_ordering() {
                 game.creative = false;
                 game.lan_acting_uuid = Some(821);
                 game.armor[0] = (id != 821006).then(|| ItemStack::new("minecraft:iron_helmet", 1));
+                let helmet_max = game
+                    .res
+                    .items()
+                    .get("minecraft:iron_helmet")
+                    .unwrap()
+                    .max_damage;
                 if id == 821008 {
-                    game.armor[0].as_mut().unwrap().damage = game
-                        .res
-                        .items()
-                        .get("minecraft:iron_helmet")
+                    game.armor[0].as_mut().unwrap().damage = helmet_max - 1;
+                }
+                if matches!(id, 821010 | 821012) {
+                    game.armor[0].as_mut().unwrap().damage = helmet_max - 2;
+                }
+                if id == 821011 {
+                    game.armor[0]
+                        .as_mut()
                         .unwrap()
-                        .max_damage
-                        - 1;
+                        .data_mut()
+                        .set_other("!minecraft:damage", Some(horizon_world::nbt::Tag::Byte(1)));
+                }
+                if id == 821012 {
+                    game.armor[0]
+                        .as_mut()
+                        .unwrap()
+                        .enchant("minecraft:protection", 4);
                 }
                 game.apply_equipment();
+                if id == 821012 {
+                    game.apply_effect_status();
+                    let protection: f32 = game
+                        .player
+                        .as_ref()
+                        .unwrap()
+                        .status
+                        .protection
+                        .iter()
+                        .map(|(_, value)| *value)
+                        .sum();
+                    assert!(protection > 0.0);
+                }
                 if id == 821007 {
                     game.player.as_mut().unwrap().invulnerable = true;
                 }
@@ -157,6 +188,19 @@ fn falling_helmet_wear_honors_cancel_edits_guards_and_cooldown_ordering() {
                         assert!(hurt);
                         assert_eq!(game.armor[0].as_ref().unwrap().damage, 0);
                     }
+                    821010 | 821012 => {
+                        // Two points of wear break the helmet before armor and
+                        // protection reduce this 8-point hit: 6 health, not 5.904.
+                        assert!(hurt);
+                        assert!(game.armor[0].is_none());
+                        let record = game.player.as_ref().unwrap().hurt_log.last().unwrap();
+                        assert_eq!(record.armor, 0.0);
+                        assert_eq!(record.taken, 6.0);
+                    }
+                    821011 => {
+                        assert!(hurt);
+                        assert_eq!(game.armor[0].as_ref().unwrap().damage, 0);
+                    }
                     821006 => {
                         assert!(hurt);
                         assert!(game.armor[0].is_none());
@@ -205,7 +249,7 @@ fn falling_helmet_wear_honors_cancel_edits_guards_and_cooldown_ordering() {
     assert_eq!(
         *heard.lock().unwrap(),
         [
-            821001, 821002, 821002, 821008, 821009, 821003, 821004, 821004
+            821001, 821002, 821002, 821008, 821009, 821010, 821012, 821003, 821004, 821004
         ]
         .map(|entity| Wear {
             entity,

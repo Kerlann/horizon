@@ -186,6 +186,9 @@ impl FoodWorld for TickWorld<'_> {
             .expect("validated starvation source");
         self.events
             .push(MotionEvent::Health(HealthEvent::StarvationDamage(amount)));
+        let mut status = crate::effects::StatusFlags::default();
+        let mut helmet = None;
+        let mut helmet_wear = Vec::new();
         let mut environment = Environment {
             level: self.level.reborrow(),
             entity: self.entity,
@@ -204,7 +207,7 @@ impl FoodWorld for TickWorld<'_> {
             dead: self.dead,
             sync_velocity: self.sync_velocity,
             game_time: self.game_time,
-            status: Default::default(),
+            status: &mut status,
             blocking: None,
             blocked: 0.0,
             shield_damage: 0,
@@ -215,9 +218,12 @@ impl FoodWorld for TickWorld<'_> {
             totem_off_hand: false,
             totem_fired: false,
             canceled: false,
-            helmet: None,
+            helmet: &mut helmet,
             helmet_player: None,
-            helmet_wear: &mut Vec::new(),
+            helmet_player_name: None,
+            helmet_off_protection: &[],
+            helmet_modifiers: Vec::new(),
+            helmet_wear: &mut helmet_wear,
         };
         if ServerPlayerCombat::new(self.attributes, self.data, food, self.ids, &mut environment)?
             .hurt(self.hurt, amount)?

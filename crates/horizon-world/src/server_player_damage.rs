@@ -45,6 +45,11 @@ pub trait ServerDamageEnvironment<A: HealthAttributes = EntityAttributes>:
     /// Equipment breakage may update the live attribute map before armor and
     /// toughness are queried by the rest of this hit.
     fn hurt_armor(&mut self, attributes: &mut A, damage: f32) -> Result<(), EnvError<Self>>;
+    /// Head wear decided in `hurt_helmet` applies its attribute removals here,
+    /// still before armor and toughness are read. The default has nothing queued.
+    fn commit_helmet_attributes(&mut self, _attributes: &mut A) -> Result<(), EnvError<Self>> {
+        Ok(())
+    }
     fn has_resistance(&mut self) -> Result<bool, EnvError<Self>>;
     fn resistance_amplifier(&mut self) -> Result<i32, EnvError<Self>>;
     fn award_resisted(&mut self, amount: i32) -> Result<(), EnvError<Self>>;

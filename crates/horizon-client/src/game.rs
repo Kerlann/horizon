@@ -13890,6 +13890,7 @@ impl Game<'_> {
         };
         player.helmet = self.armor[0].clone();
         player.helmet_player = self.lan_acting_uuid;
+        player.helmet_player_name = self.lan_acting_name.clone();
         for (attribute, id) in std::mem::take(&mut self.applied_modifiers) {
             let _ = player.set_modifier_unclamped(&attribute, &id, 0.0, "add_value", false);
         }
@@ -13947,10 +13948,14 @@ impl Game<'_> {
                 .filter(|stack| wear.applies_to(stack, applied.as_ref()))
                 .cloned()
             else {
+                // The slot changed after the hit. The live head piece and its
+                // modifiers follow the slot, not the decision that missed it.
+                self.apply_equipment();
+                self.apply_effect_status();
                 continue;
             };
-            let (updated, broken) =
-                self.damage_stack(&stack, wear.amount.min(i32::MAX as u32) as i32, true);
+            let updated = wear.updated.clone();
+            let broken = wear.broken.clone();
             if self.armor[0].as_ref() != Some(&stack) {
                 continue;
             }
@@ -13962,14 +13967,24 @@ impl Game<'_> {
                         before: wear.stack,
                         after,
                     });
-            if let Some(stack) = broken {
+            if let Some(stack) = &broken {
+                self.trigger_item_durability(stack, stack.damage as i32);
                 self.player_equipment_broke(
                     horizon_world::player_inventory::EquipmentSlot::Head,
-                    &stack,
+                    stack,
                 );
                 self.award_stat("broken", &stack.item, 1);
+            } else if self.armor[0]
+                .as_ref()
+                .is_some_and(|after| after.damage != stack.damage)
+            {
+                let after = self.armor[0].clone().expect("head piece");
+                self.trigger_item_durability(&after, after.damage as i32);
             }
             self.apply_equipment();
+            if broken.is_some() {
+                self.apply_effect_status();
+            }
         }
         for event in events {
             if let MotionEvent::Health(horizon_client::health::HealthEvent::ArmorHurt {
@@ -14004,24 +14019,11 @@ impl Game<'_> {
         // The pieces that may wear (`doHurtEquipment`'s checks).
         let mut eligible: [Option<ItemStack>; 4] = std::array::from_fn(|i| {
             let stack = self.armor[i].clone()?;
-            let info = world_items!(self).get(&stack.item)?;
-            let component = |id| stack.data().and_then(|data| data.other(id));
             // ItemStack.isDamageableItem: component removal and
             // unbreakable are checked before enchantment RNG or hooks.
-            if stack.count == 0
-                || !info.equip_damage_on_hurt
-                || component("minecraft:unbreakable").is_some()
-                || component("!minecraft:max_damage").is_some()
-                || component("!minecraft:damage").is_some()
+            if !horizon_client::health::equipment_can_wear(world_items!(self), &stack)
                 || (fire && world_items!(self).resists_fire(&stack, &name))
             {
-                return None;
-            }
-            let max = match component("minecraft:max_damage") {
-                Some(horizon_world::nbt::Tag::Int(value)) => u32::try_from(*value).ok()?,
-                _ => info.max_damage,
-            };
-            if max == 0 {
                 return None;
             }
             Some(stack)

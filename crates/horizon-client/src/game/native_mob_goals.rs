@@ -203,7 +203,8 @@ impl Game<'_> {
                 Some(world_items!(self)),
                 Some(&self.pack.block_registries),
                 &self.damage_hooks,
-            );
+            )
+            .with_enchantments(&world_stations!(self).enchantments);
             let m = &mut mobs[index];
             let mut selector = if targets {
                 std::mem::take(&mut m.ai.targets)

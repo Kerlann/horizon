@@ -28,6 +28,42 @@ use horizon_core::{
     geometry::{Aabb, Axis, Direction, Vec3},
     random::{LegacyRandom, RandomSource},
 };
+
+/// `EnchantmentHelper.getDamageProtection` for `pieces`, from a fresh seed.
+fn protection_table(
+    damage: &horizon_world::damage_source::Catalog,
+    enchantments: &horizon_client::enchant::Enchantments,
+    items: &horizon_client::items::Items,
+    pieces: &[Option<ItemStack>],
+) -> Vec<(String, f32)> {
+    let mut table = Vec::new();
+    let mut random = LegacyRandom::new(0);
+    for (_, def) in damage.entries() {
+        let ctx = horizon_client::enchant::EffectContext {
+            items: Some(items),
+            damage_type: Some(&def.name),
+            this: Some("minecraft:player"),
+            ..Default::default()
+        };
+        let total: f32 = pieces
+            .iter()
+            .flatten()
+            .map(|stack| {
+                enchantments.modify_value(
+                    Some(stack),
+                    "minecraft:damage_protection",
+                    &ctx,
+                    &mut random,
+                    0.0,
+                )
+            })
+            .sum();
+        if total > 0.0 {
+            table.push((def.name.clone(), total));
+        }
+    }
+    table
+}
 use horizon_world::nbt::Tag;
 use mod_api::{EffectApplicable, EffectTickChange, EntityRef, LivingRef, NativePlayerFood};
 
@@ -1333,36 +1369,25 @@ impl Game<'_> {
                 *generation == self.damage_tag_generation && cached == &armor
             })
         {
-            let mut table = Vec::new();
-            let e = &self.stations().enchantments;
-            let mut random = horizon_core::random::LegacyRandom::new(0);
-            for (_, def) in self.health_resources.damage.entries() {
-                let ctx = horizon_client::enchant::EffectContext {
-                    items: Some(self.items()),
-                    damage_type: Some(&def.name),
-                    this: Some("minecraft:player"),
-                    ..Default::default()
-                };
-                let total: f32 = armor
-                    .iter()
-                    .flatten()
-                    .map(|s| {
-                        e.modify_value(
-                            Some(s),
-                            "minecraft:damage_protection",
-                            &ctx,
-                            &mut random,
-                            0.0,
-                        )
-                    })
-                    .sum();
-                if total > 0.0 {
-                    table.push((def.name.clone(), total));
-                }
-            }
+            let (table, bare) = {
+                let enchantments = self.stations().enchantments.clone();
+                let items = self.items();
+                let table =
+                    protection_table(&self.health_resources.damage, &enchantments, items, &armor);
+                let mut headless = armor.clone();
+                headless[0] = None;
+                let bare = protection_table(
+                    &self.health_resources.damage,
+                    &enchantments,
+                    items,
+                    &headless,
+                );
+                (table, bare)
+            };
             self.potions.protection_for = Some((self.damage_tag_generation, armor));
             if let Some(p) = self.player.as_mut() {
                 p.status.protection = table;
+                p.helmet_off_protection = bare;
             }
         }
         let mut status = self.potions.effects.status();

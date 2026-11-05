@@ -2609,6 +2609,15 @@ impl Mob {
         }
         true
     }
+    /// Write a head-wear decision that already ran inside the hit.
+    fn apply_resolved_head(&mut self, wear: &crate::health::HelmetWear) {
+        let slot = horizon_world::player_inventory::EquipmentSlot::Head as usize;
+        if wear.broken.is_some() {
+            self.set_equipment_stack(slot, None);
+        } else if let Some(updated) = wear.updated.clone() {
+            self.set_equipment_stack(slot, Some(updated));
+        }
+    }
 
     pub fn burning_time(&self) -> f64 {
         let base = finalize::value(self, finalize::Attr::BurningTime);
@@ -3595,9 +3604,12 @@ impl Mob {
             if let Some(wear) = level.helmet_wear(
                 crate::health::Hurting::Mob(self, &source),
                 None,
+                None,
                 &stack,
                 amount,
             ) {
+                // The piece is already worn before armor and protection below.
+                self.apply_resolved_head(&wear);
                 self.outbox
                     .push(MobEvent::HelmetHurt { mob: self.id, wear });
             }

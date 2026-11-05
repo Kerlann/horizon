@@ -901,6 +901,7 @@ macro_rules! damage_level_of {
             Some(&$game.pack.block_registries),
             &$game.damage_hooks,
         )
+        .with_enchantments(&world_stations!($game).enchantments)
         .attacked_by($game.combat.attack())
     };
     ($game:ident, $attack:expr) => {
@@ -911,6 +912,7 @@ macro_rules! damage_level_of {
             Some(&$game.pack.block_registries),
             &$game.damage_hooks,
         )
+        .with_enchantments(&world_stations!($game).enchantments)
         .attacked_by($attack)
     };
     ($game:ident) => {
@@ -921,6 +923,7 @@ macro_rules! damage_level_of {
             Some(&$game.pack.block_registries),
             &$game.damage_hooks,
         )
+        .with_enchantments(&world_stations!($game).enchantments)
     };
 }
 pub(super) use damage_level_of;

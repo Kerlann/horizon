@@ -493,6 +493,10 @@ pub struct PlayerMotion {
     pub helmet: Option<crate::items::ItemStack>,
     /// The wearing player's UUID, absent in simulation-only fixtures.
     pub helmet_player: Option<u128>,
+    /// That player's name, for the item-damage listener during head wear.
+    pub helmet_player_name: Option<String>,
+    /// Enchantment protection with the head slot empty, used when a hit breaks it.
+    pub helmet_off_protection: Vec<(String, f32)>,
     /// Head wear decided inside hurtServer, awaiting equipment write-back.
     pub helmet_wear: Vec<crate::health::HelmetWear>,
     /// Status effects and armor protection seen by movement and damage.
@@ -644,6 +648,8 @@ impl PlayerMotion {
             status: crate::effects::StatusFlags::default(),
             helmet: None,
             helmet_player: None,
+            helmet_player_name: None,
+            helmet_off_protection: Vec::new(),
             helmet_wear: Vec::new(),
             impulse: ImpulseContext::default(),
             spawn_extra_particles_on_fall: false,

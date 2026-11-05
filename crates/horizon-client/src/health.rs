@@ -95,6 +95,8 @@ pub struct DamageLevel<'a> {
     air: horizon_world::registry::BlockStateId,
     registry: &'a horizon_world::registry::BlockRegistry,
     tags: Option<&'a crate::items::Items>,
+    /// Enchantments of the hit's world, for head-wear durability before armor is read.
+    enchantments: Option<&'a crate::enchant::Enchantments>,
     block_registries: Option<&'a crate::command::args::Registries>,
     random: &'a mut horizon_core::random::LegacyRandom,
     attachments: &'a mut horizon_world::attachments::Attachments,
@@ -128,6 +130,7 @@ impl<'a> DamageLevel<'a> {
             air: *air,
             registry,
             tags,
+            enchantments: None,
             block_registries,
             random,
             attachments,
@@ -151,6 +154,7 @@ impl<'a> DamageLevel<'a> {
             air: world.air,
             registry,
             tags,
+            enchantments: None,
             block_registries,
             random: &mut lent.random,
             attachments: &mut lent.attachments,
@@ -158,6 +162,11 @@ impl<'a> DamageLevel<'a> {
             hooks: Some(hooks),
             attack: &NO_ATTACK,
         }
+    }
+    /// The world's enchantment table, used when head wear resolves before the hit.
+    pub fn with_enchantments(mut self, enchantments: &'a crate::enchant::Enchantments) -> Self {
+        self.enchantments = Some(enchantments);
+        self
     }
     /// The same level on a client predicting a mob it rides: no damage hooks fire.
     pub fn predicted(self) -> Self {
@@ -174,6 +183,7 @@ impl<'a> DamageLevel<'a> {
             air: self.air,
             registry: self.registry,
             tags: self.tags,
+            enchantments: self.enchantments,
             block_registries: self.block_registries,
             random: self.random,
             attachments: self.attachments,
@@ -193,6 +203,10 @@ impl<'a> DamageLevel<'a> {
     /// The authoritative world's merged tag tables, if available.
     pub fn tags(&self) -> Option<&crate::items::Items> {
         self.tags
+    }
+    /// Enchantments lent with the level, when the hit's world has them.
+    pub fn enchantments(&self) -> Option<&'a crate::enchant::Enchantments> {
+        self.enchantments
     }
     /// The cached block parser context, if available.
     pub fn block_registries(&self) -> Option<&crate::command::args::Registries> {
@@ -264,6 +278,33 @@ pub struct HelmetWear {
     pub stack: crate::items::ItemStack,
     /// Durability points before Unbreaking and item-damage listeners.
     pub amount: u32,
+    /// The piece after that pipeline, when it survived.
+    pub updated: Option<crate::items::ItemStack>,
+    /// The piece as it broke, when the wear destroyed it.
+    pub broken: Option<crate::items::ItemStack>,
+}
+/// A worn piece `doHurtEquipment` will actually damage. A removed durability
+/// component, `unbreakable`, or a zero maximum is not eligible, before any
+/// enchantment roll or listener.
+pub fn equipment_can_wear(items: &crate::items::Items, stack: &crate::items::ItemStack) -> bool {
+    let Some(info) = items.get(&stack.item) else {
+        return false;
+    };
+    if stack.count == 0 || !info.equip_damage_on_hurt {
+        return false;
+    }
+    let component = |id: &str| stack.data().and_then(|data| data.other(id));
+    if component("minecraft:unbreakable").is_some()
+        || component("!minecraft:max_damage").is_some()
+        || component("!minecraft:damage").is_some()
+    {
+        return false;
+    }
+    let max = match component("minecraft:max_damage") {
+        Some(horizon_world::nbt::Tag::Int(value)) => u32::try_from(*value).unwrap_or(0),
+        _ => info.max_damage,
+    };
+    max > 0
 }
 /// The last successful write in a batch of head-wear decisions.
 /// Later decisions can still name its original stack, not yet written when they ran.
@@ -291,28 +332,206 @@ impl DamageLevel<'_> {
         &mut self,
         hurting: Hurting<'_>,
         player: Option<u128>,
+        name: Option<&str>,
         stack: &crate::items::ItemStack,
         damage: f32,
     ) -> Option<HelmetWear> {
-        let items = self.tags?;
-        let info = items.get(&stack.item)?;
-        if damage <= 0.0
-            || stack.count == 0
-            || info.equip_slot.is_none()
-            || !info.equip_damage_on_hurt
-            || !crate::stations::is_damageable(items, stack)
         {
-            return None;
+            let items = self.tags?;
+            let info = items.get(&stack.item)?;
+            if damage <= 0.0 || info.equip_slot.is_none() || !equipment_can_wear(items, stack) {
+                return None;
+            }
         }
         let mut amount = ((damage / 4.0).max(1.0)) as u32;
         if let Some(hook) = self.hooks.and_then(|h| h.helmet) {
             amount = hook(self.reborrow(), hurting, player, stack, damage);
         }
-        (amount > 0).then(|| HelmetWear {
+        (amount > 0).then(|| self.settle_wear(stack, amount, player.zip(name)))
+    }
+    /// Unbreaking and a server player's item-damage listener, on the level's
+    /// random, before armor reads the piece this wear leaves.
+    fn settle_wear(
+        &mut self,
+        stack: &crate::items::ItemStack,
+        amount: u32,
+        player: Option<(u128, &str)>,
+    ) -> HelmetWear {
+        let mut projected = durability_projection(self.tags, stack);
+        let mut world = WearWorld {
+            original: stack,
+            enchantments: self.enchantments,
+            items: self.tags,
+            random: self.random,
+            player,
+            broken: None,
+        };
+        let _ = horizon_world::item_durability::hurt_and_break(
+            &mut projected,
+            &mut world,
+            amount.min(i32::MAX as u32) as i32,
+            player.is_some(),
+        );
+        let mut updated = stack.clone();
+        updated.count = projected.count.max(0) as u32;
+        if let Some(damage) = projected.damage {
+            updated.damage = damage as u32;
+        }
+        let broken = world.broken;
+        HelmetWear {
             stack: stack.clone(),
             amount,
-        })
+            updated: (updated.count > 0).then_some(updated),
+            broken,
+        }
     }
+}
+/// Durability projection for one head piece. The item-damage listener sees a
+/// host that refuses world writes: the hit's level is not the server.
+struct WearHost;
+impl mod_api::Host for WearHost {}
+impl mod_api::ServerHost for WearHost {}
+struct WearWorld<'a> {
+    original: &'a crate::items::ItemStack,
+    enchantments: Option<&'a crate::enchant::Enchantments>,
+    items: Option<&'a crate::items::Items>,
+    random: &'a mut horizon_core::random::LegacyRandom,
+    player: Option<(u128, &'a str)>,
+    broken: Option<crate::items::ItemStack>,
+}
+impl horizon_world::item_durability::DurabilityWorld for WearWorld<'_> {
+    type Error = std::convert::Infallible;
+    type Stack = horizon_world::item_durability::DurabilityStack;
+    fn storage_error(error: std::convert::Infallible) -> std::convert::Infallible {
+        error
+    }
+    fn infinite_materials(
+        &mut self,
+        _: &mut Self::Stack,
+    ) -> std::result::Result<bool, std::convert::Infallible> {
+        Ok(false)
+    }
+    fn process_enchantments(
+        &mut self,
+        _: &mut Self::Stack,
+        amount: i32,
+    ) -> std::result::Result<i32, std::convert::Infallible> {
+        let mut loss = amount.max(0) as u32;
+        if let Some(enchantments) = self.enchantments
+            && enchantments.has_component(self.original, "minecraft:item_damage")
+        {
+            let ctx = crate::enchant::EffectContext {
+                tool: Some(&self.original.item),
+                items: self.items,
+                ..Default::default()
+            };
+            loss = enchantments
+                .modify_value(
+                    Some(self.original),
+                    "minecraft:item_damage",
+                    &ctx,
+                    self.random,
+                    amount as f32,
+                )
+                .max(0.0) as u32;
+        }
+        if loss > 0
+            && let Some((uuid, name)) = self.player
+            && mod_api::__private::listened(mod_api::HookId::ItemDamaged)
+        {
+            let mut points = loss as i32;
+            let mut cancel = false;
+            mod_api::dispatch_item_damaged(
+                &mut WearHost,
+                uuid,
+                name,
+                &self.original.item,
+                &mut points,
+                &mut cancel,
+            );
+            loss = if cancel { 0 } else { points.max(0) as u32 };
+        }
+        Ok(loss.min(i32::MAX as u32) as i32)
+    }
+    fn durability_changed(
+        &mut self,
+        _: &mut Self::Stack,
+        _: i32,
+    ) -> std::result::Result<(), std::convert::Infallible> {
+        Ok(())
+    }
+    fn broken(
+        &mut self,
+        _: &mut Self::Stack,
+        copy: Self::Stack,
+    ) -> std::result::Result<(), std::convert::Infallible> {
+        let mut stack = self.original.clone();
+        stack.damage = copy.damage.unwrap_or(0) as u32;
+        self.broken = Some(stack);
+        Ok(())
+    }
+}
+/// The durability projection `damage_stack` and head wear share.
+pub fn durability_projection(
+    items: Option<&crate::items::Items>,
+    stack: &crate::items::ItemStack,
+) -> horizon_world::item_durability::DurabilityStack {
+    let component = |name: &str| stack.data().and_then(|data| data.other(name));
+    let item = items.and_then(|items| items.get(&stack.item));
+    let max = match component("minecraft:max_damage") {
+        Some(horizon_world::nbt::Tag::Int(value)) => Some(*value),
+        _ => item.and_then(|item| (item.max_damage > 0).then_some(item.max_damage as i32)),
+    };
+    horizon_world::item_durability::DurabilityStack {
+        count: stack.count as i32,
+        air: &*stack.item == "minecraft:air",
+        max_damage: if component("!minecraft:max_damage").is_some() {
+            None
+        } else {
+            max
+        },
+        damage: if component("!minecraft:damage").is_some() {
+            None
+        } else if component("minecraft:damage").is_some()
+            || item.is_some_and(|item| {
+                item.components
+                    .iter()
+                    .any(|component| component == "minecraft:damage")
+            })
+        {
+            Some(stack.damage as i32)
+        } else {
+            None
+        },
+        unbreakable: component("!minecraft:unbreakable").is_none()
+            && (component("minecraft:unbreakable").is_some()
+                || item.is_some_and(|item| {
+                    item.components
+                        .iter()
+                        .any(|component| component == "minecraft:unbreakable")
+                })),
+    }
+}
+/// Attribute modifiers a broken head piece must drop before this hit reads armor.
+pub(crate) fn helmet_attribute_removals(
+    items: &crate::items::Items,
+    enchantments: Option<&crate::enchant::Enchantments>,
+    stack: &crate::items::ItemStack,
+) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    for row in crate::item_attributes::attribute_modifiers(stack, items).iter() {
+        if crate::living_attributes::modifier_applies(&row.slot, "head") {
+            out.push((row.attribute.clone(), row.id.clone(), row.operation.clone()));
+        }
+    }
+    if let Some(enchantments) = enchantments {
+        for row in enchantments.modifier_rows(stack) {
+            if crate::living_attributes::modifier_applies(&row.slot, "head") {
+                out.push((row.attribute, format!("{}/head", row.id), row.operation));
+            }
+        }
+    }
+    out
 }
 /// A level's random and attachments, taken out of its world while the world is read
 /// elsewhere (the mob tick), and put back after.
@@ -848,7 +1067,6 @@ impl PlayerMotion {
             dead: &mut h.dead,
             sync_velocity: &mut h.sync_velocity,
             game_time: h.game_time,
-            status: self.status.clone(),
             blocking,
             blocked: 0.0,
             shield_damage: 0,
@@ -859,9 +1077,13 @@ impl PlayerMotion {
             totem_off_hand,
             totem_fired: false,
             canceled: false,
-            helmet: self.helmet.as_ref(),
+            helmet: &mut self.helmet,
             helmet_player: self.helmet_player,
+            helmet_player_name: self.helmet_player_name.clone(),
+            helmet_off_protection: &self.helmet_off_protection,
+            helmet_modifiers: Vec::new(),
             helmet_wear: &mut self.helmet_wear,
+            status: &mut self.status,
         };
         let hurt = ServerPlayerCombat::new(
             &mut self.attributes,
@@ -948,8 +1170,13 @@ impl PlayerMotion {
     }
 }
 pub(crate) struct Environment<'a> {
-    pub(crate) helmet: Option<&'a crate::items::ItemStack>,
+    pub(crate) helmet: &'a mut Option<crate::items::ItemStack>,
     pub(crate) helmet_player: Option<u128>,
+    pub(crate) helmet_player_name: Option<String>,
+    /// Protection with the head slot empty, swapped in when this hit breaks it.
+    pub(crate) helmet_off_protection: &'a [(String, f32)],
+    /// Attribute modifiers a broken head piece drops before armor is read.
+    pub(crate) helmet_modifiers: Vec<(String, String, String)>,
     pub(crate) helmet_wear: &'a mut Vec<HelmetWear>,
     /// The level the hit lands in, for the damage hooks.
     pub(crate) level: DamageLevel<'a>,
@@ -972,7 +1199,7 @@ pub(crate) struct Environment<'a> {
     pub(crate) sync_velocity: &'a mut bool,
     pub(crate) game_time: i64,
     /// Resistance, fire resistance and armor protection (effects.rs).
-    pub(crate) status: crate::effects::StatusFlags,
+    pub(crate) status: &'a mut crate::effects::StatusFlags,
     /// The raised blocking item, if any, and what it blocked.
     pub(crate) blocking: Option<Blocking>,
     pub(crate) blocked: f32,
@@ -1119,6 +1346,14 @@ impl ServerDamageEnvironment<Attributes> for Environment<'_> {
             source: self.source.type_id(),
             amount: damage,
         });
+        Ok(())
+    }
+    fn commit_helmet_attributes(&mut self, attributes: &mut Attributes) -> io::Result<()> {
+        for (attribute, id, operation) in self.helmet_modifiers.drain(..) {
+            let _ = crate::living_attributes::set_modifier(
+                attributes, &attribute, &id, 0.0, &operation, false,
+            );
+        }
         Ok(())
     }
     fn has_resistance(&mut self) -> io::Result<bool> {
@@ -1353,25 +1588,43 @@ impl HurtWorld for Environment<'_> {
         Ok(false)
     }
     fn helmet_empty(&mut self, _: &mut State) -> io::Result<bool> {
-        Ok(self.helmet.is_none_or(|s| s.count == 0))
+        Ok(self.helmet.as_ref().is_none_or(|s| s.count == 0))
     }
     fn hurt_helmet(&mut self, _: &mut State, damage: f32) -> io::Result<()> {
-        if let Some(stack) = self.helmet {
-            let source = HurtSource {
-                damage_type: &self.source.definition().name,
-                causing: self.causing,
-                direct: 0,
-                position: None,
-            };
-            if let Some(wear) = self.level.helmet_wear(
-                Hurting::Player(self.entity, source),
-                self.helmet_player,
-                stack,
-                damage,
-            ) {
-                self.helmet_wear.push(wear);
-            }
+        let Some(stack) = self.helmet.clone() else {
+            return Ok(());
+        };
+        if stack.count == 0 {
+            return Ok(());
         }
+        let source = HurtSource {
+            damage_type: &self.source.definition().name,
+            causing: self.causing,
+            direct: 0,
+            position: None,
+        };
+        let Some(wear) = self.level.helmet_wear(
+            Hurting::Player(self.entity, source),
+            self.helmet_player,
+            self.helmet_player_name.as_deref(),
+            &stack,
+            damage,
+        ) else {
+            return Ok(());
+        };
+        if wear.broken.is_some() {
+            // The piece is gone for the rest of this hit: protection and, once
+            // `commit_helmet_attributes` runs, its attribute modifiers.
+            self.status.protection = self.helmet_off_protection.to_vec();
+            if let Some(items) = self.level.tags() {
+                self.helmet_modifiers =
+                    helmet_attribute_removals(items, self.level.enchantments(), &stack);
+            }
+            *self.helmet = None;
+        } else if let Some(updated) = wear.updated.clone() {
+            *self.helmet = Some(updated);
+        }
+        self.helmet_wear.push(wear);
         Ok(())
     }
     fn actually_hurt(&mut self, _: &mut State, _: &mut DamageContainer, _: f32) -> io::Result<()> {
