@@ -1780,7 +1780,6 @@ impl Launcher {
             .filter(|_| self.settings.auto_updates_mods() && self.starting_pack.is_none())
             .map(|i| mods_page::AutoTarget {
                 instance: i.clone(),
-                level: Some(backend::mod_api_level(&tag)),
             });
         let mods_tx = self.mods.tx.clone();
         std::thread::spawn(move || {

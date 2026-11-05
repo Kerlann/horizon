@@ -38,7 +38,6 @@ fn index_of(versions: &[(&str, &str, &Path)]) -> Index {
             api: "0.2".into(),
             side: Some(horizon_mods::Side::Both),
             capabilities: vec![horizon_mods::Capability::Registries],
-            api_level: None,
             game: (*game).into(),
             requires: Vec::new(),
             file: index::File {
@@ -61,10 +60,7 @@ fn index_of(versions: &[(&str, &str, &Path)]) -> Index {
     index
 }
 
-const PLAY: Context = Context {
-    in_pack: false,
-    level: 100,
-};
+const PLAY: Context = Context { in_pack: false };
 
 /// The browser's entry for `ruby` at `version`.
 fn entry(version: &str) -> installed::Entry {
@@ -139,15 +135,6 @@ fn updates_forward_on_the_same_game_only() {
     };
     assert_eq!(to(&modrinth, &PLAY), None);
 
-    // The newest needs a newer Horizon: the one before it.
-    let mut newer = index.clone();
-    let ruby_at = newer.projects.len() - 1;
-    newer.projects[ruby_at].versions[0].api_level = Some(7);
-    let low = Context { level: 6, ..PLAY };
-    assert_eq!(
-        version_of(decide(&newer, &entry("1.0.0"), &low)),
-        Some("1.1.0".into())
-    );
     // Never backwards: the newest was taken down while it is installed.
     let mut down = index.clone();
     down.revoked.push(index::Revoked {

@@ -295,7 +295,6 @@ fn data_pack(index: &mut Index, dir: &Path) -> Project {
     version.api = "94".into();
     version.side = None;
     version.capabilities.clear();
-    version.api_level = None;
     version.requires.clear();
     version.file = index::File {
         name: "lanterns-1.0.0.zip".into(),

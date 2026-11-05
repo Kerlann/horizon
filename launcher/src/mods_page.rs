@@ -529,7 +529,6 @@ impl Launcher {
             .list
             .iter()
             .map(|i| AutoTarget {
-                level: self.version_of(i).map(|tag| backend::mod_api_level(tag)),
                 instance: i.clone(),
             })
             .collect();
@@ -1701,10 +1700,9 @@ impl Launcher {
     }
 }
 
-/// An instance whose registry projects may update and its game's mod API level.
+/// An instance whose registry projects may update.
 pub(super) struct AutoTarget {
     pub(super) instance: instances::Instance,
-    pub(super) level: Option<u32>,
 }
 
 /// Updates the registry projects of `targets`: Horizon's own instances only, never a modpack's
@@ -1714,12 +1712,11 @@ pub(super) fn auto_update(targets: &[AutoTarget]) -> Vec<String> {
     for t in targets {
         let i = &t.instance;
         let pack = i.id.starts_with("pack:") || i.id.starts_with("port:");
-        let (false, None, Some(level)) = (pack, &i.java, t.level) else {
+        let (false, None) = (pack, &i.java) else {
             continue;
         };
         let ctx = horizon::auto::Context {
             in_pack: horizon::auto::in_pack(&i.home),
-            level,
         };
         if let Some(report) = horizon::auto::run(&i.home, &ctx, &|_, _| {}) {
             lines.extend(report.lines());

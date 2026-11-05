@@ -7,15 +7,14 @@
 //!   whole, when the player asks;
 //! - a native mod, which is updated and rebuilt only when the player asks;
 //! - a data pack: it lives in a world, not in the browser's list;
-//! - a version for another Minecraft than the one installed, a newer version that needs a newer
-//!   Horizon, and anything older than what is installed.
+//! - a version for another Minecraft than the one installed, and anything older than what is installed.
 //!
 //! A content mod (`.hmod`) whose new version drops a block, item, entity, effect, menu or
 //! creative tab the installed one has waits for the player (its blocks would vanish from their
 //! worlds): the notice says which. The file an update replaces is kept in
 //! `mod-browser/replaced/` until the next start: an update cut short (a crash between moving the
 //! file and saving the list) is rolled back from it then.
-use super::{install_version_guarded, needs_port, Index};
+use super::{install_version_guarded, Index};
 use crate::browser::{installed, Kind, SourceId, GAME};
 use crate::i18n::trf;
 use horizon_mods::index;
@@ -37,10 +36,9 @@ pub enum Decision<'a> {
     Skip,
 }
 
-/// The game folder's place and the mod API level of the game.
+/// Whether the game folder belongs to a modpack.
 pub struct Context {
     pub in_pack: bool,
-    pub level: u32,
 }
 
 /// What an automatic update did: `Title version` updated, what waits for the player and why,
@@ -86,7 +84,7 @@ pub fn decide<'a>(index: &'a Index, entry: &installed::Entry, ctx: &Context) -> 
     let Some(p) = index.project(&entry.project) else {
         return Decision::Skip;
     };
-    let Some(target) = index.installable(p, GAME, ctx.level) else {
+    let Some(target) = index.installable(p, GAME) else {
         return Decision::Skip;
     };
     // Versions are newest first: only forward, from a version the index still lists.
@@ -96,7 +94,7 @@ pub fn decide<'a>(index: &'a Index, entry: &installed::Entry, ctx: &Context) -> 
     };
     let same_game = p.versions[now].game == target.game;
     let native_next = p.kind == index::Kind::NativeMod;
-    if next >= now || !same_game || needs_port(target) || native_next {
+    if next >= now || !same_game || native_next {
         return Decision::Skip;
     }
     Decision::Update(target)
