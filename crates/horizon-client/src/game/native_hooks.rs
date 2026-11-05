@@ -9186,12 +9186,12 @@ pub(super) fn helmet_wear(
         return amount;
     }
     let (entity, kind, source) = hurt_server_args(hurting, level.attack());
-    let mut entries = vec![mod_api::NativeArmorHurt {
+    let mut entries = Vec::from([mod_api::NativeArmorHurt {
         slot: horizon_world::player_inventory::EquipmentSlot::Head,
         stack: stack.clone(),
         damage: wear,
         new_damage: wear,
-    }];
+    }]);
     let mut cancel = false;
     HitLevel(level).native_armor_hurt(
         player,
