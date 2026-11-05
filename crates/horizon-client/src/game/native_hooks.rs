@@ -10987,7 +10987,7 @@ impl Game<'_> {
         )
     }
     /// `MobEvent::PlaceBlock`: a mob sets `state` at `pos` unless a mod
-    /// cancels `entity_place`; a refused enderman keeps carrying it.
+    /// cancels `entity_place`. Enderman attempts use `enderman_place_block`.
     pub(super) fn mob_place_block(
         &mut self,
         mob: u32,
@@ -11002,11 +11002,6 @@ impl Game<'_> {
             .find(|m| m.id == mob)
             .map(|m| m.kind.id.clone());
         if self.place_canceled(mob, at, state, against, None) {
-            if let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob)
-                && &*m.kind.id == "minecraft:enderman"
-            {
-                m.extra.carried = Some(state);
-            }
             return Ok(());
         }
         let facts = self.res.facts();

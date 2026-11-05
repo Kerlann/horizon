@@ -2065,9 +2065,8 @@ pub enum MobEvent {
         pos: [i32; 3],
         state: horizon_world::registry::BlockStateId,
     },
-    /// A mob placing a block (an enderman putting its carried block down, a
-    /// snow golem's trail): `entity_place` may refuse it, and a refused
-    /// enderman keeps carrying `state`.
+    /// A mob placing a block (such as a snow golem's trail): `entity_place`
+    /// may refuse it. Enderman leave-block attempts use `EndermanPlaceBlock`.
     PlaceBlock {
         mob: u32,
         pos: [i32; 3],

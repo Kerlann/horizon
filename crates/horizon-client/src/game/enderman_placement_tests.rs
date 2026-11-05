@@ -190,22 +190,31 @@ fn leave_block_goal_uses_real_neighbor_shapes_and_keeps_air_placement() {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn canceled_normalized_placements_keep_the_original_carried_block() {
     use horizon_core::position::BlockPos;
+    use horizon_world::registry::BlockStateId;
     use mod_api::{EntityPlaceEvent, Flow, Hooks, ModEntry, ServerHost, testing::with_mods};
     use std::sync::Mutex;
 
-    struct Cancel(Arc<Mutex<Vec<BlockPos>>>);
+    struct Cancel {
+        heard: Arc<Mutex<Vec<BlockPos>>>,
+        normalized: Arc<Mutex<Vec<BlockStateId>>>,
+    }
     #[mod_api::__subscriptions]
     impl Hooks for Cancel {
         fn entity_place(&self, _: &mut dyn ServerHost, event: &mut EntityPlaceEvent) -> Flow {
-            self.0.lock().unwrap().push(event.pos);
+            self.heard.lock().unwrap().push(event.pos);
+            self.normalized.lock().unwrap().push(event.state);
             Flow::Cancel
         }
     }
 
     let heard = Arc::new(Mutex::new(Vec::new()));
+    let normalized = Arc::new(Mutex::new(Vec::new()));
     let mods = vec![ModEntry::new(
         "enderman_place_probe",
-        Box::new(Cancel(heard.clone())),
+        Box::new(Cancel {
+            heard: heard.clone(),
+            normalized: normalized.clone(),
+        }),
     )];
     with_mods(mods.into(), || {
         super::native_entity_refs::tests::with_game(|game| {
@@ -244,8 +253,159 @@ fn canceled_normalized_placements_keep_the_original_carried_block() {
                 assert_eq!(game.world.block(3, 4, 3), air);
                 assert_eq!(game.mobs[0].extra.carried, Some(carried));
                 assert_eq!(heard.lock().unwrap().len(), i + 1, "one veto per attempt");
+                let state = normalized.lock().unwrap()[i];
+                if name == "minecraft:poppy" {
+                    assert_eq!(state, air, "the veto sees the AIR-normalized flower");
+                } else {
+                    let state = registry.state(state).unwrap();
+                    assert_eq!(state.name, "minecraft:note_block");
+                    assert_eq!(
+                        state.properties.get("instrument").map(String::as_str),
+                        Some("basedrum"),
+                        "the veto sees the normalized note block"
+                    );
+                }
             }
         });
     });
     assert_eq!(*heard.lock().unwrap(), [BlockPos::new(3, 4, 3); 2]);
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn a_placement_listener_discarding_the_enderman_refuses_the_attempt() {
+    use mod_api::{EntityPlaceEvent, Flow, Hooks, ModEntry, ServerHost, testing::with_mods};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Discard(Arc<AtomicUsize>);
+    #[mod_api::__subscriptions]
+    impl Hooks for Discard {
+        fn entity_place(&self, host: &mut dyn ServerHost, event: &mut EntityPlaceEvent) -> Flow {
+            assert!(
+                event
+                    .placer
+                    .expect("the live enderman resolves")
+                    .discard(host)
+            );
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Flow::Continue
+        }
+    }
+
+    let heard = Arc::new(AtomicUsize::new(0));
+    let mods = vec![ModEntry::new(
+        "enderman_discard_probe",
+        Box::new(Discard(heard.clone())),
+    )];
+    with_mods(mods.into(), || {
+        super::native_entity_refs::tests::with_game(|game| {
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            game.block_ticks
+                .add_empty_chunk(ChunkPos::new(0, 0))
+                .unwrap();
+            let registry = game.pack.assets.registry;
+            let air = registry.default_state("minecraft:air").unwrap();
+            let stone = registry.default_state("minecraft:stone").unwrap();
+            game.world.set(3, 3, 3, stone).unwrap();
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:enderman")
+                .unwrap()
+                .clone();
+            let mut mob = Mob::new(325, kind, Vec3::new(3.5, 4.0, 3.5), 0.0);
+            mob.extra.carried = Some(stone);
+            game.mobs.push(mob);
+            let attempt = MobEvent::EndermanPlaceBlock {
+                mob: 325,
+                pos: [3, 4, 3],
+                carried: stone,
+                occupants: Vec::new(),
+            };
+            game.handle_mob_events(vec![attempt.clone()]).unwrap();
+            assert_eq!(heard.load(Ordering::SeqCst), 1);
+            let mob = game.mobs.iter().find(|m| m.id == 325).unwrap();
+            // Discard does not set health to zero: alive() alone is not enough.
+            assert!(mob.alive());
+            assert!(mob.removed);
+            assert_eq!(mob.extra.carried, Some(stone));
+            assert_eq!(game.world.block(3, 4, 3), air);
+            // An already removed enderman cannot start another placement either.
+            game.handle_mob_events(vec![attempt]).unwrap();
+            assert_eq!(heard.load(Ordering::SeqCst), 1);
+            assert_eq!(game.world.block(3, 4, 3), air);
+        });
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn an_air_normalized_placement_empties_the_hand_without_a_block_change_notice() {
+    use mod_api::{EntityChangeBlockEvent, Hooks, ModEntry, ServerHost, testing::with_mods};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Changed(Arc<AtomicUsize>);
+    #[mod_api::__subscriptions]
+    impl Hooks for Changed {
+        fn entity_change_block(
+            &self,
+            _: &mut dyn ServerHost,
+            event: &mut EntityChangeBlockEvent<'_>,
+        ) {
+            assert_eq!(event.from, "minecraft:air");
+            assert_eq!(event.to, "minecraft:note_block");
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    let heard = Arc::new(AtomicUsize::new(0));
+    let mods = vec![ModEntry::new(
+        "enderman_change_probe",
+        Box::new(Changed(heard.clone())),
+    )];
+    with_mods(mods.into(), || {
+        super::native_entity_refs::tests::with_game(|game| {
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            game.block_ticks
+                .add_empty_chunk(ChunkPos::new(0, 0))
+                .unwrap();
+            let registry = game.pack.assets.registry;
+            let air = registry.default_state("minecraft:air").unwrap();
+            let stone = registry.default_state("minecraft:stone").unwrap();
+            game.world.set(3, 3, 3, stone).unwrap();
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:enderman")
+                .unwrap()
+                .clone();
+            for name in ["minecraft:poppy", "minecraft:note_block"] {
+                let carried = registry.default_state(name).unwrap();
+                let mut mob = Mob::new(325, kind.clone(), Vec3::new(3.5, 4.0, 3.5), 0.0);
+                mob.extra.carried = Some(carried);
+                game.mobs.clear();
+                game.mobs.push(mob);
+                game.handle_mob_events(vec![MobEvent::EndermanPlaceBlock {
+                    mob: 325,
+                    pos: [3, 4, 3],
+                    carried,
+                    occupants: Vec::new(),
+                }])
+                .unwrap();
+                assert_eq!(game.mobs[0].extra.carried, None);
+                let state = game.world.block(3, 4, 3);
+                if name == "minecraft:poppy" {
+                    assert_eq!(state, air);
+                    assert_eq!(heard.load(Ordering::SeqCst), 0);
+                } else {
+                    assert_eq!(registry.state(state).unwrap().name, "minecraft:note_block");
+                    assert_eq!(heard.load(Ordering::SeqCst), 1);
+                }
+            }
+        });
+    });
 }

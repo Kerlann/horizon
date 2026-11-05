@@ -24,6 +24,7 @@ impl Game<'_> {
         if !self.mobs.iter().any(|m| {
             m.id == mob
                 && m.alive()
+                && !m.removed
                 && m.species() == Species::Enderman
                 && m.extra.carried == Some(carried)
         }) {
@@ -80,6 +81,7 @@ impl Game<'_> {
             .find(|m| {
                 m.id == mob
                     && m.alive()
+                    && !m.removed
                     && m.species() == Species::Enderman
                     && m.extra.carried == Some(carried)
             })
@@ -97,16 +99,21 @@ impl Game<'_> {
         let to = facts.get(candidate.state).name.clone();
         // AIR is a legitimate normalized state. setBlock may report no
         // change for it; the eligible operation still empties the hand.
-        self.with_level(|b, level, ticks| {
-            b.set_block(level, ticks, at, candidate.state, flags::UPDATE_ALL);
+        let changed = self.with_level(|b, level, ticks| {
+            b.set_block(level, ticks, at, candidate.state, flags::UPDATE_ALL)
         });
         if let Some(m) = self.mobs.iter_mut().find(|m| {
-            m.id == mob && m.species() == Species::Enderman && m.extra.carried == Some(carried)
+            m.id == mob
+                && !m.removed
+                && m.species() == Species::Enderman
+                && m.extra.carried == Some(carried)
         }) {
             m.extra.carried = None;
         }
         self.process_level_events()?;
-        self.native_entity_change_block(mob, &kind, pos, &from, &to);
+        if changed {
+            self.native_entity_change_block(mob, &kind, pos, &from, &to);
+        }
         Ok(())
     }
 }
