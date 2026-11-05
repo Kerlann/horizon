@@ -19,7 +19,6 @@ fn ruby(version: &str) -> Vec<u8> {
     );
     horizon_mods::Package::write_files(
         &manifest,
-        None,
         &[(
             "assets/ruby/lang/en_us.json",
             br#"{"item.ruby.ruby": "Ruby"}"#,
@@ -53,7 +52,7 @@ fn registry(version: &str, bytes: &[u8], url: &str) -> Index {
         "id": "zoom", "kind": "native-mod", "name": "Zoom", "summary": "Zoom",
         "license": "MIT", "source": "https://github.com/someone/zoom", "downloads": 99,
         "versions": [{ "version": "1", "api": "0.2", "game": crate::mod_registry::GAME,
-            "file": file("zoom-1.hnmod", 1, "b".repeat(64)) }]
+            "file": file("zoom-1.hmod", 1, "b".repeat(64)) }]
     });
     let text = serde_json::json!({ "schema": 1, "projects": [ruby, old, native] }).to_string();
     Index::parse_local(&text).unwrap()

@@ -346,7 +346,6 @@ impl Game<'_> {
                 Event::Changed => {
                     self.settings.save(&Self::options_path());
                     self.apply_settings();
-                    self.sync_native_switches();
                     self.sync_pregen_option();
                     self.sync_agent_control();
                     self.ui.options.agent_status = self.agent_status_lines();
@@ -429,11 +428,11 @@ impl Game<'_> {
                 }
                 Event::BrowseMods => {
                     let ui = &mut self.ui.options.mod_browser;
-                    self.mods.jobs.browse(ui, Self::game_dir());
+                    self.mod_jobs.browse(ui, Self::game_dir());
                 }
                 Event::InstallMod(id) => {
                     let ui = &mut self.ui.options.mod_browser;
-                    self.mods.jobs.install(ui, Self::game_dir(), id);
+                    self.mod_jobs.install(ui, Self::game_dir(), id);
                 }
                 // The website, through ConfirmLinkScreen as other links.
                 Event::OpenModPage(url) => self.confirm_trusted_link(&url, Screen::Options),

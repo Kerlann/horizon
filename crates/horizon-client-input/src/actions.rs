@@ -49,7 +49,6 @@ actions! {
     PickItem, "key.pickItem", None;
     Command, "key.command", Some(KeyCode::Slash);
     Friends, "key.friends", Some(KeyCode::KeyO);
-    Emote, "key.emote", Some(KeyCode::KeyB);
     SocialInteractions, "key.socialInteractions", Some(KeyCode::KeyP);
     ToggleGui, "key.toggleGui", Some(KeyCode::F1);
     ToggleSpectatorShaderEffects, "key.toggleSpectatorShaderEffects", Some(KeyCode::F4);

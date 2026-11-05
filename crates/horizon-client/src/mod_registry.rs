@@ -96,24 +96,17 @@ fn fetch_text(at: &str) -> Result<String, String> {
     Ok(text)
 }
 
-/// Whether version `v` is a `.hmod` with code: the game doesn't run those any
-/// more, and the launcher neither lists nor installs them (`needs_port`).
-fn needs_port(v: &Version) -> bool {
-    v.file.name.ends_with(".hmod")
-        && v.capabilities
-            .iter()
-            .any(|c| *c != horizon_mods::Capability::Registries)
-}
-
 /// The version of content mod `p` this game installs: the newest for this
 /// Minecraft version that wasn't taken down and has no code.
 pub fn installable<'a>(index: &Index, p: &'a Project) -> Option<&'a Version> {
     if p.kind != Kind::Mod {
         return None;
     }
-    index
-        .installable(p, GAME, horizon_mods::api_level::LEVEL)
-        .filter(|v| !needs_port(v))
+    index.installable(p, GAME).filter(|v| {
+        v.capabilities
+            .iter()
+            .all(|c| *c == horizon_mods::Capability::Registries)
+    })
 }
 
 /// The registry's projects the browser offers, most downloaded first: content
@@ -208,6 +201,11 @@ pub fn install(
     let trust = index::check_file(index, p, v, &download).inspect_err(|_| {
         let _ = fs::remove_file(&download);
     })?;
+    let package = horizon_mods::Package::read(&download)?;
+    if package.manifest.native.is_some() || package.manifest.wasm.is_some() {
+        let _ = fs::remove_file(&download);
+        return Err("Install code mods with the launcher, then restart the game".into());
+    }
     if let Some(dir) = target.parent() {
         fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
@@ -318,6 +316,7 @@ impl Installed {
     fn version_of(&self, home: &Path, id: &str) -> Option<String> {
         if let Some(e) = self.position(id).map(|i| &self.entries[i])
             && let (Some(version), Some(file)) = (e["version"].as_str(), e["file"].as_str())
+            && file == format!("{}/{id}.hmod", crate::mod_list::DIR)
             && home.join(file).exists()
         {
             return Some(version.to_owned());
