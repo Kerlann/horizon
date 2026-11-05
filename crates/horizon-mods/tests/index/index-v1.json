@@ -7,7 +7,7 @@
       "kind": "mod",
       "name": "Coordinates HUD",
       "summary": "Sample content: a resource translation.",
-      "description": "A signed content-only package for registry tests.",
+      "description": "A signed content-only package with a resource translation for registry tests.",
       "authors": [
         "Horizon"
       ],
@@ -36,6 +36,9 @@
             "signature": "untrusted comment: test fixture signature\nRUS/AoT50ekAUNGOFYYzLx14ztEwWHyuuRmX4RMAJRLQZtahDe1pdBarv034NUBDbKubCXPrNlaoGNgyBdLh+yImG01fkAuWdwQ=\ntrusted comment: coords_hud 0.1.0 content fixture\nNgKmC0TYjDjfZkDqfXKlEGOtkB0kq8WiiYU51042pbRhS7Xb9qNLLvqCgks5ehimk5f6AuXx1fcilPYbRf/lDw==\n"
           }
         }
+      ],
+      "categories": [
+        "utility"
       ]
     },
     {
@@ -71,7 +74,12 @@
             "sha256": "4ad64fdf094fe3d4a52d7b0d22ee8ea5889d0b76cc3f12c588db501a0ad0c4bd"
           }
         }
-      ]
+      ],
+      "description": "Coordinates HUD with a calm render distance, played together as one profile.",
+      "categories": [
+        "lightweight"
+      ],
+      "icon": "https://horizon-rust.github.io/horizon-mods/icons/cozy.png"
     },
     {
       "id": "glow",
@@ -99,7 +107,12 @@
             "sha256": "331cfe29a666a0de804e9a9ff3d19d246eebcfbfa70b4f49bba8482d30ad9f02"
           }
         }
-      ]
+      ],
+      "description": "A soft bloom drawn over the world after it renders, in Horizon's own shader format.",
+      "categories": [
+        "bloom"
+      ],
+      "icon": "https://horizon-rust.github.io/horizon-mods/icons/glow.png"
     },
     {
       "id": "skyblock_start",
