@@ -120,7 +120,7 @@ fn updates_forward_on_the_same_game_only() {
     };
     assert_eq!(to(&entry("1.0.0"), &in_pack), None, "a modpack's profile");
     let native = installed::Entry {
-        file: "horizon-native-mods/ruby.hnmod".into(),
+        file: "horizon-native-mods/ruby.hmod".into(),
         ..entry("1.0.0")
     };
     assert_eq!(
