@@ -1,1 +1,0 @@
-{"status":"pr_opened","pr":1056,"branch":"bulk-batch2-2j42fp-f3dbfd61eb14","head":"7a9444de9beb93eca3d4b4f60f6665dfb38bde82","notes":"Fractional vehicle spill implemented; rustfmt and diff check passed. Focused test and requested cargo checks remain queued behind shared build lock; in-game proof not run, as noted in PR."}
