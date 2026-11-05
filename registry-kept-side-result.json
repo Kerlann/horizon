@@ -1,0 +1,10 @@
+{
+  "ready": true,
+  "audit": "/box/shared/upstream-sync/batch-3d33b0299d/registry-kept-side-audit.md",
+  "summary": "Independent audit of exact writer commit 415588155ffd486be9d50f2bc1e5b3a4f95cd387 completed the empty registry assignment. Both delta inventories and registry tree identities confirm no registry source or policy integration changed. No registry fixes were needed; diff check passed. Ready only for the registry area, with no build or runtime claim. Precise cross-area launcher findings are recorded for integration.",
+  "unread": [],
+  "defects": [
+    "Cross-area launcher mismatch at the writer snapshot: launcher/src/servers_page.rs:68, :97 and :1225 introduce Field::ShopGift and self.shop.find_soon, but the retained Launcher type in launcher/src/main.rs:211–467 has no shop field. Launcher area must remove the cosmetic field and arm; no cross-area edit made here.",
+    "Cross-area no-cosmetics policy residue at the writer snapshot: launcher/src/wardrobe_page/shop.rs and launcher/src/wardrobe_page/shop/basket.rs remain tracked new files and must be dropped by the launcher area. Recheck after integrating its result."
+  ]
+}
