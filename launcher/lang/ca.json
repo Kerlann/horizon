@@ -1122,5 +1122,10 @@
   "{version} is not installed": "{version} no està instal·lat",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (o .mcp.json en un projecte)",
   "← All servers": "← Tots els servidors",
-  "← Newer": "← Més recent"
+  "← Newer": "← Més recent",
+  "Update registry mods automatically": "Update registry mods automatically",
+  "At start and before you play, what you installed from Horizon's registry moves to its newest version for this game. Never inside a modpack, and an update that would remove blocks or items waits for you.": "At start and before you play, what you installed from Horizon's registry moves to its newest version for this game. Never inside a modpack, and an update that would remove blocks or items waits for you.",
+  "Updated automatically: {list}.": "Updated automatically: {list}.",
+  "{title} wasn't updated: {error}": "{title} wasn't updated: {error}",
+  "{title} {version} waits for you: it no longer has {ids}, which your worlds may use. Update it on the Mods page when you're ready.": "{title} {version} waits for you: it no longer has {ids}, which your worlds may use. Update it on the Mods page when you're ready."
 }

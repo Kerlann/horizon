@@ -1,7 +1,4 @@
 {
-  "horizon.extras.header.world": "World",
-  "horizon.extras.pregen": "Chunk pregeneration",
-  "horizon.extras.pregen.tooltip": "Enables /pregen in your single-player and LAN worlds. With cheats enabled, use /pregen start to generate an area before exploring it. Does not enable the command on servers you join.",
   "horizon.options.controller": "Controller",
   "horizon.options.three_d_skin_layers": "3D Skin Layers",
   "horizon.options.vibration": "Vibration",
@@ -735,6 +732,9 @@
   "horizon.pvp.chat_search.tooltip": "Ctrl+F in the open chat: what you type shows only the messages holding it. Enter or Ctrl+F again stops.",
   "horizon.pvp.preset": "PvP preset",
   "horizon.pvp.preset.tooltip": "Turns on the custom crosshair, the armour and effects widgets, toggle sprint and sneak, lower fire, and the FPS counter and keystrokes mods if installed. Your settings for each stay.",
+  "horizon.extras.header.world": "World",
+  "horizon.extras.pregen": "Chunk pregeneration",
+  "horizon.extras.pregen.tooltip": "Enables /pregen in your single-player and LAN worlds. With cheats enabled, use /pregen start to generate an area before exploring it. Does not enable the command on servers you join.",
   "Bindings": "Bindings",
   "Device": "Device",
   "Look": "Look",

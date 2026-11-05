@@ -1,7 +1,4 @@
 {
-  "horizon.extras.header.world": "Mundo",
-  "horizon.extras.pregen": "Pré-gerar chunks",
-  "horizon.extras.pregen.tooltip": "Habilita /pregen nos seus mundos de um jogador e em LAN. Com comandos habilitados, use /pregen start para gerar uma área antes de explorá-la. Não habilita o comando nos servidores em que você entra.",
   "horizon.options.controller": "Controlador",
   "horizon.options.vibration": "Vibração",
   "horizon.options.adaptive_triggers": "Gatilhos adaptativos",
@@ -477,5 +474,8 @@
   "horizon.pack.filter.realistic": "Realista",
   "horizon.pack.filter.simplistic": "Simplista",
   "horizon.pack.filter.vanillaLike": "Semelhante à baunilha",
-  "horizon.pack.addFailed": "O pacote não pôde ser adicionado: %s"
+  "horizon.pack.addFailed": "O pacote não pôde ser adicionado: %s",
+  "horizon.extras.header.world": "Mundo",
+  "horizon.extras.pregen": "Pré-gerar chunks",
+  "horizon.extras.pregen.tooltip": "Habilita /pregen nos seus mundos de um jogador e em LAN. Com comandos habilitados, use /pregen start para gerar uma área antes de explorá-la. Não habilita o comando nos servidores em que você entra."
 }

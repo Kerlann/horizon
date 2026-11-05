@@ -1122,5 +1122,10 @@
   "{version} is not installed": "{version}이(가) 설치되지 않았습니다.",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (또는 프로젝트 내 .mcp.json)",
   "← All servers": "← 모든 서버",
-  "← Newer": "← 최신"
+  "← Newer": "← 최신",
+  "Update registry mods automatically": "Update registry mods automatically",
+  "At start and before you play, what you installed from Horizon's registry moves to its newest version for this game. Never inside a modpack, and an update that would remove blocks or items waits for you.": "At start and before you play, what you installed from Horizon's registry moves to its newest version for this game. Never inside a modpack, and an update that would remove blocks or items waits for you.",
+  "Updated automatically: {list}.": "Updated automatically: {list}.",
+  "{title} wasn't updated: {error}": "{title} wasn't updated: {error}",
+  "{title} {version} waits for you: it no longer has {ids}, which your worlds may use. Update it on the Mods page when you're ready.": "{title} {version} waits for you: it no longer has {ids}, which your worlds may use. Update it on the Mods page when you're ready."
 }
