@@ -1,0 +1,14 @@
+{
+  "pr": 1096,
+  "head": "15d2a0961fa823afa1e68278dbb7354d439a69d5",
+  "dir": "/box/shared/fork-lead/batch-fix/1096-exact",
+  "summary": "Exact-head dev build of the retained proof1007 trait mod (separate workspace, not a game example) linked into proof1007-game at 15d2a0961fa823afa1e68278dbb7354d439a69d5, clean tree before and after. Integrated Server thread and dedicated main thread both logged the pig sequence (2/20/true, then 4 with damage 2/ticks 20/false, third weaker command ok=false and no third Post). Same-tick player function proof:hit on the Server thread produced the same two posts and no third Post; a follow-up say after the weaker damage proved the function reached the end. Spaced ctl player hits were all fresh and are not a cooldown proof. Sample test_stage.py status ok and horizon.py check cargo_exit 0, linked_executable false, pinned to this head. No source defect found.",
+  "limits": [
+    "No wasm runtime execution, network guest, fake player, in-game dragon, or performance measurement.",
+    "The retained horizon-mod.toml used capabilities = []; this head rejects that for every manifest, so the loaded package uses capabilities = [\"registries\"]. Package files were chmod 644 because the filesystem marks them executable and the reader refuses mode 0111.",
+    "Spaced horizon-ctl player damages all fired as fresh hits. The player cooldown/refusal result is only the same-tick datapack function, not the mod's own first-tick commands (those returned ok=false under join protection).",
+    "The screenshot shows the world and damage chat, not the side_effects flag. State health is not used as flag evidence.",
+    "Dedicated hook thread name is main; the server log calls that thread Server thread. Startup logged 'No key layers in MapLike[{}]'; not investigated and not treated as a damage-flag defect.",
+    "Sample check compiles the pinned crate; it is not sample gameplay. cargo check --examples was not run; the probe is outside the Horizon workspace."
+  ]
+}
