@@ -9274,7 +9274,7 @@ fn mob_source(damage: &Damage, attack: &Attack) -> HurtSource<'static> {
         direct: if melee {
             causing
         } else {
-            attack.projectile.unwrap_or(0)
+            attack.projectile_for(super::creatures::source_damage_type(*damage))
         },
         position: damage.from,
     }

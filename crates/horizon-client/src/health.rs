@@ -392,6 +392,28 @@ pub static NO_ATTACK: Attack = Attack {
     held: [None, None],
 };
 impl Attack {
+    /// The direct projectile only for damage sources that actually name it.
+    pub fn projectile_for(&self, damage_type: &str) -> i32 {
+        if matches!(
+            damage_type,
+            "minecraft:arrow"
+                | "minecraft:trident"
+                | "minecraft:thrown"
+                | "minecraft:fireball"
+                | "minecraft:unattributed_fireball"
+                | "minecraft:wither_skull"
+                | "minecraft:mob_projectile"
+                | "minecraft:indirect_magic"
+                | "minecraft:spit"
+                | "minecraft:wind_charge"
+                | "minecraft:fireworks"
+        ) {
+            self.projectile.unwrap_or(0)
+        } else {
+            0
+        }
+    }
+
     /// The main-hand stack of `direct`, a hit's direct entity, when it is the attacker
     /// (`DamageSource.getWeaponItem`: the direct entity's weapon), else none.
     pub fn weapon_of(&self, direct: i32) -> Option<&crate::items::ItemStack> {
@@ -1113,7 +1135,10 @@ impl ServerDamageEnvironment<Attributes> for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: self.level.attack().projectile.unwrap_or(0),
+            direct: self
+                .level
+                .attack()
+                .projectile_for(&self.source.definition().name),
             position: None,
         };
         self.level
@@ -1124,7 +1149,10 @@ impl ServerDamageEnvironment<Attributes> for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: self.level.attack().projectile.unwrap_or(0),
+            direct: self
+                .level
+                .attack()
+                .projectile_for(&self.source.definition().name),
             position: None,
         };
         self.level
@@ -1209,7 +1237,10 @@ impl HurtWorld for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: self.level.attack().projectile.unwrap_or(0),
+            direct: self
+                .level
+                .attack()
+                .projectile_for(&self.source.definition().name),
             position: None,
         };
         let canceled = self.level.incoming_canceled(
@@ -1260,7 +1291,10 @@ impl HurtWorld for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: self.level.attack().projectile.unwrap_or(0),
+            direct: self
+                .level
+                .attack()
+                .projectile_for(&self.source.definition().name),
             position: None,
         };
         let Some(block) =
@@ -1335,7 +1369,10 @@ impl HurtWorld for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: self.level.attack().projectile.unwrap_or(0),
+            direct: self
+                .level
+                .attack()
+                .projectile_for(&self.source.definition().name),
             position: None,
         };
         // A native mod may cancel the totem: the player dies.
@@ -1442,6 +1479,17 @@ mod datapack_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn projectile_identity_belongs_to_the_damage_source_not_the_impact() {
+        let attack = Attack {
+            projectile: Some(912),
+            ..Default::default()
+        };
+        assert_eq!(attack.projectile_for("minecraft:arrow"), 912);
+        assert_eq!(attack.projectile_for("minecraft:wither_skull"), 912);
+        assert_eq!(attack.projectile_for("minecraft:magic"), 0);
+        assert_eq!(attack.projectile_for("minecraft:fall"), 0);
+    }
     #[test]
     fn the_weapon_is_the_attackers_main_hand_only_for_its_own_hit() {
         let sword = crate::items::ItemStack::new("minecraft:iron_sword", 1);
