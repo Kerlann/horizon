@@ -43,6 +43,16 @@ pub trait Hooks {
         cancellable = false
     )]
     fn server_about_to_start();
+    /// Fired once immediately after `server_about_to_start`, before the server
+    /// accepts play, on both integrated and dedicated servers. A failed startup
+    /// still reaches `server_stopped`.
+    #[hook(
+        side = "server",
+        contract = "listen",
+        neoforge = "ServerStartingEvent",
+        cancellable = false
+    )]
+    fn server_starting();
     /// The server has opened its worlds and is about to run its tick loop
     /// (NeoForge's `ServerStartedEvent`): every level is loaded, no player has
     /// joined, and the first tick has not run. Fired where `WorldOpenReady` was,
@@ -70,6 +80,16 @@ pub trait Hooks {
         cancellable = false
     )]
     fn server_stopping();
+    /// Fired once at the end of server teardown, after `server_stopping` and
+    /// the final save on an orderly stop. Also fired when startup or teardown
+    /// fails after startup began, on integrated and dedicated servers.
+    #[hook(
+        side = "server",
+        contract = "listen",
+        neoforge = "ServerStoppedEvent",
+        cancellable = false
+    )]
+    fn server_stopped();
     /// The authoritative server tick's phases: `ServerTickStart` before any
     /// level is ticked (NeoForge's `ServerTickEvent.Pre`), `ServerTickEnd`
     /// after the last (`.Post`). Read blocks with `native_server_block`, by

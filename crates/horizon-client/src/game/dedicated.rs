@@ -827,16 +827,20 @@ impl Game<'_> {
     /// DedicatedServer.initServer and MinecraftServer.runServer.
     // The epoch starts at world open; failures before that send no lifecycle event.
     pub(super) fn run_dedicated(&mut self) -> Result<()> {
-        let result = self.run_dedicated_inner();
+        let mut startup_began = false;
+        let result = self.run_dedicated_inner(&mut startup_began);
         if let Err(error) = &result {
             self.native_players_leaving();
             self.native_lifecycle_world_failed(&error.to_string());
             self.native_lifecycle_close_failed(&error.to_string());
         }
+        if startup_began {
+            self.native_server_stopped(true);
+        }
         result
     }
 
-    fn run_dedicated_inner(&mut self) -> Result<()> {
+    fn run_dedicated_inner(&mut self, startup_began: &mut bool) -> Result<()> {
         // This thread ticks the server (MinecraftServer.spin's priority).
         horizon_threads::favour_current();
         self.join_world_rest()?;
@@ -958,7 +962,9 @@ impl Game<'_> {
         // The mods' common and server configs, read before the server starts.
         self.native_configs_server_start(&world_dir, true);
         // MinecraftServer.loadLevel's start: nothing is loaded yet.
+        *startup_began = true;
         self.native_server_about_to_start(true);
+        self.native_server_starting(true);
         self.native_lifecycle_open_started();
         // The registries the server sends are read while the world prepares.
         let sync = super::lan::preload_sync_data(&self.res.core.item_data);

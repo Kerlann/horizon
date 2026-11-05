@@ -615,6 +615,7 @@ impl Game<'_> {
             self.native_players_leaving();
             self.native_lifecycle_close_failed(&error.to_string());
         }
+        self.native_server_stopped(false);
         result
     }
 
@@ -724,6 +725,7 @@ impl Game<'_> {
         }
         // MinecraftServer.loadLevel's start: nothing is loaded yet.
         self.native_server_about_to_start(false);
+        self.native_server_starting(false);
         self.native_lifecycle_open_started();
         // `load_world`, with the world `serve` started preparing.
         startup::time("server.wait_rest", || self.join_world_rest())?;
