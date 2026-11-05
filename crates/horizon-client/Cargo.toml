@@ -17,7 +17,6 @@ horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
 horizon-mod-api = { path = "../horizon-mod-api" }
 horizon-mod-api-macros = { path = "../horizon-mod-api-macros" }
 horizon-mod-wasm = { path = "../horizon-mod-wasm" }
-horizon-cosmetics = { path = "../horizon-cosmetics" }
 horizon-client-lib = { path = "../horizon-client-lib", default-features = false }
 horizon-assets = { path = "../horizon-assets" }
 horizon-client-core = { path = "../horizon-client-core" }

@@ -2674,6 +2674,20 @@ mod tests {
     }
 
     #[test]
+    fn native_mods_for_another_game_revision_are_rejected() {
+        let root = dir("revision-mismatch");
+        write_native(&root.join("matching"), "matching", A, B);
+        write_native(&root.join("other"), "other", B, B);
+        let mods = bundles(&root).unwrap();
+        assert_eq!(
+            mismatch(&mods, A).as_deref(),
+            Some("other → bbbbbbb; the build uses aaaaaaa")
+        );
+        assert!(mismatch(&mods[..1], A).is_none());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn a_registry_download_is_a_bundle_with_its_pins() {
         let d = dir("hmod");
         write_native(&d.join("veinminer"), "veinminer", A, B);

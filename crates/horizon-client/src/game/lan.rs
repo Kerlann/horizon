@@ -3686,7 +3686,16 @@ mod tests {
             integrated: false,
             levels: Default::default(),
         };
-        let hub = hub::Hub::new(lan, sync, encoder, hub_config);
+        let hub = hub::Hub::new(
+            lan,
+            sync,
+            encoder,
+            hub_config,
+            std::sync::Arc::new(
+                crate::game::test_server_load()
+                    .loop_context(horizon_world::native_load_context::LoopSide::Server, []),
+            ),
+        );
         let meta_of = |m: &Mob| {
             let (mut meta, mut defaults) = (Vec::new(), Vec::new());
             super::mob_meta(m, &hub, None, 0, &mut meta, &mut defaults);

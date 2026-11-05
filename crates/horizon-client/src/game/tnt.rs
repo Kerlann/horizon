@@ -746,6 +746,8 @@ mod tests {
                 &assets,
                 &facts,
                 &fluids,
+                &crate::game::test_server_load()
+                    .loop_context(horizon_world::native_load_context::LoopSide::Server, []),
                 None,
                 Some(&motion.blocks),
             )

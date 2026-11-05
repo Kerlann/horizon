@@ -467,11 +467,5 @@
   "horizon.pack.filter.realistic": "Realistico",
   "horizon.pack.filter.simplistic": "Semplicista",
   "horizon.pack.filter.vanillaLike": "Simil a la vaniglia",
-  "horizon.pack.addFailed": "El pachett l’è minga stà pusibel giuntà: %s",
-  "horizon.extras.header.cosmetics": "Cosmetich",
-  "horizon.extras.cosmetics_mine": "I me cosmetich",
-  "horizon.extras.cosmetics_mine.tooltip": "Ascüs: tüt i giucadur Horizon te veden senza i tò cosmetich, anca tì. L’istess interruttur del guardaroba del lanciador.",
-  "horizon.extras.cosmetics_others": "Cosmetich di olter giucadur",
-  "horizon.extras.cosmetics_others.tooltip": "Che ròbb che purtan sü i olter giucadur Horizon: tüt, sultant i luur stil de etichett o nient. Ascüs, el giœugh dumanda mai cus’è che g’han sü.",
-  "horizon.extras.cosmetics_auras.tooltip": "Auras and trails other players wear. Disattiva per predefiniziun."
+  "horizon.pack.addFailed": "El pachett l’è minga stà pusibel giuntà: %s"
 }

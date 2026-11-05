@@ -457,15 +457,5 @@
   "horizon.pack.filter.realistic": "Realista",
   "horizon.pack.filter.simplistic": "Simplista",
   "horizon.pack.filter.vanillaLike": "semblant a la vainilla",
-  "horizon.pack.addFailed": "No s'ha pogut afegir el paquet: %s",
-  "horizon.extras.header.cosmetics": "Cosmètics",
-  "horizon.extras.cosmetics_mine": "Els meus cosmètics",
-  "horizon.extras.cosmetics_mine.tooltip": "Ocult: tots els jugadors d'Horizon et veuen sense els teus cosmètics, tu inclòs. El mateix interruptor que l'armari del llançador.",
-  "horizon.extras.cosmetics_others": "Cosmètica d'altres jugadors",
-  "horizon.extras.cosmetics_others.tooltip": "Què porten altres jugadors d'Horizon: tot, només els seus estils d'etiquetes de nom o res. Amagat, el joc mai pregunta què porten.",
-  "horizon.extras.cosmetics_auras": "Les aures i els camins dels altres",
-  "horizon.extras.cosmetics_auras.tooltip": "Aures i rastres que porten altres jugadors. Desactivat per defecte.",
-  "horizon.extras.cosmetics.shown": "Es mostra",
-  "horizon.extras.cosmetics.hidden": "Ocult",
-  "horizon.extras.cosmetics.name_tags": "Només etiquetes de nom"
+  "horizon.pack.addFailed": "No s'ha pogut afegir el paquet: %s"
 }

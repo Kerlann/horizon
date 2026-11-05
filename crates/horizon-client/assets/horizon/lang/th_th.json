@@ -481,15 +481,5 @@
   "horizon.pack.filter.realistic": "สมจริง",
   "horizon.pack.filter.simplistic": "เรียบง่าย",
   "horizon.pack.filter.vanillaLike": "เหมือนวานิลลา",
-  "horizon.pack.addFailed": "ไม่สามารถเพิ่มแพ็กได้: %s",
-  "horizon.extras.header.cosmetics": "เครื่องสำอาง",
-  "horizon.extras.cosmetics_mine": "เครื่องสำอางของฉัน",
-  "horizon.extras.cosmetics_mine.tooltip": "ซ่อนเร้น: ผู้เล่น Horizon ทุกคนมองเห็นคุณโดยไม่ได้แต่งหน้า รวมไปถึงคุณด้วย สวิตช์แบบเดียวกับตู้เสื้อผ้าของตัวเรียกใช้งาน",
-  "horizon.extras.cosmetics_others": "เครื่องสำอางของผู้เล่นคนอื่น",
-  "horizon.extras.cosmetics_others.tooltip": "ชุดที่ผู้เล่น Horizon คนอื่นๆ ใส่: ทุกอย่าง เฉพาะรูปแบบป้ายชื่อของพวกเขา หรือไม่ใส่เลย ซ่อนเร้นเกมไม่เคยถามว่าพวกเขาสวมอะไร",
-  "horizon.extras.cosmetics_auras": "ออร่าและเส้นทางของผู้อื่น",
-  "horizon.extras.cosmetics_auras.tooltip": "ออร่าและเส้นทางที่ผู้เล่นคนอื่นสวมใส่ ปิดโดยค่าเริ่มต้น",
-  "horizon.extras.cosmetics.shown": "แสดงแล้ว",
-  "horizon.extras.cosmetics.hidden": "ซ่อนเร้น",
-  "horizon.extras.cosmetics.name_tags": "ป้ายชื่อเท่านั้น"
+  "horizon.pack.addFailed": "ไม่สามารถเพิ่มแพ็กได้: %s"
 }

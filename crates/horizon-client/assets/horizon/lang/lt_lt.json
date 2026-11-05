@@ -461,15 +461,5 @@
   "horizon.pack.filter.realistic": "Realistiškas",
   "horizon.pack.filter.simplistic": "Supaprastinta",
   "horizon.pack.filter.vanillaLike": "Vanilės tipo",
-  "horizon.pack.addFailed": "Nepavyko pridėti paketo: %s",
-  "horizon.extras.header.cosmetics": "Kosmetika",
-  "horizon.extras.cosmetics_mine": "Mano kosmetika",
-  "horizon.extras.cosmetics_mine.tooltip": "Paslėpta: kiekvienas „Horizon“ žaidėjas mato jus be jūsų kosmetikos, įskaitant jus. Tas pats jungiklis kaip ir paleidimo priemonės drabužių spinta.",
-  "horizon.extras.cosmetics_others": "Kitų žaidėjų kosmetika",
-  "horizon.extras.cosmetics_others.tooltip": "Ką dėvi kiti „Horizon“ žaidėjai: viskas, tik jų vardų etiketės arba nieko. Paslėptas, žaidimas niekada neklausia, ką jie dėvi.",
-  "horizon.extras.cosmetics_auras": "Kitų auros ir takai",
-  "horizon.extras.cosmetics_auras.tooltip": "Auros ir takai, kuriuos nešioja kiti žaidėjai. Išjungta pagal numatytuosius nustatymus.",
-  "horizon.extras.cosmetics.shown": "Parodyta",
-  "horizon.extras.cosmetics.hidden": "Paslėpta",
-  "horizon.extras.cosmetics.name_tags": "Tik vardų žymos"
+  "horizon.pack.addFailed": "Nepavyko pridėti paketo: %s"
 }

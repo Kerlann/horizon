@@ -481,15 +481,5 @@
   "horizon.pack.filter.x16": "16к",
   "horizon.pack.filter.x32": "32к",
   "horizon.pack.filter.x64": "64к",
-  "horizon.pack.addFailed": "Пакет се не може додати: %s",
-  "horizon.extras.header.cosmetics": "Козметика",
-  "horizon.extras.cosmetics_mine": "Моја козметика",
-  "horizon.extras.cosmetics_mine.tooltip": "Скривено: сваки Horizon играч вас види без козметике, укључујући и вас. Исти прекидач као Гардероба у покретачу.",
-  "horizon.extras.cosmetics_others": "Козметика других играча",
-  "horizon.extras.cosmetics_others.tooltip": "Шта носе други Horizon играчи: све, само стилове ознака имена или ништа. Када је скривено, игра никада не пита шта носе.",
-  "horizon.extras.cosmetics_auras": "Ауре и трагови других",
-  "horizon.extras.cosmetics_auras.tooltip": "Ауре и стазе које други играчи носе. Подразумевано искључено.",
-  "horizon.extras.cosmetics.shown": "Показано",
-  "horizon.extras.cosmetics.hidden": "Скривено",
-  "horizon.extras.cosmetics.name_tags": "Само ознаке са именом"
+  "horizon.pack.addFailed": "Пакет се не може додати: %s"
 }

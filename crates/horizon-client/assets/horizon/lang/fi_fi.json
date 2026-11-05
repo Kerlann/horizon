@@ -443,15 +443,5 @@
   "horizon.pack.filter.realistic": "Realistinen",
   "horizon.pack.filter.simplistic": "Yksinkertaista",
   "horizon.pack.filter.vanillaLike": "Vaniljamainen",
-  "horizon.pack.addFailed": "Pakettia ei voitu lisätä: %s",
-  "horizon.extras.header.cosmetics": "Kosmetiikka",
-  "horizon.extras.cosmetics_mine": "Minun kosmetiikkani",
-  "horizon.extras.cosmetics_mine.tooltip": "Piilotettu: jokainen Horizon-pelaaja näkee sinut ilman kosmetiikkaasi, sinä mukaan lukien. Sama kytkin kuin kantoraketin vaatekaappi.",
-  "horizon.extras.cosmetics_others": "Muiden pelaajien kosmetiikkaa",
-  "horizon.extras.cosmetics_others.tooltip": "Mitä muut Horizon-pelaajat käyttävät: kaikki, vain heidän nimilaputyylinsä tai ei mitään. Piilotettu, peli ei koskaan kysy, mitä he käyttävät.",
-  "horizon.extras.cosmetics_auras": "Toisten aurat ja polut",
-  "horizon.extras.cosmetics_auras.tooltip": "Aurat ja jäljet, joita muut pelaajat käyttävät. Oletuksena pois päältä.",
-  "horizon.extras.cosmetics.shown": "Näytetään",
-  "horizon.extras.cosmetics.hidden": "Piilotettu",
-  "horizon.extras.cosmetics.name_tags": "Vain nimilaput"
+  "horizon.pack.addFailed": "Pakettia ei voitu lisätä: %s"
 }

@@ -985,7 +985,13 @@ mod tests {
             };
             assert_eq!(drawn.text_width("A"), 6.0);
             assert_eq!(drawn.text_width("AÁ"), 12.0);
-            drawn.text("AÁ", [0.0, 0.0], 0xFF0000);
+            drawn.text(
+                &mod_api::Text::literal("AÁ"),
+                [0.0, 0.0],
+                0xFF0000,
+                false,
+                0,
+            );
             assert_eq!(surface.vertices.len(), 8, "a quad per glyph");
             // Vanilla's bitmap providers: A is 8x8 with ascent 7; Á is 9x12 with ascent 10.
             // GlyphBitmap places the top at 7 - ascent; BakedSheetGlyph adds the pen's position.

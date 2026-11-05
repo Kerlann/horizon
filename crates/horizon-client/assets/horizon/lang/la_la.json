@@ -394,14 +394,5 @@
   "horizon.pack.filter.realistic": "Realistica",
   "horizon.pack.filter.simplistic": "Simplex",
   "horizon.pack.filter.vanillaLike": "Vanilla-sicut",
-  "horizon.pack.addFailed": "pravis addi non potuit;%s",
-  "horizon.extras.cosmetics_mine": "My stibio",
-  "horizon.extras.cosmetics_mine.tooltip": "Occultus: omnisHorizonlusor te sine tuis fucis videt, te comprehendit. Idem transitum cum vestiario launcher.",
-  "horizon.extras.cosmetics_others": "Alii histriones medicamentis",
-  "horizon.extras.cosmetics_others.tooltip": "Quid aliud?Horizonhistriones gerunt: omnia, solum nomen tag stili, vel nihil. Occultus, ludus numquam quaerit quod gerunt.",
-  "horizon.extras.cosmetics_auras": "Aliorum auras et calles",
-  "horizon.extras.cosmetics_auras.tooltip": "Auras et calles alii lusores gerunt. Off per defaltam.",
-  "horizon.extras.cosmetics.shown": "Ostensum",
-  "horizon.extras.cosmetics.hidden": "Occultus",
-  "horizon.extras.cosmetics.name_tags": "Nomen tags tantum"
+  "horizon.pack.addFailed": "pravis addi non potuit;%s"
 }

@@ -455,15 +455,5 @@
   "horizon.pack.filter.realistic": "Realisttalaš",
   "horizon.pack.filter.simplistic": "Álki",
   "horizon.pack.filter.vanillaLike": "Vaniljalágan",
-  "horizon.pack.addFailed": "Páhka ii sáhttán lasihit: %s",
-  "horizon.extras.header.cosmetics": "Kosmetihkka",
-  "horizon.extras.cosmetics_mine": "Mu kosmetihkka",
-  "horizon.extras.cosmetics_mine.tooltip": "Čuohpaduvvon: juohke Horizon spealli oaidná du kosmetihka haga, maiddái don. Seamma čujuhus go álggaheaddji gárvodanrusttegis.",
-  "horizon.extras.cosmetics_others": "Eará čiekčiid kosmetihkka",
-  "horizon.extras.cosmetics_others.tooltip": "Maid eará Horizon-speallit geavahit: visot, dušše sin nammamearkkaid stiillat, dahje ii mihkkege. Čuožžilan, speallu ii goassege jeara maid sii geavahit.",
-  "horizon.extras.cosmetics_auras": "Earáid aurat ja čuovggat",
-  "horizon.extras.cosmetics_auras.tooltip": "Aurat ja čuovggat maid eará čiekčit geavahit. Heaittihuvvon standárdan.",
-  "horizon.extras.cosmetics.shown": "Čájehuvvon",
-  "horizon.extras.cosmetics.hidden": "Čuohpaduvvon",
-  "horizon.extras.cosmetics.name_tags": "Dušše nammamearkkat"
+  "horizon.pack.addFailed": "Páhka ii sáhttán lasihit: %s"
 }

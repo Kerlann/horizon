@@ -434,15 +434,5 @@
   "horizon.pack.filter.realistic": "Realistisk",
   "horizon.pack.filter.simplistic": "Forsimplet",
   "horizon.pack.filter.vanillaLike": "Vanilje-agtig",
-  "horizon.pack.addFailed": "Pakken kunne ikke tilføjes: %s",
-  "horizon.extras.header.cosmetics": "Kosmetik",
-  "horizon.extras.cosmetics_mine": "Min kosmetik",
-  "horizon.extras.cosmetics_mine.tooltip": "Skjult: alle Horizon-spillere ser dig uden din kosmetik, inklusive dig. Den samme kontakt som løfterakettens garderobe.",
-  "horizon.extras.cosmetics_others": "Andre spilleres kosmetik",
-  "horizon.extras.cosmetics_others.tooltip": "Hvad andre Horizon-spillere bærer: alt, kun deres navnemærke eller intet. Skjult spørger spillet aldrig, hvad de har på.",
-  "horizon.extras.cosmetics_auras": "Andres auraer og spor",
-  "horizon.extras.cosmetics_auras.tooltip": "Auraer og spor, som andre spillere bærer. Fra som standard.",
-  "horizon.extras.cosmetics.shown": "Vist",
-  "horizon.extras.cosmetics.hidden": "Skjult",
-  "horizon.extras.cosmetics.name_tags": "Kun navneskilte"
+  "horizon.pack.addFailed": "Pakken kunne ikke tilføjes: %s"
 }

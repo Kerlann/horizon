@@ -464,15 +464,5 @@
   "horizon.pack.filter.realistic": "Реалистичен",
   "horizon.pack.filter.simplistic": "Опростено",
   "horizon.pack.filter.vanillaLike": "Подобно на ванилия",
-  "horizon.pack.addFailed": "Пакетът не можа да бъде добавен: %s",
-  "horizon.extras.header.cosmetics": "Козметика",
-  "horizon.extras.cosmetics_mine": "Моята козметика",
-  "horizon.extras.cosmetics_mine.tooltip": "Скрит: всеки играч на Horizon ви вижда без вашата козметика, включително и вие. Същият превключвател като гардероба на стартера.",
-  "horizon.extras.cosmetics_others": "Козметика за други играчи",
-  "horizon.extras.cosmetics_others.tooltip": "Какво носят другите играчи на Horizon: всичко, само техните стилове на имената или нищо. Скрито, играта никога не пита какво носят.",
-  "horizon.extras.cosmetics_auras": "Аури и следи на други",
-  "horizon.extras.cosmetics_auras.tooltip": "Аури и пътеки, които другите играчи носят. Изключено по подразбиране.",
-  "horizon.extras.cosmetics.shown": "Показано",
-  "horizon.extras.cosmetics.hidden": "Скрити",
-  "horizon.extras.cosmetics.name_tags": "Само етикети с имена"
+  "horizon.pack.addFailed": "Пакетът не можа да бъде добавен: %s"
 }

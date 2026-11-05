@@ -456,15 +456,5 @@
   "horizon.pack.filter.realistic": "Realist",
   "horizon.pack.filter.simplistic": "Sadə",
   "horizon.pack.filter.vanillaLike": "Vanil kimi",
-  "horizon.pack.addFailed": "Paketi əlavə etmək mümkün olmadı: %s",
-  "horizon.extras.header.cosmetics": "Kosmetika",
-  "horizon.extras.cosmetics_mine": "Kosmetikam",
-  "horizon.extras.cosmetics_mine.tooltip": "Gizli: hər Horizon oyunçu sizi kosmetikanız olmadan görür. Başlatma şkafı ilə eyni açar.",
-  "horizon.extras.cosmetics_others": "Digər oyunçuların kosmetikası",
-  "horizon.extras.cosmetics_others.tooltip": "Digər Horizon oyunçular nə geyinirlər: hər şey, yalnız ad etiketi üslubları və ya heç nə. Gizli, oyun heç vaxt nə geyindiklərini soruşmur.",
-  "horizon.extras.cosmetics_auras": "Başqalarının auraları və izləri",
-  "horizon.extras.cosmetics_auras.tooltip": "Digər oyunçuların geydiyi auralar və izlər. Defolt olaraq söndürülür.",
-  "horizon.extras.cosmetics.shown": "Göstərildi",
-  "horizon.extras.cosmetics.hidden": "Gizli",
-  "horizon.extras.cosmetics.name_tags": "Yalnız ad etiketləri"
+  "horizon.pack.addFailed": "Paketi əlavə etmək mümkün olmadı: %s"
 }

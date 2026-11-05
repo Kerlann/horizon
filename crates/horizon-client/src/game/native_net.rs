@@ -258,7 +258,7 @@ mod tests {
             &settings,
             std::time::Instant::now(),
             false,
-            true,
+            ExecutionRole::Client,
             &Progress::new(),
             &mut |_, _| unreachable!("no menu handoff"),
         )

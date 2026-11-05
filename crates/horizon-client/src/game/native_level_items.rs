@@ -326,6 +326,7 @@ mod tests {
                 let orb = |id, x, value, ticks| {
                     let p = Vec3::new(x, 70.0, 0.5);
                     ExperienceOrb {
+                        rotation: [0.0, 0.0],
                         join: Default::default(),
                         id,
                         position: p,

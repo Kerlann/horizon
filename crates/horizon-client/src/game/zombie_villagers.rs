@@ -426,7 +426,7 @@ mod tests {
         assert!(zombie.invulnerable_flag);
         assert!(zombie.extra.left_handed);
         let mut cured = mob(3, Species::Villager, "minecraft:villager");
-        convert_to_villager(&zombie, &mut cured);
+        convert_to_villager(&zombie, &mut cured, true);
         assert!(cured.silent);
         assert!(cured.no_ai);
         assert!(cured.no_gravity);

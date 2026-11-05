@@ -468,15 +468,5 @@
   "horizon.pack.filters": "Фільтры",
   "horizon.pack.filter.realistic": "Рэалістычны",
   "horizon.pack.filter.simplistic": "Спрошчаны",
-  "horizon.pack.filter.vanillaLike": "Ванільны",
-  "horizon.extras.header.cosmetics": "Касметыка",
-  "horizon.extras.cosmetics_mine": "Мая касметыка",
-  "horizon.extras.cosmetics_mine.tooltip": "Схаваны: кожны гулец Horizon бачыць вас без вашай касметыкі, у тым ліку і вас. The same switch as the launcher's Wardrobe.",
-  "horizon.extras.cosmetics_others": "Касметыка іншых гульцоў",
-  "horizon.extras.cosmetics_others.tooltip": "Што носяць іншыя гульцы Horizon: усё, толькі стылі тэгаў з імёнамі або нічога. Hidden, the game never asks what they wear.",
-  "horizon.extras.cosmetics_auras": "Чужыя аўры і шлейфы",
-  "horizon.extras.cosmetics_auras.tooltip": "Auras and trails other players wear. Выключана па змаўчанні.",
-  "horizon.extras.cosmetics.shown": "Паказана",
-  "horizon.extras.cosmetics.hidden": "Схаваны",
-  "horizon.extras.cosmetics.name_tags": "Толькі біркі з імёнамі"
+  "horizon.pack.filter.vanillaLike": "Ванільны"
 }

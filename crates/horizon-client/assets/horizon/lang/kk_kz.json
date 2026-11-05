@@ -467,15 +467,5 @@
   "horizon.pack.filter.realistic": "Шынайы",
   "horizon.pack.filter.simplistic": "Қарапайым",
   "horizon.pack.filter.vanillaLike": "Ваниль тәрізді",
-  "horizon.pack.addFailed": "Пакетті қосу мүмкін емес: %s",
-  "horizon.extras.header.cosmetics": "Косметика",
-  "horizon.extras.cosmetics_mine": "Менің косметикам",
-  "horizon.extras.cosmetics_mine.tooltip": "Жасырын: әрбір Horizon ойыншы сізді косметикасыз көреді, сіз қосасыз. Іске қосу құрылғысының гардеробымен бірдей қосқыш.",
-  "horizon.extras.cosmetics_others": "Басқа ойыншылардың косметикасы",
-  "horizon.extras.cosmetics_others.tooltip": "Басқа Horizon ойыншылары не киеді: барлығы, тек олардың атау тегінің стильдері немесе ештеңе жоқ. Жасырын, ойын ешқашан не киетінін сұрамайды.",
-  "horizon.extras.cosmetics_auras": "Басқалардың ауралары мен жолдары",
-  "horizon.extras.cosmetics_auras.tooltip": "Басқа ойыншылар киетін ауралар мен жолдар. Әдепкі бойынша өшірулі.",
-  "horizon.extras.cosmetics.shown": "Көрсетілген",
-  "horizon.extras.cosmetics.hidden": "Жасырын",
-  "horizon.extras.cosmetics.name_tags": "Тек атау тегтері"
+  "horizon.pack.addFailed": "Пакетті қосу мүмкін емес: %s"
 }

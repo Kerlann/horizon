@@ -445,15 +445,5 @@
   "horizon.pack.filter.realistic": "Xaqiiqo ah",
   "horizon.pack.filter.simplistic": "Fudud",
   "horizon.pack.filter.vanillaLike": "Vanilla u eg",
-  "horizon.pack.addFailed": "Xidhmada laguma darin karo: %s",
-  "horizon.extras.header.cosmetics": "Waxyaabaha la isku qurxiyo",
-  "horizon.extras.cosmetics_mine": "Qurxintayda",
-  "horizon.extras.cosmetics_mine.tooltip": "Qarsoon: Horizon ciyaaryahan kasta ayaa ku arkaa adiga oo aan la'aanteed waxyaalaha la isku qurxiyo, adiga ayaa ku daray. La mid ah sida Wardrobe-ka furaha.",
-  "horizon.extras.cosmetics_others": "Isqurxinta ciyaartoyda kale",
-  "horizon.extras.cosmetics_others.tooltip": "Waxa kale ee Horizon ciyaartoy xidha: wax walba, kaliya magacooda sumadda qaababka, ama waxba. Qarsoon, ciyaartu weligeed ma waydiiso waxay xidhaan.",
-  "horizon.extras.cosmetics_auras": "Auraska iyo raadadka kuwa kale",
-  "horizon.extras.cosmetics_auras.tooltip": "Auras iyo raad-raacyo ciyaartoy kale xidhaan. Demin sida caadiga ah.",
-  "horizon.extras.cosmetics.shown": "Muujiyay",
-  "horizon.extras.cosmetics.hidden": "Qarsoon",
-  "horizon.extras.cosmetics.name_tags": "Magac tags kaliya"
+  "horizon.pack.addFailed": "Xidhmada laguma darin karo: %s"
 }

@@ -443,15 +443,5 @@
   "horizon.pack.filter.realistic": "Realistisk",
   "horizon.pack.filter.simplistic": "Forenklet",
   "horizon.pack.filter.vanillaLike": "Vaniljeaktig",
-  "horizon.pack.addFailed": "Pakken kunne ikke legges til: %s",
-  "horizon.extras.header.cosmetics": "Kosmetikk",
-  "horizon.extras.cosmetics_mine": "Kosmetikken min",
-  "horizon.extras.cosmetics_mine.tooltip": "Skjult: hver Horizon-spiller ser deg uten kosmetikken din, inkludert du. Samme bryter som bærerakettens garderobe.",
-  "horizon.extras.cosmetics_others": "Andre spilleres kosmetikk",
-  "horizon.extras.cosmetics_others.tooltip": "Hva andre Horizon-spillere har på seg: alt, bare navnelappene deres, eller ingenting. Skjult spør spillet aldri hva de har på seg.",
-  "horizon.extras.cosmetics_auras": "Andres auraer og stier",
-  "horizon.extras.cosmetics_auras.tooltip": "Auraer og stier andre spillere har på seg. Av som standard.",
-  "horizon.extras.cosmetics.shown": "Vist",
-  "horizon.extras.cosmetics.hidden": "Skjult",
-  "horizon.extras.cosmetics.name_tags": "Kun navnelapper"
+  "horizon.pack.addFailed": "Pakken kunne ikke legges til: %s"
 }

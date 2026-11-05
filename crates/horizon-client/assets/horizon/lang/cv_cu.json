@@ -478,15 +478,5 @@
   "horizon.pack.filter.x16": "16х",
   "horizon.pack.filter.x32": "32х",
   "horizon.pack.filter.x64": "64х",
-  "horizon.pack.addFailed": "Пакета хушма май килмерӗ: %s",
-  "horizon.extras.header.cosmetics": "Косметика",
-  "horizon.extras.cosmetics_mine": "Манӑн косметика",
-  "horizon.extras.cosmetics_mine.tooltip": "Пытарнӑ: кашни Horizon вылякан сире косметикӑсӑр курать, эсир те ҫав шутра. Пуҫкаҫӑн гардеробӗнчи пекех переключатель.",
-  "horizon.extras.cosmetics_others": "Ытти вылякансен косметики",
-  "horizon.extras.cosmetics_others.tooltip": "Ытти Horizon вылякансем мӗн тӑхӑнаҫҫӗ: пурте, вӗсен ячӗсен стилӗсем ҫеҫ, е нимӗн те мар. Вӑрттӑн, вӑйӑ нихҫан та вӗсем мӗн тӑхӑннине ыйтмасть.",
-  "horizon.extras.cosmetics_auras": "Ыттисен аурисем тата йӗрӗсем",
-  "horizon.extras.cosmetics_auras.tooltip": "Ытти вылякансем тӑхӑнакан аурӑсемпе йӗрсем. Выключен по умолчанию.",
-  "horizon.extras.cosmetics.shown": "Кӑтартнӑ",
-  "horizon.extras.cosmetics.hidden": "Пытарнӑ",
-  "horizon.extras.cosmetics.name_tags": "Ят паллисем кӑна"
+  "horizon.pack.addFailed": "Пакета хушма май килмерӗ: %s"
 }

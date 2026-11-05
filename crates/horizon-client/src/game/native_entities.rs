@@ -510,6 +510,7 @@ mod tests {
                 );
                 drop(seen);
                 game.tnts.push(super::super::tnt::PrimedTnt {
+                    rotation: [0.0, 0.0],
                     join: Default::default(),
                     id: 0,
                     position: Vec3::ZERO,

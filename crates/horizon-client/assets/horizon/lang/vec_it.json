@@ -458,15 +458,5 @@
   "horizon.pack.filter.realistic": "Reałistico",
   "horizon.pack.filter.simplistic": "Semplice",
   "horizon.pack.filter.vanillaLike": "Come vanilia",
-  "horizon.pack.addFailed": "El pacheto no se ga podesto zontar: %s",
-  "horizon.extras.header.cosmetics": "Cosmetici",
-  "horizon.extras.cosmetics_mine": "I me cosmetici",
-  "horizon.extras.cosmetics_mine.tooltip": "Nascosto: ogni Horizon giocatore ti vede senza i tuoi cosmetici, tu compreso. Lo stesso interruttore del Armadio del lanciatore.",
-  "horizon.extras.cosmetics_others": "Cosmetici dei altri zogadori",
-  "horizon.extras.cosmetics_others.tooltip": "Cossa che i altri zugadori de Horizon i ga indosso: tuto, soło i so stiłi de name tag, o gnente. Nascosto, el zogo no ghe dimanda mai cossa che i porta.",
-  "horizon.extras.cosmetics_auras": "Aure e sentieri dei altri",
-  "horizon.extras.cosmetics_auras.tooltip": "Aure e sentieri che altri zugadori i ga. Spento par indebołimento.",
-  "horizon.extras.cosmetics.shown": "Mostrà",
-  "horizon.extras.cosmetics.hidden": "Sconto",
-  "horizon.extras.cosmetics.name_tags": "Solo etichete de nome"
+  "horizon.pack.addFailed": "El pacheto no se ga podesto zontar: %s"
 }

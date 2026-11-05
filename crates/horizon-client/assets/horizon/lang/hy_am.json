@@ -457,15 +457,5 @@
   "horizon.pack.filter.realistic": "Իրատեսական",
   "horizon.pack.filter.simplistic": "Պարզեցված",
   "horizon.pack.filter.vanillaLike": "Վանիլի նման",
-  "horizon.pack.addFailed": "Փաթեթը չհաջողվեց ավելացնել՝ %s",
-  "horizon.extras.header.cosmetics": "Կոսմետիկա",
-  "horizon.extras.cosmetics_mine": "Իմ կոսմետիկան",
-  "horizon.extras.cosmetics_mine.tooltip": "Թաքնված. յուրաքանչյուր Horizon խաղացող ձեզ տեսնում է առանց ձեր կոսմետիկայի, այդ թվում՝ դուք: Նույն անջատիչը, ինչ գործարկիչի զգեստապահարան:",
-  "horizon.extras.cosmetics_others": "Այլ խաղացողների կոսմետիկա",
-  "horizon.extras.cosmetics_others.tooltip": "Ինչ են հագնում մյուս Horizon խաղացողները. ամեն ինչ, միայն նրանց անվան պիտակի ոճերը, կամ ոչինչ: Թաքնված, խաղը երբեք չի հարցնում, թե ինչ են նրանք հագնում:",
-  "horizon.extras.cosmetics_auras": "Ուրիշների աուրաներն ու արահետները",
-  "horizon.extras.cosmetics_auras.tooltip": "Աուրաները և արահետները կրում են այլ խաղացողներ: Լռելյայն անջատված է:",
-  "horizon.extras.cosmetics.shown": "Ցուցադրված է",
-  "horizon.extras.cosmetics.hidden": "Թաքնված",
-  "horizon.extras.cosmetics.name_tags": "Միայն անունների պիտակներ"
+  "horizon.pack.addFailed": "Փաթեթը չհաջողվեց ավելացնել՝ %s"
 }

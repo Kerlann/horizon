@@ -451,15 +451,5 @@
   "horizon.pack.filter.realistic": "Reális",
   "horizon.pack.filter.simplistic": "Leegyszerűsítő",
   "horizon.pack.filter.vanillaLike": "Vaníliaszerű",
-  "horizon.pack.addFailed": "A csomagot nem sikerült hozzáadni: %s",
-  "horizon.extras.header.cosmetics": "Kozmetikumok",
-  "horizon.extras.cosmetics_mine": "A kozmetikumom",
-  "horizon.extras.cosmetics_mine.tooltip": "Rejtett: minden Horizon játékos lát téged a kozmetikumai nélkül, beleértve Önt is. Ugyanaz a kapcsoló, mint az indító gardróbjában.",
-  "horizon.extras.cosmetics_others": "Más játékosok kozmetikumai",
-  "horizon.extras.cosmetics_others.tooltip": "Amit a többi Horizon játékos visel: mindent, csak a névcímkék stílusát, vagy semmit. Rejtett, a játék soha nem kérdezi, mit viselnek.",
-  "horizon.extras.cosmetics_auras": "Mások aurái és nyomai",
-  "horizon.extras.cosmetics_auras.tooltip": "Más játékosok által viselt aurák és nyomvonalak. Alapértelmezés szerint ki.",
-  "horizon.extras.cosmetics.shown": "Megjelenítve",
-  "horizon.extras.cosmetics.hidden": "Rejtett",
-  "horizon.extras.cosmetics.name_tags": "Csak névcímkék"
+  "horizon.pack.addFailed": "A csomagot nem sikerült hozzáadni: %s"
 }

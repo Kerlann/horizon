@@ -457,15 +457,5 @@
   "horizon.pack.filter.realistic": "fìrinneach",
   "horizon.pack.filter.simplistic": "Sìmplidh",
   "horizon.pack.filter.vanillaLike": "Vanilla-coltach",
-  "horizon.pack.addFailed": "Cha b' urrainn dhuinn am pasgan a chur ris: %s",
-  "horizon.extras.header.cosmetics": "Cosgaidh",
-  "horizon.extras.cosmetics_mine": "Mo choslas",
-  "horizon.extras.cosmetics_mine.tooltip": "Falaichte: chì a h-uile cluicheadair Horizon thu às aonais na cungaidhean maise agad, thug thu a-steach. An aon tionndadh ri Wardrobe an lannsair.",
-  "horizon.extras.cosmetics_others": "Coltas cluicheadairean eile",
-  "horizon.extras.cosmetics_others.tooltip": "Na bhios cluicheadairean Horizon eile a’ caitheamh: a h-uile càil, dìreach na stoidhlichean tag ainm aca, no dad. Falaichte, cha bhith an geama a-riamh a’ faighneachd dè a bhios orra.",
-  "horizon.extras.cosmetics_auras": "Auras agus slighean cuid eile",
-  "horizon.extras.cosmetics_auras.tooltip": "Auras agus slighean bidh cluicheadairean eile a’ caitheamh. Cuir dheth gu bunaiteach.",
-  "horizon.extras.cosmetics.shown": "Air a shealltainn",
-  "horizon.extras.cosmetics.hidden": "Falaichte",
-  "horizon.extras.cosmetics.name_tags": "Tagaichean ainmean a-mhàin"
+  "horizon.pack.addFailed": "Cha b' urrainn dhuinn am pasgan a chur ris: %s"
 }
