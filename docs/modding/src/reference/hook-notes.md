@@ -442,15 +442,15 @@ the hit, which doesn't tell every vanilla type apart yet:
 
 The causing and direct entities are 0 for now in these cases:
 
-- A player's direct entity, always
+- A player's direct entity except for direct projectile hits
 - A player's causing entity, except for a mob that shot the projectile, the mob `/damage` names, an evoker that summoned
   the fangs, a slime or magma cube that touched the player, and a mob that exploded (a sulfur cube's is guessed until
   its blast names its source)
 - A mob's causing and direct entities when a player is behind the hit outside the player's own attack (arrows,
   tridents, blasts, TNT a player lit)
-- A mob's direct entity when it isn't the causing one (a projectile, a blast, a potion)
+- A mob's direct entity when it isn't the causing one, except for direct projectile hits (for example, a blast or potion)
 - A falling block on a mob, whose causing and direct entity is the block in vanilla
-- The dragon's direct entity for a projectile or a blast
+- The dragon's direct entity for a blast
 - The dragon's causing player when it isn't the acting one on a LAN guest's turn
 - `/damage` on a mob `by` an entity with a damage type that isn't melee: the direct entity is 0, not that entity
 

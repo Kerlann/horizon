@@ -17,7 +17,7 @@ use horizon_client::{
     mesher::Vertex,
     mobs::{Damage, DamageKind, Who},
     particles::{ParticleOptions, ParticleType},
-    projectiles::ProjectileKind,
+    projectiles::{Projectile, ProjectileKind},
     text::Text,
 };
 use horizon_core::position::BlockPos;
@@ -839,18 +839,18 @@ impl Dragon {
 /// The source `reallyHurt` takes from a hit `by` the player of that entity
 /// id: `DamageSources.explosion(crystal, player)` is `player_explosion` with
 /// a player behind it, who is the causing entity, and the direct one of a
-/// melee hit (a projectile's direct entity isn't known here).
+/// melee hit. For a projectile, the direct entity is the projectile itself.
 fn hurt_source(
     kind: DamageKind,
     by: Option<i32>,
-    direct: Option<&ProjectileKind>,
+    direct: Option<&Projectile>,
 ) -> HurtSource<'static> {
     let causing = by.unwrap_or(0);
     let melee = direct.is_none() && super::creatures::melee(kind);
     HurtSource {
         damage_type: super::creatures::damage_type(kind, by.is_some()),
         causing,
-        direct: if melee { causing } else { 0 },
+        direct: direct.map_or(if melee { causing } else { 0 }, |p| p.id as i32),
         position: None,
     }
 }
@@ -1324,7 +1324,7 @@ impl Game<'_> {
         amount: f32,
         by_player: bool,
         kind: DamageKind,
-        direct: Option<&ProjectileKind>,
+        direct: Option<&Projectile>,
     ) -> Hurt {
         if id >= CRYSTAL_IDS {
             // EndCrystal.hurtServer: false while invulnerable and for fire
@@ -1364,7 +1364,7 @@ impl Game<'_> {
         counts: bool,
         by: Option<FightWho>,
         kind: DamageKind,
-        direct: Option<&ProjectileKind>,
+        direct: Option<&Projectile>,
     ) -> Hurt {
         let by_id = by.map(|who| self.fight_entity(who));
         let source = counts.then(|| hurt_source(kind, by_id, direct));
@@ -1374,7 +1374,7 @@ impl Game<'_> {
         let was_down = d.down();
         let (cooldown, last_hurt) = (d.invulnerable, d.last_hurt);
         let level = super::entity::damage_level_of!(self);
-        let hurt = d.hurt_part(level, part, damage, source, kind, direct);
+        let hurt = d.hurt_part(level, part, damage, source, kind, direct.map(|p| &p.kind));
         // LivingEntity.hurtServer: damage that is applied sets lastHurtByPlayer
         // (100 ticks); a hit the damage cooldown absorbs returns before that.
         if counts
@@ -5071,9 +5071,10 @@ mod tests {
         };
         let melee = source(DamageKind::PlayerAttack, Some(12), None);
         assert_eq!(melee, ("minecraft:player_attack", 12, 12));
-        let arrow = ProjectileKind::Trident;
+        let mut arrow = Projectile::new(ProjectileKind::Trident, Vec3::ZERO, None);
+        arrow.id = 47;
         let shot = source(DamageKind::Arrow, Some(12), Some(&arrow));
-        assert_eq!(shot, ("minecraft:arrow", 12, 0));
+        assert_eq!(shot, ("minecraft:arrow", 12, 47));
         let blast = source(DamageKind::Explosion, Some(12), None);
         assert_eq!(blast, ("minecraft:player_explosion", 12, 0));
         let blast = source(DamageKind::Explosion, None, None);

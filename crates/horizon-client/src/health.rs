@@ -376,6 +376,8 @@ pub type Held = [Option<crate::items::ItemStack>; 2];
 pub struct Attack {
     /// The attacking entity's id, 0 for none.
     pub attacker: i32,
+    /// The projectile delivering this attack, or 0 when none.
+    pub projectile: i32,
     /// What it holds, or none when it is not known (no native mod listens: the game only
     /// records it then).
     pub held: Held,
@@ -383,6 +385,7 @@ pub struct Attack {
 /// The attack of a hit nobody started: environment damage, falls, a level built outside a hit.
 pub static NO_ATTACK: Attack = Attack {
     attacker: 0,
+    projectile: 0,
     held: [None, None],
 };
 impl Attack {
@@ -1089,7 +1092,7 @@ impl ServerDamageEnvironment<Attributes> for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: 0,
+            direct: self.level.attack().projectile,
             position: None,
         };
         self.level
@@ -1100,7 +1103,7 @@ impl ServerDamageEnvironment<Attributes> for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: 0,
+            direct: self.level.attack().projectile,
             position: None,
         };
         self.level
@@ -1185,7 +1188,7 @@ impl HurtWorld for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: 0,
+            direct: self.level.attack().projectile,
             position: None,
         };
         let canceled = self.level.incoming_canceled(
@@ -1236,7 +1239,7 @@ impl HurtWorld for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: 0,
+            direct: self.level.attack().projectile,
             position: None,
         };
         let Some(block) =
@@ -1311,7 +1314,7 @@ impl HurtWorld for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: 0,
+            direct: self.level.attack().projectile,
             position: None,
         };
         // A native mod may cancel the totem: the player dies.
@@ -1420,6 +1423,7 @@ mod tests {
         let sword = crate::items::ItemStack::new("minecraft:iron_sword", 1);
         let attack = Attack {
             attacker: 7,
+            projectile: 0,
             held: [Some(sword.clone()), None],
         };
         assert_eq!(attack.weapon_of(7), Some(&sword));
@@ -1640,7 +1644,7 @@ mod tests {
         ) -> bool {
             let (entity, seen) = match hurting {
                 Hurting::Player(e, s) | Hurting::Dragon(e, s) | Hurting::ArmorStand(e, s) => {
-                    (e, format!("{} {}", s.damage_type, s.causing))
+                    (e, format!("{} {} {}", s.damage_type, s.causing, s.direct))
                 }
                 Hurting::Mob(mob, source) => (mob.id as i32, format!("{:?}", source.kind)),
             };
@@ -1736,10 +1740,15 @@ mod tests {
         assert!(doubled.hurt(level, health, rules, id, 5.0).unwrap());
         assert_eq!(doubled.health.health(), 10.0);
         // The causing mob when it is known, else 0.
+        let attack = super::Attack {
+            projectile: 77,
+            ..Default::default()
+        };
+        let level = &mut level.reborrow().attacked_by(&attack);
         let hurt = player(9013).hurt_caused_by(level, health, rules, id, 5.0, None, false, 44);
         assert!(hurt.unwrap().hurt);
-        assert_eq!(seen(9011), [("minecraft:arrow 0".to_owned(), 5.0)]);
-        assert_eq!(seen(9013), [("minecraft:arrow 44".to_owned(), 5.0)]);
+        assert_eq!(seen(9011), [("minecraft:arrow 0 0".to_owned(), 5.0)]);
+        assert_eq!(seen(9013), [("minecraft:arrow 44 77".to_owned(), 5.0)]);
     }
 
     /// What the knockback hook of these tests saw: the entity, the hit that

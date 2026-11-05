@@ -776,10 +776,12 @@ impl Game<'_> {
                         t.dealt_damage = true;
                         let mut hurt_at = None;
                         let aim = self.attacker_aim(Some(Who::Player));
+                        let mut attack = self.attack_of_who(Some(Who::Player));
+                        attack.projectile = t.id as i32;
                         if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
                             let from = Some([t.position.x, t.position.y, t.position.z]);
                             let hurt = m.damage_projectile(
-                                crate::game::entity::damage_level_of!(self),
+                                crate::game::entity::damage_level_of!(self, &attack),
                                 damage,
                                 Damage {
                                     kind: DamageKind::Arrow,

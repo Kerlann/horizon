@@ -9073,7 +9073,11 @@ impl Game<'_> {
         } else {
             [None, None]
         };
-        Attack { attacker, held }
+        Attack {
+            attacker,
+            projectile: 0,
+            held,
+        }
     }
     /// [`Self::attack_of`] for the attacker a damage source names: the player, a mob, or (none)
     /// the attack the enclosing [`Self::with_attack`] lends.
@@ -9215,7 +9219,13 @@ fn mob_source(damage: &Damage, attack: &Attack) -> HurtSource<'static> {
     HurtSource {
         damage_type: super::creatures::source_damage_type(*damage),
         causing,
-        direct: if melee { causing } else { 0 },
+        direct: if melee {
+            causing
+        } else if damage.is_projectile() {
+            attack.projectile
+        } else {
+            0
+        },
         position: damage.from,
     }
 }
@@ -13232,11 +13242,24 @@ mod tests {
                 },
                 &Attack {
                     attacker: 7,
+                    projectile: 0,
                     held: Default::default(),
                 },
             );
             (s.damage_type, s.causing, s.direct)
         };
+        let projectile = Attack {
+            attacker: 7,
+            projectile: 77,
+            held: Default::default(),
+        };
+        let damage = Damage {
+            kind: K::Arrow,
+            attacker: Some(Who::Mob(3)),
+            from: None,
+            attacker_species: None,
+        };
+        assert_eq!(mob_source(&damage, &projectile).direct, 77);
         let zombie = Some(Who::Mob(3));
         assert_eq!(source(K::MobAttack, zombie), ("minecraft:mob_attack", 3, 3));
         assert_eq!(source(K::Thorns, zombie), ("minecraft:thorns", 3, 3));
