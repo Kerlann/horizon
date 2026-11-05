@@ -105,6 +105,7 @@ impl Installed {
     }
 
     pub fn save(&self, home: &Path) -> Result<(), String> {
+        let _lease = super::mutation::acquire();
         let path = home.join(MANIFEST);
         let part = home.join(format!(".{MANIFEST}.part"));
         let text = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
@@ -209,6 +210,8 @@ pub fn install(
     home: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Vec<Entry>, String> {
+    let _lease = super::mutation::acquire();
+    super::horizon::auto::before_manual(home)?;
     if project.source == SourceId::Horizon {
         return super::horizon::install(project, home, progress);
     }
@@ -234,6 +237,8 @@ pub(super) fn put(
     folder: &dyn Fn(Kind) -> &'static str,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Vec<Entry>, String> {
+    let _lease = super::mutation::acquire();
+    super::horizon::auto::before_manual(home)?;
     let mut installed = Installed::load(home);
     let mut done = Vec::new();
     for step in steps {
@@ -303,6 +308,8 @@ pub(super) fn put(
 
 /// Removes what the browser installed for `name` (a project id or slug): its file and its entry.
 pub fn remove(home: &Path, name: &str) -> Result<Entry, String> {
+    let _lease = super::mutation::acquire();
+    super::horizon::auto::before_manual(home)?;
     let mut installed = Installed::load(home);
     let entry = installed
         .lookup(name)

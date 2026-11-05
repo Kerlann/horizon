@@ -551,6 +551,8 @@ pub fn origins(home: &Path) -> Vec<Origin> {
 /// it came from. A mod from the registry or the player's own is never replaced; one from GitHub
 /// is (that is how it updates).
 pub fn install(home: &Path, found: &Resolved, packed: &Packed) -> Result<Origin, String> {
+    let _lease = crate::browser::mutation::acquire();
+    crate::browser::horizon::auto::before_manual(home)?;
     let target = home.join(INSTALLED).join(format!("{}.hmod", packed.id));
     if target.exists() && origin(home, &packed.id).is_none() {
         return Err(format!(
@@ -580,6 +582,8 @@ pub fn install(home: &Path, found: &Resolved, packed: &Packed) -> Result<Origin,
 
 /// Removes mod `id` installed from GitHub; false when it wasn't.
 pub fn remove(home: &Path, id: &str) -> Result<bool, String> {
+    let _lease = crate::browser::mutation::acquire();
+    crate::browser::horizon::auto::before_manual(home)?;
     if origin(home, id).is_none() {
         return Ok(false);
     }

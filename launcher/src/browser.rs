@@ -15,6 +15,7 @@ pub mod installed;
 pub mod java;
 pub mod java_instance;
 pub mod modrinth;
+pub(crate) mod mutation;
 
 use serde::{Deserialize, Serialize};
 

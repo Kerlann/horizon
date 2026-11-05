@@ -122,6 +122,13 @@ pub fn is_enabled(home: &Path, id: &str) -> bool {
 
 /// Turns mod `id` on (or off) in `horizon-mods.txt`, keeping the other lines.
 pub fn set_enabled(home: &Path, id: &str, on: bool) -> Result<(), String> {
+    let _lease = super::mutation::acquire();
+    super::horizon::auto::before_manual(home)?;
+    set_enabled_inner(home, id, on)
+}
+
+/// Writes inside an already leased replacement or restore, without settling its own journal.
+pub(crate) fn set_enabled_inner(home: &Path, id: &str, on: bool) -> Result<(), String> {
     let path = home.join(MODS_LIST);
     let text = fs::read_to_string(&path).unwrap_or_default();
     let key = format!("mod.{id}");
@@ -164,6 +171,8 @@ pub fn install(
     home: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Vec<Entry>, String> {
+    let _lease = super::mutation::acquire();
+    super::horizon::auto::before_manual(home)?;
     let job = Job {
         source,
         everything,
@@ -290,6 +299,8 @@ impl Job<'_> {
 
 /// Removes an installed mod's folder and turns it off.
 pub fn remove(home: &Path, entry: &Entry) -> Result<(), String> {
+    let _lease = super::mutation::acquire();
+    super::horizon::auto::before_manual(home)?;
     let Some(id) = entry.file.strip_prefix("horizon-mods/") else {
         return Err(format!("{} isn't in {MODS_DIR}/.", entry.file));
     };

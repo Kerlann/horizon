@@ -12,9 +12,9 @@
 //! A content mod (`.hmod`) whose new version drops a block, item, entity, effect, menu or
 //! creative tab the installed one has waits for the player (its blocks would vanish from their
 //! worlds): the notice says which. The file an update replaces is kept in
-//! `mod-browser/replaced/` until the next start: an update cut short (a crash between moving the
-//! file and saving the list) is rolled back from it then.
-use super::{install_version_guarded, Index};
+//! `mod-browser/replaced/` until the next start or manual mutation: an update cut short (a crash
+//! between moving the file and saving the list) is rolled back from it then, with its enabled state.
+use super::{install_version_guarded, Index, InstallGuard};
 use crate::browser::{installed, Kind, SourceId, GAME};
 use crate::i18n::trf;
 use horizon_mods::index;
@@ -130,7 +130,10 @@ struct Kept {
     entry: installed::Entry,
     /// Its copy, relative to the game folder.
     copy: String,
-    /// The launcher process that replaced it: its own updates aren't cleared before it ends.
+    /// The mod's on-list state before replacement; packs have no on-list entry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    enabled: Option<bool>,
+    /// The launcher process that replaced it: startup recovery leaves its own updates alone.
     pid: u32,
 }
 
@@ -154,8 +157,11 @@ fn kept_list(home: &Path) -> Vec<Kept> {
 fn save_kept(home: &Path, list: &[Kept]) -> Result<(), String> {
     let path = home.join(KEPT);
     if list.is_empty() {
-        let _ = fs::remove_file(&path);
-        return Ok(());
+        return match fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("{}: {e}", path.display())),
+        };
     }
     let text = serde_json::to_string_pretty(list).map_err(|e| e.to_string())?;
     let part = home.join("mod-browser/.replaced.json.part");
@@ -179,6 +185,7 @@ fn finished(home: &Path, kept: &Kept) -> bool {
 
 /// Puts `kept` back: its file where it was and its entry in the browser's list.
 fn restore(home: &Path, kept: &Kept) -> Result<(), String> {
+    let _lease = crate::browser::mutation::acquire();
     let (Some(target), copy) = (kept.entry.path(home), home.join(&kept.copy)) else {
         return Err(format!("{} is outside the game folder", kept.entry.file));
     };
@@ -195,12 +202,34 @@ fn restore(home: &Path, kept: &Kept) -> Result<(), String> {
     }
     list.entries.retain(|e| !ours(e));
     list.entries.push(kept.entry.clone());
+    if let Some(enabled) = kept.enabled {
+        crate::browser::java::set_enabled_inner(home, &kept.entry.project, enabled)?;
+    }
     list.save(home)
+}
+
+/// Settle automatic replacements before a manual mutation can invalidate their recovery
+/// evidence (for example, removing a successfully updated project). Refuse the mutation if an
+/// unfinished replacement cannot be restored. Never discard a backup before its journal save.
+pub(crate) fn before_manual(home: &Path) -> Result<(), String> {
+    let _lease = crate::browser::mutation::acquire();
+    let mut list = kept_list(home);
+    while let Some(kept) = list.last() {
+        if !finished(home, kept) {
+            restore(home, kept)?;
+        }
+        let copy = home.join(&kept.copy);
+        list.pop();
+        save_kept(home, &list)?;
+        let _ = fs::remove_file(copy);
+    }
+    Ok(())
 }
 
 /// At start: each file an earlier launcher replaced is dropped when its update finished, put back
 /// when it didn't.
 pub fn recover(home: &Path) {
+    let _lease = crate::browser::mutation::acquire();
     let me = std::process::id();
     let (mut mine, earlier): (Vec<Kept>, Vec<Kept>) =
         kept_list(home).into_iter().partition(|k| k.pid == me);
@@ -219,6 +248,7 @@ pub fn recover(home: &Path) {
 
 /// Keeps the file `entry` installed before it is replaced.
 fn keep(home: &Path, entry: &installed::Entry) -> Result<Kept, String> {
+    let _lease = crate::browser::mutation::acquire();
     let from = entry
         .path(home)
         .ok_or_else(|| format!("{} is outside the game folder", entry.file))?;
@@ -232,6 +262,8 @@ fn keep(home: &Path, entry: &installed::Entry) -> Result<Kept, String> {
     let kept = Kept {
         entry: entry.clone(),
         copy,
+        enabled: (entry.kind == Kind::Mod)
+            .then(|| crate::browser::java::is_enabled(home, &entry.project)),
         pid: std::process::id(),
     };
     let mut list = kept_list(home);
@@ -250,9 +282,7 @@ pub fn run(
     enabled: bool,
     progress: &dyn Fn(&str, f32),
 ) -> Option<Report> {
-    // The start's run and Play's never touch a folder at once.
-    static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
+    let _lease = crate::browser::mutation::acquire();
     recover(home);
     if !enabled {
         return None;
@@ -268,6 +298,7 @@ pub(super) fn run_with(
     ctx: &Context,
     progress: &dyn Fn(&str, f32),
 ) -> Report {
+    let _lease = crate::browser::mutation::acquire();
     recover(home);
     let pending: BTreeSet<String> = kept_list(home)
         .into_iter()
@@ -307,6 +338,8 @@ fn update(
     home: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Option<String>, String> {
+    let _lease = crate::browser::mutation::acquire();
+    let enabled = crate::browser::java::is_enabled(home, &p.id);
     let old: Option<PathBuf> = entry.path(home).filter(|p| p.is_file());
     let held = RefCell::new(None);
     // Content mods: nothing the worlds may hold goes missing.
@@ -351,7 +384,11 @@ fn update(
         Some(_) => Some(keep(home, entry)?),
         None => None,
     };
-    match install_version_guarded(index, local, p, v, home, &guard, progress) {
+    let guard = InstallGuard {
+        check: &guard,
+        enabled: Some(enabled),
+    };
+    match install_version_guarded(index, local, p, v, home, guard, progress) {
         Ok(_) => Ok(None),
         Err(e) => {
             if let Some(kept) = &kept {

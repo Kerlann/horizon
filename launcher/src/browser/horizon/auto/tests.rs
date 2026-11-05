@@ -180,16 +180,7 @@ fn updates_holds_and_keeps_the_replaced_file_until_the_next_start() {
     let v3 = ruby(&dir, "1.2.0", &["lamp"], &[]);
     let first = index_of(&[("1.0.0", GAME, &v1)]);
     let p = first.project("ruby").unwrap();
-    install_version_guarded(
-        &first,
-        true,
-        p,
-        &p.versions[0],
-        &home,
-        &|_| Ok(()),
-        &|_, _| {},
-    )
-    .unwrap();
+    super::super::install_version(&first, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
 
     // 1.1.0 adds a block: updated, the 1.0.0 file kept aside.
     let index = index_of(&[("1.1.0", GAME, &v2), ("1.0.0", GAME, &v1)]);
@@ -265,16 +256,7 @@ fn wasm_update_waits_for_the_player() {
     .unwrap();
     let first = index_of(&[("1.0.0", GAME, &old)]);
     let p = first.project("ruby").unwrap();
-    install_version_guarded(
-        &first,
-        true,
-        p,
-        &p.versions[0],
-        &home,
-        &|_| Ok(()),
-        &|_, _| {},
-    )
-    .unwrap();
+    super::super::install_version(&first, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
     let index = index_of(&[("1.1.0", GAME, &new), ("1.0.0", GAME, &old)]);
     let report = run_with(&index, true, &home, &PLAY, &|_, _| {});
     assert!(report.updated.is_empty(), "{report:?}");
@@ -293,16 +275,7 @@ fn backup_paths_stay_in_the_backup_folder() {
     let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
     let index = index_of(&[("1.0.0", GAME, &v1)]);
     let p = index.project("ruby").unwrap();
-    install_version_guarded(
-        &index,
-        true,
-        p,
-        &p.versions[0],
-        &home,
-        &|_| Ok(()),
-        &|_, _| {},
-    )
-    .unwrap();
+    super::super::install_version(&index, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
     let mut entry = installed::Installed::load(&home).entries.remove(0);
     entry.version = "../../outside".into();
     let kept = keep(&home, &entry).unwrap();
@@ -332,16 +305,7 @@ fn failed_restore_keeps_its_record_for_retry() {
     let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
     let index = index_of(&[("1.0.0", GAME, &v1)]);
     let p = index.project("ruby").unwrap();
-    install_version_guarded(
-        &index,
-        true,
-        p,
-        &p.versions[0],
-        &home,
-        &|_| Ok(()),
-        &|_, _| {},
-    )
-    .unwrap();
+    super::super::install_version(&index, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
     let entry = installed::Installed::load(&home).entries.remove(0);
     let mut kept = keep(&home, &entry).unwrap();
     kept.pid = 0;
@@ -375,16 +339,8 @@ fn an_update_cut_short_is_rolled_back_at_the_next_start() {
     let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
     let index = index_of(&[("1.0.0", GAME, &v1)]);
     let p = index.project("ruby").unwrap();
-    install_version_guarded(
-        &index,
-        true,
-        p,
-        &p.versions[0],
-        &home,
-        &|_| Ok(()),
-        &|_, _| {},
-    )
-    .unwrap();
+    super::super::install_version(&index, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
+    crate::browser::java::set_enabled(&home, "ruby", false).unwrap();
     let before = installed::Installed::load(&home);
     let old = before.find(SourceId::Horizon, "ruby").unwrap().clone();
     // An earlier launcher kept 1.0.0, then stopped with a half-written file and the list still
@@ -393,13 +349,230 @@ fn an_update_cut_short_is_rolled_back_at_the_next_start() {
     k.pid = 0;
     save_kept(&home, &[k]).unwrap();
     fs::write(home.join(&old.file), b"half").unwrap();
+    fs::write(home.join("horizon-mods.txt"), "mod.ruby:true\n").unwrap();
     assert!(run(&home, &PLAY, false, &|_, _| {}).is_none());
     assert_eq!(
         installed_ruby(&home),
         ("1.0.0".into(), fs::read(&v1).unwrap())
     );
     assert!(kept_list(&home).is_empty());
+    assert!(!crate::browser::java::is_enabled(&home, "ruby"));
     fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn disabled_content_stays_disabled_but_explicit_install_enables() {
+    let dir = scratch("auto-disabled");
+    let home = dir.join("home");
+    let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
+    let v2 = ruby(&dir, "1.1.0", &["lamp", "brick"], &[]);
+    let v3 = ruby(&dir, "1.2.0", &["lamp", "brick", "ore"], &[]);
+    let first = index_of(&[("1.0.0", GAME, &v1)]);
+    let p = first.project("ruby").unwrap();
+    super::super::install_version(&first, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
+    crate::browser::java::set_enabled(&home, "ruby", false).unwrap();
+    crate::browser::java::set_enabled(&home, "other", true).unwrap();
+    let on_list = fs::read(home.join("horizon-mods.txt")).unwrap();
+
+    let index = index_of(&[("1.1.0", GAME, &v2), ("1.0.0", GAME, &v1)]);
+    let report = run_with(&index, true, &home, &PLAY, &|_, _| {});
+    assert_eq!(report.updated, ["Ruby 1.1.0"]);
+    assert_eq!(
+        installed_ruby(&home),
+        ("1.1.0".into(), fs::read(&v2).unwrap())
+    );
+    assert!(!crate::browser::java::is_enabled(&home, "ruby"));
+    assert_eq!(fs::read(home.join("horizon-mods.txt")).unwrap(), on_list);
+    assert_eq!(kept_list(&home)[0].enabled, Some(false));
+
+    let explicit = index_of(&[("1.2.0", GAME, &v3), ("1.1.0", GAME, &v2)]);
+    let p = explicit.project("ruby").unwrap();
+    super::super::install_version(&explicit, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
+    assert!(crate::browser::java::is_enabled(&home, "ruby"));
+    assert!(crate::browser::java::is_enabled(&home, "other"));
+    assert_eq!(
+        installed_ruby(&home),
+        ("1.2.0".into(), fs::read(&v3).unwrap())
+    );
+    assert!(kept_list(&home).is_empty());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn list_save_failure_after_the_enabled_write_restores_disabled_state_and_keeps_retry() {
+    let dir = scratch("auto-disabled-save-failure");
+    let home = dir.join("home");
+    let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
+    let v2 = ruby(&dir, "1.1.0", &["lamp", "brick"], &[]);
+    let first = index_of(&[("1.0.0", GAME, &v1)]);
+    let p = first.project("ruby").unwrap();
+    super::super::install_version(&first, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
+    fs::write(
+        home.join("horizon-mods.txt"),
+        "mod.ruby:false\nmod.other:true\n",
+    )
+    .unwrap();
+    let index = index_of(&[("1.1.0", GAME, &v2), ("1.0.0", GAME, &v1)]);
+    let part = home.join(".mod-browser.json.part");
+    let report = run_with(&index, true, &home, &PLAY, &|_, _| {
+        // The downloaded package still passes all checks. Only the final browser-list save
+        // fails, after the package rename and enabled-list write have succeeded.
+        fs::create_dir_all(&part).unwrap();
+    });
+    assert!(report.updated.is_empty());
+    assert_eq!(report.failed.len(), 1, "{report:?}");
+    assert!(
+        report.failed[0].contains(".mod-browser.json.part"),
+        "{report:?}"
+    );
+    assert_eq!(
+        installed_ruby(&home),
+        ("1.0.0".into(), fs::read(&v1).unwrap())
+    );
+    assert!(!crate::browser::java::is_enabled(&home, "ruby"));
+    assert_eq!(
+        fs::read_to_string(home.join("horizon-mods.txt")).unwrap(),
+        "mod.other:true\n"
+    );
+    // Rollback's list save hits the same obstruction. Its backup and disabled-state snapshot
+    // must survive, and manual mutation must refuse rather than bypass the unfinished restore.
+    let kept = kept_list(&home);
+    assert_eq!(kept.len(), 1);
+    assert_eq!(kept[0].enabled, Some(false));
+    assert_eq!(kept[0].pid, 0);
+    assert!(home.join(&kept[0].copy).is_file());
+    assert!(installed::remove(&home, "ruby").is_err());
+    fs::remove_dir(&part).unwrap();
+    recover(&home);
+    assert_eq!(
+        installed_ruby(&home),
+        ("1.0.0".into(), fs::read(v1).unwrap())
+    );
+    assert!(!crate::browser::java::is_enabled(&home, "ruby"));
+    assert!(kept_list(&home).is_empty());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn automatic_snapshot_serializes_manual_install_and_remove() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    for remove in [false, true] {
+        let dir = scratch(if remove {
+            "auto-manual-remove"
+        } else {
+            "auto-manual-install"
+        });
+        let home = dir.join("home");
+        let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
+        let v2 = ruby(&dir, "1.1.0", &["lamp", "brick"], &[]);
+        let first = index_of(&[("1.0.0", GAME, &v1)]);
+        let p = first.project("ruby").unwrap();
+        super::super::install_version(&first, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
+        if remove {
+            let hud = first.project("coords_hud").unwrap();
+            super::super::install_version(&first, true, hud, &hud.versions[0], &home, &|_, _| {})
+                .unwrap();
+        }
+        let index = index_of(&[("1.1.0", GAME, &v2), ("1.0.0", GAME, &v1)]);
+        let (paused_tx, paused_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let auto_home = home.clone();
+        let auto_index = index.clone();
+        let automatic = std::thread::spawn(move || {
+            let paused = std::cell::Cell::new(false);
+            run_with(&auto_index, true, &auto_home, &PLAY, &|_, _| {
+                if !paused.replace(true) {
+                    paused_tx.send(()).unwrap();
+                    resume_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                }
+            })
+        });
+        // A has read the browser list and is waiting for its download to finish.
+        paused_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        let (blocked_tx, blocked_rx) = mpsc::channel();
+        let manual_home = home.clone();
+        let manual = std::thread::spawn(move || {
+            crate::browser::mutation::on_wait(move || blocked_tx.send(()).unwrap());
+            if remove {
+                installed::remove(&manual_home, "coords_hud").map(|e| vec![e])
+            } else {
+                let p = super::super::project_of(index.project("coords_hud").unwrap()).unwrap();
+                super::super::install_from(&index, true, &p, &manual_home, &|_, _| {})
+            }
+        });
+        // Observe B actually waiting at the shared lease, not just a spawned thread. No sleep
+        // or timeout-based claim of exclusion: only then let A commit its snapshot.
+        blocked_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        resume_tx.send(()).unwrap();
+        let report = automatic.join().unwrap();
+        assert_eq!(report.updated, ["Ruby 1.1.0"]);
+        manual.join().unwrap().unwrap();
+        let list = installed::Installed::load(&home);
+        assert_eq!(
+            list.find(SourceId::Horizon, "ruby").unwrap().version,
+            "1.1.0"
+        );
+        assert_eq!(list.find(SourceId::Horizon, "coords_hud").is_none(), remove);
+        assert_eq!(home.join("horizon-mods/coords_hud.hmod").is_file(), !remove);
+        assert_eq!(installed_ruby(&home).1, fs::read(&v2).unwrap());
+        // Removing an automatically updated mod must settle its completed journal, so a
+        // future recovery cannot resurrect it just because the file is now intentionally gone.
+        installed::remove(&home, "ruby").unwrap();
+        recover(&home);
+        assert!(installed::Installed::load(&home)
+            .find(SourceId::Horizon, "ruby")
+            .is_none());
+        assert!(!home.join("horizon-mods/ruby.hmod").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[test]
+fn automatic_decisions_wait_for_a_manual_update_to_commit() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let dir = scratch("manual-auto-update");
+    let home = dir.join("home");
+    let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
+    let v2 = ruby(&dir, "1.1.0", &["lamp", "brick"], &[]);
+    let first = index_of(&[("1.0.0", GAME, &v1)]);
+    let p = first.project("ruby").unwrap();
+    super::super::install_version(&first, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
+    let index = index_of(&[("1.1.0", GAME, &v2), ("1.0.0", GAME, &v1)]);
+    let (paused_tx, paused_rx) = mpsc::channel();
+    let (resume_tx, resume_rx) = mpsc::channel();
+    let manual_home = home.clone();
+    let manual_index = index.clone();
+    let manual = std::thread::spawn(move || {
+        let p = super::super::project_of(manual_index.project("ruby").unwrap()).unwrap();
+        let paused = std::cell::Cell::new(false);
+        super::super::install_from(&manual_index, true, &p, &manual_home, &|_, _| {
+            if !paused.replace(true) {
+                paused_tx.send(()).unwrap();
+                resume_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+            }
+        })
+    });
+    paused_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    let (blocked_tx, blocked_rx) = mpsc::channel();
+    let auto_home = home.clone();
+    let automatic = std::thread::spawn(move || {
+        crate::browser::mutation::on_wait(move || blocked_tx.send(()).unwrap());
+        run_with(&index, true, &auto_home, &PLAY, &|_, _| {})
+    });
+    blocked_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    resume_tx.send(()).unwrap();
+    manual.join().unwrap().unwrap();
+    assert_eq!(automatic.join().unwrap(), Report::default());
+    assert_eq!(
+        installed_ruby(&home),
+        ("1.1.0".into(), fs::read(v2).unwrap())
+    );
+    assert!(kept_list(&home).is_empty());
+    fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

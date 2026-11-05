@@ -696,7 +696,25 @@ fn install_version(
     home: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<installed::Entry, String> {
-    install_version_guarded(index, local, p, v, home, &|_| Ok(()), progress)
+    install_version_guarded(
+        index,
+        local,
+        p,
+        v,
+        home,
+        InstallGuard {
+            check: &|_| Ok(()),
+            enabled: None,
+        },
+        progress,
+    )
+}
+
+/// The replacement check and the mod's enabled state at commit. Explicit installs enable;
+/// automatic updates keep the state read under the mutation lease.
+struct InstallGuard<'a> {
+    check: &'a dyn Fn(&Path) -> Result<(), String>,
+    enabled: Option<bool>,
 }
 
 /// [`install_version`], with `guard` asked about the downloaded file once it passed the index's
@@ -707,9 +725,13 @@ fn install_version_guarded(
     p: &index::Project,
     v: &index::Version,
     home: &Path,
-    guard: &dyn Fn(&Path) -> Result<(), String>,
+    guard: InstallGuard<'_>,
     progress: &dyn Fn(&str, f32),
 ) -> Result<installed::Entry, String> {
+    let _lease = super::mutation::acquire();
+    if guard.enabled.is_none() {
+        auto::before_manual(home)?;
+    }
     let project = project_of(p).ok_or_else(|| format!("{} can't be installed here.", p.name))?;
     if let Some(r) = index.revoked(&p.id, &v.file.sha256) {
         return Err(format!("{} was taken down: {}", p.name, r.reason));
@@ -781,7 +803,7 @@ fn install_version_guarded(
         }
     });
     let trust = checked
-        .and_then(|t| guard(&path).map(|()| t))
+        .and_then(|t| (guard.check)(&path).map(|()| t))
         .inspect_err(|_| {
             let _ = fs::remove_file(&path);
         })?;
@@ -797,7 +819,7 @@ fn install_version_guarded(
         let _ = fs::remove_file(old);
     }
     if project.kind == Kind::Mod {
-        java::set_enabled(home, &p.id, true)?;
+        java::set_enabled_inner(home, &p.id, guard.enabled.unwrap_or(true))?;
     }
     let entry = installed::Entry {
         source: SourceId::Horizon,
@@ -834,6 +856,10 @@ pub fn mod_id(entry: &installed::Entry) -> Option<&str> {
 /// Turns the registry's files that were taken down off in the game folder `home`, and says
 /// which. Their files stay, so the player sees them and can remove them.
 pub fn turn_off_revoked(index: &Index, home: &Path) -> Vec<String> {
+    let _lease = super::mutation::acquire();
+    if let Err(error) = auto::before_manual(home) {
+        return vec![error];
+    }
     let mut out = Vec::new();
     for e in installed::Installed::load(home).entries {
         let hash = e.checksum.strip_prefix("SHA-256:").unwrap_or_default();

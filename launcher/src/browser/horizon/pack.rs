@@ -79,6 +79,7 @@ fn install_in(
     dir: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Installed, String> {
+    let _lease = crate::browser::mutation::acquire();
     let p = index
         .project(id)
         .ok_or_else(|| format!("{id} isn't in Horizon's registry."))?;
@@ -103,6 +104,7 @@ fn install_version_in(
     work: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Installed, String> {
+    let _lease = crate::browser::mutation::acquire();
     let line = format!("{} {}", p.name, v.version);
     let file = FileRef {
         url: v.file.url.clone(),
@@ -177,6 +179,7 @@ pub fn apply(cmd: &mut Command, work: &Path) -> Result<(), String> {
 
 /// Removes an installed pack: its mods and the profile's saves.
 pub fn remove(work: &Path) -> Result<(), String> {
+    let _lease = crate::browser::mutation::acquire();
     if work.parent() != Some(packs_dir().as_path()) || !is_pack(work) {
         return Err(format!("{} is not an installed modpack.", work.display()));
     }

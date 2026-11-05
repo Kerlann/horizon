@@ -217,6 +217,8 @@ fn set_line(path: &Path, key: &str, value: &str) -> Result<(), String> {
 /// Turns a pack on or off. A resource pack turned on goes on top; a shader pack turned on
 /// replaces the one that was.
 pub fn set_enabled(home: &Path, pack: &Pack, on: bool) -> Result<(), String> {
+    let _lease = crate::browser::mutation::acquire();
+    crate::browser::horizon::auto::before_manual(home)?;
     match pack.kind {
         Kind::Resource => {
             let options = home.join(OPTIONS);
@@ -306,6 +308,8 @@ pub fn kind_of(file: &Path) -> Result<Kind, String> {
 /// Copies a pack file into the right folder of `home`, under a name not taken yet. Returns it,
 /// turned off.
 pub fn add(home: &Path, file: &Path) -> Result<Pack, String> {
+    let _lease = crate::browser::mutation::acquire();
+    crate::browser::horizon::auto::before_manual(home)?;
     let kind = kind_of(file)?;
     let dir = home.join(kind.folder());
     fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -332,6 +336,8 @@ pub fn add(home: &Path, file: &Path) -> Result<Pack, String> {
 
 /// Turns the pack off and moves it to the system's trash.
 pub fn remove(home: &Path, pack: &Pack) -> Result<(), String> {
+    let _lease = crate::browser::mutation::acquire();
+    crate::browser::horizon::auto::before_manual(home)?;
     if pack.enabled {
         set_enabled(home, pack, false)?;
     }
