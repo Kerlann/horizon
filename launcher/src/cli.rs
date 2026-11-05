@@ -2188,7 +2188,8 @@ fn github_native(
     }
     println!("Build it next: horizon-launcher native-build --trust-native-code");
     println!(
-        "Native mods use the prebuilt game when possible. Full source builds use fast settings."
+        "{}",
+        tr("Native mods use the prebuilt game when possible. Full source builds use fast settings.")
     );
     Ok(())
 }

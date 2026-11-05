@@ -1097,5 +1097,6 @@
     "{mod}: {reason}": "{mod}: {reason}",
     "Build now · {estimate}": "Build now · {estimate}",
     "Play without them": "Play without them",
-    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again."
+    "The installed build was removed after planning. Start the build again.": "The installed build was removed after planning. Start the build again.",
+    "Native mods use the prebuilt game when possible. Full source builds use fast settings.": "Native mods use the prebuilt game when possible. Full source builds use fast settings."
 }
