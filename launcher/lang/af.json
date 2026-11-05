@@ -1131,8 +1131,7 @@
   "At start and before you play, content installed from Horizon's registry moves to its newest version for this game. Never inside a modpack. Code mods and updates that would remove blocks or items wait for you.": "At start and before you play, content installed from Horizon's registry moves to its newest version for this game. Never inside a modpack. Code mods and updates that would remove blocks or items wait for you.",
   "{title} {version} waits for you: code mods update only when you choose to update them.": "{title} {version} waits for you: code mods update only when you choose to update them.",
   "Tags": "Etikette",
-  "Made for Horizon {pin}, but {mods} pin another commit: the build will ask you to Build anyway and may not compile": "Made for Horizon {pin}, but {mods} pin another commit: the build will ask you to Build anyway and may not compile",
-  "Made for Horizon {pin}, you play {yours}: the launcher builds your game on {pin}": "Made for Horizon {pin}, you play {yours}: the launcher builds your game on {pin}",
-  "Needs native hook points v{needs}, the Horizon you play has v{has}: update Horizon first": "Needs native hook points v{needs}, the Horizon you play has v{has}: update Horizon first",
-  "Builds on the Horizon you play": "Builds on the Horizon you play"
+  "Builds on the Horizon you play": "Builds on the Horizon you play",
+  "Made for Horizon {pin}, but {mods} pin another commit: the build requires all native mods to match the game revision": "Made for Horizon {pin}, but {mods} pin another commit: the build requires all native mods to match the game revision",
+  "Made for Horizon {pin}, you play {yours}: choose matching mod versions or a matching Horizon version before building": "Made for Horizon {pin}, you play {yours}: choose matching mod versions or a matching Horizon version before building"
 }
