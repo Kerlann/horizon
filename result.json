@@ -1,0 +1,1 @@
+{"status":"pr_opened","pr":1064,"branch":"bulk-batch4-srwz7h-1030","head":"26f5ce0f21432934a5a5acf0390ad05b19331f78","notes":"Focused test, all-targets check, wasm check and paired sample checks passed. Dev game launched on integrated server, but no throwaway trait mod was loaded: end-to-end XP proof remains outstanding."}
