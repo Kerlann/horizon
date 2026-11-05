@@ -2375,6 +2375,31 @@ impl Game<'_> {
                 }
                 MobEvent::SunProtectionWear { mob } => self.wear_sun_protection(mob),
                 MobEvent::ArmorHurt { mob, amount, kind } => self.hurt_mob_armor(mob, amount, kind),
+                MobEvent::HelmetHurt { mob, wear } => {
+                    use horizon_world::player_inventory::EquipmentSlot;
+                    let Some(m) = self.mobs.iter().find(|m| m.id == mob) else {
+                        continue;
+                    };
+                    if m.item_by_slot(EquipmentSlot::Head).as_ref() != Some(&wear.stack) {
+                        continue;
+                    }
+                    let at = [m.position.x, m.position.y, m.position.z];
+                    let (updated, broken) = self.damage_stack(
+                        &wear.stack,
+                        wear.amount.min(i32::MAX as u32) as i32,
+                        false,
+                    );
+                    let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob) else {
+                        continue;
+                    };
+                    if m.item_by_slot(EquipmentSlot::Head).as_ref() != Some(&wear.stack) {
+                        continue;
+                    }
+                    m.set_equipment_stack(EquipmentSlot::Head as usize, updated);
+                    if broken.is_some() {
+                        self.lan_entity_event(mob as i32, 49, at);
+                    }
+                }
                 MobEvent::EntityEvent { mob, event, at } => {
                     self.lan_entity_event(mob as i32, event, at)
                 }

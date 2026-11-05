@@ -2963,3 +2963,20 @@ Horizon ticks vanilla's spawners where it always has: the trader, patrol, cat an
 ## Finalize spawn
 
 - **`finalize_spawn(dimension, kind, reason, pos, spawner, difficulty, spawn_cancelled, cancel)`** (NeoForge's `FinalizeSpawnEvent`): fires where the game calls `Mob.finalizeSpawn` for a mob it made, before it runs. There are two cancels, as in NeoForge: return `Flow::Cancel` to skip finalization (no equipment, attributes or class setup; the mob still spawns uninitialised, and finalization's random draws are skipped), or set `spawn_cancelled` so no mob is added. `difficulty` (`NativeDifficulty`) is settable and is what finalization reads. `spawner` is `NativeSpawner::Block` for a spawner or trial spawner, none otherwise. Fired only where vanilla 26.3 calls `finalizeSpawn`, with vanilla's reason at that call: natural spawning, chunk generation, spawners, trial spawners, patrols, raids and sieges, reinforcements, cat spawners, phantoms, jockeys, `/summon`, `/raid`, spawn eggs, dispensers, the nether portal's piglin (`Structure`), skeleton traps, evoker vexes, wandering traders and conversions. Not fired where vanilla creates the mob without it (breeding, an infested block's silverfish, a thrown egg's chick, a thrown pearl's endermite, hatching eggs, built golems, the oozing effect's slimes, a lightning trap's horse), for loads (`persist.rs` finalizes a placed entity only through its `horizon:finalize` marker, which is a load) or for structure mobs placed by world generation. Group data is left out: it lives only in the worldgen `finalize` path, which has no host. Both new types are plain data (`NativeDifficulty` and `NativeSpawner`, `#[non_exhaustive]`). Read-only host; replayed ticks, so listeners are pure functions of their inputs. Tick-time effect: one `listened` branch with no listeners. Beyond NeoForge: none.
+
+## Falling-block helmet wear
+
+`Hooks::armor_hurt` (NeoForge `ArmorHurtEvent`) also covers the head-only
+wear of falling blocks, anvils and stalactites on players and equipped mobs.
+The callback runs after incoming-damage and blocking listeners, before the
+helmet's 25% damage reduction and before the hurt cooldown check. The event
+contains a `Head` entry, with `damage` and `new_damage` in durability points
+(`max(1, damage / 4)`, truncated). Return `Flow::Cancel` to keep the helmet's
+durability, or change `new_damage` (zero also prevents wear). Neither choice
+removes the helmet's protection or cancels the health hit. Ordinary armor
+wear later in the same hit remains a separate equipment operation.
+
+The callback receives `&mut dyn LevelRandomHost`: the hit's level random and
+level attachments, not a full game host. Unbreaking and the existing item
+wear listeners are applied during equipment write-back, as for other armor
+wear. A piece replaced before write-back is not worn by the old decision.

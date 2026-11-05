@@ -489,6 +489,12 @@ pub struct PlayerMotion {
     /// target makes the next landing throw up the block below.
     pub spawn_extra_particles_on_fall: bool,
     pub health: crate::health::PlayerHealth,
+    /// The equipped head piece, supplied by the game's equipment binding.
+    pub helmet: Option<crate::items::ItemStack>,
+    /// The wearing player's UUID, absent in simulation-only fixtures.
+    pub helmet_player: Option<u128>,
+    /// Head wear decided inside hurtServer, awaiting equipment write-back.
+    pub helmet_wear: Vec<crate::health::HelmetWear>,
     /// Status effects and armor protection seen by movement and damage.
     pub status: crate::effects::StatusFlags,
     /// Water and lava around the player (`Entity.fluidInteraction`).
@@ -636,6 +642,9 @@ impl PlayerMotion {
         Ok(Self {
             health: crate::health::PlayerHealth::new(&resources.health, &mut attributes)?,
             status: crate::effects::StatusFlags::default(),
+            helmet: None,
+            helmet_player: None,
+            helmet_wear: Vec::new(),
             impulse: ImpulseContext::default(),
             spawn_extra_particles_on_fall: false,
             position,

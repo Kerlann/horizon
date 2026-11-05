@@ -4899,7 +4899,6 @@ impl Game<'_> {
     /// `new_damage` a mod may change (0 for none; Unbreaking is applied
     /// after). Canceling means no armor damage. A server player's `feet`,
     /// `legs`, `chest` and `head`; a mob's `body` (a horse's armor).
-    /// Falling-block helmet hits (`hurtHelmet`) are not ported yet.
     /// Server-side.
     pub(super) fn native_armor_hurt(
         &mut self,
@@ -4910,7 +4909,8 @@ impl Game<'_> {
         entries: &mut Vec<mod_api::NativeArmorHurt>,
         cancel: &mut bool,
     ) {
-        self.fire_armor_hurt(player, entity, kind, source, entries, cancel);
+        HitLevel(super::entity::damage_level_of!(self).reborrow())
+            .native_armor_hurt(player, entity, kind, source, entries, cancel);
     }
     /// A mob is about to destroy a block (NeoForge's `LivingDestroyBlockEvent`):
     /// a wither breaking blocks around it, a ravager breaking leaves, the ender
@@ -8865,6 +8865,18 @@ pub(super) fn use_totem(level: DamageLevel<'_>, hurting: Hurting<'_>, off_hand: 
 pub(super) struct HitLevel<'a>(pub(super) DamageLevel<'a>);
 
 impl HitLevel<'_> {
+    pub(super) fn native_armor_hurt(
+        &mut self,
+        player: Option<u128>,
+        entity: u32,
+        kind: &str,
+        source: &HurtSource<'_>,
+        entries: &mut Vec<mod_api::NativeArmorHurt>,
+        cancel: &mut bool,
+    ) {
+        self.fire_armor_hurt(player, entity, kind, source, entries, cancel);
+    }
+
     /// NeoForge's `LivingShieldBlockEvent`: entity `entity` of type `kind`
     /// (`minecraft:player`, `minecraft:zombie`) is hit for `damage` from `source` (its
     /// type and entities, as `native_living_incoming_damage` names them), and
@@ -9158,6 +9170,46 @@ pub(super) fn knockback(level: DamageLevel<'_>, pushed: Hurting<'_>, knock: &mut
     canceled
 }
 
+/// Head wear at hurtHelmet: one ArmorHurtEvent, not another damage hook moment.
+pub(super) fn helmet_wear(
+    level: DamageLevel<'_>,
+    hurting: Hurting<'_>,
+    player: Option<u128>,
+    stack: &ItemStack,
+    damage: f32,
+) -> u32 {
+    let wear = super::durability_damage(damage);
+    let amount = wear as u32;
+    if !mod_api::__private::listened(mod_api::HookId::ArmorHurt) {
+        return amount;
+    }
+    let (entity, kind, source) = hurt_server_args(hurting, level.attack());
+    let mut entries = vec![mod_api::NativeArmorHurt {
+        slot: horizon_world::player_inventory::EquipmentSlot::Head,
+        stack: stack.clone(),
+        damage: wear,
+        new_damage: wear,
+    }];
+    let mut cancel = false;
+    HitLevel(level).native_armor_hurt(
+        player,
+        entity as u32,
+        kind,
+        &source,
+        &mut entries,
+        &mut cancel,
+    );
+    if cancel {
+        0
+    } else {
+        super::answered_wear(
+            &entries,
+            horizon_world::player_inventory::EquipmentSlot::Head,
+            amount,
+        )
+    }
+}
+
 /// The damage hooks every level of the game lends to its hits (`Game.damage_hooks`).
 pub(super) const DAMAGE_HOOKS: DamageHooks = DamageHooks {
     incoming: Some(incoming_damage),
@@ -9166,6 +9218,7 @@ pub(super) const DAMAGE_HOOKS: DamageHooks = DamageHooks {
     knockback: Some(knockback),
     totem: Some(use_totem),
     shield: Some(shield_block),
+    helmet: Some(helmet_wear),
 };
 /// The contacts of a simulating entity with a block, as the simulation's own code (client-lib)
 /// reports them.

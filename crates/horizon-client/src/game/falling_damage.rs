@@ -18,6 +18,8 @@ impl Game<'_> {
             if impact.amount > 0.0 {
                 let mob_kind = if stalactite {
                     horizon_client::mobs::DamageKind::FallingStalactite
+                } else if anvil {
+                    horizon_client::mobs::DamageKind::FallingAnvil
                 } else {
                     horizon_client::mobs::DamageKind::FallingBlock
                 };
@@ -185,7 +187,7 @@ impl Game<'_> {
             self.drop_falling_block(block.state, block.position);
         }
     }
-    fn falling_hurt_player(&mut self, position: Vec3, amount: f32, kind: &str) {
+    pub(super) fn falling_hurt_player(&mut self, position: Vec3, amount: f32, kind: &str) {
         if self.creative || self.spectator() {
             return;
         }
@@ -195,11 +197,6 @@ impl Game<'_> {
             return;
         }
         let original = amount;
-        let amount = if self.armor[0].is_some() {
-            amount * 0.75
-        } else {
-            amount
-        };
         let rules = self.world.health_rules;
         let hurt = match (self.player.as_mut(), self.motion.health.damage.id(kind)) {
             (Some(p), Some(id)) => p
@@ -214,6 +211,22 @@ impl Game<'_> {
             _ => false,
         };
         if hurt {
+            let actual = self
+                .player
+                .as_ref()
+                .and_then(|p| {
+                    p.events.iter().rev().find_map(|event| {
+                        if let horizon_client::motion::MotionEvent::Health(
+                            horizon_client::health::HealthEvent::Criterion { amount, .. },
+                        ) = event
+                        {
+                            Some(*amount)
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .unwrap_or(amount);
             // LivingEntity.hurtServer: ENTITY_HURT_PLAYER, the falling block
             // (`DamageSources.fallingBlock(this)` and the like) being both the
             // causing and the direct entity.
@@ -228,7 +241,7 @@ impl Game<'_> {
                 is_direct: true,
                 source: Some(block),
                 original,
-                actual: amount,
+                actual,
                 blocked: false,
             });
         }

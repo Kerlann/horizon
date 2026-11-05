@@ -1717,6 +1717,11 @@ pub enum MobEvent {
         amount: f32,
         kind: DamageKind,
     },
+    /// Head-only wear decided inside hurtServer, before the cooldown test.
+    HelmetHurt {
+        mob: u32,
+        wear: crate::health::HelmetWear,
+    },
     /// `OfferFlowerGoal.stop`: the item goes to the target's antenna (saddle)
     /// slot if it is empty, as a guaranteed drop.
     Gift {
@@ -3476,14 +3481,6 @@ impl Mob {
         };
         amount -= blocked;
         container.record_block(blocked);
-        // #damages_helmet: falling anvils, blocks and stalactites.
-        if matches!(
-            source.kind,
-            DamageKind::FallingBlock | DamageKind::FallingAnvil | DamageKind::FallingStalactite
-        ) && self.extra.head_id().is_some()
-        {
-            amount *= 0.75;
-        }
         // LivingEntity.hurtServer: `#freeze_hurts_extra_types` take five times.
         if source.kind == DamageKind::Freeze
             && matches!(
@@ -3492,6 +3489,25 @@ impl Mob {
             )
         {
             amount *= 5.0;
+        }
+        // #damages_helmet: falling anvils, blocks and stalactites.
+        if matches!(
+            source.kind,
+            DamageKind::FallingBlock | DamageKind::FallingAnvil | DamageKind::FallingStalactite
+        ) && let Some(stack) = self
+            .item_by_slot(horizon_world::player_inventory::EquipmentSlot::Head)
+            .filter(|s| s.count > 0)
+        {
+            if let Some(wear) = level.helmet_wear(
+                crate::health::Hurting::Mob(self, &source),
+                None,
+                &stack,
+                amount,
+            ) {
+                self.outbox
+                    .push(MobEvent::HelmetHurt { mob: self.id, wear });
+            }
+            amount *= 0.75;
         }
         if !amount.is_finite() {
             amount = f32::MAX;

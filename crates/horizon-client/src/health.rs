@@ -68,6 +68,10 @@ pub struct DamageHooks {
     /// for what it hurts, the damage and whether vanilla blocks. It may change the
     /// [`ShieldBlock`].
     pub shield: Option<fn(DamageLevel<'_>, Hurting<'_>, f32, bool, &mut ShieldBlock)>,
+    /// ArmorHurtEvent at hurtHelmet, before helmet protection and the hurt cooldown.
+    pub helmet: Option<
+        fn(DamageLevel<'_>, Hurting<'_>, Option<u128>, &crate::items::ItemStack, f32) -> u32,
+    >,
 }
 impl DamageHooks {
     /// No hooks: what tests of the vanilla behaviour hit through.
@@ -78,6 +82,7 @@ impl DamageHooks {
         knockback: None,
         totem: None,
         shield: None,
+        helmet: None,
     };
 }
 /// The level a hit lands in, as damage code sees it: its blocks, its random
@@ -250,6 +255,44 @@ impl<'a> DamageLevel<'a> {
         if let Some(hook) = self.hooks.and_then(|hooks| hooks.post) {
             hook(self.reborrow(), hurting, container);
         }
+    }
+}
+/// A helmet wear decision, retained until the game applies its equipment writes.
+#[derive(Clone, Debug)]
+pub struct HelmetWear {
+    /// The piece the hook saw; a replacement in the slot is never worn instead.
+    pub stack: crate::items::ItemStack,
+    /// Durability points before Unbreaking and item-damage listeners.
+    pub amount: u32,
+}
+impl DamageLevel<'_> {
+    /// `hurtHelmet`'s head-only `doHurtEquipment`, shared by player and mob hits.
+    /// The hook runs inside hurtServer, even when the cooldown later refuses the hit.
+    pub fn helmet_wear(
+        &mut self,
+        hurting: Hurting<'_>,
+        player: Option<u128>,
+        stack: &crate::items::ItemStack,
+        damage: f32,
+    ) -> Option<HelmetWear> {
+        let items = self.tags?;
+        let info = items.get(&stack.item)?;
+        if damage <= 0.0
+            || stack.count == 0
+            || info.equip_slot.is_none()
+            || !info.equip_damage_on_hurt
+            || !crate::stations::is_damageable(items, stack)
+        {
+            return None;
+        }
+        let mut amount = ((damage / 4.0).max(1.0)) as u32;
+        if let Some(hook) = self.hooks.and_then(|h| h.helmet) {
+            amount = hook(self.reborrow(), hurting, player, stack, damage);
+        }
+        (amount > 0).then(|| HelmetWear {
+            stack: stack.clone(),
+            amount,
+        })
     }
 }
 /// A level's random and attachments, taken out of its world while the world is read
@@ -794,6 +837,9 @@ impl PlayerMotion {
             totem_off_hand,
             totem_fired: false,
             canceled: false,
+            helmet: self.helmet.as_ref(),
+            helmet_player: self.helmet_player,
+            helmet_wear: &mut self.helmet_wear,
         };
         let hurt = ServerPlayerCombat::new(
             &mut self.attributes,
@@ -880,6 +926,9 @@ impl PlayerMotion {
     }
 }
 pub(crate) struct Environment<'a> {
+    pub(crate) helmet: Option<&'a crate::items::ItemStack>,
+    pub(crate) helmet_player: Option<u128>,
+    pub(crate) helmet_wear: &'a mut Vec<HelmetWear>,
     /// The level the hit lands in, for the damage hooks.
     pub(crate) level: DamageLevel<'a>,
     /// The player's entity id, and the causing entity's (0: none or not known).
@@ -1282,9 +1331,25 @@ impl HurtWorld for Environment<'_> {
         Ok(false)
     }
     fn helmet_empty(&mut self, _: &mut State) -> io::Result<bool> {
-        Ok(true)
+        Ok(self.helmet.is_none_or(|s| s.count == 0))
     }
-    fn hurt_helmet(&mut self, _: &mut State, _: f32) -> io::Result<()> {
+    fn hurt_helmet(&mut self, _: &mut State, damage: f32) -> io::Result<()> {
+        if let Some(stack) = self.helmet {
+            let source = HurtSource {
+                damage_type: &self.source.definition().name,
+                causing: self.causing,
+                direct: 0,
+                position: None,
+            };
+            if let Some(wear) = self.level.helmet_wear(
+                Hurting::Player(self.entity, source),
+                self.helmet_player,
+                stack,
+                damage,
+            ) {
+                self.helmet_wear.push(wear);
+            }
+        }
         Ok(())
     }
     fn actually_hurt(&mut self, _: &mut State, _: &mut DamageContainer, _: f32) -> io::Result<()> {

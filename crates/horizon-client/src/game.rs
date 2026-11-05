@@ -259,6 +259,8 @@ mod native_falling;
 mod native_guest_turn_tests;
 #[cfg(test)]
 mod native_held_out_tests;
+#[cfg(test)]
+mod native_helmet_tests;
 mod native_hooks;
 mod native_inventories;
 mod native_item_container;
@@ -13831,6 +13833,8 @@ impl Game<'_> {
         let Some(player) = self.player.as_mut() else {
             return;
         };
+        player.helmet = self.armor[0].clone();
+        player.helmet_player = self.lan_acting_uuid;
         for (attribute, id) in std::mem::take(&mut self.applied_modifiers) {
             let _ = player.set_modifier_unclamped(&attribute, &id, 0.0, "add_value", false);
         }
@@ -13876,6 +13880,30 @@ impl Game<'_> {
     /// `getDamageAfterArmorAbsorb`), whatever the damage: a mob, an explosion,
     /// a cactus, lava, a campfire.
     fn wear_armor(&mut self, events: &[MotionEvent]) {
+        let pending = self
+            .player
+            .as_mut()
+            .map(|p| std::mem::take(&mut p.helmet_wear))
+            .unwrap_or_default();
+        for wear in pending {
+            if self.armor[0].as_ref() != Some(&wear.stack) {
+                continue;
+            }
+            let (updated, broken) =
+                self.damage_stack(&wear.stack, wear.amount.min(i32::MAX as u32) as i32, true);
+            if self.armor[0].as_ref() != Some(&wear.stack) {
+                continue;
+            }
+            self.armor[0] = updated;
+            if let Some(stack) = broken {
+                self.player_equipment_broke(
+                    horizon_world::player_inventory::EquipmentSlot::Head,
+                    &stack,
+                );
+                self.award_stat("broken", &stack.item, 1);
+            }
+            self.apply_equipment();
+        }
         for event in events {
             if let MotionEvent::Health(horizon_client::health::HealthEvent::ArmorHurt {
                 source,

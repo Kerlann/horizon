@@ -215,6 +215,9 @@ impl FoodWorld for TickWorld<'_> {
             totem_off_hand: false,
             totem_fired: false,
             canceled: false,
+            helmet: None,
+            helmet_player: None,
+            helmet_wear: &mut Vec::new(),
         };
         if ServerPlayerCombat::new(self.attributes, self.data, food, self.ids, &mut environment)?
             .hurt(self.hurt, amount)?
