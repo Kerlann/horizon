@@ -1213,7 +1213,7 @@ impl MotionWorld<'_, '_, '_> {
         {
             self.player.fall_flying = true;
         }
-        // LivingEntity.tick fallFlyTicks, then updateFallFlying.
+        // LivingEntity.updateFallFlying (fallFlyTicks is counted after the move).
         if self.player.fall_flying {
             // Entity.checkFallDistanceAccumulation: a glide that isn't diving
             // (falling slower than 0.5 a tick) keeps the fall distance at 1, so
@@ -1221,7 +1221,6 @@ impl MotionWorld<'_, '_, '_> {
             if self.player.velocity.y > -0.5 && self.player.fall_distance > 1.0 {
                 self.player.fall_distance = 1.0;
             }
-            self.player.fall_fly_ticks += 1;
             // canGlide alone: water and lava don't end a glide, levitation does.
             let still = self.player.glider
                 && !self.player.ground.on_ground
@@ -1238,8 +1237,6 @@ impl MotionWorld<'_, '_, '_> {
             {
                 self.player.glider_wear += 1;
             }
-        } else {
-            self.player.fall_fly_ticks = 0;
         }
         // LocalPlayer.goDownInWater, before LivingEntity.aiStep's velocity cleanup.
         if self.player.fluids.was_touching_water
@@ -1267,6 +1264,12 @@ impl MotionWorld<'_, '_, '_> {
             direction,
             jumping: jumping && !self.player.flying,
         })?;
+        // LivingEntity.tick counts fallFlyTicks after aiStep.
+        if self.player.fall_flying {
+            self.player.fall_fly_ticks += 1;
+        } else {
+            self.player.fall_fly_ticks = 0;
+        }
         if self.player.spectator {
             self.player.ground.on_ground = false;
         }
@@ -2184,11 +2187,13 @@ impl MotionWorld<'_, '_, '_> {
         let movement = self.player.velocity;
         let before = self.player.position;
         self.move_self(movement)?;
-        // LivingEntity.handleFallFlyingCollisions: only the server hurts, and
-        // it compares the delta before the move with the one after it, which
+        // LivingEntity.handleFallFlyingCollisions: the fall-damage sound plays
+        // on both sides (a glider's own travel is client-side, and the sound
+        // must reach its own ears, #8906), only the server hurts, and it
+        // compares the delta before the move with the one after it, which
         // `Entity.move` leaves as the movement it resolved. `move_entity` does
         // not write that back, so the distance actually travelled stands in.
-        if !self.player.client_side && self.player.collision.horizontal {
+        if self.player.collision.horizontal {
             let travelled = self.player.position.subtract(before);
             let new_h = (travelled.x * travelled.x + travelled.z * travelled.z).sqrt();
             let dmg = fly_into_wall_damage(move_h, new_h);
@@ -2208,28 +2213,31 @@ impl MotionWorld<'_, '_, '_> {
                         volume: 1.0,
                         pitch: 1.0,
                     }));
-                let id = self
-                    .resources
-                    .health
-                    .damage
-                    .id("minecraft:fly_into_wall")
-                    .ok_or("missing fly_into_wall damage type")?;
-                let rules = self.scene.health_rules;
-                self.player.hurt(
-                    &mut crate::health::DamageLevel::of(
-                        self.scene,
-                        self.assets.registry,
-                        self.tag_items,
-                        self.block_registries,
-                        self.damage_hooks,
-                    ),
-                    self.health,
-                    rules,
-                    id,
-                    dmg,
-                )?;
-                if self.player.server_copy {
-                    self.player.wall_hit_events = Some(first..self.player.events.len());
+                // Only the server hurts; the sound is shared.
+                if !self.player.client_side {
+                    let id = self
+                        .resources
+                        .health
+                        .damage
+                        .id("minecraft:fly_into_wall")
+                        .ok_or("missing fly_into_wall damage type")?;
+                    let rules = self.scene.health_rules;
+                    self.player.hurt(
+                        &mut crate::health::DamageLevel::of(
+                            self.scene,
+                            self.assets.registry,
+                            self.tag_items,
+                            self.block_registries,
+                            self.damage_hooks,
+                        ),
+                        self.health,
+                        rules,
+                        id,
+                        dmg,
+                    )?;
+                    if self.player.server_copy {
+                        self.player.wall_hit_events = Some(first..self.player.events.len());
+                    }
                 }
             }
         }
@@ -4113,6 +4121,75 @@ mod tests {
             player.hurt_log
         );
         assert!(player.health.health() < 20.0, "{}", player.health.health());
+    }
+
+    /// A client's own glide into a wall plays its fall sound but never hurts
+    /// it (`handleFallFlyingCollisions`' playSound runs on both sides, the
+    /// hurt is the server's alone), so the glider hears it.
+    #[test]
+    fn a_clients_own_glide_into_a_wall_plays_the_fall_sound_and_does_not_hurt_it() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.local/horizon-client")
+            .join(horizon_core::VANILLA_VERSION);
+        if !root.join("movement-properties.nbt").exists() {
+            return;
+        }
+        let assets = Assets::load(&root).unwrap();
+        let render = assets.reload(&root).unwrap();
+        let binding = crate::collisions::load(&root, assets.registry).unwrap();
+        let resources = MotionResources::load(&root, &assets).unwrap();
+        let mut scene = World::test_scene(&assets, &render, 1).unwrap();
+        // A wall in the way of a glide along +x, at feet height.
+        let stone = assets.registry.default_state("minecraft:stone").unwrap();
+        for y in 4..=5 {
+            for z in 19..=21 {
+                scene.set(23, y, z, stone).unwrap();
+            }
+        }
+        let mut player = PlayerMotion::new(&resources, Vec3::new(22.0, 4.0, 20.5)).unwrap();
+        player.client_side = true;
+        player.fall_flying = true;
+        // Looking along +x keeps the glide on its course into the wall.
+        player.yaw = -90.0;
+        player.pitch = 0.0;
+        player.carry_client_movement(Vec3::new(1.2, 0.0, 0.0));
+        let loop_context = crate::test_resources::loop_context(
+            horizon_world::native_load_context::LoopSide::Client,
+        );
+        let mut w = MotionWorld {
+            tag_items: None,
+            block_registries: None,
+            loop_context: &loop_context,
+            damage_hooks: &crate::health::DamageHooks::NONE,
+            entities: &[],
+            player: &mut player,
+            scene: &mut scene,
+            assets: &assets,
+            collision_binding: &binding,
+            resources: &resources,
+            health: &resources.health,
+        };
+        w.travel_fall_flying().unwrap();
+        assert!(
+            w.player.events.iter().any(|e| matches!(
+                e,
+                MotionEvent::Fall(crate::landing::FallEvent::Sound {
+                    sound: crate::landing::SceneSound::SmallFall,
+                    ..
+                })
+            )),
+            "{:?}",
+            w.player.events
+        );
+        assert!(
+            !w.player
+                .hurt_log
+                .last()
+                .is_some_and(|hurt| hurt.source == "minecraft:fly_into_wall"),
+            "a client's own glide does not hurt it: {:?}",
+            w.player.hurt_log
+        );
+        assert_eq!(w.player.health.health(), 20.0);
     }
 
     #[test]
@@ -6232,6 +6309,50 @@ mod tests {
             0.1,
             "the flight speed follows the sprint state, not the sprint key"
         );
+    }
+    /// #9858: `LivingEntity.tick` counts `fallFlyTicks` after `aiStep`, so
+    /// `updateFallFlying` sees last tick's count plus one: the glider wears
+    /// on the 20th glide tick, not the 19th.
+    #[test]
+    fn a_glider_wears_on_the_twentieth_glide_tick() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.local/horizon-client")
+            .join(horizon_core::VANILLA_VERSION);
+        if !root.join("movement-properties.nbt").exists() {
+            return;
+        }
+        let assets = Assets::load(&root).unwrap();
+        let render = assets.reload(&root).unwrap();
+        let binding = crate::collisions::load(&root, assets.registry).unwrap();
+        let resources = MotionResources::load(&root, &assets).unwrap();
+        let mut scene = World::test_scene(&assets, &render, 2).unwrap();
+        let mut player = PlayerMotion::new(&resources, Vec3::new(20.5, 100.0, 20.5)).unwrap();
+        player.glider = true;
+        player.fall_flying = true;
+        let mut w = MotionWorld {
+            tag_items: None,
+            block_registries: None,
+            loop_context: crate::test_resources::server_loop_context(),
+            damage_hooks: &crate::health::DamageHooks::NONE,
+            entities: &[],
+            player: &mut player,
+            scene: &mut scene,
+            assets: &assets,
+            collision_binding: &binding,
+            resources: &resources,
+            health: &resources.health,
+        };
+        for tick in 1..=19 {
+            w.player_movement_tick([0.0, 0.0], false).unwrap();
+            assert!(w.player.fall_flying, "still gliding on tick {tick}");
+            assert_eq!(w.player.glider_wear, 0, "no wear by tick {tick}");
+        }
+        w.player_movement_tick([0.0, 0.0], false).unwrap();
+        assert_eq!(
+            w.player.glider_wear, 1,
+            "the 20th glide tick wears the glider"
+        );
+        assert_eq!(w.player.fall_fly_ticks, 20);
     }
     /// #9817: `LivingEntity.travelInAir`: a client (`level.isClientSide()`) whose
     /// chunk below is not loaded skips gravity and falls at 0.1 a tick

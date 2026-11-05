@@ -1908,12 +1908,12 @@ impl Game<'_> {
     /// `Container.stopOpen`'s no-op. Called by the close packet and by the
     /// `ServerPlayer.tick` reach/destroyed close.
     fn close_guest_vehicle_menu(&mut self, conn: u32, key: (i32, i32, i32)) {
-        if self.lan.is_none() {
+        let Some(host) = self.lan.as_ref() else {
             return;
-        }
-        self.store_cart_items(key);
+        };
         let other_viewers =
             Self::vehicle_has_other_viewers(self.container, &host.hub.guests, Some(conn), key);
+        self.store_cart_items(key);
         if !other_viewers {
             self.world.block_entities.remove(&key);
         }

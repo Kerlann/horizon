@@ -826,7 +826,12 @@ impl Game<'_> {
                 f64::from(p.1) + y_off,
                 f64::from(p.2) + 0.5,
             ];
-            return self.spawn_dragon_spawned(at);
+            return self.spawn_dragon_spawned(
+                at,
+                super::creatures::SpawnSite::Finalizing(
+                    horizon_client::mobs::spawn_rules::Reason::Dispenser,
+                ),
+            );
         }
         let t = self.res.mob_types().get(&name)?.clone();
         let y_off = if try_move_down {

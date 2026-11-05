@@ -8,6 +8,7 @@
 //! exit portal, the egg and the next gateway; and its rendering and boss bar.
 use super::{
     Dim, Game,
+    creatures::{Finalized, SpawnSite},
     potions::{Victim, mob_can_be_affected},
 };
 use horizon_client::{
@@ -4344,27 +4345,41 @@ impl Game<'_> {
     /// one is not the fight's (`EnderDragon.aiStep` adopts it only when its UUID is the fight's),
     /// so it can be spawned in any dimension. Horizon keeps one dragon per level, as `/summon`
     /// and loading do: with one already there, nothing spawns and the egg stays.
-    pub(super) fn spawn_dragon_spawned(&mut self, at: [f64; 3]) -> Option<u32> {
+    pub(super) fn spawn_dragon_spawned(&mut self, at: [f64; 3], site: SpawnSite) -> Option<u32> {
         if self.dragon.is_some() {
             return None;
         }
         let position = Vec3::new(at[0], at[1], at[2]);
         // EntityType.create: `snapTo(.., Mth.wrapDegrees(level.getRandom().nextFloat() * 360))`.
         let yaw = horizon_client::camera::wrap_degrees(self.world.random.next_float() * 360.0);
-        // Mob.finalizeSpawn (EnderDragon keeps it): the follow range's
-        // `random.triangle(0, 0.11485)`, then `setLeftHanded(nextFloat() < 0.05)`, from the
-        // level's random. Neither changes how the dragon flies.
-        let _ = self.world.random.triangle(0.0, 0.114_850_000_000_000_01);
-        let _ = self.world.random.next_float();
+        let finalized = match site {
+            SpawnSite::Finalizing(reason) => {
+                self.finalize_spawn_at("minecraft:ender_dragon", at, reason, None)
+                    .0
+            }
+            SpawnSite::Plain => Finalized::Done,
+        };
+        match finalized {
+            Finalized::Cancelled => return None,
+            Finalized::Skipped => {}
+            Finalized::Done => {
+                // Mob.finalizeSpawn (EnderDragon keeps it): the follow range's
+                // `random.triangle(0, 0.11485)`, then `setLeftHanded(nextFloat() < 0.05)`, from the
+                // level's random. Neither changes how the dragon flies.
+                let _ = self.world.random.triangle(0.0, 0.114_850_000_000_000_01);
+                let _ = self.world.random.next_float();
+            }
+        }
         // The dragon's own random (`Entity.random`), not the level's.
         let seed = super::dispenser::entity_random().next_long();
         let mut dragon = Dragon::new(position, yaw, seed);
+        dragon.join = horizon_client::join_seq::JoinSeq::next();
         dragon.id = self.next_entity + 1;
         self.next_entity += 9;
         let id = dragon.id;
         self.dragon = Some(dragon);
         self.place_dragon_parts();
-        Some(id)
+        self.native_joins_flush(false, id).then_some(id)
     }
 
     /// `handleAddEntity` for `minecraft:ender_dragon`. Its constructor
@@ -4746,6 +4761,158 @@ fn push_seen_with_hurt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "needs prepared resources and an isolated process for native mods"]
+    fn a_spawn_egg_dragon_joins_once_and_a_canceled_spawn_fails() {
+        use mod_api::{EntityJoinLevelEvent, Flow, Hooks, ModEntry, ServerHost};
+        use std::sync::{
+            Arc, Mutex,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        struct Observer {
+            joins: Arc<Mutex<Vec<(u32, bool)>>>,
+            cancel: Arc<AtomicBool>,
+        }
+        #[mod_api::__subscriptions]
+        impl Hooks for Observer {
+            fn entity_join_level(
+                &self,
+                _: &mut dyn ServerHost,
+                event: &mut EntityJoinLevelEvent<'_>,
+            ) -> Flow {
+                if event.kind != "minecraft:ender_dragon" {
+                    return Flow::Continue;
+                }
+                self.joins
+                    .lock()
+                    .unwrap()
+                    .push((event.entity, event.loaded_from_disk));
+                if self.cancel.load(Ordering::Relaxed) {
+                    Flow::Cancel
+                } else {
+                    Flow::Continue
+                }
+            }
+        }
+        let joins = Arc::new(Mutex::new(Vec::new()));
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mods: mod_api::Mods = vec![ModEntry::new(
+            "dragon-joins",
+            Box::new(Observer {
+                joins: joins.clone(),
+                cancel: cancel.clone(),
+            }),
+        )]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                game.dragon = None;
+                game.native_joins_skip();
+                let at = [4.5, 200.0, 4.5];
+                let id = game
+                    .spawn_mob_spawned(
+                        "minecraft:ender_dragon",
+                        at,
+                        super::super::creatures::SpawnSite::Finalizing(
+                            horizon_client::mobs::spawn_rules::Reason::SpawnItemUse,
+                        ),
+                    )
+                    .unwrap();
+                assert_eq!(game.dragon.as_ref().unwrap().id, id);
+                assert_eq!(*joins.lock().unwrap(), vec![(id, false)]);
+                game.native_joins_flush(false, 0);
+                assert_eq!(joins.lock().unwrap().len(), 1, "a join is told only once");
+                let dispenser =
+                    SpawnSite::Finalizing(horizon_client::mobs::spawn_rules::Reason::Dispenser);
+                assert!(game.spawn_dragon_spawned(at, dispenser).is_none());
+                assert_eq!(joins.lock().unwrap().len(), 1, "no second dragon joins");
+
+                game.dragon = None;
+                cancel.store(true, Ordering::Relaxed);
+                // The dispenser calls the shared constructor directly.
+                assert!(game.spawn_dragon_spawned(at, dispenser).is_none());
+                assert!(game.dragon.is_none(), "a refused dragon never stays loaded");
+                game.native_joins_flush(false, 0);
+                assert_eq!(*joins.lock().unwrap(), vec![(id, false), (id + 9, false)]);
+            });
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources and an isolated process for native mods"]
+    fn dragon_finalization_preserves_the_site_and_both_cancels() {
+        use horizon_client::mobs::spawn_rules::Reason;
+        use mod_api::{FinalizeSpawnEvent, Flow, Hooks, Host, ModEntry};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        #[derive(Clone, Copy, PartialEq)]
+        enum Answer {
+            Keep,
+            Skip,
+            Refuse,
+        }
+        struct Listener {
+            answer: Answer,
+            reason: Reason,
+            calls: Arc<AtomicUsize>,
+        }
+        #[mod_api::__subscriptions]
+        impl Hooks for Listener {
+            fn finalize_spawn(&self, _: &dyn Host, event: &mut FinalizeSpawnEvent<'_>) -> Flow {
+                assert_eq!(event.kind, "minecraft:ender_dragon");
+                assert_eq!(event.reason, self.reason);
+                assert!(event.spawner.is_none());
+                self.calls.fetch_add(1, Ordering::Relaxed);
+                match self.answer {
+                    Answer::Keep => Flow::Continue,
+                    Answer::Skip => Flow::Cancel,
+                    Answer::Refuse => {
+                        event.spawn_cancelled = true;
+                        Flow::Continue
+                    }
+                }
+            }
+        }
+        super::super::native_entity_refs::tests::with_game(|game| {
+            for reason in [Reason::SpawnItemUse, Reason::Dispenser] {
+                for answer in [Answer::Keep, Answer::Skip, Answer::Refuse] {
+                    game.dragon = None;
+                    game.world.random = LegacyRandom::new(42);
+                    let calls = Arc::new(AtomicUsize::new(0));
+                    let mods: mod_api::Mods = vec![ModEntry::new(
+                        "dragon-finalize",
+                        Box::new(Listener {
+                            answer,
+                            reason,
+                            calls: calls.clone(),
+                        }),
+                    )]
+                    .into();
+                    let result = mod_api::testing::with_mods(mods, || {
+                        game.spawn_dragon_spawned([4.5, 200.0, 4.5], SpawnSite::Finalizing(reason))
+                    });
+                    assert_eq!(calls.load(Ordering::Relaxed), 1);
+                    assert_eq!(result.is_none(), answer == Answer::Refuse);
+                    assert_eq!(game.dragon.is_none(), answer == Answer::Refuse);
+                    // snapTo always draws yaw; only completed Mob.finalizeSpawn
+                    // draws the follow-range triangle and handedness roll.
+                    let mut expected = LegacyRandom::new(42);
+                    expected.next_float();
+                    if answer == Answer::Keep {
+                        expected.triangle(0.0, 0.114_850_000_000_000_01);
+                        expected.next_float();
+                    }
+                    assert_eq!(game.world.random.next_long(), expected.next_long());
+                }
+            }
+        });
+    }
+
     #[test]
     fn a_dragon_save_keeps_equipment_only_while_something_is_equipped() {
         use horizon_client::items::ItemStack;
