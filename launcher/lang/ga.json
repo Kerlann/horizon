@@ -242,7 +242,6 @@
   "Downloading the prebuilt game at {revision} (once)": "Downloading the prebuilt game at {revision} (once)",
   "Downloading {source}…": "Ag íosluchtú {source}…",
   "Downloads": "Íoslódálacha",
-  "Downloads, sign-ins and updates go through this HTTP proxy (http://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Téann íoslódálacha, síniú isteach agus nuashonruithe tríd an seachfhreastalaí HTTP seo (http://host:port). Ní chiallaíonn folamh aon cheann: úsáidtear HTTPS_PROXY ina ionad sin nuair a cuireadh tús leis an tosaitheoir le ceann amháin.",
   "Duplicate…": "Déan dúblach…",
   "E_GAME_DEPENDENCY: {mod}: Cargo.toml depends on the game ({key}). Declare game internals through horizon-internals instead.": "E_GAME_DEPENDENCY: {mod}: Cargo.toml depends on the game ({key}). Declare game internals through horizon-internals instead.",
   "E_INTERNAL_AMBIGUOUS: {mod} uses {path}, which has multiple kinds; choose a kind from: {kinds}.": "E_INTERNAL_AMBIGUOUS: {mod} uses {path}, which has multiple kinds; choose a kind from: {kinds}.",
@@ -1145,5 +1144,10 @@
   "Made for Horizon {pin}, you play {yours}: choose matching mod versions or a matching Horizon version before building": "Made for Horizon {pin}, you play {yours}: choose matching mod versions or a matching Horizon version before building",
   "Star on GitHub": "Tabhair réalta ar GitHub",
   "Windows' Smart App Control is blocking the build (os error 4551). It only lets signed programs run, and a native build runs programs no one has signed: the ones it compiles on this computer and some of the compiler's own. To build native mods, turn it off in Windows Security > App & browser control > Smart App Control settings, then build again. On some Windows versions it can't be turned back on without reinstalling Windows. Content mods (.hmod) need no build and work with it on.": "Windows' Smart App Control is blocking the build (os error 4551). It only lets signed programs run, and a native build runs programs no one has signed: the ones it compiles on this computer and some of the compiler's own. To build native mods, turn it off in Windows Security > App & browser control > Smart App Control settings, then build again. On some Windows versions it can't be turned back on without reinstalling Windows. Content mods (.hmod) need no build and work with it on.",
-  "{count} stars on GitHub": "{count} réalta ar GitHub"
+  "{count} stars on GitHub": "{count} réalta ar GitHub",
+  "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Téann íoslódálacha, síniú isteach agus nuashonruithe tríd an seachfhreastalaí seo (http://host:port, socks5://host:port). Ní chiallaíonn folamh aon cheann: úsáidtear HTTPS_PROXY ina ionad sin nuair a cuireadh tús leis an tosaitheoir le ceann amháin.",
+  "Companion": "Compánach",
+  "Trail": "Rian",
+  "Aura": "Aura",
+  "Hide other players' trails and auras": "Folaigh rianta agus aurataí imreoirí eile"
 }
