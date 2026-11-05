@@ -157,10 +157,19 @@ fn save_kept(home: &Path, list: &[Kept]) -> Result<(), String> {
         let _ = fs::remove_file(&path);
         return Ok(());
     }
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let part = home.join(format!(".replaced.{}-{id}.part", std::process::id()));
     let text = serde_json::to_string_pretty(list).map_err(|e| e.to_string())?;
-    let part = home.join("mod-browser/.replaced.json.part");
-    fs::write(&part, text).map_err(|e| format!("{}: {e}", part.display()))?;
-    fs::rename(&part, &path).map_err(|e| format!("{}: {e}", path.display()))
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let res = fs::write(&part, text).and_then(|()| fs::rename(&part, &path));
+    if let Err(e) = res {
+        let _ = fs::remove_file(&part);
+        return Err(format!("{}: {e}", path.display()));
+    }
+    Ok(())
 }
 
 /// Whether the browser's list has `kept`'s project at a newer version whose file is in place.
@@ -201,6 +210,7 @@ fn restore(home: &Path, kept: &Kept) -> Result<(), String> {
 /// At start: each file an earlier launcher replaced is dropped when its update finished, put back
 /// when it didn't.
 pub fn recover(home: &Path) {
+    let _lock = crate::browser::lock_home(home);
     let me = std::process::id();
     let (mut mine, earlier): (Vec<Kept>, Vec<Kept>) =
         kept_list(home).into_iter().partition(|k| k.pid == me);
@@ -268,6 +278,7 @@ pub(super) fn run_with(
     ctx: &Context,
     progress: &dyn Fn(&str, f32),
 ) -> Report {
+    let _lock = crate::browser::lock_home(home);
     recover(home);
     let pending: BTreeSet<String> = kept_list(home)
         .into_iter()
@@ -307,6 +318,14 @@ fn update(
     home: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Option<String>, String> {
+    let _lock = crate::browser::lock_home(home);
+    let list = installed::Installed::load(home);
+    let Some(current) = list.find(entry.source, &entry.project) else {
+        return Ok(None);
+    };
+    if current.version != entry.version {
+        return Ok(None);
+    }
     let old: Option<PathBuf> = entry.path(home).filter(|p| p.is_file());
     let held = RefCell::new(None);
     // Content mods: nothing the worlds may hold goes missing.
