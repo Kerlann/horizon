@@ -1199,7 +1199,6 @@ impl Launcher {
                             .unwrap_or_default();
                         cmd.envs(self.client_vars.iter().map(|(k, v)| (k, v)));
                         let launch = instance.map(|i| i.launch).unwrap_or_default();
-                        horizon_launcher::launch::limit_memory(&mut cmd, &launch);
                         self.starting_client = Some(tag);
                         jar_launch::client(cmd, launch, run, self.tx.clone());
                     }

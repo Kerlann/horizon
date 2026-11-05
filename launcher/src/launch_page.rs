@@ -259,17 +259,9 @@ impl Launcher {
             (true, Ok(typed)) => typed.unwrap_or(instances::DEFAULT_MEMORY_MB),
             _ => memory,
         };
-        let unit = (memory.is_some() || self.servers.has_focus(Field::MemoryLimit))
-            .then(|| text(theme::LABEL).text_color(t.ink_soft).child("MB"));
-        let input = self.field(Field::MemoryLimit, tr("No limit"), 120., cx);
-        let about = match java {
-            Some(_) => {
-                "How much memory Java may use (-Xmx). Set it too low and the game can crash."
-            }
-            None => {
-                "The game stays under this. Very low values make it slower, and it crashes only if it can't run at all. Change it while playing with /ramlimit."
-            }
-        };
+        let unit = text(theme::LABEL).text_color(t.ink_soft).child("MB");
+        let input = self.field(Field::MemoryLimit, "4096", 120., cx);
+        let about = "How much memory Java may use (-Xmx). Set it too low and the game can crash.";
         let track = div()
             .id("launch-memory")
             .relative()

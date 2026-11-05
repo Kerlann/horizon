@@ -1495,7 +1495,6 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
             cmd.envs(accounts.look_env());
             let vars = instance.vars(cmd.get_program());
             cmd.envs(vars.iter().map(|(k, v)| (k, v)));
-            horizon_launcher::launch::limit_memory(&mut cmd, &instance.launch);
             horizon_launcher::jars::prepare_launch(
                 &mut cmd,
                 &instance.launch,
