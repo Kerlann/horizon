@@ -26,6 +26,7 @@ static RENDERERS: OnceLock<RenderInstalled> = OnceLock::new();
 struct RenderInstalled {
     renderers: Box<[&'static dyn RenderHooks]>,
     subscribers: Subscribers,
+    mod_indices: Box<[Option<usize>]>,
 }
 
 #[cfg(any(test, feature = "testing"))]
@@ -52,9 +53,21 @@ fn new_render_installed(renderers: Box<[&'static dyn RenderHooks]>) -> RenderIns
     });
     let subscribers =
         Subscribers::new(generated::RENDER_HOOK_COUNT, renderers.len(), subscriptions);
+    let mod_indices = renderers
+        .iter()
+        .map(|renderer| {
+            crate::mods().iter().position(|entry| {
+                entry
+                    .hooks
+                    .render()
+                    .is_some_and(|candidate| std::ptr::eq(candidate, *renderer))
+            })
+        })
+        .collect();
     RenderInstalled {
         renderers,
         subscribers,
+        mod_indices,
     }
 }
 
@@ -76,6 +89,7 @@ fn entered_render(
         installed
             .subscribers
             .indices(hook_id as usize)
+            .filter(move |&index| installed.mod_indices[index].is_none_or(crate::mod_index_on))
             .map(move |index| installed.renderers[index])
     })
 }

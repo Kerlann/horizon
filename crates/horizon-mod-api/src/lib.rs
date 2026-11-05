@@ -3386,9 +3386,8 @@ pub fn mod_ids() -> impl Iterator<Item = &'static str> {
     mods().iter().map(|entry| entry.id)
 }
 
-/// Switch an installed trait mod's subsequent hook dispatches on or off.
-#[doc(hidden)]
-pub fn set_mod_on(id: &str, on: bool) -> bool {
+/// Switch an installed trait mod's subsequent dispatches on or off.
+pub(crate) fn set_mod_on(id: &str, on: bool) -> bool {
     let Some(installed) = installed() else {
         return false;
     };
@@ -3412,6 +3411,15 @@ pub fn subscribed_by(index: usize, hook: Option<generated::HookId>) -> bool {
                 && !installed.disabled[index].load(std::sync::atomic::Ordering::Relaxed)
                 && installed.subscribers.contains(hook as usize, index)
         })
+    })
+}
+
+fn mod_index_on(index: usize) -> bool {
+    installed().is_none_or(|installed| {
+        installed
+            .disabled
+            .get(index)
+            .is_none_or(|disabled| !disabled.load(std::sync::atomic::Ordering::Relaxed))
     })
 }
 
@@ -3470,18 +3478,21 @@ fn entered_parts<'a, P: ?Sized>(
     hook: &'static str,
 ) -> impl Iterator<Item = &'a P> {
     let mut guard = None;
-    parts.iter().map(move |attached| {
-        // The last part's mark goes first, as in `Entered`.
-        drop(guard.take());
-        guard = Some(crate::crash::enter_native_mod(
-            crate::crash::NativeModCall {
-                id: attached.mod_id,
-                hook,
-                part: Some(attached.type_name),
-            },
-        ));
-        &*attached.part
-    })
+    parts
+        .iter()
+        .filter(|attached| mod_index_on(attached.mod_index))
+        .map(move |attached| {
+            // The last part's mark goes first, as in `Entered`.
+            drop(guard.take());
+            guard = Some(crate::crash::enter_native_mod(
+                crate::crash::NativeModCall {
+                    id: attached.mod_id,
+                    hook,
+                    part: Some(attached.type_name),
+                },
+            ));
+            &*attached.part
+        })
 }
 
 struct Entered<'a> {
