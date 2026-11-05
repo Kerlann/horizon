@@ -2654,7 +2654,12 @@ impl OptionsUi {
                     Text::literal(format!("{}: ", lang::get("horizon.mods.browse.enabled")))
                         .append(on_off(s.mods.is_on(i)));
                 let toggle = button(0.0, 0.0, 150.0, label, Act::ToggleMod(i));
-                rows.push(Row::Buttons(install, Some(toggle)));
+                let installed = &s.mods.installed[i];
+                let dead = installed.id.is_empty() || self.in_world && installed.native.is_none();
+                rows.push(Row::Buttons(
+                    install,
+                    Some(if dead { inactive(toggle) } else { toggle }),
+                ));
                 rows.push(Row::Buttons(page, None));
             }
             None => rows.push(Row::Buttons(install, Some(page))),
