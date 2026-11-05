@@ -20,6 +20,8 @@ use std::{
 pub(super) struct ModsState {
     /// `--dev-mod PATH`: content mods always on.
     pub(super) dev: Vec<PathBuf>,
+    /// The window's content-mod browser worker.
+    pub(super) jobs: Arc<Mutex<super::mod_browser::Jobs>>,
     pub(super) native: std::sync::Arc<horizon_mods::runtime::Runtime>,
     pub(super) selected: std::sync::Arc<[horizon_mods::selection::SelectedPackage]>,
     /// Structured load refusals, rendered only at the existing Mods-page boundary.
@@ -545,6 +547,7 @@ impl Game<'_> {
             .collect();
         // A mod with a native version built in says so instead.
         self.list_native_mods();
+        self.sync_native_switches();
         let built = self.mods.native.built();
         let built_mods = native_mods_detail(built);
         if let Some(list) = built_mods {
@@ -555,6 +558,14 @@ impl Game<'_> {
         let unbuilt = not_built(&native_dir, built, &self.settings.mods.installed);
         self.settings.mods.installed.extend(unbuilt);
         self.mods.report_refusals(&mut self.settings.mods.installed);
+    }
+
+    /// Apply the player's code-mod switches to the next hook dispatch.
+    pub(super) fn sync_native_switches(&self) {
+        for id in mod_api::__private::mod_ids() {
+            let on = !self.settings.mods.disabled.contains(*id);
+            mod_api::__private::set_mod_on(id, on);
+        }
     }
 }
 

@@ -19,7 +19,6 @@ fn ruby(version: &str) -> Vec<u8> {
     );
     horizon_mods::Package::write_files(
         &manifest,
-        None,
         &[(
             "assets/ruby/lang/en_us.json",
             br#"{"item.ruby.ruby": "Ruby"}"#,
@@ -53,7 +52,7 @@ fn registry(version: &str, bytes: &[u8], url: &str) -> Index {
         "id": "zoom", "kind": "native-mod", "name": "Zoom", "summary": "Zoom",
         "license": "MIT", "source": "https://github.com/someone/zoom", "downloads": 99,
         "versions": [{ "version": "1", "api": "0.2", "game": crate::mod_registry::GAME,
-            "file": file("zoom-1.hnmod", 1, "b".repeat(64)) }]
+            "file": file("zoom-1.hmod", 1, "b".repeat(64)) }]
     });
     let text = serde_json::json!({ "schema": 1, "projects": [ruby, old, native] }).to_string();
     Index::parse_local(&text).unwrap()
@@ -146,6 +145,39 @@ fn bytes_other_than_the_index_lists_never_reach_the_mods_folder() {
     });
     assert!(install(&index, &home, "ruby", &serve(bytes)).is_err());
     assert!(!home.join("horizon-mods/ruby.hmod").exists());
+    fs::remove_dir_all(&home).unwrap();
+}
+
+/// A registry row labelled as content cannot route wasm code through the content installer.
+#[test]
+fn a_code_package_never_reaches_the_content_mods_folder() {
+    let module = b"\0asm\x01\0\0\0";
+    let manifest = format!(
+        "id = 'ruby'\nname = 'Ruby'\nversion = '1.0'\napi = '0.2'\nside = 'both'\ncapabilities = ['registries']\n[wasm]\nsha512 = '{}'\ntoolchain = '1.99.1'\nbuilt_with = 'test'\n",
+        horizon_mods::manifest::sha512_of(module)
+    );
+    let bytes = horizon_mods::Package::write_files(&manifest, &[("mod.wasm", module)]).unwrap();
+    let index = registry("1.0", &bytes, "file:///ruby.hmod");
+    let home = scratch("code");
+    let error = install(&index, &home, "ruby", &serve(bytes.clone())).unwrap_err();
+    assert!(error.contains("code mods"), "{error}");
+    assert!(!home.join("horizon-mods/ruby.hmod").exists());
+    assert!(!home.join("mod-browser/downloads/ruby.hmod.part").exists());
+    assert!(!home.join(MANIFEST).exists());
+    // A previously installed code package cannot bypass that boundary at the same version.
+    fs::create_dir_all(home.join("horizon-mods")).unwrap();
+    fs::write(home.join("horizon-mods/ruby.hmod"), bytes).unwrap();
+    fs::write(
+        home.join(MANIFEST),
+        serde_json::json!({"entries": [{
+            "source": "horizon", "project": "ruby", "version": "1.0",
+            "file": "horizon-mods/ruby.hmod", "verdict": "Unsigned"
+        }]})
+        .to_string(),
+    )
+    .unwrap();
+    let error = install(&index, &home, "ruby", &|_, _| panic!("already installed")).unwrap_err();
+    assert!(error.contains("code mods"), "{error}");
     fs::remove_dir_all(&home).unwrap();
 }
 

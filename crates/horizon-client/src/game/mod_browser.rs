@@ -149,6 +149,8 @@ impl Game<'_> {
         let installed = self
             .mods
             .jobs
+            .lock()
+            .unwrap()
             .poll(&mut self.ui.options.mod_browser, &mut self.settings.mods);
         if installed {
             self.settings.save(&Self::options_path());

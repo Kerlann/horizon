@@ -54,6 +54,17 @@ impl Game<'_> {
             .map(|(i, m)| (m.id, i))
             .collect();
         let mut riding: HashMap<u32, u32> = HashMap::new();
+        // If the vehicle already has a first rider that is still validly riding it, preserve it.
+        for m in &self.mobs {
+            if let Some(r) = m.extra.rider
+                && let Some(&j) = index.get(&r)
+                && self.mobs[j].extra.mount == Some(m.id)
+                && self.mobs[j].alive()
+                && !self.mobs[j].removed
+            {
+                riding.insert(m.id, r);
+            }
+        }
         for i in 0..self.mobs.len() {
             let Some(v) = self.mobs[i].extra.mount else {
                 continue;
@@ -69,7 +80,7 @@ impl Game<'_> {
                         .get(&v)
                         .is_some_and(|&j| self.mobs[j].alive() && !self.mobs[j].removed));
             if valid {
-                riding.insert(v, self.mobs[i].id);
+                riding.entry(v).or_insert(self.mobs[i].id);
             } else {
                 let m = &mut self.mobs[i];
                 m.extra.mount = None;
@@ -129,16 +140,28 @@ impl Game<'_> {
                 if horizon_client::mobs::camel::is_camel(vehicle.species()) {
                     // Camel.getPassengerAttachmentPoint: the seat follows the
                     // rider's place in `getPassengers` (load order).
-                    let aboard: Vec<usize> = (0..self.mobs.len())
+                    let mut aboard: Vec<usize> = (0..self.mobs.len())
                         .filter(|&k| self.mobs[k].extra.mount == Some(v))
                         .collect();
-                    let seat = aboard.iter().position(|&k| k == i).unwrap_or(0);
+                    let player_aboard = vehicle.rider.is_some() || self.riding == Some(v);
+                    let (seat, count) = if player_aboard {
+                        let mob_seat = aboard.iter().position(|&k| k == i).unwrap_or(0);
+                        (mob_seat + 1, aboard.len() + 1)
+                    } else {
+                        if let Some(driver) = vehicle.extra.rider
+                            && let Some(pos) =
+                                aboard.iter().position(|&k| self.mobs[k].id == driver)
+                            && pos != 0
+                        {
+                            let driver_idx = aboard.remove(pos);
+                            aboard.insert(0, driver_idx);
+                        }
+                        let seat = aboard.iter().position(|&k| k == i).unwrap_or(0);
+                        (seat, aboard.len())
+                    };
                     let animal = horizon_client::mobs::drops::is_animal(self.mobs[i].species());
                     attach = horizon_client::mobs::camel::passenger_attachment_at(
-                        vehicle,
-                        seat,
-                        aboard.len(),
-                        animal,
+                        vehicle, seat, count, animal,
                     );
                 }
                 if vehicle.species() == horizon_client::mobs::Species::HappyGhast {
