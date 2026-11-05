@@ -14,10 +14,9 @@ pub mod images;
 pub mod installed;
 pub mod java;
 pub mod java_instance;
-pub mod lock;
 pub mod modrinth;
 
-pub use lock::{lock_home, try_lock_home, HomeLockGuard};
+pub use horizon_mods::install_lock::{lock_home, try_lock_home, HomeLockGuard};
 
 use serde::{Deserialize, Serialize};
 

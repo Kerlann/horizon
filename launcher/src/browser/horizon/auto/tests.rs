@@ -400,6 +400,78 @@ fn an_update_cut_short_is_rolled_back_at_the_next_start() {
 }
 
 #[test]
+fn an_unreadable_manifest_is_not_a_completed_removal() {
+    for (name, unreadable) in [("missing", None), ("invalid", Some(b"{".as_slice()))] {
+        let dir = scratch(&format!("auto-recover-manifest-{name}"));
+        let home = dir.join("home");
+        let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
+        let index = index_of(&[("1.0.0", GAME, &v1)]);
+        let p = index.project("ruby").unwrap();
+        let entry = install_version_guarded(
+            &index,
+            true,
+            p,
+            &p.versions[0],
+            &home,
+            &|_| Ok(()),
+            &|_, _| {},
+        )
+        .unwrap();
+        let mut kept = keep(&home, &entry).unwrap();
+        kept.pid = 0;
+        save_kept(&home, &[kept]).unwrap();
+        fs::write(entry.path(&home).unwrap(), b"half").unwrap();
+        let manifest = home.join(installed::MANIFEST);
+        match unreadable {
+            Some(bytes) => fs::write(manifest, bytes).unwrap(),
+            None => fs::remove_file(manifest).unwrap(),
+        }
+        recover(&home);
+        assert_eq!(
+            installed_ruby(&home),
+            ("1.0.0".into(), fs::read(&v1).unwrap())
+        );
+        assert!(kept_list(&home).is_empty());
+        fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[test]
+fn recovery_does_not_undo_a_manual_removal_after_an_update() {
+    let dir = scratch("auto-remove-before-recovery");
+    let home = dir.join("home");
+    let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
+    let v2 = ruby(&dir, "1.1.0", &["lamp", "brick"], &[]);
+    let index = index_of(&[("1.1.0", GAME, &v2), ("1.0.0", GAME, &v1)]);
+    let p = index.project("ruby").unwrap();
+    install_version_guarded(
+        &index,
+        true,
+        p,
+        &p.versions[1],
+        &home,
+        &|_| Ok(()),
+        &|_, _| {},
+    )
+    .unwrap();
+    let report = run_with(&index, true, &home, &PLAY, &|_, _| {});
+    assert_eq!(report.updated, ["Ruby 1.1.0"]);
+    let mut kept = kept_list(&home);
+    assert_eq!(kept.len(), 1);
+    let copy = home.join(&kept[0].copy);
+    kept[0].pid = 0;
+    save_kept(&home, &kept).unwrap();
+
+    let removed = installed::remove(&home, "ruby").unwrap();
+    recover(&home);
+    assert!(installed::Installed::load(&home).entries.is_empty());
+    assert!(!removed.path(&home).unwrap().exists());
+    assert!(!copy.exists());
+    assert!(kept_list(&home).is_empty());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn the_report_says_what_changed_and_nothing_otherwise() {
     assert!(Report::default().lines().is_empty());
     let r = Report {

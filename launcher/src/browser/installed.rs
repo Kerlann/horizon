@@ -98,14 +98,20 @@ fn readable_entries<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Entry>
 
 impl Installed {
     pub fn load(home: &Path) -> Self {
-        fs::read_to_string(home.join(MANIFEST))
-            .ok()
-            .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_default()
+        Self::read(home).unwrap_or_default()
     }
 
+    /// Reads the persisted list without treating an unreadable file as an empty list.
+    pub(super) fn read(home: &Path) -> Result<Self, String> {
+        let path = home.join(MANIFEST);
+        let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
+    }
+
+    /// Atomically publishes the list. Mutating callers must hold `lock_home`
+    /// from before `load` through this save, not just while writing the file.
     pub fn save(&self, home: &Path) -> Result<(), String> {
-        let _lock = super::lock_home(home);
+        let _lock = super::lock_home(home).map_err(|e| e.to_string())?;
         static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let path = home.join(MANIFEST);
@@ -216,7 +222,7 @@ pub fn install(
     home: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Vec<Entry>, String> {
-    let _lock = super::lock_home(home);
+    let _lock = super::lock_home(home).map_err(|e| e.to_string())?;
     if project.source == SourceId::Horizon {
         return super::horizon::install(project, home, progress);
     }
@@ -242,7 +248,7 @@ pub(super) fn put(
     folder: &dyn Fn(Kind) -> &'static str,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Vec<Entry>, String> {
-    let _lock = super::lock_home(home);
+    let _lock = super::lock_home(home).map_err(|e| e.to_string())?;
     let mut installed = Installed::load(home);
     let mut done = Vec::new();
     for step in steps {
@@ -312,7 +318,7 @@ pub(super) fn put(
 
 /// Removes what the browser installed for `name` (a project id or slug): its file and its entry.
 pub fn remove(home: &Path, name: &str) -> Result<Entry, String> {
-    let _lock = super::lock_home(home);
+    let _lock = super::lock_home(home).map_err(|e| e.to_string())?;
     let mut installed = Installed::load(home);
     let entry = installed
         .lookup(name)
