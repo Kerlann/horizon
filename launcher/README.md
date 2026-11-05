@@ -455,7 +455,7 @@ same name and arguments, generated from the CLI's definition (`src/cli_tools.rs`
 `install`, `remove`, `prepare`, `settings`, `mods_search`, `mods_install`, `modpack_import`,
 `servers_create`, `bug_report`... A call runs that command with `--json` and returns its
 output. Tools that delete something (`remove`, `mods_remove`, `modpack_remove`,
-`servers_forget`, `account_sign_out`, `data_delete`) need `confirm: true`. The session runs a few
+`servers_forget`, `account_sign_out`) need `confirm: true`. The session runs a few
 itself, under the CLI's names: `play`, `server` with `server_command`, `server_log` and
 `server_stop`, `account_list` and `account_sign_in` (returns the link and code for the player;
 the sign-in finishes in the background). A server started through MCP stops (cleanly, with

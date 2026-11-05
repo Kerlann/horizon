@@ -73,8 +73,8 @@ class Failed(Exception):
 
 
 def game_env(screen, home=None):
-    """The environment of a game: lab.game_env with HORIZON_HOME `home` (a scratch folder when None), no live-count
-    ping, and on Linux the virtual screen `screen` (macOS and Windows have none)."""
+    """The environment of a game: lab.game_env with HORIZON_HOME `home` (a scratch folder when None),
+    and on Linux the virtual screen `screen` (macOS and Windows have none)."""
     extra = {}
     if home is not None:
         extra['HORIZON_HOME'] = home

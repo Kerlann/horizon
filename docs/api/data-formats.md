@@ -7,7 +7,7 @@ and worlds. Each entry names its version field, its documentation and its level 
 
 | Format | Where | Version | Level | Documented in |
 | --- | --- | --- | --- | --- |
-| Benchmark report | the benchmark's output, the local log, uploads | `"format": "horizon-benchmark-report"`, `"version": 1` | stable | [benchmark-report.md](../benchmark-report.md) |
+| Benchmark report | the benchmark's output, the local log | `"format": "horizon-benchmark-report"`, `"version": 1` | stable | [benchmark-report.md](../benchmark-report.md) |
 | Content mod package | `.hmod`: a zip with `horizon-mod.toml`, `assets/`, `data/` and optional `icon.png` | the manifest's `api` | preview | [../modding/src/reference/manifest.md](../modding/src/reference/manifest.md), [mods.md](../modding/src/how-to/content-mods.md#the-manifest), [../modding/src/reference/registry-index.md](../modding/src/reference/registry-index.md) |
 | Native mod package | `.hmod` with native code: the same flat package plus root `Cargo.toml` and `src/`, with `[native]` in `horizon-mod.toml` | the manifest's `api` for content; exact `horizon` and `mixins` source pins for code | experimental | [../modding/src/reference/manifest.md](../modding/src/reference/manifest.md), [../modding/src/how-to/native-mods.md](../modding/src/how-to/native-mods.md) |
 | Mods turned on | `horizon-mods.txt` | none | preview | [mods.md](../modding/src/start/installing.md#playing-with-mods) |
