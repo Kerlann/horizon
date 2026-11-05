@@ -5,7 +5,7 @@
 //!
 //! - a game folder inside a modpack's profile: the pack pins its mods by SHA-256 and updates as a
 //!   whole, when the player asks;
-//! - a native mod, which is updated and rebuilt only when the player asks;
+//! - code mods, which update only when the player asks;
 //! - a data pack: it lives in a world, not in the browser's list;
 //! - a version for another Minecraft than the one installed, and anything older than what is installed.
 //!
@@ -279,7 +279,24 @@ fn update(
     // Content mods: nothing the worlds may hold goes missing.
     let guard = |new: &Path| -> Result<(), String> {
         let content = entry.file.ends_with(".hmod") && v.file.name.ends_with(".hmod");
-        let (Some(old), true) = (&old, content) else {
+        if !content {
+            return Ok(());
+        }
+        let new_package = horizon_mods::Package::read(new)?;
+        let old_wasm = old
+            .as_ref()
+            .map(horizon_mods::Package::read)
+            .transpose()?
+            .is_some_and(|package| package.manifest.wasm.is_some());
+        if old_wasm || new_package.manifest.wasm.is_some() {
+            let why = trf(
+                "{title} {version} waits for you: code mods update only when you choose to update them.",
+                &[("title", &p.name), ("version", &v.version)],
+            );
+            *held.borrow_mut() = Some(why.clone());
+            return Err(why);
+        }
+        let Some(old) = &old else {
             return Ok(());
         };
         let gone = dropped(old, new)?;
