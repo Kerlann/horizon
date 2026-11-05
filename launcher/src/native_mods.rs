@@ -3473,39 +3473,32 @@ mod tests {
     }
 
     #[test]
-    fn staged_cargo_uses_only_its_own_injections_including_cached_output() {
-        let d = dir("injection-env");
+    fn cached_mixin_output_isolated_from_next_build() {
+        let d = dir("injection-cache-stage");
         let fresh = d.join("fresh");
         let snapshot = d.join("snapshot");
         let stage = d.join("stage");
-        fs::create_dir_all(fresh.join("crates/horizon-client")).unwrap();
-        fs::write(
-            fresh.join("crates/horizon-client/Cargo.toml"),
-            "[package]\nname = 'horizon-client'\nversion = '0.1.0'\n[build-dependencies]\nhorizon-mod-api-gen = { path = '../horizon-mod-api-gen' }\n",
-        )
-        .unwrap();
-        let rust = Toolchain {
-            dir: d.join("rust"),
-            host: rust_toolchain::host().unwrap(),
-        };
-        let env = |dir: &Path| {
-            cargo(&rust, dir, "build")
-                .get_envs()
-                .find(|(key, _)| *key == inject::ENV)
-                .map(|(_, value)| value.map(std::ffi::OsStr::to_owned))
-        };
-        assert_eq!(env(&stage), Some(None));
-        inject::stage(&fresh, &[]).unwrap();
+        let patched = Path::new("crates/horizon-client/src/game.rs");
+        fs::create_dir_all(fresh.join(patched).parent().unwrap()).unwrap();
+        fs::write(fresh.join(patched), "patched by mixins").unwrap();
         sync(&fresh, &snapshot).unwrap();
         sync(&snapshot, &stage).unwrap();
-        assert_eq!(fs::read(stage.join(inject::INPUT)).unwrap(), b"[]");
         assert_eq!(
-            env(&stage),
-            Some(Some(stage.join(inject::INPUT).into_os_string()))
+            fs::read_to_string(stage.join(patched)).unwrap(),
+            "patched by mixins"
         );
-        fs::remove_file(fresh.join(inject::INPUT)).unwrap();
-        sync(&fresh, &stage).unwrap();
-        assert_eq!(env(&stage), Some(None));
+
+        // A later no-mixin build stages the clean source and removes stale cached files.
+        let source = d.join("source");
+        fs::create_dir_all(source.join(patched).parent().unwrap()).unwrap();
+        fs::write(source.join(patched), "clean source").unwrap();
+        fs::write(stage.join("stale.rs"), "stale").unwrap();
+        sync(&source, &stage).unwrap();
+        assert_eq!(
+            fs::read_to_string(stage.join(patched)).unwrap(),
+            "clean source"
+        );
+        assert!(!stage.join("stale.rs").exists());
         fs::remove_dir_all(d).unwrap();
     }
 

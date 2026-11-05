@@ -327,7 +327,7 @@ fn a_registry_data_pack_is_checked_then_goes_into_a_world() {
         .collect();
     assert_eq!(found, ["lanterns"]);
     // Not into the game folder: into a world.
-    assert!(install_from(&index, true, None, &p, &dir.join("home"), &|_, _| {}).is_err());
+    assert!(install_from(&index, true, &p, &dir.join("home"), &|_, _| {}).is_err());
     let (zip, number) = fetch_datapack_from(&index, true, &p, &dir.join("dl"), &|_| {}).unwrap();
     assert_eq!(number, "1.0.0");
     let world = dir.join("world");
