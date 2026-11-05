@@ -1,0 +1,1 @@
+{"status":"blocked","notes":"Not implemented; the Ask is not already built. The renderer currently reads back and writes the screenshot inside Renderer::render before returning to Game, so firing the requested client-thread hook at the specified post-readback, pre-save point requires restructuring that pipeline, including HDR handling. No PR was opened and no checks were run."}
