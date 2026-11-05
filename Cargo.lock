@@ -2083,6 +2083,7 @@ dependencies = [
  "horizon-release-sign",
  "horizon-server-files",
  "horizon-server-launch",
+ "horizon-world",
  "libc",
  "p12-keystore",
  "png",
