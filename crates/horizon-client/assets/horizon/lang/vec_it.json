@@ -458,5 +458,6 @@
   "horizon.pack.filter.realistic": "Reałistico",
   "horizon.pack.filter.simplistic": "Semplice",
   "horizon.pack.filter.vanillaLike": "Come vanilia",
-  "horizon.pack.addFailed": "El pacheto no se ga podesto zontar: %s"
+  "horizon.pack.addFailed": "El pacheto no se ga podesto zontar: %s",
+  "Shader Packs...": "Pachetti de Shader..."
 }

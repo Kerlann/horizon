@@ -464,5 +464,6 @@
   "horizon.pack.filter.realistic": "Реалистичен",
   "horizon.pack.filter.simplistic": "Опростено",
   "horizon.pack.filter.vanillaLike": "Подобно на ванилия",
-  "horizon.pack.addFailed": "Пакетът не можа да бъде добавен: %s"
+  "horizon.pack.addFailed": "Пакетът не можа да бъде добавен: %s",
+  "Shader Packs...": "Шейдър пакети..."
 }

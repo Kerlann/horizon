@@ -458,5 +458,6 @@
   "horizon.pack.filter.realistic": "ຈິງ",
   "horizon.pack.filter.simplistic": "ງ່າຍດາຍ",
   "horizon.pack.filter.vanillaLike": "ຄ້າຍຄື vanilla",
-  "horizon.pack.addFailed": "ບໍ່ສາມາດເພີ່ມຊຸດໄດ້: %s"
+  "horizon.pack.addFailed": "ບໍ່ສາມາດເພີ່ມຊຸດໄດ້: %s",
+  "Shader Packs...": "ຊອງ Shader..."
 }

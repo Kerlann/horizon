@@ -456,5 +456,6 @@
   "horizon.pack.filter.realistic": "Ρεαλιστική",
   "horizon.pack.filter.simplistic": "Απλουστευτική",
   "horizon.pack.filter.vanillaLike": "Σαν βανίλια",
-  "horizon.pack.addFailed": "Δεν ήταν δυνατή η προσθήκη του πακέτου: %s"
+  "horizon.pack.addFailed": "Δεν ήταν δυνατή η προσθήκη του πακέτου: %s",
+  "Shader Packs...": "Πακέτα Shader..."
 }

@@ -457,5 +457,6 @@
   "horizon.pack.filter.realistic": "Realista",
   "horizon.pack.filter.simplistic": "Simplista",
   "horizon.pack.filter.vanillaLike": "semblant a la vainilla",
-  "horizon.pack.addFailed": "No s'ha pogut afegir el paquet: %s"
+  "horizon.pack.addFailed": "No s'ha pogut afegir el paquet: %s",
+  "Shader Packs...": "Paquets d'ombres..."
 }

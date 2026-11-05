@@ -1129,5 +1129,12 @@
   "{title} wasn't updated: {error}": "{title} wasn't updated: {error}",
   "{title} {version} waits for you: it no longer has {ids}, which your worlds may use. Update it on the Mods page when you're ready.": "{title} {version} waits for you: it no longer has {ids}, which your worlds may use. Update it on the Mods page when you're ready.",
   "At start and before you play, content installed from Horizon's registry moves to its newest version for this game. Never inside a modpack. Code mods and updates that would remove blocks or items wait for you.": "At start and before you play, content installed from Horizon's registry moves to its newest version for this game. Never inside a modpack. Code mods and updates that would remove blocks or items wait for you.",
-  "{title} {version} waits for you: code mods update only when you choose to update them.": "{title} {version} waits for you: code mods update only when you choose to update them."
+  "{title} {version} waits for you: code mods update only when you choose to update them.": "{title} {version} waits for you: code mods update only when you choose to update them.",
+  "{count} stars on GitHub": "{count} izar GitHub-en",
+  "Star on GitHub": "Eman izar bat GitHub-en",
+  "Builds on the Horizon you play": "Builds on the Horizon you play",
+  "Needs native hook points v{needs}, the Horizon you play has v{has}: update Horizon first": "Needs native hook points v{needs}, the Horizon you play has v{has}: update Horizon first",
+  "Made for Horizon {pin}, but {mods} pin another commit: the build will ask you to Build anyway and may not compile": "Made for Horizon {pin}, but {mods} pin another commit: the build will ask you to Build anyway and may not compile",
+  "Made for Horizon {pin}, you play {yours}: the launcher builds your game on {pin}": "Made for Horizon {pin}, you play {yours}: the launcher builds your game on {pin}",
+  "Tags": "Etiketak"
 }
