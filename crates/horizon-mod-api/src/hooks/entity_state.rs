@@ -1,8 +1,12 @@
 //! The `entity_state` hooks and helpers: declarations the mod API generator reads (see `hooks/mod.rs`).
 
 pub trait Helpers {
+    /// Whether the player is using secondary use (sneak), not whether its pose is crouching.
+    /// On the client, the local player's live semantic sneak state is read; obtain its entity
+    /// from `host.local_player()` or `host.entity(id)`. On the server this reads the
+    /// entity's shift-key flag, including a persistent fake's action setup.
     #[helper(
-        side = "server",
+        side = "both",
         receiver = "entity",
         target = "horizon_client::game::native_entity_state::Game<'_>::native_entity_is_shift_key_down"
     )]

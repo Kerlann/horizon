@@ -2384,49 +2384,8 @@ impl Game<'_> {
                 let _ = self.guest_attack(conn, gi, p.id);
             }
             S::Interact(p) => {
-                // handleInteract: a target inside the world border, within the entity
-                // interaction range plus 3 of its box, or nothing happens.
-                if let Some(target) = self.guest_target_box(gi, p.id)
-                    && (!self.inside_border(&target)
-                        || self.as_guest(conn, |g| g.within_entity_interaction_range(&target, 3.0))
-                            != Some(true))
-                {
-                    return;
-                }
-                // LeashFenceKnotEntity.interact: a knot has no entity here, only its fence.
-                if let Some(knot) = self.knot_at_id(p.id) {
-                    let hand = if p.hand == 1 { Hand::Off } else { Hand::Main };
-                    let swung = self.as_guest(conn, |g| {
-                        let swings = g.swings_started;
-                        g.with_hand(hand, |g| g.use_knot(knot, true));
-                        g.swings_started != swings
-                    });
-                    self.lan_swing_back(conn, swung);
-                    return;
-                }
-                let Some(host) = self.lan.as_ref() else {
-                    return;
-                };
-                let before = host.hub.guests[gi].vehicle;
-                if self.look_at_entity(gi, p.id, Some(p.location)).is_some() {
-                    // handleInteract: the entity and that hand only; a click the
-                    // entity passes comes back as UseItem. The entity is the
-                    // packet's own id, which the range check above passed.
-                    let hand = if p.hand == 1 { Hand::Off } else { Hand::Main };
-                    let target = InteractTarget {
-                        id: p.id,
-                        location: p.location,
-                    };
-                    let swung = self.as_guest(conn, |g| {
-                        g.guest_use = Some(GuestUse::Entity(hand, target));
-                        let swings = g.swings_started;
-                        let _ = g.use_item();
-                        g.guest_use = None;
-                        g.swings_started != swings
-                    });
-                    self.lan_swing_back(conn, swung);
-                    self.guest_boarded(conn, before);
-                }
+                let hand = if p.hand == 1 { Hand::Off } else { Hand::Main };
+                let _ = self.guest_interact(conn, gi, p.id, hand, p.location);
             }
             S::MoveVehicle(p) => self.guest_move_vehicle(conn, &p),
             S::PaddleBoat(p) => self.guest_paddle_boat(conn, [p.left, p.right]),
@@ -3575,6 +3534,66 @@ impl Game<'_> {
         self.lan_swing_back(conn, swung);
         self.guest_instrument_sound(conn, heard, horn);
         Ok(consumed)
+    }
+
+    /// `handleInteract`'s entity use for a guest or the persistent fake: the border and
+    /// interaction range, then that entity and hand only, never an air-use fallback.
+    pub(super) fn guest_interact(
+        &mut self,
+        conn: u32,
+        gi: usize,
+        id: i32,
+        hand: Hand,
+        location: [f64; 3],
+    ) -> Result<bool, ActionRefused> {
+        if let Some(target) = self.guest_target_box(gi, id) {
+            if !self.inside_border(&target) {
+                return Err(ActionRefused::Protected);
+            }
+            if self.as_guest_at(gi, conn, |g| {
+                g.within_entity_interaction_range(&target, 3.0)
+            }) != Ok(true)
+            {
+                return Err(ActionRefused::OutOfReach);
+            }
+        } else {
+            return Err(ActionRefused::InvalidTarget);
+        }
+        // LeashFenceKnotEntity.interact: a knot has no entity here, only its fence.
+        if let Some(knot) = self.knot_at_id(id) {
+            let used = self
+                .as_guest_at(gi, conn, |g| {
+                    let swings = g.swings_started;
+                    let consumed = g.with_hand(hand, |g| g.use_knot(knot, true));
+                    (g.swings_started != swings, consumed)
+                })
+                .ok();
+            self.lan_swing_back(conn, used.map(|u| u.0));
+            return Ok(used.is_some_and(|u| u.1));
+        }
+        let host = self.lan.as_ref().ok_or(ActionRefused::Stale)?;
+        let before = host.hub.guests[gi].vehicle;
+        // Packet interactions aim the server's ray at the clicked entity. A fake already
+        // supplies its own viewpoint; its explicit target must not change that rotation.
+        if !host.hub.guests[gi].is_fake() && self.look_at_entity(gi, id, Some(location)).is_none() {
+            return Ok(false);
+        }
+        let target = InteractTarget { id, location };
+        let used = self
+            .as_guest_at(gi, conn, |g| {
+                let saved = g.guest_use;
+                let failed = std::mem::replace(&mut g.use_failed, false);
+                g.guest_use = Some(GuestUse::Entity(hand, target));
+                let swings = g.swings_started;
+                let consumed = matches!(g.use_item(), Ok(Some(_))) && !g.use_failed;
+                g.guest_use = saved;
+                g.use_failed = failed;
+                (g.swings_started != swings, consumed)
+            })
+            .ok();
+        self.lan_swing_back(conn, used.map(|u| u.0));
+        self.guest_boarded(conn, before);
+        Ok(used.is_some_and(|u| u.1))
     }
 
     /// `ServerGamePacketListenerImpl.handleInteract`'s ATTACK for guest `conn` (at `gi`) hitting

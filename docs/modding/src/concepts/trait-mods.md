@@ -587,6 +587,9 @@ that player's packet would run it:
   `useOn`, which is how a block item is placed;
 - `PlayerAction::UseItem { hand }` is a use in the air (`ServerPlayerGameMode.useItem`), by the item's own ray from
   the player's eyes and look: a bucket clicked on a block passes, as vanilla's does, and empties when used.
+- `PlayerAction::InteractOn { hand, target, location }` interacts with that entity (`Player.interactOn`),
+  after the border and interaction-range checks, with the hit relative to its origin. A passed click does not
+  fall back to using the item in the air. The fake keeps its own supplied look, rather than aiming a new ray;
 - `PlayerAction::Attack { target }` is a hit with the main hand (`handleInteract`'s ATTACK, then `Player.attack`):
   the border and the attack range, the native mods' `attack_entity`, then the blow on a player, a mob or another
   entity, or a fireball, wind charge or shulker bullet turned back. The blow is scaled by the attack strength, as a
@@ -605,10 +608,30 @@ read what is left after. The answer says what happened:
 | `Ok(ActionOutcome::Consumed)` | Vanilla's `InteractionResult` consumed (a success or a consume), the blow landed, or the block broke |
 | `Ok(ActionOutcome::Passed)` | Nothing used the click, a mod or the game stopped the blow, or the block stayed |
 | `Ok(ActionOutcome::EffectBlocked(effect))` | The click ran, but what it would start was stopped: a menu or screen, sleeping, riding, or going to another dimension (`FakeEffect`). The click's own side effects have still happened then: the swing seen by others, the hooks that run before the use, vanilla's `Success` |
-| `Err(ActionRefused::…)` | Nothing ran: `NotFake` (a real player's handle), `Stale`, `Busy` (another player's turn, an open transaction, or a hook inside another `perform_action`), `OutOfReach`, `Protected`, or `InvalidTarget` (an attack on the fake itself or an entity not in its level) |
+| `Err(ActionRefused::…)` | Nothing ran: `NotFake` (a real player's handle), `Stale`, `Busy` (another player's turn, an open transaction, or a hook inside another `perform_action`), `OutOfReach`, `Protected`, `InvalidSetup` (non-finite scoped viewpoint or entity hit), or `InvalidTarget` (an interaction or attack on the fake itself or an entity not in its level) |
 
-What a machine does beyond a player's action stays in the mod: a deployer's reach and eye height, its own mining
-progress, catching its drops.
+For a machine using an isolated stack, `player.perform_action_scoped(host, action, setup)` composes that same
+persistent player's action with temporary state. Build `PlayerActionSetup::new(stack, eye, yaw, pitch,
+secondary_use)`: the fake acts in survival with a fresh standing body (eye height 1.62), that stack in its main
+hand, and no other inventory or equipment. Its supplied rotation is used for item rays. Secondary use holds
+semantic sneak without changing that standing eye height. No second player is created.
+
+The `ScopedActionResult` contains `outcome` (the same `ActionOutcome`), `held` (the nonempty main-hand remainder)
+and `other` (other nonempty inventory stacks, then offhand, carried stack and armor). These stacks are returned
+to the caller, not kept by the fake. The fake's persistent body, inventory, game mode, look, secondary-use state
+and action timers are restored even on refusal; world changes and the usual interaction/Parts hooks remain.
+The ordinary fake safety rules still apply: no screens, sleep, rides, dimension travel, online participation,
+statistics, advancement credit or network connection. Neither action method can run inside another player turn
+or an open transaction; the action's own ordinary write paths still run transactionally.
+
+On either side, `player.entity().is_shift_key_down(host)` reads semantic secondary use rather than a physical
+key mapping or a crouching pose. On the client obtain the reachable local handle with `host.local_player()`
+(or `host.entity(id)`); it reads live secondary use even before the next movement tick updates the body's
+shift flag. On the server the existing entity flag is read, including a scoped fake's setup. Stale handles and
+clients without a joined local player return `None`.
+
+What a machine does beyond a player's action stays in the mod: its own mining progress and catching world drops.
+Scoped actions retain player reach, protection and border checks; eye placement is supplied by the mod.
 
 ### Testing a trait mod
 

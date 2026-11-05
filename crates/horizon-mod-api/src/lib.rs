@@ -3561,6 +3561,16 @@ pub enum PlayerAction {
         /// The hand whose item is used.
         hand: Hand,
     },
+    /// Interact with `target` using one hand (`Player.interactOn`), without falling back to
+    /// using the item in the air when the entity passes the click.
+    InteractOn {
+        /// The hand whose item is used.
+        hand: Hand,
+        /// The entity clicked, in the fake's level.
+        target: EntityRef,
+        /// The hit relative to the entity's origin, as in an entity interaction packet.
+        location: [f64; 3],
+    },
     /// Attack `target` with the main hand (`ServerGamePacketListenerImpl.handleInteract`'s
     /// ATTACK, then `Player.attack`): a player, a mob or another entity, or a fireball, a wind
     /// charge or a shulker bullet turned back. Mobs don't take the fake as the player to answer.
@@ -3576,6 +3586,59 @@ pub enum PlayerAction {
         /// The block broken.
         pos: [i32; 3],
     },
+}
+
+/// Temporary state for [`PlayerRef::perform_action_scoped`]. The existing fake acts in
+/// survival with a fresh standing body, holding only `stack` in its main hand; its persistent
+/// body, items, look, secondary-use state and action timers are restored afterwards.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct PlayerActionSetup {
+    /// The main-hand stack. A zero-count stack means an empty hand.
+    pub stack: ItemStack,
+    /// Eye position in world coordinates, using the standing eye height (1.62).
+    pub eye: [f64; 3],
+    /// Vanilla yaw in degrees.
+    pub yaw: f32,
+    /// Vanilla pitch in degrees.
+    pub pitch: f32,
+    /// Secondary use, as when holding sneak; this does not change the standing eye height.
+    pub secondary_use: bool,
+}
+impl PlayerActionSetup {
+    /// A scoped survival setup with the supplied main-hand stack and viewpoint.
+    pub fn new(stack: ItemStack, eye: [f64; 3], yaw: f32, pitch: f32, secondary_use: bool) -> Self {
+        Self {
+            stack,
+            eye,
+            yaw,
+            pitch,
+            secondary_use,
+        }
+    }
+}
+
+/// A scoped action's result. The returned stacks belong to the caller, not to the fake's
+/// restored inventory. World changes and normal action hooks have already run.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct ScopedActionResult {
+    /// What the existing player action path did, including a stopped fake-player effect.
+    pub outcome: ActionOutcome,
+    /// The remaining main-hand stack, if nonempty.
+    pub held: Option<ItemStack>,
+    /// Other nonempty inventory stacks, then offhand, carried stack and armor, in that order.
+    pub other: Vec<ItemStack>,
+}
+impl ScopedActionResult {
+    /// The outcome and inventory returned by a scoped action.
+    pub fn new(outcome: ActionOutcome, held: Option<ItemStack>, other: Vec<ItemStack>) -> Self {
+        Self {
+            outcome,
+            held,
+            other,
+        }
+    }
 }
 
 /// Why a fake player's `perform_action` did nothing at all: it was refused before any of the
@@ -3596,7 +3659,9 @@ pub enum ActionRefused {
     /// The block or entity is above or below the world, under spawn protection or outside the
     /// world border (`ServerLevel.mayInteract`): nothing is done there.
     Protected,
-    /// The attack's target isn't an entity in the fake's level, or is the fake itself
+    /// The scoped setup's eye position, rotation or entity hit is not finite.
+    InvalidSetup,
+    /// The action's target isn't an entity in the fake's level, or is the fake itself
     /// (`handleInteract`'s "Attempting to attack an invalid entity").
     InvalidTarget,
 }
@@ -3621,7 +3686,7 @@ pub enum ActionOutcome {
     /// Vanilla's `InteractionResult` consumed (a success or a consume), and no effect was
     /// blocked.
     Consumed,
-    /// Vanilla's result passed: nothing used the click.
+    /// Nothing consumed the click: vanilla passed or failed, or a mod stopped the action.
     Passed,
     /// The click ran (the swing, the hooks before the use, vanilla's `Success`), but the effect
     /// it would start was stopped, as a fake can't take part in it.

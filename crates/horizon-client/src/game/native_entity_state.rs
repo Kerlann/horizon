@@ -3,7 +3,8 @@
 //! sprinting, water and lava, fire and air, silence, invisibility and pose.
 //! Players and mobs have them all; the other kinds have the ones Horizon
 //! keeps for them (an armor stand's fire and invisibility, an item's fire),
-//! and `None` for the rest, as for a stale handle or on a client.
+//! and `None` for the rest, as for a stale handle. Secondary use also reads
+//! the local client's live semantic sneak state; the other flags are server-only.
 use super::{Game, commands::Target};
 use horizon_client::mobs::{Mob, Species, sync};
 use horizon_client::motion::PlayerMotion;
@@ -70,9 +71,16 @@ impl Game<'_> {
             t => Body::Other(t),
         })
     }
-    /// Whether the player holds the sneak key (`Entity.isShiftKeyDown`);
-    /// false for the other kinds.
+    /// `isSecondaryUseActive`: the local client's live semantic sneak state (not the
+    /// physical key binding or last tick's crouching pose); the server's shift-key flag.
+    /// False for non-player entities, None for a stale or unreachable handle.
     pub(super) fn native_entity_is_shift_key_down(&self, entity: EntityRef) -> Option<bool> {
+        if !self.is_logical_server() {
+            return Some(match self.native_client_entity_target(entity)? {
+                Target::Player => self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft),
+                _ => false,
+            });
+        }
         Some(match self.native_entity_body(entity)? {
             Body::Player(p) => p.shift_key_down,
             _ => false,
@@ -482,6 +490,56 @@ mod tests {
         with_player(|game, player| {
             assert!(player.set_ticks_frozen(game, 53));
             assert_eq!(game.player.as_ref().unwrap().ticks_frozen, 53);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn secondary_use_reads_reachable_client_handles_and_keeps_server_flags() {
+        use super::super::execution_role::ExecutionRole;
+        use horizon_core::geometry::Vec3;
+        use horizon_protocol::connection::Pipe;
+        use mod_api::{ClientHost, Host};
+        use winit::keyboard::KeyCode;
+        super::super::native_entity_refs::tests::with_game(|game| {
+            game.options.execution_role = ExecutionRole::Client;
+            game.options.dedicated = None;
+            let (client, _server) = Pipe::pair();
+            game.connect_local(client, "SneakReadTest").unwrap();
+            // The joined client's state; the local-player and entity constructors must both
+            // resolve it, not just a hand-built entity id accepted by an unreachable stub.
+            let remote = game.remote.as_mut().unwrap();
+            remote.logged_in = true;
+            remote.entity_id = 7;
+            remote.profile = 42;
+            game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
+            let local = game.local_player().unwrap();
+            let entity = game.entity(7).unwrap();
+            assert_eq!(local.entity(), entity);
+            game.keys.insert(KeyCode::ShiftLeft);
+            assert!(!game.player.as_ref().unwrap().shift_key_down);
+            assert_eq!(entity.is_shift_key_down(game), Some(true));
+            game.keys.clear();
+            game.player.as_mut().unwrap().shift_key_down = true;
+            assert_eq!(
+                entity.is_shift_key_down(game),
+                Some(false),
+                "live secondary use, not last tick's body flag"
+            );
+            let stale = EntityRef::new(mod_api::NativeWorldEpoch::new(0), 7);
+            assert_eq!(stale.is_shift_key_down(game), None);
+            game.remote.as_mut().unwrap().logged_in = false;
+            assert!(game.local_player().is_none());
+            assert_eq!(entity.is_shift_key_down(game), None);
+        });
+        with_player(|game, player| {
+            game.keys.clear();
+            game.player.as_mut().unwrap().shift_key_down = true;
+            assert_eq!(
+                player.is_shift_key_down(game),
+                Some(true),
+                "server keeps its semantic entity flag"
+            );
         });
     }
 

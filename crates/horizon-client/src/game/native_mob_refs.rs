@@ -34,6 +34,9 @@ impl Game<'_> {
         match target {
             Target::Guest(conn) => {
                 let g = self.command_guest(conn)?;
+                if g.is_fake() {
+                    return None;
+                }
                 Some(PlayerFacts {
                     mode: g.game_mode,
                     alive: !g.dead && g.health > 0.0,
@@ -42,6 +45,9 @@ impl Game<'_> {
                 })
             }
             Target::Player => {
+                if self.lan_acting_fake {
+                    return None;
+                }
                 let player = self.player.as_ref()?;
                 Some(PlayerFacts {
                     mode: self.mode_id(),
