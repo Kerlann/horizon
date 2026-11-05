@@ -135,10 +135,20 @@ struct Kept {
 }
 
 fn kept_list(home: &Path) -> Vec<Kept> {
-    fs::read_to_string(home.join(KEPT))
+    let list: Vec<Kept> = fs::read_to_string(home.join(KEPT))
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    list.into_iter()
+        .filter(|kept| {
+            Path::new(&kept.copy)
+                .strip_prefix(KEPT_DIR)
+                .ok()
+                .and_then(Path::to_str)
+                .and_then(crate::browser::safe_name)
+                .is_some()
+        })
+        .collect()
 }
 
 fn save_kept(home: &Path, list: &[Kept]) -> Result<(), String> {
@@ -209,8 +219,10 @@ fn keep(home: &Path, entry: &installed::Entry) -> Result<Kept, String> {
     let from = entry
         .path(home)
         .ok_or_else(|| format!("{} is outside the game folder", entry.file))?;
-    let name = from.file_name().unwrap_or_default().to_string_lossy();
-    let copy = format!("{KEPT_DIR}/{}-{name}", entry.version);
+    if !index::valid_id(&entry.project) {
+        return Err(format!("invalid registry project id {:?}", entry.project));
+    }
+    let copy = format!("{KEPT_DIR}/{}", entry.project);
     let to = home.join(&copy);
     fs::create_dir_all(home.join(KEPT_DIR)).map_err(|e| e.to_string())?;
     fs::copy(&from, &to).map_err(|e| format!("{}: {e}", from.display()))?;

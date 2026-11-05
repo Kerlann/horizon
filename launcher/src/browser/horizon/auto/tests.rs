@@ -287,6 +287,45 @@ fn wasm_update_waits_for_the_player() {
 }
 
 #[test]
+fn backup_paths_stay_in_the_backup_folder() {
+    let dir = scratch("auto-backup-path");
+    let home = dir.join("home");
+    let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
+    let index = index_of(&[("1.0.0", GAME, &v1)]);
+    let p = index.project("ruby").unwrap();
+    install_version_guarded(
+        &index,
+        true,
+        p,
+        &p.versions[0],
+        &home,
+        &|_| Ok(()),
+        &|_, _| {},
+    )
+    .unwrap();
+    let mut entry = installed::Installed::load(&home).entries.remove(0);
+    entry.version = "../../outside".into();
+    let kept = keep(&home, &entry).unwrap();
+    assert_eq!(kept.copy, "mod-browser/replaced/ruby");
+    assert!(home.join(&kept.copy).is_file());
+
+    let outside = home.join("outside");
+    fs::write(&outside, b"untouched").unwrap();
+    save_kept(
+        &home,
+        &[Kept {
+            copy: "mod-browser/replaced/../../outside".into(),
+            pid: 0,
+            ..kept
+        }],
+    )
+    .unwrap();
+    recover(&home);
+    assert_eq!(fs::read(outside).unwrap(), b"untouched");
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn an_update_cut_short_is_rolled_back_at_the_next_start() {
     let dir = scratch("auto-rollback");
     let home = dir.join("home");
