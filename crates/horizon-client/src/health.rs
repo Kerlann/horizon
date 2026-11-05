@@ -301,6 +301,10 @@ impl DamageLevel<'_> {
             || info.equip_slot.is_none()
             || !info.equip_damage_on_hurt
             || !crate::stations::is_damageable(items, stack)
+            || stack.data().is_some_and(|data| {
+                data.other("!minecraft:damage").is_some()
+                    || data.other("!minecraft:max_damage").is_some()
+            })
         {
             return None;
         }
