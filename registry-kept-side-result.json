@@ -1,0 +1,10 @@
+{
+  "ready": true,
+  "audit": "/box/shared/upstream-sync/batch-2266c4de14/registry-kept-side-audit.md",
+  "summary": "Independent assigned-area source audit complete at exact writer head 6c52252edb000bc277801a96762280b9cd7937d2. Both registry files match fork baseline c07bc50982 byte-for-byte; the only incoming registry delta was the intentionally removed Nightly broken_on metadata. Read both assigned files and associated test sources completely, inspected original-parent branches and current consumers, and confirmed pinned package, signing, immutable-kind, numeric ownership and image-review policies remain intact. No additional in-area fix was required. Diff checks passed. Source-ready applies only to the assigned paths; cross-area defects remain. No builds, tests or runtime proof claimed.",
+  "unread": [],
+  "defects": [
+    "Unresolved cross-area launcher compile defect, independently confirmed: launcher/src/browser/horizon/auto/tests.rs:42 initializes removed index::Version.broken_on. Launcher owner must adapt the fixture without restoring compatibility metadata.",
+    "Additional unresolved cross-area game integration defect: crates/horizon-client/src/mod_registry.rs:115 calls Index::installable with an obsolete third argument and references nonexistent horizon_mods::api_level::LEVEL; the current signature at crates/horizon-mods/src/index.rs:367 accepts only project and game. The enclosing consumer also retains forbidden needs_port at lines 99–106 and its filter at line 116. Game owner must adapt it to the current package model without compatibility aliases."
+  ]
+}
