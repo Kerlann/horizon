@@ -2577,6 +2577,31 @@ impl OptionsUi {
         }
         rows
     }
+    fn can_toggle_mod(&self, s: &Settings, i: usize) -> bool {
+        s.mods.installed.get(i).is_some_and(|installed| {
+            !installed.dev
+                && !installed.id.is_empty()
+                && (!self.in_world || installed.native.is_some())
+        })
+    }
+
+    /// The same switch policy on installed-mod and registry-project pages.
+    fn mod_toggle(&self, s: &Settings, i: usize, width: f32, mut label: Text) -> Widget {
+        let installed = &s.mods.installed[i];
+        // Content mods feed the block-state tables the open world's chunks
+        // were decoded with. Native mods can still toggle live via `native_on`.
+        let frozen = self.in_world && installed.native.is_none();
+        if frozen {
+            label = label.append(tr("horizon.mods.in_world"));
+        }
+        let toggle = button(0.0, 0.0, width, label, Act::ToggleMod(i));
+        if !self.can_toggle_mod(s, i) {
+            inactive(toggle)
+        } else {
+            toggle
+        }
+    }
+
     /// A registry project's page: what it is, Install or Update, its switch
     /// once installed, its description and changelog.
     fn mod_project_rows(&self, s: &Settings) -> Vec<Row> {
@@ -2649,7 +2674,7 @@ impl OptionsUi {
                 let label =
                     Text::literal(format!("{}: ", lang::get("horizon.mods.browse.enabled")))
                         .append(on_off(s.mods.is_on(i)));
-                let toggle = button(0.0, 0.0, 150.0, label, Act::ToggleMod(i));
+                let toggle = self.mod_toggle(s, i, 150.0, label);
                 rows.push(Row::Buttons(install, Some(toggle)));
                 rows.push(Row::Buttons(page, None));
             }
@@ -3073,23 +3098,13 @@ impl OptionsUi {
                     } else if installed.dev {
                         label = label.append(tr("horizon.mods.dev"));
                     }
-                    // A content mod's set feeds the block-state tables the
-                    // open world's chunks were decoded with: changing it
-                    // mid-world remaps their ids (Forge/Fabric freeze the
-                    // registry before a world opens). A native mod toggles
-                    // live through `native_on`, so it stays available.
-                    let content = installed.native.is_none();
-                    if self.in_world && content {
-                        label = label.append(tr("horizon.mods.in_world"));
-                    }
-                    let dead = installed.dev || installed.id.is_empty() || self.in_world && content;
                     // Only native mods with actual settings need a second button.
                     if installed
                         .native
                         .as_ref()
                         .is_some_and(|page| !page.keys.is_empty() || !page.buttons.is_empty())
                     {
-                        let toggle = button(0.0, 0.0, 150.0, label, Act::ToggleMod(i));
+                        let toggle = self.mod_toggle(s, i, 150.0, label);
                         let settings = button(
                             0.0,
                             0.0,
@@ -3097,10 +3112,9 @@ impl OptionsUi {
                             tr("horizon.mods.settings"),
                             Act::ModSettings(i),
                         );
-                        Row::Buttons(if dead { inactive(toggle) } else { toggle }, Some(settings))
+                        Row::Buttons(toggle, Some(settings))
                     } else {
-                        let widget = button(0.0, 0.0, 310.0, label, Act::ToggleMod(i));
-                        Row::Buttons(if dead { inactive(widget) } else { widget }, None)
+                        Row::Buttons(self.mod_toggle(s, i, 310.0, label), None)
                     }
                 }));
                 rows
@@ -4496,8 +4510,10 @@ impl OptionsUi {
                             events.push(Event::Changed);
                         }
                         Act::ToggleMod(i) => {
-                            s.mods.toggle(i);
-                            events.push(Event::Changed);
+                            if self.can_toggle_mod(s, i) {
+                                s.mods.toggle(i);
+                                events.push(Event::Changed);
+                            }
                         }
                         Act::ModSettings(i) => {
                             events.push(Event::ButtonClick);
@@ -5474,8 +5490,10 @@ impl OptionsUi {
                             events.push(Event::Changed);
                         }
                         Act::ToggleMod(i) => {
-                            s.mods.toggle(i);
-                            events.push(Event::Changed);
+                            if self.can_toggle_mod(s, i) {
+                                s.mods.toggle(i);
+                                events.push(Event::Changed);
+                            }
                         }
                         Act::ModSettings(i) => {
                             self.focus = None;
@@ -7833,6 +7851,74 @@ mod tests {
         assert_eq!(toggles(&mut ui, &s), [(0, true), (1, true)]);
         ui.open_at(true, Page::Mods);
         assert_eq!(toggles(&mut ui, &s), [(0, false), (1, true)]);
+    }
+
+    #[test]
+    fn registry_project_content_toggle_freezes_in_world_for_mouse_and_keyboard() {
+        let atlas = atlas();
+        let size = (480.0, 320.0);
+        let mut s = Settings::default();
+        s.mods.installed.push(crate::mod_list::Installed {
+            id: "ruby".into(),
+            title: "Ruby".into(),
+            description: String::new(),
+            problem: None,
+            dev: false,
+            native: None,
+        });
+        let mut ui = OptionsUi::default();
+        ui.mod_browser.listings.push(crate::mod_browser::Listing {
+            id: "ruby".into(),
+            name: "Ruby".into(),
+            version: "1.0".into(),
+            installed: Some("1.0".into()),
+            ..Default::default()
+        });
+        ui.mod_project = "ruby".into();
+        for in_world in [true, false] {
+            ui.open_at(in_world, Page::ModProject);
+            let (widgets, ..) = ui.layout(&s, size.0, size.1);
+            let toggle = widgets
+                .iter()
+                .find(|w| {
+                    matches!(
+                        w.kind,
+                        WKind::Button {
+                            act: Act::ToggleMod(0),
+                            ..
+                        }
+                    )
+                })
+                .expect("the installed registry project has a switch");
+            let WKind::Button { active, label, .. } = &toggle.kind else {
+                unreachable!()
+            };
+            assert_eq!(*active, !in_world);
+            if in_world {
+                assert!(label.plain().ends_with(&lang::get("horizon.mods.in_world")));
+            }
+            let was_on = s.mods.is_on(0);
+            let events = ui.click(
+                &mut s,
+                &atlas,
+                toggle.x + 1.0,
+                toggle.y + 1.0,
+                size,
+                [480, 320],
+                false,
+                false,
+            );
+            assert_eq!(events.contains(&Event::Changed), !in_world);
+            assert_eq!(s.mods.is_on(0), if in_world { was_on } else { !was_on });
+
+            // Even stale keyboard focus cannot activate the frozen switch.
+            ui.focus = Some(FocusId::Act(Act::ToggleMod(0)));
+            ui.focus_from_keyboard = true;
+            let was_on = s.mods.is_on(0);
+            let events = ui.key(&mut s, &atlas, winit::keyboard::KeyCode::Enter, None);
+            assert_eq!(events.contains(&Event::Changed), !in_world);
+            assert_eq!(s.mods.is_on(0), if in_world { was_on } else { !was_on });
+        }
     }
 
     /// An Extras or PvP & HUD label wider than half a row takes the whole row, so every label
