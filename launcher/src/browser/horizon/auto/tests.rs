@@ -21,7 +21,7 @@ fn ruby(dir: &Path, version: &str, blocks: &[&str], items: &[&str]) -> PathBuf {
         .collect();
     let files: Vec<(&str, &[u8])> = names.iter().map(|(n, b)| (n.as_str(), *b)).collect();
     let manifest = format!("{MANIFEST}version = \"{version}\"\n");
-    let bytes = horizon_mods::Package::write_files(&manifest, None, &files).unwrap();
+    let bytes = horizon_mods::Package::write_files(&manifest, &files).unwrap();
     let path = dir.join(format!("ruby-{version}.hmod"));
     fs::write(&path, bytes).unwrap();
     path
