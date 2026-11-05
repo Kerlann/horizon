@@ -176,6 +176,36 @@ fn scoped_mods_dispatch_and_restore_after_panic() {
 }
 
 #[test]
+fn native_switch_skips_and_resumes_subscribed_hooks() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct HostDouble;
+    impl Host for HostDouble {}
+    impl ClientHost for HostDouble {}
+    struct Counter(Arc<AtomicUsize>);
+    #[mod_api::__subscriptions]
+    impl Hooks for Counter {
+        fn client_tick_pre(&self, _: &mut dyn ClientHost, _: &mut ClientTickPreEvent) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let count = Arc::new(AtomicUsize::new(0));
+    testing::with_mods(
+        vec![ModEntry::new("counter", Box::new(Counter(count.clone())))].into(),
+        || {
+            assert_eq!(mod_ids().collect::<Vec<_>>(), ["counter"]);
+            dispatch_client_tick_pre(&mut HostDouble);
+            assert!(set_mod_on("counter", false));
+            dispatch_client_tick_pre(&mut HostDouble);
+            assert!(set_mod_on("counter", true));
+            dispatch_client_tick_pre(&mut HostDouble);
+            assert!(!set_mod_on("missing", false));
+        },
+    );
+    assert_eq!(count.load(Ordering::Relaxed), 2);
+}
+
+#[test]
 fn movement_input_writes_back_all_fields() {
     struct TestHost;
     impl Host for TestHost {}
