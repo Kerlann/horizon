@@ -6,7 +6,6 @@
 //! departed entities, a few times per tick, so a hook that removes one never
 //! shifts the lists the game is walking. A vehicle with a chest spills it, as vanilla's `remove` does.
 use super::{Game, commands::Target};
-use horizon_core::position::BlockPos;
 use mod_api::{EntityRef, NativeRemovalReason};
 
 impl Game<'_> {
@@ -94,12 +93,7 @@ impl Game<'_> {
             return;
         }
         let items = std::mem::take(items);
-        let at = BlockPos {
-            x: at.x.floor() as i32,
-            y: at.y.floor() as i32,
-            z: at.z.floor() as i32,
-        };
-        self.with_level(|_, level, _| level.drop_lost_contents(at, items));
+        self.with_level(|_, level, _| level.drop_vehicle_contents([at.x, at.y, at.z], items));
         self.flush_spill();
     }
     /// Takes out the entities mods removed since the last sweep.

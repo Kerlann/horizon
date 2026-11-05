@@ -775,8 +775,20 @@ impl GameLevel<'_> {
     }
     /// `Containers.dropItemStack` of one slot (an empty one still draws its spot).
     fn drop_item_stack(&mut self, pos: BlockPos, stack: Option<ItemStack>) {
+        self.drop_item_stack_at(
+            [f64::from(pos.x), f64::from(pos.y), f64::from(pos.z)],
+            stack,
+        );
+    }
+    /// Spill a vehicle's inventory at its exact position.
+    pub(super) fn drop_vehicle_contents(&mut self, pos: [f64; 3], items: Vec<Option<ItemStack>>) {
+        for stack in items {
+            self.drop_item_stack_at(pos, stack);
+        }
+    }
+    fn drop_item_stack_at(&mut self, pos: [f64; 3], stack: Option<ItemStack>) {
         let count = stack.as_ref().map_or(0, |s| s.count);
-        for piece in removal::drop_item_stack(&mut self.world.random, pos, count) {
+        for piece in removal::drop_item_stack_at(&mut self.world.random, pos, count) {
             let Some(stack) = &stack else { break };
             self.spill.spawns.push(Spawn {
                 stack: ItemStack {

@@ -76,13 +76,26 @@ pub struct Spilled {
 /// with triangular motions, all from the level random. An empty stack still
 /// draws the spot.
 pub fn drop_item_stack<R: RandomSource>(random: &mut R, pos: BlockPos, count: u32) -> Vec<Spilled> {
+    drop_item_stack_at(
+        random,
+        [f64::from(pos.x), f64::from(pos.y), f64::from(pos.z)],
+        count,
+    )
+}
+
+/// `Containers.dropItemStack` at an exact entity position.
+pub fn drop_item_stack_at<R: RandomSource>(
+    random: &mut R,
+    pos: [f64; 3],
+    count: u32,
+) -> Vec<Spilled> {
     // EntityTypes.ITEM is 0.25 wide.
     let size = f64::from(0.25f32);
     let center_range = 1.0 - size;
     let half = size / 2.0;
-    let x = f64::from(pos.x) + random.next_double() * center_range + half;
-    let y = f64::from(pos.y) + random.next_double() * center_range;
-    let z = f64::from(pos.z) + random.next_double() * center_range + half;
+    let x = pos[0] + random.next_double() * center_range + half;
+    let y = pos[1] + random.next_double() * center_range;
+    let z = pos[2] + random.next_double() * center_range + half;
     let mut left = count;
     let mut out = Vec::new();
     while left > 0 {
@@ -160,4 +173,22 @@ pub fn orb_value(value: u32) -> u32 {
         .into_iter()
         .find(|&v| value >= v)
         .unwrap_or(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use horizon_core::random::LegacyRandom;
+
+    #[test]
+    fn vehicle_spill_uses_fractional_position() {
+        let mut random = LegacyRandom::new(42);
+        let drops = drop_item_stack_at(&mut random, [-1.1, 70.9, 2.9], 1);
+        assert_eq!(drops.len(), 1);
+        let [x, y, z] = drops[0].pos;
+        assert!((-0.975..-0.225).contains(&x));
+        assert!((70.9..71.65).contains(&y));
+        assert!((3.025..3.775).contains(&z));
+        assert_eq!(drops[0].count, 1);
+    }
 }
