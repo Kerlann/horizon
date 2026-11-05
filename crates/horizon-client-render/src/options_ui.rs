@@ -2650,6 +2650,11 @@ impl OptionsUi {
                     Text::literal(format!("{}: ", lang::get("horizon.mods.browse.enabled")))
                         .append(on_off(s.mods.is_on(i)));
                 let toggle = button(0.0, 0.0, 150.0, label, Act::ToggleMod(i));
+                let toggle = if self.in_world && s.mods.installed[i].native.is_none() {
+                    inactive(toggle)
+                } else {
+                    toggle
+                };
                 rows.push(Row::Buttons(install, Some(toggle)));
                 rows.push(Row::Buttons(page, None));
             }
@@ -7833,6 +7838,17 @@ mod tests {
         assert_eq!(toggles(&mut ui, &s), [(0, true), (1, true)]);
         ui.open_at(true, Page::Mods);
         assert_eq!(toggles(&mut ui, &s), [(0, false), (1, true)]);
+
+        ui.mod_browser.listings = vec![crate::mod_browser::Listing {
+            id: "content".into(),
+            installed: Some("1.0".into()),
+            ..Default::default()
+        }];
+        ui.mod_project = "content".into();
+        ui.open_at(false, Page::ModProject);
+        assert_eq!(toggles(&mut ui, &s), [(0, true)]);
+        ui.open_at(true, Page::ModProject);
+        assert_eq!(toggles(&mut ui, &s), [(0, false)]);
     }
 
     /// An Extras or PvP & HUD label wider than half a row takes the whole row, so every label
