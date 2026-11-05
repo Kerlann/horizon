@@ -708,6 +708,7 @@ impl Launcher {
         this.load_profile_heads();
         this.load_auth_statuses(true);
         this.fetch_startup_releases();
+        this.mods_auto_update();
         this.fetch_links();
         if home::getting_ready_preview() {
             this.preparing = true;
@@ -1774,8 +1775,22 @@ impl Launcher {
         self.play_pressed = Some(Instant::now());
         let tx = self.tx.clone();
         let offline_without_owner = self.settings.dev_offline;
+        let auto = self
+            .selected_instance()
+            .filter(|_| self.starting_pack.is_none())
+            .map(|i| mods_page::AutoTarget {
+                instance: i.clone(),
+            });
+        let mods_tx = self.mods.tx.clone();
+        let auto_enabled = self.settings.auto_updates_mods();
         std::thread::spawn(move || {
             backend::complete_assets(&tag);
+            if let Some(auto) = auto {
+                let lines = mods_page::auto_update(&[auto], auto_enabled);
+                if !lines.is_empty() {
+                    let _ = mods_tx.send(mods_page::Event::AutoUpdated(lines));
+                }
+            }
             let session = account::session_for_game(&backend::game_home(), offline_without_owner);
             let _ = tx.send(Msg::Session(session));
         });
@@ -2537,6 +2552,25 @@ fn slot_row(
                 })),
         )
         .children(right)
+}
+
+/// Microsoft account actions go below the profile in the fixed-width glass card.
+fn account_row(
+    slot: Option<Div>,
+    name: impl IntoElement,
+    detail: Option<AnyElement>,
+    actions: Div,
+    t: &Theme,
+) -> Div {
+    if glass_ui::flat() {
+        return div()
+            .flex()
+            .flex_col()
+            .min_w_0()
+            .child(slot_row(slot, name, detail, None, t))
+            .child(actions.flex_wrap().px(px(16.)).pb(px(12.)));
+    }
+    slot_row(slot, name, detail, Some(actions.into_any_element()), t)
 }
 
 /// A plate that stands apart from the page: notices, the console, the agents note.
@@ -4282,7 +4316,7 @@ impl Launcher {
                 }))
             });
             n += 1;
-            rows = rows.child(slot_row(
+            rows = rows.child(account_row(
                 Some(self.profile_heads.draw(Some(&a.uuid), 32., self.scale, &t)),
                 a.name.clone(),
                 Some(
@@ -4300,7 +4334,7 @@ impl Launcher {
                         })
                         .into_any_element(),
                 ),
-                Some(actions.into_any_element()),
+                actions,
                 &t,
             ));
         }

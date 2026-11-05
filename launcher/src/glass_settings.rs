@@ -217,7 +217,7 @@ impl Launcher {
             Some(
                 div()
                     .child(tr(
-                        "At start and before you play, what you installed from Horizon's registry moves to its newest version for this game. Never inside a modpack, and an update that would remove blocks or items waits for you.",
+                        "At start and before you play, content installed from Horizon's registry moves to its newest version for this game. Never inside a modpack. Code mods and updates that would remove blocks or items wait for you.",
                     ))
                     .into_any_element(),
             ),

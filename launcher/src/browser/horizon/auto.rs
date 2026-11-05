@@ -5,19 +5,16 @@
 //!
 //! - a game folder inside a modpack's profile: the pack pins its mods by SHA-256 and updates as a
 //!   whole, when the player asks;
-//! - a native mod (`.hnmod`) when the instance's build is pinned to a Nightly, or before Play
-//!   (only the start's run updates them: the launcher rebuilds the game with them before it
-//!   plays, [`Report::rebuild`]);
+//! - code mods, which update only when the player asks;
 //! - a data pack: it lives in a world, not in the browser's list;
-//! - a version for another Minecraft than the one installed, a newer version that needs a newer
-//!   Horizon, and anything older than what is installed.
+//! - a version for another Minecraft than the one installed, and anything older than what is installed.
 //!
 //! A content mod (`.hmod`) whose new version drops a block, item, entity, effect, menu or
 //! creative tab the installed one has waits for the player (its blocks would vanish from their
 //! worlds): the notice says which. The file an update replaces is kept in
 //! `mod-browser/replaced/` until the next start: an update cut short (a crash between moving the
 //! file and saving the list) is rolled back from it then.
-use super::{install_version_guarded, needs_port, Index};
+use super::{install_version_guarded, Index};
 use crate::browser::{installed, Kind, SourceId, GAME};
 use crate::i18n::trf;
 use horizon_mods::index;
@@ -39,12 +36,9 @@ pub enum Decision<'a> {
     Skip,
 }
 
-/// The game folder's place: inside a modpack's profile, the mod API level of the game, and
-/// whether its native mods may update (no Nightly pin, and a build can follow).
+/// Whether the game folder belongs to a modpack.
 pub struct Context {
     pub in_pack: bool,
-    pub level: u32,
-    pub natives: bool,
 }
 
 /// What an automatic update did: `Title version` updated, what waits for the player and why,
@@ -54,8 +48,6 @@ pub struct Report {
     pub updated: Vec<String>,
     pub held: Vec<String>,
     pub failed: Vec<String>,
-    /// A native mod was updated: the game is built again before it plays.
-    pub rebuild: bool,
 }
 
 impl Report {
@@ -81,8 +73,7 @@ pub fn in_pack(home: &Path) -> bool {
 
 /// Whether `entry` updates automatically, and to what.
 pub fn decide<'a>(index: &'a Index, entry: &installed::Entry, ctx: &Context) -> Decision<'a> {
-    let native = crate::native_status::is_native_file(&entry.file);
-    let skip_native = native && !ctx.natives;
+    let skip_native = crate::native_status::is_native_file(&entry.file);
     if entry.source != SourceId::Horizon
         || ctx.in_pack
         || skip_native
@@ -93,7 +84,7 @@ pub fn decide<'a>(index: &'a Index, entry: &installed::Entry, ctx: &Context) -> 
     let Some(p) = index.project(&entry.project) else {
         return Decision::Skip;
     };
-    let Some(target) = index.installable(p, GAME, ctx.level) else {
+    let Some(target) = index.installable(p, GAME) else {
         return Decision::Skip;
     };
     // Versions are newest first: only forward, from a version the index still lists.
@@ -103,7 +94,7 @@ pub fn decide<'a>(index: &'a Index, entry: &installed::Entry, ctx: &Context) -> 
     };
     let same_game = p.versions[now].game == target.game;
     let native_next = p.kind == index::Kind::NativeMod;
-    if next >= now || !same_game || needs_port(target) || (native_next && !ctx.natives) {
+    if next >= now || !same_game || native_next {
         return Decision::Skip;
     }
     Decision::Update(target)
@@ -144,10 +135,20 @@ struct Kept {
 }
 
 fn kept_list(home: &Path) -> Vec<Kept> {
-    fs::read_to_string(home.join(KEPT))
+    let list: Vec<Kept> = fs::read_to_string(home.join(KEPT))
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    list.into_iter()
+        .filter(|kept| {
+            Path::new(&kept.copy)
+                .strip_prefix(KEPT_DIR)
+                .ok()
+                .and_then(Path::to_str)
+                .and_then(crate::browser::safe_name)
+                .is_some()
+        })
+        .collect()
 }
 
 fn save_kept(home: &Path, list: &[Kept]) -> Result<(), String> {
@@ -157,7 +158,9 @@ fn save_kept(home: &Path, list: &[Kept]) -> Result<(), String> {
         return Ok(());
     }
     let text = serde_json::to_string_pretty(list).map_err(|e| e.to_string())?;
-    fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))
+    let part = home.join("mod-browser/.replaced.json.part");
+    fs::write(&part, text).map_err(|e| format!("{}: {e}", part.display()))?;
+    fs::rename(&part, &path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// Whether the browser's list has `kept`'s project at a newer version whose file is in place.
@@ -199,12 +202,13 @@ fn restore(home: &Path, kept: &Kept) -> Result<(), String> {
 /// when it didn't.
 pub fn recover(home: &Path) {
     let me = std::process::id();
-    let (mine, earlier): (Vec<Kept>, Vec<Kept>) =
+    let (mut mine, earlier): (Vec<Kept>, Vec<Kept>) =
         kept_list(home).into_iter().partition(|k| k.pid == me);
-    for k in &earlier {
-        if !finished(home, k) {
-            if let Err(e) = restore(home, k) {
+    for k in earlier {
+        if !finished(home, &k) {
+            if let Err(e) = restore(home, &k) {
                 eprintln!("Couldn't put {} back: {e}", k.entry.title);
+                mine.push(k);
                 continue;
             }
         }
@@ -218,8 +222,10 @@ fn keep(home: &Path, entry: &installed::Entry) -> Result<Kept, String> {
     let from = entry
         .path(home)
         .ok_or_else(|| format!("{} is outside the game folder", entry.file))?;
-    let name = from.file_name().unwrap_or_default().to_string_lossy();
-    let copy = format!("{KEPT_DIR}/{}-{name}", entry.version);
+    if !index::valid_id(&entry.project) {
+        return Err(format!("invalid registry project id {:?}", entry.project));
+    }
+    let copy = format!("{KEPT_DIR}/{}", entry.project);
     let to = home.join(&copy);
     fs::create_dir_all(home.join(KEPT_DIR)).map_err(|e| e.to_string())?;
     fs::copy(&from, &to).map_err(|e| format!("{}: {e}", from.display()))?;
@@ -236,11 +242,21 @@ fn keep(home: &Path, entry: &installed::Entry) -> Result<Kept, String> {
 }
 
 /// Updates every installed registry project of game folder `home` that [`decide`] says, by the
-/// index (fetched at most every ten minutes); None when it can't be read.
-pub fn run(home: &Path, ctx: &Context, progress: &dyn Fn(&str, f32)) -> Option<Report> {
+/// index (fetched at most every ten minutes); None when updates are disabled or it can't be read.
+/// An interrupted update is recovered first, even when updates are disabled or offline.
+pub fn run(
+    home: &Path,
+    ctx: &Context,
+    enabled: bool,
+    progress: &dyn Fn(&str, f32),
+) -> Option<Report> {
     // The start's run and Play's never touch a folder at once.
     static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
+    recover(home);
+    if !enabled {
+        return None;
+    }
     let index = super::index().ok()?;
     Some(run_with(&index, super::local(), home, ctx, progress))
 }
@@ -253,15 +269,22 @@ pub(super) fn run_with(
     progress: &dyn Fn(&str, f32),
 ) -> Report {
     recover(home);
+    let pending: BTreeSet<String> = kept_list(home)
+        .into_iter()
+        .filter(|kept| kept.pid != std::process::id())
+        .map(|kept| kept.entry.project)
+        .collect();
     let mut report = Report::default();
     for entry in installed::Installed::load(home).entries {
+        if pending.contains(&entry.project) {
+            continue;
+        }
         let Decision::Update(v) = decide(index, &entry, ctx) else {
             continue;
         };
         let p = index.project(&entry.project).expect("decide found it");
         match update(index, local, p, v, &entry, home, progress) {
             Ok(None) => {
-                report.rebuild |= p.kind == index::Kind::NativeMod;
                 report.updated.push(format!("{} {}", p.name, v.version));
             }
             Ok(Some(why)) => report.held.push(why),
@@ -289,7 +312,24 @@ fn update(
     // Content mods: nothing the worlds may hold goes missing.
     let guard = |new: &Path| -> Result<(), String> {
         let content = entry.file.ends_with(".hmod") && v.file.name.ends_with(".hmod");
-        let (Some(old), true) = (&old, content) else {
+        if !content {
+            return Ok(());
+        }
+        let new_package = horizon_mods::Package::read(new)?;
+        let old_wasm = old
+            .as_ref()
+            .map(horizon_mods::Package::read)
+            .transpose()?
+            .is_some_and(|package| package.manifest.wasm.is_some());
+        if old_wasm || new_package.manifest.wasm.is_some() {
+            let why = trf(
+                "{title} {version} waits for you: code mods update only when you choose to update them.",
+                &[("title", &p.name), ("version", &v.version)],
+            );
+            *held.borrow_mut() = Some(why.clone());
+            return Err(why);
+        }
+        let Some(old) = &old else {
             return Ok(());
         };
         let gone = dropped(old, new)?;
@@ -315,9 +355,19 @@ fn update(
         Ok(_) => Ok(None),
         Err(e) => {
             if let Some(kept) = &kept {
-                // Nothing moved when the check refused it; else the old file goes back now.
+                // Leave the backup and journal intact if restoring it fails.
                 if !finished(home, kept) {
-                    let _ = restore(home, kept);
+                    if let Err(restore_error) = restore(home, kept) {
+                        let mut list = kept_list(home);
+                        if let Some(record) = list
+                            .iter_mut()
+                            .find(|k| k.entry.project == kept.entry.project)
+                        {
+                            record.pid = 0;
+                        }
+                        let _ = save_kept(home, &list);
+                        return Err(format!("{e}; restore failed: {restore_error}"));
+                    }
                 }
                 let _ = fs::remove_file(home.join(&kept.copy));
                 let mut list = kept_list(home);

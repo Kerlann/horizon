@@ -21,7 +21,7 @@ fn ruby(dir: &Path, version: &str, blocks: &[&str], items: &[&str]) -> PathBuf {
         .collect();
     let files: Vec<(&str, &[u8])> = names.iter().map(|(n, b)| (n.as_str(), *b)).collect();
     let manifest = format!("{MANIFEST}version = \"{version}\"\n");
-    let bytes = horizon_mods::Package::write_files(&manifest, None, &files).unwrap();
+    let bytes = horizon_mods::Package::write_files(&manifest, &files).unwrap();
     let path = dir.join(format!("ruby-{version}.hmod"));
     fs::write(&path, bytes).unwrap();
     path
@@ -38,7 +38,6 @@ fn index_of(versions: &[(&str, &str, &Path)]) -> Index {
             api: "0.2".into(),
             side: Some(horizon_mods::Side::Both),
             capabilities: vec![horizon_mods::Capability::Registries],
-            api_level: None,
             game: (*game).into(),
             requires: Vec::new(),
             file: index::File {
@@ -61,11 +60,7 @@ fn index_of(versions: &[(&str, &str, &Path)]) -> Index {
     index
 }
 
-const PLAY: Context = Context {
-    in_pack: false,
-    level: 100,
-    natives: true,
-};
+const PLAY: Context = Context { in_pack: false };
 
 /// The browser's entry for `ruby` at `version`.
 fn entry(version: &str) -> installed::Entry {
@@ -121,27 +116,13 @@ fn updates_forward_on_the_same_game_only() {
     };
     assert_eq!(to(&entry("1.0.0"), &in_pack), None, "a modpack's profile");
     let native = installed::Entry {
-        file: "horizon-native-mods/ruby.hnmod".into(),
+        file: "horizon-native-mods/ruby.hmod".into(),
         ..entry("1.0.0")
-    };
-    let pinned = Context {
-        natives: false,
-        ..PLAY
     };
     assert_eq!(
         to(&native, &PLAY),
-        Some("1.2.0".into()),
-        "then built again before Play"
-    );
-    assert_eq!(
-        to(&native, &pinned),
         None,
-        "pinned to a Nightly, or before Play"
-    );
-    assert_eq!(
-        to(&entry("1.0.0"), &pinned),
-        Some("1.2.0".into()),
-        "content mods still do"
+        "native mods require an explicit update"
     );
     let data = installed::Entry {
         kind: Kind::DataPack,
@@ -154,15 +135,6 @@ fn updates_forward_on_the_same_game_only() {
     };
     assert_eq!(to(&modrinth, &PLAY), None);
 
-    // The newest needs a newer Horizon: the one before it.
-    let mut newer = index.clone();
-    let ruby_at = newer.projects.len() - 1;
-    newer.projects[ruby_at].versions[0].api_level = Some(7);
-    let low = Context { level: 6, ..PLAY };
-    assert_eq!(
-        version_of(decide(&newer, &entry("1.0.0"), &low)),
-        Some("1.1.0".into())
-    );
     // Never backwards: the newest was taken down while it is installed.
     let mut down = index.clone();
     down.revoked.push(index::Revoked {
@@ -276,6 +248,127 @@ fn updates_holds_and_keeps_the_replaced_file_until_the_next_start() {
 }
 
 #[test]
+fn wasm_update_waits_for_the_player() {
+    let dir = scratch("auto-wasm");
+    let home = dir.join("home");
+    let old = ruby(&dir, "1.0.0", &["lamp"], &[]);
+    let module = b"\0asm\x01\0\0\0";
+    let manifest = format!(
+        "{MANIFEST}version = \"1.1.0\"\n[wasm]\nsha512 = \"{}\"\ntoolchain = \"1.99.1\"\nbuilt_with = \"test\"\n",
+        horizon_mods::manifest::sha512_of(module)
+    );
+    let new = dir.join("ruby-1.1.0.hmod");
+    fs::write(
+        &new,
+        horizon_mods::Package::write_files(&manifest, &[("mod.wasm", module)]).unwrap(),
+    )
+    .unwrap();
+    let first = index_of(&[("1.0.0", GAME, &old)]);
+    let p = first.project("ruby").unwrap();
+    install_version_guarded(
+        &first,
+        true,
+        p,
+        &p.versions[0],
+        &home,
+        &|_| Ok(()),
+        &|_, _| {},
+    )
+    .unwrap();
+    let index = index_of(&[("1.1.0", GAME, &new), ("1.0.0", GAME, &old)]);
+    let report = run_with(&index, true, &home, &PLAY, &|_, _| {});
+    assert!(report.updated.is_empty(), "{report:?}");
+    assert_eq!(report.held.len(), 1, "{report:?}");
+    assert_eq!(
+        installed_ruby(&home),
+        ("1.0.0".into(), fs::read(&old).unwrap())
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn backup_paths_stay_in_the_backup_folder() {
+    let dir = scratch("auto-backup-path");
+    let home = dir.join("home");
+    let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
+    let index = index_of(&[("1.0.0", GAME, &v1)]);
+    let p = index.project("ruby").unwrap();
+    install_version_guarded(
+        &index,
+        true,
+        p,
+        &p.versions[0],
+        &home,
+        &|_| Ok(()),
+        &|_, _| {},
+    )
+    .unwrap();
+    let mut entry = installed::Installed::load(&home).entries.remove(0);
+    entry.version = "../../outside".into();
+    let kept = keep(&home, &entry).unwrap();
+    assert_eq!(kept.copy, "mod-browser/replaced/ruby");
+    assert!(home.join(&kept.copy).is_file());
+
+    let outside = home.join("outside");
+    fs::write(&outside, b"untouched").unwrap();
+    save_kept(
+        &home,
+        &[Kept {
+            copy: "mod-browser/replaced/../../outside".into(),
+            pid: 0,
+            ..kept
+        }],
+    )
+    .unwrap();
+    recover(&home);
+    assert_eq!(fs::read(outside).unwrap(), b"untouched");
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn failed_restore_keeps_its_record_for_retry() {
+    let dir = scratch("auto-restore-retry");
+    let home = dir.join("home");
+    let v1 = ruby(&dir, "1.0.0", &["lamp"], &[]);
+    let index = index_of(&[("1.0.0", GAME, &v1)]);
+    let p = index.project("ruby").unwrap();
+    install_version_guarded(
+        &index,
+        true,
+        p,
+        &p.versions[0],
+        &home,
+        &|_| Ok(()),
+        &|_, _| {},
+    )
+    .unwrap();
+    let entry = installed::Installed::load(&home).entries.remove(0);
+    let mut kept = keep(&home, &entry).unwrap();
+    kept.pid = 0;
+    save_kept(&home, &[kept.clone()]).unwrap();
+    let target = entry.path(&home).unwrap();
+    fs::remove_file(&target).unwrap();
+    fs::create_dir(&target).unwrap();
+    recover(&home);
+    assert_eq!(kept_list(&home).len(), 1);
+    assert!(home.join(&kept.copy).is_file());
+    let v2 = ruby(&dir, "1.1.0", &["lamp", "brick"], &[]);
+    let newer = index_of(&[("1.1.0", GAME, &v2), ("1.0.0", GAME, &v1)]);
+    let report = run_with(&newer, true, &home, &PLAY, &|_, _| {});
+    assert!(report.updated.is_empty());
+    assert_eq!(kept_list(&home).len(), 1);
+    assert!(home.join(&kept.copy).is_file());
+    fs::remove_dir(target).unwrap();
+    recover(&home);
+    assert_eq!(
+        installed_ruby(&home),
+        ("1.0.0".into(), fs::read(v1).unwrap())
+    );
+    assert!(kept_list(&home).is_empty());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn an_update_cut_short_is_rolled_back_at_the_next_start() {
     let dir = scratch("auto-rollback");
     let home = dir.join("home");
@@ -300,7 +393,7 @@ fn an_update_cut_short_is_rolled_back_at_the_next_start() {
     k.pid = 0;
     save_kept(&home, &[k]).unwrap();
     fs::write(home.join(&old.file), b"half").unwrap();
-    recover(&home);
+    assert!(run(&home, &PLAY, false, &|_, _| {}).is_none());
     assert_eq!(
         installed_ruby(&home),
         ("1.0.0".into(), fs::read(&v1).unwrap())
