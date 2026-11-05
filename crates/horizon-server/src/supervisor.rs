@@ -115,10 +115,10 @@ fn prune_chunks(shared: &Arc<Shared>, dir: &Path, config: &Config) {
         Err(e) => note(
             shared,
             "ERROR",
-            &format!("Chunk prune stopped before deleting anything: {e}"),
+            &format!("Chunk prune failed; some files may already have been changed: {e}"),
         ),
     };
-    if settings.mode == prune::Mode::Delete {
+    if settings.mode == horizon_server_launch::prune::Mode::Delete {
         note(
             shared,
             "INFO",
@@ -224,7 +224,7 @@ pub fn run(dir: &Path) -> Result<(), String> {
         let written = config
             .write_properties(dir)
             .map_err(|e| format!("server.properties: {e}"))?;
-        if config.prune_chunks.mode != crate::prune::Mode::Off {
+        if config.prune_chunks.mode != horizon_server_launch::prune::Mode::Off {
             prune_chunks(&shared, dir, &config);
         }
         note(
