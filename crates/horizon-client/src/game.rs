@@ -13965,26 +13965,20 @@ impl Game<'_> {
                 continue;
             }
             self.armor[0] = updated;
-            applied =
-                self.armor[0]
-                    .clone()
-                    .map(|after| horizon_client::health::HelmetWearApplied {
-                        before: wear.stack,
-                        after,
-                    });
+            let after = self.armor[0].clone();
+            if let Some(new_damage) = wear.durability_changed {
+                self.trigger_item_durability(&wear.stack, new_damage);
+            }
+            applied = after.map(|after| horizon_client::health::HelmetWearApplied {
+                before: wear.stack,
+                after,
+            });
             if let Some(stack) = &broken {
-                self.trigger_item_durability(stack, stack.damage as i32);
                 self.player_equipment_broke(
                     horizon_world::player_inventory::EquipmentSlot::Head,
                     stack,
                 );
                 self.award_stat("broken", &stack.item, 1);
-            } else if self.armor[0]
-                .as_ref()
-                .is_some_and(|after| after.damage != stack.damage)
-            {
-                let after = self.armor[0].clone().expect("head piece");
-                self.trigger_item_durability(&after, after.damage as i32);
             }
             self.apply_equipment();
             if broken.is_some() {

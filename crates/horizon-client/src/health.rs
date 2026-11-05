@@ -282,6 +282,9 @@ pub struct HelmetWear {
     pub updated: Option<crate::items::ItemStack>,
     /// The piece as it broke, when the wear destroyed it.
     pub broken: Option<crate::items::ItemStack>,
+    /// The durability callback's unclamped new damage, paired with `stack` as
+    /// its original before-image. None when no callback ran.
+    pub durability_changed: Option<i32>,
 }
 /// A worn piece `doHurtEquipment` will actually damage. A removed durability
 /// component, `unbreakable`, or a zero maximum is not eligible, before any
@@ -365,6 +368,7 @@ impl DamageLevel<'_> {
             random: self.random,
             player,
             broken: None,
+            durability_changed: None,
         };
         let _ = horizon_world::item_durability::hurt_and_break(
             &mut projected,
@@ -383,6 +387,7 @@ impl DamageLevel<'_> {
             amount,
             updated: (updated.count > 0).then_some(updated),
             broken,
+            durability_changed: world.durability_changed,
         }
     }
 }
@@ -398,6 +403,7 @@ struct WearWorld<'a> {
     random: &'a mut horizon_core::random::LegacyRandom,
     player: Option<(u128, &'a str)>,
     broken: Option<crate::items::ItemStack>,
+    durability_changed: Option<i32>,
 }
 impl horizon_world::item_durability::DurabilityWorld for WearWorld<'_> {
     type Error = std::convert::Infallible;
@@ -456,8 +462,9 @@ impl horizon_world::item_durability::DurabilityWorld for WearWorld<'_> {
     fn durability_changed(
         &mut self,
         _: &mut Self::Stack,
-        _: i32,
+        damage: i32,
     ) -> std::result::Result<(), std::convert::Infallible> {
+        self.durability_changed = Some(damage);
         Ok(())
     }
     fn broken(
@@ -1776,6 +1783,40 @@ mod datapack_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn helmet_wear_retains_durability_callback_before_image_and_unclamped_damage() {
+        let mut level = TestLevel::new(0);
+        for (before, amount, new_damage, broken) in [(0, 2, 2, false), (9, 4, 13, true)] {
+            let mut original = crate::items::ItemStack::new("test:helmet", 1);
+            original.damage = before;
+            original.data_mut().set_other(
+                "minecraft:max_damage",
+                Some(horizon_world::nbt::Tag::Int(10)),
+            );
+            original.data_mut().set_other(
+                "minecraft:damage",
+                Some(horizon_world::nbt::Tag::Int(before as i32)),
+            );
+            let wear = level
+                .level()
+                .settle_wear(&original, amount, Some((821, "wearer")));
+            assert_eq!(wear.stack, original);
+            assert_eq!(wear.durability_changed, Some(new_damage));
+            assert_eq!(wear.broken.is_some(), broken);
+            if broken {
+                assert!(wear.updated.is_none());
+                assert_eq!(wear.broken.unwrap().damage, 10);
+            } else {
+                assert_eq!(wear.updated.unwrap().damage, 2);
+            }
+            let zero = level
+                .level()
+                .settle_wear(&original, 0, Some((821, "wearer")));
+            assert_eq!(zero.durability_changed, None);
+        }
+    }
+
     #[test]
     fn the_weapon_is_the_attackers_main_hand_only_for_its_own_hit() {
         let sword = crate::items::ItemStack::new("minecraft:iron_sword", 1);

@@ -259,3 +259,69 @@ fn falling_helmet_wear_honors_cancel_edits_guards_and_cooldown_ordering() {
         })
     );
 }
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn helmet_wear_advancement_uses_original_item_and_unclamped_new_damage() {
+    use horizon_client::advancements as adv;
+
+    with_game(|game| {
+        for before in [0, 9] {
+            let mut player = PlayerMotion::new(game.motion, Vec3::ZERO).unwrap();
+            player.entity_id = 821013;
+            player.client_loaded = true;
+            game.player = Some(player);
+            game.creative = false;
+            game.lan_acting_uuid = Some(821);
+            game.lan_acting_name = Some("wearer".into());
+            let mut helmet = ItemStack::new("minecraft:iron_helmet", 1);
+            helmet.damage = before;
+            helmet.data_mut().set_other(
+                "minecraft:max_damage",
+                Some(horizon_world::nbt::Tag::Int(10)),
+            );
+            game.armor[0] = Some(helmet);
+            game.apply_equipment();
+
+            let trigger = "minecraft:item_durability_changed";
+            let id = "test:helmet_wear";
+            let mut tree = adv::Tree::default();
+            tree.list.push(adv::Advancement {
+                id: id.into(),
+                parent: None,
+                display: None,
+                criteria: vec![adv::Criterion {
+                    name: "worn".into(),
+                    trigger: trigger.into(),
+                    conditions: serde_json::json!({
+                        "item": {
+                            "items": "minecraft:iron_helmet",
+                            "components": {"minecraft:damage": before}
+                        },
+                        "delta": -2,
+                        "durability": 10 - (before as i32 + 2)
+                    })
+                    .into(),
+                }],
+                requirements: vec![vec!["worn".into()]],
+                rewards: Default::default(),
+            });
+            tree.by_id.insert(id.into(), 0);
+            tree.by_trigger.insert(trigger.into(), vec![(0, 0)]);
+            game.adv.tree = Arc::new(tree);
+            game.adv.progress = Default::default();
+            game.adv.loaded = true;
+            game.adv.quiet = true;
+
+            game.falling_hurt_player(Vec3::ZERO, 8.0, "minecraft:falling_anvil");
+            assert!(!game.adv.progress.has(id, "worn"));
+            game.wear_armor(&[]);
+            assert!(game.adv.progress.has(id, "worn"), "before damage {before}");
+            if before == 0 {
+                assert_eq!(game.armor[0].as_ref().unwrap().damage, 2);
+            } else {
+                assert!(game.armor[0].is_none());
+            }
+        }
+    });
+}

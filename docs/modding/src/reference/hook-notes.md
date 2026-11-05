@@ -3027,7 +3027,9 @@ The callback receives `&mut dyn LevelRandomHost`: the hit's level random and
 level attachments, not a full game host. Unbreaking and the item-damage
 listener run before armor, toughness and protection are read for that hit, so
 a head piece that breaks no longer contributes to it. A piece replaced before
-write-back is not worn by the old decision.
+write-back is not worn by the old decision. Durability advancement predicates
+see the original stack and the durability callback's unclamped new damage,
+including when wear exceeds the remaining durability and breaks the piece.
 
 ### Structure template snapshots
 
