@@ -2756,7 +2756,7 @@ impl Game<'_> {
         // this tick to their clients. Otherwise a newly broken block and its
         // drops remain absent from the snapshot until the following tick.
         if !paused {
-            self.tick_guests();
+            horizon_client::spans::time("lan_guests", || self.tick_guests());
             // The vehicles the guests just moved enter their portals now.
             let Some(host) = self.lan.as_ref() else {
                 return;
@@ -2793,9 +2793,11 @@ impl Game<'_> {
                     return;
                 };
                 host.hub.riding = riding;
-                self.lan_entities(&mut states, true, 0);
-                self.lan_hook_states(&mut states);
-                self.lan_entity_uuids(&mut states);
+                horizon_client::spans::time("lan_entity_states", || {
+                    self.lan_entities(&mut states, true, 0);
+                    self.lan_hook_states(&mut states);
+                    self.lan_entity_uuids(&mut states);
+                });
                 let Some(host) = self.lan.as_mut() else {
                     return;
                 };
@@ -2908,9 +2910,11 @@ impl Game<'_> {
                 if !pass.packets_drained {
                     events.extend(host.hub.drain_packets(&mut ctx));
                 }
-                events.extend(host.hub.tick_level(&mut ctx));
+                events.extend(horizon_client::spans::time("lan_tick_level", || {
+                    host.hub.tick_level(&mut ctx)
+                }));
                 if pass.last {
-                    host.hub.end_tick();
+                    horizon_client::spans::time("lan_end_tick", || host.hub.end_tick());
                 }
                 events
             };
@@ -2918,7 +2922,10 @@ impl Game<'_> {
             let Some(host) = self.lan.take() else {
                 return;
             };
-            let Some(back) = self.lan_process_events(host, events, entities, spawn) else {
+            let processed = horizon_client::spans::time("lan_process_events", || {
+                self.lan_process_events(host, events, entities, spawn)
+            });
+            let Some(back) = processed else {
                 return;
             };
             self.lan = Some(back);

@@ -1187,6 +1187,7 @@ impl Game<'_> {
             }
         }
         let uuid = self.level.player_uuid;
+        let level_id = self.dim.id();
         let mut snapshot: Vec<Seen> = self.mobs.iter().map(|m| seen(m, uuid)).collect();
         let mut events = Vec::new();
         let mut mobs = std::mem::take(&mut self.mobs);
@@ -1388,8 +1389,13 @@ impl Game<'_> {
                 };
                 w.controlling_player_movement = controlling_player_movement;
                 let credit_expiring = m.ai.last_hurt_by_player == 1;
+                // `horizon-report`'s cost by mob type (tick_profile.rs).
+                let sampled = super::tick_profile::start().map(|t| (t, mobs[i].kind.clone()));
                 let kept =
                     horizon_client::mobs::riders::tick(&mut mobs, i, &w, &mut level, &mut events);
+                if let Some((started, kind)) = sampled {
+                    super::tick_profile::add(level_id, &kind, started);
+                }
                 let m = &mut mobs[i];
                 m.despawn = mod_api::NativeDespawn::default();
                 if credit_expiring && m.ai.last_hurt_by_player == 0 {
@@ -2711,11 +2717,13 @@ impl Game<'_> {
                     });
                     // Only a creeper or a wither empties the hives it blows up.
                     // The creeper is already gone from the list, so the event
-                    // carries its kind.
-                    let result = if matches!(species, Species::Creeper | Species::Wither) {
-                        self.with_hive_emptying_blast(|g| g.explode(source_mob, at, radius))
-                    } else {
-                        self.explode(source_mob, at, radius)
+                    // carries its kind. A sulfur cube's blast is TNT's.
+                    let result = match species {
+                        Species::Creeper | Species::Wither => {
+                            self.with_hive_emptying_blast(|g| g.explode(source_mob, at, radius))
+                        }
+                        Species::SulfurCube => self.explode_sulfur_cube(source_mob, at, radius),
+                        _ => self.explode(source_mob, at, radius),
                     };
                     self.combat.explosion_source = None;
                     self.combat.explosion_source_named = false;
