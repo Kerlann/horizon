@@ -2,9 +2,9 @@
 //! (docs/modding/src/how-to/native-mods.md, "Entity and level handles", #7387): `Entity.discard`
 //! and `Entity.remove` with a reason. Nothing dies and nothing drops loot.
 //! The handle reads as gone from the call on, as `isRemoved` does. A mob
-//! leaves at once; the other kinds leave at the level's next sweep of
-//! departed entities, a few times per tick, so a hook that removes one never
-//! shifts the lists the game is walking. A vehicle with a chest spills it, as vanilla's `remove` does.
+//! leaves at once; other kinds are marked and announced at once, while their
+//! physical cleanup waits for the next sweep so active walks stay valid.
+//! A vehicle with a chest spills it, as vanilla's `remove` does.
 use super::{Game, commands::Target};
 use horizon_core::position::BlockPos;
 use mod_api::{EntityRef, NativeRemovalReason};
@@ -35,9 +35,12 @@ impl Game<'_> {
                 true
             }
             Some(t) => {
-                if !self.persist.removals.contains(&t) {
-                    self.persist.removals.push(t);
+                let passengers = self.native_entity_passengers(entity).unwrap_or_default();
+                self.persist.removals.push(t);
+                for passenger in passengers {
+                    self.native_entity_stop_riding(passenger);
                 }
+                self.native_entity_left(entity.id());
                 true
             }
         }
@@ -164,7 +167,14 @@ mod tests {
                 1
             );
             let entity = game.native_entity(12).unwrap();
+            let selector = horizon_client::command::args::Selector {
+                kind: 'e',
+                limit: usize::MAX,
+                ..Default::default()
+            };
+            assert!(game.select(&selector).contains(&super::Target::Other(12)));
             assert!(entity.discard(game));
+            assert!(!game.select(&selector).contains(&super::Target::Other(12)));
             assert!(!entity.discard(game));
             game.native_removals_flush();
             assert!(!game.persist.raw.contains_key(&12));

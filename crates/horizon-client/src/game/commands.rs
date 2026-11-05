@@ -740,7 +740,11 @@ impl Game<'_> {
             return self.player_named(name).into_iter().collect();
         }
         if let Some(uuid) = s.uuid {
-            return self.target_by_uuid(uuid).into_iter().collect();
+            return self
+                .target_by_uuid(uuid)
+                .filter(|t| !self.persist.removals.contains(t))
+                .into_iter()
+                .collect();
         }
         let origin = {
             let p = self.source_position();
@@ -818,6 +822,9 @@ impl Game<'_> {
         candidates
             .into_iter()
             .filter_map(|t| {
+                if self.persist.removals.contains(&t) {
+                    return None;
+                }
                 let p = self.target_position(t)?;
                 let ty = self.target_type(t);
                 // type=: every positive must match, no negative may match.
