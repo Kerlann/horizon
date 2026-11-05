@@ -473,6 +473,10 @@ impl Game<'_> {
     }
     /// Settings that Horizon applies beyond render distance, volume and GUI scale.
     pub(super) fn apply_ui_settings(&mut self) {
+        horizon_client::hud::GUI_SCALE.store(
+            self.settings.gui_scale,
+            std::sync::atomic::Ordering::Relaxed,
+        );
         if horizon_client_render::mipmap::set_dither_cutouts(
             self.settings.horizon.dither_cutout_mips,
         ) {
@@ -534,12 +538,29 @@ impl Game<'_> {
             font.reset_cache();
             self.ui.chat.rescale(&self.gui.atlas);
         }
+        self.notify_resize_settings();
         // 3D skin layers: a skin's slabs are built when it is resolved, so a
         // change here rebuilds the players already on screen (the Options
         // screen keeps resolving them every frame; this covers the console
         // and a setting restored from options.txt at start).
         if self.title.is_none() {
             self.update_remote_skins();
+        }
+    }
+    fn notify_resize_settings(&mut self) {
+        let Some(window) = &self.window else { return };
+        let size = window.inner_size();
+        let settings = (
+            self.settings.gui_scale,
+            self.settings.fullscreen,
+            self.settings.force_unicode,
+        );
+        if self
+            .resize_settings
+            .replace(settings)
+            .is_some_and(|old| old != settings)
+        {
+            self.native_window_resize(size.width, size.height);
         }
     }
     /// `Window.updateFullscreenState`: a fullscreen change made by the window
@@ -559,6 +580,7 @@ impl Game<'_> {
         {
             self.settings.fullscreen = now;
             self.settings.save(&Self::options_path());
+            self.notify_resize_settings();
         }
     }
     /// F11 (key.fullscreen): Window.toggleFullScreen, remembered in options.txt.

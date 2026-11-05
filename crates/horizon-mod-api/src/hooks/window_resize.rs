@@ -1,8 +1,8 @@
 //! Window resize hook declaration.
 
 pub trait Hooks {
-    /// The client window's physical size changed, after handling the resize.
-    /// Repeated notifications of the same size are not dispatched.
+    /// After a window resize or applying a changed GUI scale, fullscreen, or Unicode font setting.
+    /// The dimensions are physical pixels; repeated physical resize events are suppressed.
     #[hook(
         side = "client",
         contract = "listen",

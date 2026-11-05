@@ -2910,6 +2910,7 @@ struct Game<'a> {
     effects_layout: std::cell::Cell<Option<horizon_client::inventory_effects::EffectsLayout>>,
     window: Option<Arc<Window>>,
     last_window_size: Option<winit::dpi::PhysicalSize<u32>>,
+    resize_settings: Option<(u32, bool, bool)>,
     renderer: Option<Renderer>,
     /// Avoid an endless rebuild loop if the new device is lost as well.
     last_device_recovery: Option<Instant>,
@@ -15519,10 +15520,6 @@ impl Game<'_> {
         if self.settings.sound_device != self.audio.device() {
             let _ = self.audio.set_device(&self.settings.sound_device);
         }
-        horizon_client::hud::GUI_SCALE.store(
-            self.settings.gui_scale,
-            std::sync::atomic::Ordering::Relaxed,
-        );
         self.apply_ui_settings();
     }
     /// The sprite layers a shader pack draws in the translucent pass: every section is meshed
@@ -20290,6 +20287,7 @@ impl<'a> Game<'a> {
             effects_layout: std::cell::Cell::new(None),
             window: None,
             last_window_size: None,
+            resize_settings: None,
             renderer: None,
             last_device_recovery: None,
             entity_vertices: Vec::new(),
