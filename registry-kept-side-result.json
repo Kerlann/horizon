@@ -1,0 +1,9 @@
+{
+  "ready": true,
+  "audit": "/box/shared/upstream-sync/batch-6d99e14ff0/registry-kept-side-audit.md",
+  "summary": "Independent source audit at exact writer commit 68096b47b8ac2ef6bd1c480dca2e8850e1a7c4b3 completely covers both assigned legacy deletions. Original ancestor and upstream blobs are identical, fork deletions and current flat-package/mixin staging and typed wasm compatibility remain correct. No source fixes were needed; scoped diff checks passed. One unwired incoming game registry API mismatch is named for the integrator, not edited across area ownership. No build, test, or runtime claim.",
+  "unread": [],
+  "defects": [
+    "Cross-area unresolved at the writer scaffold: incoming crates/horizon-client/src/mod_registry.rs:100-116 retains needs_port and calls index.installable(p, GAME, horizon_mods::api_level::LEVEL). The deleted api_level module must stay absent, and current Index::installable at crates/horizon-mods/src/index.rs:367 takes only project and game. No module declaration wires mod_registry at this audited commit; game/mod_browser.rs refers to it. The game/integration owner must reconcile this incoming source with current APIs without restoring compatibility paths. No assigned-scope defect."
+  ]
+}
