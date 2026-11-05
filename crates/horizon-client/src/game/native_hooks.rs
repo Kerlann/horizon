@@ -2680,6 +2680,14 @@ impl Game<'_> {
     pub(super) fn native_client_stopping(&mut self) {
         self.fire_client_stopping();
     }
+    /// The client shutdown has completed.
+    pub(super) fn native_client_stopped(&mut self) {
+        self.fire_client_stopped();
+    }
+    /// The process is about to exit after its game has stopped.
+    pub(super) fn native_game_shutting_down(&mut self) {
+        self.fire_game_shutting_down();
+    }
     /// The client made a new level for `dimension` (NeoForge's
     /// `LevelEvent.Load` from the `ClientLevel` constructor): on joining a
     /// server, single player's own included, and on changing dimension.

@@ -539,6 +539,24 @@ fn the_lifecycle_moments_fire_once_each_in_order() {
         ) {
             self.0.lock().unwrap().push("client_stopping".into());
         }
+        fn client_stopped(
+            &self,
+            _host: &mut dyn ClientHost,
+            _event: &mut mod_api::ClientStoppedEvent,
+        ) {
+            self.0.lock().unwrap().push("client_stopped".into());
+        }
+        fn game_shutting_down(
+            &self,
+            host: mod_api::HostSide<'_>,
+            _event: &mut mod_api::GameShuttingDownEvent,
+        ) {
+            let side = match host {
+                mod_api::HostSide::Client(_) => "client",
+                mod_api::HostSide::Server(_) => "server",
+            };
+            self.0.lock().unwrap().push(format!("shutting_down {side}"));
+        }
     }
 
     let log = Arc::new(Mutex::new(Vec::new()));
@@ -557,7 +575,11 @@ fn the_lifecycle_moments_fire_once_each_in_order() {
             game.native_server_stopping(true);
             game.native_lifecycle_world_closed();
             game.native_lifecycle_world_closed();
+            game.native_game_shutting_down();
+            game.options.execution_role = crate::game::execution_role::ExecutionRole::Client;
             game.native_client_stopping();
+            game.native_client_stopped();
+            game.native_game_shutting_down();
         });
     });
     assert_eq!(
@@ -567,7 +589,10 @@ fn the_lifecycle_moments_fire_once_each_in_order() {
             "started dedicated=true",
             "stopping dedicated=true",
             "WorldCloseFinal",
+            "shutting_down server",
             "client_stopping",
+            "client_stopped",
+            "shutting_down client",
         ]
     );
 }
