@@ -233,7 +233,7 @@ The opening, then Play ([clip](docs/opening.webm)):
   keeping every field the launcher doesn't show and the servers joined with Direct Connection. The
   same from the command line: `horizon-launcher multiplayer [list|add|remove] [--instance <name>]`
   and `horizon-launcher play --server <address or name>`.
-- **Patch notes**: each release's notes, newest first, with a link to GitHub Sponsors. Quiet "Sponsor", "Discord" and "Website" links sit in the sidebar footer.
+- **Patch notes**: each release's notes, newest first, with no ads. Quiet "Roadmap", "Documentation" and "Website" links sit in the sidebar footer.
 
 Data lives in the platform's data directory (`~/.local/share/horizon-launcher` on Linux,
 `~/Library/Application Support/horizon-launcher` on macOS, `%APPDATA%\horizon-launcher` on
@@ -277,8 +277,8 @@ page `servers.json` (the list), `servers/<name>/` (the servers created there) an
   Without one, `HTTPS_PROXY` and `HTTP_PROXY` are used when the launcher is started with them, and
   `NO_PROXY` names the hosts to reach directly, a modpack import's jars included. A server on this
   computer never goes through it.
-- **Links**: the Discord invite, the Sponsors page and the website come from `launcher/links.json` on main
-  (`{"discord": "...", "sponsor": "...", "website": "..."}`), so they change without a launcher release. Offline,
+- **Links**: the website, the roadmap and the documentation come from `launcher/links.json` on this fork's main
+  (`{"website": "...", "roadmap": "...", "docs": "..."}`), so they change without a launcher release. Offline,
   the launcher uses the same values built in; an empty address hides its button.
 
 Long pages, dialogs, the server console and data previews have a visible scrollbar when
@@ -387,7 +387,7 @@ and don't set `%ERRORLEVEL%` / `$LASTEXITCODE`. Scripts that need the exit code 
     horizon-launcher play [--version <tag>] [--instance <name>] [--arg <ARG>]...   start the client; --arg passes an extra argument through (repeatable)
     horizon-launcher server [--dir <dir>] [--version <tag>] [--accept-eula]
     horizon-launcher notes [<tag>]                  patch notes as plain text
-    horizon-launcher links                          the Discord, sponsor and website links
+    horizon-launcher links                          the website, roadmap and documentation links
     horizon-launcher game-args [<line>]             show or set the extra arguments the game starts with
     horizon-launcher update [--check]               Horizon and the launcher
     horizon-launcher logs [--lines N] [--crash]     the end of the game's log, or its newest crash report
@@ -505,7 +505,7 @@ The game writes its log to `logs/latest.log` in the game folder (`HORIZON_HOME`,
 archives the previous one at start as `logs/<date>-<n>.log.gz`, as Minecraft does. When it
 crashes it writes `crash-reports/crash-<date>_<time>-client.txt` beside them. When a game the
 launcher started crashes, the Play page says so, with buttons to open or copy the report, open the
-logs folder and report it on Discord; Settings has the logs folder too. A crash report leaves the
+logs folder and report it on GitHub; Settings has the logs folder too. A crash report leaves the
 machine only if you turn on crash reports (below).
 
 ## Data collection

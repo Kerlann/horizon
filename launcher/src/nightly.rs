@@ -37,6 +37,15 @@ pub fn date_of(version: &str) -> Option<&str> {
     is_date(date).then_some(date)
 }
 
+/// A full 40-character commit as a player reads it, `b1ff51d9e…`; anything else as it is.
+pub fn short_commit(version: &str) -> String {
+    if version.len() == 40 && version.bytes().all(|b| b.is_ascii_hexdigit()) {
+        format!("{}…", &version[..9])
+    } else {
+        version.to_owned()
+    }
+}
+
 /// A Nightly's version as a player reads it: `Nightly · 4baa571` for `nightly-2026-10-29-4baa571`,
 /// or None for anything that is not one. The date is already on the row beside it.
 pub fn label(version: &str) -> Option<String> {
@@ -122,6 +131,13 @@ mod tests {
         assert_eq!(date_of("v0.2.95"), None);
         assert_eq!(date_of("nightly"), None);
         assert!(horizon_release_sign::is_nightly(&version_of(&r)));
+    }
+
+    #[test]
+    fn a_full_commit_reads_as_nine_characters() {
+        let full = "b1ff51d9e0123456789abcdef0123456789abcde";
+        assert_eq!(short_commit(full), "b1ff51d9e…");
+        assert_eq!(short_commit("v0.2.97"), "v0.2.97");
     }
 
     #[test]

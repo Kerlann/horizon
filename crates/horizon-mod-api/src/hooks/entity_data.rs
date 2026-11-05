@@ -32,7 +32,7 @@ pub trait Helpers {
     )]
     fn entity_remove_tag();
     #[helper(
-        side = "server",
+        side = "both",
         receiver = "entity",
         target = "horizon_client::game::native_entity_data::Game<'_>::native_entity_name"
     )]

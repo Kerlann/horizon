@@ -37,6 +37,9 @@ switch. The first install shows a trust notice, and every build waits behind a r
 after a review (its later releases are checked by machine); and they play in a game of their own, built for the
 instance they are installed in.
 
+Villager handles preserve the full signed integer level (at least 1), including values above the
+five vanilla trade tiers. Higher levels use the master badge and do not gain further vanilla trades.
+
 ## Native mod source revisions
 
 A native mod targets one exact Horizon source revision: `horizon` in its `horizon-mod.toml` `[native]` section.

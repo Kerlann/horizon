@@ -273,7 +273,7 @@ fn carry_over(from: &Mob, to: &mut Mob) {
     // VillagerData and the trades, experience and gossip.
     to.extra.variant = from.extra.variant;
     to.extra.variant2 = from.extra.variant2;
-    to.extra.variant3 = from.extra.variant3.max(1);
+    to.extra.villager_level = from.extra.villager_level.max(1);
     to.extra.trade = from.extra.trade.clone();
     if let Some(g) = villager::ext(from).map(|e| e.gossips.clone()) {
         villager::ext_mut(to).gossips = g;

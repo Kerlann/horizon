@@ -238,12 +238,12 @@ fn variant(m: &Mob, regs: &SpawnRegistries, v: &mut Vec<String>) {
             "minecraft:{}/minecraft:{}/{}",
             VILLAGER_TYPES[m.extra.variant as usize % 7],
             PROFESSIONS[m.extra.variant2 as usize % PROFESSIONS.len()],
-            m.extra.variant3.max(1)
+            m.extra.villager_level.max(1)
         )),
         S::ZombieVillager => v.push(format!(
             "minecraft:{}/{}",
             VILLAGER_TYPES[m.extra.variant as usize % 7],
-            m.extra.variant3.max(1)
+            m.extra.villager_level.max(1)
         )),
         S::Phantom => v.push(format!("size={}", m.extra.size)),
         S::Turtle => v.push(format!(

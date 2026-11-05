@@ -457,9 +457,9 @@ fn another_guests_live_merchant_session_is_visible_during_a_turn() {
     });
 }
 
-/// Requires the passenger walk (horizon-rust/horizon#8383) as well as #228's host visibility.
+/// The passenger walk (horizon-rust/horizon#8383) keeps #228's host visibility.
 #[test]
-#[ignore = "needs the passenger walk: horizon-rust/horizon#8383"]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn another_guest_follows_a_vehicle_teleported_during_a_turn() {
     with_guests(|game| {
         game.lan
@@ -472,8 +472,8 @@ fn another_guest_follows_a_vehicle_teleported_during_a_turn() {
         let horse = game.res.mob_types().get("minecraft:horse").unwrap().clone();
         game.mobs
             .push(Mob::new(42, horse, Vec3::new(3.0, 64.0, 5.0), 0.0));
-        // Put B in the horse's seat using the same placement as a normal turn.
-        game.as_guest(13, |game| game.position_rider()).unwrap();
+        // Boarding publishes the seat back to the hub after positioning the body.
+        game.guest_boarded(13, None);
         let vehicle = game.native_entity(42).unwrap();
         let rider = game.native_entity(13).unwrap();
         let before = [3.0, 64.0 + (1.44375 - 0.6), 5.0];

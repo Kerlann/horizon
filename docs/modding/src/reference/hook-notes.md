@@ -191,7 +191,9 @@ requires a farmer at work and `mob_griefing` enabled.
   block once the game allowed it (`ServerPlayerGameMode.destroyBlock`) and may cancel it, which keeps the block and its
   drops; `native_entity_place` (`EntityPlaceEvent`, `EntityMultiPlaceEvent`) hears a block placed from an item
   (`BlockItem.place`), an enderman putting its block down or a snow golem's trail, before it is written, and may cancel it:
-  nothing is placed and the stack is kept. A bed, door or tall plant arrives as one `Placement::Multi`. Silverfish
+  nothing is placed and the stack is kept. For a player, `placed_against` is the state next to the primary placed
+  block opposite the clicked face, even when the clicked block is replaceable; for mobs it is the state below.
+  A bed, door or tall plant arrives as one `Placement::Multi`. Silverfish
   infesting, turtle eggs and falling blocks are not placements yet.
 
 - Block entities for a mod's blocks (`native_block_entity`, `native_block_entity_ticks`,
@@ -216,8 +218,8 @@ requires a farmer at work and `mob_griefing` enabled.
   own GUI textures (`assets/<namespace>/textures/gui`, drawn with `native_sprite`).
 
 - Buttons, tooltips and item icons on mod screens: `native_screen_click` and `native_screen_tooltip` (the client), `native_menu_button`
-  (a button press on the server, on the mod block entity) and the helpers `native_item`, `native_screen_title`, `native_block`,
-  `native_block_property` and `native_cursor`. A mod inserts items through the block's item capability,
+  (a button press on the server, on the mod block entity) and the helpers `native_item`, `native_screen_title`, `LevelRef::block`,
+  `LevelRef::block_property` and `native_cursor`. A mod inserts items through the block's item capability,
   `level.capability(host, &ITEMS, pos, side)`.
 - `click_menu_button(button)`, a client helper, presses button `button` of the open menu as a click on one of its buttons does
   (`MultiPlayerGameMode.handleInventoryButtonClick`, `ServerboundContainerButtonClickPacket`); the server's menu decides what it does
@@ -2183,6 +2185,7 @@ handle, an entity the client doesn't track and a level it doesn't show:
 - `host.entity(id)` and `host.level(dimension)`: the local player or an entity the server told the client of, and the
   one level the client shows. `host.living(entity)` is the local player only.
 - `entity.position(host)`, `rotation(host)` and `velocity(host)`: the client's copy, interpolated as it draws it.
+- `entity.name(host)`: the synced custom name or type name, and a player's profile name, from either side's host.
 - `level.block_state(host, pos)`, `block`, `block_property` and `is_loaded`: blocks of the chunks the client holds.
   A chunk it doesn't hold reads as unloaded; no read loads one.
 - `living.equipment(host, slot)`, `hand_item`, `effect`, `effects`, `health` and `max_health`, for the local player.
@@ -2963,6 +2966,8 @@ Horizon ticks vanilla's spawners where it always has: the trader, patrol, cat an
 ## Finalize spawn
 
 - **`finalize_spawn(dimension, kind, reason, pos, spawner, difficulty, spawn_cancelled, cancel)`** (NeoForge's `FinalizeSpawnEvent`): fires where the game calls `Mob.finalizeSpawn` for a mob it made, before it runs. There are two cancels, as in NeoForge: return `Flow::Cancel` to skip finalization (no equipment, attributes or class setup; the mob still spawns uninitialised, and finalization's random draws are skipped), or set `spawn_cancelled` so no mob is added. `difficulty` (`NativeDifficulty`) is settable and is what finalization reads. `spawner` is `NativeSpawner::Block` for a spawner or trial spawner, none otherwise. Fired only where vanilla 26.3 calls `finalizeSpawn`, with vanilla's reason at that call: natural spawning, chunk generation, spawners, trial spawners, patrols, raids and sieges, reinforcements, cat spawners, phantoms, jockeys, `/summon`, `/raid`, spawn eggs, dispensers, the nether portal's piglin (`Structure`), skeleton traps, evoker vexes, wandering traders and conversions. Not fired where vanilla creates the mob without it (breeding, an infested block's silverfish, a thrown egg's chick, a thrown pearl's endermite, hatching eggs, built golems, the oozing effect's slimes, a lightning trap's horse), for loads (`persist.rs` finalizes a placed entity only through its `horizon:finalize` marker, which is a load) or for structure mobs placed by world generation. Group data is left out: it lives only in the worldgen `finalize` path, which has no host. Both new types are plain data (`NativeDifficulty` and `NativeSpawner`, `#[non_exhaustive]`). Read-only host; replayed ticks, so listeners are pure functions of their inputs. Tick-time effect: one `listened` branch with no listeners. Beyond NeoForge: none.
+
+`window_resize` notifies client mods after a window resize or applying a changed GUI scale, fullscreen, or Unicode font setting. Its width and height are physical pixels; duplicate physical resize events are suppressed.
 
 ## Falling-block helmet wear
 

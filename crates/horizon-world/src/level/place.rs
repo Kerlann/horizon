@@ -59,6 +59,14 @@ pub struct PlacementPreview {
     pub companion: Option<(BlockPos, BlockStateId)>,
 }
 
+impl PlaceContext {
+    /// The neighbour opposite the clicked face of the actual placement position.
+    pub fn placed_against_pos(&self, placed_pos: BlockPos) -> BlockPos {
+        let [x, y, z] = self.face.opposite().normal();
+        placed_pos.offset(x, y, z)
+    }
+}
+
 /// `BlockPlaceContext` after resolving the replaced position: what
 /// `Block.getStateForPlacement` reads, and what a mod block is handed when it
 /// chooses the state it is placed in
@@ -1857,5 +1865,33 @@ impl Behaviours {
             ctx.pos = rel(input.clicked_pos, input.face);
         }
         sim.state_for_placement(block, &ctx)
+    }
+}
+
+#[cfg(test)]
+mod placed_against_tests {
+    use super::*;
+
+    #[test]
+    fn placed_against_uses_actual_placement_position() {
+        let clicked = BlockPos::new(10, 20, 30);
+        for face in Direction::ALL {
+            let ctx = PlaceContext {
+                clicked_pos: clicked,
+                face,
+                hit: Vec3::new(0.0, 0.0, 0.0),
+                inside: false,
+                yaw: 0.0,
+                pitch: 0.0,
+                sneaking: false,
+                item: String::new(),
+                can_use_game_master_blocks: false,
+            };
+            let [x, y, z] = face.normal();
+            // A solid clicked block puts the new block beside it.
+            assert_eq!(ctx.placed_against_pos(clicked.offset(x, y, z)), clicked);
+            // A replaceable clicked block is itself the placement position.
+            assert_eq!(ctx.placed_against_pos(clicked), clicked.offset(-x, -y, -z));
+        }
     }
 }

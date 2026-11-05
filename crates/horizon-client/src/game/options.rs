@@ -1,6 +1,6 @@
 //! The options screens bound to the game: drawing, input, applying settings
 //! (video, sound, chat, font, language) and the F11 fullscreen toggle.
-use super::{Game, Screen};
+use super::{Game, ResizeState, Screen};
 use horizon_client::{
     Result,
     hud::HudBatch,
@@ -287,6 +287,13 @@ impl Game<'_> {
             .shortcut(&self.gui.atlas, shortcut, &mut self.clipboard)
     }
     pub(super) fn options_scroll(&mut self, amount: f32) -> Result<()> {
+        if self.pad_stick_scroll() {
+            let size = self.gui_size();
+            self.ui
+                .options
+                .scroll_at(&self.settings, size, self.cursor, amount);
+            return Ok(());
+        }
         let framebuffer = self.renderer.as_ref().map_or([1280, 720], |r| {
             [r.config.width as i32, r.config.height as i32]
         });
@@ -478,6 +485,10 @@ impl Game<'_> {
     }
     /// Settings that Horizon applies beyond render distance, volume and GUI scale.
     pub(super) fn apply_ui_settings(&mut self) {
+        horizon_client::hud::GUI_SCALE.store(
+            self.settings.gui_scale,
+            std::sync::atomic::Ordering::Relaxed,
+        );
         if horizon_client_render::mipmap::set_dither_cutouts(
             self.settings.horizon.dither_cutout_mips,
         ) {
@@ -541,12 +552,29 @@ impl Game<'_> {
             font.reset_cache();
             self.ui.chat.rescale(&self.gui.atlas);
         }
+        self.notify_window_resize();
         // 3D skin layers: a skin's slabs are built when it is resolved, so a
         // change here rebuilds the players already on screen (the Options
         // screen keeps resolving them every frame; this covers the console
         // and a setting restored from options.txt at start).
         if self.title.is_none() {
             self.update_remote_skins();
+        }
+    }
+    pub(super) fn resize_state_of(&self, size: winit::dpi::PhysicalSize<u32>) -> ResizeState {
+        ResizeState {
+            size,
+            gui_scale: self.settings.gui_scale,
+            fullscreen: self.settings.fullscreen,
+            force_unicode: self.settings.force_unicode,
+        }
+    }
+    /// Fires `window_resize` once when the physical size or a GUI setting differs from the last report.
+    pub(super) fn notify_window_resize(&mut self) {
+        let Some(window) = &self.window else { return };
+        let now = self.resize_state_of(window.inner_size());
+        if now.differs_from(&mut self.resize_state) {
+            self.native_window_resize(now.size.width, now.size.height);
         }
     }
     /// `Window.updateFullscreenState`: a fullscreen change made by the window
@@ -566,6 +594,7 @@ impl Game<'_> {
         {
             self.settings.fullscreen = now;
             self.settings.save(&Self::options_path());
+            self.notify_window_resize();
         }
     }
     /// F11 (key.fullscreen): Window.toggleFullScreen, remembered in options.txt.
@@ -676,5 +705,38 @@ fn windowed_again(w: &winit::window::Window) {
             at.x + (screen.width.saturating_sub(small.width) / 2) as i32,
             at.y + (screen.height.saturating_sub(small.height) / 2) as i32,
         ));
+    }
+}
+
+#[cfg(test)]
+mod resize_state_tests {
+    use super::ResizeState;
+    use winit::dpi::PhysicalSize;
+
+    fn state(width: u32, fullscreen: bool) -> ResizeState {
+        ResizeState {
+            size: PhysicalSize::new(width, 480),
+            gui_scale: 2,
+            fullscreen,
+            force_unicode: false,
+        }
+    }
+
+    /// One resize event that also flips fullscreen is observed twice (by the fullscreen
+    /// observer and by the resize handler) but reported once.
+    #[test]
+    fn overlapping_observers_report_a_change_once() {
+        let mut last = Some(state(640, false));
+        let now = state(800, true);
+        assert!(now.differs_from(&mut last));
+        assert!(!now.differs_from(&mut last));
+    }
+
+    /// A settings-only change at an unchanged physical size still reports.
+    #[test]
+    fn a_settings_only_change_reports() {
+        let mut last = Some(state(640, false));
+        assert!(!state(640, false).differs_from(&mut last));
+        assert!(state(640, true).differs_from(&mut last));
     }
 }

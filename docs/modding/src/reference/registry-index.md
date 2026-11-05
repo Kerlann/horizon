@@ -106,6 +106,7 @@ id = "coords_hud"                # the file's name, and the manifest's id
 kind = "mod"                     # mod | native-mod | modpack | resourcepack | shader
 repo = "horizon-rust/coords-hud" # GitHub owner/name: its releases are its versions
 owners = ["ludovic111"]          # GitHub logins responsible for the project
+owner_ids = [12345678]           # their numeric GitHub IDs: these decide who an owner is (a login can change hands)
 key = "RWT..."                   # optional: the minisign public key every version is signed with
 icon = "icons/coords_hud.png"    # optional: a PNG of at most 256 KiB in the repository, or https://
 # The page. Each field may instead come from horizon-registry.toml in the repo (below); these win.
@@ -168,8 +169,10 @@ The submission form's service (`crates/horizon-mod-registry`) lists a new projec
 reads the repository's address and the page, and opens the pull request. It no longer takes updates for a project listed
 with a `repo`: "publish a GitHub release in <repo>". Projects without a `repo` can still be updated through the form
 (it uploads the file to the repository's `staging` release as `<sha256>.<extension>` and opens a pull request; an
-owner's update with nothing else changed is merged by `owner-update` once the checks pass). A project's kind never
-changes. A submission that GitHub broke off after
+owner's update with nothing else changed is merged by `owner-update` once the checks pass; only an owner whose numeric
+GitHub ID is in `owner_ids` gets that, and an entry without `owner_ids` matches its owners by login and always waits for
+a reviewer). The registry's deployment contract is [owner-update-v2.md](https://github.com/arismoko/horizon/blob/main/docs/api/owner-update-v2.md).
+A project's kind never changes. A submission that GitHub broke off after
 making its `submit/<id>-<version>` branch can be sent again: the same account's retry starts that branch again from
 `main` while it has no open pull request; anyone else's is refused.
 

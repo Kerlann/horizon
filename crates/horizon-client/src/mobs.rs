@@ -1080,6 +1080,8 @@ pub struct Extra {
     /// Secondary variant (horse markings, tropical fish pattern colours, panda hidden gene).
     pub variant2: u8,
     pub variant3: u8,
+    /// VillagerData.level for villagers and zombie villagers.
+    pub villager_level: i32,
     /// `MushroomCow.stewEffects`: what a brown one took from a flower, given
     /// back in its next bowl of stew. `None` is vanilla's null.
     pub stew_effects: Option<Vec<(Arc<str>, i32)>>,

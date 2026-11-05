@@ -3344,7 +3344,7 @@ fn villager_data(m: &Mob) -> Tag {
                 PROFESSIONS[m.extra.variant2 as usize % PROFESSIONS.len()]
             )),
         ),
-        ("level", Tag::Int(i32::from(m.extra.variant3.max(1)))),
+        ("level", Tag::Int(m.extra.villager_level.max(1))),
     ])
 }
 /// `AbstractVillager` "Offers" (`MerchantOffers.CODEC`).
@@ -3472,9 +3472,9 @@ fn read_villager(m: &mut Mob, tag: &Tag) {
         m.extra.variant2 = name("profession")
             .and_then(|p| PROFESSIONS.iter().position(|v| *v == p))
             .unwrap_or(0) as u8;
-        m.extra.variant3 = number(data.get("level"))
+        m.extra.villager_level = number(data.get("level"))
             .unwrap_or(1)
-            .clamp(1, i64::from(u8::MAX)) as u8;
+            .clamp(1, i64::from(i32::MAX)) as i32;
     }
     let memory = |key: &str| {
         tag.get("Brain")
@@ -3800,6 +3800,28 @@ mod tests {
             );
             assert_eq!(mob.swell, expected, "Fuse={fuse:?}");
         }
+    }
+
+    #[test]
+    fn villager_level_round_trips_above_byte_range() {
+        use crate::mobs::Species;
+        let mut kind = crate::mobs::sensor_scan_tests::kind();
+        let def = Arc::make_mut(&mut kind);
+        def.id = "minecraft:villager".into();
+        def.species = Species::Villager;
+        let types = [("minecraft:villager".into(), kind)].into();
+        let data = Tag::compound([
+            ("profession", string("minecraft:farmer")),
+            ("type", string("minecraft:plains")),
+            ("level", Tag::Int(123456)),
+        ]);
+        let tag = Tag::compound([
+            ("id", string("minecraft:villager")),
+            ("Pos", doubles(&[0.0, 100.0, 0.0])),
+            ("VillagerData", data.clone()),
+        ]);
+        let mob = mob_from_nbt(&tag, &types, 7, None).unwrap();
+        assert_eq!(villager_data(&mob), data);
     }
 
     #[test]

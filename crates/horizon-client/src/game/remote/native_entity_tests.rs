@@ -109,7 +109,10 @@ fn a_client_reads_the_entities_and_menu_the_server_shows_it() {
     assert_eq!(game.native_entity_rotation(me), Some([45.0, 10.0]));
     // The profile the login named (the net thread's `Joined`).
     game.remote.as_mut().unwrap().profile_name = "Steve".into();
-    assert_eq!(game.native_entity_name(me).as_deref(), Some("Steve"));
+    assert_eq!(
+        me.name(&game as &dyn mod_api::ClientHost).as_deref(),
+        Some("Steve")
+    );
 
     // An armor stand with a custom name and a helmet.
     let uuid = 0x0011_2233_4455_6677_8899_aabb_ccdd_eeff;
@@ -134,26 +137,27 @@ fn a_client_reads_the_entities_and_menu_the_server_shows_it() {
     assert_eq!(game.native_entity_block_position(stand), Some([1, 64, 2]));
     assert_eq!(game.native_entity_rotation(stand), Some([90.0, 0.0]));
     assert_eq!(game.native_entity_uuid(stand), Some(uuid));
-    assert_eq!(game.native_entity_name(stand).as_deref(), Some("Greeter"));
-    let living = game.native_living(stand).expect("an armor stand is living");
-    let head = game.native_living_equipment(living, EquipmentSlot::Head);
     assert_eq!(
-        head.map(|s| s.item.to_string()).as_deref(),
-        Some("minecraft:diamond_helmet")
+        stand.name(&game as &dyn mod_api::ClientHost).as_deref(),
+        Some("Greeter")
     );
+    // The client keeps the stand's equipment for rendering, but only its own
+    // player is exposed as a LivingRef.
+    assert_eq!(game.native_living(stand), None);
+    let head = &game
+        .armor_stands
+        .iter()
+        .find(|a| a.id == 20)
+        .unwrap()
+        .equipment[EquipmentSlot::Head as usize];
     assert_eq!(
-        game.native_living_equipment(living, EquipmentSlot::Chest),
-        None
+        head.as_ref().map(|s| &*s.item),
+        Some("minecraft:diamond_helmet")
     );
     // A client knows no saved data or tags, and changes nothing itself.
     assert_eq!(game.native_entity_nbt(stand), None);
     assert_eq!(game.native_entity_tags(stand), None);
     assert!(!game.native_entity_add_tag(stand, "seen"));
-    assert!(!game.native_living_set_equipment(living, EquipmentSlot::Head, None));
-    assert!(
-        game.native_living_equipment(living, EquipmentSlot::Head)
-            .is_some()
-    );
     assert!(!game.native_entity_set_velocity(stand, [0.0, 1.0, 0.0]));
 
     // An entity the client keeps no list of its own for: its type and

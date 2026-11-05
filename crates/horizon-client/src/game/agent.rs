@@ -696,7 +696,7 @@ impl Game<'_> {
                 v["villager"] = json!({
                     "type": VILLAGER_TYPES[m.extra.variant as usize % VILLAGER_TYPES.len()],
                     "profession": PROFESSIONS[m.extra.variant2 as usize % PROFESSIONS.len()],
-                    "level": m.extra.variant3,
+                    "level": m.extra.villager_level,
                 });
             }
             push(

@@ -1,7 +1,8 @@
 //! An entity's saved data, tags and name for native server mods, through an
 //! `EntityRef` (docs/modding/src/how-to/native-mods.md, "Entity and level handles", #7387): what
 //! `/data` and `/tag` read and change. They return `None` (or `false`) for a
-//! stale handle or on a client.
+//! stale handle or on a client, which the server sends no saved data or tags;
+//! only the name reads there.
 use super::{Game, commands::Target};
 use horizon_world::nbt::{Compound, Tag};
 use mod_api::EntityRef;
@@ -95,7 +96,7 @@ impl Game<'_> {
     /// (`Entity.DATA_CUSTOM_NAME`) and a player's profile name. API
     /// 386.
     pub(super) fn native_entity_name(&self, entity: EntityRef) -> Option<String> {
-        let t = self.native_entity_target(entity)?;
+        let t = self.native_entity_read_target(entity)?;
         if let Some(r) = &self.remote {
             let id = i32::try_from(entity.id()).ok()?;
             if let Some((_, Some(name))) = r.level_player(id) {

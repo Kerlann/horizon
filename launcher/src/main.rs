@@ -56,9 +56,9 @@ mod motion;
 mod multiplayer_page;
 mod native_log_page;
 mod new_instance;
+mod open_card;
 mod owner_page;
 mod packs_page;
-mod partner;
 mod perf;
 mod plate;
 mod profile_heads;
@@ -304,7 +304,7 @@ struct Launcher {
     settings: Settings,
     /// The last failed settings write, kept across page changes until a save succeeds.
     settings_save_error: Option<String>,
-    /// The Discord, sponsor and website links: built in until links.json on main has been read.
+    /// The Roadmap and Documentation links: built in until links.json on the fork's main has been read.
     links: backend::Links,
     preparing: bool,
     prepare_log: VecDeque<String>,
@@ -479,33 +479,6 @@ impl Launcher {
                 .is_err()
             {
                 break;
-            }
-        })
-        .detach();
-        // Counts the time a partner banner is on screen, until it may be hidden.
-        cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(Duration::from_secs(10))
-                    .await;
-                let counting = this.update(cx, |this, cx| {
-                    let s = &mut this.settings;
-                    if s.partner_hidden || s.partner_seen_secs >= partner::SEEN_BEFORE_HIDE {
-                        return false;
-                    }
-                    // On screen on every page: the card in the sidebar, the banner on Servers.
-                    s.partner_seen_secs += 10;
-                    if s.partner_seen_secs % 60 == 0
-                        || s.partner_seen_secs >= partner::SEEN_BEFORE_HIDE
-                    {
-                        this.save_settings();
-                        cx.notify();
-                    }
-                    true
-                });
-                if !matches!(counting, Ok(true)) {
-                    break;
-                }
             }
         })
         .detach();
@@ -1018,8 +991,6 @@ impl Launcher {
                     self.releases = r.map_or_else(Load::Failed, Load::Ready)
                 }
                 Msg::Links(links) => {
-                    // The official server may have moved: its list entry follows.
-                    self.multiplayer.stale();
                     self.links = links;
                 }
                 // The page reads is_prepared when drawn; `changed` redraws it.
@@ -2768,7 +2739,6 @@ impl Launcher {
             },
         ));
         let items = self.instance_items(heading, cx);
-        let mut rows = items.len();
         let list = div()
             .flex()
             .flex_col()
@@ -2784,8 +2754,6 @@ impl Launcher {
         if !servers.is_empty() {
             list = list.child(heading(tr("SERVERS").into()));
         }
-        rows += servers.len();
-        let headings = 1 + usize::from(!servers.is_empty());
         for e in servers {
             let up = self.servers.is_up(&e.dir);
             let open = self.page == Page::Servers && self.servers.open.as_ref() == Some(&e.dir);
@@ -2916,57 +2884,28 @@ impl Launcher {
             }
             _ => {}
         }
-        // Sculk's card above the links: seen without scrolling, on every page but Servers, which shows
-        // its wide banner. Tall where the sidebar has the height for it besides the wordmark, its rows
-        // (52 high each, under headings of 40) and the links, compact otherwise. After a while on
-        // screen a "Hide" beside its label puts it away for good.
-        if self.page != Page::Servers && !self.settings.partner_hidden {
-            let free = f32::from(window.viewport_size().height)
-                - theme::TOPBAR
-                - 40. * headings as f32
-                - 52. * rows as f32
-                - 110.;
-            let mut side = div().relative().mb(px(8.)).child(partner::card(
-                "partner-side",
-                theme::SIDEBAR - 20.,
-                free < partner::TALL_HEIGHT,
-                &t,
-            ));
-            if self.settings.partner_seen_secs >= partner::SEEN_BEFORE_HIDE {
-                let hide = partner::hide_button("partner-hide", &t).on_click(cx.listener(
-                    |this, _: &ClickEvent, _, cx| {
-                        this.settings.partner_hidden = true;
-                        this.save_settings();
-                        cx.notify();
-                    },
-                ));
-                side = side.child(hide);
+        foot = foot.child(div().mb(px(8.)).child(open_card::card(
+            "open-card",
+            theme::FONT,
+            open_card::Palette {
+                ink: shell::c(n.ink),
+                soft: shell::c(n.muted),
+                accent: gpui::rgb(0x6b4bff).into(),
+            },
+            &self.theme,
+        )));
+        for (id, label, icon, url) in [
+            ("roadmap", tr("Roadmap"), "map", &self.links.roadmap),
+            (
+                "documentation",
+                tr("Documentation"),
+                "book-open",
+                &self.links.docs,
+            ),
+        ] {
+            if !url.is_empty() {
+                foot = foot.child(link(id, label, icon, url.clone()));
             }
-            foot = foot.child(side);
-        }
-        if !self.links.sponsor.is_empty() {
-            foot = foot.child(link(
-                "sponsor",
-                tr("Sponsor"),
-                "heart",
-                self.links.sponsor.clone(),
-            ));
-        }
-        if !self.links.discord.is_empty() {
-            foot = foot.child(link(
-                "discord",
-                "Discord",
-                "message",
-                self.links.discord.clone(),
-            ));
-        }
-        if !self.links.website.is_empty() {
-            foot = foot.child(link(
-                "website",
-                tr("Website"),
-                "globe",
-                self.links.website.clone(),
-            ));
         }
         foot = foot.child(
             shell::text(theme::night::CAPTION, shell::c(n.muted))
@@ -3024,7 +2963,7 @@ impl Launcher {
             |tag| {
                 horizon_launcher::nightly::label(tag)
                     .or_else(|| build_import::label(tag))
-                    .unwrap_or_else(|| tag.clone())
+                    .unwrap_or_else(|| horizon_launcher::nightly::short_commit(tag))
             },
         );
         // As tall as Play: "Version" over the tag, and a chevron.
@@ -3538,14 +3477,11 @@ impl Launcher {
                     crate::glass_toast::open(cx, &dir);
                 }),
         );
-        let discord = self.links.discord.clone();
-        if !discord.is_empty() {
-            actions = actions.child(
-                button("crash-discord", "Report on Discord", Kind::Secondary, &t)
-                    .bg(t.plate)
-                    .on_click(move |_, _, cx| cx.open_url(&discord)),
-            );
-        }
+        actions = actions.child(
+            button("crash-report", "Report on GitHub", Kind::Secondary, &t)
+                .bg(t.plate)
+                .on_click(|_, _, cx| cx.open_url(&backend::issues_url())),
+        );
         actions = actions.child(
             button("crash-dismiss", "Dismiss", Kind::Ghost, &t).on_click(cx.listener(
                 |this, _: &ClickEvent, _, cx| {
@@ -3555,9 +3491,9 @@ impl Launcher {
             )),
         );
         let help = tr(if crash.report.is_some() {
-            "When you report it on Discord, attach the crash report file (or paste it with Copy report) and say what you were doing."
+            "When you report it on GitHub, attach the crash report file (or paste it with Copy report) and say what you were doing."
         } else {
-            "The game ended without a crash report. When you report it on Discord, attach latest.log from the logs folder and say what you were doing."
+            "The game ended without a crash report. When you report it on GitHub, attach latest.log from the logs folder and say what you were doing."
         });
         let mut body = div()
             .flex_1()
@@ -4891,46 +4827,11 @@ impl Launcher {
         if t.glass {
             return self.glass_notes(cx);
         }
-        let sponsor = (!self.links.sponsor.is_empty()).then(|| {
-            plate(&t)
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap(px(16.))
-                .p(px(24.))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.))
-                        .child(
-                            text(theme::HEADING)
-                                .text_color(t.ink)
-                                .child(tr("Support the work below")),
-                        )
-                        .child(text(theme::UI).text_color(t.muted).child(tr(
-                            "Horizon is built in the open. Sponsors fund the next release.",
-                        ))),
-                )
-                .child(
-                    button("sponsor", "Sponsor on GitHub", Kind::Secondary, &t)
-                        .bg(t.plate)
-                        .on_click({
-                            let url = self.links.sponsor.clone();
-                            move |_: &ClickEvent, _, cx| cx.open_url(&url)
-                        }),
-                )
-        });
-        let page = div()
-            .flex()
-            .flex_col()
-            .gap(px(32.))
-            .child(page_header(
-                "Patch notes",
-                "What changed in each release, newest first.",
-                &t,
-            ))
-            .children(sponsor);
+        let page = div().flex().flex_col().gap(px(32.)).child(page_header(
+            "Patch notes",
+            "What changed in each release, newest first.",
+            &t,
+        ));
         let releases = match &self.releases {
             Load::Loading => return page.child(centered(tr("Loading patch notes…"), &t)),
             Load::Failed(e) => {
@@ -5151,7 +5052,7 @@ impl Render for Launcher {
         let (topbar, sidebar) = if t.glass {
             (
                 self.glass_topbar(cx),
-                self.glass_sidebar(window, cx).into_any_element(),
+                self.glass_sidebar(cx).into_any_element(),
             )
         } else {
             (self.topbar(cx), self.sidebar(window, cx).into_any_element())

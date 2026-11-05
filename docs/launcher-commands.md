@@ -137,7 +137,7 @@ MCP: `notes`.
 
 ## `horizon-launcher links`
 
-Show the Discord, sponsor and website links.
+Show the website, roadmap and documentation links.
 
     horizon-launcher links
 

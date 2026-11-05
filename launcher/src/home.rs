@@ -38,7 +38,9 @@ impl Launcher {
                 "Horizon {}",
                 horizon_launcher::nightly::label(tag)
                     .or_else(|| horizon_launcher::build_import::label(tag))
-                    .unwrap_or_else(|| tag.trim_start_matches('v').to_string())
+                    .unwrap_or_else(|| horizon_launcher::nightly::short_commit(
+                        tag.trim_start_matches('v')
+                    ))
             ));
         }
         what.push(tr(if prepared { "Ready" } else { "Needs preparing" }).to_string());
@@ -248,7 +250,11 @@ impl Launcher {
                         .child(
                             horizon_launcher::nightly::label(tag)
                                 .or_else(|| horizon_launcher::build_import::label(tag))
-                                .unwrap_or_else(|| tag.trim_start_matches('v').to_string()),
+                                .unwrap_or_else(|| {
+                                    horizon_launcher::nightly::short_commit(
+                                        tag.trim_start_matches('v'),
+                                    )
+                                }),
                         ),
                 )
                 .child(

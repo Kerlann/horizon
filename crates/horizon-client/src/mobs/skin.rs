@@ -601,7 +601,7 @@ mod tests {
                         "minecraft:villager" | "minecraft:zombie_villager"
                     ) {
                         m.extra.variant2 = 5;
-                        m.extra.variant3 = 3;
+                        m.extra.villager_level = 3;
                     }
                     // White field markings (`entityTranslucent`).
                     if id == "minecraft:horse" {

@@ -488,7 +488,7 @@ fn villager_data(m: &mut Mob, data: &[i32], builtin: &Builtin) {
     if let Some(p) = index("minecraft:villager_profession", profession, &PROFESSIONS) {
         m.extra.variant2 = p;
     }
-    m.extra.variant3 = level.clamp(0, i32::from(u8::MAX)) as u8;
+    m.extra.villager_level = level.max(1);
 }
 
 impl Game<'_> {
@@ -1270,7 +1270,7 @@ mod tests {
             (
                 VILLAGER_TYPES[m.extra.variant as usize],
                 PROFESSIONS[m.extra.variant2 as usize],
-                m.extra.variant3,
+                m.extra.villager_level,
             )
         };
         apply(
@@ -1284,6 +1284,15 @@ mod tests {
             &[(19, s::VILLAGER_DATA, Value::Ids(vec![desert, librarian, 5]))],
         );
         assert_eq!(name(&m), ("desert", "librarian", 5));
+        apply(
+            &mut m,
+            &[(
+                19,
+                s::VILLAGER_DATA,
+                Value::Ids(vec![desert, librarian, 123456]),
+            )],
+        );
+        assert_eq!(name(&m), ("desert", "librarian", 123456));
         // A zombie villager's data comes after Zombie's three entries.
         let mut z = mob("minecraft:zombie_villager").unwrap();
         apply(

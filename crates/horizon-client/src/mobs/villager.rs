@@ -11,7 +11,7 @@ use horizon_core::random::RandomSource;
 use std::f32::consts::PI;
 
 // Villager state: `variant` type, `variant2` profession (index into
-// `render::PROFESSIONS`), `variant3` level, `home` the claimed job site,
+// `render::PROFESSIONS`), `villager_level` level, `home` the claimed job site,
 // `bed` and `meeting` the claimed bed head and bell, `ints[0]` the unhappy
 // counter, `ints[1]` the bed's facing while asleep (1 north, 2 south,
 // 3 west, 4 east), `trade` the offers, experience and restocks.
@@ -40,8 +40,8 @@ pub fn job_site_profession(block: &str) -> Option<u8> {
 }
 
 pub fn register(m: &mut Mob) {
-    if m.extra.variant3 == 0 {
-        m.extra.variant3 = 1;
+    if m.extra.villager_level == 0 {
+        m.extra.villager_level = 1;
     }
     // Villager's constructor: its brain does everything, it has no goals.
     m.ai.nav.can_open_doors = true;

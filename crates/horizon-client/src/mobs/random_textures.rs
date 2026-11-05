@@ -151,7 +151,7 @@ pub fn choose(
     let profession =
         matches!(m.species(), Species::Villager | Species::ZombieVillager).then(|| {
             let name = PROFESSIONS[m.extra.variant2 as usize % PROFESSIONS.len()];
-            (format!("minecraft:{name}"), i32::from(m.extra.variant3))
+            (format!("minecraft:{name}"), m.extra.villager_level.max(1))
         });
     let facts = Facts {
         biome: seen.biome.as_deref(),
@@ -570,14 +570,14 @@ mod tests {
         );
         let mut m = mob(Species::Villager);
         m.extra.variant2 = PROFESSIONS.iter().position(|&p| p == "librarian").unwrap() as u8;
-        m.extra.variant3 = 3;
+        m.extra.villager_level = 3;
         choose(&mut m, &t, &data(), Some(seen("minecraft:plains")), 0);
         let villager2 = variant("entity/villager/villager2");
         assert_eq!(
             texture(&m, &t, "entity/villager/villager"),
             Some(villager2.as_str())
         );
-        m.extra.variant3 = 2;
+        m.extra.villager_level = 2;
         choose(&mut m, &t, &data(), None, 0);
         assert_eq!(texture(&m, &t, "entity/villager/villager"), None);
     }

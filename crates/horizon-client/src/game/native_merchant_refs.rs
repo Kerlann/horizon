@@ -68,7 +68,7 @@ impl Game<'_> {
         {
             return read(&session.offers, session.xp, session.level);
         }
-        let level = i32::from(mob.extra.variant3.max(1));
+        let level = mob.extra.villager_level.max(1);
         match mob.extra.trade.as_deref() {
             Some(t) if !t.unset => read(&t.offers, t.xp, level),
             Some(t) => read(&[], t.xp, level),
@@ -103,10 +103,10 @@ impl Game<'_> {
                 ..Trader::default()
             })
         });
-        let mut level = i32::from(mob.extra.variant3.max(1));
+        let mut level = mob.extra.villager_level.max(1);
         let done = edit(&mut trader.offers, &mut trader.xp, &mut level);
         if done && mob.species() == Species::Villager {
-            mob.extra.variant3 = level.clamp(1, i32::from(u8::MAX)) as u8;
+            mob.extra.villager_level = level.max(1);
         }
         done
     }
@@ -238,22 +238,21 @@ impl Game<'_> {
         true
     }
 
-    /// `VillagerData.level`, 1 to 5.
+    /// `VillagerData.level`, at least 1.
     pub(super) fn native_villager_level(&self, merchant: MerchantRef) -> Option<i32> {
         let index = self.native_villager_index(merchant)?;
         Some(self.merchant_read(index, |_, _, level| level.max(1)))
     }
 
     /// `VillagerData.withLevel`: `Math.max(1, level)`, with no upper limit in
-    /// vanilla. Horizon stores a level in a byte, so one above 255 is kept
-    /// as 255. The offers stay as they are; the next level-up adds its trades
+    /// vanilla. The offers stay as they are; the next level-up adds its trades
     /// (a level past 5 can't level up). A trading guest's session follows,
     /// and gets the sequences a level-up from the new level needs.
     pub(super) fn native_villager_set_level(&mut self, merchant: MerchantRef, level: i32) -> bool {
         let Some(index) = self.native_villager_index(merchant) else {
             return false;
         };
-        let level = level.clamp(1, i32::from(u8::MAX));
+        let level = level.max(1);
         self.merchant_write(index, |_, _, current| {
             *current = level;
             true
@@ -436,14 +435,17 @@ pub(super) mod tests {
             assert_eq!(villager.level(game), Some(1));
             assert!(villager.set_level(game, 4));
             assert_eq!(villager.level(game), Some(4));
-            assert_eq!(game.mobs[0].extra.variant3, 4);
-            // Vanilla: `Math.max(1, level)`, no upper limit; a byte holds 255.
+            assert_eq!(game.mobs[0].extra.villager_level, 4);
+            assert!(villager.set_level(game, 123456));
+            assert_eq!(villager.level(game), Some(123456));
+            assert_eq!(game.mobs[0].extra.villager_level, 123456);
+            // Vanilla: `Math.max(1, level)`, no upper limit.
             assert!(villager.set_level(game, 0));
             assert_eq!(villager.level(game), Some(1));
             assert!(villager.set_level(game, 6));
             assert_eq!(villager.level(game), Some(6));
             assert!(villager.set_level(game, 1000));
-            assert_eq!(villager.level(game), Some(255));
+            assert_eq!(villager.level(game), Some(1000));
             assert!(villager.set_level(game, 4));
             assert_eq!(
                 villager.villager_type(game).as_deref(),

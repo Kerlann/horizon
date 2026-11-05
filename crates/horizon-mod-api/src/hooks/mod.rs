@@ -285,4 +285,5 @@ mod translate;
 mod use_item_on_block;
 mod validate_tickets;
 mod vanilla_game_event;
+mod window_resize;
 mod xp_orb_targeting;

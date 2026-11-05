@@ -936,7 +936,7 @@ fn mob_meta(
                 id("minecraft:villager_profession", profession),
             ) {
                 let index = if kind == "minecraft:villager" { 19 } else { 20 };
-                let level = i32::from(e.variant3.max(1));
+                let level = e.villager_level.max(1);
                 meta.push((
                     index,
                     serializer::VILLAGER_DATA,

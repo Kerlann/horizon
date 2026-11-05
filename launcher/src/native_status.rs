@@ -102,7 +102,7 @@ impl Build {
     pub fn horizon_short(&self) -> String {
         match crate::nightly::date_of(&self.base) {
             Some(date) => format!("Nightly {}", &date[5..]),
-            None => self.base.clone(),
+            None => crate::nightly::short_commit(&self.base),
         }
     }
 }
@@ -112,7 +112,7 @@ impl Build {
 pub fn horizon_label(version: &str) -> String {
     match crate::nightly::date_of(version) {
         Some(date) => format!("Nightly {date}"),
-        None => version.to_owned(),
+        None => crate::nightly::short_commit(version),
     }
 }
 

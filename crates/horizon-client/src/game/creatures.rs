@@ -710,6 +710,28 @@ impl Game<'_> {
             self.lan_entity_event(id as i32, event, at);
         }
     }
+    /// Transfer the entity-owned state that is stored outside `Mob`.
+    fn transfer_conversion_identity(&mut self, from: u32, to: u32) {
+        use super::commands::Target;
+        use horizon_client::save::uuid_text;
+
+        let tags = self.tags_of(Target::Mob(from));
+        if !tags.is_empty() {
+            self.set_entity_tags(Target::Mob(to), &tags);
+        }
+        self.load_scoreboard();
+        let old_name = uuid_text(self.uuid_for(from));
+        let team = self
+            .score
+            .board
+            .players_team(&old_name)
+            .map(|t| t.name.clone());
+        if let Some(team) = team {
+            let new_name = uuid_text(self.uuid_for(to));
+            self.score.board.add_to_team(&new_name, &team);
+            self.score.board.remove_from_team(&old_name);
+        }
+    }
     /// Finalize a converted frog or witch before it joins the level.
     fn finalize_converted(&mut self, mob: &mut Mob) {
         // A mod that stops a conversion's finalization leaves the mob as converted.
@@ -754,6 +776,7 @@ impl Game<'_> {
         self.next_entity += 1;
         let mut mob = Mob::new(self.next_entity, t, from.position, from.yaw);
         horizon_client::mobs::conversion::single(&from, &mut mob, params);
+        self.transfer_conversion_identity(from.id, mob.id);
         if matches!(from.species(), Species::Zombie | Species::Husk) {
             let at = [from.position.x, from.position.y, from.position.z];
             let special = self.local_difficulty(at).special();
@@ -8624,6 +8647,49 @@ mod tests {
     use super::thrown_item_axes;
     use super::thrown_item_quad;
     use super::{ProjectileKind, is_item_billboard};
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn conversion_transfers_tags_and_team() {
+        use super::super::commands::Target;
+        use horizon_client::{
+            mobs::{Mob, conversion::Params},
+            save::uuid_text,
+        };
+        use horizon_core::geometry::Vec3;
+
+        super::super::native_entity_refs::tests::with_game(|game| {
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:villager")
+                .unwrap()
+                .clone();
+            let from = Mob::new(100, kind, Vec3::ZERO, 0.0);
+            game.mobs.push(from.clone());
+            game.next_entity = 100;
+            game.set_entity_tags(Target::Mob(100), &["tracked".into()]);
+            let old = uuid_text(game.uuid_for(100));
+            game.load_scoreboard();
+            game.score.board.add_team("test");
+            game.score.board.add_to_team(&old, "test");
+            let id = game
+                .convert_to(
+                    &from,
+                    "minecraft:zombie_villager",
+                    Params {
+                        keep_equipment: false,
+                        preserve_can_pick_up_loot: true,
+                    },
+                    |_, _| {},
+                )
+                .unwrap();
+            assert_eq!(game.tags_of(Target::Mob(id)), ["tracked"]);
+            let new = uuid_text(game.uuid_for(id));
+            assert_eq!(game.score.board.players_team(&new).unwrap().name, "test");
+            assert!(game.score.board.players_team(&old).is_none());
+        });
+    }
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]

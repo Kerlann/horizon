@@ -310,3 +310,26 @@ fn render_gui_pre_cancel_reaches_the_game() {
     assert!(canceled, "a mod's cancel reaches the game");
     assert_eq!(*heard.lock().unwrap(), ["pre"]);
 }
+
+#[test]
+fn window_resize_delivers_physical_dimensions() {
+    use std::sync::Mutex;
+    struct TestHost;
+    impl Host for TestHost {}
+    impl ClientHost for TestHost {}
+    struct Listener(Arc<Mutex<Vec<(u32, u32)>>>);
+    #[mod_api::__subscriptions]
+    impl Hooks for Listener {
+        fn window_resize(&self, _: &mut dyn ClientHost, event: &mut WindowResizeEvent) {
+            self.0.lock().unwrap().push((event.width, event.height));
+        }
+    }
+    let heard = Arc::new(Mutex::new(Vec::new()));
+    testing::with_mods(
+        vec![ModEntry::new("resize", Box::new(Listener(heard.clone())))].into(),
+        || {
+            dispatch_window_resize(&mut TestHost, 1200, 900);
+        },
+    );
+    assert_eq!(*heard.lock().unwrap(), [(1200, 900)]);
+}

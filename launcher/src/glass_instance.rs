@@ -569,7 +569,7 @@ pub(super) fn horizon_choices(releases: &[Release], installed: &[String]) -> Vec
 fn version_label(tag: &str) -> String {
     horizon_launcher::nightly::label(tag)
         .or_else(|| build_import::label(tag))
-        .unwrap_or_else(|| tag.to_string())
+        .unwrap_or_else(|| horizon_launcher::nightly::short_commit(tag))
 }
 
 impl Launcher {

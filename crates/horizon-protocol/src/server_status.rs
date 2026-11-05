@@ -3,21 +3,10 @@
 //! status state, a status request, and the server's JSON answer. Nothing about the asker is sent.
 //!
 //! The launcher's server list asks for it when the list or a server's page is shown, never in
-//! the background. [`OFFICIAL_ADDRESS`] is the official server's built-in address; the launcher
-//! takes the current one from `launcher/links.json`.
+//! the background.
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
-
-/// Horizon's official survival server (SMP). The launcher's server list offers the same entry
-/// (`launcher/src/server_list.rs`) until links.json names another. Its SRV record leads to the
-/// port.
-pub const OFFICIAL_ADDRESS: &str = "play.playhorizon.dev";
-
-/// The official server's earlier addresses: the game and the launcher move a server list's
-/// entries for them to [`OFFICIAL_ADDRESS`], once. A move appends the old address here (and to
-/// `official_server_previous` in `launcher/links.json`).
-pub const OFFICIAL_PREVIOUS: &[&str] = &["horizon.bunchy7s.dev"];
 
 /// The port a server address without one means.
 pub const DEFAULT_PORT: u16 = 25565;

@@ -890,8 +890,8 @@
 //!
 //! API 20 adds buttons, tooltips and item icons on mod screens
 //! (`native_screen_click`, `native_screen_tooltip`, `native_menu_button`,
-//! and `native_item`, `native_screen_title`, `native_data`, `native_block`,
-//! `native_block_property`, `native_insert_item`, `native_cursor`).
+//! and `native_item`, `native_screen_title`, `native_data`, `LevelRef::block`,
+//! `LevelRef::block_property`, `native_insert_item`, `native_cursor`).
 //!
 //! API 19 adds mod-drawn screens for mod blocks (`native_screen`,
 //! `native_screen_draw`, and the `native_sprite` helpers), with the mod's own
@@ -3210,6 +3210,10 @@ impl Game<'_> {
         canceled: &mut bool,
     ) {
         self.fire_mouse_button_pre(button, pressed, modifiers, canceled);
+    }
+    /// The physical window size changed.
+    pub(super) fn native_window_resize(&mut self, width: u32, height: u32) {
+        self.fire_window_resize(width, height);
     }
     /// An accepted raw button event finished dispatch, including a screen handler's early return.
     pub(super) fn native_mouse_button_post(&mut self, button: i32, pressed: bool, modifiers: u32) {
@@ -10302,11 +10306,6 @@ impl Game<'_> {
         }
         fs::read(self.options.resources.join(path)).ok()
     }
-    /// The block at `pos` (`mymod:cable`; air where nothing is loaded).
-    pub(super) fn native_block(&self, pos: [i32; 3]) -> String {
-        let state = self.world.block(pos[0], pos[1], pos[2]);
-        self.res.facts().get(state).name.to_string()
-    }
     /// The most recently extracted world frame's camera, if one exists.
     /// During GUI rendering this is the current frame, including bob/spin and FOV.
     pub(super) fn native_camera(&self) -> Option<NativeCamera> {
@@ -10330,18 +10329,6 @@ impl Game<'_> {
                 [min.x, min.y, min.z, max.x, max.y, max.z]
             })
             .collect()
-    }
-    /// Property `key` of the block at `pos` (a machine's `facing`), if it
-    /// has one.
-    pub(super) fn native_block_property(&self, pos: [i32; 3], key: &str) -> Option<String> {
-        let state = self.world.block(pos[0], pos[1], pos[2]);
-        self.pack
-            .assets
-            .registry
-            .state(state)?
-            .properties
-            .get(key)
-            .cloned()
     }
     /// The window's width and height in physical pixels, independent of GUI
     /// scale; none on a server or when no window exists.
@@ -10900,9 +10887,10 @@ impl Game<'_> {
         else {
             return false;
         };
+        let against_pos = ctx.placed_against_pos(preview.pos);
         let against = self
             .world
-            .block(ctx.clicked_pos.x, ctx.clicked_pos.y, ctx.clicked_pos.z);
+            .block(against_pos.x, against_pos.y, against_pos.z);
         let (_, entity) = self.native_clicker();
         self.place_canceled(
             entity.cast_unsigned(),

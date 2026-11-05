@@ -411,7 +411,8 @@ impl Launcher {
                         "Stay on {version}",
                         &[(
                             "version",
-                            &horizon_launcher::nightly::label(tag).unwrap_or(tag.to_string()),
+                            &horizon_launcher::nightly::label(tag)
+                                .unwrap_or_else(|| horizon_launcher::nightly::short_commit(tag)),
                         )],
                     ),
                     locked || !ready,
@@ -497,7 +498,7 @@ impl Launcher {
             |tag| {
                 horizon_launcher::nightly::label(tag)
                     .or_else(|| build_import::label(tag))
-                    .unwrap_or_else(|| tag.clone())
+                    .unwrap_or_else(|| horizon_launcher::nightly::short_commit(tag))
             },
         );
         let open = self.picker_open;
@@ -565,7 +566,7 @@ impl Launcher {
                 let latest = follows.as_ref() == Some(tag);
                 let name = horizon_launcher::nightly::label(tag)
                     .or_else(|| build_import::label(tag))
-                    .unwrap_or_else(|| tag.clone());
+                    .unwrap_or_else(|| horizon_launcher::nightly::short_commit(tag));
                 let note = if latest {
                     tr("Newest · follows updates").to_string()
                 } else {

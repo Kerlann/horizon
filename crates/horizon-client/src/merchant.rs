@@ -254,7 +254,7 @@ impl Session {
     /// The trade sets whose sequences a villager of `profession` at `level`
     /// may draw while trading: those of the levels above it.
     pub fn sequences_needed(trades: &Trades, profession: &str, level: i32) -> Vec<String> {
-        (level + 1..=5)
+        (level.saturating_add(1)..=5)
             .filter_map(|l| trades.sequence(&Trades::set_for(profession, l)))
             .collect()
     }

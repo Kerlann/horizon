@@ -209,7 +209,7 @@ impl Game<'_> {
                 v
             } else {
                 let profession = PROFESSIONS[m.extra.variant2 as usize % PROFESSIONS.len()];
-                let level = i32::from(m.extra.variant3.max(1));
+                let level = m.extra.villager_level.max(1);
                 let set = merchant::Trades::set_for(profession, level);
                 if self.stations().trades.sets.contains_key(&set) {
                     self.offers_from_set(&set, &variant, origin)
@@ -270,7 +270,7 @@ impl Game<'_> {
             "wandering_trader"
         };
         let level = if villager {
-            i32::from(m.extra.variant3.max(1))
+            m.extra.villager_level.max(1)
         } else {
             1
         };
@@ -327,7 +327,7 @@ impl Game<'_> {
             return;
         };
         if session.villager {
-            m.extra.variant3 = session.level.clamp(1, i32::from(u8::MAX)) as u8;
+            m.extra.villager_level = session.level.max(1);
         }
         m.extra.flag2 = false;
         m.random = session.random.clone();
@@ -428,7 +428,7 @@ impl Game<'_> {
             m.random = session.random.clone();
             m.ambient_timer = session.ambient_sound_time;
             if villager {
-                m.extra.variant3 = session.level.clamp(1, i32::from(u8::MAX)) as u8;
+                m.extra.villager_level = session.level.max(1);
             }
         }
         for e in events {

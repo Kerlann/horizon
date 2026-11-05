@@ -2145,7 +2145,7 @@ impl B {
                     let prof = m.extra.variant2;
                     let can_be_fired =
                         prof != super::villager::NONE && prof != super::villager::NITWIT;
-                    if can_be_fired && super::villager::xp(m) == 0 && m.extra.variant3 <= 1 {
+                    if can_be_fired && super::villager::xp(m) == 0 && m.extra.villager_level <= 1 {
                         super::villager::set_profession(m, super::villager::NONE);
                         cx.refresh = true;
                         true

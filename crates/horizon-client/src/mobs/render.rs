@@ -976,7 +976,7 @@ pub fn layers(m: &Mob, age: f32) -> Vec<Layer> {
                 if prof != "nitwit" {
                     // `LEVEL_LOCATIONS` clamps the level to 1..=5.
                     let level = ["stone", "iron", "gold", "emerald", "diamond"]
-                        [(m.extra.variant3.max(1) as usize - 1).min(4)];
+                        [(m.extra.villager_level.max(1) as usize - 1).min(4)];
                     push(
                         &mut v,
                         model,
@@ -2940,7 +2940,7 @@ mod tests {
                         let mut m =
                             Mob::new(1, kind.clone(), horizon_core::geometry::Vec3::ZERO, 0.0);
                         m.extra.age = if baby { -24000 } else { 0 };
-                        (m.extra.variant, m.extra.variant2, m.extra.variant3) =
+                        (m.extra.variant, m.extra.variant2, m.extra.villager_level) =
                             (t as u8, p as u8, 5);
                         let layers = layers(&m, m.age as f32);
                         let group = if baby { "/baby/" } else { "/type/" };
