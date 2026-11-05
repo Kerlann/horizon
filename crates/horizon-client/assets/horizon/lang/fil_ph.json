@@ -415,5 +415,6 @@
   "horizon.pack.filters": "Mga filter",
   "horizon.pack.filter.realistic": "Makatotohanan",
   "horizon.pack.filter.vanillaLike": "Parang vanilla",
-  "horizon.pack.addFailed": "Hindi maidagdag ang pack: %s"
+  "horizon.pack.addFailed": "Hindi maidagdag ang pack: %s",
+  "Shader Packs...": "Mga Shader Pack..."
 }

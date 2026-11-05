@@ -445,5 +445,6 @@
   "horizon.pack.filter.realistic": "Xaqiiqo ah",
   "horizon.pack.filter.simplistic": "Fudud",
   "horizon.pack.filter.vanillaLike": "Vanilla u eg",
-  "horizon.pack.addFailed": "Xidhmada laguma darin karo: %s"
+  "horizon.pack.addFailed": "Xidhmada laguma darin karo: %s",
+  "Shader Packs...": "Xirmooyinka Shader..."
 }

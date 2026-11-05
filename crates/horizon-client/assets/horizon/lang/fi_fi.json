@@ -443,5 +443,6 @@
   "horizon.pack.filter.realistic": "Realistinen",
   "horizon.pack.filter.simplistic": "Yksinkertaista",
   "horizon.pack.filter.vanillaLike": "Vaniljamainen",
-  "horizon.pack.addFailed": "Pakettia ei voitu lisätä: %s"
+  "horizon.pack.addFailed": "Pakettia ei voitu lisätä: %s",
+  "Shader Packs...": "Shader Packit..."
 }

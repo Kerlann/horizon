@@ -434,5 +434,6 @@
   "horizon.pack.filter.realistic": "Realistisk",
   "horizon.pack.filter.simplistic": "Forsimplet",
   "horizon.pack.filter.vanillaLike": "Vanilje-agtig",
-  "horizon.pack.addFailed": "Pakken kunne ikke tilføjes: %s"
+  "horizon.pack.addFailed": "Pakken kunne ikke tilføjes: %s",
+  "Shader Packs...": "Shader-pakker..."
 }
