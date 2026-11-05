@@ -158,7 +158,9 @@ fn save_kept(home: &Path, list: &[Kept]) -> Result<(), String> {
         return Ok(());
     }
     let text = serde_json::to_string_pretty(list).map_err(|e| e.to_string())?;
-    fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))
+    let part = home.join("mod-browser/.replaced.json.part");
+    fs::write(&part, text).map_err(|e| format!("{}: {e}", part.display()))?;
+    fs::rename(&part, &path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// Whether the browser's list has `kept`'s project at a newer version whose file is in place.
@@ -343,9 +345,19 @@ fn update(
         Ok(_) => Ok(None),
         Err(e) => {
             if let Some(kept) = &kept {
-                // Nothing moved when the check refused it; else the old file goes back now.
+                // Leave the backup and journal intact if restoring it fails.
                 if !finished(home, kept) {
-                    let _ = restore(home, kept);
+                    if let Err(restore_error) = restore(home, kept) {
+                        let mut list = kept_list(home);
+                        if let Some(record) = list
+                            .iter_mut()
+                            .find(|k| k.entry.project == kept.entry.project)
+                        {
+                            record.pid = 0;
+                        }
+                        let _ = save_kept(home, &list);
+                        return Err(format!("{e}; restore failed: {restore_error}"));
+                    }
                 }
                 let _ = fs::remove_file(home.join(&kept.copy));
                 let mut list = kept_list(home);
