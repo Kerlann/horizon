@@ -242,7 +242,6 @@
   "Downloading the prebuilt game at {revision} (once)": "Downloading the prebuilt game at {revision} (once)",
   "Downloading {source}…": "正在下载 {source}…",
   "Downloads": "下载量",
-  "Downloads, sign-ins and updates go through this HTTP proxy (http://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "下载、登录和更新均通过此 HTTP 代理（http://host:port）。留空表示不使用：若启动器启动时设置了 HTTPS_PROXY 则会优先使用。",
   "Duplicate…": "复制…",
   "E_GAME_DEPENDENCY: {mod}: Cargo.toml depends on the game ({key}). Declare game internals through horizon-internals instead.": "E_GAME_DEPENDENCY: {mod}: Cargo.toml depends on the game ({key}). Declare game internals through horizon-internals instead.",
   "E_INTERNAL_AMBIGUOUS: {mod} uses {path}, which has multiple kinds; choose a kind from: {kinds}.": "E_INTERNAL_AMBIGUOUS: {mod} uses {path}, which has multiple kinds; choose a kind from: {kinds}.",
@@ -1145,5 +1144,10 @@
   "Made for Horizon {pin}, you play {yours}: choose matching mod versions or a matching Horizon version before building": "Made for Horizon {pin}, you play {yours}: choose matching mod versions or a matching Horizon version before building",
   "Star on GitHub": "在 GitHub 上加星",
   "Windows' Smart App Control is blocking the build (os error 4551). It only lets signed programs run, and a native build runs programs no one has signed: the ones it compiles on this computer and some of the compiler's own. To build native mods, turn it off in Windows Security > App & browser control > Smart App Control settings, then build again. On some Windows versions it can't be turned back on without reinstalling Windows. Content mods (.hmod) need no build and work with it on.": "Windows 的智能应用控制（Smart App Control）正在阻止构建（os error 4551）。它只允许已签名的程序运行，而原生构建会运行没有人签名的程序：在这台电脑上编译出的程序，以及编译器自带的一些程序。要构建原生模组，请在 Windows 安全中心 > 应用和浏览器控制 > 智能应用控制设置中将其关闭，然后重新构建。在某些 Windows 版本上，关闭后只有重装 Windows 才能重新开启。内容模组（.hmod）无需构建，开启它也能使用。",
-  "{count} stars on GitHub": "GitHub 上 {count} 颗星"
+  "{count} stars on GitHub": "GitHub 上 {count} 颗星",
+  "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "下载、登录和更新均通过此代理（http://host:port, socks5://host:port）。留空表示不使用：若启动器启动时设置了 HTTPS_PROXY 则会优先使用。",
+  "Companion": "伙伴",
+  "Trail": "拖尾",
+  "Aura": "光环",
+  "Hide other players' trails and auras": "隐藏其他玩家的拖尾和光环"
 }
