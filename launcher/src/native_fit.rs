@@ -1,7 +1,6 @@
-//! Whether a native mod fits the Horizon the player plays, said before it is installed (#9860),
-//! so a mod made for another Horizon is no surprise at build time. A mod naming a hook points'
-//! version fits any Horizon with that `NATIVE_HOOKS_API` or a later one; a pinned mod fits the
-//! commit it pins (docs/native-mods.md, "Pinned to a Nightly").
+//! Whether a native mod fits the Horizon the player plays, said before it is installed, so a
+//! mod made for another Horizon is no surprise at build time. Diverges from upstream: native
+//! mods pin an exact commit, with no hook-version compatibility or automatic revision change.
 use crate::i18n::{tr, trf};
 use crate::instances::Instance;
 use crate::{backend, native_mods};
@@ -10,12 +9,10 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// The Horizon the selected instance plays: the commit its game was compiled from and that
-/// commit's hook points' version (None when it couldn't be read).
+/// The Horizon the selected instance plays: the commit its game was compiled from.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Plays {
     pub revision: String,
-    pub hooks: Option<u32>,
 }
 
 /// How a native mod fits [`Plays`].
@@ -23,47 +20,31 @@ pub struct Plays {
 pub enum Fit {
     /// It builds on the Horizon the player plays.
     Fits,
-    /// It needs hook points the player's Horizon doesn't have yet.
-    NeedsNewer { needs: u32, has: u32 },
-    /// It pins another commit, and mods turned on pin yet another one: the build asks for
-    /// Build anyway, and the mods made for the other commit may not compile.
+    /// It pins another commit, and mods turned on pin yet another one. The build refuses
+    /// mismatched pins rather than changing them.
     Clashes { pin: String, with: Vec<String> },
-    /// It pins another commit, alone: the build compiles the game on that commit.
-    MovesTo { pin: String },
+    /// It pins another commit: the player must choose matching mods or a matching game.
+    OtherRevision { pin: String },
 }
 
-/// How mod `id` fits: it names hook points' version `hooks`, else pins commit `pin`. `pins` are
-/// the mods turned on that pin a commit (id, commit); the mod's own older version among them is
-/// replaced by this one. None when the hook points of the Horizon played aren't known.
-pub fn fit(
-    id: &str,
-    hooks: Option<u32>,
-    pin: &str,
-    plays: &Plays,
-    pins: &[(String, String)],
-) -> Option<Fit> {
-    if let Some(needs) = hooks {
-        let has = plays.hooks?;
-        return Some(match needs <= has {
-            true => Fit::Fits,
-            false => Fit::NeedsNewer { needs, has },
-        });
-    }
+/// How mod `id`, which pins commit `pin`, fits the Horizon played. `pins` are the mods turned
+/// on that pin a commit (id, commit); the mod's own older version is replaced by this one.
+pub fn fit(id: &str, pin: &str, plays: &Plays, pins: &[(String, String)]) -> Fit {
     if pin == plays.revision {
-        return Some(Fit::Fits);
+        return Fit::Fits;
     }
     let with: Vec<String> = pins
         .iter()
         .filter(|(other, revision)| other != id && revision != pin)
         .map(|(other, _)| other.clone())
         .collect();
-    Some(match with.is_empty() {
-        true => Fit::MovesTo { pin: pin.into() },
+    match with.is_empty() {
+        true => Fit::OtherRevision { pin: pin.into() },
         false => Fit::Clashes {
             pin: pin.into(),
             with,
         },
-    })
+    }
 }
 
 fn short(revision: &str) -> &str {
@@ -74,36 +55,28 @@ fn short(revision: &str) -> &str {
 pub fn describe(fit: &Fit, plays: &Plays) -> String {
     match fit {
         Fit::Fits => tr("Builds on the Horizon you play").to_owned(),
-        Fit::NeedsNewer { needs, has } => trf(
-            "Needs native hook points v{needs}, the Horizon you play has v{has}: update Horizon first",
-            &[("needs", &needs.to_string()), ("has", &has.to_string())],
-        ),
         Fit::Clashes { pin, with } => trf(
-            "Made for Horizon {pin}, but {mods} pin another commit: the build will ask you to Build anyway and may not compile",
+            "Made for Horizon {pin}, but {mods} pin another commit: the build requires all native mods to match the game revision",
             &[("pin", short(pin)), ("mods", &with.join(", "))],
         ),
-        Fit::MovesTo { pin } => trf(
-            "Made for Horizon {pin}, you play {yours}: the launcher builds your game on {pin}",
+        Fit::OtherRevision { pin } => trf(
+            "Made for Horizon {pin}, you play {yours}: choose matching mod versions or a matching Horizon version before building",
             &[("pin", short(pin)), ("yours", short(&plays.revision))],
         ),
     }
 }
 
-/// [`Plays`] by the version an instance plays (kept for good once its hook points are known, a
-/// failure for [`RETRY`]), and hook points' versions by commit: reading them asks GitHub, and a
-/// search asks for every native mod it finds.
+/// [`Plays`] by the version an instance plays: a known commit is kept, a failure for [`RETRY`].
+/// Only resolving a release or Nightly commit asks GitHub, once for all the search's results.
 type CacheKey = (String, Option<String>);
 type Known = HashMap<CacheKey, (Instant, Option<Plays>)>;
 static PLAYS: Mutex<Option<Known>> = Mutex::new(None);
-static HOOKS: Mutex<Option<HashMap<String, u32>>> = Mutex::new(None);
 const RETRY: Duration = Duration::from_secs(60);
 
 fn cached(cache: &Known, key: &CacheKey) -> Option<Option<Plays>> {
     cache
         .get(key)
-        .filter(|(at, plays)| {
-            plays.as_ref().is_some_and(|p| p.hooks.is_some()) || at.elapsed() < RETRY
-        })
+        .filter(|(at, plays)| plays.is_some() || at.elapsed() < RETRY)
         .map(|(_, plays)| plays.clone())
 }
 
@@ -114,25 +87,20 @@ pub fn plays(instance: &Instance) -> Option<Plays> {
         return None;
     }
     let version = instance.resolve_version(None).ok()?;
-    // Native builds can be rebuilt under the same version name on a different commit.
-    // Read the build record before consulting the cache so the cached answer follows it.
+    // Read the build record before consulting the cache so a rebuild's answer follows it.
     let native_revision = native_mods::about(&version).map(|about| about.horizon);
     let key = (version.clone(), native_revision.clone());
     let known = cached(PLAYS.lock().unwrap().get_or_insert_default(), &key);
     if let Some(plays) = known {
         return plays;
     }
-    // A native build is the commit it compiled; anything else, the commit of the release or
-    // Nightly a build would start from.
+    // A native build is the commit it compiled; anything else, the commit a build would use.
     let revision = match native_revision {
         Some(revision) => Some(revision),
         None => native_mods::base_for(Some(&version), &backend::installed(), false)
             .and_then(|base| native_mods::revision_of(&base).ok()),
     };
-    let plays = revision.map(|revision| Plays {
-        hooks: hooks_at(&revision),
-        revision,
-    });
+    let plays = revision.map(|revision| Plays { revision });
     PLAYS
         .lock()
         .unwrap()
@@ -141,33 +109,26 @@ pub fn plays(instance: &Instance) -> Option<Plays> {
     plays
 }
 
-fn hooks_at(revision: &str) -> Option<u32> {
-    if let Some(&hooks) = HOOKS.lock().unwrap().get_or_insert_default().get(revision) {
-        return Some(hooks);
-    }
-    let hooks = native_mods::hooks_at(revision)?;
-    HOOKS
-        .lock()
-        .unwrap()
-        .get_or_insert_default()
-        .insert(revision.into(), hooks);
-    Some(hooks)
-}
-
 /// The native mods turned on in game folder `home` that pin a commit, as (id, commit).
 pub fn pins(home: &Path) -> Vec<(String, String)> {
     crate::native_status::bundles_on(home)
         .into_iter()
-        .filter(|b| b.manifest.hooks.is_none())
-        .map(|b| (b.manifest.id, b.manifest.horizon))
+        .map(|b| {
+            let native = b.manifest.native.expect("native bundle");
+            (b.manifest.id, native.horizon)
+        })
         .collect()
 }
 
-/// The line the registry browser shows for a native mod's version naming `hooks`, or pinning
-/// `pin`, in `instance`; None when it can't be told.
-pub fn line(instance: &Instance, id: &str, hooks: Option<u32>, pin: &str) -> Option<String> {
+/// The line the registry browser shows for a native mod's version pinning `pin`, in `instance`;
+/// None when the game's revision can't be told. This only describes fit: it never builds or
+/// changes the instance or a package pin.
+pub fn line(instance: &Instance, id: &str, pin: &str) -> Option<String> {
     let plays = plays(instance)?;
-    fit(id, hooks, pin, &plays, &pins(&instance.home)).map(|fit| describe(&fit, &plays))
+    Some(describe(
+        &fit(id, pin, &plays, &pins(&instance.home)),
+        &plays,
+    ))
 }
 
 #[cfg(test)]
@@ -178,10 +139,9 @@ mod tests {
     const OTHER: &str = "2222222222222222222222222222222222222222";
     const THIRD: &str = "3333333333333333333333333333333333333333";
 
-    fn plays(hooks: Option<u32>) -> Plays {
+    fn plays() -> Plays {
         Plays {
             revision: YOURS.into(),
-            hooks,
         }
     }
 
@@ -195,7 +155,7 @@ mod tests {
         let old_key = (version.clone(), Some(YOURS.to_string()));
         let rebuilt_key = (version.clone(), Some(OTHER.to_string()));
         let unbuilt_key = (version, None);
-        let old = plays(Some(28));
+        let old = plays();
         let mut cache = Known::new();
         cache.insert(old_key.clone(), (Instant::now(), Some(old.clone())));
         assert_eq!(cached(&cache, &old_key), Some(Some(old)));
@@ -204,34 +164,12 @@ mod tests {
     }
 
     #[test]
-    fn a_hook_points_mod_fits_that_version_or_a_later_one() {
-        let at_28 = plays(Some(28));
-        assert_eq!(fit("zoom", Some(28), OTHER, &at_28, &[]), Some(Fit::Fits));
-        assert_eq!(fit("zoom", Some(3), OTHER, &at_28, &[]), Some(Fit::Fits));
-        assert_eq!(
-            fit("zoom", Some(30), YOURS, &at_28, &[]),
-            Some(Fit::NeedsNewer { needs: 30, has: 28 })
-        );
-        // Unknown hook points: nothing is said rather than a guess.
-        assert_eq!(fit("zoom", Some(1), OTHER, &plays(None), &[]), None);
-    }
-
-    #[test]
-    fn a_hook_points_mod_ignores_the_others_pins() {
-        let pins = [pin("veinminer", THIRD)];
-        assert_eq!(
-            fit("zoom", Some(5), OTHER, &plays(Some(9)), &pins),
-            Some(Fit::Fits)
-        );
-    }
-
-    #[test]
     fn a_pinned_mod_fits_only_its_commit() {
-        let p = plays(None);
-        assert_eq!(fit("jei", None, YOURS, &p, &[]), Some(Fit::Fits));
+        let p = plays();
+        assert_eq!(fit("jei", YOURS, &p, &[]), Fit::Fits);
         assert_eq!(
-            fit("jei", None, OTHER, &p, &[]),
-            Some(Fit::MovesTo { pin: OTHER.into() })
+            fit("jei", OTHER, &p, &[]),
+            Fit::OtherRevision { pin: OTHER.into() }
         );
     }
 
@@ -244,16 +182,16 @@ mod tests {
         ];
         // `chop` agrees with the pin and `jei` is the mod being replaced: only veinminer clashes.
         assert_eq!(
-            fit("jei", None, OTHER, &plays(None), &pins),
-            Some(Fit::Clashes {
+            fit("jei", OTHER, &plays(), &pins),
+            Fit::Clashes {
                 pin: OTHER.into(),
                 with: vec!["veinminer".into()],
-            })
+            }
         );
         let agreeing = [pin("chop", OTHER)];
         assert_eq!(
-            fit("jei", None, OTHER, &plays(None), &agreeing),
-            Some(Fit::MovesTo { pin: OTHER.into() })
+            fit("jei", OTHER, &plays(), &agreeing),
+            Fit::OtherRevision { pin: OTHER.into() }
         );
     }
 }

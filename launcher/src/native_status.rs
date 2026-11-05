@@ -137,29 +137,21 @@ pub fn enabled(home: &Path) -> Vec<Mod> {
     out
 }
 
-fn hnmods(home: &Path) -> Vec<std::path::PathBuf> {
-    let mut paths: Vec<_> = fs::read_dir(home.join(native_mods::INSTALLED))
-        .map(|dir| dir.flatten().map(|e| e.path()).collect())
-        .unwrap_or_default();
-    paths.retain(|p| p.extension().is_some_and(|e| e == "hnmod"));
-    paths.sort();
-    paths
+/// The native mods turned on in game folder `home` that pin Horizon commit `revision`.
+pub fn pinning(home: &Path, revision: &str) -> Vec<String> {
+    bundles_on(home)
+        .into_iter()
+        .filter(|b| b.manifest.native.as_ref().expect("native bundle").horizon == revision)
+        .map(|b| b.manifest.id)
+        .collect()
 }
 
-/// The native mods turned on in game folder `home` that pin Horizon commit `revision` (those naming
-/// a hook points' version follow the others, so they pin nothing).
-pub fn pinning(home: &Path, revision: &str) -> Vec<String> {
-    hnmods(home)
+/// The readable native mods turned on in game folder `home`.
+pub fn bundles_on(home: &Path) -> Vec<horizon_mods::index::native::Bundle> {
+    hmods(home)
         .into_iter()
         .filter_map(|path| horizon_mods::index::native::Bundle::read(&path).ok())
-        .filter(|b| {
-            b.manifest
-                .native
-                .as_ref()
-                .is_some_and(|n| n.horizon == revision)
-        })
         .filter(|b| java::is_enabled(home, &b.manifest.id))
-        .map(|b| b.manifest.id)
         .collect()
 }
 
@@ -380,10 +372,22 @@ mod tests {
             java::set_enabled(&home, id, true).unwrap();
         }
         assert_eq!(state(&enabled(&home), None), State::NotBuilt);
+        let mut pins = pinning(&home, &"a".repeat(40));
+        pins.sort();
+        assert_eq!(
+            pins,
+            ["github", "local", "registry"],
+            "fit reads the enabled flat packages, including a renamed local file"
+        );
+        assert!(pinning(&home, &"b".repeat(40)).is_empty());
         for id in ["registry", "github", "local"] {
             java::set_enabled(&home, id, false).unwrap();
         }
         assert_eq!(state(&enabled(&home), None), State::NoMods);
+        assert!(
+            bundles_on(&home).is_empty(),
+            "disabled packages pin nothing"
+        );
         assert_eq!(
             untracked(&home).len(),
             2,

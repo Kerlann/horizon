@@ -2667,6 +2667,40 @@ mod tests {
         d
     }
 
+    /// The launcher's toolchain in `dir` for every host it ships one for: the build commands are
+    /// checked for each host on whichever machine runs the tests, not only for its own.
+    fn toolchains(dir: impl Into<PathBuf>) -> Vec<Toolchain> {
+        let dir = dir.into();
+        rust_toolchain::hosts()
+            .iter()
+            .map(|host| Toolchain {
+                dir: dir.clone(),
+                host,
+            })
+            .collect()
+    }
+
+    /// What `rust`'s host puts before cargo's subcommand ([`Toolchain::configure_cargo`]): the
+    /// ARM64 target's rustflags, nothing on the other hosts.
+    fn host_args(rust: &Toolchain) -> Vec<String> {
+        let mut cmd = Command::new("cargo");
+        rust.configure_cargo(&mut cmd);
+        cmd.get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    /// `cmd`'s arguments after its host's own ([`host_args`]), which must come first.
+    fn args_after_host(rust: &Toolchain, cmd: &Command) -> Vec<String> {
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        let host = host_args(rust);
+        assert_eq!(args[..host.len()], host, "{}", rust.host.target);
+        args[host.len()..].to_vec()
+    }
+
     fn project_manifest(id: &str, version: &str, horizon: &str, mixins: &str) -> String {
         format!(
             "id='{id}'\nname='{id}'\nversion='{version}'\napi='0.2'\ncapabilities=['registries']\n[native]\ngame='26.3'\nhorizon='{horizon}'\nmixins='{mixins}'\n"
@@ -2690,12 +2724,14 @@ mod tests {
 
     #[test]
     fn horizon_mixins_finds_the_launchers_cargo() {
-        let rust = Toolchain {
-            dir: PathBuf::from("/rust/1.99.1-x"),
-            host: rust_toolchain::host().unwrap(),
-        };
+        for rust in toolchains("/rust/1.99.1-x") {
+            horizon_mixins_finds(&rust);
+        }
+    }
+
+    fn horizon_mixins_finds(rust: &Toolchain) {
         let cmd = apply(
-            &rust,
+            rust,
             Path::new("/tools/horizon-mixins"),
             Path::new("/src"),
             Path::new("/mods"),
@@ -3521,22 +3557,25 @@ mod tests {
             version_for(A, B, Profile::Optimized, Target::Server, None, &found).unwrap(),
             "the profile is still in the server key"
         );
-        let rust = Toolchain {
-            dir: PathBuf::from("/rust/1.99.1-x"),
-            host: rust_toolchain::host().unwrap(),
-        };
+        let rusts = toolchains("/rust/1.99.1-x");
+        // The same after each host's own arguments.
         let flags = |stage: &Path, target: Target| {
-            compile(
-                &rust,
-                stage,
-                target,
-                Path::new("/native/target"),
-                Profile::Balanced,
-                "horizon-client",
-            )
-            .get_args()
-            .map(|a| a.to_string_lossy().into_owned())
-            .collect::<Vec<String>>()
+            let each: Vec<Vec<String>> = rusts
+                .iter()
+                .map(|rust| {
+                    let cmd = compile(
+                        rust,
+                        stage,
+                        target,
+                        Path::new("/native/target"),
+                        Profile::Balanced,
+                        "horizon-client",
+                    );
+                    args_after_host(rust, &cmd)
+                })
+                .collect();
+            assert!(each.windows(2).all(|w| w[0] == w[1]), "{each:?}");
+            each[0].clone()
         };
         let server = flags(&d, Target::Server);
         assert!(server.contains(&"--no-default-features".into()));
@@ -4033,23 +4072,27 @@ mod tests {
 
     #[test]
     fn the_game_compiles_outside_the_players_cargo_configuration() {
-        let rust = Toolchain {
-            dir: PathBuf::from("/rust/1.99.1-x"),
-            host: rust_toolchain::host().unwrap(),
-        };
-        let stage = dir("stage-config");
+        for rust in toolchains("/rust/1.99.1-x") {
+            assert_eq!(
+                host_args(&rust).is_empty(),
+                rust.host.target != rust_toolchain::WINDOWS_ARM64_TARGET,
+                "only the ARM64 host adds its target's rustflags"
+            );
+            compiles_outside_the_players_cargo_configuration(&rust);
+        }
+    }
+
+    fn compiles_outside_the_players_cargo_configuration(rust: &Toolchain) {
+        let stage = dir(&format!("stage-config-{}", rust.host.target));
         let cmd = compile(
-            &rust,
+            rust,
             &stage,
             Target::Client,
             Path::new("/native/target"),
             Profile::Balanced,
             "horizon-client",
         );
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|a| a.to_string_lossy().into_owned())
-            .collect();
+        let args = args_after_host(rust, &cmd);
         assert_eq!(
             args[..3],
             [
@@ -4071,37 +4114,41 @@ mod tests {
         fs::create_dir_all(stage.join(".cargo")).unwrap();
         fs::write(stage.join(".cargo/config.toml"), "").unwrap();
         let cmd = compile(
-            &rust,
+            rust,
             &stage,
             Target::Client,
             Path::new("/native/target"),
             Profile::Balanced,
             "horizon-client",
         );
-        let args: Vec<_> = cmd.get_args().collect();
+        let args = args_after_host(rust, &cmd);
         assert_eq!(args[1], "--config");
-        assert_eq!(args[2], stage.join(".cargo/config.toml"));
+        assert_eq!(PathBuf::from(&args[2]), stage.join(".cargo/config.toml"));
+        let _ = fs::remove_dir_all(stage);
     }
 
     #[test]
     fn builds_use_the_selected_profile() {
         let d = dir("profile");
-        let rust = Toolchain {
-            dir: PathBuf::from("/rust/1.99.1-x"),
-            host: rust_toolchain::host().unwrap(),
-        };
+        let rusts = toolchains("/rust/1.99.1-x");
+        // The same after each host's own arguments.
         let args = |profile| -> Vec<String> {
-            compile(
-                &rust,
-                &d,
-                Target::Client,
-                Path::new("/native/target"),
-                profile,
-                "horizon-client",
-            )
-            .get_args()
-            .map(|a| a.to_string_lossy().into_owned())
-            .collect()
+            let each: Vec<Vec<String>> = rusts
+                .iter()
+                .map(|rust| {
+                    let cmd = compile(
+                        rust,
+                        &d,
+                        Target::Client,
+                        Path::new("/native/target"),
+                        profile,
+                        "horizon-client",
+                    );
+                    args_after_host(rust, &cmd)
+                })
+                .collect();
+            assert!(each.windows(2).all(|w| w[0] == w[1]), "{each:?}");
+            each[0].clone()
         };
         let performance = args(Profile::Balanced);
         assert!(performance.windows(2).any(|w| w == ["--profile", "fast"]));
