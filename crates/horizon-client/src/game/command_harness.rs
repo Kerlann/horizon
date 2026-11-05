@@ -693,11 +693,11 @@ impl Game<'_> {
                                 },
                             ),
                         );
-                        let acknowledged = host
-                            .hub
-                            .guest(conn)
-                            .is_some_and(|p| p.ack_up_to.get() >= sequence);
-                        g.lan = Some(host);
+                        let acknowledged = g.lan.as_ref().is_some_and(|host| {
+                            host.hub
+                                .guest(conn)
+                                .is_some_and(|p| p.ack_up_to.get() >= sequence)
+                        });
                         if !acknowledged {
                             return Err("use block: owner packet was not acknowledged".into());
                         }
