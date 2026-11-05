@@ -1,0 +1,19 @@
+{
+  "ready": false,
+  "summary": "Fetched and checked out the requested exact area head. Added source-level guards for both mouse and keyboard mod-toggle dispatch and disabled and guarded registry installation and updates while a world is open. Scoped rustfmt and git diff --check passed. No tests or builds were run. The requested full independent audit and cross-area integration are not complete, so this is not source-ready.",
+  "defects": [
+    "Fixed in assigned area: stale mouse or keyboard activation could dispatch a content-mod toggle while a world is open, or toggle a developer or invalid entry.",
+    "Fixed in assigned area: the registry project page allowed install and update requests while a world is open; both the widget and dispatch now guard against that state.",
+    "Cross-area unresolved: a world may open while a browser installation is already running; game-side installation and Jobs::poll must enforce content-state safety at completion, not rely on the UI guard.",
+    "Cross-area unresolved: browser installation must preserve native pins and use cross-process transaction locking. Reference commit a196f59d22761b4c807b063c55c0c69cf96d258b includes relevant installer and lock changes; these were not applied outside assigned paths.",
+    "Cross-area unresolved: mod_registry::installable references removed api_level::LEVEL and legacy needs_port.",
+    "Cross-area unresolved: renderer ownership cannot use pointer identity because zero-sized or shared renderers collide; ownership must be carried by index. The relevant owner implementation is outside assigned paths and has not been certified."
+  ],
+  "unread": [
+    "Independent full enclosing-function review of OptionsUi click, key_modifiers, layout, draw, wheel and list_rows remains incomplete.",
+    "Independent full review of HudAtlas::pack and helpers, Jobs<G>::run and dispatch/planning helpers, extras implementations, mod_browser and pad_glyph remains incomplete.",
+    "Independent full review of changed controller, graphics, widgets and split-profile functions and fixtures, and current and parent module tables, remains incomplete.",
+    "Input threshold parsing and game registry installation, verification, persistence, enable/reload, native pin and recovery paths remain unaudited in full.",
+    "The reference branch was inspected for the browser switch and installer-lock changes, but its switch-dispatch, installer-race and camel-admission changes were not independently audited in full."
+  ]
+}

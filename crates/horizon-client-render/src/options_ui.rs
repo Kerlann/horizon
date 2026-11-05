@@ -2581,6 +2581,13 @@ impl OptionsUi {
         }
         rows
     }
+    fn can_toggle_mod(&self, s: &Settings, i: usize) -> bool {
+        s.mods
+            .installed
+            .get(i)
+            .is_some_and(|m| !m.dev && !m.id.is_empty() && (!self.in_world || m.native.is_some()))
+    }
+
     /// A registry project's page: what it is, Install or Update, its switch
     /// once installed, its description and changelog.
     fn mod_project_rows(&self, s: &Settings) -> Vec<Row> {
@@ -2639,6 +2646,12 @@ impl OptionsUi {
                 tr("horizon.mods.browse.installed"),
                 Act::None,
             )),
+        };
+        // Installing or updating content can change the block-state registry.
+        let install = if self.in_world {
+            inactive(install)
+        } else {
+            install
         };
         let page = button(
             0.0,
@@ -4505,8 +4518,10 @@ impl OptionsUi {
                             events.push(Event::Changed);
                         }
                         Act::ToggleMod(i) => {
-                            s.mods.toggle(i);
-                            events.push(Event::Changed);
+                            if self.can_toggle_mod(s, i) {
+                                s.mods.toggle(i);
+                                events.push(Event::Changed);
+                            }
                         }
                         Act::ModSettings(i) => {
                             events.push(Event::ButtonClick);
@@ -4526,8 +4541,10 @@ impl OptionsUi {
                             }
                         }
                         Act::InstallMod => {
-                            self.mod_browser.message = None;
-                            events.push(Event::InstallMod(self.mod_project.clone()));
+                            if !self.in_world {
+                                self.mod_browser.message = None;
+                                events.push(Event::InstallMod(self.mod_project.clone()));
+                            }
                         }
                         Act::OpenModPage => {
                             if let Some(l) = self.mod_browser.listing(&self.mod_project) {
@@ -5480,8 +5497,10 @@ impl OptionsUi {
                             events.push(Event::Changed);
                         }
                         Act::ToggleMod(i) => {
-                            s.mods.toggle(i);
-                            events.push(Event::Changed);
+                            if self.can_toggle_mod(s, i) {
+                                s.mods.toggle(i);
+                                events.push(Event::Changed);
+                            }
                         }
                         Act::ModSettings(i) => {
                             self.focus = None;
@@ -5503,8 +5522,10 @@ impl OptionsUi {
                             }
                         }
                         Act::InstallMod => {
-                            self.mod_browser.message = None;
-                            events.push(Event::InstallMod(self.mod_project.clone()));
+                            if !self.in_world {
+                                self.mod_browser.message = None;
+                                events.push(Event::InstallMod(self.mod_project.clone()));
+                            }
                         }
                         Act::OpenModPage => {
                             if let Some(l) = self.mod_browser.listing(&self.mod_project) {
