@@ -99,7 +99,8 @@ pub enum ItemPlace {
 /// A mod's own places ([`ItemPlace::Mod`]), registered with
 /// [`Registrar::place_provider`](super::Registrar::place_provider): NeoForge's own `ItemAccess`s.
 /// Like a handler, it holds no borrow: its stacks live where the mod keeps them (a player's
-/// attachments).
+/// attachments). While its mod is disabled, lookups refuse both reads and writes through its
+/// places; re-enabling the mod makes the same registrations available again.
 pub trait PlaceProvider: Send + Sync + 'static {
     /// The stack at `key`, if any.
     fn stack(&self, host: &mut dyn ServerHost, key: u64) -> Option<ItemStack>;
@@ -538,7 +539,8 @@ fn one_of(
 impl ItemPlace {
     /// `key`'s handler for the item here (`ItemAccess.getCapability`): the first provider to
     /// answer, of those mods registered for its item `before_game`, the game's own, and the
-    /// mods' others, each in registration order.
+    /// mods' others, each in registration order. Disabled mods' providers are skipped until
+    /// their mod is re-enabled.
     pub fn capability<T: ?Sized + 'static>(
         &self,
         host: &mut dyn ServerHost,

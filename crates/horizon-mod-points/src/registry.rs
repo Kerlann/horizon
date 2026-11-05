@@ -2,7 +2,7 @@
 //! `#[horizon_mod] impl Points` and the wasm runtime's proxies both [`register`] here while the game
 //! loads, and raw listeners [`register_raw`]; the game then [`seal`]s the list, which
 //! sets [`POINTS`]. A firing slot walks the mods subscribed to that place, API listeners first and
-//! then raw ones, each in registration (dispatch) order, skipping any [`stop`]ped mod.
+//! then raw ones, each in registration (dispatch) order, skipping disabled and [`stop`]ped mods.
 use crate::{POINT_COUNT, PointId, Points};
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -14,6 +14,8 @@ pub static POINTS: [AtomicBool; POINT_COUNT] = [const { AtomicBool::new(false) }
 
 struct Listener {
     id: &'static str,
+    /// Resolved at the seal, so firing reads the owner's canonical enable flag without a scan.
+    mod_index: Option<usize>,
     /// The mod's `impl Points`, when it has one.
     points: Option<&'static dyn Points>,
     /// Set when the mod stopped (a trap in its wasm group, or the game giving up on it): its
@@ -117,6 +119,7 @@ fn listener(open: &mut Open, id: &'static str) -> usize {
         None => {
             open.listeners.push(Listener {
                 id,
+                mod_index: None,
                 points: None,
                 stopped: AtomicBool::new(false),
             });
@@ -228,7 +231,7 @@ pub fn stop(id: &str) {
 pub fn seal() {
     // Takes the list under the lock, then asks each mod where it listens without it: a mod's
     // `subscribed` may call `stop` (or `register`, refused) without deadlocking.
-    let (listeners, raw_list) = {
+    let (mut listeners, raw_list) = {
         let mut open = lock();
         if open.sealing {
             return;
@@ -240,7 +243,8 @@ pub fn seal() {
         )
     };
     let mut places = vec![Vec::new(); POINT_COUNT];
-    for (index, listener) in listeners.iter().enumerate() {
+    for (index, listener) in listeners.iter_mut().enumerate() {
+        listener.mod_index = mod_api::__private::mod_index(listener.id);
         for place in listener
             .points
             .iter()
@@ -274,10 +278,14 @@ pub fn seal() {
 }
 
 /// Runs `call` for the mod `listener` while it runs `name`, so a panic in it names the mod; a
-/// stopped mod is skipped.
+/// disabled or stopped mod is skipped.
 fn run(sealed: &Sealed, listener: u32, name: &'static str, call: impl FnOnce()) {
     let listener = &sealed.listeners[listener as usize];
-    if !listener.stopped.load(Ordering::Acquire) {
+    if !listener.stopped.load(Ordering::Acquire)
+        && listener
+            .mod_index
+            .is_none_or(mod_api::__private::mod_index_on)
+    {
         let _guard = mod_api::__private::enter(listener.id, name);
         call();
     }
