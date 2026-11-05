@@ -1,4 +1,4 @@
-//! Stored player health and empty-equipment server damage for the resident scene.
+//! Stored player health and server damage for the resident scene.
 //! World/audio/network consumers are queued explicitly; full death and tick
 //! lifecycles (drops, respawn, effects) remain separate work.
 use crate::{

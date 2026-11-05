@@ -3,9 +3,10 @@
 pub trait Hooks {
     /// Armor is about to take durability damage from a hit (NeoForge's
     /// `ArmorHurtEvent`, vanilla's `LivingEntity.doHurtEquipment`): once per
-    /// hit, for the pieces that would wear. `entity` is the wearer's entity id,
+    /// equipment-wear operation, for the pieces that would wear. `entity` is the wearer's entity id,
     /// `player` its UUID (None for a mob), `kind` its type and `source` the hit's
-    /// damage type (`causing` and `direct` are 0: the hit does not carry them here). Each entry has
+    /// damage type (ordinary armor wear has unknown `causing` and `direct` ids;
+    /// helmet wear carries the ids known to the hit). Each entry has
     /// its `slot`, the `stack`, the `damage` vanilla worked out and a
     /// `new_damage` a mod may change (0 for none; Unbreaking is applied
     /// after). Canceling means no armor damage. A server player's `feet`,
