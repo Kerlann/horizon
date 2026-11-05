@@ -2691,7 +2691,7 @@ impl Goal for EatBlock {
                         drop: false,
                     });
                 }
-                super::ai::ate(m);
+                super::ai::ate(m, cx.events);
             } else if cx.w.block_name(x, y - 1, z) == "minecraft:grass_block" {
                 // The particles and the dirt `setBlock` are the same gate.
                 if cx.w.can_grief(m.id) {
@@ -2703,7 +2703,7 @@ impl Goal for EatBlock {
                         flags: horizon_world::level::flags::UPDATE_CLIENTS,
                     });
                 }
-                super::ai::ate(m);
+                super::ai::ate(m, cx.events);
             }
         }
     }
