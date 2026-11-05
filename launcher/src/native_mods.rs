@@ -1720,7 +1720,10 @@ fn pipeline(
             None => match prebuilt::fetch(&revision, target, || {
                 progress(Step::PrebuiltGame(revision.clone()))
             })? {
-                Ok(game) => prebuilt::serves_points(&game, &point_injections)?.map(|()| game),
+                Ok(game) => {
+                    prebuilt::serves_points(&game, &point_injections)?;
+                    Ok(game)
+                }
                 Err(reason) => Err(reason),
             },
         };
@@ -1829,17 +1832,26 @@ fn pipeline(
         } else {
             sync(&source, &fresh)?;
         }
-        // Each point injection's function becomes a point in the staged game, as it is in a
-        // prebuilt one, so the mods' `impl Points` compiles the same on both routes.
-        inject::mark(&fresh, &point_injections)?;
-        let staged_points = horizon_mod_api_gen::points::game_points(&fresh)?
-            .into_iter()
-            .map(|point| inject::ListedPoint {
-                name: point.name,
-                target: point.target,
-            })
-            .collect::<Vec<_>>();
-        inject::check(&point_injections, &staged_points).map_err(|e| e.to_string())?;
+        // The staged game gets its points as a prebuilt one does: the revision's own staging
+        // pass, so the mods' `impl Points` compiles the same on both routes.
+        let listed = real.join("points.json");
+        let mut pass = cargo(&rust, &fresh, "run");
+        pass.args([
+            "--locked",
+            "--release",
+            "-q",
+            "-p",
+            "horizon-mod-api-gen",
+            "--bin",
+            "horizon-stage",
+            "--",
+        ])
+        .arg(&fresh)
+        .arg(&listed)
+        .arg(real.join("internals.json"))
+        .env("CARGO_TARGET_DIR", real.join("target"));
+        run(pass, "Marking the game's injection points", |_| {})?;
+        inject::check(&point_injections, &inject::listed(&listed)?).map_err(|e| e.to_string())?;
         if !mods.is_empty() {
             // Offline metadata resolves all targets, including packages not fetched for this host.
             let mut fetch = cargo(&rust, &source, "fetch");

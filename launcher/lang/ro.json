@@ -1073,7 +1073,6 @@
   "{version} available": "{version} disponibil",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} din registrul Horizon, propriul profil: {mods}",
   "{version} is not installed": "{version} nu este instalat",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (sau .mcp.json într-un proiect)",
   "← All servers": "← Toate serverele",
   "← Newer": "← Mai nou",

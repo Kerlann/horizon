@@ -63,7 +63,7 @@ jobs:
     env:
       # v<layout>: the launcher asks only for the archive layout it reads (prebuilt_archive in
       # crates/horizon-mods/src/index/native.rs); bump both when the folder's layout changes.
-      ARCHIVE: horizon-prebuilt-v2-${{ matrix.target }}${{ matrix.server && '-server' || '' }}.tar.gz
+      ARCHIVE: horizon-prebuilt-v3-${{ matrix.target }}${{ matrix.server && '-server' || '' }}.tar.gz
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,6 +88,8 @@ jobs:
         run: python tools/prebuilt_game.py build prebuilt ${{ matrix.server && '--server' || '' }}
       - name: The starter mod and the game executable build against the archive alone
         run: python tools/prebuilt_game.py smoke prebuilt
+      - name: Exported names, toward Windows' 65,535
+        run: python tools/prebuilt_game.py exports prebuilt | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Archive
         run: |
           tar -czf "$ARCHIVE" -C prebuilt .

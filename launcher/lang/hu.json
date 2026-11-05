@@ -1073,7 +1073,6 @@
   "{version} available": "{version} elérhető",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} a Horizon nyilvántartásából, saját profilja: {mods}",
   "{version} is not installed": "{version} nincs telepítve",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (vagy .mcp.json egy projektben)",
   "← All servers": "← Minden szerver",
   "← Newer": "← Újabb",

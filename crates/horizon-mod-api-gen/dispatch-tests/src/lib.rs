@@ -403,10 +403,6 @@ mod tests {
             pub const mob_render: Option<RenderHookId> = Some(RenderHookId::MobRender);
             pub const block_entity_draw: Option<RenderHookId> = Some(RenderHookId::BlockEntityDraw);
         }
-        /// `Hooks::points` names the game's points trait, which this fixture has none of.
-        pub mod points {
-            pub trait Points {}
-        }
         include!(concat!(env!("OUT_DIR"), "/mod_api_generated.rs"));
         pub use horizon_mod_api_macros::__subscriptions;
     }

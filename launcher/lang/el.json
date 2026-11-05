@@ -1073,7 +1073,6 @@
   "{version} available": "{version} διαθέσιμο",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} από το μητρώο του Horizon, το δικό του προφίλ: {mods}",
   "{version} is not installed": "Το {version} δεν έχει εγκατασταθεί",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (ή .mcp.json σε ένα έργο)",
   "← All servers": "← Όλοι οι διακομιστές",
   "← Newer": "← Νεότερο",

@@ -1073,7 +1073,6 @@
   "{version} available": "Na voljo {version}",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} iz Horizonovega registra, svoj profil: {mods}",
   "{version} is not installed": "{version} ni nameščen",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (ali .mcp.json v projektu)",
   "← All servers": "← Vsi strežniki",
   "← Newer": "← Novejše",

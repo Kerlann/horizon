@@ -217,7 +217,6 @@ impl Game<'_> {
 
     /// Commands.performCommand for a line without its slash. A client mod's
     /// `command` hook is the caller's: this also runs on a server.
-    #[horizon_mod_api_macros::point(side = "both")]
     pub(super) fn run_command(&mut self, command: &str) -> bool {
         let d = vanilla::game_dispatcher_with_features(&self.level.enabled_features);
         let parse = d.parse(command, &self.ui.registries);

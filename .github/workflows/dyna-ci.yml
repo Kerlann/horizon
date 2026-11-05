@@ -161,6 +161,8 @@ jobs:
             .
             docs/modding/examples/wasm-hello -> target/horizon-mod
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: The mod API and the points crate build for wasm32
+        run: cargo +1.99.1 check -p horizon-mod-api -p horizon-mod-points --target wasm32-unknown-unknown
       - name: Build the sample to mod.wasm, and the std member the game ships
         run: |
           cargo +stable build -p cargo-horizon-mod -p xtask

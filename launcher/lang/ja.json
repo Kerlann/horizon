@@ -1073,7 +1073,6 @@
   "{version} available": "{version} が利用可能です",
   "{version} from Horizon's registry, its own profile: {mods}": "Horizonレジストリの {version}、独自プロファイル：{mods}",
   "{version} is not installed": "{version} はインストールされていません",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json（またはプロジェクト内の.mcp.json）",
   "← All servers": "← すべてのサーバー",
   "← Newer": "← Newer",

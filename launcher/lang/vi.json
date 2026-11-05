@@ -1073,7 +1073,6 @@
   "{version} available": "{version} có sẵn",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} từ cơ quan đăng ký của Horizon, hồ sơ riêng của nó: {mods}",
   "{version} is not installed": "{version} chưa được cài đặt",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (hoặc .mcp.json trong một dự án)",
   "← All servers": "← Tất cả máy chủ",
   "← Newer": "← Mới hơn",

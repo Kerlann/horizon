@@ -1073,7 +1073,6 @@
   "{version} available": "{version} tillgängliga",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} från Horizons register, dess egen profil: {mods}",
   "{version} is not installed": "{version} är inte installerad",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (eller .mcp.json i ett projekt)",
   "← All servers": "← Alla servrar",
   "← Newer": "← Nyare",

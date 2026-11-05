@@ -1616,6 +1616,7 @@ dependencies = [
  "horizon-mod-api",
  "horizon-mod-api-gen",
  "horizon-mod-api-macros",
+ "horizon-mod-points",
  "horizon-mod-wasm",
  "horizon-mods",
  "horizon-narrator",
@@ -1888,6 +1889,7 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
+ "sha2",
  "syn 2.0.119",
  "toml",
  "wit-parser 0.261.0",
@@ -1913,6 +1915,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "horizon-mod-points"
+version = "0.1.0"
+dependencies = [
+ "horizon-mod-api",
+ "horizon-mod-api-gen",
+ "horizon-mod-api-macros",
+]
+
+[[package]]
 name = "horizon-mod-wasm"
 version = "0.1.0"
 dependencies = [
@@ -1934,6 +1945,7 @@ name = "horizon-modding-examples"
 version = "0.0.0"
 dependencies = [
  "horizon-mod-api",
+ "horizon-mod-points",
 ]
 
 [[package]]

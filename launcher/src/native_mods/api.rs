@@ -38,8 +38,16 @@ pub(super) fn main_rs(template: &str, mods: &[&horizon_mods::Manifest]) -> Strin
         .enumerate()
         .map(|(i, m)| super::inject::main_checks(i, &super::inject::of(m)))
         .collect::<String>();
+    // A mod listens at points when it has point injections: its `impl Points` registers.
+    let points = mods
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| !super::inject::of(m).is_empty())
+        .map(|(i, m)| format!("        ({:?}, mod_{i}::__horizon_points),\n", m.id))
+        .collect::<String>();
     template
         .replace("/* MOD_ENTRIES */", &entries)
+        .replace("/* MOD_POINTS */", &points)
         .replace("/* BUILT_MODS */", &inventory)
         + &checks
 }
@@ -52,13 +60,21 @@ pub(super) struct Project<'a> {
     api_deps: Vec<ApiDependency>,
 }
 
-/// The mod API's package, the one crate a mod depends on.
+/// The mod API's package, the one crate every mod depends on.
 pub(super) const API_PACKAGE: &str = "horizon-mod-api";
+/// The injection points' package, which a mod that listens at points also depends on (#589).
+pub(super) const POINTS_PACKAGE: &str = "horizon-mod-points";
 
-/// A `horizon-mod-api` dependency, under `[dependencies]` or a `[target.*]` table.
+/// Each game package a mod may depend on, with its library's name.
+pub(super) const PACKAGES: [(&str, &str); 2] =
+    [(API_PACKAGE, "mod_api"), (POINTS_PACKAGE, "mod_points")];
+
+/// A dependency on one of [`PACKAGES`], under `[dependencies]` or a `[target.*]` table.
 struct ApiDependency {
     target: Option<String>,
     key: String,
+    package: &'static str,
+    library: &'static str,
 }
 
 impl ApiDependency {
@@ -125,22 +141,29 @@ impl<'a> Project<'a> {
                     .get("package")
                     .and_then(toml::Value::as_str)
                     .unwrap_or(key);
-                match package {
-                    API_PACKAGE => api_deps.push(ApiDependency {
+                if let Some(&(package, library)) =
+                    PACKAGES.iter().find(|(name, _)| *name == package)
+                {
+                    api_deps.push(ApiDependency {
                         target: target.map(str::to_owned),
                         key: key.clone(),
-                    }),
-                    "horizon-client" => {
-                        return Err(ProjectError::GameDependency {
-                            mod_id: mod_id(),
-                            key: key.clone(),
-                        });
-                    }
-                    _ => {}
+                        package,
+                        library,
+                    });
+                    continue;
+                }
+                if package == "horizon-client" {
+                    return Err(ProjectError::GameDependency {
+                        mod_id: mod_id(),
+                        key: key.clone(),
+                    });
                 }
             }
         }
-        if !api_deps.iter().any(|api| api.target.is_none()) {
+        if !api_deps
+            .iter()
+            .any(|api| api.target.is_none() && api.package == API_PACKAGE)
+        {
             return Err(ProjectError::ApiDependency { mod_id: mod_id() });
         }
         Ok(Self {
@@ -159,13 +182,18 @@ impl<'a> Project<'a> {
         dependency_tables(&self.cargo)
     }
 
-    /// The names the mod's code calls the mod API by: `mod_api`, or a renamed dependency's key.
-    pub(super) fn api_dependencies(&self) -> std::collections::BTreeSet<String> {
+    /// The names the mod's code calls the game's packages by (`mod_api`, `mod_points`, or a
+    /// renamed dependency's key), each with its package's library name.
+    pub(super) fn api_dependencies(&self) -> std::collections::BTreeSet<(String, &'static str)> {
         self.api_deps
             .iter()
-            .map(|api| match api.key.as_str() {
-                API_PACKAGE => "mod_api".to_owned(),
-                key => key.replace('-', "_"),
+            .map(|api| {
+                let name = if api.key == api.package {
+                    api.library.to_owned()
+                } else {
+                    api.key.replace('-', "_")
+                };
+                (name, api.library)
             })
             .collect()
     }
@@ -234,7 +262,7 @@ pub(super) fn stage(
         let package = project.package.clone();
         for api in &project.api_deps {
             let dependency = api.value_mut(&mut manifest);
-            let mut rewritten = path_dep("../../crates/horizon-mod-api");
+            let mut rewritten = path_dep(&format!("../../crates/{}", api.package));
             if let Some(old) = dependency.as_table() {
                 // A renamed dependency also needs its package name.
                 for key in ["package", "features"] {

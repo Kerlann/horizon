@@ -342,7 +342,12 @@ pub use species::Species;
 pub fn draws_parent_variant(species: Species) -> bool {
     matches!(
         species,
-        Species::Pig | Species::Cow | Species::Chicken | Species::Fox | Species::Cat
+        Species::Pig
+            | Species::Cow
+            | Species::Chicken
+            | Species::Fox
+            | Species::Cat
+            | Species::Wolf
     )
 }
 
@@ -2209,9 +2214,9 @@ pub enum MobEvent {
     Breed {
         parent: u32,
         partner: u32,
-        /// A llama's baby, drawn from the parent's random as
-        /// `Llama.getBreedOffspring` does.
-        llama: Option<Box<super::mobs::llama::Offspring>>,
+        /// Equine inheritance, drawn at `getBreedOffspring`'s goal moment,
+        /// before later same-tick healing and grazing rolls.
+        equine: Option<Box<equine::Offspring>>,
         /// Whether the parent supplies the variant, if already drawn.
         parent_variant: Option<bool>,
         /// The parent-RNG experience decision, if already made.
@@ -2498,7 +2503,8 @@ pub struct Seen {
     pub potential_job: Option<[i32; 3]>,
     pub meeting: Option<[i32; 3]>,
     /// `variant2`: a villager's profession (index into
-    /// `render::PROFESSIONS`), a llama's strength. And a villager's experience.
+    /// `render::PROFESSIONS`), a llama's strength or a horse's markings.
+    /// And a villager's experience.
     pub profession: u8,
     pub xp: i32,
     /// What other villagers read of a villager's state and brain.
@@ -2844,7 +2850,12 @@ pub fn apply_mob_pushes(m: &mut Mob, pending: &mut PendingPushes) {
 /// Applies the brain memories a mob's tick set on other mobs (from event
 /// index `from` on), at once: vanilla sets them on the other entity during
 /// the tick, before the mobs after it tick.
-pub fn apply_brain_events(mobs: &mut [Mob], events: &mut Vec<MobEvent>, from: usize) {
+pub fn apply_brain_events(
+    mobs: &mut [Mob],
+    level: &mut DamageLevel<'_>,
+    events: &mut Vec<MobEvent>,
+    from: usize,
+) {
     let mut i = from;
     while i < events.len() {
         match events[i] {
@@ -2892,6 +2903,67 @@ pub fn apply_brain_events(mobs: &mut [Mob], events: &mut Vec<MobEvent>, from: us
                     animal_brain::forget_breed_target(m, parent);
                 }
                 i += 1;
+            }
+            // Pufferfish.touch: the poison and playSound sit inside the
+            // hurtServer branch, so only a hit that landed poisons and stings.
+            // In vanilla, this runs in Pufferfish.aiStep during the fish's tick,
+            // so mobs ticking later in the same level tick tick their effects.
+            MobEvent::PufferfishSting {
+                mob,
+                target,
+                amount,
+                mut source,
+                poison_ticks,
+            } => {
+                let mut sound = None;
+                let mut raised = Vec::new();
+                let fish = mobs.iter().find(|m| m.id == mob);
+                if source.attacker_species.is_none() {
+                    source.attacker_species = fish.map(Mob::species);
+                }
+                let held = if crate::native_client_hooks::has_mods() {
+                    fish.and_then(|m| m.extra.main_hand_stack()).cloned()
+                } else {
+                    None
+                };
+                let attack = crate::health::Attack {
+                    attacker: mob as i32,
+                    held: [held, None],
+                    player_uuid: None,
+                };
+                let (aim, fish_pos, fish_silent) = fish
+                    .map(|m| {
+                        (
+                            Aim {
+                                eye: [m.position.x, m.eye_y(), m.position.z],
+                                look: m.look_angle(),
+                                feet: [m.position.x, m.position.y, m.position.z],
+                            },
+                            [m.position.x, m.position.y, m.position.z],
+                            m.silent,
+                        )
+                    })
+                    .map(|(aim, pos, silent)| (Some(aim), Some(pos), silent))
+                    .unwrap_or((None, None, true));
+                let mut hit_level = level.reborrow().attacked_by(&attack);
+                if let Some(t) = mobs.iter_mut().find(|m| m.id == target)
+                    && t.damage_aimed(&mut hit_level, amount, source, aim)
+                {
+                    t.add_effect("minecraft:poison", poison_ticks, 0);
+                    raised = std::mem::take(&mut t.outbox);
+                    if !fish_silent && let Some(at) = fish_pos {
+                        sound = Some(MobEvent::Sound("entity.puffer_fish.sting", at, 1.0, 1.0));
+                    }
+                }
+                events.remove(i);
+                if let Some(s) = sound {
+                    events.insert(i, s);
+                    i += 1;
+                }
+                for e in raised {
+                    events.insert(i, e);
+                    i += 1;
+                }
             }
             _ => i += 1,
         }

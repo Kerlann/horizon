@@ -1073,7 +1073,6 @@
   "{version} available": "{version} 사용 가능",
   "{version} from Horizon's registry, its own profile: {mods}": "Horizon 레지스트리의 {version}, 고유 프로필: {mods}",
   "{version} is not installed": "{version}이(가) 설치되지 않았습니다.",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (또는 프로젝트 내 .mcp.json)",
   "← All servers": "← 모든 서버",
   "← Newer": "← 최신",

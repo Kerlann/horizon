@@ -1073,7 +1073,6 @@
   "{version} available": "{version}praesto",
   "{version} from Horizon's registry, its own profile: {mods}": "{version}e*Horizonregistro, suo profano;{mods}",
   "{version} is not installed": "{version}non installed",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (vel .mcp.json in project)",
   "← All servers": "Omnes servers",
   "← Newer": "Recentior",

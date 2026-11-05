@@ -1073,7 +1073,6 @@
   "{version} available": "{version} beskikbaar",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} van Horizon se register, sy eie profiel: {mods}",
   "{version} is not installed": "{version} is nie geïnstalleer nie",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (of .mcp.json in 'n projek)",
   "← All servers": "← Alle bedieners",
   "← Newer": "← Nuwer",

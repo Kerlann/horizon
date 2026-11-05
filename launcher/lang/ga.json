@@ -1073,7 +1073,6 @@
   "{version} available": "{version} ar fáil",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} ó chlár Horizon, a phróifíl féin: {mods}",
   "{version} is not installed": "Níl {version} suiteáilte",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (nó .mcp.json i dtionscadal)",
   "← All servers": "← Gach freastalaí",
   "← Newer": "← Níos nuaí",

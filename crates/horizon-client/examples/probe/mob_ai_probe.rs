@@ -1380,7 +1380,12 @@ pub fn main() -> horizon_client::Result<()> {
                         dropped_leads += 1;
                     }
                 }
-                horizon_client::mobs::apply_brain_events(&mut mobs, &mut events, from);
+                horizon_client::mobs::apply_brain_events(
+                    &mut mobs,
+                    &mut test_level.level(),
+                    &mut events,
+                    from,
+                );
                 villager_events(
                     &mut mobs,
                     &mut events,

@@ -3,7 +3,7 @@
 //! the ridden movement and jump, offspring stats and `AbstractEquineModel`.
 use super::finalize::{Attr, set_base};
 use super::{
-    Mob, MobEvent, MobWorld, Species,
+    Mob, MobEvent, MobWorld, Seen, Species,
     anim::{Poses, State},
     goals::{
         Breed, Cx, Float, FollowParent, Goal, LookAtPlayer, MOVE, Panic, RandomLookAround, Stroll,
@@ -251,20 +251,89 @@ pub fn offspring(a: f64, b: f64, min: f64, max: f64, r: &mut impl RandomSource) 
         v
     }
 }
-/// `AbstractHorse.setOffspringAttributes` from two parents.
-pub fn inherit(child: &mut Mob, a: &Mob, b: &Mob, r: &mut impl RandomSource) {
-    let health = offspring(
-        f64::from(a.attrs.max_health),
-        f64::from(b.attrs.max_health),
-        15.0,
-        30.0,
-        r,
-    );
-    set_base(child, Attr::MaxHealth, f64::from(health as f32));
-    child.health = child.attrs.max_health;
-    child.extra.vector[0] = offspring(a.extra.vector[0], b.extra.vector[0], 0.4, 1.0, r);
-    let speed = offspring(a.attrs.speed, b.attrs.speed, 0.1125, 0.3375, r);
-    set_base(child, Attr::MovementSpeed, speed);
+/// `AbstractHorse.setOffspringAttributes`, drawn before later `aiStep` rolls.
+#[derive(Clone, Debug)]
+pub struct OffspringAttributes {
+    pub max_health: f32,
+    pub jump: f64,
+    pub speed: f64,
+}
+impl OffspringAttributes {
+    pub fn draw(m: &mut Mob, partner: &Seen) -> Self {
+        let r = &mut m.random;
+        Self {
+            max_health: offspring(
+                f64::from(m.attrs.max_health),
+                partner.stats[0],
+                15.0,
+                30.0,
+                r,
+            ) as f32,
+            jump: offspring(m.extra.vector[0], partner.stats[1], 0.4, 1.0, r),
+            speed: offspring(m.attrs.speed, partner.stats[2], 0.1125, 0.3375, r),
+        }
+    }
+}
+/// A horse, donkey, mule or llama's inheritance, decided by its breeding goal.
+#[derive(Clone, Debug)]
+pub struct Offspring {
+    pub attributes: OffspringAttributes,
+    pub variant: u8,
+    /// Horse markings or llama strength; unused for donkeys and mules.
+    pub variant2: u8,
+}
+/// `Horse`/`Donkey`/`Llama.getBreedOffspring`. Camels only create a baby and
+/// inherit no attributes; the other `AbstractHorse` species do not breed.
+pub fn breed_offspring(m: &mut Mob, partner: &Seen) -> Option<Offspring> {
+    if super::llama::is_llama(m.species()) {
+        return Some(super::llama::breed_offspring(m, partner));
+    }
+    if !matches!(
+        m.species(),
+        Species::Horse | Species::Donkey | Species::Mule
+    ) {
+        return None;
+    }
+    let mut variant = 0;
+    let mut variant2 = 0;
+    // Horse.getBreedOffspring: coat and markings precede attributes, except
+    // when a horse and donkey have a mule (attributes only).
+    if m.species() == Species::Horse && partner.species == Species::Horse {
+        let r = &mut m.random;
+        let c = r.next_int_bound(9).unwrap_or(0);
+        variant = if c < 4 {
+            m.extra.variant
+        } else if c < 8 {
+            partner.variant
+        } else {
+            r.next_int_bound(7).unwrap_or(0) as u8
+        };
+        let mk = r.next_int_bound(5).unwrap_or(0);
+        variant2 = if mk < 2 {
+            m.extra.variant2
+        } else if mk < 4 {
+            partner.profession
+        } else {
+            r.next_int_bound(5).unwrap_or(0) as u8
+        };
+    }
+    Some(Offspring {
+        attributes: OffspringAttributes::draw(m, partner),
+        variant,
+        variant2,
+    })
+}
+/// Apply the goal's inheritance without advancing either parent's random.
+pub fn apply_offspring(child: &mut Mob, o: &Offspring) {
+    set_base(child, Attr::MaxHealth, f64::from(o.attributes.max_health));
+    child.health = o.attributes.max_health;
+    child.extra.vector[0] = o.attributes.jump;
+    set_base(child, Attr::MovementSpeed, o.attributes.speed);
+    child.extra.variant = o.variant;
+    child.extra.variant2 = o.variant2;
+    if super::llama::is_trader(child) {
+        child.persistent = true;
+    }
 }
 /// The rider controls the mount: saddled, with a player on it.
 pub fn controlled(m: &Mob) -> bool {

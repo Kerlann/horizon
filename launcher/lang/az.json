@@ -1073,7 +1073,6 @@
   "{version} available": "{version} mövcuddur",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} Horizon reyestrindən, öz profili: {mods}",
   "{version} is not installed": "{version} quraşdırılmayıb",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (və ya layihədə .mcp.json)",
   "← All servers": "← Bütün serverlər",
   "← Newer": "← Daha yeni",

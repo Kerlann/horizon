@@ -1073,7 +1073,6 @@
   "{version} available": "{version} ar gael",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} o gofrestrfa Horizon, ei broffil ei hun: {mods}",
   "{version} is not installed": "Nid yw {version} wedi'i osod",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (neu .mcp.json mewn prosiect)",
   "← All servers": "← Pob gweinydd",
   "← Newer": "← Newyddach",

@@ -1073,7 +1073,6 @@
   "{version} available": "{version} доступно",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} из Horizon-овог регистра, засебан профил: {mods}",
   "{version} is not installed": "{version} није инсталиран",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.цлауде.јсон (или .мцп.јсон у пројекту)",
   "← All servers": "← Сви сервери",
   "← Newer": "← Новије",

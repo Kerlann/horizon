@@ -1073,7 +1073,6 @@
   "{version} available": "{version} ხელმისაწვდომია",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} Horizon-ის რეესტრიდან, საკუთარი პროფილი: {mods}",
   "{version} is not installed": "{version} არ არის დაინსტალირებული",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (ან .mcp.json პროექტში)",
   "← All servers": "← ყველა სერვერი",
   "← Newer": "← უფრო ახალი",

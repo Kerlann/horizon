@@ -3,16 +3,23 @@
 //! (`game`). None of it is part of the API a mod is written against.
 use crate::*;
 
-pub mod point;
+/// The installed mod `id`'s hooks, for the game to hand its other faces (its `impl Points`) on.
+pub fn hooks_of(id: &str) -> Option<&'static dyn Hooks> {
+    crate::mods()
+        .iter()
+        .find(|entry| entry.id == id)
+        .map(|entry| &*entry.hooks)
+}
+
+/// Marks the thread as inside mod `id`'s `call` until the guard drops, as a hook's dispatch does,
+/// so a panic in it names both.
+pub fn enter(id: &'static str, call: &'static str) -> crate::crash::NativeModGuard {
+    crate::mark_mod(id, call)
+}
 
 /// Install the process-wide ordered list of mods.
 pub fn install(mods: Mods) {
     crate::install(mods);
-}
-
-/// Whether an installed mod listens at `point` (the game fills that slot).
-pub fn point_listened(point: Option<points::PointId>) -> bool {
-    crate::point_listened(point)
 }
 
 /// Whether an installed mod subscribes to `hook`.

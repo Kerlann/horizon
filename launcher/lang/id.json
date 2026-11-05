@@ -1073,7 +1073,6 @@
   "{version} available": "{version} tersedia",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} dari registri Horizon, profilnya sendiri: {mods}",
   "{version} is not installed": "{version} tidak diinstal",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (atau .mcp.json di dalam proyek)",
   "← All servers": "← Semua server",
   "← Newer": "← Lebih baru",

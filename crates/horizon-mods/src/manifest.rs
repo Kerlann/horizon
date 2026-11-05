@@ -297,7 +297,7 @@ impl Manifest {
                         ));
                     }
                 }
-                // A trait method listens at a point (`mod_api::points::Points`): at its head or
+                // A trait method listens at a point (`mod_points::Points`): at its head or
                 // return, with the point's own record, so nothing else of a mixin applies.
                 if injection.trait_method.is_some()
                     && (injection.hook.is_some()

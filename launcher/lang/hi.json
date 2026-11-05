@@ -1073,7 +1073,6 @@
   "{version} available": "{version} उपलब्ध है",
   "{version} from Horizon's registry, its own profile: {mods}": "Horizon की रजिस्ट्री से {version}, इसकी अपनी प्रोफ़ाइल: {mods}",
   "{version} is not installed": "{version} इंस्टॉल नहीं है",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (या किसी प्रोजेक्ट में .mcp.json)",
   "← All servers": "← सभी सर्वर",
   "← Newer": "← नया",

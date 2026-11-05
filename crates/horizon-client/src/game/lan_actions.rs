@@ -1610,8 +1610,27 @@ impl Game<'_> {
         else {
             return false;
         };
-        // The mods may stop the menu; the click is spent.
+        // The mods may stop the menu; the click is spent. A fake player is
+        // stopped here too: the stand-in the open staged leaves the level
+        // through the close path, its items back on the vehicle, where a
+        // later transfer finds them. A stand-in another guest's menu still
+        // backs is not this use's to remove: the close is only for the one
+        // nobody is looking at.
         if !self.guest_may_open(conn, menu, None) {
+            let viewed = self.lan.as_ref().is_some_and(|host| {
+                host.hub
+                    .guests
+                    .iter()
+                    .filter(|g| host.hub.here(g))
+                    .any(|g| {
+                        g.menu
+                            .as_ref()
+                            .is_some_and(|m| m.slots == Slots::Block(pos))
+                    })
+            });
+            if !viewed {
+                self.close_cart_container(pos);
+            }
             return true;
         }
         // ServerPlayer.openMenu closes the menu that was open.

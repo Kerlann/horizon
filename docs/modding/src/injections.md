@@ -6,9 +6,10 @@ by renaming its target, then [ask for the hook](#ask-for-the-hook).
 
 It comes in two forms:
 
-- A **point injection** (`trait_method`) listens at an *injection point*: a game function marked
-  `#[point]`, with a slot at its head and its return that the game fills at load with the listeners of
-  the mods that name it. It changes no game source, so it builds against the prebuilt game in seconds.
+- A **point injection** (`trait_method`) listens at an *injection point*. Every `Game` method is one,
+  apart from the few its shape rules out ([below](#which-methods-are-points)): the prebuilt game has a slot
+  at each one's head and return, which the game fills at load with the listeners of the mods that name it.
+  It changes no game source, so it builds against the prebuilt game in seconds.
 - A **helper injection** (`helper`) splices your Rust into the game's source with
   [horizon-mixins](https://github.com/horizon-rust/horizon-mixins) before it is compiled. The game is
   rebuilt from source.
@@ -23,8 +24,9 @@ Apply these rules in order and stop at the first that fits.
 1. A hook or a Part method exists for the moment: implement it. **No injection.**
 2. No hook: a point injection. `target` (the `Game` method), `kind = "HEAD"` or `"RETURN"`, and
    `trait_method = "<point>"` (head) or `"<point>_return"` (return), where `<point>` is the method's name.
-   Implement that method in `#[mod_api::horizon_mod] impl mod_api::points::Points` at the crate root and
-   return it from `Hooks::points`. The body uses only `mod_api` types. This is the default injection.
+   Add `horizon-mod-points` to `Cargo.toml` beside `horizon-mod-api` (only a mod that listens at points
+   does). Implement that method in `#[mod_api::horizon_mod] impl mod_points::Points` on the same type as the
+   mod's `Hooks`, at the crate root. The body uses only `mod_api` types. This is the default injection.
 3. You need private game internals, another kind, or another crate: `helper = "src/<file>.rs"` bound to
    `&mut Game`. Last resort. It breaks on game updates, rebuilds the game and never runs as `mod.wasm`. File a
    hook request with it.
@@ -40,9 +42,9 @@ Exact fields (unknown fields are refused):
 | `bindings`, `cancellable`, `selector`, `require`, `ordinal`, `argument`, `slice`, `variable`, `result` | `helper` only: horizon-mixins' own fields. A point listener gets the point's record instead and cancels through its `cancel` |
 | `priority` | horizon-mixins' order among helpers |
 
-Point errors name the injection: its `target` isn't a `Game` method, or it names a method that isn't the
-point's (`tick` at a `RETURN` is `tick_return`), or the mod's `impl Points` doesn't override the method it
-names. Helper errors: `E_HOOK_UNKNOWN` (the `hook` name is not in the catalog: use a name the error lists, or use `target`);
+Point errors name the injection: its `target` isn't a point of the game the mod pins, or it names a method
+that isn't the point's (`tick` at a `RETURN` is `tick_return`), or the mod's `impl Points` doesn't override
+the method it names. Helper errors: `E_HOOK_UNKNOWN` (the `hook` name is not in the catalog: use a name the error lists, or use `target`);
 `E_HOOK_VERSION` (the catalog lacks that `hook_version`: use a version the error lists, and rebuild against the
 game the mod pins).
 
@@ -55,14 +57,10 @@ the event, and writes take `host`.
    [rustdoc](reference/api.md). A per-block, per-item or per-entity moment is a Part method. Nothing in this
    chapter applies.
 2. **No hook: a point injection (`trait_method`).** The default. Your `Points` method gets the side's host
-   and the point's record (`mod_api::points::<Point>Args`): the function's arguments with API types, and a
+   and the point's record (`mod_points::<Point>Args`): the function's arguments with API types, and a
    `cancel` or `result` where the function returns `()` or an API value. It uses only `mod_api` types.
-   - **On the prebuilt game** (the `performance` profile), the target must be one of the game's points: the
-     build compiles only your mods, in seconds.
-   - **A target that isn't a point yet** builds the game from source, and the launcher marks the function
-     `#[point(side = "both")]` in the copy it builds, so the same `impl Points` compiles (with a `HostSide`
-     host). Its parameters must have API types; the compiler says which doesn't. Ask for the point to be
-     added, which makes it prebuilt.
+   Every `Game` method is a point on both routes: the prebuilt game was built with them all, and a source
+   build gets the same points, so a point injection always builds against the prebuilt game in seconds.
 3. **You truly need private internals: a `helper` bound to `Game`.** The last resort. It reads game state no
    API exposes, so it breaks when the game changes, rebuilds the game, can never run as `mod.wasm`, and should
    always come with a hook request. `hook = "<name>"` names a catalog hook point's function for a helper, so
@@ -72,7 +70,7 @@ the event, and writes take `host`.
 
 | Form | Kinds | Where | Order | Game rebuild | `mod.wasm` |
 | --- | --- | --- | --- | --- | --- |
-| `trait_method` (point) | `HEAD`, `RETURN` | `Game` methods | dependency order | no, on a prebuilt point | no |
+| `trait_method` (point) | `HEAD`, `RETURN` | `Game` methods | dependency order | no | no |
 | `helper` | any | any crate | priority descending, then mod id, then injection id | yes | no |
 | Hook or Part method (no injection) | — | — | dependency order | no | yes |
 
@@ -130,7 +128,8 @@ fn count(game: &mut crate::game::Game<'_>) {
 }
 ```
 
-**2. A point injection** (the default). `Game::tick` is a point, so this builds on the prebuilt game:
+**2. A point injection** (the default). `Game::tick` is a point, so this builds on the prebuilt game. The
+mod depends on `horizon-mod-points` as well as `horizon-mod-api`:
 
 ```toml
 [[native.injection]]
@@ -225,14 +224,34 @@ Modules are **native-only** and last-resort support code for helpers, outside th
 line: a mod's behaviour still goes through hooks, handles and Parts. Any capability a module needs
 that the API lacks is a hook request in #44's row form, not a reason to grow the module.
 
+## Which methods are points
+
+Every inherent `Game` method of the game module is a point, named after the method, except:
+
+- the hook functions themselves (`native_*`), which are hooks;
+- a method compiled only under a `cfg`, and one in a `cfg`-gated module;
+- `const`, `async` and `unsafe` functions, and methods without a `&self` or `&mut self` receiver;
+- `impl Trait` or `!` in the signature, `#[inline(always)]`, and a parameter named `cancel` or `result`.
+
+A method whose return value borrows the game (`-> &T`, `-> Option<&mut T>`) has a head and no return; a
+`'static` return (`-> Option<&'static str>`) borrows nothing and has both. A `usize` or `isize` crosses
+the record as `u64` or `i64`, one width for native and wasm listeners.
+`points.json`, beside the prebuilt game, lists them all; the rustdoc of `horizon-mod-points` documents
+each with the function it listens at.
+
+The source tree carries no `#[point]`: the build of the prebuilt game, and the launcher's source builds,
+put one on each method in the copy they compile. A plain `cargo build` of the game in a checkout has no
+points; a mod listening there builds, and its listeners never fire.
+
 ## Reference
 
 - A point's methods are `<point>` (its head: the arguments it was called with) and `<point>_return` (after
-  its body: the value it returns), on `mod_api::points::Points`, documented in the rustdoc with the function
-  each one listens at. Its record is `mod_api::points::<Point>Args`.
-- A listener's host is the point's side: `&mut dyn ServerHost`, `&mut dyn ClientHost`, or a `HostSide` for a
-  point on both sides, and `&dyn Host` on a function that takes `&self`.
-- The game fills a point's slots once, after the mods are installed; a point no mod listens at costs one
+  its body: the value it returns), on `mod_points::Points`. Its record is `mod_points::<Point>Args`.
+- Depend on `horizon-mod-points` only to listen at points. It holds one record per point, so a crate that
+  depends on it compiles a few seconds slower; a mod without point injections leaves it out.
+- A listener's host is a `HostSide` on a function that takes `&mut self`, and `&dyn Host` on one that takes
+  `&self`.
+- The game sets a point's slots once, after the mods are installed; a point no mod listens at costs one
   atomic load and a branch.
 - A point injection's `hook`, bindings and horizon-mixins fields are refused: a hook is its own `Hooks` method,
   and the record carries what the point passes.

@@ -1073,7 +1073,6 @@
   "{version} available": "{version} கிடைக்கிறது",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} Horizon இன் பதிவேட்டில் இருந்து, அதன் சொந்த சுயவிவரம்: {mods}",
   "{version} is not installed": "{version} நிறுவப்படவில்லை",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (அல்லது திட்டத்தில் .mcp.json)",
   "← All servers": "← அனைத்து சர்வர்கள்",
   "← Newer": "← புதியது",

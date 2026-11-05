@@ -118,8 +118,9 @@ fn expand(mut implementation: ItemImpl, export: bool) -> TokenStream {
     quote!(#implementation #export).into()
 }
 
-/// `#[horizon_mod]` on `impl Points`: its subscriptions, and `__HORIZON_POINTS`, the methods it
-/// overrides, which the launcher's generated `main` checks each slot injection against.
+/// `#[horizon_mod]` on `impl mod_points::Points`: its subscriptions, `__HORIZON_POINTS`, the methods
+/// it overrides, which the launcher's generated `main` checks each point injection against, and
+/// `__horizon_points`, which the generated `main` registers the mod's listeners with.
 fn expand_points(mut implementation: ItemImpl) -> TokenStream {
     let mut methods = Vec::new();
     let mut cfgs = Vec::new();
@@ -130,16 +131,26 @@ fn expand_points(mut implementation: ItemImpl) -> TokenStream {
         }
     }
     implementation.items.push(syn::parse_quote! {
-        fn subscribed(&self) -> &'static [Option<mod_api::points::PointId>] {
-            &[#(#(#cfgs)* mod_api::points::#methods),*]
+        fn subscribed(&self) -> &'static [Option<mod_points::PointId>] {
+            &[#(#(#cfgs)* mod_points::ids::#methods),*]
         }
     });
     let names = methods.iter().map(|method| method.to_string());
+    let ty = &implementation.self_ty;
     quote! {
         #implementation
         /// The injection-point methods this mod overrides (its `impl Points`).
         #[doc(hidden)]
         pub const __HORIZON_POINTS: &[&str] = &[#(#(#cfgs)* #names),*];
+        /// The mod's `impl Points`: its installed `Hooks`, the same value, seen as its listeners.
+        /// The launcher's generated `main` registers it.
+        #[doc(hidden)]
+        pub fn __horizon_points(hooks: &'static dyn mod_api::Hooks) -> &'static dyn mod_points::Points {
+            let hooks: &'static dyn ::std::any::Any = hooks;
+            hooks
+                .downcast_ref::<#ty>()
+                .expect("a mod's Points and Hooks are one type")
+        }
     }
     .into()
 }
@@ -168,11 +179,12 @@ pub fn horizon_part(_attribute: TokenStream, input: TokenStream) -> TokenStream 
 }
 
 /// `#[point(side = "server" | "client" | "both", name = "…", hot)]` on a `Game` method: an
-/// injection point (#589), a slot the launcher fills at load with the listeners of the mods'
-/// `[[native.injection]]` entries that target this function, with no game rebuild. Its head checks
-/// the slot (one atomic load and a branch while it is empty) and hands each listener the side's
-/// host and the parameters with API types, which it may change. `name` is needed only where two
-/// pointed functions share a name; `hot` marks one that runs per block, entity or frame.
+/// injection point (#589), a slot the launcher fills at load for the mods whose `impl Points` listens
+/// there. The staging pass that builds the prebuilt game (and the launcher's source builds) puts it
+/// on every method [`point_shape::eligible`] admits; the source tree carries none. Its head checks
+/// the slot (one atomic load and a branch while nothing listens) and hands each listener the side's
+/// host and the parameters with API types, which it may change; its return does the same with the
+/// value returned, unless that value borrows the game.
 #[proc_macro_attribute]
 pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
     let mut function = parse_macro_input!(input as ImplItemFn);
@@ -196,7 +208,10 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
     // The body moves to an inlined inner function, so the return listeners run however it
     // returns; the outer function takes each parameter by a plain name.
     let inner = syn::Ident::new(
-        &format!("__point_{}", function.sig.ident),
+        &format!(
+            "__point_{}",
+            function.sig.ident.to_string().trim_start_matches("r#")
+        ),
         function.sig.ident.span(),
     );
     let mut outer = function.clone();
@@ -212,62 +227,121 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
         };
         let plain = format_ident!("__p{i}");
         *typed.pat = syn::parse_quote!(#plain);
-        match original.filter(|name| shape.args.iter().any(|arg| arg.name == *name)) {
-            Some(name) => {
+        match original.and_then(|name| shape.args.iter().find(|arg| arg.name == name)) {
+            Some(arg) => {
+                let name = &arg.name;
                 passed.push(plain);
-                call.push(quote!(__args.#name));
+                call.push(match (&arg.ty, point_shape::wide(&arg.ty)) {
+                    (syn::Type::Reference(_), _) => quote!(&*__args.#name),
+                    // A native width crosses as 64 bits: back to the parameter's own type.
+                    (ty, Some(_)) => quote!(__args.#name as #ty),
+                    (_, None) => quote!(__args.#name),
+                });
             }
             None => call.push(quote!(#plain)),
         }
     }
+    // The inner function's type and const parameters, named at the call: one only in the return
+    // type can't be inferred through it.
+    let generics: Vec<_> = function
+        .sig
+        .generics
+        .params
+        .iter()
+        .filter_map(|param| match param {
+            syn::GenericParam::Type(ty) => Some(&ty.ident),
+            syn::GenericParam::Const(c) => Some(&c.ident),
+            syn::GenericParam::Lifetime(_) => None,
+        })
+        .collect();
+    let turbofish = if generics.is_empty() {
+        quote!()
+    } else {
+        quote!(::<#(#generics),*>)
+    };
     // What the listeners get for `self`: the shape's host.
     let host = match (shape.mutable, shape.side) {
         (false, _) => quote!(self),
         (true, point_shape::Side::Both) => quote!(crate::game::points::host_side(&mut *self)),
         (true, _) => quote!(&mut *self),
     };
-    let (slot, return_slot, record) = (shape.slot(), shape.return_slot(), shape.record());
-    let fire = quote!(::mod_api::__private::point::fire(__listeners, |__listener| __listener(#host, &mut __args)));
-    let (stop, returned) = match &shape.returns {
-        point_shape::Returns::Unit => (
-            quote!(if __args.cancel {
-                return;
-            }),
-            quote!(#fire;),
-        ),
-        point_shape::Returns::UnitResult => (
-            quote!(if __args.cancel {
-                return Ok(());
-            }),
-            quote!(#fire;),
-        ),
-        point_shape::Returns::Value(_) => (
-            quote!(if let Some(__result) = __args.result.take() {
-                return __result;
-            }),
-            quote! {
-                __args.result = Some(__result);
-                #fire;
-                return __args.result.unwrap_or(__result);
+    let record = shape.record();
+    let fire = |variant: &syn::Ident, method: &syn::Ident| {
+        let name = method.to_string();
+        quote! {
+            crate::game::points::fire(
+                crate::game::points::PointId::#variant,
+                #name,
+                &mut |__points| __points.#method(#host, &mut __args),
+            )
+        }
+    };
+    let listened = |variant: &syn::Ident| quote!(crate::game::points::POINTS[crate::game::points::PointId::#variant as usize].load(::std::sync::atomic::Ordering::Acquire));
+    let (head_variant, head_method) = (
+        shape.variant(),
+        syn::Ident::new(&shape.name, proc_macro2::Span::call_site()),
+    );
+    let head_listened = listened(&head_variant);
+    let head_fire = fire(&head_variant, &head_method);
+    // A native-width value crosses the record as 64 bits.
+    let (widen, narrow) = match &shape.returns {
+        point_shape::Returns::Value(ty) => match point_shape::wide(ty) {
+            Some(wide) => (quote!(as #wide), quote!(as #ty)),
+            None => (quote!(), quote!()),
+        },
+        _ => (quote!(), quote!()),
+    };
+    let stop = match &shape.returns {
+        point_shape::Returns::Unit => quote!(if __args.cancel {
+            return;
+        }),
+        point_shape::Returns::UnitResult => quote!(if __args.cancel {
+            return Ok(());
+        }),
+        point_shape::Returns::Value(_) => quote!(if let Some(__result) = __args.result.take() {
+            return __result #narrow;
+        }),
+        point_shape::Returns::Opaque => quote!(),
+    };
+    let returned = if shape.has_return() {
+        let (variant, method) = (
+            shape.return_variant(),
+            format_ident!("{}_return", shape.name),
+        );
+        let return_listened = listened(&variant);
+        let return_fire = fire(&variant, &method);
+        let body = match &shape.returns {
+            point_shape::Returns::Value(_) => quote! {
+                __args.result = Some(__result #widen);
+                #return_fire;
+                return __args.result.map_or(__result, |__value| __value #narrow);
             },
-        ),
-        point_shape::Returns::Opaque => (quote!(), quote!(#fire;)),
+            _ => quote!(#return_fire;),
+        };
+        quote! {
+            if #return_listened {
+                #body
+            }
+        }
+    } else {
+        quote!()
     };
     outer.block = syn::parse_quote!({
         let mut __args = crate::game::points::#record::__new(#(#passed),*);
-        if let Some(__listeners) = crate::game::points::#slot.get() {
-            #fire;
+        if #head_listened {
+            #head_fire;
             #stop
         }
-        let __result = self.#inner(#(#call),*);
-        if let Some(__listeners) = crate::game::points::#return_slot.get() {
-            #returned
-        }
+        let __result = self.#inner #turbofish(#(#call),*);
+        #returned
         __result
     });
+    outer.attrs.retain(|attr| !attr.path().is_ident("inline"));
     function.sig.ident = inner;
     function.vis = syn::Visibility::Inherited;
-    function.attrs.retain(|attr| !attr.path().is_ident("doc"));
+    function
+        .attrs
+        .retain(|attr| !attr.path().is_ident("doc") && !attr.path().is_ident("inline"));
     function.attrs.push(syn::parse_quote!(#[inline(always)]));
     quote!(#outer #function).into()
 }

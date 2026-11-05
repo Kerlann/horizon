@@ -1073,7 +1073,6 @@
   "{version} available": "{version} دستیاب ہے۔",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} Horizon کی رجسٹری سے، اس کی اپنی پروفائل: {mods}",
   "{version} is not installed": "{version} انسٹال نہیں ہے۔",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (یا ایک پروجیکٹ میں .mcp.json)",
   "← All servers": "← تمام سرورز",
   "← Newer": "← جدید تر",

@@ -1073,7 +1073,6 @@
   "{version} available": "{version} זמין",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} מהרישום של Horizon, פרופיל משלו: {mods}",
   "{version} is not installed": "{version} אינו מותקן",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (או .mcp.json בפרויקט)",
   "← All servers": "← כל השרתים",
   "← Newer": "← חדש יותר",

@@ -5,12 +5,25 @@ use mod_api::__private::game::*;
 
 /// Start the game. The executable supplies the allocator and retains the mod API marker.
 pub fn main() {
-    main_with(Vec::new(), &[]);
+    main_with(Vec::new(), &[], &[]);
 }
 
 /// Start the game with named trait mods in dispatch order.
+/// Whether a mod's `__HORIZON_POINTS` names a method, at compile time: the launcher's generated
+/// `main` checks each point injection with it.
+#[doc(hidden)]
+pub use mod_points::__private::lists as point_listed;
+
+/// A native mod that listens at injection points: its id, and the generated export that sees its
+/// installed `Hooks` as its `impl Points` (#589).
+pub type NativePoints = (
+    &'static str,
+    fn(&'static dyn mod_api::Hooks) -> &'static dyn mod_points::Points,
+);
+
 pub fn main_with(
     mut mods: Vec<mod_api::ModEntry>,
+    points: &[NativePoints],
     built: &'static [horizon_mods::runtime::BuiltMod],
 ) {
     let exe = std::env::current_exe();
@@ -71,6 +84,14 @@ pub fn main_with(
         ));
     }
     mod_api::__private::install(mods.into());
+    for (id, listeners) in points {
+        let hooks = mod_api::__private::hooks_of(id)
+            .expect("a native mod listening at points is installed");
+        if let Err(error) = mod_points::register(id, listeners(hooks)) {
+            eprintln!("Horizon: {id}: {error}");
+            std::process::exit(game::exit_code::ERROR);
+        }
+    }
     crate::game::points::attach_installed();
     let help = launch.is_information_request();
     logging::set_game_home(launch.context.home.clone());

@@ -1073,7 +1073,6 @@
   "{version} available": "{version} ມີໃຫ້",
   "{version} from Horizon's registry, its own profile: {mods}": "{version} ຈາກທະບຽນຂອງ Horizon, ໂປຣໄຟລ໌ຂອງມັນເອງ: {mods}",
   "{version} is not installed": "{version} ບໍ່ໄດ້ຕິດຕັ້ງ",
-  "{why}, so the game builds from source and makes it a point": "{why}, so the game builds from source and makes it a point",
   "~/.claude.json (or .mcp.json in a project)": "~/.claude.json (ຫຼື .mcp.json ໃນໂຄງການ)",
   "← All servers": "← ເຊີບເວີທັງໝົດ",
   "← Newer": "← ໃໝ່ກວ່າ",
