@@ -505,6 +505,10 @@ impl Game<'_> {
         at: [f64; 3],
         site: SpawnSite,
     ) -> Option<u32> {
+        // Dragons have a separate entity implementation, but eggs use the same spawn path.
+        if matches!(kind, "ender_dragon" | "minecraft:ender_dragon") {
+            return self.spawn_dragon_spawned(at);
+        }
         // The spawn is not a natural one (no jockeys, the patrol leader roll
         // stays), but the mob is not persistent: vanilla's SummonCommand
         // never calls setPersistenceRequired. The flag is false from the
@@ -2481,10 +2485,22 @@ impl Game<'_> {
                     let ctx = self.who_context(Some(Who::Mob(source)), None);
                     self.post_game_event(event, at, ctx);
                 }
-                // Armadillo.rollUp/rollOut: `gameEvent(ENTITY_ACTION)`.
+                // A mob's own `gameEvent(..)` calls: Armadillo.rollUp/rollOut's
+                // ENTITY_ACTION, Creeper.tick's PRIME_FUSE, Mob.ate's EAT, the
+                // shulker's lid (Shulker.setRawPeekAmount), an evoker's vexes
+                // (ENTITY_PLACE).
                 MobEvent::GameEvent {
                     event, at, source, ..
-                } if event == "minecraft:entity_action" => {
+                } if matches!(
+                    event,
+                    "minecraft:entity_action"
+                        | "minecraft:prime_fuse"
+                        | "minecraft:eat"
+                        | "minecraft:container_open"
+                        | "minecraft:container_close"
+                        | "minecraft:entity_place"
+                ) =>
+                {
                     let ctx = self.who_context(Some(Who::Mob(source)), None);
                     self.post_game_event(event, at, ctx);
                 }
