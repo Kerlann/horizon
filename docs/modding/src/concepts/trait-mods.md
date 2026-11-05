@@ -781,8 +781,13 @@ The following documented `Game` helpers are not in the trait yet:
   `item_entities`, `player`, `panel_recipes`, `recipes`, `component`,
   `set_component`, `remove_component`, `spawn_falling_block`, `explode`,
   `container_slots` uses gameplay-private types.
-- `with_mod_block_entity` and `trigger_criterion` are generic or take
-  `impl Trait`, so their signatures cannot be called through `dyn Host`.
+- `with_mod_block_entity` is generic, so its signature cannot be called through `dyn Host`.
+
+Advancement triggers instead live on `PlayerRef::trigger_criterion`, with a mod-owned
+`CriterionTest` and the game's scoped `CriterionContext` resource. The context keeps real
+world-aware item predicates; it is not a conditions-only snapshot. See
+[advancement triggers](../reference/hook-notes.md#advancement-triggers) for the contract and
+the wasm runtime's current same-group callback limitation.
 
 The following catalog hooks are not in the trait:
 

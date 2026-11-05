@@ -40,6 +40,7 @@ pub(super) const IMPORTS: &[&str] = &[
     "ServerReloadListeners",
     "ClientReloadListeners",
     "ServerReloadResources",
+    "CriterionContext",
 ];
 
 /// Imported traits a call never hands over, each reached through another's method instead.
@@ -92,6 +93,7 @@ const EXPORTS: &[&str] = &[
     "ServerReloadListener",
     "ClientReloadListener",
     "PlaceProvider",
+    "CriterionTest",
 ];
 
 /// Every exported trait: [`EXPORTS`], then the handler traits `mod_api`'s capability keys name
@@ -774,6 +776,39 @@ mod tests {
                         .implementation
                         .contains("impl ClientBackendMut for")
                 );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn criteria_bind_a_mod_test_and_a_scoped_world_context() {
+        std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(|| {
+                let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+                let generated =
+                    super::super::sources(&root, super::super::FillMode::Require).unwrap();
+                let included = [
+                    ("mod_api_generated.rs", generated.hooks.as_str()),
+                    ("mod_api_generated_host.rs", generated.host.as_str()),
+                    ("native_render_generated.rs", generated.render.as_str()),
+                ];
+                let wasm = super::generate(&root, &included).unwrap();
+                let mut resolve = wit_parser::Resolve::default();
+                let package = resolve.push_str("mod-api.wit", &wasm.wit).unwrap();
+                let package = &resolve.packages[package];
+                let context = &resolve.interfaces[package.interfaces["criterion-context"]];
+                assert!(context.functions.contains_key("conditions-json"));
+                assert!(context.functions.contains_key("item"));
+                let test = &resolve.interfaces[package.interfaces["criterion-test"]];
+                assert_eq!(test.functions["test"].params[0].name, "handler");
+                let backend = &resolve.interfaces[package.interfaces["backend-mut"]];
+                assert!(backend.functions.contains_key("player-trigger-criterion"));
+                let host = &resolve.interfaces[package.interfaces["server-host"]];
+                assert!(!host.functions.contains_key("trigger-criterion"));
+                assert!(!wasm.unbound.iter().any(|name| name.contains("Criterion")));
             })
             .unwrap()
             .join()

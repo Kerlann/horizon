@@ -8,43 +8,38 @@ use horizon_client::{
     advancements::{self as adv, EntityView},
     items::ItemStack,
 };
+use mod_api::{
+    CriterionContext, CriterionTest, CriterionTestError, Identifier, PlayerRef,
+    TriggerCriterionError,
+};
 use serde_json::Value;
+use std::{cell::Cell, sync::Arc};
 
 /// One open criterion of a mod's trigger, as the mod's test sees it.
-pub(crate) struct NativeCriterion<'a> {
-    /// The criterion's `conditions`, `Null` when it has none. Its `player`
-    /// predicate is the game's to test, as vanilla's `SimpleInstance.player`.
-    pub(crate) conditions: &'a Value,
+struct NativeCriterion<'a> {
+    conditions: &'a Value,
     world: &'a dyn adv::World,
 }
 
-#[allow(dead_code)]
-impl NativeCriterion<'_> {
+impl CriterionContext for NativeCriterion<'_> {
+    fn conditions_json(&self) -> String {
+        self.conditions.to_string()
+    }
+
     /// Whether `stack` passes the item predicate under `key` in the
     /// conditions, as the game's own triggers read an `ItemPredicate`:
     /// `items` (an id, a list or a `#tag`), `count`, the `potion_contents`
     /// and `damage` components, and the `enchantments` and `damage`
     /// predicates; other components and predicates aren't checked. A missing
     /// key passes, as an absent `Optional<ItemPredicate>` does.
-    pub(crate) fn item(&self, key: &str, stack: &ItemStack) -> bool {
+    fn item(&self, key: &str, stack: &ItemStack) -> bool {
         adv::item(&self.conditions[key], &item_view(stack), self.world)
     }
 }
 
-/// Whether a mod may fire `trigger`: a namespaced id outside `minecraft`,
-/// whose triggers the game fires from its own events.
-fn mod_trigger(trigger: &str) -> bool {
-    trigger
-        .split_once(':')
-        .is_some_and(|(ns, path)| !ns.is_empty() && !path.is_empty() && ns != "minecraft")
-}
-
-/// Helpers for server mods, kept as stable as the hook points.
-// Native mods use these; nothing in Horizon does.
-#[allow(dead_code)]
 impl Game<'_> {
     /// Fires the mod's criteria trigger `trigger` (`mymod:pipe_connected`)
-    /// for the player with that UUID: vanilla's
+    /// for `player`: vanilla's
     /// `SimpleCriterionTrigger.trigger`. Each criterion of theirs with that
     /// trigger, not yet granted, of an advancement not yet done, is tested
     /// by `test` and then by its `player` predicate; those that pass are
@@ -53,37 +48,66 @@ impl Game<'_> {
     ///
     /// The acting player is reached inside their hook; another live player
     /// is reached in their own level, including during a guest's turn. An
-    /// outer player displaced by a nested turn is unavailable. True
-    /// when the player was reached, whether or not anything was granted;
-    /// false off a server, when the player isn't on or can't be reached from
-    /// here, and for a `minecraft:` trigger or a name without a namespace.
-    pub(super) fn native_trigger_criterion(
+    /// outer player displaced by a nested turn is unavailable. `Ok(())`
+    /// means the player was reached, whether or not anything was granted.
+    /// A stale/offline/displaced handle, a remote client, or a `minecraft:`
+    /// trigger or empty id is refused with a typed reason.
+    ///
+    /// `test` is lent to this call only. A failed test stops further testing
+    /// and reports `Test`; earlier matching criteria may already be granted.
+    /// Wasm's generated resource route exists, but a callback into the group
+    /// currently firing the trigger is refused by the runtime's reentry guard.
+    pub(super) fn native_player_trigger_criterion(
         &mut self,
-        uuid: u128,
-        trigger: &str,
-        test: impl Fn(&NativeCriterion<'_>) -> bool,
-    ) -> bool {
-        if !mod_trigger(trigger) || self.remote.is_some() {
-            return false;
+        player: PlayerRef,
+        trigger: &Identifier,
+        test: Arc<dyn CriterionTest>,
+    ) -> Result<(), TriggerCriterionError> {
+        if trigger.namespace().is_empty()
+            || trigger.path().is_empty()
+            || trigger.namespace() == "minecraft"
+        {
+            return Err(TriggerCriterionError::InvalidTrigger);
         }
-        let Some(target) = self
-            .native_player_ref(uuid)
-            .and_then(|player| self.native_entity_target(player.entity()))
-        else {
-            return false;
-        };
+        if self.remote.is_some() {
+            return Err(TriggerCriterionError::NotServer);
+        }
+        let target = self
+            .player_handle_read(player)
+            .and_then(|_| self.native_entity_target(player.entity()))
+            .ok_or(TriggerCriterionError::PlayerUnavailable)?;
         // In their level: the predicates read where they are, and a reward
-        // that doesn't fit drops there.
-        self.for_player(target, |g| g.trigger_mod_criteria(trigger, &test))
-            .is_some()
+        // that doesn't fit drops there. Reuse the existing player swap and
+        // advancement trigger, not a second predicate or awarding path.
+        self.for_player(target, |g| {
+            g.trigger_mod_criteria(&trigger.to_string(), test.as_ref())
+        })
+        .ok_or(TriggerCriterionError::PlayerUnavailable)?
     }
 
     /// `trigger` for a mod's trigger, for the player in place.
-    fn trigger_mod_criteria(&mut self, trigger: &str, test: &dyn Fn(&NativeCriterion<'_>) -> bool) {
+    fn trigger_mod_criteria(
+        &mut self,
+        trigger: &str,
+        test: &dyn CriterionTest,
+    ) -> Result<(), TriggerCriterionError> {
         let me = self.player_entity();
+        let refused = Cell::new(None);
         self.trigger(trigger, |conditions, world| {
-            passes(conditions, &me, world, test)
+            if refused.get().is_some() {
+                return false;
+            }
+            match passes(conditions, &me, world, test) {
+                Ok(pass) => pass,
+                Err(error) => {
+                    refused.set(Some(error));
+                    false
+                }
+            }
         });
+        refused
+            .get()
+            .map_or(Ok(()), |error| Err(TriggerCriterionError::Test(error)))
     }
 }
 
@@ -94,16 +118,16 @@ fn passes(
     conditions: &Value,
     me: &EntityView,
     world: &dyn adv::World,
-    test: &dyn Fn(&NativeCriterion<'_>) -> bool,
-) -> bool {
+    test: &dyn CriterionTest,
+) -> Result<bool, CriterionTestError> {
     let player = adv::Entities {
         this: Some(me),
         origin: me.position,
         tool: None,
         block_pos: None,
     };
-    test(&NativeCriterion { conditions, world })
-        && adv::conditions(&conditions["player"], &player, world)
+    Ok(test.test(&NativeCriterion { conditions, world })?
+        && adv::conditions(&conditions["player"], &player, world))
 }
 
 #[cfg(test)]
@@ -157,6 +181,17 @@ mod tests {
         })
     }
 
+    struct ItemTest {
+        key: &'static str,
+        stack: ItemStack,
+    }
+
+    impl CriterionTest for ItemTest {
+        fn test(&self, criterion: &dyn CriterionContext) -> Result<bool, CriterionTestError> {
+            Ok(criterion.item(self.key, &self.stack))
+        }
+    }
+
     #[test]
     fn a_mods_criterion_takes_its_own_test_and_the_player_predicate() {
         let burning = EntityView {
@@ -169,34 +204,65 @@ mod tests {
             ..burning.clone()
         };
         let copper = ItemStack::new("minecraft:copper_ingot", 2);
-        let pipe = |stack: &ItemStack| {
-            let stack = stack.clone();
-            move |c: &NativeCriterion<'_>| c.item("pipe", &stack)
+        let pipe = |stack: &ItemStack| ItemTest {
+            key: "pipe",
+            stack: stack.clone(),
         };
         let c = criterion();
-        assert!(passes(&c, &burning, &Plains, &pipe(&copper)));
-        assert!(
-            !passes(&c, &calm, &Plains, &pipe(&copper)),
+        assert_eq!(passes(&c, &burning, &Plains, &pipe(&copper)), Ok(true));
+        assert_eq!(
+            passes(&c, &calm, &Plains, &pipe(&copper)),
+            Ok(false),
             "the player predicate"
         );
         let one = ItemStack::new("minecraft:copper_ingot", 1);
-        assert!(
-            !passes(&c, &burning, &Plains, &pipe(&one)),
+        assert_eq!(
+            passes(&c, &burning, &Plains, &pipe(&one)),
+            Ok(false),
             "the item's count"
         );
         let iron = ItemStack::new("minecraft:iron_ingot", 2);
-        assert!(!passes(&c, &burning, &Plains, &pipe(&iron)), "the tag");
+        assert_eq!(
+            passes(&c, &burning, &Plains, &pipe(&iron)),
+            Ok(false),
+            "the tag"
+        );
         // A criterion without the key or any conditions passes the item test.
-        let any = |c: &NativeCriterion<'_>| c.item("filter", &iron);
-        assert!(passes(&c, &burning, &Plains, &any));
-        assert!(passes(&Value::Null, &calm, &Plains, &any));
+        let any = ItemTest {
+            key: "filter",
+            stack: iron,
+        };
+        assert_eq!(passes(&c, &burning, &Plains, &any), Ok(true));
+        assert_eq!(passes(&Value::Null, &calm, &Plains, &any), Ok(true));
+        let context = NativeCriterion {
+            conditions: &c,
+            world: &Plains,
+        };
+        assert_eq!(
+            serde_json::from_str::<Value>(&context.conditions_json()).unwrap(),
+            c
+        );
+        assert_eq!(
+            NativeCriterion {
+                conditions: &Value::Null,
+                world: &Plains
+            }
+            .conditions_json(),
+            "null"
+        );
     }
 
     #[test]
-    fn mods_fire_only_their_own_namespaced_triggers() {
-        assert!(mod_trigger("mymod:pipe_connected"));
-        assert!(!mod_trigger("minecraft:inventory_changed"));
-        assert!(!mod_trigger("inventory_changed"));
-        assert!(!mod_trigger(":pipe_connected"));
+    fn an_unavailable_test_is_not_a_nonmatching_criterion() {
+        struct Unavailable;
+        impl CriterionTest for Unavailable {
+            fn test(&self, _: &dyn CriterionContext) -> Result<bool, CriterionTestError> {
+                Err(CriterionTestError::Unavailable)
+            }
+        }
+        assert_eq!(
+            passes(&criterion(), &EntityView::default(), &Plains, &Unavailable),
+            Err(CriterionTestError::Unavailable)
+        );
     }
 }

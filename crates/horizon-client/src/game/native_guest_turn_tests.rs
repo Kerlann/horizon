@@ -219,6 +219,17 @@ fn another_guests_services_work_during_a_turn() {
         native_inventories::NativeInventoryKind::{Ender, Player},
     };
     use horizon_client::{advancements as adv, command::args::Selector, items::ItemStack};
+    use mod_api::{CriterionContext, CriterionTest, CriterionTestError, TriggerCriterionError};
+
+    struct Accept;
+    impl CriterionTest for Accept {
+        fn test(&self, criterion: &dyn CriterionContext) -> Result<bool, CriterionTestError> {
+            assert_eq!(criterion.conditions_json(), "null");
+            Ok(true)
+        }
+    }
+    let trigger = mod_api::Identifier::parse("turns:probe").unwrap();
+    let vanilla_trigger = mod_api::Identifier::parse("minecraft:tick").unwrap();
 
     with_guests(|game| {
         game.build_registries();
@@ -251,6 +262,7 @@ fn another_guests_services_work_during_a_turn() {
             .unwrap()
             .inventory[0] = Some(stone.clone());
         let a = game.native_player_ref(12).unwrap();
+        let b = game.native_player_ref(13).unwrap();
         game.as_guest(12, |game| {
             assert_eq!(game.native_entity_target(a.entity()), Some(Target::Player));
             assert_eq!(
@@ -272,8 +284,18 @@ fn another_guests_services_work_during_a_turn() {
                 game.native_inventory(13, Ender).unwrap().slots[0],
                 Some(stone.clone())
             );
-            assert!(game.native_trigger_criterion(13, "turns:probe", |_| true));
-            assert!(game.native_trigger_criterion(12, "turns:probe", |_| true));
+            assert_eq!(
+                a.trigger_criterion(game, &vanilla_trigger, Arc::new(Accept)),
+                Err(TriggerCriterionError::InvalidTrigger)
+            );
+            assert_eq!(
+                b.trigger_criterion(game, &trigger, Arc::new(Accept)),
+                Ok(())
+            );
+            assert_eq!(
+                a.trigger_criterion(game, &trigger, Arc::new(Accept)),
+                Ok(())
+            );
             assert!(game.native_run_command("give guest13 minecraft:diamond 2"));
             assert!(game.native_run_command("give @a[name=guest13] minecraft:diamond 1"));
             assert!(game.native_run_command(
@@ -287,7 +309,10 @@ fn another_guests_services_work_during_a_turn() {
             game.as_guest(13, |game| {
                 assert!(game.native_inventory(12, Player).is_err());
                 assert!(game.native_inventory(13, Player).is_err());
-                assert!(!game.native_trigger_criterion(12, "turns:probe", |_| true));
+                assert_eq!(
+                    a.trigger_criterion(game, &trigger, Arc::new(Accept)),
+                    Err(TriggerCriterionError::PlayerUnavailable)
+                );
                 assert!(!game.native_run_command("give guest12 minecraft:dirt 1"));
                 assert!(!game.native_run_command("give @a[name=guest12] minecraft:dirt 1"));
                 let inventory = game.inventory.clone();

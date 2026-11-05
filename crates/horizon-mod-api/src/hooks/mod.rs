@@ -211,6 +211,7 @@ mod player_actions;
 mod player_break_speed;
 mod player_brewed_potion;
 mod player_cooldowns;
+mod player_criteria;
 mod player_death_location;
 mod player_enchant_item;
 mod player_flyable_fall;

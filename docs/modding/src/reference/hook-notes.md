@@ -563,7 +563,7 @@ or transactions. Declarations still go on each event or registrar.
 
 - `Hooks::render_tooltip_pre` (NeoForge's `RenderTooltipEvent.Pre`) is asked for each tooltip about to be placed and drawn, after `render_tooltip_gather_components`: item tooltips and text tooltips (a button's, a book's, the creative tab names), not the selected-item name a bundle draws beside its grid. `place` is the point the tooltip hangs from (the cursor, or the point its screen gives), before the positioner adds its offset and keeps the box on screen; set its `x` and `y` to move it. `screen_width` and `screen_height` are the screen's size. `elements` are the tooltip's lines then its images, read-only (change them in `render_tooltip_gather_components`), and `stack` is the item it describes, `None` for a text tooltip. Set `cancel` and nothing is drawn and no `tooltip_color` is asked. It runs each frame a tooltip shows, only while a mod listens. Diverges from upstream: new hook.
 
-- [advancement triggers](#advancement-triggers) of a mod's own: `native_trigger_criterion(uuid, trigger, test)` fires a trigger
+- [advancement triggers](#advancement-triggers) of a mod's own: `player.trigger_criterion(host, trigger, test)` fires a trigger
   an advancement of a content mod or a data pack names (`mymod:pipe_connected`) for one player, as a NeoForge mod's
   `SimpleCriterionTrigger.trigger`.
 
@@ -2502,18 +2502,31 @@ whatever conditions the mod reads:
 }
 ```
 
-- `native_trigger_criterion(uuid, trigger, test)` fires it for one player, on a server only. Each criterion with that
+- `player.trigger_criterion(host, &trigger, test)` fires it on a `PlayerRef`, with a mutable `ServerHost`,
+  a mod-owned `Identifier` such as `mymod:pipe_connected`, and an `Arc<dyn CriterionTest>`. Each criterion with that
   trigger the player hasn't been granted, of an advancement not done yet, goes to `test`, then to its `player`
   predicate, as vanilla tests one. Those that pass are granted; an advancement they complete is awarded as by the game's
   own triggers: the toast, the chat line, the rewards and the player's saved progress.
-- `test` gets a `NativeCriterion`: its `conditions` (`Null` when it has none), and `item(key, stack)`, which tests
-  `stack` against the item predicate under `key` as the game's own triggers read one: `items` (an id, a list or a
-  `#tag`), `count`, the `potion_contents` and `damage` components, and the `enchantments` and `damage` predicates.
-  Other components and predicates aren't checked. A missing key passes.
-- It reaches the acting player inside their hook, and another live player on the server in their own level, including
-  during a guest's turn. A displaced outer player is unavailable. True means the player was reached, not
-  that anything was granted. It returns false otherwise, when the player isn't on, and for a `minecraft:` trigger or a
-  name without a namespace: the game fires vanilla's triggers from its own events.
+- `CriterionTest::test(&self, criterion: &dyn CriterionContext)` returns `Result<bool, CriterionTestError>`.
+  The context is a scoped game resource, borrowed only for this test; neither it nor its private world can be retained.
+  `criterion.conditions_json()` gives owned JSON (`"null"` when conditions are absent).
+  `criterion.item(key, &stack)` tests the item predicate under `key` as the game's own triggers read one: `items`
+  (an id, a list or a `#tag`), `count`, the `potion_contents` and `damage` components, and the `enchantments` and
+  `damage` predicates. Other components and predicates aren't checked. A missing key passes. Tag membership is
+  evaluated in the target player's world, not from a detached conditions snapshot.
+- It reaches the acting player inside their hook, and another player on the server in their own level, including
+  during a guest's turn. A displaced outer player is unavailable. `Ok(())` means the player was reached, not that
+  anything was granted. `TriggerCriterionError` distinguishes an invalid trigger (`minecraft:` is reserved; empty
+  namespace/path is refused), a remote client, an unavailable player, a missing game backend, and a failed test.
+  A failed test stops further tests; earlier matching criteria may already be granted. The test itself is not retained.
+- Both resource interfaces and their glue are generated from the traits. **Runtime limitation:** the wasm runtime
+  refuses callbacks into a group already executing a hook. When a wasm mod triggers a criterion from its own hook,
+  the test currently returns `CriterionTestError::Unavailable`, propagated as `TriggerCriterionError::Test`, rather
+  than silently treating it as a nonmatch. Generated bindings alone do not make this synchronous same-group callback
+  executable; runtime support is still required. Native predicates execute synchronously through the same criterion context.
+
+Diverges from upstream: this replaces the unscoped `Host` closure helper with a player receiver and generated
+criterion resources; the private advancement world remains solely in the native implementation.
 
 ### Explosions
 
