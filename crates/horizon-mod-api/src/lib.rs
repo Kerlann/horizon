@@ -3271,6 +3271,7 @@ pub type Mods = Arc<[ModEntry]>;
 pub(crate) struct Installed {
     mods: Mods,
     subscribers: horizon_client_core::subscribers::Subscribers,
+    disabled: Box<[std::sync::atomic::AtomicBool]>,
 }
 
 impl Installed {
@@ -3288,7 +3289,15 @@ impl Installed {
             mods.len(),
             subscriptions,
         );
-        Self { mods, subscribers }
+        let disabled = mods
+            .iter()
+            .map(|_| std::sync::atomic::AtomicBool::new(false))
+            .collect();
+        Self {
+            mods,
+            subscribers,
+            disabled,
+        }
     }
 }
 
@@ -3371,13 +3380,37 @@ pub(crate) fn listened(hook: generated::HookId) -> bool {
     installed().is_some_and(|installed| installed.subscribers.contains_any(hook as usize))
 }
 
+/// The IDs of installed trait mods, in dispatch order.
+#[doc(hidden)]
+pub fn mod_ids() -> impl Iterator<Item = &'static str> {
+    mods().iter().map(|entry| entry.id)
+}
+
+/// Switch an installed trait mod's subsequent hook dispatches on or off.
+#[doc(hidden)]
+pub fn set_mod_on(id: &str, on: bool) -> bool {
+    let Some(installed) = installed() else {
+        return false;
+    };
+    let mut found = false;
+    for (entry, disabled) in installed.mods.iter().zip(&*installed.disabled) {
+        if entry.id == id {
+            disabled.store(!on, std::sync::atomic::Ordering::Relaxed);
+            found = true;
+        }
+    }
+    found
+}
+
 /// Whether an installed mod subscribes to an injected hook.
 // hidden: a game-side helper, not part of the mod surface
 #[doc(hidden)]
 pub fn subscribed_by(index: usize, hook: Option<generated::HookId>) -> bool {
     hook.is_some_and(|hook| {
         installed().is_some_and(|installed| {
-            index < installed.mods.len() && installed.subscribers.contains(hook as usize, index)
+            index < installed.mods.len()
+                && !installed.disabled[index].load(std::sync::atomic::Ordering::Relaxed)
+                && installed.subscribers.contains(hook as usize, index)
         })
     })
 }
@@ -3409,6 +3442,9 @@ fn entered_with_id(
         installed
             .subscribers
             .indices(hook_id as usize)
+            .filter(move |&index| {
+                !installed.disabled[index].load(std::sync::atomic::Ordering::Relaxed)
+            })
             .map(move |index| {
                 drop(crash_guard.take());
                 let entry = &installed.mods[index];
