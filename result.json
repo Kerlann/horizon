@@ -1,0 +1,1 @@
+{"status":"blocked","notes":"Not implemented; toast_add is not already built. Inspection found separate advancement, recipe, tutorial, system and music toast queues, including client-lib/title paths, so the required end-to-end hook and verification remain unfinished. No PR opened."}
