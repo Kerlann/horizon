@@ -312,6 +312,7 @@ fn a_hidden_state_draws_nothing_and_shows_its_neighbours_face() {
             nether_shading: false,
             shader_pack_lighting: false,
             separate_ao: false,
+            shader_pack: false,
             assets: &f.assets,
             render: &f.render,
             tables: &f.tables,

@@ -481,6 +481,7 @@ fn a_shader_pack_s_still_water_top_starts_at_its_south_west_corner() {
             cutout_leaves: true,
             translucent_layers: &[],
             leaf_culling: LeafCullingMode::Off,
+            hidden_states: &[],
         };
         let mesh = mesher.mesh(&region, 0);
         // The top and its backward face, both from the same first corner.
