@@ -7,7 +7,8 @@ pub trait Hooks {
     /// the player's screenshots folder, or set `message` to replace the
     /// success chat line. `None` uses the normal translated, clickable line
     /// for the final file name. Return `Flow::Cancel` to write no files and
-    /// show no message. Invalid paths (including symlinks) report screenshot failure;
+    /// show `message`, or a default cancellation line when it is `None`.
+    /// Invalid paths (including symlinks) report screenshot failure;
     /// parent folders are created. HDR copies follow the final name with
     /// `-hdr.png`. Agent captures and world icons do not fire this hook.
     #[hook(

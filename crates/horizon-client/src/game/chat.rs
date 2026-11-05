@@ -1696,6 +1696,15 @@ impl Game<'_> {
         self.native_screenshot(&mut file_name, &mut message, &mut cancel);
         if cancel {
             self.ui.screenshot_message = None;
+            let focused = self.screen == Screen::Chat;
+            self.ui.chat.add(
+                &self.gui.atlas,
+                message.unwrap_or_else(|| Text::translate("horizon.screenshot.cancelled", &[])),
+                None,
+                ChatSource::Client,
+                self.visual_ticks(),
+                focused,
+            );
             return None;
         }
         let root = horizon_client::logging::player_dir().join("screenshots");
