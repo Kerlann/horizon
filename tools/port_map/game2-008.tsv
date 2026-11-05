@@ -99,7 +99,7 @@ ItemStack.isBroken	inline	crates/horizon-client/src/game.rs::Game::damage_held	t
 ItemStack.nextDamageWillBreak	inline	crates/horizon-client/src/game/trident.rs::Game::use_trident	gap: minor: only the trident's check is ported here
 ItemStack.processDurabilityChange	port	crates/horizon-client/src/game/enchant_effects.rs::Game::durability_loss	the Unbreaking-adjusted loss
 ItemStack.applyDamage	port	crates/horizon-client/src/game.rs::Game::damage_held	gap: minor: no item durability advancement trigger fires
-ItemStack.hurtAndConvertOnBreak	port	crates/horizon-client/src/game/mounts.rs::Game::use_steering_stick	gap: minor: broken steering sticks become a fresh fishing rod without carrying over components
+ItemStack.hurtAndConvertOnBreak	port	crates/horizon-client/src/game/mounts.rs::Game::use_steering_stick	steering-stick wear uses the shared durability path; a broken stick becomes a fishing rod retaining its components with damage reset
 ItemStack.hurtEnemy	port	crates/horizon-client/src/game/mace.rs::Game::weapon_wear	the per-hit durability loss of a weapon
 ItemStack.interactLivingEntity	port	crates/horizon-client/src/game.rs::Game::interact_entity	equip-on-interact is in the mob paths (nautili.rs, ghasts.rs)
 ItemStack.copy	skip:java		value copy
