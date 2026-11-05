@@ -2141,6 +2141,7 @@ impl Game<'_> {
 
     /// `ItemStack.getTooltipLines` subset: name in rarity colour, lore,
     /// potion effects, enchantments (gray, curses red), stored enchantments, trims.
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn stack_tooltip(
         &self,
         stack: &ItemStack,
@@ -2819,6 +2820,7 @@ impl Game<'_> {
     /// [`Self::draw_stack_tooltip`] with `TooltipFlag.isCreative` set when
     /// `creative` (a creative tab's own slot), and `after_name` inserted from
     /// line 1, as the creative screen adds its tab names.
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn draw_stack_tooltip_with(
         &mut self,
         batch: &mut HudBatch,
@@ -3079,6 +3081,7 @@ impl Game<'_> {
             || horizon_client::bundle::Contents::of(self.items(), stack).is_some()
     }
     /// Hovered-slot tooltip on the plain inventory, crafting and container screens.
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn draw_slot_tooltip(&mut self, batch: &mut HudBatch) {
         let Some(slot) = self.slot_at(batch, self.cursor.0, self.cursor.1) else {
             return;

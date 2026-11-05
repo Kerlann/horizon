@@ -462,6 +462,7 @@ impl Game<'_> {
     /// the next ones only their level. While `paused`, only the connections
     /// run. The native server tick hook brackets it (`ServerTickStart` before
     /// the first level, `ServerTickEnd` after the last).
+    #[horizon_mod_api_macros::point(side = "server")]
     pub(super) fn tick_server(&mut self, paused: bool) -> Result<()> {
         // `tickRateManager.tick()` once per server tick, before any level
         // (each `ServerLevel.tick` only reads `runsNormally`), and the native

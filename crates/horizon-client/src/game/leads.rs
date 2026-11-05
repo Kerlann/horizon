@@ -502,6 +502,7 @@ impl Game<'_> {
         attached
     }
     /// `LeashFeatureRenderer` for every lead and `LeashKnotRenderer` for the knots.
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn leash_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
         let atlas = &self.gui.atlas;
         let white = atlas.font.white();

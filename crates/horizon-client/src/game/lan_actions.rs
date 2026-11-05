@@ -413,6 +413,7 @@ impl Game<'_> {
     /// game's, which the returned swap keeps until `leave_guest`. The host
     /// stays in `self.lan`, so the guest can reach other players. Guest turns
     /// can nest: the acting guest and their queued packets are restored.
+    #[horizon_mod_api_macros::point(side = "server", hot)]
     pub(super) fn enter_guest(&mut self, conn: u32) -> Option<GuestSwap> {
         let i = self.guest_index(conn)?;
         self.enter_guest_at(i, conn).ok()
@@ -761,6 +762,7 @@ impl Game<'_> {
 
     /// The second half of `as_guest`: the guest's state back into their
     /// record, the game's back in place, and what the turn changed sent.
+    #[horizon_mod_api_macros::point(side = "server", hot)]
     pub(super) fn leave_guest(&mut self, swap: GuestSwap) {
         let Some(host) = self.lan.as_ref() else {
             unreachable!("LanHost dropped inside a guest turn; closes are deferred");
@@ -3752,6 +3754,7 @@ impl Game<'_> {
     /// Commands.performCommand for a guest with command access.
     /// Commands.performCommand for a guest, with the message arguments it
     /// signed (none after an unsigned command packet).
+    #[horizon_mod_api_macros::point(side = "server")]
     pub(super) fn guest_command(
         &mut self,
         conn: u32,
@@ -4353,6 +4356,7 @@ impl Game<'_> {
     }
 
     /// Per tick, for every guest: dig, use items, pick up drops, die.
+    #[horizon_mod_api_macros::point(side = "server")]
     pub(super) fn tick_guests(&mut self) {
         self.tick_guest_cameras();
         self.lan_merchant_tick();

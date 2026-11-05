@@ -226,6 +226,7 @@ impl Game<'_> {
         self.tweaks.drag = None;
     }
     /// The wheel over an inventory screen: true when the tweaks used it.
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn tweak_scroll(&mut self, delta: f32, slot: Option<usize>) -> bool {
         if !self.settings.extras.mouse_tweaks_wheel || !self.tweaks_on() || self.carried.is_some() {
             return false;
@@ -397,6 +398,7 @@ impl Game<'_> {
     }
     /// The sort buttons: a bordered square with three bars, lighter under
     /// the cursor.
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn draw_sort_buttons(&self, batch: &mut HudBatch, ox: f32, oy: f32) {
         let atlas = &self.gui.atlas;
         for ((x, y), _) in self.sort_buttons() {
@@ -424,6 +426,7 @@ impl Game<'_> {
         }
     }
     /// A left press on a sort button sorts its slots (true).
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn sort_press(&mut self) -> bool {
         let Some(r) = self.renderer.as_ref() else {
             return false;
@@ -446,6 +449,7 @@ impl Game<'_> {
     pub(super) fn sort_key_press(&mut self, key: KeyCode) -> bool {
         keybinds::key_name(key).is_some_and(|name| self.sort_input(name))
     }
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn sort_mouse_press(&mut self, button: MouseButton) -> bool {
         self.sort_input(&keybinds::mouse_name(button))
     }
@@ -489,6 +493,7 @@ impl Game<'_> {
         true
     }
     /// Sorts `slots` with ordinary left clicks (needs an empty hand).
+    #[horizon_mod_api_macros::point(side = "client")]
     fn sort_slots(&mut self, slots: &[usize]) {
         if self.carried.is_some() {
             return;

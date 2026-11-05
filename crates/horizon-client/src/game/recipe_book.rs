@@ -1009,6 +1009,7 @@ impl Game<'_> {
     /// `ServerboundPlaceRecipePacket`: the server places the recipe
     /// (`ServerPlaceRecipe` on the menu engine) and answers with a ghost
     /// recipe when the items are missing.
+    #[horizon_mod_api_macros::point(side = "both")]
     fn place_recipe(&mut self, book_type: BookType, entry_index: usize, use_max: bool) {
         let Some(entry) = self
             .recipe_ui

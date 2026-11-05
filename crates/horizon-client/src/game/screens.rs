@@ -675,6 +675,7 @@ impl Game<'_> {
     }
     /// LocalPlayer.respawn: the player comes back (the death screen's
     /// button, or at once with `immediate_respawn`).
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn respawn_player(&mut self) -> Result<()> {
         self.death_focus = None;
         self.ui.death_text = None;

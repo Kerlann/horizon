@@ -485,6 +485,7 @@ impl Game<'_> {
     }
 
     /// The right stick turns the view, once per frame (`Entity.turn`).
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn pad_look(&mut self, seconds: f32) {
         let settings = &self.settings.controller;
         if !settings.enabled || self.pad_in_menu() || self.player.is_none() || !self.pad_focused() {

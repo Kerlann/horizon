@@ -1085,6 +1085,7 @@ impl Game<'_> {
     /// End crystals (on the spikes, or placed in any dimension) and thrown
     /// eyes of ender, as camera-relative entity geometry (End portals and
     /// gateways are block entities).
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn end_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
         self.end_crystal_geometry(camera, out);
         self.eye_geometry(camera, out);

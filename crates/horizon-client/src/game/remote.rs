@@ -1275,6 +1275,7 @@ impl Game<'_> {
         self.titles.reset_times();
     }
 
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn send(&self, packet: S) {
         if let Some(r) = &self.remote {
             r.session.send(packet);
@@ -2088,6 +2089,7 @@ impl Game<'_> {
     }
     /// ClientboundCommandSuggestionsPacket: id, range start and length, then
     /// each suggestion's text and optional tooltip.
+    #[horizon_mod_api_macros::point(side = "client")]
     fn handle_command_suggestions(&mut self, data: &[u8]) {
         let lang = self
             .remote
@@ -2549,6 +2551,7 @@ impl Game<'_> {
     /// ClientLevel.setServerVerifiedBlockState: a block the client predicted keeps its
     /// predicted state until the server acknowledges the action; the server's state is
     /// remembered for then.
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     fn server_block(&mut self, pos: [i32; 3], state: i32) {
         if let Some((_, known)) = self
             .remote
@@ -2582,6 +2585,7 @@ impl Game<'_> {
             }
         }
     }
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     fn set_block(&mut self, pos: [i32; 3], state: i32) {
         let state = BlockStateId(state.max(0) as u32);
         let previous = self.world.block(pos[0], pos[1], pos[2]);
@@ -5771,6 +5775,7 @@ impl Game<'_> {
         (self.yaw, self.pitch) = look_at_rotation(from, to);
     }
     /// ClientPacketListener.handleMovePlayer.
+    #[horizon_mod_api_macros::point(side = "client")]
     fn remote_teleport(&mut self, p: &play::PlayerPosition) -> Result<()> {
         use play::relative as rel;
         let current = self
@@ -7321,6 +7326,7 @@ impl Game<'_> {
     }
 
     /// MultiPlayerGameMode.startDestroyBlock / continueDestroyBlock.
+    #[horizon_mod_api_macros::point(side = "client")]
     fn remote_mining(&mut self, start: bool) {
         let debug_stick = self
             .held()
@@ -7539,6 +7545,7 @@ impl Game<'_> {
                     .is_some_and(|p| WirePatch::adds(&p, CAN_BREAK)))
     }
     /// Minecraft.startUseItem: use one crosshair target, then the item itself.
+    #[horizon_mod_api_macros::point(side = "client")]
     fn remote_use(&mut self) {
         // Minecraft.startUseItem returns before resetting rightClickDelay
         // while a survival block break is active.
@@ -7571,6 +7578,7 @@ impl Game<'_> {
     /// `Minecraft.startUseItem`'s entity turn for `hand`: Interact goes to
     /// the server, and whether the click ends there is what this client's
     /// copy of the entity answers (`MultiPlayerGameMode.interact`).
+    #[horizon_mod_api_macros::point(side = "client")]
     fn remote_use_entity(&mut self, hand: Hand) -> bool {
         // A menu this use opens (a chest minecart's) is no clicked block's.
         if let Some(r) = self.remote.as_mut() {
@@ -7677,6 +7685,7 @@ impl Game<'_> {
 
     /// MultiPlayerGameMode.useItemOn for `hand`: whether the click ends there
     /// (the block reacts, or a block item is placed).
+    #[horizon_mod_api_macros::point(side = "client")]
     fn remote_use_item_on(&mut self, hand: Hand) -> bool {
         let held = self.with_hand(hand, |g| g.held().cloned());
         let held_block = held
@@ -8400,6 +8409,7 @@ impl Game<'_> {
 
     /// MultiPlayerGameMode.useItem for `hand`, if it holds something: whether
     /// the click ends there, as far as this client can tell (`use_ends_click`).
+    #[horizon_mod_api_macros::point(side = "client")]
     fn remote_use_item(&mut self, hand: Hand) -> bool {
         let Some(held) = self.with_hand(hand, |g| g.held().cloned()) else {
             return false;
@@ -8882,6 +8892,7 @@ impl Game<'_> {
         self.apply_use_cooldown(&stack);
     }
     /// MouseHandler updates KeyMapping; handleKeybinds sends packets on a tick.
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn remote_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> {
         use horizon_client::interaction_input::Button;
         let input = match button {
@@ -9224,6 +9235,7 @@ impl Game<'_> {
             .ok()
     }
 
+    #[horizon_mod_api_macros::point(side = "client")]
     fn remote_continue_attack(&mut self, down: bool) {
         if !down {
             self.clicks.miss_time = 0;

@@ -79,6 +79,7 @@ impl Game<'_> {
         self.extras.mouse
     }
     /// Auto-reconnect: a connection to `address` as `name` starts.
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn extras_connecting(&mut self, address: &str, name: &str, lan: bool) {
         self.extras.reconnect.connecting(address, name, lan);
     }
@@ -160,6 +161,7 @@ impl Game<'_> {
     }
     /// Refresh the minimap's tiles within the frame budget, recompose its
     /// image when the view or a tile changed, and queue the upload.
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     fn update_minimap(&mut self) {
         let Some((_, _, view)) = self.minimap_shown() else {
             if self.minimap_wanted().is_none() || self.player.is_none() {
@@ -233,6 +235,7 @@ impl Game<'_> {
         }
     }
     /// Mouse turning while zoomed.
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn zoom_turn_scale(&self) -> f64 {
         self.zoom_now().2
     }

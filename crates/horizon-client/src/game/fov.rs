@@ -208,6 +208,7 @@ impl Game<'_> {
     /// `updateBob`), `rideTick`'s `resetBob` and `LocalPlayer.move`'s walked
     /// distance, after the player's movement this tick. `before` is the
     /// ground state, velocity and position at the start of the tick.
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn tick_avatar(&mut self, before: (bool, [f64; 3], [f64; 3]), riding: bool) {
         let Some(p) = self.player.as_ref() else {
             return;

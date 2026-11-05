@@ -375,6 +375,7 @@ impl Game<'_> {
         state
     }
     /// `GuiGraphics.renderItem(player, level, stack, x, y, 0)`.
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn draw_item_model(&self, batch: &mut HudBatch, stack: &ItemStack, x: f32, y: f32) {
         let owner = self.player_owner(Some(stack));
         let state = self.resolve_item(stack, DisplayContext::Gui, Some(&owner), 0);
@@ -411,6 +412,7 @@ impl Game<'_> {
     }
     /// Submit a resolved item under `pose` (camera-relative) at `light`
     /// (packed lightmap coordinates).
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn submit_item_world(
         &self,
         state: &ItemRenderState,

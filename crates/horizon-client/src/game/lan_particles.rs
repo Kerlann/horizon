@@ -545,6 +545,7 @@ impl Game<'_> {
 
     /// `ClientPacketListener.handleExplosion`: the blast's particles (and its
     /// sound, when the packet carries it), then the player's push.
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn remote_explode(&mut self, p: &play::Explode) {
         if p.play_sound {
             let pitch = (1.0

@@ -269,6 +269,7 @@ impl Game<'_> {
     /// interpolated eye, or a point up to the camera distance behind (or in
     /// front of) it, pulled in where visual shapes are in the way. Returns the
     /// position, yaw and pitch to render from.
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn camera_view(&mut self, partial: f32) -> Option<(glam::DVec3, f32, f32)> {
         // Minecraft.cameraEntity: a server's spectator camera on a mob or
         // another player.
@@ -658,6 +659,7 @@ impl Game<'_> {
         body_visible(self.own_invisible(), self.own_team())
     }
     /// The player's model for the entity pass in third person.
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn player_model_geometry(
         &self,
         camera: glam::DVec3,

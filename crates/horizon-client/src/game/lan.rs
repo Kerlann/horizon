@@ -2824,6 +2824,7 @@ impl Game<'_> {
         }
     }
 
+    #[horizon_mod_api_macros::point(side = "server")]
     pub(super) fn lan_guest_joined(
         &mut self,
         conn: u32,

@@ -251,6 +251,7 @@ impl Game<'_> {
         })
     }
     /// Nearer than the targeted block?
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn before_block(&self, distance: f64) -> bool {
         self.block_distance().is_none_or(|block| block > distance)
     }

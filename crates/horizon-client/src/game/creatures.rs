@@ -1067,6 +1067,7 @@ impl Game<'_> {
         }
     }
     /// Advance every mob one tick, then apply their events.
+    #[horizon_mod_api_macros::point(side = "both")]
     pub(super) fn tick_creatures(&mut self) -> Result<()> {
         self.attack_ticks = self.attack_ticks.saturating_add(1);
         self.refresh_gear_knockback_resistance();
@@ -4292,6 +4293,7 @@ impl Game<'_> {
         }
     }
 
+    #[horizon_mod_api_macros::point(side = "both")]
     fn tick_projectiles(&mut self) -> Result<()> {
         let mut projectiles = std::mem::take(&mut self.creatures.projectiles);
         let mut hits = Vec::new();

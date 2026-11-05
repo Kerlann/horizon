@@ -3913,6 +3913,7 @@ impl Game<'_> {
     }
     /// Voxel traversal against non-air, non-fluid blocks, clipped against
     /// each block's outline shape (`BlockGetter.clip` with `ClipContext.Block.OUTLINE`).
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     fn pick(&self) -> Option<Hit> {
         // A guest of a hosted world acts on the block their client targeted.
         if let Some(hit) = self.forced_hit {
@@ -4544,6 +4545,7 @@ impl Game<'_> {
         drops
     }
     /// Block.popResource
+    #[horizon_mod_api_macros::point(side = "both")]
     fn pop_resource(&mut self, pos: [i32; 3], mut stack: ItemStack) {
         self.pending.attach(pos, &mut stack);
         // Block.popResource: Mth.nextDouble offsets from the level random; the
@@ -4662,6 +4664,7 @@ impl Game<'_> {
             _ => {}
         }
     }
+    #[horizon_mod_api_macros::point(side = "both")]
     fn tick_items(&mut self) {
         // EntityTickEvent.Pre for the items about to tick, and the Post after them.
         let mut round = self.native_tick_round();
@@ -5403,6 +5406,7 @@ impl Game<'_> {
     }
     /// ServerLevel.tick block phases: scheduled ticks, random ticks in the
     /// chunks the tickets simulate, block events and moving pistons.
+    #[horizon_mod_api_macros::point(side = "both")]
     fn tick_blocks(&mut self) -> Result<()> {
         // ServerChunkCache.tick: the tickets that time out.
         self.tickets.tick_portal();
@@ -5707,6 +5711,7 @@ impl Game<'_> {
         Ok(())
     }
     /// Side effects reported by the behaviour library, in vanilla order.
+    #[horizon_mod_api_macros::point(side = "both")]
     fn process_level_events(&mut self) -> Result<()> {
         let events = std::mem::take(&mut self.level_events);
         self.lan_record_events(&events);
@@ -6650,6 +6655,7 @@ impl Game<'_> {
         }
         self.award_stat("used", &stack.item, 1);
     }
+    #[horizon_mod_api_macros::point(side = "both")]
     fn break_block(&mut self, pos: [i32; 3]) -> Result<()> {
         self.with_player_actor(|game| game.break_block_as_player(pos))
     }
@@ -6877,6 +6883,7 @@ impl Game<'_> {
         Ok(())
     }
     /// The hand whose use ended the click, if any.
+    #[horizon_mod_api_macros::point(side = "both")]
     fn use_item(&mut self) -> Result<Option<Hand>> {
         self.with_player_actor(|game| game.use_item_as_player())
     }
@@ -6956,6 +6963,7 @@ impl Game<'_> {
     /// guest's interact packet names its entity (`target`), which the helpers
     /// use as it is; the local player picks from the crosshair instead, the
     /// way `Minecraft.hitResult` does.
+    #[horizon_mod_api_macros::point(side = "both")]
     fn interact_entity(&mut self, target: Option<InteractTarget>) -> Result<bool> {
         // Native mods, where Player.interactOn starts: before the entity's
         // own interact and the item's interactLivingEntity. The entity is the
@@ -7023,6 +7031,7 @@ impl Game<'_> {
     }
     /// One hand's turn in `startUseItem`: `useItemOn` the block aimed at,
     /// then `useItem`. Whether the click ends here (it acted or failed).
+    #[horizon_mod_api_macros::point(side = "both")]
     fn use_hand(&mut self, block_hit: Option<&Hit>) -> Result<bool> {
         self.use_failed = false;
         // The click's target as it was decided, before the adventure gate
@@ -8111,6 +8120,7 @@ impl Game<'_> {
             .unwrap_or(1);
         self.level_event_at(id, pos, direction as i32);
     }
+    #[horizon_mod_api_macros::point(side = "both")]
     fn tick_mining(&mut self) -> Result<()> {
         if self.destroy_delay > 0 {
             self.destroy_delay -= 1;
@@ -8729,6 +8739,7 @@ impl Game<'_> {
     /// `key`, the vanilla default the mapping translated to, may itself be
     /// another mapping's rebound key. `source` is the device the event came
     /// from: a key stays held while any device holds it.
+    #[horizon_mod_api_macros::point(side = "client")]
     fn mapped_key(
         &mut self,
         key: KeyCode,
@@ -9267,6 +9278,7 @@ impl Game<'_> {
         hud_layout::paint(batch, &self.gui.atlas, &draws);
         self.native_item_decorations(stack, x, y, batch);
     }
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     fn hud(&mut self, size: [u32; 2]) -> HudBatch {
         // The pack prompt replaces the connecting screen (setScreen), but
         // in game it opens over the world.
@@ -9299,6 +9311,7 @@ impl Game<'_> {
         self.resolve_inline_profiles(&batch.inline_profiles);
         batch
     }
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     fn hud_layers(&mut self, size: [u32; 2]) -> HudBatch {
         let mut batch = HudBatch::new(size);
         // GlobalSettingsUniform's GameTime, for a resource pack's text shader.
@@ -10104,6 +10117,7 @@ impl Game<'_> {
             .collect();
         self.award_recipes(&recipes);
     }
+    #[horizon_mod_api_macros::point(side = "both")]
     fn craft_recipe(&self) -> Option<(String, ItemStack)> {
         let n = self.craft_size;
         let grid: Vec<Option<ItemStack>> = (0..n * n).map(|i| self.craft_grid[i].clone()).collect();
@@ -10318,6 +10332,7 @@ impl Game<'_> {
     /// state, and a press whose release never reached the screen -- the
     /// pointer left the window, or the screen closed first -- would
     /// otherwise leave every later press on every later screen swallowed.
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn reset_inventory_clicks(&mut self) {
         self.inv_clicks.cancel_drag();
         self.inv_drag = None;
@@ -11305,6 +11320,7 @@ impl Game<'_> {
         self.click_inventory(right);
     }
     /// Mouse movement while a quick craft drag is running.
+    #[horizon_mod_api_macros::point(side = "client")]
     fn inventory_drag_move(&mut self) {
         if self.tweaks_on() && self.tweak_drag_move(self.inventory_target().0) {
             return;
@@ -11447,6 +11463,7 @@ impl Game<'_> {
     }
     /// Mouse release over an inventory screen: `mouseReleased` ends or
     /// cancels the drag, drops a stack released outside, or clicks.
+    #[horizon_mod_api_macros::point(side = "client")]
     fn inventory_mouse_release(&mut self, right: bool) {
         use horizon_client::container_screen::{Release, Target};
         self.tweak_release();
@@ -12491,6 +12508,7 @@ impl Game<'_> {
         self.sky_darken_memo.set(Some((key, darken)));
         darken
     }
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     fn mob_hit(&self) -> Option<(usize, f64)> {
         if let Some(hit) = self.tick_mob {
             return hit;
@@ -14958,6 +14976,7 @@ impl Game<'_> {
     /// `left` or right arm with its skin at pose `m`, in its rest pose
     /// turned 0.1 radians outwards. Mods are asked first (`RenderArmEvent`)
     /// and may draw at `m` or leave the arm out.
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     fn first_person_arm(
         &self,
         left: bool,
@@ -17677,6 +17696,7 @@ impl Game<'_> {
         Ok(())
     }
     /// A mouse button while playing (window or control socket).
+    #[horizon_mod_api_macros::point(side = "client")]
     fn play_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> {
         if self.sleeping.is_some() {
             return Ok(());

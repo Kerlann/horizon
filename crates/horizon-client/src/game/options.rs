@@ -543,6 +543,7 @@ impl Game<'_> {
     }
     /// `Window.updateFullscreenState`: a fullscreen change made by the window
     /// system is adopted by the option (`Minecraft.fullscreenStateChanged`).
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn observe_fullscreen(&mut self) {
         // HDR calibration's own fullscreen is not the player's option: it
         // goes back to what it was when the calibration ends.

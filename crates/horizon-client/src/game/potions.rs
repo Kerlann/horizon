@@ -565,6 +565,7 @@ pub(super) fn collect_dragon_breath(
 
 impl Game<'_> {
     /// Right-click with a potion, splash/lingering potion or glass bottle.
+    #[horizon_mod_api_macros::point(side = "both")]
     pub(super) fn use_potion_item(&mut self, stack: &ItemStack) -> horizon_client::Result<bool> {
         match &*stack.item {
             "minecraft:potion" | "minecraft:ominous_bottle" => {

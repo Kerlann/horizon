@@ -400,6 +400,7 @@ impl Game<'_> {
         ))
     }
 
+    #[horizon_mod_api_macros::point(side = "client", hot)]
     pub(super) fn draw_dialog(&mut self, batch: &mut HudBatch) {
         if !self.dialog_open() {
             return;

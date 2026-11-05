@@ -242,6 +242,7 @@ impl Game<'_> {
 
     /// The local player's tick in its vehicle, in place of its own movement:
     /// false when it rides nothing.
+    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn remote_ride(&mut self, keys: Keys) -> bool {
         let Some(id) = self.riding else {
             return false;
