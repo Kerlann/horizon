@@ -1,0 +1,1 @@
+{"ready":true,"audit":"/box/shared/upstream-sync/batch-fb6121bce9/locales-resolution.md","summary":"Resolved locale maps in commit efbf54d147ba3ce3939766134d42f5b1a210ec0b. Independent reconstruction of 165 maps found zero collisions and mismatches; excluded the prohibited cosmetics-store key. Diff check passed. No builds or tests run.","unread":[],"defects":[]}
