@@ -1,0 +1,1 @@
+{"status":"pr_opened","pr":1051,"branch":"bulk-batch1-g80qpv-927","head":"3f9404c75f","notes":"NBT and network focused tests passed; merchant handle test ignored. Client and client-lib all-target checks and wasm check passed. Dev server-thread level 123456 survived world reload."}
