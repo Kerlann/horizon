@@ -116,6 +116,7 @@ struct PackNotifier {
     /// The last request has finished.
     done: bool,
     toast: Option<SystemToast>,
+    toast_cancelled: bool,
 }
 impl PackNotifier {
     fn new(progress: Receiver<download::Progress>, total: usize) -> Self {
@@ -128,11 +129,12 @@ impl PackNotifier {
             bytes: None,
             done: false,
             toast: None,
+            toast_cancelled: false,
         }
     }
     /// The batch's events since the last call, with the toast updated once
     /// for all of them. False once the batch has ended and its toast is gone.
-    fn poll(&mut self) -> bool {
+    fn poll(&mut self, admit: impl FnOnce(SystemToast) -> Option<SystemToast>) -> bool {
         let (mut changed, mut hide) = (false, false);
         let ended = loop {
             let event = match self.progress.try_recv() {
@@ -162,13 +164,15 @@ impl PackNotifier {
                 }
             };
         };
-        if changed {
+        if changed && !self.toast_cancelled {
             let (title, message) = self.text();
-            let (title, message) = (title.plain(), message.map(|m| m.plain()));
             // SystemToast.addOrUpdate.
             match &mut self.toast {
                 Some(toast) => toast.reset(title, message),
-                None => self.toast = Some(SystemToast::new(title, message)),
+                None => {
+                    self.toast = admit(SystemToast::new(title, message));
+                    self.toast_cancelled = self.toast.is_none();
+                }
             }
         }
         if hide && let Some(toast) = &mut self.toast {
@@ -376,7 +380,9 @@ impl Game<'_> {
     /// that finished, the ones to start, a resource reload when the active
     /// packs change, and the statuses for the server.
     pub(super) fn tick_server_packs(&mut self) {
-        self.server_packs.notifiers.retain_mut(PackNotifier::poll);
+        let mut notifiers = std::mem::take(&mut self.server_packs.notifiers);
+        notifiers.retain_mut(|n| n.poll(|toast| self.add_system_toast(toast)));
+        self.server_packs.notifiers = notifiers;
         // A reload waits for the world's resources (`reload_packs`).
         if self.rest_loader.is_some() {
             return;
@@ -519,11 +525,12 @@ impl Game<'_> {
                 .save_failure
                 .map(|(x, z)| horizon_client::chunk_io::save_failure_toast(x, z)),
         ];
-        for (slot, new) in self.server_packs.chunk_io.iter_mut().zip(toasts) {
-            match (slot.as_mut(), new) {
-                (Some(shown), Some(new)) => shown.reset_from(new),
-                (None, Some(new)) => *slot = Some(new),
-                _ => {}
+        for (index, new) in toasts.into_iter().enumerate() {
+            let Some(new) = new else { continue };
+            if let Some(shown) = &mut self.server_packs.chunk_io[index] {
+                shown.reset_from(new);
+            } else {
+                self.server_packs.chunk_io[index] = self.add_system_toast(new);
             }
         }
     }
@@ -597,7 +604,7 @@ mod tests {
             send.send(*event).unwrap();
         }
         let mut notifier = PackNotifier::new(receive, total);
-        assert!(notifier.poll());
+        assert!(notifier.poll(Some));
         notifier
     }
     fn texts(n: &PackNotifier) -> (serde_json::Value, Option<serde_json::Value>) {
@@ -638,12 +645,12 @@ mod tests {
             send.send(event).unwrap();
         }
         let mut n = PackNotifier::new(receive, 2);
-        assert!(n.poll());
+        assert!(n.poll(Some));
         // Not the last request yet: still downloading.
         assert_eq!(texts(&n).0["translate"], "download.pack.title");
         send.send(RequestFinished(true)).unwrap();
         drop(send);
-        assert!(n.poll(), "the failure toast stays until it slides out");
+        assert!(n.poll(Some), "the failure toast stays until it slides out");
         let (title, message) = texts(&n);
         assert_eq!(
             title,
@@ -653,10 +660,26 @@ mod tests {
     }
 
     #[test]
+    fn a_cancelled_download_toast_is_not_retried_on_progress() {
+        let (send, receive) = std::sync::mpsc::channel();
+        let mut n = PackNotifier::new(receive, 1);
+        send.send(RequestStart).unwrap();
+        assert!(n.poll(|_| None));
+        assert!(n.toast.is_none());
+        send.send(DownloadStart(Some(100))).unwrap();
+        send.send(Bytes(50)).unwrap();
+        assert!(n.poll(|_| panic!("cancelled toast must not be added again")));
+        assert!(n.toast.is_none());
+        send.send(RequestFinished(true)).unwrap();
+        drop(send);
+        assert!(!n.poll(|_| panic!("no toast on completion")));
+    }
+
+    #[test]
     fn a_finished_batch_without_a_toast_is_dropped() {
         let (send, receive) = std::sync::mpsc::channel::<download::Progress>();
         drop(send);
-        assert!(!PackNotifier::new(receive, 1).poll());
+        assert!(!PackNotifier::new(receive, 1).poll(Some));
     }
 
     #[test]

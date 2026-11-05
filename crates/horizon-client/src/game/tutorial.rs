@@ -55,6 +55,7 @@ pub(super) struct Tutorial {
     look_finished: bool,
     reset_count: u32,
     pub(super) break_progress: f32,
+    cancelled_hint: Option<Hint>,
 }
 
 impl Tutorial {
@@ -70,6 +71,7 @@ impl Tutorial {
             look_finished: false,
             reset_count: 0,
             break_progress: 0.0,
+            cancelled_hint: None,
         }
     }
 
@@ -348,7 +350,7 @@ impl super::Game<'_> {
             .fold(0, |a, b| a | b)
     }
 
-    fn tutorial_toast(&self, hint: Hint, progress: Option<f32>) -> HintToast {
+    fn tutorial_toast(&self, hint: Hint, progress: Option<f32>) -> Option<HintToast> {
         use horizon_client::{keybinds, text::Text};
         let key = |mapping: &str| keybinds::display_name(self.settings.keys.get(mapping)).plain();
         let (title_key, fallback, description_key, description, icon_args) = match hint {
@@ -407,21 +409,29 @@ impl super::Game<'_> {
             }
             text
         };
-        let title = substitute(self.translate(title_key, fallback), &icon_args);
+        let mut title = Text::literal(substitute(self.translate(title_key, fallback), &icon_args));
         let desc_args = match hint {
             Hint::Move => vec![key("key.jump")],
             Hint::PunchTree => vec![key("key.attack")],
             Hint::OpenInventory => vec![key("key.inventory")],
             _ => vec![],
         };
-        let description = substitute(self.translate(description_key, description), &desc_args);
+        let mut description = Some(Text::literal(substitute(
+            self.translate(description_key, description),
+            &desc_args,
+        )));
+        if !self.add_toast(mod_api::ToastKind::Tutorial, &mut title, &mut description) {
+            return None;
+        }
         let font = &self.gui.atlas.font;
-        let mut lines = font.split_lines(&Text::literal(title), 126.0);
+        let mut lines = font.split_lines(&title, 126.0);
         let title_lines = lines.len();
-        lines.extend(font.split_lines(&Text::literal(description), 126.0));
+        if let Some(description) = description {
+            lines.extend(font.split_lines(&description, 126.0));
+        }
         let height = 10 + 11 * lines.len().max(2);
         let slots = height.div_ceil(32);
-        HintToast {
+        Some(HintToast {
             hint,
             lines,
             title_lines,
@@ -432,7 +442,7 @@ impl super::Game<'_> {
             slot: None,
             slots,
             slide: Default::default(),
-        }
+        })
     }
 
     pub(super) fn draw_tutorial_toasts(
@@ -441,6 +451,9 @@ impl super::Game<'_> {
         hidden: bool,
     ) {
         let wanted = self.tutorial.hint();
+        if wanted.map(|(hint, _)| hint) != self.tutorial.cancelled_hint {
+            self.tutorial.cancelled_hint = None;
+        }
         for t in &mut self.tutorial_toasts {
             t.wanted = wanted.is_some_and(|(hint, _)| hint == t.hint);
             if t.wanted {
@@ -448,13 +461,17 @@ impl super::Game<'_> {
             }
         }
         if let Some((hint, progress)) = wanted
+            && self.tutorial.cancelled_hint != Some(hint)
             && !self
                 .tutorial_toasts
                 .iter()
                 .any(|t| t.wanted && t.hint == hint)
         {
-            let toast = self.tutorial_toast(hint, progress);
-            self.tutorial_toasts.push(toast);
+            if let Some(toast) = self.tutorial_toast(hint, progress) {
+                self.tutorial_toasts.push(toast);
+            } else {
+                self.tutorial.cancelled_hint = Some(hint);
+            }
         }
         let mut used = self.toast_slots_used();
         for t in &mut self.tutorial_toasts {

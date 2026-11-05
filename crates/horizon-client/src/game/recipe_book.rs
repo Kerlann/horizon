@@ -260,10 +260,7 @@ impl Game<'_> {
         }
         match self.adv.toasts.iter_mut().find(|t| t.is_recipe()) {
             Some(toast) => toast.add_recipes(items),
-            None => self
-                .adv
-                .toasts
-                .push_back(super::advancements::Toast::recipe(items)),
+            None => self.add_advancement_toast(super::advancements::Toast::recipe(items)),
         }
     }
 

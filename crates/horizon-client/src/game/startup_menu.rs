@@ -25,8 +25,8 @@ pub(super) struct StartupMenu {
     dragging: bool,
     clipboard: SystemClipboard,
     selection: AppendSelection,
-    /// The narrator's `NARRATOR_TOGGLE` toast, handed to the game with the title.
-    narrator_toast: Option<horizon_client::toasts::SystemToast>,
+    /// Narrator candidate, admitted only once Game can supply a ClientHost.
+    pending_narrator_toast: Option<horizon_client::toasts::SystemToast>,
     /// The screens' narration, handed to the game with the title (which
     /// stays the screen already opened).
     narration: horizon_client::screen_narrator::ScreenNarrator,
@@ -120,7 +120,10 @@ impl StartupMenu {
         game.physical_keys = std::mem::take(&mut self.physical_keys);
         game.clipboard = std::mem::take(&mut self.clipboard);
         game.text_selection = std::mem::take(&mut self.selection);
-        game.narrator_toast = self.narrator_toast.take();
+        game.narrator_toast = self
+            .pending_narrator_toast
+            .take()
+            .and_then(|toast| game.add_system_toast(toast));
         game.narration = std::mem::take(&mut self.narration);
         // Preserve an existing resource-error screen opened by start_game.
         if self.options_open {
@@ -605,7 +608,8 @@ impl Loading {
                 }
                 Event::Narrator => super::narrator::update_status(
                     self.settings.narrator(),
-                    &mut self.menu.narrator_toast,
+                    &mut self.menu.pending_narrator_toast,
+                    Some,
                 ),
                 // The startup menu has no screen stack for ConfirmLinkScreen;
                 // the link opens directly, as the menu's other links do.
@@ -666,7 +670,11 @@ impl Loading {
             return;
         }
         let was_disabled = super::narrator::cycle_status(&mut self.settings);
-        super::narrator::update_status(self.settings.narrator(), &mut self.menu.narrator_toast);
+        super::narrator::update_status(
+            self.settings.narrator(),
+            &mut self.menu.pending_narrator_toast,
+            Some,
+        );
         self.save_menu_settings();
         self.menu
             .narration
@@ -1205,7 +1213,6 @@ impl Loading {
                 );
                 self.settings.save(&Game::options_path());
             }
-            let _ = title.update_toast(self.settings.notification_display_time);
             for found in title.lan_found_narrations((batch.width, batch.height)) {
                 horizon_narrator::say_system_queued(&found.plain());
             }
@@ -1228,16 +1235,8 @@ impl Loading {
         {
             key_focus::draw_outline(&gui.atlas, batch, focus);
         }
-        // Over every screen, as the game's; no sound before the sound engine.
-        let title_toast = self.menu.title.as_ref().is_some_and(|t| t.has_toast());
-        super::narrator::draw_toast(
-            &mut self.menu.narrator_toast,
-            u32::from(title_toast),
-            f64::from(self.settings.notification_display_time),
-            &gui.atlas,
-            batch,
-            false,
-        );
+        // No ClientHost exists while resources load. Toast candidates are
+        // admitted on handoff to Game, before their first animation or sound.
     }
 
     pub(super) fn restart_menu_resources(&mut self) -> Result<()> {

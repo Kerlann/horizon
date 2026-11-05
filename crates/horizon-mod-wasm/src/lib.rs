@@ -11,6 +11,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+mod points;
+
+pub use points::Listening;
+
 /// The game's shared Rust standard library member, shipped beside the executable and linked
 /// first into every group (members are built against the same pinned toolchain).
 pub const STD_MEMBER: &str = "horizon-wasm-std.wasm";
@@ -53,6 +57,20 @@ pub enum Refusal {
     Package(String),
     /// The group didn't instantiate or its exports aren't this game's.
     Load(LoadError),
+    /// An injection, or a place the mod listens at, names no point of this game.
+    NoSuchPoint { point: String },
+    /// The mod listens at a place its `horizon-mod.toml` doesn't list.
+    UndeclaredPoint { point: String },
+    /// Its `horizon-mod.toml` lists a place the mod doesn't listen at.
+    UnfilledPoint { point: String },
+    /// The mod was built for another shape of a point's record than this game's.
+    ChangedPoint {
+        point: String,
+        built: String,
+        game: String,
+    },
+    /// Its listeners couldn't be set up.
+    Points(String),
 }
 
 impl std::fmt::Display for Refusal {
@@ -81,6 +99,22 @@ impl std::fmt::Display for Refusal {
             ),
             Self::Package(why) => write!(f, "{why}"),
             Self::Load(why) => write!(f, "{why}"),
+            Self::NoSuchPoint { point } => {
+                write!(f, "listens at {point}, which this game has no point at")
+            }
+            Self::UndeclaredPoint { point } => write!(
+                f,
+                "listens at {point}, which its horizon-mod.toml doesn't list"
+            ),
+            Self::UnfilledPoint { point } => write!(
+                f,
+                "lists {point} in its horizon-mod.toml but doesn't listen there"
+            ),
+            Self::ChangedPoint { point, built, game } => write!(
+                f,
+                "was built for another {point}: its record is ({built}), this game's ({game}); rebuild it"
+            ),
+            Self::Points(why) => write!(f, "{why}"),
         }
     }
 }
@@ -92,6 +126,8 @@ impl std::error::Error for Refusal {}
 pub struct Loaded {
     pub mods: Vec<mod_api::ModEntry>,
     pub refused: Vec<(String, Refusal)>,
+    /// The mods' listeners at points, in the order of `mods`: registered after the native mods'.
+    pub listening: Vec<Listening>,
 }
 
 /// The engine every group runs on: calls limited by time, its epoch advanced by a thread of
@@ -354,12 +390,15 @@ pub fn load(config: &RuntimeConfig, std_member: &[u8], packages: Vec<WasmPackage
             return Loaded {
                 mods: Vec::new(),
                 refused,
+                listening: Vec::new(),
             };
         }
     };
     let (groups, mut refused) = groups(&packages);
     let mut mods = Vec::new();
+    let mut listening = Vec::new();
     for members in groups {
+        let members_of_group = members.clone();
         let ids: Vec<&'static str> = members
             .iter()
             .map(|&i| &*Box::leak(packages[i].manifest.id.clone().into_boxed_str()))
@@ -382,11 +421,61 @@ pub fn load(config: &RuntimeConfig, std_member: &[u8], packages: Vec<WasmPackage
                 .map_err(Refusal::Load)
             });
         match loaded {
-            Ok(entries) => mods.extend(entries),
+            Ok(members) => {
+                // Every member's points are checked before any is installed: a member refused
+                // over its points takes the members depending on it with it, as a dependency
+                // refused earlier does.
+                let mut checked: Vec<_> = members
+                    .into_iter()
+                    .zip(&members_of_group)
+                    .map(|(member, &i)| {
+                        let listening = points::listen(&packages[i].manifest, &member.exports);
+                        (member, i, listening)
+                    })
+                    .collect();
+                loop {
+                    let failed: BTreeSet<&str> = checked
+                        .iter()
+                        .filter(|(_, _, listening)| listening.is_err())
+                        .map(|(_, i, _)| packages[*i].manifest.id.as_str())
+                        .collect();
+                    let mut changed = false;
+                    for (_, i, listening) in &mut checked {
+                        if listening.is_ok()
+                            && let Some(id) = packages[*i]
+                                .manifest
+                                .dependencies
+                                .keys()
+                                .find(|id| failed.contains(id.as_str()))
+                        {
+                            *listening = Err(Refusal::DependencyRefused {
+                                dependency: id.clone(),
+                            });
+                            changed = true;
+                        }
+                    }
+                    if !changed {
+                        break;
+                    }
+                }
+                for (member, _, checked) in checked {
+                    match checked {
+                        Ok(points) => {
+                            mods.push(member.entry);
+                            listening.extend(points);
+                        }
+                        Err(why) => refused.push((member.exports.id().to_string(), why)),
+                    }
+                }
+            }
             Err(why) => refused.extend(ids.iter().map(|id| (id.to_string(), why.clone()))),
         }
     }
-    Loaded { mods, refused }
+    Loaded {
+        mods,
+        refused,
+        listening,
+    }
 }
 
 static REFUSED: OnceLock<Vec<(String, Refusal)>> = OnceLock::new();
@@ -398,13 +487,14 @@ pub fn refused() -> &'static [(String, Refusal)] {
 
 /// Loads the wasm mods the player turned on in `game_dir` (and every `dev` package), once at
 /// startup: the same selection as content mods (`horizon_mods::selection`), so a wasm mod's
-/// `assets/` and `data/` load as content beside its code. Refusals are kept for [`refused`].
+/// `assets/` and `data/` load as content beside its code. Refusals are kept for [`refused`]; the
+/// mods, and their listeners at points for the game to register after the native mods'.
 pub fn load_installed(
     executable: &Path,
     game_dir: &Path,
     dev: &[PathBuf],
     config: &RuntimeConfig,
-) -> Vec<mod_api::ModEntry> {
+) -> (Vec<mod_api::ModEntry>, Vec<Listening>) {
     let enabled = horizon_mods::mod_list::ModList::load(game_dir).enabled;
     let mut refused = Vec::new();
     let packages: Vec<WasmPackage> =
@@ -423,14 +513,14 @@ pub fn load_installed(
                 },
             )
             .collect();
-    let mods = if packages.is_empty() {
-        Vec::new()
+    let loaded = if packages.is_empty() {
+        (Vec::new(), Vec::new())
     } else {
         match std::fs::read(executable.with_file_name(STD_MEMBER)) {
             Ok(std_member) => {
                 let loaded = load(config, &std_member, packages);
                 refused.extend(loaded.refused);
-                loaded.mods
+                (loaded.mods, loaded.listening)
             }
             Err(_) => {
                 refused.extend(
@@ -438,7 +528,7 @@ pub fn load_installed(
                         .into_iter()
                         .map(|p| (p.manifest.id, Refusal::NoStd)),
                 );
-                Vec::new()
+                (Vec::new(), Vec::new())
             }
         }
     };
@@ -446,7 +536,7 @@ pub fn load_installed(
         log::warn!("wasm mod {id} refused: {why}");
     }
     let _ = REFUSED.set(refused);
-    mods
+    loaded
 }
 
 #[cfg(test)]

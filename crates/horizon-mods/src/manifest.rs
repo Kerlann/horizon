@@ -243,9 +243,98 @@ pub(super) fn valid_mod_id(id: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
 }
 
+/// One injection's own rules: a hook or a target, and a helper or a trait method that listens at
+/// a point as only a point's listener can.
+fn check_injection(injection: &Injection) -> Result<(), String> {
+    // Modules share horizon-mixins' one id space with injections.
+    if injection.hook.is_some() == injection.target.is_some() {
+        return Err(format!(
+            "{MANIFEST}: injection needs exactly one hook or target"
+        ));
+    }
+    match (&injection.helper, &injection.trait_method) {
+        (Some(helper), None) if plain_path(helper) && source_file(helper) => {}
+        (None, Some(method))
+            if !method.is_empty()
+                && method
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+                && !method.as_bytes()[0].is_ascii_digit() => {}
+        _ => {
+            return Err(format!(
+                "{MANIFEST}: injection needs one source helper or trait_method"
+            ));
+        }
+    }
+    // A trait method listens at a point (`mod_points::Points`): at its head or
+    // return, with the point's own record, so nothing else of a mixin applies.
+    if injection.trait_method.is_some()
+        && (injection.hook.is_some()
+            || !matches!(injection.kind, InjectionKind::Head | InjectionKind::Return)
+            || injection.cancellable
+            || !injection.bindings.is_empty()
+            || injection.argument.is_some()
+            || injection.selector.is_some()
+            || injection.ordinal.is_some()
+            || injection.require.is_some()
+            || injection.slice.is_some()
+            || injection.variable.is_some()
+            || injection.result.is_some())
+    {
+        return Err(format!(
+            "{MANIFEST}: injection {}: a trait_method listens at the HEAD or RETURN of the point its `target` names, and takes the point's record: no `hook` (a hook is its own Hooks method), bindings, cancellable, argument, selector, ordinal, require, slice, variable or result (cancel through the record's `cancel`); use a helper for the rest",
+            injection.id
+        ));
+    }
+    Ok(())
+}
+
+impl Native {
+    /// The injections of a wasm mod's `[native]`, which holds nothing else.
+    fn points(native: toml::Value) -> Result<Vec<Injection>, toml::de::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Points {
+            #[serde(default)]
+            injection: Vec<Injection>,
+        }
+        Ok(native.try_into::<Points>()?.injection)
+    }
+}
+
 impl Manifest {
     pub fn parse(text: &str) -> Result<Self, String> {
-        let m: Manifest = toml::from_str(text).map_err(|e| format!("{MANIFEST}: {e}"))?;
+        let mut table: toml::Table =
+            toml::from_str(text).map_err(|e| format!("{MANIFEST}: {e}"))?;
+        // A wasm mod's `[native]` holds only its injections: it pins no build, as it builds none.
+        let points = match (table.get("wasm"), table.get("native")) {
+            (Some(_), Some(toml::Value::Table(native)))
+                if native.keys().all(|key| key == "injection") =>
+            {
+                let native = table.remove("native").expect("just found");
+                Native::points(native).map_err(|e| format!("{MANIFEST}: {e}"))?
+            }
+            _ => Vec::new(),
+        };
+        let mut m: Manifest = toml::Value::Table(table)
+            .try_into()
+            .map_err(|e| format!("{MANIFEST}: {e}"))?;
+        if let Some(wasm) = &mut m.wasm {
+            let mut ids = std::collections::HashSet::new();
+            for injection in &points {
+                if injection.id.is_empty() || !ids.insert(&injection.id) {
+                    return Err(format!("{MANIFEST}: empty or duplicate injection id"));
+                }
+                if injection.trait_method.is_none() || injection.target.is_none() {
+                    return Err(format!(
+                        "{MANIFEST}: injection {}: a wasm mod listens at points (a trait_method at a point's target); a mod that changes game code is a native mod",
+                        injection.id
+                    ));
+                }
+                check_injection(injection)?;
+            }
+            wasm.points = points;
+        }
         if !valid_mod_id(&m.id) {
             return Err(format!(
                 "{MANIFEST}: id {:?} is not [a-z0-9_]{{1,64}}",
@@ -277,46 +366,7 @@ impl Manifest {
                 if injection.id.is_empty() || !ids.insert(&injection.id) {
                     return Err(format!("{MANIFEST}: empty or duplicate injection id"));
                 }
-                // Modules share horizon-mixins' one id space with injections.
-                if injection.hook.is_some() == injection.target.is_some() {
-                    return Err(format!(
-                        "{MANIFEST}: injection needs exactly one hook or target"
-                    ));
-                }
-                match (&injection.helper, &injection.trait_method) {
-                    (Some(helper), None) if plain_path(helper) && source_file(helper) => {}
-                    (None, Some(method))
-                        if !method.is_empty()
-                            && method
-                                .bytes()
-                                .all(|b| b.is_ascii_alphanumeric() || b == b'_')
-                            && !method.as_bytes()[0].is_ascii_digit() => {}
-                    _ => {
-                        return Err(format!(
-                            "{MANIFEST}: injection needs one source helper or trait_method"
-                        ));
-                    }
-                }
-                // A trait method listens at a point (`mod_api::points::Points`): at its head or
-                // return, with the point's own record, so nothing else of a mixin applies.
-                if injection.trait_method.is_some()
-                    && (injection.hook.is_some()
-                        || !matches!(injection.kind, InjectionKind::Head | InjectionKind::Return)
-                        || injection.cancellable
-                        || !injection.bindings.is_empty()
-                        || injection.argument.is_some()
-                        || injection.selector.is_some()
-                        || injection.ordinal.is_some()
-                        || injection.require.is_some()
-                        || injection.slice.is_some()
-                        || injection.variable.is_some()
-                        || injection.result.is_some())
-                {
-                    return Err(format!(
-                        "{MANIFEST}: injection {}: a trait_method listens at the HEAD or RETURN of the point its `target` names, and takes the point's record: no `hook` (a hook is its own Hooks method), bindings, cancellable, argument, selector, ordinal, require, slice, variable or result (cancel through the record's `cancel`); use a helper for the rest",
-                        injection.id
-                    ));
-                }
+                check_injection(injection)?;
             }
             for module in &native.module {
                 if module.id.is_empty() || !ids.insert(&module.id) {
@@ -1243,6 +1293,37 @@ capabilities = ["registries"]
             "a".repeat(40)
         );
         assert!(Manifest::parse(&both).unwrap_err().contains("not both"));
+    }
+
+    #[test]
+    fn a_wasm_mod_lists_the_points_it_listens_at_without_native_pins() {
+        let wasm = format!(
+            "{}\n[wasm]\nsha512 = \"{}\"\ntoolchain = \"1.99.1\"\n",
+            EXAMPLE.trim_end(),
+            "0".repeat(128)
+        );
+        let with = |injection: &str| {
+            Manifest::parse(&format!("{wasm}\n[[native.injection]]\n{injection}"))
+        };
+        let tick = "id = \"count\"\ntarget = \"horizon_client::game::Game<'_>::tick\"\nkind = \"HEAD\"\ntrait_method = \"tick\"\n";
+        let m = with(tick).unwrap();
+        assert!(m.native.is_none());
+        let points = m.wasm.as_ref().unwrap().points();
+        assert_eq!(points.len(), 1);
+        assert_eq!(points[0].trait_method.as_deref(), Some("tick"));
+        // Changing game code is a native mod's: a helper, or a mixin kind, is refused.
+        let helper = tick.replace("trait_method = \"tick\"", "helper = \"src/a.rs\"");
+        assert!(with(&helper).unwrap_err().contains("is a native mod"));
+        let mixin = tick.replace("HEAD", "OVERWRITE");
+        assert!(with(&mixin).unwrap_err().contains("HEAD or RETURN"));
+        let twice = format!("{tick}\n[[native.injection]]\n{tick}");
+        assert!(with(&twice).unwrap_err().contains("duplicate"));
+        // `[native]` with pins beside `[wasm]` is still two kinds of mod.
+        let pinned = format!(
+            "{wasm}\n[native]\ngame = \"g\"\nhorizon = \"{0}\"\nmixins = \"{0}\"\n\n[[native.injection]]\n{tick}",
+            "a".repeat(40)
+        );
+        assert!(Manifest::parse(&pinned).unwrap_err().contains("not both"));
     }
 
     #[test]

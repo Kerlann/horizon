@@ -28,7 +28,8 @@ const REDUCTIONS: usize = 6;
 /// One hit's damage sequence from `hurtServer` to the health, as NeoForge's
 /// `DamageContainer` carries it: the damage that came in, what blocking, the cooldown and
 /// each reduction took, the damage `LivingDamageEvent.Pre` left and what the health lost.
-/// A value is 0 until the step that sets it has run.
+/// Numeric values are 0 until the step that sets them has run; side effects are false until
+/// `hurtServer` decides whether the hit is fresh.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DamageContainer {
     original: f32,
@@ -36,6 +37,7 @@ pub struct DamageContainer {
     blocked: f32,
     shield_damage: f32,
     post_attack_invulnerability_ticks: i32,
+    should_cause_side_effects: bool,
     reductions: [f32; REDUCTIONS],
     entered_pre: f32,
     inflicted: f32,
@@ -50,6 +52,7 @@ pub struct DamageValues {
     pub blocked: f32,
     pub shield_damage: f32,
     pub post_attack_invulnerability_ticks: i32,
+    pub should_cause_side_effects: bool,
     pub reductions: [f32; 6],
     pub entered_pre: f32,
     pub inflicted: f32,
@@ -64,6 +67,7 @@ impl From<&DamageContainer> for DamageValues {
             blocked: d.blocked,
             shield_damage: d.shield_damage,
             post_attack_invulnerability_ticks: d.post_attack_invulnerability_ticks,
+            should_cause_side_effects: d.should_cause_side_effects,
             reductions: d.reductions,
             entered_pre: d.entered_pre,
             inflicted: d.inflicted,
@@ -81,6 +85,7 @@ impl From<DamageValues> for DamageContainer {
             blocked: v.blocked,
             shield_damage: v.shield_damage,
             post_attack_invulnerability_ticks: v.post_attack_invulnerability_ticks,
+            should_cause_side_effects: v.should_cause_side_effects,
             reductions: v.reductions,
             entered_pre: v.entered_pre,
             inflicted: v.inflicted,
@@ -99,6 +104,7 @@ impl DamageContainer {
             blocked: 0.0,
             shield_damage: 0.0,
             post_attack_invulnerability_ticks: 20,
+            should_cause_side_effects: false,
             reductions: [0.0; REDUCTIONS],
             entered_pre: 0.0,
             inflicted: 0.0,
@@ -137,6 +143,18 @@ impl DamageContainer {
     /// (`setPostAttackInvulnerabilityTicks`).
     pub fn set_post_attack_invulnerability_ticks(&mut self, ticks: i32) {
         self.post_attack_invulnerability_ticks = ticks;
+    }
+    /// Whether `hurtServer` decided this hit was fresh (`shouldCauseSideEffects`), so it
+    /// causes hurt sounds, knockback and other fresh-hit effects. False for a stronger hit
+    /// inside the damage cooldown unless its source bypasses the cooldown. This is recorded
+    /// before `actuallyHurt`, independently of the final damage or modded cooldown ticks.
+    pub fn should_cause_side_effects(&self) -> bool {
+        self.should_cause_side_effects
+    }
+    /// The damage sequence: `hurtServer`'s fresh-hit decision before the damage hooks run.
+    #[doc(hidden)]
+    pub fn record_should_cause_side_effects(&mut self, fresh: bool) {
+        self.should_cause_side_effects = fresh;
     }
     /// What `reduction` took off the hit (`getReduction`).
     pub fn reduction(&self, reduction: Reduction) -> f32 {

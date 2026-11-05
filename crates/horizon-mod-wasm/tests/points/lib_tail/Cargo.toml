@@ -1,0 +1,13 @@
+[package]
+name = "lib-tail"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+horizon-mod-api = { path = "../../../../horizon-mod-api" }
+horizon-mod-points = { path = "../../../../horizon-mod-points" }
+counter-lib = { path = "../../groups/counter_lib" }
+
+# A mod is its own project, not a member of the game's workspace.
+[workspace]

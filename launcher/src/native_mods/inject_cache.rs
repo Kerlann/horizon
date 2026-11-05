@@ -25,7 +25,7 @@ pub(super) fn key(
         super::STAGING,
         revision,
         mixins,
-        // The Cargo profile: `Performance` and `Dev` stage the same source.
+        // The Cargo profile: `Balanced` and `Developer` stage the same source.
         profile.cargo().0,
         super::rust_toolchain::VERSION,
     ] {

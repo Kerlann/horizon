@@ -8,17 +8,10 @@ pub fn generate(root: &Path, out_dir: &Path, target: Target) -> Result<(), Strin
     track(root)?;
     let generated = sources(root, super::FillMode::Require)?;
     let outputs = match target {
-        Target::Client => {
-            let points = super::points::game_points(root)?;
-            let list = serde_json::to_string_pretty(&points).map_err(|e| e.to_string())?;
-            // The list the launcher routes injections by: the prebuilt game carries it.
-            fs::write(out_dir.join("points.json"), list + "\n").map_err(|e| e.to_string())?;
-            vec![
-                ("mod_api_host_generated.rs", generated.implementation),
-                ("mod_api_fire_generated.rs", generated.fire),
-                ("points_generated.rs", super::points::slots(&points)),
-            ]
-        }
+        Target::Client => vec![
+            ("mod_api_host_generated.rs", generated.implementation),
+            ("mod_api_fire_generated.rs", generated.fire),
+        ],
         Target::Api => {
             let hooks = generated.hooks;
             let included = [
@@ -39,9 +32,7 @@ pub fn generate(root: &Path, out_dir: &Path, target: Target) -> Result<(), Strin
                 println!("cargo:rerun-if-changed={}", path.display());
             }
             fs::write(out_dir.join("mod-api.wit"), &wasm.wit).map_err(|e| e.to_string())?;
-            let points = super::points::records(&super::points::game_points(root)?);
             vec![
-                ("points_api_generated.rs", points),
                 ("mod_api_generated.rs", hooks),
                 ("mod_api_generated_host.rs", generated.host),
                 ("native_render_generated.rs", generated.render),
@@ -56,6 +47,20 @@ pub fn generate(root: &Path, out_dir: &Path, target: Target) -> Result<(), Strin
         syn::parse_file(&code).map_err(|e| format!("generated Rust: {name}: {e}"))?;
     }
     Ok(())
+}
+
+/// `horizon-mod-points`' generated file: each point's record, `PointId` and the `Points` trait,
+/// from the game's source, tracking the game module's files.
+pub fn generate_points(root: &Path, out_dir: &Path) -> Result<(), String> {
+    let src = root.join("crates/horizon-client/src");
+    println!("cargo:rerun-if-changed={}", src.join("game.rs").display());
+    println!("cargo:rerun-if-changed={}", src.join("game").display());
+    for path in super::points::tracked(&src)? {
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
+    let code = super::points::records(&super::points::game_points(root)?);
+    syn::parse_file(&code).map_err(|e| format!("generated Rust: points: {e}"))?;
+    fs::write(out_dir.join("points_generated.rs"), code).map_err(|e| e.to_string())
 }
 
 pub(super) fn track(root: &Path) -> Result<(), String> {

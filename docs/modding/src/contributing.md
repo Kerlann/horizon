@@ -26,3 +26,17 @@ The book follows [Diátaxis](https://diataxis.fr): a page is one of four kinds, 
 - `src/llms.txt` is the index for agents; keep it in step with `SUMMARY.md`.
 
 Build the book with `mdbook build docs/modding` and the reference with `cargo doc -p horizon-mod-api --no-deps`.
+
+# What a PR needs to show
+
+Code review, CI and your own focused tests are the proof. You don't need to run the game.
+
+A reviewer runs your change in game at your head only when a test can't cover one of these, and says which:
+
+- rendering or UI, what the player sees;
+- client-server sync: LAN guests, a dedicated server, packets;
+- when or in what order something happens compared with vanilla, such as a hook's firing point.
+
+If your PR changes or removes something mods already use, the reviewer also runs
+[horizon-machine-sample](https://github.com/arismoko/horizon-machine-sample) against it. A new item's `///` doc is its
+reference.

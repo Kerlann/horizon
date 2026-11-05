@@ -3,7 +3,10 @@
 pub trait Hooks {
     /// NeoForge's `LivingDamageEvent.Post`: the health of entity `entity` of type `kind` has
     /// just lost the hit `container` describes, with its final values (health damage, the
-    /// reductions, the post-attack invulnerability ticks). It only listens, and fires where
+    /// reductions, the post-attack invulnerability ticks). `container.should_cause_side_effects()`
+    /// carries `hurtServer`'s fresh-hit decision (`shouldCauseSideEffects`): false for a stronger
+    /// hit inside the cooldown unless its source bypasses it, independent of the final damage
+    /// or modded invulnerability ticks. It only listens, and fires where
     /// `native_living_damage_pre` does once the health took more than 0. It can't write the
     /// entity or the world's blocks: the level host gives the hit's random and level attachments.
     #[hook(

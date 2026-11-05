@@ -23,6 +23,7 @@ pub(super) struct Toast {
     icon: String,
     frame: Frame,
     title: Text,
+    description: Option<Text>,
     slide: Slide,
     /// `ToastInstance.firstSlotIndex`: the 32-pixel slot it stacks in once it
     /// leaves the queue.
@@ -40,7 +41,8 @@ impl Toast {
         Self {
             icon: String::new(),
             frame: Frame::Task,
-            title: Text::literal(""),
+            title: Text::translate("recipe.toast.title", &[]),
+            description: Some(Text::translate("recipe.toast.description", &[])),
             slide: Slide::default(),
             slot: None,
             recipes: items,
@@ -912,10 +914,11 @@ impl Game<'_> {
         if let Some(d) = &a.display {
             // A network player's client shows its own toast.
             if d.show_toast && !self.adv.quiet && self.lan_acting.is_none() {
-                self.adv.toasts.push_back(Toast {
+                self.add_advancement_toast(Toast {
                     icon: d.icon.clone(),
                     frame: d.frame,
-                    title: text_of(&d.title),
+                    title: Text::translate(toast_label(d.frame).0, &[]),
+                    description: Some(text_of(&d.title)),
                     slide: Slide::default(),
                     slot: None,
                     recipes: Vec::new(),
@@ -2056,12 +2059,24 @@ impl Game<'_> {
             .chain(self.narrator_toast.as_ref().and_then(|t| t.slot))
             .fold(self.tutorial_toast_slots(), |used, slot| used | 1 << slot)
     }
+    pub(super) fn add_advancement_toast(&mut self, mut toast: Toast) {
+        let kind = if toast.is_recipe() {
+            mod_api::ToastKind::Recipe
+        } else {
+            mod_api::ToastKind::Advancement
+        };
+        if self.add_toast(kind, &mut toast.title, &mut toast.description) {
+            self.adv.toasts.push_back(toast);
+        }
+    }
+
     /// The `AdvancementToast` or `RecipeToast` at `index` in its slot at `y`.
     fn draw_toast(&mut self, batch: &mut HudBatch, index: usize, y: f32, multiplier: f64) {
         let t = &self.adv.toasts[index];
         let x = batch.width - 160.0 * t.slide.portion;
         let fully_for = t.slide.fully_for;
         let (title, frame, icon) = (t.title.clone(), t.frame, t.icon.clone());
+        let description = t.description.clone().unwrap_or_else(|| Text::literal(""));
         let recipe = t
             .is_recipe()
             .then(|| t.recipes[t.displayed_recipe(fully_for, multiplier)].clone());
@@ -2070,11 +2085,8 @@ impl Game<'_> {
             // station at 0.6 scale in the corner over the cycling result.
             let atlas = &self.gui.atlas;
             batch.sprite(atlas, "gui/sprites/toast/recipe", x, y);
-            let title = self.translate("recipe.toast.title", "New Recipe(s) Unlocked!");
-            let description = self.translate("recipe.toast.description", "Check your recipe book");
-            let atlas = &self.gui.atlas;
-            batch.text(atlas, &title, x + 30.0, y + 7.0, 0xFF50_0050, false);
-            batch.text(atlas, &description, x + 30.0, y + 18.0, 0xFF00_0000, false);
+            batch.text_styled(atlas, &title, x + 30.0, y + 7.0, 0xFF50_0050, false);
+            batch.text_styled(atlas, &description, x + 30.0, y + 18.0, 0xFF00_0000, false);
             let start = batch.vertices.len();
             self.draw_item_model(batch, &ItemStack::new(&station, 1), x + 3.0, y + 3.0);
             batch.scale_since(start, x, y, 0.6, 0.6);
@@ -2083,12 +2095,12 @@ impl Game<'_> {
         }
         let atlas = &self.gui.atlas;
         batch.sprite(atlas, "gui/sprites/toast/advancement", x, y);
-        let (key, color) = toast_label(frame);
+        let (_, color) = toast_label(frame);
         // AdvancementToast.extractRenderState: a title of one line sits under
         // the frame's label; a longer one is wrapped at 125, the label fading
         // out first (to 1.5 s) and the lines fading in after it over 0.3 s.
-        let lines = atlas.font.split(&title.resolve_legacy(), 125.0);
-        let label = Text::translate(key, &[]);
+        let lines = atlas.font.split(&description.resolve_legacy(), 125.0);
+        let label = title;
         let rgb = color & 0x00FF_FFFF;
         if let [line] = lines.as_slice() {
             batch.text_styled(atlas, &label, x + 30.0, y + 7.0, color, false);
@@ -2318,10 +2330,11 @@ impl Game<'_> {
                 && self.adv.progress.done(a)
                 && let Some(d) = a.display.as_ref().filter(|d| d.show_toast)
             {
-                self.adv.toasts.push_back(Toast {
+                self.add_advancement_toast(Toast {
                     icon: d.icon.clone(),
                     frame: d.frame,
-                    title: text_of(&d.title),
+                    title: Text::translate(toast_label(d.frame).0, &[]),
+                    description: Some(text_of(&d.title)),
                     slide: Slide::default(),
                     slot: None,
                     recipes: Vec::new(),
@@ -2341,6 +2354,92 @@ pub(super) fn text_of(v: &Value) -> Text {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn toast_admission_cancels_edits_and_preserves_queue_behavior() {
+        use mod_api::{ClientHost, Flow, Hooks, ModEntry, ToastAddEvent, ToastKind};
+        struct Listener;
+        #[mod_api::__subscriptions]
+        impl Hooks for Listener {
+            fn toast_add(&self, _: &dyn ClientHost, event: &mut ToastAddEvent<'_>) -> Flow {
+                match event.description.as_ref().map(Text::plain).as_deref() {
+                    Some("cancel") => Flow::Cancel,
+                    Some("edit") => {
+                        *event.title = Text::literal("replacement").with_color(0x12_3456);
+                        *event.description = Some(Text::literal("changed"));
+                        Flow::Continue
+                    }
+                    _ => Flow::Continue,
+                }
+            }
+        }
+        let mods: mod_api::Mods = vec![ModEntry::new("toasts", Box::new(Listener))].into();
+        mod_api::testing::with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                game.options.execution_role = super::super::execution_role::ExecutionRole::Client;
+                game.adv.toasts.clear();
+                let advancement = |name: &str| Toast {
+                    icon: "minecraft:stone".into(),
+                    frame: Frame::Challenge,
+                    title: Text::translate("advancements.toast.challenge", &[]),
+                    description: Some(Text::literal(name)),
+                    slide: Slide::default(),
+                    slot: None,
+                    recipes: vec![],
+                    changed: false,
+                    last_changed: 0,
+                };
+                game.add_advancement_toast(advancement("cancel"));
+                assert!(game.adv.toasts.is_empty());
+                game.add_advancement_toast(advancement("untouched"));
+                let original = &game.adv.toasts[0];
+                assert_eq!(
+                    original.title.component(),
+                    serde_json::json!({"translate": "advancements.toast.challenge"})
+                );
+                assert_eq!(original.description.as_ref().unwrap().plain(), "untouched");
+                assert_eq!(original.icon, "minecraft:stone");
+                assert!(original.slot.is_none());
+                assert!(
+                    original.slide.origin.is_none(),
+                    "not animated before admission"
+                );
+                game.add_advancement_toast(advancement("edit"));
+                let edited = &game.adv.toasts[1];
+                assert_eq!(edited.title.plain(), "replacement");
+                assert_eq!(edited.title.component()["color"], "#123456");
+                assert_eq!(edited.description.as_ref().unwrap().plain(), "changed");
+                assert_eq!(edited.frame, Frame::Challenge);
+                for kind in [
+                    ToastKind::Recipe,
+                    ToastKind::Tutorial,
+                    ToastKind::System,
+                    ToastKind::Other,
+                ] {
+                    let mut title = Text::literal("title");
+                    let mut description = Some(Text::literal("cancel"));
+                    assert!(!game.add_toast(kind, &mut title, &mut description));
+                }
+                let mut system = horizon_client::toasts::SystemToast::new("system".into(), None);
+                system.message = Some(Text::literal("edit"));
+                let system = game.add_system_toast(system).unwrap();
+                assert_eq!(system.title.plain(), "replacement");
+                assert_eq!(system.message.unwrap().plain(), "changed");
+                for role in [
+                    super::super::execution_role::ExecutionRole::IntegratedServer,
+                    super::super::execution_role::ExecutionRole::DedicatedServer,
+                ] {
+                    game.options.execution_role = role;
+                    let mut title = Text::literal("server");
+                    let mut description = Some(Text::literal("edit"));
+                    assert!(!game.add_toast(ToastKind::Advancement, &mut title, &mut description));
+                    assert_eq!(title.plain(), "server", "server must not invoke listener");
+                    assert_eq!(description.unwrap().plain(), "edit");
+                }
+            });
+        });
+    }
 
     #[test]
     fn looking_at_triggers_are_the_ones_that_ask() {

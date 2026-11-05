@@ -7,6 +7,9 @@
 //! - `imports N`: N calls into the game (`host.level`).
 //! - `compute N`: plain mod logic on N values: fill, sort, hash-map counts, a checksum.
 //!
+//! It also listens at the game's tick point, doing nothing: the cost of a point filled by a wasm
+//! mod (the `point` row; `tests/bench.rs` lists the point in the manifest it loads the mod with).
+//!
 //! It also registers the structure type `bench_mod:spin`, whose start is found after some
 //! compute work, for the test of worldgen workers sharing the mod.
 use std::collections::HashMap;
@@ -20,6 +23,11 @@ use mod_api::{
 
 #[derive(Default)]
 pub struct Mod;
+
+#[mod_api::horizon_mod]
+impl mod_points::Points for Mod {
+    fn tick(&self, _host: mod_api::HostSide<'_>, _args: &mut mod_points::TickArgs) {}
+}
 
 #[mod_api::horizon_mod]
 impl Hooks for Mod {

@@ -189,7 +189,9 @@ requires a farmer at work and `mob_griefing` enabled.
 
 - Breaking and placing a block, on the server for every player: `native_break_block` hears a player break a
   block once the game allowed it (`ServerPlayerGameMode.destroyBlock`) and may cancel it, which keeps the block and its
-  drops; `native_entity_place` (`EntityPlaceEvent`, `EntityMultiPlaceEvent`) hears a block placed from an item
+  drops. Set `exp_to_drop` to `Some(amount)` to replace the vanilla XP sample later, after item drops are prepared;
+  `None` retains vanilla sampling. The subsequent `block_drops` event can edit the resulting experience or cancel
+  the drops, and disabled block drops suppress both items and XP. `native_entity_place` (`EntityPlaceEvent`, `EntityMultiPlaceEvent`) hears a block placed from an item
   (`BlockItem.place`), an enderman putting its block down or a snow golem's trail, before it is written, and may cancel it:
   nothing is placed and the stack is kept. For a player, `placed_against` is the state next to the primary placed
   block opposite the clicked face, even when the clicked block is replaceable; for mobs it is the state below.
@@ -455,6 +457,15 @@ requires a farmer at work and `mob_griefing` enabled.
   `native_kill_mob` don't reach it yet: they set the health to 0 instead of hurting with `minecraft:generic_kill` as
   vanilla does. NeoForge's reduction modifiers (`addReductionModifier`) aren't there yet.
 
+- `living_damage_post` (NeoForge's `LivingDamageEvent.Post`) observes the hit after it takes health.
+  Its `container.should_cause_side_effects()` is `hurtServer`'s fresh-hit decision
+  (`shouldCauseSideEffects`), recorded before damage is applied: true for a fresh hit, false for a
+  stronger hit inside the invulnerability window, and true for a source that bypasses the cooldown.
+  A weaker or equal hit refused by the cooldown does not fire Post. The flag is not inferred from
+  final damage or invulnerability ticks, so changing those in a damage listener does not change it.
+  It accompanies the container's reductions, inflicted damage and health damage in native and wasm
+  listeners; it describes the decision to cause fresh-hit effects, not whether every effect occurred.
+
 A player's damage type is the source's own. A mob's and the dragon's come from the kind of damage Horizon keeps for
 the hit, which doesn't tell every vanilla type apart yet:
 
@@ -523,6 +534,22 @@ one, where vanilla gives the `by` one.
 
 - Chunks and players coming and going, on the server: `native_chunk_load` (with whether the chunk is new), `native_chunk_unload`, and
   `native_player_logged_in` and `native_player_logged_out`, which come in pairs however a player leaves, the server stopping included. Changes made to the departing chunk in `native_chunk_unload` aren't saved: as in vanilla, the chunk is saved before it unloads.
+
+  One tick's streaming step (`update_world`) runs in this order:
+
+  1. The chunks that come and go are worked out. A chunk saved while that is planned is copied for its save there.
+  2. The arriving chunks join the level and the departing ones leave it.
+  3. Each departing chunk that changed since its last save is copied, with its block entities and save data, and the
+     copy is queued to save.
+  4. `native_chunk_load` runs for each arriving chunk (`native_chunks_loaded`).
+  5. `native_chunk_unload` runs for each departing chunk.
+  6. The departing chunks' entities, block entities and block names are dropped.
+
+  So an edit a `native_chunk_load` listener makes to a chunk departing in the same tick (a neighbour's block entity,
+  say) comes after that chunk's save copy (step 3): it is not saved, and step 6 drops it. That is the difference from an
+  ordinary load, where the edit lands in a chunk that stays and is saved with its next save, and it is the same rule as
+  `native_chunk_unload`, whose edits also come after the copy. Change a chunk you may lose from a later tick instead,
+  after checking it is still loaded.
 - Sounds the server plays to its players: `native_play_level_sound_at_position` and `native_play_level_sound_at_entity`
   (NeoForge's `PlayLevelSoundEvent.AtPosition` and `.AtEntity`, in `ServerLevel.playSeededSound`). As in vanilla, a mob's own
   sounds (`Entity.playSound`) are at its position; only `playSound(except, sourceEntity, ...)` sounds are at an entity: vanilla's
@@ -744,7 +771,7 @@ or transactions. Declarations still go on each event or registrar.
 
 - Redstone signals as a block reads them, on a level handle (`LevelRef`) on a server, through the game's own `SignalGetter`, mods' `block_signal` and `should_check_weak_power` parts included: `level.signal(host, pos, direction)` (`getSignal`, how strongly the block at `pos` powers its neighbour on the `direction` side, conducted power included), `level.direct_signal(host, pos, direction)` (`getDirectSignal`, the strong power alone), `level.direct_signal_to(host, pos)` (`getDirectSignalTo`), `level.best_neighbor_signal(host, pos)` (`getBestNeighborSignal`, the strongest power reaching `pos`, as a dispenser or a piston reads it) and `level.has_neighbor_signal(host, pos)` (`hasNeighborSignal`, stopping at the first powered side). Each costs what the game's own call does. They take `&mut dyn ServerHost`, not `&dyn Host`: the signal path asks mods' parts, which get the level as their host, and only a write borrow of the game builds it. They read the level in place: None (or false) for another level, a stale handle or a client.
 
-- `native_weather()` (rain and thunder levels, 0 in the Nether and the End), `native_day_time()`, `native_world_height()` (min y and height) and `native_max_stack_size(item)`, with `level.brightness(host, layer, pos)` for light and `level.is_raining_at(host, pos)` for rain at a position: what a mod's solar panel, wind turbine, quarry or own container needs without reaching into Horizon's internals.
+- `level.weather(host)` (rain and thunder levels, 0 in the Nether and the End), `native_day_time()`, `level.height(host)` (min y and height) and `native_max_stack_size(item)`, with `level.brightness(host, layer, pos)` for light and `level.is_raining_at(host, pos)` for rain at a position: what a mod's solar panel, wind turbine, quarry or own container needs without reaching into Horizon's internals.
 
 - Giving a whole stack (damage, name, enchantments kept) to any player from a server hook: `insert_any` into
   the player's [`ENTITY_ITEMS`](../concepts/trait-mods.md#an-entitys-items) handler places it as `Inventory.add` does, and answers how many went.
@@ -1136,7 +1163,7 @@ registration path.
 
 - a player changing dimension: `native_player_changed_dimension(player, name, from, to)` is heard once per move of a server's player into another level, when the move has ended (a portal's exit found and the player standing there, a command's teleport landed, a respawn in another level placed for good), with `from` and `to` as dimension ids (`minecraft:overworld`, `minecraft:the_nether`, `minecraft:the_end`) and the player's state swapped in so that `native_tell` and the other helpers reach them. A move within a level is not heard.
 
-- A mod that hears `native_pickup_xp` sets `listened` in `native_pickup_xp_listened` (a HEAD injection); `native_pickup_xp(player, dimension, orb, value, count, canceled)` then runs before a server player takes an orb. Canceling leaves the orb and the pickup delay unchanged; otherwise the value is clamped to 1..=2,147,483,647 and the count to at least one, then one count is taken. `native_mending_repair(player, stack, experience, repair)` sees the damaged Mending item picked at random and can change the durability repair proposed for it, which is capped at its current damage. Turning a positive proposal into zero leaves the experience unspent (a zero vanilla proposal keeps vanilla's behaviour); if the picked stack is removed, changed except for its damage, or no longer eligible, the repair is skipped and the experience remains. The repair also decides how much experience is left for further repairs. It runs for `PlayerRef::give_experience_points` too. Both run on the integrated and the dedicated server, guests included.
+- `native_pickup_xp(player, dimension, orb, value, count, canceled)` runs before a server player takes an orb; with no listener the server skips swapping a guest in for it (the shared `listened` probe). Canceling leaves the orb and the pickup delay unchanged; otherwise the value is clamped to 1..=2,147,483,647 and the count to at least one, then one count is taken. `native_mending_repair(player, stack, experience, repair)` sees the damaged Mending item picked at random and can change the durability repair proposed for it, which is capped at its current damage. Turning a positive proposal into zero leaves the experience unspent (a zero vanilla proposal keeps vanilla's behaviour); if the picked stack is removed, changed except for its damage, or no longer eligible, the repair is skipped and the experience remains. The repair also decides how much experience is left for further repairs. It runs for `PlayerRef::give_experience_points` too. Both run on the integrated and the dedicated server, guests included.
 
 - Whom an experience orb follows (`XpOrbTargetingEvent`): `native_xp_orb_targeting(orb, scan_distance, following)`, on a server, for each orb as it ticks. `following` starts as the nearest living player within `scan_distance` (8) blocks who isn't a spectator, or `None`; set another player, or `None` to follow no one. The orb goes only for a living player who isn't a spectator and is in its level, and moves only once they are within 8 blocks. An orb that follows no one gets vanilla's push out of a block it is stuck in. Horizon looks for the nearest player on every orb tick, where vanilla keeps the player it follows while they stay within 8 blocks, so the hook is asked every tick for each orb (NeoForge asks only when the orb has no player in range). Clients still predict the orb's flight towards the nearest player; the server's position wins.
 
@@ -2216,15 +2243,24 @@ handle, an entity the client doesn't track and a level it doesn't show:
   level the server has loaded, not only the one in place. A block in a chunk that isn't loaded or a `y` outside
   the world's height reads as `None`. `level.brightness(host, LightLayer::Block | Sky, pos)` reads the stored light
   (`getBrightness`) the same way, as the game's own light query holds it, and is `None` where the block read is.
+  `level.height(host)` (`LevelHeightAccessor.getMinY`, `getHeight`) also works with `&dyn Host` in client
+  hooks, including render, screen and mouse hooks. Obtain the handle with `host.level(dimension)`; on a
+  client only its current dimension is available, after login. It reads that client's synchronized level
+  shape, without loading chunks or allocating. A stale handle, logout or a different dimension returns
+  `None`, not guessed Overworld bounds. On a server it still reads parked loaded levels as well.
   `level.fluid_state(host, pos)` reads the fluid there the same way.
   `level.fluid_flow(host, pos)` (`FluidState.getFlow`) reads its current as a `Vec3`, through the function that pushes
   entities, so a `fluid_flow` listener's change is what it reads: zero where no fluid flows, `None` where the block read
   is. It reads on a client too, from the client's own copy of the level. It costs what one entity's push by that block
   does: up to twelve block reads around `pos` (the four neighbours and below them; falling fluid also checks
   their faces), with no allocation, plus the `fluid_flow` listeners.
+- `level.weather(host)` reads rain and thunder levels on **both sides**, using the shared `Host` from server,
+  render, screen or mouse hooks. It returns `Some((rain, thunder))`, each 0.0 to 1.0, at partial tick 1.0
+  (`Level.getRainLevel` / `getThunderLevel`, with thunder scaled by rain). Both are 0 where the level cannot have
+  weather. A server can read any open level, including parked levels; a client reads only its current synchronized
+  level after login. Stale handles and unavailable levels return `None`; the read never loads a level.
 - `level.seed(host)`, `difficulty` (`"normal"`, as `/difficulty` names it), `game_rule(host, "keep_inventory")` (a
-  `GameRuleValue`, `Bool` or `Int`; None for an unknown rule), `weather` (rain and thunder levels, 0.0 to 1.0; both 0
-  where the level has no weather), `is_raining` and `is_thundering` read its world settings.
+  `GameRuleValue`, `Bool` or `Int`; None for an unknown rule), `is_raining` and `is_thundering` read its server settings.
   `level.is_raining_at(host, pos)` (`Level.isRainingAt`) asks about one position of any open level: it rains there, the
   position has full sky light with nothing motion-blocking or fluid above it, and its biome's precipitation at that
   height is rain (not snow or none). It is `None` where the block read is, an unloaded chunk or a `y` outside the
@@ -2956,7 +2992,7 @@ Horizon ticks vanilla's spawners where it always has: the trader, patrol, cat an
 
 ## Block drops
 
-- **`block_drops(level, dimension, pos, state, breaker, tool, drops, experience, cancel)`** (NeoForge's `BlockDropsEvent`): `Block.dropResources` built the item entities for a broken block and nothing has spawned yet. Edit `drops` (`NativeItemDrop`: stack, position, velocity, pickup delay) or `experience`, or set `cancel` for no drops, no experience and no `spawnAfterBreak` effects (an infested block's silverfish; a bee nest's bees are `playerDestroy`'s and still come out). `breaker` is the player's UUID, none for a level-side break; `tool` is their stack. It fires on the player's break and on every level-side `Block.dropResources`. Positions and motions are drawn before the event, in vanilla's order, listener or not, and the list is the one that spawns, so a mod that leaves it alone changes nothing. It runs inside a level write, so it gets the level host: reads and the level's random, no writes. Not fired for explosion drops, mob block breaks, dispensers or other loot-table drops; a level-side break is not asked `loot_drops`. Tick-time effect: none beyond one `listened` branch with no listeners. Beyond NeoForge: level-side breaks fire it too. Diverges from upstream: `block_exp` is removed into `experience` (its catalog row named no NeoForge event).
+- **`block_drops(level, dimension, pos, state, breaker, tool, drops, experience, cancel)`** (NeoForge's `BlockDropsEvent`): `Block.dropResources` built the item entities for a broken block and nothing has spawned yet. Edit `drops` (`NativeItemDrop`: stack, position, velocity, pickup delay) or `experience`, or set `cancel` for no drops, no experience and no `spawnAfterBreak` effects (an infested block's silverfish; a bee nest's bees are `playerDestroy`'s and still come out). `breaker` is the player's UUID, none for a level-side break; `tool` is their stack. It fires on the player's break, mob block breaks that drop loot, explosions and every level-side `Block.dropResources`. Positions and motions are drawn before the event, in vanilla's order, listener or not, and the list is the one that spawns, so a mod that leaves it alone changes nothing. It runs inside a level write, so it gets the level host: reads and the level's random, no writes. Player, mob and explosion block loot still runs `loot_drops` first; a level-side break is not asked `loot_drops`. Not fired for dispensers or other loot-table drops. Explosions start with zero experience, but a listener may award it. Their events run after the blast removes the blocks and merges loot, before items spawn. Each block owns only its contribution to a merged entity, with that entity's prepared position and velocity: cancel removes only that share. Unchanged shares rejoin the original merged entity; edited or added drops spawn exactly as returned. Empty-loot blocks still fire; TNT that primes instead does not. A no-op listener preserves both merging and level-random draws. Tick-time effect: explosions add a `listened` branch per block; contribution tracking allocates only with listeners. Mob breaks use the same item construction and XP sampling as other block breaks. Beyond NeoForge: level-side breaks and explosion loot fire it too. Diverges from upstream: `block_exp` is removed into `experience` (its catalog row named no NeoForge event).
 
 ## Spawn checks
 
@@ -2992,3 +3028,11 @@ level attachments, not a full game host. Unbreaking and the item-damage
 listener run before armor, toughness and protection are read for that hit, so
 a head piece that breaks no longer contributes to it. A piece replaced before
 write-back is not worn by the old decision.
+
+### Structure template snapshots
+
+`ServerHost::structure_template(id, at, rotation, mirror)` reads a template without placing it.
+It searches the world's saved templates before data packs and returns the rotated size and blocks
+in vanilla placement order, with each transformed state and its saved block-entity data. It uses
+the palette selected at `at`; processors and entities are not included. Invalid or missing names
+return `None`. A builder can retain this snapshot and place its blocks over time.

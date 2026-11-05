@@ -9,8 +9,10 @@ Feature → files → harness for the most-changed areas: [docs/architecture.md]
 - **Never commit Mojang's files**: game jars, assets, decompiled source, prepared resources (`.local/`).
   `tools/check_public_tree.py` rejects them; `git config core.hooksPath .githooks` runs it on commit.
 - **Keep your runs away from real player data.** Any game or launcher you start gets fresh `mktemp -d`
-  folders in `HORIZON_HOME` (the game's data), `HORIZON_LAUNCHER_HOME`, `XDG_DATA_HOME` and
-  `XDG_CONFIG_HOME`, plus `HORIZON_LAUNCHER_NO_SELF_UPDATE=1` and `HORIZON_NO_AUDIO=1`, and, for the
+  folders in `HORIZON_HOME` (logs, crash reports, telemetry consent, recordings; not saves), `HORIZON_LAUNCHER_HOME`, `XDG_DATA_HOME` and
+  `XDG_CONFIG_HOME`, plus `HORIZON_LAUNCHER_NO_SELF_UPDATE=1` and `HORIZON_NO_AUDIO=1`. Saves, `options.txt` and
+  caches go in the game folder, by default the working directory: start the game from a scratch folder with
+  `--game-dir` pointing at it, or they land in the repo root, hidden by `.gitignore`. For the
   launcher, `HORIZON_LAUNCHER_TRASH`, `HORIZON_LAUNCHER_CLIPBOARD` and `HORIZON_LAUNCHER_DESKTOP` pointing into the scratch home. Never write to
   `~/.local/share/{applications,horizon,horizon-launcher}` or `~/.local/bin`.
 - **Mark what an agent posts.** A PR body starts with a line naming the person whose agent opened it and
@@ -151,9 +153,9 @@ python3 tools/agent_control_e2e.py         # horizon-ctl / MCP end to end
   + a Rust probe: `crates/<crate>/examples/<name>_{probe,fixture}.rs` (horizon-world 175, horizon-client 104),
   or the game binary with a fixture env var (`game/dispense_fixture.rs`, `game/sculk_fixture.rs`,
   `game/command_harness.rs`, `game/net_harness.rs`). Copy a nearby harness for a new one.
-- Developing a native mod? Run `horizon-launcher settings native-profile dev` once. `dev` builds the game crate
-  unoptimized: a mod edit rebuilds about 6× faster than with `performance`, while game logic runs up to about twice as
-  slow. Use it while developing, not for playing; `performance` stays the default for players and releases
+- Developing a native mod? Run `horizon-launcher settings native-profile developer` once. Developer builds the game crate
+  unoptimized: a mod edit rebuilds about 6× faster than with Balanced, while game logic runs up to about twice as
+  slow. Use it while developing, not for playing; Optimized stays the default for players and releases
   ([docs/modding/src/how-to/native-mods.md](docs/modding/src/how-to/native-mods.md)).
 - Probes build into `.local/parity-target/`; harnesses find binaries via `lab.cargo_target()`, never `target/`.
 - Harness selection uses Cargo dep-info and reachable-code narrowing (`tools/parity_reach.py`).

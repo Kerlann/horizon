@@ -49,10 +49,11 @@ pub fn quick_move(host: &mut dyn mod_api::ClientHost, slot: usize) -> bool {
 // ANCHOR_END: menu_quick_move
 
 /// The same counter as a point injection: `trait_method = "tick"` at the head of
-/// `Game::tick`, listened to by the mod's `impl Points`.
+/// `Game::tick`, listened to by the mod's `impl Points` (from `horizon-mod-points`).
 pub mod at_a_point {
     use super::count;
-    use mod_api::{Hooks, HostSide, points::Points, points::TickArgs};
+    use mod_api::{Hooks, HostSide};
+    use mod_points::{Points, TickArgs};
 
     #[derive(Default)]
     struct Mod;
@@ -68,11 +69,8 @@ pub mod at_a_point {
         }
     }
 
+    // The same type is the mod's `Hooks`: the game finds its listeners through it.
     #[mod_api::horizon_mod]
-    impl Hooks for Mod {
-        fn points(&self) -> Option<&dyn Points> {
-            Some(self)
-        }
-    }
+    impl Hooks for Mod {}
     // ANCHOR_END: points
 }

@@ -251,12 +251,13 @@ impl Game<'_> {
             self.settings.save(&Self::options_path());
             if self.spawn_pack_reload(ReloadKind::Selection).is_ok() {
                 // addResourcePackLoadFailToast(null), SystemToast.addOrUpdate.
-                let title = lang::tr("resourcePack.load_fail", &[]);
+                let title = horizon_client::text::Text::translate("resourcePack.load_fail", &[]);
                 match &mut self.server_packs.load_fail {
                     Some(toast) => toast.reset(title, None),
                     None => {
-                        self.server_packs.load_fail =
-                            Some(horizon_client::toasts::SystemToast::new(title, None));
+                        self.server_packs.load_fail = self.add_system_toast(
+                            horizon_client::toasts::SystemToast::new(title, None),
+                        );
                     }
                 }
                 return;

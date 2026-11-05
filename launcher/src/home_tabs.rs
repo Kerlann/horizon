@@ -16,11 +16,11 @@ pub(super) enum HomeTab {
 }
 
 impl HomeTab {
-    /// `HORIZON_LAUNCHER_PAGE=worlds` (or `instance-mods`, `multiplayer`, `packs`, `screenshots`,
+    /// `HORIZON_LAUNCHER_PAGE=worlds` (or `instance-mods`, `instance-mods-building`, `multiplayer`, `packs`, `screenshots`,
     /// `console`) opens Home on that tab, for screenshots.
     pub(super) fn from_env() -> Self {
         match std::env::var("HORIZON_LAUNCHER_PAGE").as_deref() {
-            Ok("instance-mods") => HomeTab::Mods,
+            Ok("instance-mods" | "instance-mods-building") => HomeTab::Mods,
             Ok("worlds") => HomeTab::Worlds,
             Ok("multiplayer") => HomeTab::Multiplayer,
             Ok("packs") => HomeTab::Packs,

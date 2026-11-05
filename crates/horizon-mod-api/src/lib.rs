@@ -91,14 +91,6 @@ use std::sync::{Arc, OnceLock};
 // hidden: a module of game-side types; mods use their re-exports
 #[doc(hidden)]
 pub mod __private;
-pub mod points {
-    //! The game's injection points (#589): functions marked `#[point]`, whose head and return a mod
-    //! listens at through [`Points`], with no game rebuild when the game was built with the point.
-    //! Each listener gets the point's record: the arguments the API carries, and `cancel` or
-    //! `result` where the function's return allows. A mod names each method in a
-    //! `[[native.injection]]` whose `target` is the point's function.
-    include!(concat!(env!("OUT_DIR"), "/points_api_generated.rs"));
-}
 mod phase;
 pub use horizon_mods::Side;
 pub use phase::{
@@ -189,6 +181,22 @@ pub use horizon_core::random::LegacyRandom;
 pub use horizon_core::{
     arm_pose::ArmPose, geometry::Direction, position::BlockPos, random::RandomSource,
 };
+/// The family of a client notification entering the toast queue.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ToastKind {
+    /// An advancement completed by the local player.
+    Advancement,
+    /// Newly unlocked recipe displays.
+    Recipe,
+    /// A tutorial hint, including its progress indicator.
+    Tutorial,
+    /// A system notice, such as narrator status, backups or pack downloads.
+    System,
+    /// A toast without one of the above families, including now-playing music.
+    Other,
+}
+
 /// The registry facts a recipe viewer needs for an enchantment.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -3237,8 +3245,6 @@ pub type Mods = Arc<[ModEntry]>;
 pub(crate) struct Installed {
     mods: Mods,
     subscribers: horizon_client_core::subscribers::Subscribers,
-    /// Which mods listen at each injection point's head and return.
-    point_subscribers: horizon_client_core::subscribers::Subscribers,
 }
 
 impl Installed {
@@ -3256,25 +3262,7 @@ impl Installed {
             mods.len(),
             subscriptions,
         );
-        let point_subscriptions = mods.iter().enumerate().flat_map(|(index, entry)| {
-            entry
-                .hooks
-                .points()
-                .map_or(&[][..], |points| points.subscribed())
-                .iter()
-                .flatten()
-                .map(move |point| (index, *point as usize))
-        });
-        let point_subscribers = horizon_client_core::subscribers::Subscribers::new(
-            points::POINT_COUNT,
-            mods.len(),
-            point_subscriptions,
-        );
-        Self {
-            mods,
-            subscribers,
-            point_subscribers,
-        }
+        Self { mods, subscribers }
     }
 }
 
@@ -3357,34 +3345,6 @@ pub(crate) fn listened(hook: generated::HookId) -> bool {
     installed().is_some_and(|installed| installed.subscribers.contains_any(hook as usize))
 }
 
-/// Whether an installed mod listens at `point`; `None` (a point this API lacks) never is.
-pub(crate) fn point_listened(point: Option<points::PointId>) -> bool {
-    point.is_some_and(|point| {
-        installed()
-            .is_some_and(|installed| installed.point_subscribers.contains_any(point as usize))
-    })
-}
-
-/// The mods listening at `point`, in dispatch order, each marked as running `name` so a panic in
-/// it names the mod, as [`entered`] marks a hook's.
-fn entered_points(
-    point: points::PointId,
-    name: &'static str,
-) -> impl Iterator<Item = &'static dyn points::Points> {
-    installed().into_iter().flat_map(move |installed| {
-        let mut crash_guard = None;
-        installed
-            .point_subscribers
-            .indices(point as usize)
-            .filter_map(move |index| {
-                drop(crash_guard.take());
-                let entry = &installed.mods[index];
-                crash_guard = Some(mark_mod(entry.id, name));
-                entry.hooks.points()
-            })
-    })
-}
-
 /// Whether an installed mod subscribes to an injected hook.
 // hidden: a game-side helper, not part of the mod surface
 #[doc(hidden)]
@@ -3433,7 +3393,7 @@ fn entered_with_id(
     })
 }
 
-fn mark_mod(id: &'static str, hook: &'static str) -> crate::crash::NativeModGuard {
+pub(crate) fn mark_mod(id: &'static str, hook: &'static str) -> crate::crash::NativeModGuard {
     crate::crash::enter_native_mod(crate::crash::NativeModCall {
         id,
         hook,
@@ -4432,6 +4392,10 @@ mod block_entity_type;
 pub use block_entity_type::{BlockEntityPartError, BlockEntityTypeBuilder, BlockEntityTypeKey};
 mod ticket_controller;
 pub use ticket_controller::TicketController;
+mod structure_template;
+pub use structure_template::{
+    StructureMirror, StructureRotation, StructureTemplateBlock, StructureTemplateSnapshot,
+};
 mod structure_type;
 /// The structure box a piece's `bounding_box` answers, in world blocks.
 pub use horizon_world::worldgen::structure::BoundingBox;

@@ -45,14 +45,11 @@ impl Game<'_> {
             self.set_music_toast_state(state);
         }
         // MusicManager's showNowPlayingToast and hideNowPlayingToast calls.
-        let multiplier = f64::from(self.settings.notification_display_time);
         for show in std::mem::take(&mut self.music.toast_requests) {
-            if let Some(toast) = &mut self.now_playing {
-                if show {
-                    toast.show(multiplier);
-                } else {
-                    toast.hide();
-                }
+            if show {
+                self.show_music_toast();
+            } else if let Some(toast) = &mut self.now_playing {
+                toast.hide();
             }
         }
     }
@@ -73,20 +70,32 @@ impl Game<'_> {
     /// the toast (the second one shows it at once while music is audible),
     /// Never drops it.
     fn set_music_toast_state(&mut self, state: u8) {
-        self.now_playing = match state {
-            0 => None,
-            _ => {
-                let mut toast = horizon_client::toasts::NowPlayingToast::default();
-                if state == 2 && self.final_music_volume() > 0.0 {
-                    toast.show(f64::from(self.settings.notification_display_time));
-                }
-                Some(toast)
-            }
-        };
+        self.now_playing = (state != 0).then(Default::default);
+        if state == 2 && self.final_music_volume() > 0.0 {
+            self.show_music_toast();
+        }
     }
+    fn show_music_toast(&mut self) {
+        if self.now_playing.is_none() {
+            return;
+        }
+        let Some(song) = self.now_playing_song() else {
+            return;
+        };
+        let mut title = song;
+        let mut description = None;
+        if self.add_toast(mod_api::ToastKind::Other, &mut title, &mut description)
+            && let Some(toast) = &mut self.now_playing
+        {
+            toast.title = title;
+            toast.description = description;
+            toast.show(f64::from(self.settings.notification_display_time));
+        }
+    }
+
     /// `NowPlayingToast.getNowPlayingString` of the song the music manager
     /// plays: its file's short language key, slashes as dots.
-    fn now_playing_song(&self) -> Option<String> {
+    fn now_playing_song(&self) -> Option<mod_api::Text> {
         let id = self.music.current_instance()?;
         let location = self
             .audio
@@ -104,7 +113,9 @@ impl Game<'_> {
             format!("{namespace}.{path}")
         }
         .replace('/', ".");
-        Some(horizon_client::lang::get_or(&key, &key))
+        Some(mod_api::Text::literal(horizon_client::lang::get_or(
+            &key, &key,
+        )))
     }
     /// `ToastManager.update` (it plays no toast sound for this toast) and
     /// `extractRenderState` for the Now Playing toast, which slides in at the
@@ -141,7 +152,7 @@ impl Game<'_> {
             && self.music_toast_state == 2
             && let Some(toast) = &self.now_playing
         {
-            toast.draw(&self.gui.atlas, batch, &song, &self.music_notes);
+            toast.draw(&self.gui.atlas, batch, &self.music_notes);
         }
     }
     /// `Minecraft.tick` -> `SoundManager.tick(pause)`, after the music, with

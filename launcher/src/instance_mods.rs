@@ -10,6 +10,7 @@
 use super::*;
 use crate::plate::alpha;
 use crate::shell::{c, Action};
+use build_mode::ModKind;
 use horizon_launcher::browser::{
     horizon, images, installed, java, modrinth, Kind as PackKind, SourceId,
 };
@@ -36,6 +37,8 @@ pub(super) struct ModRow {
     pub(super) icon: Option<Arc<gpui::Image>>,
     pub(super) error: Option<String>,
     pub(super) native: Option<native_status::Installed>,
+    /// What the package is and its mod id, for a Horizon mod; None for a Java jar.
+    pub(super) kind: Option<(ModKind, String)>,
 }
 
 /// Modrinth projects' icon URLs by project id, kept on disk beside the image cache so the icons
@@ -134,6 +137,7 @@ fn read(home: &Path, java_instance: bool) -> Vec<ModRow> {
                         icon,
                         error: None,
                         native: None,
+                        kind: None,
                     }
                 })
             })
@@ -153,6 +157,10 @@ fn read(home: &Path, java_instance: bool) -> Vec<ModRow> {
                     icon: icon.image,
                     error: icon.error,
                     native: None,
+                    kind: package
+                        .as_ref()
+                        .ok()
+                        .map(|p| (ModKind::of(&p.manifest), p.manifest.id.clone())),
                 }
             })
             .collect()
@@ -168,6 +176,7 @@ fn read(home: &Path, java_instance: bool) -> Vec<ModRow> {
                 entry: None,
                 icon: icon.image,
                 error: icon.error,
+                kind: Some((ModKind::Native, native.id.clone())),
                 native: Some(native),
             }
         }));
@@ -472,6 +481,11 @@ impl Launcher {
         let t = self.theme;
         let n = t.night;
         let icon = self.mod_icon(row.entry.as_ref(), row.icon.clone(), 40.);
+        let chip = row
+            .kind
+            .as_ref()
+            .filter(|(kind, _)| *kind == ModKind::Native)
+            .and_then(|(_, id)| self.route_chip(id, cx));
         let controls = if let Some(native) = &row.native {
             self.native_mod_actions(native, busy, cx)
         } else {
@@ -569,6 +583,8 @@ impl Launcher {
                         .child(source),
                     ),
             )
+            .children(row.kind.as_ref().map(|(kind, _)| self.kind_badge(*kind)))
+            .children(chip)
             .children(update)
             .child(controls)
     }

@@ -709,6 +709,7 @@ impl Dragon {
         }
         // LivingEntity.hurtServer: within the cooldown only what exceeds the last hit.
         let window = self.invulnerable > 10;
+        container.record_should_cause_side_effects(!window);
         let mut dealt = if window {
             if damage <= self.last_hurt {
                 return Hurt::Landed { full: false };

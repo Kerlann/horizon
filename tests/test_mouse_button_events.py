@@ -19,7 +19,7 @@ class MouseButtonEventsTests(unittest.TestCase):
         fixture = r"""
 use std::collections::HashSet;
 #[derive(Clone, Copy, PartialEq)] enum ElementState { Pressed, Released }
-enum WindowEvent { MouseInput { state: ElementState, button: i32 }, Other }
+enum WindowEvent { MouseInput { state: ElementState, button: i32 }, Resized(()), Other }
 fn glfw_button(button: i32) -> i32 { button }
 fn glfw_modifiers(modifiers: u32) -> u32 { modifiers }
 struct Game { physical_buttons: HashSet<i32>, modifiers: u32, synthetic: bool, cancel: bool,
@@ -37,6 +37,7 @@ impl Game {
         self.calls.push("post");
     }
     fn settle_title_mode(&mut self) {}
+    fn notify_window_resize(&mut self) {}
     fn handle_window_event_inner(&mut self, _: (), _: WindowEvent) {
         self.calls.push("handle");
         if self.early { return; }

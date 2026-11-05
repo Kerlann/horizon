@@ -171,7 +171,9 @@ pub fn hurt_server<W: HurtWorld>(
     if !damage.is_finite() {
         damage = f32::MAX;
     }
-    let fresh = if s.cooldown as f32 > 10.0 && !w.tag(s, HurtTag::BypassesCooldown)? {
+    let fresh = !(s.cooldown as f32 > 10.0 && !w.tag(s, HurtTag::BypassesCooldown)?);
+    container.record_should_cause_side_effects(fresh);
+    if !fresh {
         if damage <= s.last_hurt {
             return Ok(false);
         }
@@ -181,7 +183,6 @@ pub fn hurt_server<W: HurtWorld>(
         w.actually_hurt(s, &mut container, damage - s.last_hurt)?;
         s.last_hurt = damage;
         after_pre(s, &container, cooldown);
-        false
     } else {
         // A fresh hit's cooldown: vanilla's 20, or what `LivingIncomingDamageEvent` set.
         let cooldown = container.post_attack_invulnerability_ticks();
@@ -191,8 +192,7 @@ pub fn hurt_server<W: HurtWorld>(
         after_pre(s, &container, cooldown);
         s.hurt_duration = 10;
         s.hurt_time = s.hurt_duration;
-        true
-    };
+    }
     w.resolve_mob(s)?;
     w.resolve_player(s)?;
     if fresh {

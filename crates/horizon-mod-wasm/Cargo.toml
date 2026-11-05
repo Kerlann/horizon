@@ -9,6 +9,7 @@ description = "The one runtime for wasm mods: groups packages by their dependenc
 [dependencies]
 horizon-mod-api = { path = "../horizon-mod-api", features = ["wasm-host"] }
 horizon-mods = { path = "../horizon-mods", default-features = false }
+horizon-mod-points = { path = "../horizon-mod-points", features = ["wasm-host"] }
 wasmtime = { version = "50", default-features = false, features = ["anyhow", "cranelift", "component-model", "runtime", "std", "parallel-compilation", "pulley"] }
 wit-component = "0.261"
 semver = "1"

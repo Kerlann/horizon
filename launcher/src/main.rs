@@ -6,6 +6,7 @@
 mod agents_page;
 mod art;
 mod blocks;
+mod build_mode;
 mod cli;
 mod cli_tools;
 mod console;
@@ -166,7 +167,7 @@ enum SelfUpdate {
     Ready(String),
     /// A newer launcher can't go in here: this copy can't replace itself
     /// (`backend::cannot_replace_itself`), or the installer said why (the error). The player
-    /// downloads the launcher again once.
+    /// follows the recovery advice for its install location.
     Stuck(Option<String>),
     Failed(String),
 }
@@ -226,6 +227,7 @@ struct Launcher {
     checked: Option<Instant>,
     update_error: Option<String>,
     self_update: SelfUpdate,
+    self_update_hidden: bool,
     /// The Horizon version being installed as an update, and whether it becomes the selected one.
     update_install: Option<(String, bool)>,
     /// The Horizon version being installed because an instance was made or saved to play it: it
@@ -254,6 +256,8 @@ struct Launcher {
     /// Native mods (`native_mods`, on the Mods page): the build's step while it runs, why it
     /// failed, and the warning before a build while it is open, with the mods it names.
     native_step: Option<String>,
+    /// Where the build under way is, for the card's stages and bar.
+    native_progress: Option<native_mods::Progress>,
     /// When the running native build started, and the whole seconds last drawn (the status shows
     /// the time it has taken).
     native_started: Option<(Instant, u64)>,
@@ -535,6 +539,7 @@ impl Launcher {
             // The installer the last Update started could not put the new launcher in place.
             self_update: horizon_launcher::update_handoff::take_failure()
                 .map_or(SelfUpdate::Idle, |e| SelfUpdate::Stuck(Some(e))),
+            self_update_hidden: false,
             update_install: None,
             instance_install: None,
             install_next: None,
@@ -549,6 +554,7 @@ impl Launcher {
             importing_build: false,
             import_error: None,
             native_step: None,
+            native_progress: None,
             native_started: None,
             native_done: None,
             native_error: None,
@@ -719,6 +725,17 @@ impl Launcher {
             this.open_instance_dialog(None);
             this.pick_kind(kind, cx);
         }
+        // `HORIZON_LAUNCHER_PAGE=instance-mods-building`: the Mods tab with a build shown at about 65%
+        // in its Compile stage, for screenshots; nothing builds and Cancel has nothing to stop.
+        if std::env::var("HORIZON_LAUNCHER_PAGE").as_deref() == Ok("instance-mods-building") {
+            this.native_step = Some(tr("Starting the build").into());
+            this.native_progress = Some(native_mods::Progress {
+                stage: native_mods::Stage::Compile,
+                fraction: Some(0.62),
+            });
+            this.native_started = Some((Instant::now(), 0));
+            this.native_for = this.selected_instance().map(|i| i.id.clone());
+        }
         if std::env::var("HORIZON_LAUNCHER_PAGE").as_deref() == Ok("edit-instance") {
             this.open_instance_dialog(this.selected_instance().cloned());
         }
@@ -809,6 +826,27 @@ impl Launcher {
         std::thread::spawn(move || {
             let _ = tx.send(Msg::Updates(backend::check_updates().map(Box::new)));
         });
+    }
+
+    /// Recovery text shared by both sidebar styles and Settings.
+    fn launcher_update_help(&self, error: Option<&str>) -> String {
+        if let Some(error) = error {
+            return trf("the update failed: {error}", &[("error", error)]);
+        }
+        if backend::package_managed_launcher() {
+            return tr("Update this launcher with your package manager.").to_string();
+        }
+        let folder = dirs::download_dir()
+            .or_else(dirs::home_dir)
+            .unwrap_or_else(|| std::path::PathBuf::from(tr("Downloads")));
+        trf(
+            "Close this launcher, move it to {folder}, and open it there to enable updates.",
+            &[("folder", &folder.display().to_string())],
+        )
+    }
+
+    fn launcher_download_available(&self) -> bool {
+        !backend::package_managed_launcher()
     }
 
     fn update_launcher(&mut self, release: Release) {
@@ -920,13 +958,14 @@ impl Launcher {
             }
         };
         self.native_step = Some(tr("Starting the build").into());
+        self.native_progress = None;
         self.native_started = Some((Instant::now(), 0));
         self.native_done = None;
         let profile = native_mods::Profile::chosen(&self.settings);
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let result = native_mods::build(&base, &folder, &instance, profile, |step| {
-                let _ = tx.send(Msg::NativeProgress(step.label()));
+                let _ = tx.send(Msg::NativeProgress(step.label(), step.progress()));
             });
             let _ = tx.send(Msg::Native(result));
         });
@@ -1253,17 +1292,26 @@ impl Launcher {
                     }
                 }
                 Msg::Updates(Err(e)) => self.update_error = Some(e),
-                Msg::NativeProgress(step) => self.native_step = Some(step),
+                Msg::NativeProgress(step, progress) => {
+                    self.native_step = Some(step);
+                    self.native_progress = Some(progress);
+                }
                 Msg::Native(result) => {
                     // The last step of a build that worked says how it went.
                     let last = self.native_step.take();
+                    self.native_progress = None;
                     self.native_started = None;
-                    self.native_done = result.is_ok().then_some(last).flatten();
+                    let cancelled = matches!(&result, Err(e) if e == native_mods::CANCELLED);
+                    self.native_done = match (&result, cancelled) {
+                        (Ok(_), _) => last,
+                        (Err(_), true) => Some(tr(native_mods::CANCELLED).into()),
+                        (Err(_), false) => None,
+                    };
                     self.installed = backend::installed();
                     self.reload_instances();
                     // A build attempt ended: an open panel reads the log it left.
                     self.native_log.stale = true;
-                    if let Err(e) = result {
+                    if let (Err(e), false) = (result, cancelled) {
                         self.native_error = Some(e);
                     }
                 }
@@ -1366,14 +1414,18 @@ impl Launcher {
                                 .client_started
                                 .take()
                                 .and_then(|since| backend::crash_report_since(&home, since));
-                            if error.is_some() && report.is_none() && self.switched_to_dx12() {
-                                self.client_error = Some(
+                            let switched = if error.is_some() && report.is_none() {
+                                self.switched_from_vulkan()
+                            } else {
+                                None
+                            };
+                            if let Some(api) = switched {
+                                self.client_error = Some(trf(
                                     "Horizon's Vulkan renderer crashed while starting on this \
-                                     graphics card, so the game now uses DirectX 12. Press Play \
-                                     to start it again. Video Settings > Graphics API switches \
-                                     back."
-                                        .into(),
-                                );
+                                     graphics card, so the game now uses {api}. Press Play to \
+                                     start it again. Video Settings > Graphics API switches back.",
+                                    &[("api", api)],
+                                ));
                             } else if error.is_some() || report.is_some() {
                                 let summary = report
                                     .as_ref()
@@ -1439,11 +1491,13 @@ impl Launcher {
     }
 
     /// After a crash with no report: when the game's output ends while its Vulkan renderer
-    /// started, a native crash in the graphics driver (#746), switches the game to DirectX 12
-    /// (Windows only; only where the player left the graphics API on Auto). True when it did.
-    fn switched_to_dx12(&self) -> bool {
-        if !cfg!(windows) || !backend::vulkan_start_crashed(&self.prepare_log) {
-            return false;
+    /// started, a native crash in the graphics driver (#746), switches the game to
+    /// `backend::vulkan_crash_fallback` (DirectX 12 on Windows, OpenGL on Linux; only where the
+    /// player left the graphics API on Auto). The API's label when it did.
+    fn switched_from_vulkan(&self) -> Option<&'static str> {
+        let (api, label) = backend::vulkan_crash_fallback(std::env::consts::OS)?;
+        if !backend::vulkan_start_crashed(&self.prepare_log) {
+            return None;
         }
         // The GPU is the same for every profile: the game home's setting and the crashed run's.
         let home = backend::game_home();
@@ -1451,12 +1505,12 @@ impl Launcher {
         homes.extend(self.client_home.clone().filter(|h| *h != home));
         let mut switched = false;
         for home in homes {
-            match backend::switch_to_dx12(&home) {
+            match backend::switch_from_auto(&home, api) {
                 Ok(changed) => switched |= changed,
-                Err(e) => eprintln!("Horizon launcher: could not switch to DirectX 12: {e}"),
+                Err(e) => eprintln!("Horizon launcher: could not switch to {label}: {e}"),
             }
         }
-        switched
+        switched.then_some(label)
     }
 
     /// The version Play starts: the selected instance's own, else the launcher's.
@@ -2861,11 +2915,8 @@ impl Launcher {
                         )),
                 )
             }
-            SelfUpdate::Stuck(error) => {
-                let why = match error {
-                    Some(e) => trf("the update failed: {error}", &[("error", e)]),
-                    None => tr("This copy of the launcher can't replace itself. Download it again once; it updates itself after that.").to_string(),
-                };
+            SelfUpdate::Stuck(error) if !self.self_update_hidden => {
+                let why = self.launcher_update_help(error.as_deref());
                 let url = backend::download_page(&self.links.website);
                 foot = foot.child(
                     update(tr("A new version is available").to_string())
@@ -2875,10 +2926,29 @@ impl Launcher {
                                 .child(why),
                         )
                         .child(
-                            div().relative().flex().child(
-                                button("download-launcher", "Download again", Kind::Primary, &t)
-                                    .on_click(move |_, _, cx| cx.open_url(&url)),
-                            ),
+                            div()
+                                .relative()
+                                .flex()
+                                .flex_wrap()
+                                .gap(px(6.))
+                                .when(self.launcher_download_available(), |actions| {
+                                    actions.child(
+                                        button(
+                                            "download-launcher",
+                                            "Download again",
+                                            Kind::Primary,
+                                            &t,
+                                        )
+                                        .on_click(move |_, _, cx| cx.open_url(&url)),
+                                    )
+                                })
+                                .child(
+                                    button("dismiss-launcher-update", "Dismiss", Kind::Ghost, &t)
+                                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                            this.self_update_hidden = true;
+                                            cx.notify();
+                                        })),
+                                ),
                         ),
                 )
             }
@@ -3622,7 +3692,7 @@ impl Launcher {
             SelfUpdate::Stuck(None) => format!(
                 "{}  ·  {}",
                 backend::VERSION,
-                tr("This copy of the launcher can't replace itself. Download it again once; it updates itself after that.")
+                self.launcher_update_help(None)
             ),
             SelfUpdate::Failed(e) => format!(
                 "{}  ·  {}",
@@ -3656,7 +3726,7 @@ impl Launcher {
                     }))
                     .into_any_element(),
             ),
-            SelfUpdate::Stuck(_) => {
+            SelfUpdate::Stuck(_) if self.launcher_download_available() => {
                 let url = backend::download_page(&self.links.website);
                 Some(
                     button("download-settings", "Download again", Kind::Secondary, &t)
@@ -3664,7 +3734,7 @@ impl Launcher {
                         .into_any_element(),
                 )
             }
-            SelfUpdate::Downloading(..) => None,
+            SelfUpdate::Downloading(..) | SelfUpdate::Stuck(_) => None,
             _ => Some(
                 // The glass look's About tile has the mockup's filled button.
                 button(

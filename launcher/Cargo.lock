@@ -2750,12 +2750,23 @@ name = "horizon-mod-api-gen"
 version = "0.1.0"
 dependencies = [
  "heck 0.5.0",
+ "horizon-mod-point-shape",
  "proc-macro2",
  "quote",
  "serde",
  "serde_json",
+ "sha2",
  "syn 2.0.119",
  "toml 1.1.8+spec-1.1.0",
+]
+
+[[package]]
+name = "horizon-mod-point-shape"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

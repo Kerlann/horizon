@@ -138,6 +138,30 @@ fn hooks() -> &'static dyn Hooks {
     &**HOOKS.get_or_init(__horizon_mod_hooks)
 }
 
+/// The mod's side of the exports other crates add to its world (the points crate's listeners):
+/// its hooks, the value its other faces are on, and the hosts of the call running now.
+pub mod exported {
+    use super::glue::Guest;
+
+    /// The mod's hooks.
+    pub fn hooks() -> &'static dyn crate::Hooks {
+        super::hooks()
+    }
+    /// The call's reading host.
+    pub fn host() -> &'static dyn crate::Host {
+        &Guest
+    }
+    /// The call's server host.
+    pub fn server_host() -> &'static mut dyn crate::ServerHost {
+        // A zero-sized value: leaking it allocates nothing.
+        Box::leak(Box::new(Guest))
+    }
+    /// The call's client host.
+    pub fn client_host() -> &'static mut dyn crate::ClientHost {
+        Box::leak(Box::new(Guest))
+    }
+}
+
 /// The parts and handlers the mod handed the game, by the index the game holds each by: every
 /// trait the game may call it through (a block entity part is a block part too); none once the
 /// game let it go.

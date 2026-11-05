@@ -344,6 +344,10 @@ mod tests {
                 pub struct FovPlayer;
             }
             pub struct NativeClientInfo;
+            #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+            pub enum ToastKind {
+                Advancement,
+            }
             pub struct CustomSpawners;
             #[derive(Clone)]
             pub struct SpawnerKey;
@@ -400,10 +404,6 @@ mod tests {
             use super::RenderHookId;
             pub const mob_render: Option<RenderHookId> = Some(RenderHookId::MobRender);
             pub const block_entity_draw: Option<RenderHookId> = Some(RenderHookId::BlockEntityDraw);
-        }
-        /// `Hooks::points` names the game's points trait, which this fixture has none of.
-        pub mod points {
-            pub trait Points {}
         }
         include!(concat!(env!("OUT_DIR"), "/mod_api_generated.rs"));
         pub use horizon_mod_api_macros::__subscriptions;
@@ -678,6 +678,52 @@ mod tests {
         let guard = function.find("super::listened").unwrap();
         let event = function.find("let mut event").unwrap();
         assert!(guard < event);
+    }
+
+    #[test]
+    fn toast_add_passes_kind_and_text_edits_and_stops_on_cancel() {
+        struct Filter(bool);
+        #[mod_api::__subscriptions]
+        impl Hooks for Filter {
+            fn toast_add(&self, _: &dyn ClientHost, event: &mut ToastAddEvent<'_>) -> Flow {
+                assert_eq!(event.kind, generated::mod_api::ToastKind::Advancement);
+                if self.0 {
+                    assert!(event.description.is_some());
+                    *event.description = None;
+                    Flow::Cancel
+                } else {
+                    assert!(event.description.is_none());
+                    *event.description = Some(Text);
+                    Flow::Continue
+                }
+            }
+        }
+        install(
+            vec![
+                ModEntry::new("editor", Box::new(Filter(false))),
+                ModEntry::new("cancel", Box::new(Filter(true))),
+                ModEntry::new("late", Box::new(Filter(false))),
+            ]
+            .into(),
+        );
+        ENTERED.with(|entered| entered.borrow_mut().clear());
+        let mut description = None;
+        let mut cancel = false;
+        dispatch_toast_add(
+            &TestHost,
+            generated::mod_api::ToastKind::Advancement,
+            &mut Text,
+            &mut description,
+            &mut cancel,
+        );
+        assert!(cancel);
+        assert!(description.is_none());
+        ENTERED.with(|entered| {
+            assert_eq!(
+                entered.borrow().as_slice(),
+                [(0, "toast_add"), (1, "toast_add")]
+            );
+        });
     }
 
     #[test]

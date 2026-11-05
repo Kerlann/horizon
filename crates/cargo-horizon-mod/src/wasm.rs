@@ -335,7 +335,12 @@ pub fn build(root: &Path) -> Result<(), String> {
     let text = std::fs::read_to_string(&manifest_path).map_err(|e| format!("{MANIFEST}: {e}"))?;
     let mut manifest: toml_edit::DocumentMut =
         text.parse().map_err(|e| format!("{MANIFEST}: {e}"))?;
-    if manifest.contains_key("native") {
+    // A wasm mod's `[native]` lists only the points it listens at (`[[native.injection]]`).
+    if manifest
+        .get("native")
+        .and_then(toml_edit::Item::as_table_like)
+        .is_some_and(|native| native.iter().any(|(key, _)| key != "injection"))
+    {
         return Err(format!(
             "{MANIFEST}: a [native] mod builds through the launcher, not --wasm"
         ));

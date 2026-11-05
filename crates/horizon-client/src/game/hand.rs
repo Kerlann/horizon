@@ -295,7 +295,6 @@ impl Game<'_> {
     }
     /// The attack and use part of `Minecraft.tick` for the local player:
     /// attack clicks since the last tick and the held attack button.
-    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn tick_local_hand(&mut self) -> Result<()> {
         let attack_clicks = std::mem::take(&mut self.attack_clicks);
         let use_clicks = std::mem::take(&mut self.use_clicks);
@@ -470,7 +469,6 @@ impl Game<'_> {
     /// busy, and `LocalPlayer.itemUsed` drops the hand after a use that
     /// swung and spent (or, with infinite materials, kept) the item, or that
     /// started using it.
-    #[horizon_mod_api_macros::point(side = "client")]
     pub(super) fn use_with_hand(&mut self) -> Result<()> {
         if self.clicks.destroying.active || self.hands_busy() {
             return Ok(());

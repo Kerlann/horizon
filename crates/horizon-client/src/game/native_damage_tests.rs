@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 struct Heard {
     pre: Vec<(i32, f32, f32, f32)>,
     post: Vec<(i32, f32)>,
+    side_effects: Vec<(i32, bool)>,
 }
 
 /// The test mod: 225001's incoming hit becomes 4, Pre sets 225003's and 225008's damage to 2,
@@ -62,7 +63,10 @@ impl Hooks for Probe {
         event: &mut LivingDamagePostEvent<'_>,
     ) {
         let heard = (event.entity, event.container.health_damage());
-        self.0.lock().unwrap().post.push(heard);
+        let mut log = self.0.lock().unwrap();
+        log.post.push(heard);
+        log.side_effects
+            .push((event.entity, event.container.should_cause_side_effects()));
     }
 }
 
@@ -150,6 +154,39 @@ fn a_hit_on_the_dragon_fires_pre_and_post() {
     });
     assert_eq!(heard.pre, [(225009, 6.0, 6.0, 0.0)]);
     assert_eq!(heard.post, [(225009, 6.0)]);
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn mob_and_dragon_post_records_fresh_hit_decision() {
+    let heard = heard(|game| {
+        let mut pig = mob(game, 225014, "minecraft:pig");
+        let source = Damage::of(DamageKind::Generic);
+        assert!(pig.damage(damage_level_of!(game), 2.0, source));
+        assert!(pig.damage(damage_level_of!(game), 4.0, source));
+        assert!(!pig.damage(damage_level_of!(game), 3.0, source));
+        assert_eq!(pig.health, 6.0);
+        let mut dragon = Dragon::new(Vec3::ZERO, 0.0, 0);
+        dragon.id = 225015;
+        game.dragon = Some(dragon);
+        for amount in [2.0, 4.0, 3.0] {
+            let _ = game.hit_special(SPECIAL, amount, true, DamageKind::Generic, None);
+        }
+        assert_eq!(game.dragon.as_ref().unwrap().health, 196.0);
+    });
+    assert_eq!(
+        heard.post,
+        [(225014, 2.0), (225014, 2.0), (225015, 2.0), (225015, 2.0)]
+    );
+    assert_eq!(
+        heard.side_effects,
+        [
+            (225014, true),
+            (225014, false),
+            (225015, true),
+            (225015, false)
+        ]
+    );
 }
 
 #[test]

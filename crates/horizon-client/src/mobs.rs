@@ -342,7 +342,12 @@ pub use species::Species;
 pub fn draws_parent_variant(species: Species) -> bool {
     matches!(
         species,
-        Species::Pig | Species::Cow | Species::Chicken | Species::Fox | Species::Cat
+        Species::Pig
+            | Species::Cow
+            | Species::Chicken
+            | Species::Fox
+            | Species::Cat
+            | Species::Wolf
     )
 }
 
@@ -2214,9 +2219,9 @@ pub enum MobEvent {
     Breed {
         parent: u32,
         partner: u32,
-        /// A llama's baby, drawn from the parent's random as
-        /// `Llama.getBreedOffspring` does.
-        llama: Option<Box<super::mobs::llama::Offspring>>,
+        /// Equine inheritance, drawn at `getBreedOffspring`'s goal moment,
+        /// before later same-tick healing and grazing rolls.
+        equine: Option<Box<equine::Offspring>>,
         /// Whether the parent supplies the variant, if already drawn.
         parent_variant: Option<bool>,
         /// The parent-RNG experience decision, if already made.
@@ -2503,7 +2508,8 @@ pub struct Seen {
     pub potential_job: Option<[i32; 3]>,
     pub meeting: Option<[i32; 3]>,
     /// `variant2`: a villager's profession (index into
-    /// `render::PROFESSIONS`), a llama's strength. And a villager's experience.
+    /// `render::PROFESSIONS`), a llama's strength or a horse's markings.
+    /// And a villager's experience.
     pub profession: u8,
     pub xp: i32,
     /// What other villagers read of a villager's state and brain.
@@ -3682,6 +3688,7 @@ impl Mob {
         let absorbed = self.wolf_armor_absorbs(&source);
         let mut knock = true;
         let window = self.invulnerable as f32 > 10.0;
+        container.record_should_cause_side_effects(!window);
         if window && amount <= self.last_hurt {
             return false;
         }

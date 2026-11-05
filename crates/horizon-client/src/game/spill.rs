@@ -439,7 +439,7 @@ impl GameLevel<'_> {
                 &mut self.world.random,
             ),
         };
-        let dropped = self.block_dropped(pos, state, None, tool.as_ref(), drops);
+        let dropped = self.block_dropped(pos, state, None, tool.as_ref(), drops, None);
         for item in dropped.items {
             if let Some(kept) = self.drop_into.as_mut() {
                 kept.push(item.stack);
@@ -477,25 +477,56 @@ impl GameLevel<'_> {
         breaker: Option<u128>,
         tool: Option<&ItemStack>,
         stacks: Vec<ItemStack>,
+        exp_to_drop: Option<u32>,
     ) -> BlockDrops {
-        let at = [pos.x, pos.y, pos.z];
-        let mut items: Vec<NativeItemDrop> = stacks
+        let items = stacks
             .into_iter()
             .filter(|stack| &*stack.item != "minecraft:air" && stack.count > 0)
-            .map(|mut stack| {
-                self.pending.attach(at, &mut stack);
-                let position = pop_position(&mut self.world.random, at);
-                NativeItemDrop::new(stack, position, new_item_motion(), 10)
-            })
+            .map(|stack| self.block_drop_item([pos.x, pos.y, pos.z], stack))
             .collect();
         // `tryDropExperience` samples before the silk touch effect zeroes the
         // amount; a spawner's experience ignores the tool.
         let name = self.facts.get(state).name.clone();
         let silk = tool.is_some_and(|tool| tool.enchantment_level("minecraft:silk_touch") > 0);
-        let mut experience = removal::break_experience(&mut self.world.random, &name)
-            .filter(|_| !silk || &*name == "minecraft:spawner")
-            .unwrap_or(0);
-        let mut canceled = false;
+        let experience = exp_to_drop.unwrap_or_else(|| {
+            removal::break_experience(&mut self.world.random, &name)
+                .filter(|_| !silk || &*name == "minecraft:spawner")
+                .unwrap_or(0)
+        });
+        self.block_drops_ready(
+            pos,
+            state,
+            breaker,
+            tool,
+            BlockDrops {
+                items,
+                experience,
+                canceled: false,
+            },
+        )
+    }
+    /// Build item entities only after vanilla has finished merging stacks.
+    pub(super) fn block_drop_item(&mut self, at: [i32; 3], mut stack: ItemStack) -> NativeItemDrop {
+        self.pending.attach(at, &mut stack);
+        let position = pop_position(&mut self.world.random, at);
+        NativeItemDrop::new(stack, position, new_item_motion(), 10)
+    }
+    /// The one event/filter boundary for prepared block item entities and XP.
+    /// Explosions supply their merged entities, keeping that caller's zero
+    /// initial experience; the event may still award it.
+    pub(super) fn block_drops_ready(
+        &mut self,
+        pos: BlockPos,
+        state: BlockStateId,
+        breaker: Option<u128>,
+        tool: Option<&ItemStack>,
+        dropped: BlockDrops,
+    ) -> BlockDrops {
+        let BlockDrops {
+            mut items,
+            mut experience,
+            mut canceled,
+        } = dropped;
         if self.native_authoritative {
             self.native_block_drops(mod_api::__private::BlockDropsCall {
                 dimension: self.dimension,
@@ -792,6 +823,15 @@ impl GameLevel<'_> {
 }
 
 impl Game<'_> {
+    /// Apply the shared block-drop event's item entities and experience unchanged.
+    pub(super) fn spawn_block_drops(&mut self, pos: [i32; 3], dropped: BlockDrops) {
+        for item in dropped.items {
+            self.spawn_item(item.stack, item.position, item.velocity, item.pickup_delay);
+        }
+        if dropped.experience > 0 {
+            self.spawn_orbs(pos.map(|v| f64::from(v) + 0.5), dropped.experience);
+        }
+    }
     /// Add the item entities the block behaviour spawned and follow up on the
     /// block entities it removed.
     pub(super) fn flush_spill(&mut self) {
@@ -879,26 +919,37 @@ mod tests {
             let dirt = registry.default_state("minecraft:dirt").unwrap();
             let ore = registry.default_state("minecraft:diamond_ore").unwrap();
             let pos = BlockPos::new(1, 64, 2);
-            let break_of = |game: &mut Game<'_>, state, item| {
+            let break_of = |game: &mut Game<'_>, state, item, exp_to_drop| {
                 game.world.random = LegacyRandom::new(7);
                 let dropped = game.with_level(|_, level, _| {
-                    level.block_dropped(pos, state, None, None, vec![ItemStack::new(item, 1)])
+                    level.block_dropped(
+                        pos,
+                        state,
+                        None,
+                        None,
+                        vec![ItemStack::new(item, 1)],
+                        exp_to_drop,
+                    )
                 });
                 (dropped, game.world.random.next_int())
             };
-            let (plain_ore, ore_after) = break_of(game, ore, "minecraft:diamond");
-            let (plain_dirt, dirt_after) = break_of(game, dirt, "minecraft:dirt");
+            let (plain_ore, ore_after) = break_of(game, ore, "minecraft:diamond", None);
+            let (plain_dirt, dirt_after) = break_of(game, dirt, "minecraft:dirt", None);
+            let (overridden, _) = break_of(game, ore, "minecraft:diamond", Some(17));
+            assert_eq!(overridden.experience, 17);
             assert_eq!(plain_dirt.items.len(), 1);
             let mods: mod_api::Mods =
                 vec![mod_api::ModEntry::new("block-drops", Box::new(DropsMod))].into();
             mod_api::testing::with_mods(mods, || {
-                let (heard, after) = break_of(game, ore, "minecraft:diamond");
+                let (heard, after) = break_of(game, ore, "minecraft:diamond", None);
                 assert_eq!(after, ore_after);
                 assert_eq!(heard.items.len(), 1);
                 assert_eq!(heard.items[0].position, plain_ore.items[0].position);
                 assert_eq!(heard.experience, plain_ore.experience + 2);
                 assert!(!heard.canceled);
-                let (taken, after) = break_of(game, dirt, "minecraft:dirt");
+                let (overridden, _) = break_of(game, ore, "minecraft:diamond", Some(17));
+                assert_eq!(overridden.experience, 19);
+                let (taken, after) = break_of(game, dirt, "minecraft:dirt", None);
                 assert_eq!(after, dirt_after);
                 assert!(taken.canceled && taken.items.is_empty() && taken.experience == 0);
             });

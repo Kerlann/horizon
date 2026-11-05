@@ -466,7 +466,7 @@ fn backup_screen_blocks_navigation_and_returns_to_the_selected_world() {
         matches!(&f.title.mode, Mode::Select { worlds, selected: Some(i) } if worlds[*i].folder == "World")
     );
     assert!(
-        matches!(&f.title.toast, Some((_, WorldToast::Created { folder, bytes })) if folder == "World" && *bytes > 0)
+        matches!(&f.title.pending_toast, Some(WorldToast::Created { folder, bytes }) if folder == "World" && *bytes > 0)
     );
     assert_eq!(
         Level::read(&f.title.saves.join("World")).unwrap().name,
@@ -488,7 +488,7 @@ fn failed_backup_returns_to_the_selected_world_with_an_error_toast() {
     assert!(
         matches!(&f.title.mode, Mode::Select { worlds, selected: Some(i) } if worlds[*i].folder == "World")
     );
-    let Some((_, WorldToast::Failed(error))) = &f.title.toast else {
+    let Some(WorldToast::Failed(error)) = &f.title.pending_toast else {
         panic!("backup failures should produce an error toast");
     };
     assert!(!error.is_empty());
@@ -517,7 +517,7 @@ fn stopped_backup_worker_returns_to_the_list_with_an_error_toast() {
         matches!(&f.title.mode, Mode::Select { worlds, selected: Some(i) } if worlds[*i].folder == "World")
     );
     assert!(
-        matches!(&f.title.toast, Some((_, WorldToast::Failed(error))) if error == "Backup worker stopped")
+        matches!(&f.title.pending_toast, Some(WorldToast::Failed(error)) if error == "Backup worker stopped")
     );
 }
 
@@ -530,17 +530,27 @@ fn backup_toast_slides_in_and_out_with_its_sounds() {
     f.click("Make Backup");
     f.title.poll_backup();
     f.finish_backup();
+    assert!(!f.title.has_toast(), "candidate waits for the game Host");
+    let candidate = f.title.take_pending_toast().unwrap();
+    f.title.apply_toast(candidate);
     assert_eq!(f.title.update_toast(1.0), Some("minecraft:ui.toast.in"));
     assert_eq!(f.title.update_toast(1.0), None);
     let age = |f: &mut Fixture, ms: u64| {
-        let (slide, _) = f.title.toast.as_mut().unwrap();
-        let origin = slide.origin.as_mut().unwrap();
+        let origin = f
+            .title
+            .toast
+            .as_mut()
+            .unwrap()
+            .slide
+            .origin
+            .as_mut()
+            .unwrap();
         *origin -= std::time::Duration::from_millis(ms);
     };
     // Half way in: (300 / 600)² of its width shows.
     age(&mut f, 300);
     assert_eq!(f.title.update_toast(1.0), None);
-    let portion = f.title.toast.as_ref().unwrap().0.portion;
+    let portion = f.title.toast.as_ref().unwrap().slide.portion;
     assert!((portion - 0.25).abs() < 0.02, "{portion}");
     // Shown in full for the display time, then out.
     age(&mut f, 300);
@@ -911,7 +921,7 @@ fn a_world_open_elsewhere_stays_closed_behind_a_toast() {
         Action::None
     );
     assert!(
-        matches!(&f.title.toast, Some((_, WorldToast::AccessFailure(folder))) if folder == "World")
+        matches!(&f.title.pending_toast, Some(WorldToast::AccessFailure(folder)) if folder == "World")
     );
     assert!(matches!(f.title.mode, Mode::Select { .. }));
     drop(open);
@@ -2051,7 +2061,7 @@ fn optimizing_after_a_backup_starts_when_the_backup_is_done() {
     assert!(matches!(f.title.mode, Mode::Backup { .. }));
     f.finish_backup();
     assert!(matches!(f.title.mode, Mode::Optimize { .. }));
-    assert!(f.title.toast.is_some());
+    assert!(f.title.pending_toast.is_some());
     wait_while_optimizing(&mut f);
     assert_eq!(chunk_version(&file), horizon_world::DATA_VERSION);
 }

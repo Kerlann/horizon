@@ -1508,11 +1508,19 @@ pub(super) mod tests {
                 game.native_living_equipment(living, EquipmentSlot::Saddle),
                 None
             );
+            // The host's own previous mode, which no guest's change may touch.
+            game.previous_mode = Some(horizon_client::command::args::GameMode::Adventure);
+            assert_eq!(game.native_player_previous_game_mode(player), Some(None));
             assert!(!game.native_player_set_game_mode(player, GameMode::Survival));
+            assert_eq!(game.native_player_previous_game_mode(player), Some(None));
             assert!(game.native_player_set_game_mode(player, GameMode::Creative));
             assert_eq!(
                 game.native_player_game_mode(player),
                 Some(GameMode::Creative)
+            );
+            assert_eq!(
+                game.native_player_previous_game_mode(player),
+                Some(Some(GameMode::Survival))
             );
             let abilities = game.native_player_abilities(player).unwrap();
             assert!(abilities.invulnerable && abilities.may_fly && abilities.instabuild);
@@ -1593,7 +1601,26 @@ pub(super) mod tests {
             // A mode change in a turn, then a write in the same turn: the write wins.
             game.as_guest(12, |game| {
                 let player = game.native_player_ref(12).unwrap();
+                // The guest's own previous mode is swapped in for the turn.
+                assert_eq!(
+                    game.native_player_previous_game_mode(player),
+                    Some(Some(GameMode::Creative))
+                );
+                assert_eq!(
+                    game.native_player_is_secondary_use_active(player),
+                    Some(false)
+                );
+                game.player.as_mut().unwrap().shift_key_down = true;
+                assert_eq!(
+                    game.native_player_is_secondary_use_active(player),
+                    Some(true)
+                );
+                game.player.as_mut().unwrap().shift_key_down = false;
                 assert!(game.native_player_set_game_mode(player, GameMode::Creative));
+                assert_eq!(
+                    game.native_player_previous_game_mode(player),
+                    Some(Some(GameMode::Survival))
+                );
                 let mut a = game.native_player_abilities(player).unwrap();
                 assert!(a.instabuild && a.may_fly);
                 a.fly_speed = 0.4;
@@ -1603,6 +1630,11 @@ pub(super) mod tests {
             .unwrap();
             let kept = game.lan.as_ref().unwrap().hub.guest(12).unwrap();
             assert_eq!(kept.game_mode, 1);
+            assert_eq!(kept.previous_game_mode, Some(0));
+            assert_eq!(
+                game.previous_mode,
+                Some(horizon_client::command::args::GameMode::Adventure)
+            );
             assert!(kept.abilities.instabuild);
             assert_eq!(kept.abilities.flying_speed, 0.4);
             assert_eq!(kept.abilities.walking_speed, 0.3);

@@ -645,7 +645,7 @@
 //!
 //! API 98 adds giving a whole stack to any player from a server hook (`native_give_stack`).
 //!
-//! API 97 adds reading the world's light, weather, time of day, height and item stack sizes from a native mod (`native_light`, `native_weather`, `native_day_time`, `native_world_height`, `native_max_stack_size`).
+//! API 97 adds reading the world's light, weather, time of day, height and item stack sizes from a native mod (light, weather and height now through `LevelRef`, with `native_day_time`, `native_max_stack_size`).
 //!
 //! API 96 adds reading redstone from a server mod's block (`native_neighbor_signal`).
 //!
@@ -2801,6 +2801,59 @@ impl Game<'_> {
     ) {
         self.fire_client_chat_received(system, overlay, sender, chat_type, message, cancel);
     }
+    /// `ToastAddEvent`: admit one client toast before it enters a visible queue.
+    pub(super) fn native_toast_add(
+        &self,
+        kind: mod_api::ToastKind,
+        title: &mut Text,
+        description: &mut Option<Text>,
+        cancel: &mut bool,
+    ) {
+        self.fire_toast_add(kind, title, description, cancel);
+    }
+
+    /// The single admission point for all toast families. Producers decide the
+    /// candidate first; only an accepted candidate is applied to its queue.
+    pub(super) fn add_toast(
+        &self,
+        kind: mod_api::ToastKind,
+        title: &mut Text,
+        description: &mut Option<Text>,
+    ) -> bool {
+        // Shared advancement/recipe producers also run on logical servers;
+        // only their receiving client owns toast presentation and its hook.
+        if self.is_logical_server() {
+            return false;
+        }
+        let mut cancel = false;
+        self.native_toast_add(kind, title, description, &mut cancel);
+        !cancel
+    }
+
+    pub(super) fn add_system_toast(
+        &self,
+        mut toast: horizon_client::toasts::SystemToast,
+    ) -> Option<horizon_client::toasts::SystemToast> {
+        self.add_toast(
+            mod_api::ToastKind::System,
+            &mut toast.title,
+            &mut toast.message,
+        )
+        .then_some(toast)
+    }
+
+    pub(super) fn settle_title_toasts(&mut self) {
+        let pending = self.title.as_mut().and_then(|title| {
+            title.poll_backup();
+            title.take_pending_toast()
+        });
+        if let Some(toast) = pending.and_then(|toast| self.add_system_toast(toast))
+            && let Some(title) = self.title.as_mut()
+        {
+            title.apply_toast(toast);
+        }
+    }
+
     /// NeoForge's `ClientPauseChangeEvent.Pre`: cancel a proposed pause change.
     pub(super) fn native_client_pause_change_pre(&mut self, paused: bool, cancel: &mut bool) {
         self.fire_client_pause_change_pre(paused, cancel);
@@ -7573,8 +7626,9 @@ impl Game<'_> {
         pos: [i32; 3],
         state: BlockStateId,
         canceled: &mut bool,
+        exp_to_drop: &mut Option<u32>,
     ) {
-        self.fire_break_block(pos, state, canceled);
+        self.fire_break_block(pos, state, canceled, exp_to_drop);
     }
     /// `BlockEvent.EntityPlaceEvent` (and `EntityMultiPlaceEvent`, which
     /// extends it): `placer` is about to set the block `state` at `pos`
@@ -8420,13 +8474,6 @@ impl Game<'_> {
     ) {
         self.fire_food_level_changed(player, name, from, to, cancel);
     }
-    /// Whether a mod hears `native_pickup_xp`: set `listened`
-    /// (a HEAD injection), or the server skips swapping the player in for it,
-    /// and with this empty the pickup costs nothing more without mods.
-    /// Server-side.
-    pub(super) fn native_pickup_xp_listened(&mut self, listened: &mut bool) {
-        self.fire_pickup_xp_listened(listened);
-    }
     /// Before `player` picks up orb `orb` in `dimension`. Mutations to `value`
     /// and `count` take effect only when not canceled; value is clamped to
     /// 1..=i32::MAX and count to at least one.
@@ -8983,7 +9030,8 @@ impl HitLevel<'_> {
     }
     /// NeoForge's `LivingDamageEvent.Post`: the health of entity `entity` of type `kind` has
     /// just lost the hit `container` describes, with its final values (health damage, the
-    /// reductions, the post-attack invulnerability ticks). It only listens, and fires where
+    /// reductions, the post-attack invulnerability ticks, and `should_cause_side_effects`,
+    /// `hurtServer`'s fresh-hit decision). It only listens, and fires where
     /// `native_living_damage_pre` does once the health took more than 0. It can't write the
     /// entity or the world's blocks: the level host gives the hit's random and level attachments.
     pub(super) fn native_living_damage_post(
@@ -9827,24 +9875,11 @@ impl Game<'_> {
         let _ = self.process_level_events();
         changed
     }
-    /// The rain and thunder levels of the world in place, each 0.0 to 1.0
-    /// (`Level.getRainLevel` and `Level.getThunderLevel`): what a solar panel
-    /// or a wind turbine reads. Both 0 in the Nether and the End, which have
-    /// no weather (`Level.canHaveWeather`).
-    pub(super) fn native_weather(&self) -> (f32, f32) {
-        self.weather_levels(1.0)
-    }
     /// The world's time of day in ticks (`Level.getOverworldClockTime`), the
     /// same as `native_clock`'s `day_time`; it keeps counting past 24000, so
     /// take it modulo 24000 for the hour.
     pub(super) fn native_day_time(&self) -> i64 {
         self.world.day_time
-    }
-    /// The lowest block y and the height of the world in place
-    /// (`LevelHeightAccessor.getMinY` and `getHeight`): how deep a quarry or a
-    /// miner may dig.
-    pub(super) fn native_world_height(&self) -> (i32, i32) {
-        (self.world.shape.min_y, self.world.shape.height)
     }
     /// The most of the item `item` one slot holds (`Item.getDefaultMaxStackSize`),
     /// or `None` for an unknown item: for a mod's container that fills or

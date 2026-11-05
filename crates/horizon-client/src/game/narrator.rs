@@ -47,18 +47,22 @@ pub(super) fn sync(settings: &Settings) {
 /// `status`: what was being said stops and "Narrator : <status>" is said,
 /// whatever the status (Off included). Then the `NARRATOR_TOGGLE` toast goes
 /// up, or the one still up takes the new text (`SystemToast.addOrUpdate`).
-pub(super) fn update_status(status: Status, toast: &mut Option<SystemToast>) {
+pub(super) fn update_status(
+    status: Status,
+    toast: &mut Option<SystemToast>,
+    admit: impl FnOnce(SystemToast) -> Option<SystemToast>,
+) {
     let announcement = Text::translate("options.narrator", &[])
         .append(Text::literal(" : "))
         .append(Text::translate(status.key(), &[]))
         .plain();
     horizon_narrator::update_status(status, &announcement);
     let (title, message) = horizon_narrator::toast(status, horizon_narrator::is_active());
-    let tr = |key: &str| Text::translate(key, &[]).plain();
+    let tr = |key: &str| Text::translate(key, &[]);
     let (title, message) = (tr(title), message.map(tr));
     match toast {
         Some(toast) => toast.reset(title, message),
-        None => *toast = Some(SystemToast::new(title, message)),
+        None => *toast = admit(SystemToast::new(title, message)),
     }
 }
 
@@ -200,7 +204,11 @@ impl Game<'_> {
     }
     /// The narrator option changed, on the options screen or by its hotkey.
     pub(super) fn narrator_status_changed(&mut self) {
-        update_status(self.settings.narrator(), &mut self.narrator_toast);
+        let mut toast = self.narrator_toast.take();
+        update_status(self.settings.narrator(), &mut toast, |toast| {
+            self.add_system_toast(toast)
+        });
+        self.narrator_toast = toast;
     }
     /// The narrator hotkey on a key press or repeat, before the screen or
     /// the game takes the key (it doesn't consume it): the next status,
@@ -332,9 +340,9 @@ mod tests {
     #[test]
     fn a_second_change_updates_the_toast_still_up() {
         let mut toast = None;
-        update_status(Status::All, &mut toast);
+        update_status(Status::All, &mut toast, Some);
         toast.as_mut().expect("the first change shows a toast").slot = Some(2);
-        update_status(Status::Off, &mut toast);
+        update_status(Status::Off, &mut toast, Some);
         assert_eq!(toast.expect("still the one toast").slot, Some(2));
     }
 }

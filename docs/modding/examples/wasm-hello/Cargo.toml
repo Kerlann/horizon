@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 horizon-mod-api = { path = "../../../../crates/horizon-mod-api" }
+horizon-mod-points = { path = "../../../../crates/horizon-mod-points" }
 
 # A mod is its own project, not a member of the game's workspace.
 [workspace]

@@ -4,6 +4,7 @@
 //! and its on/off `Toggle` at the row's end. Dark appearance only.
 use super::*;
 use crate::glass_ui::{self as ui, white};
+use build_mode::ModKind;
 use glass_home_lists::Listener;
 use horizon_theme::glass::radius;
 use instance_mods::ModRow;
@@ -183,6 +184,12 @@ impl Launcher {
                 })),
             })
         });
+        let chip = row
+            .kind
+            .as_ref()
+            .filter(|(kind, _)| *kind == ModKind::Native)
+            .and_then(|(_, id)| self.route_chip(id, cx))
+            .map(|chip| div().relative().child(chip));
         let controls = match &row.native {
             Some(native) => self.native_mod_actions(native, busy, cx),
             None => {
@@ -207,6 +214,12 @@ impl Launcher {
         ui::list_row(key, hovered, hover, &t)
             .child(icon)
             .child(ui::list_text(row.name.clone(), note))
+            .children(
+                row.kind
+                    .as_ref()
+                    .map(|(kind, _)| self.kind_badge(*kind).relative()),
+            )
+            .children(chip)
             .children(update.map(|u| u.relative()))
             .child(
                 controls

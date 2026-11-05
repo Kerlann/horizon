@@ -1,0 +1,44 @@
+name: mixins-check
+# A native mod with a point injection and a helper injection, built through the launcher's source
+# route and horizon-mixins at this commit (tools/ci/mixins_check.sh), so a change that breaks
+# native mods' staging fails here and not on a player's machine (#1102). Compile-only: no game
+# runs and no vanilla data is read. A property of each commit, so independent changes never
+# make it fail together.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'crates/horizon-mod-*/**'
+      - 'launcher/src/native_mods.rs'
+      - 'launcher/src/native_mods/**'
+      - 'tools/prebuilt_game.py'
+      - 'tools/ci/mixins_check.sh'
+      - 'tools/ci/mixins-check/**'
+      - '.github/workflows/mixins-check.yml'
+permissions:
+  contents: read
+concurrency:
+  group: mixins-check-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  mixins-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust and the headers the launcher and the game link against
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-x11-dev libwayland-dev \
+            libx11-xcb-dev libfontconfig-dev libvulkan-dev libasound2-dev libudev-dev
+          rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: launcher
+          shared-key: launcher
+          save-if: false
+      - name: Build the launcher
+        run: cargo +stable build --locked --manifest-path launcher/Cargo.toml
+      - name: Build the mod through the launcher at this commit
+        run: tools/ci/mixins_check.sh launcher/target/debug/horizon-launcher "$RUNNER_TEMP/mixins-check"
