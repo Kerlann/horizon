@@ -19,11 +19,31 @@ fn ruby(version: &str) -> Vec<u8> {
     );
     horizon_mods::Package::write_files(
         &manifest,
-        None,
         &[(
             "assets/ruby/lang/en_us.json",
             br#"{"item.ruby.ruby": "Ruby"}"#,
         )],
+    )
+    .unwrap()
+}
+
+/// A flat native package: its manifest pins the game and mixin builds,
+/// with Cargo metadata and sources beside it, not in a `native/` folder.
+fn native_ruby(version: &str) -> Vec<u8> {
+    let manifest = format!(
+        "id = 'ruby'\nname = 'Ruby'\nversion = '{version}'\napi = '0.2'\nside = 'both'\ncapabilities = ['registries']\n[native]\ngame = '{GAME}'\nhorizon = '{}'\nmixins = '{}'\n",
+        "a".repeat(40),
+        "b".repeat(40)
+    );
+    horizon_mods::Package::write_files(
+        &manifest,
+        &[
+            (
+                "Cargo.toml",
+                b"[package]\nname = 'ruby'\nversion = '9.0.0'\n",
+            ),
+            ("src/lib.rs", b"pub fn hook() {}\n"),
+        ],
     )
     .unwrap()
 }
@@ -52,8 +72,10 @@ fn registry(version: &str, bytes: &[u8], url: &str) -> Index {
     let native = serde_json::json!({
         "id": "zoom", "kind": "native-mod", "name": "Zoom", "summary": "Zoom",
         "license": "MIT", "source": "https://github.com/someone/zoom", "downloads": 99,
-        "versions": [{ "version": "1", "api": "0.2", "game": crate::mod_registry::GAME,
-            "file": file("zoom-1.hnmod", 1, "b".repeat(64)) }]
+        "versions": [{ "version": "1",
+            "api": format!("native-1/{}/{}", "a".repeat(40), "b".repeat(40)),
+            "game": crate::mod_registry::GAME,
+            "file": file("zoom-1.hmod", 1, "b".repeat(64)) }]
     });
     let text = serde_json::json!({ "schema": 1, "projects": [ruby, old, native] }).to_string();
     Index::parse_local(&text).unwrap()
@@ -77,6 +99,15 @@ fn the_browser_lists_only_content_mods_for_this_game() {
     assert_eq!(listed[0].version, "1.0");
     assert_eq!(listed[0].page, "https://playhorizon.dev/mods/ruby");
     assert_eq!(listed[0].installed, None);
+    let error = install(&index, &home, "zoom", &|_, _| {
+        panic!("native code must not be downloaded by the game")
+    })
+    .unwrap_err();
+    assert!(
+        error.contains("no version this game can install"),
+        "{error}"
+    );
+    assert!(!home.join(MANIFEST).exists());
     fs::remove_dir_all(&home).unwrap();
 }
 
@@ -110,6 +141,10 @@ fn an_install_is_checked_then_recorded_as_the_launchers_own() {
     assert_eq!(entries[1]["file"], "horizon-mods/ruby.hmod");
     assert_eq!(entries[1]["verdict"], "Unsigned");
     assert_eq!(listings(&index, &home)[0].installed.as_deref(), Some("1.0"));
+    assert_eq!(
+        install(&index, &home, "ruby", &|_, _| panic!("already installed")).unwrap(),
+        done
+    );
 
     // An update replaces the file and the entry.
     let newer = ruby("1.1");
@@ -147,6 +182,68 @@ fn bytes_other_than_the_index_lists_never_reach_the_mods_folder() {
     assert!(install(&index, &home, "ruby", &serve(bytes)).is_err());
     assert!(!home.join("horizon-mods/ruby.hmod").exists());
     fs::remove_dir_all(&home).unwrap();
+}
+
+#[test]
+fn native_bytes_mislabeled_as_content_never_replace_an_installed_mod() {
+    let bytes = ruby("1.0");
+    let index = registry("1.0", &bytes, "file:///ruby.hmod");
+    let home = scratch("native-download");
+    install(&index, &home, "ruby", &serve(bytes.clone())).unwrap();
+    let record = fs::read(home.join(MANIFEST)).unwrap();
+
+    // The hash is correct, but the flat package's [native] declaration is
+    // authoritative even when the registry calls it a content mod.
+    let native = native_ruby("1.1");
+    let index = registry("1.1", &native, "file:///ruby.hmod");
+    let error = install(&index, &home, "ruby", &serve(native)).unwrap_err();
+    assert!(error.contains("native code"), "{error}");
+    assert_eq!(
+        fs::read(home.join("horizon-mods/ruby.hmod")).unwrap(),
+        bytes
+    );
+    assert_eq!(fs::read(home.join(MANIFEST)).unwrap(), record);
+    assert!(!home.join("mod-browser/downloads/ruby.hmod.part").exists());
+    fs::remove_dir_all(&home).unwrap();
+}
+
+#[test]
+fn installed_native_builds_are_never_changed_by_a_content_listing() {
+    for folder in [crate::mod_list::DIR, crate::mod_list::NATIVE_DIR] {
+        for version in ["1.0", "1.1"] {
+            let home = scratch(&format!("native-installed-{folder}-{version}"));
+            let native = native_ruby("1.0");
+            let relative = format!("{folder}/ruby.hmod");
+            fs::create_dir_all(home.join(folder)).unwrap();
+            fs::write(home.join(&relative), &native).unwrap();
+            let mut installed = Installed::default();
+            installed.record(serde_json::json!({
+                "source": "horizon", "project": "ruby", "slug": "ruby", "title": "Ruby",
+                "kind": "mod", "version": "1.0", "number": "1.0", "file": relative,
+                "checksum": format!("SHA-256:{}", index::sha256(&native)),
+                "page": format!("{SITE}/ruby"), "dependency": false, "verdict": "Unsigned"
+            }));
+            installed.save(&home).unwrap();
+            let record = fs::read(home.join(MANIFEST)).unwrap();
+            let bytes = ruby(version);
+            let index = registry(version, &bytes, "file:///ruby.hmod");
+            let error = install(&index, &home, "ruby", &|_, _| {
+                panic!("an installed native package must be refused before downloading")
+            })
+            .unwrap_err();
+            assert!(
+                error.contains("native mod pinned to its game build"),
+                "{error}"
+            );
+            assert_eq!(fs::read(home.join(&relative)).unwrap(), native);
+            assert_eq!(fs::read(home.join(MANIFEST)).unwrap(), record);
+            assert!(!home.join(DOWNLOADS).exists());
+            if folder == crate::mod_list::NATIVE_DIR {
+                assert!(!home.join("horizon-mods/ruby.hmod").exists());
+            }
+            fs::remove_dir_all(&home).unwrap();
+        }
+    }
 }
 
 #[test]
