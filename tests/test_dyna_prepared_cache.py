@@ -13,6 +13,7 @@ SCRIPT = ROOT / "tools/ci/vanilla-data.sh"
 
 class PreparedCacheTest(unittest.TestCase):
     def test_fresh_stale_and_dead_lock(self):
+        (ROOT / "target").mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=ROOT / "target") as directory:
             root = Path(directory)
             source, cache, work, tmp = [root / x for x in ("source", "cache", "work", "temp")]

@@ -12,6 +12,11 @@ on:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
+    inputs:
+      prepare-output-check:
+        description: Check the prepared output digest
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -605,6 +610,42 @@ jobs:
           cargo +stable clippy $JOBS --all-targets --locked -- -D warnings
           cargo +stable test $JOBS --locked --lib --bins
   # The fork's Dyna runners have the owner's prepared vanilla data in a read-only cache.
+  prepared-output-check:
+    if: github.event_name == 'workflow_dispatch' && inputs.prepare-output-check && github.repository == 'arismoko/horizon'
+    needs: changes
+    runs-on: dyna-large
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Dyna runner dependencies
+        run: bash tools/ci/dyna_ci_deps.sh
+      - name: Install Rust toolchain
+        run: |
+          if [ ! -x "$CARGO_HOME/bin/rustup" ]; then
+            curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal
+          fi
+          rustup toolchain install stable --profile minimal
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Check prepared output digest
+        run: |
+          HORIZON_DYNA_CACHE=true HORIZON_PREPARED_CACHE="$DYNA_CI_BUILD/vanilla" HORIZON_SHARED_SOURCE=/cache/horizon-local bash tools/ci/vanilla-data.sh
+          set +e
+          python3 tools/prepare_output.py check > "$RUNNER_TEMP/output-check.log" 2>&1
+          result=$?
+          set -e
+          actual=$(python3 tools/prepare_output.py digest 2>/dev/null)
+          expected=$(awk '!/^#/ && NF == 2 { value=$2 } END { print value }' crates/horizon-prepare/output-versions.txt)
+          { echo "prepared output check: $([ "$result" -eq 0 ] && echo pass || echo fail)"; echo "actual: $actual"; echo "expected: $expected"; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$result"
+
   vanilla-parity:
     if: github.repository == 'arismoko/horizon' && github.event_name == 'workflow_dispatch'
     runs-on: dyna-large
