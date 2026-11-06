@@ -7,8 +7,8 @@ use crate::{
 };
 use horizon_core::geometry::Vec3;
 use mod_api::{
-    EntityPart, Goal, GoalContext, GoalFlags, GoalRegistrar, Hooks, Host, LivingRef, ModEntry,
-    Registrar, RegistrationContext,
+    EntityPart, Goal, GoalContext, GoalFlags, GoalRegistrar, Hooks, LivingRef, ModEntry, Registrar,
+    RegistrationContext,
 };
 use std::sync::Arc;
 
@@ -41,7 +41,10 @@ fn floor(game: &mut super::Game<'_>) {
     }
 }
 
-struct Controls;
+#[derive(Default)]
+struct Controls {
+    requested_path: bool,
+}
 impl Goal for Controls {
     fn flags(&self) -> GoalFlags {
         GoalFlags::MOVE
@@ -52,7 +55,10 @@ impl Goal for Controls {
         true
     }
     fn tick(&mut self, cx: &mut GoalContext<'_>) {
-        assert!(cx.move_to([10.5, 65.0, 3.5], 1.25));
+        if !self.requested_path {
+            assert!(cx.move_to([10.5, 65.0, 3.5], 1.25));
+            self.requested_path = true;
+        }
         cx.look_at([10.5, 66.0, 3.5]);
         cx.jump();
     }
@@ -64,7 +70,7 @@ struct Part;
 #[mod_api::horizon_part]
 impl EntityPart for Part {
     fn register_goals(&self, registrar: &mut GoalRegistrar<'_>) {
-        registrar.add_goal(0, Controls);
+        registrar.add_goal(0, Controls::default());
     }
 }
 struct Mod;
@@ -170,7 +176,7 @@ fn goal_target_admission_matches_handles_and_preserves_refused_targets() {
             ("minecraft:warden", "minecraft:zombie", false),
             ("minecraft:zombie", "minecraft:cow", true),
         ] {
-            game.mobs = vec![mob(game, 83, source), mob(game, 84, target)];
+            game.mobs = vec![mob(game, 83, source), mob(game, 84, target)].into();
             let handle = game
                 .native_entity(83)
                 .and_then(|e| game.native_mob_ref(e))

@@ -901,6 +901,7 @@ fn attached<'a, 'k, P: ?Sized>(
 ///
 /// Mods call the generic methods on `dyn Registrar` (`r.item_part("mymod:wrench", Wrench)`);
 /// they reach the trait's own methods, one implementation for native and wasm mods.
+#[horizon_mod_api_macros::registrar]
 pub trait Registrar {
     /// Look up a vanilla or another mod's type. The final registry validates it at load.
     fn block_entity_type_key(&mut self, id: &str) -> super::BlockEntityTypeKey;
@@ -937,7 +938,6 @@ pub trait Registrar {
     ///
     /// Not on wasm: the goal surface a part's `register_goals` hands the game
     /// does not cross yet (#1077); entity parts are a native mod's for now.
-    #[horizon_mod_api_macros::native_only]
     fn attach_entity_part(&mut self, entity: &str, kind: &'static str, part: Arc<dyn EntityPart>);
     /// Attach `part`, of kind `kind`, to the mod menu type `menu`.
     fn attach_menu_part(&mut self, menu: &str, kind: &'static str, part: Arc<dyn MenuPart>);
@@ -980,6 +980,7 @@ pub trait Registrar {
     fn add_structure_type(&mut self, name: &str, ty: Arc<dyn super::StructureType>);
 }
 
+#[horizon_mod_api_macros::registrar]
 impl dyn Registrar + '_ {
     /// Register structure type `name` (`tower` or `mymod:tower`), the way
     /// NeoForge's registries `STRUCTURE_TYPE` and `STRUCTURE_PIECE` register
@@ -1033,7 +1034,6 @@ impl dyn Registrar + '_ {
     /// beside vanilla's (#1077).
     ///
     /// Not on wasm: a held goal context is not bound yet; see `attach_entity_part`.
-    #[horizon_mod_api_macros::native_only]
     pub fn entity_part<P: EntityPart>(&mut self, entity: &str, part: P) {
         self.attach_entity_part(entity, type_name::<P>(), Arc::new(part));
     }
@@ -1331,6 +1331,7 @@ impl PartRegistrar {
     }
 }
 
+#[horizon_mod_api_macros::registrar]
 impl Registrar for PartRegistrar {
     fn add_structure_type(&mut self, name: &str, ty: Arc<dyn super::StructureType>) {
         let (namespace, path) = name.split_once(':').unwrap_or((self.mod_id, name));
@@ -1429,7 +1430,6 @@ impl Registrar for PartRegistrar {
         self.attach(|p| &mut p.items, kind, item, part);
     }
 
-    #[horizon_mod_api_macros::native_only]
     fn attach_entity_part(&mut self, entity: &str, kind: &'static str, part: Arc<dyn EntityPart>) {
         self.attach(|p| &mut p.entities, kind, entity, part);
     }

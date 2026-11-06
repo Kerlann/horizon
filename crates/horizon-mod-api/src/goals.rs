@@ -1,5 +1,5 @@
 //! Custom mob goals (arismoko/horizon#1077): code a mod attaches to one entity
-//! type at startup, asked at every `Mob` construction, spawning or loading, the
+//! type at startup, asked at authoritative `Mob` construction, spawning or loading, the
 //! moment vanilla's `registerGoals` fan-out ends. A mod's goals join the two
 //! selectors as vanilla's own do — same priorities, same flag locks, same
 //! interruption — and tick inside the mob's own AI step.
@@ -96,7 +96,7 @@ impl GoalFlags {
 
 /// A mod's own mob goal, run by the mob's goal selector beside vanilla's: the
 /// same priorities and interruption, its state its own (one object per mob,
-/// built in [`EntityPart::register_goals`] at every `Mob` construction, so a
+/// built in [`EntityPart::register_goals`] at server-side `Mob` construction, so a
 /// mob loaded from a chunk gets fresh goals and nothing of them is saved).
 ///
 /// The draws a goal makes come from [`GoalContext::random`], the mob's own
@@ -218,7 +218,9 @@ impl<'a> GoalContext<'a> {
         self.inner.mob()
     }
     /// The read view of the mob's tick: the ticking mob directly, other
-    /// entities from the tick's snapshot, `None` where a read is not carried.
+    /// entities from the tick's snapshot, a typed refusal where a read is not carried.
+    /// The selected real player's identity travels with its view; intact level and
+    /// block-entity reads forward to the game backend. Fake actors are not targetable.
     pub fn host(&self) -> &dyn Host {
         self.inner.host()
     }
@@ -236,14 +238,16 @@ impl<'a> GoalContext<'a> {
     pub fn stop_navigation(&mut self) {
         self.inner.stop_navigation()
     }
-    /// `getLookControl().setLookAt(x, y, z)`.
+    /// `getLookControl().setLookAt(x, y, z)`. Non-finite or unsafe coordinates
+    /// leave the current look control unchanged.
     pub fn look_at(&mut self, at: [f64; 3]) {
         self.inner.look_at(at)
     }
     /// `setTarget`; `None` clears it. The target resolves through the tick's
     /// view: a mob, or the player the tick sees. False when the target cannot
-    /// be stored — the mob's brain owns its target, as the write handle's own
-    /// rules refuse — and then the mob's target is unchanged.
+    /// be stored — including fake actors and invalid species pairings, or where
+    /// the mob's brain owns its target, as the write handle's own rules refuse —
+    /// and then the mob's target is unchanged.
     pub fn set_target(&mut self, target: Option<LivingRef>) -> bool {
         self.inner.set_target(target)
     }

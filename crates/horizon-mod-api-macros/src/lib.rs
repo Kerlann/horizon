@@ -6,12 +6,52 @@ use syn::{
     punctuated::Punctuated,
 };
 
-/// Generate the target gate for a reasoned native-only registration surface.
-/// The declaration's `Not on wasm` documentation also owns its interface exclusion.
+/// Generate registration target gates from the resources in each method's signature.
+/// Entity parts currently require a held goal context; their documented wasm exclusion applies
+/// uniformly to the registrar trait, its convenience methods and its native implementation.
 #[proc_macro_attribute]
-pub fn native_only(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let item = proc_macro2::TokenStream::from(item);
-    quote! { #[cfg(not(target_arch = "wasm32"))] #item }.into()
+pub fn registrar(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    use syn::visit::Visit;
+    struct NativeResource(bool);
+    impl<'ast> Visit<'ast> for NativeResource {
+        fn visit_path(&mut self, path: &'ast syn::Path) {
+            self.0 |= path
+                .segments
+                .last()
+                .is_some_and(|s| s.ident == "EntityPart");
+            syn::visit::visit_path(self, path);
+        }
+    }
+    fn gate(attrs: &mut Vec<syn::Attribute>, sig: &syn::Signature) {
+        let mut resource = NativeResource(false);
+        resource.visit_signature(sig);
+        if resource.0 {
+            attrs.push(syn::parse_quote!(#[cfg(not(target_arch = "wasm32"))]));
+        }
+    }
+    let mut item = parse_macro_input!(item as syn::Item);
+    match &mut item {
+        syn::Item::Trait(item) => {
+            for method in &mut item.items {
+                if let syn::TraitItem::Fn(method) = method {
+                    gate(&mut method.attrs, &method.sig);
+                }
+            }
+        }
+        syn::Item::Impl(item) => {
+            for method in &mut item.items {
+                if let syn::ImplItem::Fn(method) = method {
+                    gate(&mut method.attrs, &method.sig);
+                }
+            }
+        }
+        _ => {
+            return syn::Error::new_spanned(item, "expected a registrar trait or implementation")
+                .into_compile_error()
+                .into();
+        }
+    }
+    quote!(#item).into()
 }
 
 /// Keep only attributes that can gate a method, including nested `cfg_attr`s.

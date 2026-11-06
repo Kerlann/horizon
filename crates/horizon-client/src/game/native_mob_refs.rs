@@ -59,20 +59,51 @@ pub(super) fn target_setter_available(mob: &Mob) -> bool {
 
 /// Target admission shared by handles and a goal's selected-player snapshot.
 pub(super) fn can_target_player(mob: &Mob, facts: PlayerFacts, difficulty: i32) -> bool {
-    facts.alive
-        && !facts.invulnerable
-        && !matches!(facts.mode, 1 | 3)
-        && difficulty != 0
-        && !mob.built_by_player()
-        && !(mob.is_tamable_animal()
-            && mob.extra.tame
-            && mobs::tame::owned_by(mob.extra.owner, facts.uuid))
-        && !(mob.species() == Species::Dolphin && mob.is_baby())
+    if !facts.alive || facts.invulnerable || matches!(facts.mode, 1 | 3) || difficulty == 0 {
+        return false;
+    }
+    if mob.built_by_player() || (mob.species() == Species::Dolphin && mob.is_baby()) {
+        return false;
+    }
+    !(mob.is_tamable_animal()
+        && mob.extra.tame
+        && mobs::tame::owned_by(mob.extra.owner, facts.uuid))
+}
+
+/// Only the facts target admission needs, borrowed from a live mob or its existing tick snapshot.
+pub(super) struct MobTargetFacts {
+    id: u32,
+    species: Species,
+    alive: bool,
+    invulnerable: bool,
+    baby: bool,
+}
+impl From<&Mob> for MobTargetFacts {
+    fn from(mob: &Mob) -> Self {
+        Self {
+            id: mob.id,
+            species: mob.species(),
+            alive: mob.alive(),
+            invulnerable: mob.invulnerable_flag,
+            baby: mob.is_baby(),
+        }
+    }
+}
+impl From<&mobs::Seen> for MobTargetFacts {
+    fn from(mob: &mobs::Seen) -> Self {
+        Self {
+            id: mob.id,
+            species: mob.species,
+            alive: mob.alive,
+            invulnerable: mob.invulnerable,
+            baby: mob.baby,
+        }
+    }
 }
 
 /// Target admission over the same facts while the live mob list is taken for ticking.
-pub(super) fn can_target_seen(mob: &Mob, other: &mobs::Seen, world: &mobs::MobWorld<'_>) -> bool {
-    if other.id == mob.id || !other.alive || other.invulnerable || other.species == Species::Ghast {
+pub(super) fn can_target_mob(mob: &Mob, other: MobTargetFacts, world: &mobs::MobWorld<'_>) -> bool {
+    if !other.alive || other.invulnerable || other.species == Species::Ghast {
         return false;
     }
     if mob.species() == Species::Breeze && other.species != Species::IronGolem {
@@ -110,7 +141,7 @@ impl Game<'_> {
                     return false;
                 };
                 let seen = [super::creatures::seen(other, self.level.player_uuid)];
-                can_target_seen(mob, &seen[0], &self.mob_world_base(&seen))
+                can_target_mob(mob, (&seen[0]).into(), &self.mob_world_base(&seen))
             }
             Target::Player | Target::Guest(_) => self
                 .native_player_facts(target)

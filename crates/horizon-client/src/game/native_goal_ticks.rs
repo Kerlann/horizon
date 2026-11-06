@@ -300,7 +300,12 @@ impl GoalCxBackend for GoalCx<'_, '_> {
         let who = match target {
             None => None,
             Some(living) => match self.resolve(living.entity()) {
-                Some(Resolved::Own) => return false,
+                Some(Resolved::Own) => {
+                    if !super::native_mob_refs::can_target_mob(self.m, (&*self.m).into(), self.w) {
+                        return false;
+                    }
+                    Some(Who::Mob(self.m.id))
+                }
                 Some(Resolved::Player) => {
                     let player = self.w.player.as_ref().expect("resolved player");
                     let facts = super::native_mob_refs::PlayerFacts {
@@ -318,14 +323,14 @@ impl GoalCxBackend for GoalCx<'_, '_> {
                     if !super::native_mob_refs::can_target_player(
                         self.m,
                         facts,
-                        self.w.difficulty.base,
+                        self.w.difficulty.base.into(),
                     ) {
                         return false;
                     }
                     Some(Who::Player)
                 }
                 Some(Resolved::Seen(seen)) => {
-                    if !super::native_mob_refs::can_target_seen(self.m, seen, self.w) {
+                    if !super::native_mob_refs::can_target_mob(self.m, seen.into(), self.w) {
                         return false;
                     }
                     Some(Who::Mob(seen.id))

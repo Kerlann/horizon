@@ -1,12 +1,12 @@
 //! Mod goals on mobs (arismoko/horizon#1077): the parts a mod attaches to an
-//! entity type register their goals at every `Mob` construction, right after
+//! entity type register their goals at authoritative `Mob` construction, right after
 //! the species' own, and the engine wraps each in a [`ModGoal`] that gives the
 //! mod its own mob, the tick's read view, its random and its writes.
 //!
 //! The read view answers through the generated `Backend` impl at the bottom:
 //! the ticking mob itself, the player the tick sees and the tick's snapshot of
-//! the other entities; every other backend read is refused its typed refusal,
-//! as a host without a backend refuses it. The engine's own goals are
+//! the other entities; unavailable entity fields answer their typed refusal,
+//! while intact level and block-entity reads forward to the game backend. The engine's own goals are
 //! untouched, and a mob whose type no mod attached a part to pays nothing.
 use super::{
     Mob, MobWorld,
