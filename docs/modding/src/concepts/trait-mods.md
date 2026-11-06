@@ -824,6 +824,11 @@ stand on its few erased ones, so they work the same in a native mod and a wasm m
 value keeps its own Rust type, shared: reading one clones it out, and copying a holder's
 data copies no value.
 
+`AttachmentHolder` keeps an existing typed handle when a system needs to store a holder
+identity: `Entity`, `Player`, `BlockEntity`, `Chunk` or `Level`. It is `Copy`, does not keep
+anything loaded, and follows each handle's ordinary stale-world and unload rules. Unlike
+the storage-relative `Holder`, it carries the handle's world scope.
+
 ```rust
 use mod_api::{AttachmentCodec, AttachmentError, AttachmentType, Compound, Holder, Tag};
 
