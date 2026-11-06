@@ -1274,7 +1274,7 @@ mod tests {
         let name = |m: &Mob| {
             (
                 VILLAGER_TYPES[m.extra.variant as usize],
-                horizon_client::mobs::villager::PROFESSIONS
+                horizon_client::mobs::villager::profession_table().entries()
                     [m.extra.profession.index().unwrap_or(0) as usize]
                     .id,
                 m.extra.villager_level,

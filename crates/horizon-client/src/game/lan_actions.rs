@@ -6039,7 +6039,14 @@ impl Game<'_> {
                         host.hub.entity_event(id, event as i8);
                     }
                 }
-                MotionEvent::Fall(event) => self.landing_block_updates(&event),
+                MotionEvent::Fall(event) => {
+                    let player = self
+                        .lan
+                        .as_ref()
+                        .and_then(|host| host.hub.guest(conn))
+                        .map(|g| g.uuid);
+                    self.landing_block_updates(player, &event)
+                }
                 // PowderSnowBlock.entityInside: every player around sees the
                 // snowflake (`ServerLevel.sendParticles`).
                 MotionEvent::Snowflake { position, velocity } => {
@@ -7061,6 +7068,65 @@ fn copied_respawn_point(has_config: bool, spawn: Option<[f64; 3]>) -> Option<Opt
 mod tests {
     use super::{copied_respawn_point, eye_columns};
     use horizon_client::pose::Pose;
+
+    #[test]
+    #[ignore = "requires prepared game resources"]
+    fn crafting_guest_self_swap_keeps_eight_items() {
+        use horizon_client::{chunk::Chunk, items::ItemStack};
+        use horizon_protocol::packets::play::{ContainerClick, Serverbound};
+        use std::sync::Arc;
+        super::super::native_guest_turn_tests::with_guests(|game| {
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let table = game
+                .pack
+                .assets
+                .registry
+                .default_state("minecraft:crafting_table")
+                .unwrap();
+            game.world.set(1, 64, 1, table).unwrap();
+            game.lan.as_mut().unwrap().hub.guests.update(0, |guest| {
+                guest.inventory[0] = Some(ItemStack::new("minecraft:stone", 8));
+            });
+            game.lan_open_crafting(12, [1, 64, 1]);
+            let window = game
+                .lan
+                .as_ref()
+                .unwrap()
+                .play
+                .get(&12)
+                .unwrap()
+                .crafting
+                .table
+                .as_ref()
+                .unwrap()
+                .0;
+            game.lan_guest_packet(
+                12,
+                Serverbound::ContainerClick(ContainerClick {
+                    container: window,
+                    state: 0,
+                    slot: 37,
+                    button: 0,
+                    input: 2,
+                    changed: Vec::new(),
+                    carried: None,
+                }),
+            );
+            let guest = &game.lan.as_ref().unwrap().hub.guests[0];
+            assert_eq!(guest.inventory[0].as_ref().unwrap().count, 8);
+            assert_eq!(
+                guest
+                    .inventory
+                    .iter()
+                    .flatten()
+                    .map(|s| s.count)
+                    .sum::<u32>(),
+                8
+            );
+        });
+    }
 
     #[test]
     #[ignore = "requires prepared game resources"]

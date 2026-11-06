@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Unduhan, proses masuk, dan pembaruan melewati proksi ini (http://host:port, socks5://host:port). Kosong berarti tidak ada: HTTPS_PROXY digunakan sebagai gantinya ketika peluncur dimulai dengannya.",
   "{name} was left out: made for another Horizon version": "{name} tidak disertakan: dibuat untuk versi Horizon lain",
   "{name} was left out: clashes with {other}": "{name} tidak disertakan: bentrok dengan {other}",
-  "{name} was left out: it needs {other}, which was left out": "{name} tidak disertakan: membutuhkan {other}, yang tidak disertakan"
+  "{name} was left out: it needs {other}, which was left out": "{name} tidak disertakan: membutuhkan {other}, yang tidak disertakan",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

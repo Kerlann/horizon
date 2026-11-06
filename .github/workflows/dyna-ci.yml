@@ -361,17 +361,21 @@ jobs:
           shared-key: wasm-bench
           workspaces: |
             .
-            crates/horizon-mod-wasm/tests/bench -> target/horizon-mod
+            crates/horizon-mod-wasm/tests/bench/hook -> target/horizon-mod
+            crates/horizon-mod-wasm/tests/bench/internals -> target/horizon-mod
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build the benchmark mod to mod.wasm, and the std member
         run: |
           cargo +stable build -p cargo-horizon-mod
-          cd crates/horizon-mod-wasm/tests/bench
-          ../../../../target/debug/cargo-horizon-mod horizon-mod build --wasm
-          ../../../../target/debug/cargo-horizon-mod horizon-mod wasm-std "$GITHUB_WORKSPACE/target/horizon-wasm-std.wasm"
+          cd crates/horizon-mod-wasm/tests/bench/hook
+          ../../../../../target/debug/cargo-horizon-mod horizon-mod build --wasm
+          ../../../../../target/debug/cargo-horizon-mod horizon-mod wasm-std "$GITHUB_WORKSPACE/target/horizon-wasm-std.wasm"
+          cd ../internals
+          HORIZON_MOD_INTERNALS_CATALOG="$PWD/internals.json" ../../../../../target/debug/cargo-horizon-mod horizon-mod build --wasm
       - name: The same hook native and as mod.wasm
         env:
-          HORIZON_WASM_BENCH: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/bench/target/horizon-mod/bench_mod.hmod
+          HORIZON_WASM_BENCH: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/bench/hook/target/horizon-mod/bench_mod.hmod
+          HORIZON_WASM_INTERNALS_BENCH: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/bench/internals/target/horizon-mod/internals_bench.hmod
           HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
         run: cargo +stable test --release -p horizon-mod-wasm --test bench -- --ignored --nocapture --test-threads=1
 

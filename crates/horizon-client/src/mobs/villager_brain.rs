@@ -891,11 +891,10 @@ fn poi_matches(m: &Mob, f: PoiFilter, p: Poi) -> bool {
     let employed = profession != super::villager::NONE && profession != super::villager::NITWIT;
     match (f, p) {
         (PoiFilter::Held, p) if p.is_job() => {
-            employed && super::villager::poi_profession(p) == Some(profession)
+            employed && super::villager::profession_table().held(profession, p)
         }
         (PoiFilter::Acquirable, p) if p.is_job() => {
-            profession == super::villager::NONE
-                || (employed && super::villager::poi_profession(p) == Some(profession))
+            super::villager::profession_table().acquirable(profession, p)
         }
         (PoiFilter::Home, Poi::Home) | (PoiFilter::Meeting, Poi::Meeting) => true,
         _ => false,
@@ -2124,7 +2123,7 @@ impl B {
                         if s.species != Species::Villager || !s.alive || s.potential_job.is_some() {
                             continue;
                         }
-                        let Some(j) = super::villager::poi_profession(poi) else {
+                        let Some(j) = super::villager::profession_table().by_poi(poi) else {
                             continue;
                         };
                         if s.profession != Some(j) {
@@ -2161,8 +2160,8 @@ impl B {
                 if m.extra.profession.index() != Some(super::villager::NONE) {
                     return true;
                 }
-                if let Some(j) =
-                    poi_at(cx.w, p[0], p[1], p[2]).and_then(super::villager::poi_profession)
+                if let Some(j) = poi_at(cx.w, p[0], p[1], p[2])
+                    .and_then(|p| super::villager::profession_table().by_poi(p))
                 {
                     super::villager::set_profession(m, j);
                     cx.refresh = true;
@@ -4667,6 +4666,9 @@ mod poi_classification_tests {
         assert!(poi_matches(&mob, PoiFilter::Acquirable, Poi::Farmer));
         assert!(!poi_matches(&mob, PoiFilter::Held, Poi::Butcher));
         mob.extra.profession = super::super::villager::ProfessionState::from_index(11);
+        assert!(!poi_matches(&mob, PoiFilter::Held, Poi::Farmer));
+        assert!(!poi_matches(&mob, PoiFilter::Acquirable, Poi::Farmer));
+        mob.extra.profession = super::super::villager::ProfessionState::from_index(20);
         assert!(!poi_matches(&mob, PoiFilter::Held, Poi::Farmer));
         assert!(!poi_matches(&mob, PoiFilter::Acquirable, Poi::Farmer));
         assert_eq!(Poi::Farmer.max_tickets(), 1);

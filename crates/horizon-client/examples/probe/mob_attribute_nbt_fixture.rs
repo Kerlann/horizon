@@ -136,7 +136,10 @@ pub fn main() -> horizon_client::Result<()> {
                 .flatten()
                 .map(|n| read(&mob.extra.live, &catalog, entity, n, seed(&mob)))
                 .collect();
-            (reads, entity_nbt::mob_to_nbt(&mob, [0; 4], None, None))
+            (
+                reads,
+                entity_nbt::mob_to_nbt(&mob, [0; 4], None, None, |_| None),
+            )
         };
         for (n, r) in case["read"].as_array().into_iter().flatten().zip(reads) {
             let n = n.as_str().unwrap_or_default();

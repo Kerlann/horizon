@@ -1048,7 +1048,7 @@ fn quick_craft(
             let Some((kind, slots)) = drag.take() else {
                 return;
             };
-            let Some(mut carried) = view.guest.carried.clone() else {
+            let Some(carried) = view.guest.carried.clone() else {
                 return;
             };
             if slots.is_empty() {
@@ -1061,32 +1061,42 @@ fn quick_craft(
                 }
                 return;
             }
-            let each = match kind {
-                0 => carried.count / slots.len() as u32,
-                1 => 1,
-                _ => rules.max_stack(&carried.item).max(1),
-            };
+            let mut remaining = i64::from(carried.count);
+            let item_max = rules.max_stack(&carried.item).max(1);
+            let count = slots.len();
             for i in slots {
-                if carried.count == 0 {
-                    break;
+                if !view.enabled(i)
+                    || !view.may_place(i, &carried, rules)
+                    || (kind != 2 && (carried.count as usize) < count)
+                    || view.get(i).is_some_and(|s| {
+                        !s.same_item_same_components(&carried) || s.count > item_max
+                    })
+                {
+                    continue;
                 }
                 let existing = view.get(i).map_or(0, |s| s.count);
-                let max = view.slot_max(i, &carried, rules);
-                let put = each.min(max.saturating_sub(existing)).min(carried.count);
-                if put == 0 {
-                    continue;
+                let max = item_max.min(view.slot_max(i, &carried, rules));
+                let new_count = crate::menu::quick_craft_count(
+                    kind,
+                    carried.count,
+                    count,
+                    existing,
+                    max,
+                    item_max,
+                );
+                if kind != 2 || !view.guest.creative() {
+                    remaining -= i64::from(new_count) - i64::from(existing);
                 }
                 view.set(
                     i,
                     Some(ItemStack {
-                        count: existing + put,
+                        count: new_count,
                         ..carried.clone()
                     }),
                 );
-                if kind != 2 || !view.guest.creative() {
-                    carried.count -= put;
-                }
             }
+            let mut carried = carried;
+            carried.count = remaining.max(0) as u32;
             view.guest.carried = (carried.count > 0).then_some(carried);
         }
     }
@@ -1529,6 +1539,84 @@ mod tests {
         // Nothing leaves a hidden slot either.
         click(&mut view, &mut drag, 2, 0, input::QUICK_MOVE, &rules);
         assert_eq!(view.get(2).map(|s| s.item), Some("minecraft:stone".into()));
+    }
+
+    #[test]
+    fn quick_craft_uses_original_stack_and_clamps_existing_count() {
+        let Some(rules) = rules() else { return };
+        let mut guest = guest();
+        let mut chest = vec![None; 2];
+        let mut view = View {
+            guest: &mut guest,
+            container: Some(&mut chest),
+            shulker: false,
+            hidden: &[],
+            loop_context: crate::test_resources::server_loop_context(),
+        };
+        view.guest.carried = Some(ItemStack::new("minecraft:stone", 8));
+        let mut drag = Some((0, vec![0, 1]));
+        quick_craft(&mut view, &mut drag, -999, 2, &rules);
+        assert_eq!(
+            (view.get(0).unwrap().count, view.get(1).unwrap().count),
+            (4, 4)
+        );
+        assert!(view.guest.carried.is_none());
+        assert_eq!(crate::menu::quick_craft_count(0, 8, 2, 8, 3, 64), 3);
+    }
+
+    #[test]
+    fn guest_drag_matches_menu_for_vanilla_stack_limits() {
+        let Some(rules) = rules() else { return };
+        crate::menu::tests::with_menu(crate::menu::Kind::Chest(1), |env, menu| {
+            for (id, existing, carried, expected) in [
+                ("minecraft:stone", 63, 8, (64, 4, 3)),
+                ("minecraft:ender_pearl", 15, 8, (16, 4, 3)),
+                ("minecraft:diamond_sword", 0, 2, (1, 1, 0)),
+            ] {
+                let mut guest = guest();
+                guest.carried = Some(ItemStack::new(id, carried));
+                let mut chest = vec![None; 9];
+                if existing > 0 {
+                    chest[0] = Some(ItemStack::new(id, existing));
+                }
+                let mut view = View {
+                    guest: &mut guest,
+                    container: Some(&mut chest),
+                    shulker: false,
+                    hidden: &[],
+                    loop_context: crate::test_resources::server_loop_context(),
+                };
+                menu.load_slot(0, view.get(0));
+                menu.load_slot(1, None);
+                menu.carried = Some(ItemStack::new(id, carried));
+                let mut drag = None;
+                for (slot, button) in [(-999, 0), (0, 1), (1, 1), (-999, 2)] {
+                    click(
+                        &mut view,
+                        &mut drag,
+                        slot,
+                        button,
+                        input::QUICK_CRAFT,
+                        &rules,
+                    );
+                    menu.click(env, slot, button, crate::menu::Input::QuickCraft)
+                        .unwrap();
+                }
+                let counts = (
+                    view.get(0).map_or(0, |s| s.count),
+                    view.get(1).map_or(0, |s| s.count),
+                    view.guest.carried.as_ref().map_or(0, |s| s.count),
+                );
+                let predicted = (
+                    menu.slot(0).map_or(0, |s| s.count),
+                    menu.slot(1).map_or(0, |s| s.count),
+                    menu.carried.as_ref().map_or(0, |s| s.count),
+                );
+                assert_eq!(counts, expected, "{id}");
+                assert_eq!(predicted, expected, "{id}");
+                assert_eq!(counts.0 + counts.1 + counts.2, existing + carried);
+            }
+        });
     }
 
     /// `AbstractContainerMenu.isValidQuickcraftType`: quick-craft type 2 (a

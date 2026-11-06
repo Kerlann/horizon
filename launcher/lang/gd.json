@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Bidh luchdachadh sìos, clàradh a-steach agus ùrachaidhean a’ dol tron neach-ionaid seo (http://host:port, socks5://host:port). Chan eil falamh a’ ciallachadh gin: thathas a’ cleachdadh HTTPS_PROXY na àite nuair a thòisich an lannsair le fear.",
   "{name} was left out: made for another Horizon version": "Chaidh {name} fhàgail às: air a dhèanamh airson tionndadh eile de Horizon",
   "{name} was left out: clashes with {other}": "Chaidh {name} fhàgail às: tha e a' bualadh air {other}",
-  "{name} was left out: it needs {other}, which was left out": "Chaidh {name} fhàgail às: feumaidh e {other}, a chaidh fhàgail às"
+  "{name} was left out: it needs {other}, which was left out": "Chaidh {name} fhàgail às: feumaidh e {other}, a chaidh fhàgail às",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

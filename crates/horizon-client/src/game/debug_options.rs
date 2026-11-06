@@ -47,7 +47,7 @@ impl DebugOptionsUi {
 /// One list row (`AbstractOptionEntry`).
 enum Row {
     Category(Category),
-    Option(&'static Entry),
+    Option(Entry),
 }
 
 /// `OptionList.updateSearch`: a category row before each category's entries.

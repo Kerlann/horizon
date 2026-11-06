@@ -3612,7 +3612,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                 }
             },
             (Mode::Main, Some(5)) => {
-                self.set_mode(Mode::Multiplayer(crate::multiplayer::Screen::friend()));
+                self.set_mode(Mode::Multiplayer(crate::multiplayer::Screen::friend(true)));
                 Action::None
             }
             (Mode::Onboarding(_), Some(onboarding::SOUNDS)) => Action::Sounds,

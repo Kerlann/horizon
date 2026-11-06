@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Downloads, log-ins og opdateringer går gennem denne proxy (http://host:port, socks5://host:port). Tom betyder ingen: HTTPS_PROXY bruges i stedet, da launcheren blev startet med en.",
   "{name} was left out: made for another Horizon version": "{name} blev udeladt: lavet til en anden Horizon-version",
   "{name} was left out: clashes with {other}": "{name} blev udeladt: kolliderer med {other}",
-  "{name} was left out: it needs {other}, which was left out": "{name} blev udeladt: den kræver {other}, som blev udeladt"
+  "{name} was left out: it needs {other}, which was left out": "{name} blev udeladt: den kræver {other}, som blev udeladt",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

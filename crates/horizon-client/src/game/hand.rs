@@ -465,8 +465,7 @@ impl Game<'_> {
     /// (`getControlledVehicle`: its first passenger, on a server's client).
     pub(super) fn hands_busy(&self) -> bool {
         self.riding
-            .is_some_and(|id| self.boats.iter().any(|b| b.id == id))
-            && self.remote.as_ref().is_none_or(|r| r.first_passenger)
+            .is_some_and(|id| self.controls_boat(id) && self.boats.iter().any(|b| b.id == id))
             && [
                 winit::keyboard::KeyCode::KeyW,
                 winit::keyboard::KeyCode::KeyS,

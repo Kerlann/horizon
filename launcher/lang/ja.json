@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "ダウンロード、サインイン、アップデートはこのプロキシ (http://host:port, socks5://host:port) を経由します。空欄ならプロキシなし: ランチャーが HTTPS_PROXY 付きで起動された場合はそれが使われます。",
   "{name} was left out: made for another Horizon version": "{name} は除外されました: 別のバージョンの Horizon 向けです",
   "{name} was left out: clashes with {other}": "{name} は除外されました: {other} と競合します",
-  "{name} was left out: it needs {other}, which was left out": "{name} は除外されました: 除外された {other} が必要です"
+  "{name} was left out: it needs {other}, which was left out": "{name} は除外されました: 除外された {other} が必要です",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

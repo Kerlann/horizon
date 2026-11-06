@@ -70,11 +70,13 @@ pub(crate) fn conditions(attrs: &[syn::Attribute]) -> Vec<String> {
         .collect()
 }
 
-/// Whether `attrs` hold `#[cfg(test)]`: compiled only into tests.
+/// Whether an item is compiled only into tests, explicitly or by `#[test]`/`#[bench]`.
 pub(crate) fn test_only(attrs: &[syn::Attribute]) -> bool {
     attrs.iter().any(|attr| {
-        attr.path().is_ident("cfg")
-            && matches!(attr.parse_args::<syn::Meta>(), Ok(syn::Meta::Path(path)) if path.is_ident("test"))
+        attr.path().is_ident("test")
+            || attr.path().is_ident("bench")
+            || (attr.path().is_ident("cfg")
+                && matches!(attr.parse_args::<syn::Meta>(), Ok(syn::Meta::Path(path)) if path.is_ident("test")))
     })
 }
 

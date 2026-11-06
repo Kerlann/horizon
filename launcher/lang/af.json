@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Aflaaie, aanmeldings en opdaterings gaan deur hierdie instaanbediener (http://gasheer:poort, socks5://gasheer:poort). Leeg beteken geen: HTTPS_PROXY word eerder gebruik wanneer die lanseerder met een begin is.",
   "{name} was left out: made for another Horizon version": "{name} is weggelaat: gemaak vir 'n ander Horizon-weergawe",
   "{name} was left out: clashes with {other}": "{name} is weggelaat: bots met {other}",
-  "{name} was left out: it needs {other}, which was left out": "{name} is weggelaat: dit het {other} nodig, wat weggelaat is"
+  "{name} was left out: it needs {other}, which was left out": "{name} is weggelaat: dit het {other} nodig, wat weggelaat is",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

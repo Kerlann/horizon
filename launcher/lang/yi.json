@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "דאַונלאָודז, צייכן-ינס און דערהייַנטיקונגען גיין דורך דעם פראקסי (http://host:port, socks5://host:port). ליידיק מיטל גאָרניט: HTTPS_PROXY איז געוויינט אַנשטאָט ווען די לאָנטשער איז סטאַרטעד מיט איין.",
   "{name} was left out: made for another Horizon version": "{name} איז אויסגעלאָזט געוואָרן: געמאַכט פֿאַר אַן אַנדער ווערסיע פֿון Horizon",
   "{name} was left out: clashes with {other}": "{name} איז אויסגעלאָזט געוואָרן: שטויסט זיך מיט {other}",
-  "{name} was left out: it needs {other}, which was left out": "{name} איז אויסגעלאָזט געוואָרן: עס דאַרף {other}, וואָס איז אויסגעלאָזט געוואָרן"
+  "{name} was left out: it needs {other}, which was left out": "{name} איז אויסגעלאָזט געוואָרן: עס דאַרף {other}, וואָס איז אויסגעלאָזט געוואָרן",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

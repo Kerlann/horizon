@@ -265,6 +265,9 @@ impl<'r> Gen<'r> {
 
     /// An expression of `Value` from `expr`, a reference to a copy of `shape`.
     fn encode(&mut self, shape: &Shape, expr: TokenStream) -> TokenStream {
+        // Callers may pass a borrow: projections and method calls must bind to the whole
+        // expression, not turn `&key` into `&key.field` or `&key.iter().collect()`.
+        let expr = quote!((#expr));
         match shape {
             Shape::Scalar(scalar) => match scalar {
                 Scalar::Bool => quote!(V::B(*#expr)),
@@ -1960,6 +1963,43 @@ pub(crate) mod tests {
                 let ptr = &raw mut bag as *mut ();
                 assert!(matches!((thunk.call)(Some(ptr), vec![internals::Arg::Value(Value::B(true))]).unwrap(), Reply::Node(p, _, true) if p == ptr));
                 assert_eq!((thunk.call)(Some(ptr), vec![internals::Arg::Value(Value::B(false))]), Ok(Reply::Value(Value::Var(0, vec![]))));
+            }
+            "#,
+        );
+    }
+
+    #[test]
+    fn aggregate_map_keys_encode_borrowed_expressions() {
+        let declaration = "struct Bag {
+            tuple: std::collections::BTreeMap<(i32, u64, bool), u32>,
+            array: std::collections::BTreeMap<[i32; 2], u32>,
+            nested: std::collections::BTreeMap<Option<(u128, [i32; 1])>, u32>,
+        }";
+        let entry = internal("horizon_client::Bag", "struct", declaration);
+        let (code, counts) = all_table(&[entry]);
+        assert!(counts.refused_map_keys.is_empty());
+        run_fixture(
+            &code,
+            declaration,
+            r#"
+            let mut bag = Bag {
+                tuple: Default::default(), array: Default::default(), nested: Default::default(),
+            };
+            let keys = [
+                Value::Rec(vec![Value::S(-7), Value::U(11), Value::B(true)]),
+                Value::Seq(vec![Value::S(13), Value::S(-17)]),
+                Value::Var(1, vec![Value::Rec(vec![
+                    Value::Rec(vec![Value::U(1), Value::U(0)]),
+                    Value::Seq(vec![Value::S(-19)]),
+                ])]),
+            ];
+            let owner = __internals::TABLE.types.iter().find(|t| t.path == "horizon_client::Bag").unwrap();
+            for (field, key) in keys.into_iter().enumerate() {
+                unsafe {
+                    let Reply::Node(ptr, ty, writable) = (owner.node)((&raw mut bag).cast(), true, Op::Field(field as u32)).unwrap() else { panic!() };
+                    let node = __internals::TABLE.types[ty as usize].node;
+                    assert_eq!(node(ptr, writable, Op::CanonicalKey(&key)), Ok(Reply::Value(key)));
+                }
             }
             "#,
         );

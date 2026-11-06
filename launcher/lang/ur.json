@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "ڈاؤن لوڈ، سائن ان اور اپ ڈیٹ اس پراکسی (http://host:port, socks5://host:port) سے ہوتے ہیں۔ خالی کا مطلب کوئی نہیں: HTTPS_PROXY اس کے بجائے استعمال کیا جاتا ہے جب لانچر ایک کے ساتھ شروع کیا گیا تھا۔",
   "{name} was left out: made for another Horizon version": "{name} چھوڑ دیا گیا: Horizon کے کسی اور ورژن کے لیے بنا ہے",
   "{name} was left out: clashes with {other}": "{name} چھوڑ دیا گیا: {other} سے ٹکراتا ہے",
-  "{name} was left out: it needs {other}, which was left out": "{name} چھوڑ دیا گیا: اسے {other} چاہیے، جو چھوڑ دیا گیا"
+  "{name} was left out: it needs {other}, which was left out": "{name} چھوڑ دیا گیا: اسے {other} چاہیے، جو چھوڑ دیا گیا",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

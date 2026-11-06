@@ -58,6 +58,17 @@ impl mod_api::Host for Server {
     fn block_state_default(&self, key: mod_api::BlockKey) -> Option<mod_api::BlockStateId> {
         Some(mod_api::__private::resolved_block(key)?.default)
     }
+    fn state_fluid_state(&self, state: mod_api::BlockStateId) -> Option<mod_api::FluidState> {
+        let engine = if state == mod_api::BlockStateId(17) {
+            horizon_world::fluid::FluidState::EMPTY
+        } else {
+            horizon_world::fluid::FluidState::new(horizon_world::fluid::FluidKind::Water, 8, true)
+        };
+        Some(mod_api::__private::engine_fluid_state(
+            mod_api::__private::world_fluid_key(engine.kind())?,
+            engine,
+        ))
+    }
     fn backend(&self) -> Option<mod_api::BackendRef<'_>> {
         Some(mod_api::BackendRef::of(self))
     }
@@ -120,7 +131,8 @@ fn the_sample_mod_loads_subscribes_and_registers_its_part() {
     // Its `register` runs in the mod and attaches a part to sticks, which listens to use_item.
     mod_api::__private::install_parts(&loaded.mods).unwrap();
     mod_api::__private::resolve_effects().unwrap();
-    mod_api::__private::resolve_fluids(&["minecraft:water", "minecraft:lava"]).unwrap();
+    mod_api::__private::resolve_fluids(&["minecraft:empty", "minecraft:water", "minecraft:lava"])
+        .unwrap();
     let load = horizon_world::native_load_context::LoadContext::new(
         mod_api::DataLoadOrigin::ServerDataLoad,
         std::sync::Arc::new(horizon_world::native_load_context::LoadInputs::new(
@@ -159,6 +171,9 @@ fn the_sample_mod_loads_subscribes_and_registers_its_part() {
             .load(std::sync::atomic::Ordering::Acquire)
     );
     let mut server = Server::default();
+    let falling_source =
+        mod_api::Host::state_fluid_state(&server, mod_api::BlockStateId(18)).unwrap();
+    assert!(falling_source.falling && falling_source.is_source() && !falling_source.is_empty());
     for _ in 0..400 {
         let mut args = mod_points::TickArgs::__new();
         mod_points::__private::fire(mod_points::PointId::Tick, "tick", &mut |listener| {
