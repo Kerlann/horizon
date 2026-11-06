@@ -292,6 +292,19 @@ fn internals_accesses_against_native() {
             ));
         }
     }
+    report.push_str("\n### Guest allocation attribution\n\n| Operation | Allocations per operation | Reallocations per operation |\n| --- | ---: | ---: |\n");
+    for mode in ["descriptor", "write-descriptor", "wire-get", "wire-set"] {
+        let counts: Vec<usize> = wasm(&format!("{mode}-alloc"), 128)
+            .1
+            .split_whitespace()
+            .map(|s| s.parse().unwrap())
+            .collect();
+        report.push_str(&format!(
+            "| {mode} | {:.3} | {:.3} |\n",
+            counts[0] as f64 / 128.0,
+            counts[1] as f64 / 128.0
+        ));
+    }
     report.push_str("\n### Reused list transport\n\n128 twelve-field batches per listener, baseline subtracted. Host counts include journal growth; guest counts cover only the access loop.\n\n| Access | ns/batch | Host alloc/batch | Host realloc/batch | Guest alloc/batch | Guest realloc/batch |\n| --- | ---: | ---: | ---: | ---: | ---: |\n");
     for mode in ["get12-batch", "set12-batch"] {
         const BATCHES: i64 = 128;

@@ -26,6 +26,39 @@ fn access(raw: HandleChatInputRaw, game: Option<Game>) {
             "handle" => total += game.child().unwrap().value().unwrap(),
             "set" => game.set_copy(i).unwrap(),
             "call" => total += game.add(1).unwrap(),
+            "descriptor" => {
+                std::hint::black_box(game.f0_field());
+            }
+            "write-descriptor" => {
+                std::hint::black_box(game.f0_field().write(i));
+            }
+            "wire-get" => {
+                use mod_internals::runtime::{AsNode, bindings::horizon::mod_internals::view};
+                let node = game.node();
+                let reads = [
+                    (node, 2),
+                    (node, 3),
+                    (node, 4),
+                    (node, 5),
+                    (node, 6),
+                    (node, 7),
+                    (node, 8),
+                    (node, 9),
+                    (node, 10),
+                    (node, 11),
+                    (node, 12),
+                    (node, 13),
+                ];
+                std::hint::black_box(view::get_many(&reads));
+            }
+            "wire-set" => {
+                use mod_internals::runtime::{AsNode, bindings::horizon::mod_internals::view};
+                let node = game.node();
+                let writes = (2..14)
+                    .map(|field| (node, field, vec![view::Cell::S(i)]))
+                    .collect::<Vec<_>>();
+                std::hint::black_box(view::set_many(&writes));
+            }
             mode if mode.starts_with("get1") || mode.starts_with("set1") => {
                 macro_rules! fields {
                     ($($field:ident:$get:ident:$set:ident),+) => {
