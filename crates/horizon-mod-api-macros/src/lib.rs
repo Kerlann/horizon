@@ -6,6 +6,14 @@ use syn::{
     punctuated::Punctuated,
 };
 
+/// Generate the target gate for a reasoned native-only registration surface.
+/// The declaration's `Not on wasm` documentation also owns its interface exclusion.
+#[proc_macro_attribute]
+pub fn native_only(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item = proc_macro2::TokenStream::from(item);
+    quote! { #[cfg(not(target_arch = "wasm32"))] #item }.into()
+}
+
 /// Keep only attributes that can gate a method, including nested `cfg_attr`s.
 fn cfg_meta(meta: &Meta) -> Option<Meta> {
     if meta.path().is_ident("cfg") {

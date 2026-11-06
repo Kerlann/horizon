@@ -48,6 +48,50 @@ impl Game<'_> {
     }
 }
 
+/// The target setter cannot model these species' extra side effects yet.
+pub(super) fn target_setter_available(mob: &Mob) -> bool {
+    brain_target(mob).is_none()
+        && !matches!(
+            mob.species(),
+            Species::Fox | Species::Enderman | Species::ZombifiedPiglin
+        )
+}
+
+/// Target admission shared by handles and a goal's selected-player snapshot.
+pub(super) fn can_target_player(mob: &Mob, facts: PlayerFacts, difficulty: i32) -> bool {
+    facts.alive
+        && !facts.invulnerable
+        && !matches!(facts.mode, 1 | 3)
+        && difficulty != 0
+        && !mob.built_by_player()
+        && !(mob.is_tamable_animal()
+            && mob.extra.tame
+            && mobs::tame::owned_by(mob.extra.owner, facts.uuid))
+        && !(mob.species() == Species::Dolphin && mob.is_baby())
+}
+
+/// Target admission over the same facts while the live mob list is taken for ticking.
+pub(super) fn can_target_seen(mob: &Mob, other: &mobs::Seen, world: &mobs::MobWorld<'_>) -> bool {
+    if other.id == mob.id || !other.alive || other.invulnerable || other.species == Species::Ghast {
+        return false;
+    }
+    if mob.species() == Species::Breeze && other.species != Species::IronGolem {
+        return false;
+    }
+    if mob.species() == Species::Creeper && other.species == Species::Goat {
+        return false;
+    }
+    if matches!(
+        mob.species(),
+        Species::Evoker | Species::Vindicator | Species::Illusioner | Species::Pillager
+    ) && matches!(other.species, Species::Villager | Species::WanderingTrader)
+        && other.baby
+    {
+        return false;
+    }
+    !mob.spares_target(world, Who::Mob(other.id))
+}
+
 #[derive(Clone, Copy)]
 enum MobFlag {
     Aggressive,
@@ -65,46 +109,12 @@ impl Game<'_> {
                 let Some(other) = self.mobs.iter().find(|m| m.id == id && !m.removed) else {
                     return false;
                 };
-                if !other.alive() || other.invulnerable_flag || other.species() == Species::Ghast {
-                    return false;
-                }
-                if mob.species() == Species::Breeze && other.species() != Species::IronGolem {
-                    return false;
-                }
-                if matches!(
-                    mob.species(),
-                    Species::Evoker | Species::Vindicator | Species::Illusioner | Species::Pillager
-                ) && matches!(
-                    other.species(),
-                    Species::Villager | Species::WanderingTrader
-                ) && other.is_baby()
-                {
-                    return false;
-                }
                 let seen = [super::creatures::seen(other, self.level.player_uuid)];
-                !mob.spares_target(&self.mob_world_base(&seen), Who::Mob(id))
+                can_target_seen(mob, &seen[0], &self.mob_world_base(&seen))
             }
-            Target::Player | Target::Guest(_) => {
-                let Some(PlayerFacts {
-                    mode,
-                    alive,
-                    invulnerable,
-                    uuid,
-                }) = self.native_player_facts(target)
-                else {
-                    return false;
-                };
-                alive
-                    && !invulnerable
-                    && mode != 1
-                    && mode != 3
-                    && self.difficulty_id() != 0
-                    && !mob.built_by_player()
-                    && !(mob.is_tamable_animal()
-                        && mob.extra.tame
-                        && mobs::tame::owned_by(mob.extra.owner, uuid))
-                    && !(mob.species() == Species::Dolphin && mob.is_baby())
-            }
+            Target::Player | Target::Guest(_) => self
+                .native_player_facts(target)
+                .is_some_and(|facts| can_target_player(mob, facts, self.difficulty_id())),
             _ => false,
         }
     }
@@ -209,22 +219,14 @@ impl Game<'_> {
         let Some(mob_state) = self.mobs.iter().find(|m| m.id == id) else {
             return false;
         };
-        if brain_target(mob_state).is_some()
-            || matches!(
-                mob_state.species(),
-                Species::Fox | Species::Enderman | Species::ZombifiedPiglin
-            )
-        {
+        if !target_setter_available(mob_state) {
             return false;
         }
         if let Some(target) = target {
             let Some(target_kind) = self.native_entity_target(target.entity()) else {
                 return false;
             };
-            if !self.native_mob_valid_target(mob_state, target_kind)
-                || (mob_state.species() == Species::Creeper
-                    && matches!(target_kind, Target::Mob(other) if self.mobs.iter().any(|m| m.id == other && m.species() == Species::Goat)))
-            {
+            if !self.native_mob_valid_target(mob_state, target_kind) {
                 return false;
             }
         }

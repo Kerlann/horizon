@@ -2453,6 +2453,8 @@ pub struct SpawnSetup {
 /// A snapshot of another entity mobs can see this tick.
 #[derive(Clone, Debug)]
 pub struct Seen {
+    /// `Entity.isInvulnerable`, for target admission while the live mob list is taken.
+    pub invulnerable: bool,
     pub in_water: bool,
     pub playing_dead: bool,
     pub last_damage: Option<Damage>,
@@ -2671,6 +2673,7 @@ impl Mob {
         let m = self;
         let villager = m.species() == Species::Villager;
         Seen {
+            invulnerable: self.invulnerable_flag,
             in_water: self.fluids.in_water,
             playing_dead: axolotl::is_playing_dead(self),
             last_damage: self.last_damage.map(|(d, _)| d),
@@ -2987,6 +2990,10 @@ pub fn apply_brain_events(
 /// The player as mobs see it.
 #[derive(Clone, Debug)]
 pub struct PlayerView {
+    /// The selected player's entity identity, captured before the mob tick takes its lists.
+    pub entity_id: Option<u32>,
+    /// The selected player's invulnerability ability.
+    pub invulnerable: bool,
     pub position: Vec3,
     pub bounds: Aabb,
     pub eye: [f64; 3],
@@ -3265,7 +3272,15 @@ pub fn entity_random(id: u32, position: Vec3) -> LegacyRandom {
     random
 }
 impl Mob {
+    /// An authoritative mob, spawned or loaded: register mod goals after the species' own.
     pub fn new(id: u32, kind: Arc<MobType>, position: Vec3, yaw: f32) -> Self {
+        let mut mob = Self::client_copy(id, kind, position, yaw);
+        part_goals::attach(&mut mob);
+        mob
+    }
+
+    /// A client packet copy: it never runs server-side mod goal registration.
+    pub fn client_copy(id: u32, kind: Arc<MobType>, position: Vec3, yaw: f32) -> Self {
         let random = entity_random(id, position);
         let mut mob = Self {
             join: Default::default(),
@@ -3380,9 +3395,6 @@ impl Mob {
         // The PathNavigation constructor: the base follow range.
         mob.ai.nav.max_visited_nodes = (mob.kind.follow_range * 16.0).floor() as i32;
         ai::register(&mut mob);
-        // The parts a mod attached to this entity type add their goals right
-        // after the species' own (#1077): vanilla's `registerGoals` moment.
-        part_goals::attach(&mut mob);
         mob
     }
     /// `Mob.canPickUpLoot`, with the overrides: an allay that holds

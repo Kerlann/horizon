@@ -1117,6 +1117,8 @@ pub fn main() -> horizon_client::Result<()> {
         let mut player = Some(s.player.unwrap_or(far)).map(|p| {
             let position = Vec3::new(p[0], p[1], p[2]);
             PlayerView {
+                entity_id: None,
+                invulnerable: false,
                 position,
                 bounds: Aabb::new(
                     Vec3::new(p[0] - 0.3, p[1], p[2] - 0.3),

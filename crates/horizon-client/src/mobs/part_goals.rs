@@ -25,9 +25,6 @@ use mod_api::{
 pub trait GoalHost {
     /// The handles' epoch: a handle of an earlier world refuses.
     fn epoch(&self) -> Option<NativeWorldEpoch>;
-    /// The game's own player, its uuid and entity id, when it stands in the
-    /// tick's view: a `PlayerView` carries no id of its own.
-    fn player(&self) -> Option<([i32; 4], u32)>;
     /// Run `goal`'s `op` on the mob in hand with the tick's `MobWorld`, naming
     /// `mod_id`'s `part` in a panic. None where this side runs no mod goals.
     fn run_goal(

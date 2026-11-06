@@ -2,6 +2,12 @@
 use super::{Game, commands::Target};
 use mod_api::MobRef;
 
+/// The common boundary for mod-supplied navigation and look-control coordinates.
+pub(super) fn safe_control_position(at: [f64; 3]) -> bool {
+    at.into_iter()
+        .all(|v| v.is_finite() && v.abs() <= 2_000_000_000.0)
+}
+
 impl Game<'_> {
     /// `PathNavigation.moveTo(x, y, z, speed)`: true if a path was started.
     /// Refuses a stale or unavailable mob, a client, non-finite arguments,
@@ -9,11 +15,7 @@ impl Game<'_> {
     /// the mob's own goals may replace the path next tick. False for the
     /// dragon, which flies by its phase and keeps no navigation.
     pub(super) fn native_mob_move_to(&mut self, mob: MobRef, at: [f64; 3], speed: f64) -> bool {
-        if !speed.is_finite()
-            || at
-                .iter()
-                .any(|v| !v.is_finite() || v.abs() > 2_000_000_000.0)
-        {
+        if !speed.is_finite() || !safe_control_position(at) {
             return false;
         }
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {

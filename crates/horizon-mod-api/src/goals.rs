@@ -66,6 +66,7 @@ use crate::{Host, LegacyRandom, LivingRef, MobRef};
 /// `Goal.Flag` set does: at most one goal holding each flag runs at a time, and
 /// a goal's flags are what a higher priority interrupts.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+// exhaustive: its field is private, so mods cannot build or destructure it
 pub struct GoalFlags(u8);
 impl GoalFlags {
     /// The empty set: a goal no other goal competes with.

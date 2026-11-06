@@ -8,7 +8,7 @@
 //! through the engine's own paths (`nav_move_to`, `ai.target`), and the write
 //! handles a `ServerHost` takes do not exist here.
 use super::Game;
-use crate::mobs::{self, Mob, MobWorld, Seen, Species, TargetInfo, Who, part_goals::GoalOp};
+use crate::mobs::{self, Mob, MobWorld, Seen, TargetInfo, Who, part_goals::GoalOp};
 use horizon_core::geometry::Axis;
 use mod_api::{
     EntityRef, GoalCxBackend, Host, LegacyRandom, LivingRef, MobRef, PlayerRef,
@@ -23,6 +23,7 @@ pub(super) struct GoalCx<'a, 'w> {
     m: &'a mut Mob,
     w: &'a MobWorld<'w>,
     host: &'a dyn Host,
+    backend: &'a dyn mod_api::Backend,
 }
 
 /// What a handle names in the goal view: the ticking mob itself, the player
@@ -50,10 +51,11 @@ impl GoalCx<'_, '_> {
         if id == self.m.id {
             return Some(Resolved::Own);
         }
-        if let Some(p) = self.w.player.as_ref()
-            && let Some((uuid, player)) = host.player()
-            && player == id
-            && p.uuid == uuid
+        if self
+            .w
+            .player
+            .as_ref()
+            .is_some_and(|p| p.entity_id == Some(id))
         {
             return Some(Resolved::Player);
         }
@@ -91,15 +93,19 @@ impl GoalCx<'_, '_> {
 
     /// `Host::mob`: the handle resolves in the tick's view.
     pub(crate) fn lookup_mob(&self, entity: EntityRef) -> Option<MobRef> {
-        self.resolve(entity).map(|_| MobRef::new(entity))
+        match self.resolve(entity)? {
+            Resolved::Player => None,
+            _ => Some(MobRef::new(entity)),
+        }
     }
 
     /// `Host::player`: the player the tick sees, by uuid.
     pub(crate) fn lookup_player(&self, uuid: u128) -> Option<PlayerRef> {
         let host = self.w.goal_host?;
-        let (uuid_seen, id) = host.player()?;
+        let player = self.w.player.as_ref()?;
+        let id = player.entity_id?;
         let epoch = host.epoch()?;
-        (uuid == horizon_client::lan::playerdata::ints_uuid(uuid_seen))
+        (uuid == horizon_client::lan::playerdata::ints_uuid(player.uuid))
             .then(|| mod_api::__private::game::player_ref(EntityRef::new(epoch, id), uuid))
     }
 
@@ -270,7 +276,9 @@ impl GoalCxBackend for GoalCx<'_, '_> {
     }
 
     fn move_to(&mut self, at: [f64; 3], speed: f64) -> bool {
-        self.m.nav_move_to(self.w, at, speed)
+        speed.is_finite()
+            && super::native_mob_navigation::safe_control_position(at)
+            && self.m.nav_move_to(self.w, at, speed)
     }
 
     fn stop_navigation(&mut self) {
@@ -278,30 +286,47 @@ impl GoalCxBackend for GoalCx<'_, '_> {
     }
 
     fn look_at(&mut self, at: [f64; 3]) {
-        self.m.look_at(at);
+        if super::native_mob_navigation::safe_control_position(at) {
+            self.m.look_at(at);
+        }
     }
 
     fn set_target(&mut self, target: Option<LivingRef>) -> bool {
         // The write handle's rules, as far as the tick sees them: the
         // brain-backed species and the three whose setter side effects are
         // not modeled refuse, an unresolvable target refuses.
-        if mobs::ai::brain_target(self.m).is_some()
-            || matches!(
-                self.m.species(),
-                Species::Fox | Species::Enderman | Species::ZombifiedPiglin
-            )
-        {
+        if !super::native_mob_refs::target_setter_available(self.m) {
             return false;
         }
         let who = match target {
             None => None,
             Some(living) => match self.resolve(living.entity()) {
-                Some(Resolved::Own) => Some(Who::Mob(self.m.id)),
-                Some(Resolved::Player) => Some(Who::Player),
+                Some(Resolved::Own) => return false,
+                Some(Resolved::Player) => {
+                    let player = self.w.player.as_ref().expect("resolved player");
+                    let facts = super::native_mob_refs::PlayerFacts {
+                        mode: if player.spectator {
+                            3
+                        } else if player.creative {
+                            1
+                        } else {
+                            0
+                        },
+                        alive: player.alive,
+                        invulnerable: player.invulnerable,
+                        uuid: player.uuid,
+                    };
+                    if !super::native_mob_refs::can_target_player(
+                        self.m,
+                        facts,
+                        self.w.difficulty.base,
+                    ) {
+                        return false;
+                    }
+                    Some(Who::Player)
+                }
                 Some(Resolved::Seen(seen)) => {
-                    if !seen.alive
-                        || (self.m.species() == Species::Creeper && seen.species == Species::Goat)
-                    {
+                    if !super::native_mob_refs::can_target_seen(self.m, seen, self.w) {
                         return false;
                     }
                     Some(Who::Mob(seen.id))
@@ -314,24 +339,13 @@ impl GoalCxBackend for GoalCx<'_, '_> {
     }
 
     fn jump(&mut self) {
-        self.m.ai.jumping = true;
+        self.m.ai.jump = true;
     }
 }
 
 impl mobs::part_goals::GoalHost for Game<'_> {
     fn epoch(&self) -> Option<mod_api::NativeWorldEpoch> {
         self.native_lifecycle.epoch()
-    }
-
-    fn player(&self) -> Option<([i32; 4], u32)> {
-        // The game's own player: a guest's turn sees the guest's view, which
-        // the view's uuid check tells apart from this one.
-        if self.lan_acting_uuid.is_some() || self.player.is_none() {
-            return None;
-        }
-        let uuid = self.level.player_uuid?;
-        let id = u32::try_from(self.player.as_ref()?.entity_id).ok()?;
-        Some((uuid, id))
     }
 
     fn run_goal(
@@ -350,7 +364,12 @@ impl mobs::part_goals::GoalHost for Game<'_> {
             GoalOp::Stop => "goal_stop",
             GoalOp::Tick => "goal_tick",
         };
-        let mut gcx = GoalCx { m, w, host: self };
+        let mut gcx = GoalCx {
+            m,
+            w,
+            host: self,
+            backend: self,
+        };
         let mut context = mod_api::GoalContext::new(&mut gcx);
         let _guard = enter_native_mod(NativeModCall {
             id: mod_id,

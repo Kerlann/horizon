@@ -459,6 +459,8 @@ mod tests {
 
     fn view(x: f64, creative: bool) -> PlayerView {
         PlayerView {
+            entity_id: None,
+            invulnerable: false,
             position: Vec3::new(x, 64.0, 0.0),
             bounds: Aabb::new(Vec3::new(x, 64.0, 0.0), Vec3::new(x, 65.8, 0.0)),
             eye: [x, 65.62, 0.0],

@@ -381,6 +381,8 @@ impl Game<'_> {
             ),
         );
         Some(PlayerView {
+            entity_id: u32::try_from(p.entity_id).ok(),
+            invulnerable: p.invulnerable,
             position: p.position,
             bounds,
             eye: [

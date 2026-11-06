@@ -538,6 +538,8 @@ pub(crate) fn with_resource_test_world(
 #[cfg(test)]
 pub(crate) fn test_player(position: Vec3) -> super::PlayerView {
     super::PlayerView {
+        entity_id: None,
+        invulnerable: false,
         position,
         bounds: Aabb::new(
             Vec3::new(position.x - 0.3, position.y, position.z - 0.3),

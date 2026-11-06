@@ -597,6 +597,8 @@ mod golem_touch_tests {
             let mut w = w.clone();
             let at = Vec3::new(0.5, 64.0, 0.5);
             w.player = Some(crate::mobs::PlayerView {
+                entity_id: None,
+                invulnerable: false,
                 position: at,
                 bounds: Aabb::new(
                     Vec3::new(at.x - 0.3, at.y, at.z - 0.3),

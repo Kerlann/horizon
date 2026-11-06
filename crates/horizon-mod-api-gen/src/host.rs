@@ -36,6 +36,54 @@ pub(super) const GOAL_VIEW_LOOKUPS: &[&str] = &[
     "block_entity",
 ];
 
+struct GoalRead<'a> {
+    name: &'a str,
+    signature: String,
+    arguments: String,
+    refusal: &'static str,
+    entity_input: bool,
+}
+
+struct EntityInputs<'a> {
+    names: &'a HashSet<String>,
+    found: bool,
+}
+impl<'ast> Visit<'ast> for EntityInputs<'_> {
+    fn visit_type_path(&mut self, ty: &'ast syn::TypePath) {
+        self.found |= ty
+            .path
+            .segments
+            .iter()
+            .any(|s| self.names.contains(&s.ident.to_string()));
+        syn::visit::visit_type_path(self, ty);
+    }
+}
+
+/// Entity-backed handles follow their fields, not method-name prefixes: level and block-entity
+/// reads keep forwarding, while a new entity wrapper automatically joins the snapshot boundary.
+fn entity_handles(source: &str) -> Result<HashSet<String>, String> {
+    let file = syn::parse_file(source).map_err(|e| e.to_string())?;
+    let mut names = HashSet::from(["EntityRef".to_owned()]);
+    loop {
+        let before = names.len();
+        for item in &file.items {
+            if let Item::Struct(item) = item {
+                let mut inputs = EntityInputs {
+                    names: &names,
+                    found: false,
+                };
+                inputs.visit_fields(&item.fields);
+                if inputs.found {
+                    names.insert(item.ident.to_string());
+                }
+            }
+        }
+        if before == names.len() {
+            return Ok(names);
+        }
+    }
+}
+
 pub(super) fn generate(
     root: &Path,
     catalog: &Catalog,
@@ -45,6 +93,7 @@ pub(super) fn generate(
     let api_source = fs::read_to_string(root.join("crates/horizon-mod-api/src/lib.rs"))
         .map_err(|e| e.to_string())?;
     let types = api_types(&api_source, code)?;
+    let entity_handles = entity_handles(&api_source)?;
     let mut game = Vec::new();
     game_methods(
         &root.join("crates/horizon-client/src/game"),
@@ -64,7 +113,7 @@ pub(super) fn generate(
     let mut backend_write_impl = String::new();
     let mut client_backend_write_impl = String::new();
     // Each backend read's name, signature, argument names and typed refusal, for the goal view.
-    let mut backend_read_list: Vec<(&str, String, String, &str)> = Vec::new();
+    let mut backend_read_list = Vec::new();
     // Each `Host` method's name, signature, argument names, return type and
     // mutability, for the goal view's own `Host` impl.
     let mut host_method_list: Vec<(&str, String, String, String, bool)> = Vec::new();
@@ -203,7 +252,20 @@ pub(super) fn generate(
                         }
                     },
                 };
-                backend_read_list.push((name, sig.to_token_stream().to_string(), args, refusal));
+                let mut inputs = EntityInputs {
+                    names: &entity_handles,
+                    found: false,
+                };
+                for arg in &sig.inputs {
+                    inputs.visit_fn_arg(arg);
+                }
+                backend_read_list.push(GoalRead {
+                    name,
+                    signature: sig.to_token_stream().to_string(),
+                    arguments: args,
+                    refusal,
+                    entity_input: inputs.found,
+                });
             }
             let (trait_methods, impl_methods) = if mutable && side == Side::Client {
                 (&mut client_backend_writes, &mut client_backend_write_impl)
@@ -371,13 +433,22 @@ pub(super) fn generate(
 /// rules, refuses the mutable methods, and forwards everything else to the
 /// game host the view carries. The engine includes both beside its `GoalCx`.
 fn goal_view(
-    reads: &[(&str, String, String, &str)],
+    reads: &[GoalRead<'_>],
     host_methods: &[(&str, String, String, String, bool)],
 ) -> Result<String, String> {
     let mut backend = String::new();
-    for (name, sig, args, refusal) in reads {
+    for read in reads {
+        let GoalRead {
+            name,
+            signature: sig,
+            arguments: args,
+            refusal,
+            entity_input,
+        } = read;
         let body = if GOAL_VIEW_READS.contains(name) {
             format!("self.r_{name}({args})")
+        } else if !entity_input {
+            format!("self.backend.{name}({args})")
         } else if args.is_empty() {
             (*refusal).to_string()
         } else {

@@ -937,7 +937,7 @@ pub trait Registrar {
     ///
     /// Not on wasm: the goal surface a part's `register_goals` hands the game
     /// does not cross yet (#1077); entity parts are a native mod's for now.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[horizon_mod_api_macros::native_only]
     fn attach_entity_part(&mut self, entity: &str, kind: &'static str, part: Arc<dyn EntityPart>);
     /// Attach `part`, of kind `kind`, to the mod menu type `menu`.
     fn attach_menu_part(&mut self, menu: &str, kind: &'static str, part: Arc<dyn MenuPart>);
@@ -1031,7 +1031,9 @@ impl dyn Registrar + '_ {
     /// [`EntityPart::register_goals`] runs at every `Mob` construction of that
     /// type, spawning or loading, and its goals join the mob's selectors
     /// beside vanilla's (#1077).
-    #[cfg(not(target_arch = "wasm32"))]
+    ///
+    /// Not on wasm: a held goal context is not bound yet; see `attach_entity_part`.
+    #[horizon_mod_api_macros::native_only]
     pub fn entity_part<P: EntityPart>(&mut self, entity: &str, part: P) {
         self.attach_entity_part(entity, type_name::<P>(), Arc::new(part));
     }
@@ -1427,7 +1429,7 @@ impl Registrar for PartRegistrar {
         self.attach(|p| &mut p.items, kind, item, part);
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[horizon_mod_api_macros::native_only]
     fn attach_entity_part(&mut self, entity: &str, kind: &'static str, part: Arc<dyn EntityPart>) {
         self.attach(|p| &mut p.entities, kind, entity, part);
     }

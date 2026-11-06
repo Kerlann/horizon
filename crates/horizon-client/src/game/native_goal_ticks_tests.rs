@@ -406,7 +406,8 @@ fn the_host_answers_without_panicking() {
             // The level's own reads forward to the game host behind the tick.
             let stone = host.block_state_id("minecraft:stone");
             let tagged = host.entity_type_in_tag("minecraft:zombie", "minecraft:undead");
-            let day_time = host.day_time();
+            let level = host.level("minecraft:overworld").unwrap();
+            let day_time = level.day_time(host).unwrap();
             // The entity lookups answer the tick's own rules: the neighbour
             // comes back as a handle, and it reads from the snapshot.
             let other = OTHER.lock().unwrap().as_ref().copied();
