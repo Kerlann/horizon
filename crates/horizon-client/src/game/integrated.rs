@@ -426,6 +426,12 @@ impl Game<'_> {
             }),
         };
         let mut options = self.options.clone();
+        // A title-screen live switch may have published a different root and
+        // selection since startup. The new server inherits that generation,
+        // never the window's outstanding completion receiver.
+        options.mods = self.mods.clone();
+        options.mods.data_reload = None;
+        options.mods.data_reload_failed = false;
         // A server without a console: no local player, no window, no control socket.
         // Compatibility for gameplay checks outside startup/world loading.
         options.dedicated = Some(Vec::new());

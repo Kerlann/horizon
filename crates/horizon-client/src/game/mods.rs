@@ -28,9 +28,10 @@ pub(super) struct ModsState {
     /// The content mods the loaded resources were built with: a switch the
     /// game can apply live moves it to the player's choice (`switch_mods`).
     pub(super) applied: Option<std::collections::BTreeSet<String>>,
-    /// A live switch's resource reload is running: when it applied, the server
-    /// reloads its data from the new root. Its start, for the log.
-    pub(super) live: Option<std::time::Instant>,
+    /// The latest server data reload's answer, polled without blocking the window.
+    pub(super) data_reload: Option<Arc<ModDataReload>>,
+    /// Resources applied, but the server refused their data. A same-choice switch retries it.
+    pub(super) data_reload_failed: bool,
     /// The content mods installed, and those of them with only assets and
     /// data (`mod_content::live_switch`): they switch with a world open.
     pub(super) content_ids: std::collections::BTreeSet<String>,
@@ -41,6 +42,10 @@ pub(super) struct ModsState {
     pub(super) data_switched: bool,
     /// Structured load refusals, rendered only at the existing Mods-page boundary.
     pub(super) refused: Arc<Mutex<Vec<MissingJar>>>,
+}
+
+pub(super) struct ModDataReload {
+    result: Mutex<std::sync::mpsc::Receiver<std::result::Result<(), String>>>,
 }
 
 impl ModsState {
@@ -60,6 +65,44 @@ impl ModsState {
             })
             .collect();
         self.refused = Default::default();
+    }
+
+    /// Build an isolated candidate. Never reselect code: its validated startup
+    /// manifests and native runtime must outlive any assets/data-only switch.
+    pub(super) fn for_reload(
+        &self,
+        game_dir: &Path,
+        enabled: std::collections::BTreeSet<String>,
+    ) -> Self {
+        let content = horizon_mods::selection::content_packages(game_dir, &enabled, &self.dev)
+            .filter(|p| {
+                p.package.manifest.wasm.is_none()
+                    && !self
+                        .native
+                        .built()
+                        .iter()
+                        .any(|built| built.id == p.package.manifest.id)
+            });
+        let code = self
+            .selected
+            .iter()
+            .filter(|p| p.package.manifest.wasm.is_some())
+            .map(|p| horizon_mods::selection::SelectedPackage {
+                path: p.path.clone(),
+                package: horizon_mods::Package {
+                    manifest: p.package.manifest.clone(),
+                    icon: p.package.icon.clone(),
+                },
+            });
+        let selected = content.chain(code).collect();
+        Self {
+            applied: Some(enabled),
+            selected,
+            refused: Default::default(),
+            data_reload: None,
+            data_reload_failed: false,
+            ..self.clone()
+        }
     }
 
     fn report_refusals(&self, rows: &mut [Installed]) {
@@ -660,27 +703,20 @@ impl Game<'_> {
             .clone()
             .unwrap_or_else(|| self.settings.mods.enabled.clone())
     }
-    /// The player turned content mods on or off (Options > Mods, or an
-    /// install from Browse Mods): those with only assets and data apply now
-    /// (docs/design/mod-hotload.md), through the resource reload and then the
-    /// server's data reload (`mods_reloaded`); those that add blocks, items or
-    /// worldgen wait for a restart, and the Mods page says so.
-    pub(super) fn switch_mods(&mut self) {
-        let Some(applied) = self.mods.applied.clone() else {
-            return;
-        };
+    /// Resolve a reload's choice without publishing it. A deferred reload resolves
+    /// again when it actually starts, rather than consuming another worker's result.
+    pub(super) fn next_mods(&mut self) -> std::collections::BTreeSet<String> {
+        let applied = self.applied_mods();
         let wanted = self.settings.mods.enabled.clone();
-        if applied == wanted {
-            return;
-        }
         // Native mods' `mod.<id>` lines follow the player's choice as they are
         // (`sync_native_switches`); a content mod with blocks, items or
         // worldgen keeps the state it loaded with until a restart.
         let content = &self.mods.content_ids;
+        let live = self.mods_live_now();
         let mut next = wanted.clone();
         let mut waiting = Vec::new();
         for id in applied.symmetric_difference(&wanted) {
-            if !content.contains(id) || self.mods.live_ids.contains(id) {
+            if !content.contains(id) || live.contains(id) {
                 continue;
             }
             log::info!("Horizon: mod {id} needs a restart to switch");
@@ -693,60 +729,110 @@ impl Game<'_> {
         }
         self.ui.options.mods_note = (!waiting.is_empty())
             .then(|| lang::tr("horizon.mods.switch.restart", &[&waiting.join(", ")]));
-        let changed = applied
-            .symmetric_difference(&next)
-            .any(|id| content.contains(id));
-        if !changed {
-            self.mods.applied = Some(next);
-            return;
-        }
-        log::info!(
-            "Horizon: content mods switched live: {:?} -> {:?}",
-            applied,
-            next
-        );
-        self.mods.applied = Some(next);
-        self.mods.live = Some(std::time::Instant::now());
-        self.reload_packs();
+        next
     }
-    /// A live switch's resources applied: the server reloads its data packs
-    /// from the new root, as `/reload` does (recipes, tags, loot tables,
-    /// advancements, functions), and sends them to its players.
-    pub(super) fn mods_reloaded(&mut self, applied: bool) {
-        let Some(started) = self.mods.live.take() else {
-            return;
-        };
-        let resources_ms = started.elapsed().as_millis();
-        if !applied {
+    /// Apply assets/data-only choices through resource staging first. Bookkeeping
+    /// stays on the published resources until that particular worker succeeds.
+    pub(super) fn switch_mods(&mut self) {
+        if self.mods.applied.is_none() {
             return;
         }
+        // Even switching back to the published choice must queue a reload if
+        // another choice is already staging. It must not cancel that worker's outcome.
+        if self.pack_reload.is_some() || self.rest_loader.is_some() {
+            self.pending_pack_reload = true;
+            return;
+        }
+        let next = self.next_mods();
+        let changed = self
+            .applied_mods()
+            .symmetric_difference(&next)
+            .any(|id| self.mods.content_ids.contains(id));
+        if changed {
+            self.reload_packs();
+        } else {
+            self.mods.applied = Some(next);
+            if self.mods.data_reload_failed {
+                self.mods_reloaded();
+            }
+        }
+    }
+    /// Resources are published. Reload the server data from that exact snapshot;
+    /// report its asynchronous answer separately from the client resource result.
+    pub(super) fn mods_reloaded(&mut self) {
         let root = self.options.resources.clone();
-        let enabled = self.applied_mods();
-        let selected = self.mods.selected.clone();
-        let refused = self.mods.refused.clone();
+        let sources = self.mods.clone();
+        let (send, result) = std::sync::mpsc::channel();
         let reload = move |g: &mut Game<'_>| {
             let at = std::time::Instant::now();
-            g.options.resources = root;
-            g.settings.mods.enabled = enabled.clone();
-            g.mods.applied = Some(enabled);
-            g.mods.selected = selected;
-            g.mods.refused = refused;
-            g.mods.data_switched = true;
-            if g.world_root.as_os_str().is_empty() {
-                return;
+            let result = g.reload_mod_data(root, &sources).map_err(|e| e.to_string());
+            match &result {
+                Ok(()) => log::info!(
+                    "Horizon: content mods switched live: server data reloaded in {} ms",
+                    at.elapsed().as_millis()
+                ),
+                Err(error) => log::warn!("Horizon: content mod server reload failed: {error}"),
             }
-            g.reload_datapacks(true);
-            log::info!(
-                "Horizon: content mods switched live: server data reloaded in {} ms",
-                at.elapsed().as_millis()
-            );
+            let _ = send.send(result);
         };
-        log::info!("Horizon: content mods switched live: resources reloaded in {resources_ms} ms");
+        self.mods.data_reload_failed = false;
+        self.mods.data_reload = Some(Arc::new(ModDataReload {
+            result: Mutex::new(result),
+        }));
         if let Some(server) = &self.integrated {
+            // A rejected post drops the sender, reported by the same completion path.
             server.post(reload);
         } else if self.remote.is_none() {
+            // On the title screen this is the window itself, not a separate
+            // server. Keep its requested choice (including a queued switch).
+            let wanted = self.settings.mods.enabled.clone();
             reload(self);
+            self.settings.mods.enabled = wanted;
         }
+    }
+    pub(super) fn poll_mod_data_reload(&mut self) {
+        let Some(pending) = &self.mods.data_reload else {
+            return;
+        };
+        let result = match pending.result.lock().unwrap().try_recv() {
+            Ok(result) => result,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                Err("the server stopped before the content mod reload completed".to_owned())
+            }
+        };
+        self.mods.data_reload = None;
+        if let Err(error) = result {
+            log::warn!("Horizon: content mod server reload failed: {error}");
+            self.mods.data_reload_failed = true;
+            self.ui.options.resource_error =
+                Some(format!("{}\n{error}", lang::get("commands.reload.failure")));
+        }
+    }
+    /// Server-side candidate root and Host-visible selection. A prepare failure
+    /// publishes no data and restores the metadata alongside the existing tables.
+    pub(super) fn reload_mod_data(
+        &mut self,
+        root: PathBuf,
+        sources: &ModsState,
+    ) -> std::result::Result<(), mod_api::__private::reload::ReloadStageError> {
+        let previous_root = std::mem::replace(&mut self.options.resources, root);
+        let previous_mods = self.mods.clone();
+        let previous_enabled = self.settings.mods.enabled.clone();
+        self.mods.applied = sources.applied.clone();
+        self.mods.selected = sources.selected.clone();
+        self.mods.refused = sources.refused.clone();
+        self.mods.data_switched = true;
+        self.settings.mods.enabled = self.applied_mods();
+        if !self.world_root.as_os_str().is_empty()
+            && let Err(error) = self.reload_datapacks(true, &self.level.enabled_features.clone())
+        {
+            self.options.resources = previous_root;
+            self.mods = previous_mods;
+            self.settings.mods.enabled = previous_enabled;
+            return Err(error);
+        }
+        Ok(())
     }
     /// Apply the player's switches at the canonical native and wasm dispatch boundary.
     pub(super) fn sync_native_switches(&self) {
@@ -997,6 +1083,168 @@ mod tests {
         ];
         let bytes = horizon_mods::Package::write_files(&manifest, files).unwrap();
         std::fs::write(dir.join(format!("{id}.hmod")), bytes).unwrap();
+    }
+
+    #[test]
+    fn reload_candidates_are_isolated_and_keep_only_startup_code() {
+        let f = Fixture::new("reload-candidates");
+        let installed = f.0.join(mod_list::DIR);
+        std::fs::create_dir_all(&installed).unwrap();
+        let write = |id: &str, version: &str, wasm: bool| {
+            let mut manifest = format!(
+                "id='{id}'\nname='{id}'\nversion='{version}'\napi='0.2'\ncapabilities=['registries']\n"
+            );
+            let module = b"\0asm\x01\0\0\0";
+            if wasm {
+                manifest += &format!(
+                    "[wasm]\nsha512='{}'\ntoolchain='1.99.1'\nbuilt_with='test'\n",
+                    horizon_mods::manifest::wasm::sha512_of(module)
+                );
+            }
+            let wasm_files = [("mod.wasm", module.as_slice())];
+            let files: &[(&str, &[u8])] = if wasm { &wasm_files } else { &[] };
+            let path = installed.join(format!("{id}.hmod"));
+            std::fs::write(
+                &path,
+                horizon_mods::Package::write_files(&manifest, files).unwrap(),
+            )
+            .unwrap();
+            path
+        };
+        let code = write("startup_code", "1", true);
+        let (mut content_ids, mut live_ids) = Default::default();
+        live_switch_of(
+            &code,
+            &horizon_mods::Package::read(&code).unwrap(),
+            &mut content_ids,
+            &mut live_ids,
+        );
+        assert!(content_ids.is_empty() && live_ids.is_empty());
+        let selected = vec![horizon_mods::selection::SelectedPackage {
+            package: horizon_mods::Package::read(&code).unwrap(),
+            path: code,
+        }]
+        .into();
+        let published = ModsState {
+            applied: Some(["startup_code".to_owned()].into()),
+            selected,
+            ..Default::default()
+        };
+        write("startup_code", "2", true);
+        write("new_code", "1", true);
+        let content = write("glint", "1", false);
+        hmod(&installed, "machine_sample");
+        let wanted = ["startup_code", "new_code", "machine_sample", "glint"]
+            .map(str::to_owned)
+            .into();
+        let candidate = published.for_reload(&f.0, wanted);
+        assert_eq!(
+            published.applied.as_ref().unwrap(),
+            &std::collections::BTreeSet::from(["startup_code".to_owned()])
+        );
+        assert_eq!(published.selected.len(), 1);
+        assert!(!Arc::ptr_eq(&published.refused, &candidate.refused));
+        assert!(Arc::ptr_eq(&published.native, &candidate.native));
+        let ids: Vec<_> = candidate
+            .selected
+            .iter()
+            .map(|p| p.package.manifest.id.as_str())
+            .collect();
+        assert_eq!(ids, ["glint", "startup_code"]);
+        let frozen = &candidate.selected[1].package.manifest;
+        assert_eq!(frozen.version, "1");
+        assert_eq!(candidate.selected[0].path, content);
+        // A dispatch switch must not unload startup wasm content either.
+        let disabled = published.for_reload(&f.0, Default::default());
+        assert_eq!(disabled.selected.len(), 1);
+        assert_eq!(disabled.selected[0].package.manifest.id, "startup_code");
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn server_data_answers_are_polled_and_a_same_choice_retries_a_failure() {
+        use crate::game::native_entity_refs::tests::with_game;
+        with_game(|game| {
+            game.mods.applied = Some(Default::default());
+            game.settings.mods.enabled.clear();
+            let (send, result) = std::sync::mpsc::channel();
+            game.mods.data_reload = Some(Arc::new(ModDataReload {
+                result: Mutex::new(result),
+            }));
+            game.poll_mod_data_reload();
+            assert!(
+                game.mods.data_reload.is_some(),
+                "do not block on an unfinished server task"
+            );
+            send.send(Err("server listener rejected candidate".to_owned()))
+                .unwrap();
+            game.poll_mod_data_reload();
+            assert!(game.mods.data_reload.is_none());
+            assert!(game.mods.data_reload_failed);
+            assert!(
+                game.ui
+                    .options
+                    .resource_error
+                    .as_ref()
+                    .unwrap()
+                    .contains("server listener rejected candidate")
+            );
+            game.switch_mods();
+            assert!(
+                game.pack_reload.is_none(),
+                "already published assets need no second rebuild"
+            );
+            assert!(
+                game.mods.data_reload.is_some(),
+                "same choice retries the data phase"
+            );
+            game.poll_mod_data_reload();
+            assert!(game.mods.data_reload.is_none());
+            assert!(!game.mods.data_reload_failed);
+            let (send, result) = std::sync::mpsc::channel();
+            game.mods.data_reload = Some(Arc::new(ModDataReload {
+                result: Mutex::new(result),
+            }));
+            drop(send);
+            game.poll_mod_data_reload();
+            assert!(
+                game.mods.data_reload_failed,
+                "a dropped task is not a successful reload"
+            );
+        });
+    }
+
+    #[test]
+    fn jar_layers_and_code_packages_are_not_live_switch_candidates() {
+        let f = Fixture::new("reload-eligibility");
+        for (id, jar) in [("plain", false), ("jar_layer", true)] {
+            let mut manifest = format!(
+                "id='{id}'\nname='{id}'\nversion='1'\napi='0.2'\ncapabilities=['registries']\n"
+            );
+            if jar {
+                manifest += &format!(
+                    "[[jar]]\nid='original'\nversion='1'\nsha512='{}'\n",
+                    "a".repeat(128)
+                );
+            }
+            let path = f.0.join(format!("{id}.hmod"));
+            std::fs::write(
+                &path,
+                horizon_mods::Package::write_files(&manifest, &[]).unwrap(),
+            )
+            .unwrap();
+            let package = horizon_mods::Package::read(&path).unwrap();
+            let (mut content, mut live) = Default::default();
+            live_switch_of(&path, &package, &mut content, &mut live);
+            assert!(content.contains(id));
+            assert_eq!(live.contains(id), !jar);
+        }
+        hmod(&f.0, "machine_sample");
+        let path = f.0.join("machine_sample.hmod");
+        let package = horizon_mods::Package::read(&path).unwrap();
+        let (mut content, mut live) = Default::default();
+        live_switch_of(&path, &package, &mut content, &mut live);
+        assert!(content.is_empty() && live.is_empty());
     }
 
     #[test]

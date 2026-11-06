@@ -5874,34 +5874,49 @@ fn a_data_mod_loads_unloads_and_loads_again() {
 }
 
 #[test]
-fn roots_unused_for_a_day_are_removed() {
-    let scratch = std::env::temp_dir().join(format!("horizon-mod-prune-{}", std::process::id()));
+#[ignore = "full content root: needs prepared vanilla data"]
+fn building_a_root_preserves_old_roots_and_legacy_lazy_readers() {
+    let Some(base) = prepared() else { return };
+    let scratch = std::env::temp_dir().join(format!("horizon-mod-retain-{}", std::process::id()));
     let _ = fs::remove_dir_all(&scratch);
-    let roots = scratch.join("mod-content");
-    let root = |name: &str, age_s: u64| {
-        let dir = roots.join(name);
-        fs::create_dir_all(&dir).unwrap();
-        let stamp = dir.join(STAMP);
-        fs::write(&stamp, b"x").unwrap();
-        let file = fs::File::options().write(true).open(&stamp).unwrap();
-        file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(age_s))
+    let cache = scratch.join("cache");
+    let roots = cache.join("mod-content");
+    let old = roots.join("00000000000000aa");
+    let incomplete = roots.join("00000000000000bb");
+    for root in [&roots, &old, &incomplete] {
+        fs::create_dir_all(root.join("assets/retained")).unwrap();
+        fs::write(root.join("assets/retained/lazy.txt"), b"still in use").unwrap();
+    }
+    // Age is not a lease: another game may still read either layout after a day.
+    for root in [&roots, &old] {
+        let stamp = root.join(STAMP);
+        fs::write(&stamp, b"old").unwrap();
+        fs::File::options()
+            .write(true)
+            .open(stamp)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3 * 86400))
             .unwrap();
-        dir
-    };
-    let current = root("00000000000000aa", 3 * 86400);
-    let recent = root("00000000000000bb", 60);
-    let stale = root("00000000000000cc", 2 * 86400);
-    // Not a root's name: never touched while the folder has no root of the old layout.
-    let other = roots.join("notes");
-    fs::create_dir_all(&other).unwrap();
-    prune_roots(&roots, &current, KEEP_ROOTS);
-    assert!(current.exists() && recent.exists() && other.exists());
-    assert!(!stale.exists());
-    // An older game's single root, built straight in the folder, goes.
-    fs::write(roots.join(STAMP), b"old").unwrap();
-    fs::create_dir_all(roots.join("assets/minecraft")).unwrap();
-    prune_roots(&roots, &current, KEEP_ROOTS);
-    assert!(!roots.join(STAMP).exists() && !roots.join("assets").exists());
-    assert!(current.exists() && recent.exists());
+    }
+    let linked = scratch.join("linked");
+    crate::packs::build_overlay(&old, &[], &linked).unwrap();
+    let glint = glint_mod(&scratch.join("glint"));
+    let new = resource_root(&base, Path::new(""), std::slice::from_ref(&glint), &cache).unwrap();
+    assert_ne!(new, old);
+    // Reuse and the empty selection must not turn into cleanup paths either.
+    assert_eq!(
+        resource_root(&base, Path::new(""), &[glint], &cache).unwrap(),
+        new
+    );
+    assert_eq!(
+        resource_root(&base, Path::new(""), &[], &cache).unwrap(),
+        base
+    );
+    for root in [&roots, &old, &incomplete, &linked] {
+        assert_eq!(
+            fs::read(root.join("assets/retained/lazy.txt")).unwrap(),
+            b"still in use"
+        );
+    }
     fs::remove_dir_all(&scratch).unwrap();
 }

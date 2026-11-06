@@ -279,35 +279,11 @@ impl Game<'_> {
         if self.ui.vanilla_root.as_os_str().is_empty() {
             self.ui.vanilla_root = vanilla.clone();
         }
-        let enabled = self.applied_mods();
-        // Only content-only packages are selectable on reload. Keep code packages' validated
-        // startup manifests: changing their content must not install code or registries live.
-        let content =
-            horizon_mods::selection::content_packages(&Self::game_dir(), &enabled, &self.mods.dev)
-                .filter(|p| {
-                    p.package.manifest.wasm.is_none()
-                        && !self
-                            .mods
-                            .native
-                            .built()
-                            .iter()
-                            .any(|built| built.id == p.package.manifest.id)
-                });
-        let code = self
-            .mods
-            .selected
-            .iter()
-            .filter(|p| p.package.manifest.wasm.is_some())
-            .map(|p| horizon_mods::selection::SelectedPackage {
-                path: p.path.clone(),
-                package: horizon_mods::Package {
-                    manifest: p.package.manifest.clone(),
-                    icon: p.package.icon.clone(),
-                },
-            });
-        self.mods.selected = content.chain(code).collect();
-        self.mods.refused = Default::default();
-        let mod_sources = self.mods.clone();
+        let enabled = match kind {
+            ReloadKind::Selection => self.next_mods(),
+            ReloadKind::Server => self.applied_mods(),
+        };
+        let mod_sources = self.mods.for_reload(&Self::game_dir(), enabled);
         let (selected, server) = (
             self.settings.resource_packs.clone(),
             self.server_packs.active.clone(),
@@ -322,12 +298,13 @@ impl Game<'_> {
         // the game, before the staging worker starts: each listener keeps its
         // registering mod for crash attribution.
         let client_listeners = self.register_client_reload_listeners();
-        self.pack_reload = Some(PackReload::spawn(kind, move |progress| {
+        let worker_sources = mod_sources.clone();
+        let mut reload = PackReload::spawn(kind, move |progress| {
             stage_pack(
                 &vanilla,
                 &selected,
                 &server,
-                &mod_sources,
+                &worker_sources,
                 client_listeners,
                 &assets,
                 &res,
@@ -337,22 +314,38 @@ impl Game<'_> {
                 progress,
             )
             .map_err(|e| e.to_string())
-        })?);
+        })?;
+        reload.mods = Some(mod_sources);
+        self.pack_reload = Some(reload);
         Ok(())
     }
     /// `LoadingOverlay.tick` once the reload is done: the staged pack is
     /// applied on the render thread, and its outcome goes to whoever asked
     /// (`reloadResourcePacks`' callback, or `PackReloadConfig.Callbacks`).
     pub(super) fn drive_pack_reload(&mut self) {
+        self.poll_mod_data_reload();
         let Some((kind, staged)) = self.pack_reload.as_mut().and_then(PackReload::finished) else {
             return;
         };
-        self.pack_reload = None;
-        let result =
-            staged.and_then(|staged| self.apply_staged_pack(staged).map_err(|e| e.to_string()));
+        let reload = self.pack_reload.take().unwrap();
+        let changed = reload.mods.as_ref().is_some_and(|sources| {
+            self.applied_mods()
+                .symmetric_difference(sources.applied.as_ref().unwrap())
+                .any(|id| self.mods.content_ids.contains(id))
+        });
+        let result = staged.and_then(|staged| {
+            self.apply_staged_pack(staged, reload.mods)
+                .map_err(|e| e.to_string())
+        });
+        if result.is_ok() && (changed || self.mods.data_reload_failed) {
+            log::info!(
+                "Horizon: content mods switched live: resources reloaded in {} ms",
+                reload.started.elapsed().as_millis()
+            );
+            self.mods_reloaded();
+        }
         match kind {
             ReloadKind::Selection => {
-                self.mods_reloaded(result.is_ok());
                 if let Err(e) = result {
                     self.selection_reload_failed(&e);
                 }
@@ -367,7 +360,11 @@ impl Game<'_> {
     }
     /// The render-thread half: the renderer on the new pack's textures, then
     /// the swap (`ReloadInstance`'s application listeners).
-    pub(super) fn apply_staged_pack(&mut self, staged: StagedPack) -> horizon_client::Result<()> {
+    fn apply_staged_pack(
+        &mut self,
+        staged: StagedPack,
+        sources: Option<super::mods::ModsState>,
+    ) -> horizon_client::Result<()> {
         let StagedPack {
             root,
             client_applies,
@@ -419,7 +416,13 @@ impl Game<'_> {
                 return Err(error);
             }
         };
-        // Everything loaded: switch over.
+        // Everything loaded: switch over. Reload callbacks must see the same
+        // selection as the resources, never the candidate of a queued reload.
+        if let Some(sources) = sources {
+            self.mods.applied = sources.applied;
+            self.mods.selected = sources.selected;
+            self.mods.refused = sources.refused;
+        }
         self.waypoint_styles = horizon_client::locator_bar::WaypointStyles::load(&root);
         self.armor_stand_assets.reload_trims(&root);
         self.random_tick_sections.clear();
@@ -665,6 +668,9 @@ pub(super) struct PackReload {
     pub(super) progress: super::Progress,
     kind: ReloadKind,
     handle: Option<std::thread::JoinHandle<StageResult>>,
+    /// Only this worker's successful application may publish its content selection.
+    mods: Option<super::mods::ModsState>,
+    started: std::time::Instant,
 }
 impl PackReload {
     /// Starts `stage` on its own thread and returns at once.
@@ -681,6 +687,8 @@ impl PackReload {
             progress,
             kind,
             handle: Some(handle),
+            mods: None,
+            started: std::time::Instant::now(),
         })
     }
     pub(super) fn kind(&self) -> ReloadKind {
@@ -834,6 +842,166 @@ mod tests {
             staged.err().as_deref(),
             Some("the pack reload worker panicked")
         );
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_failed_content_worker_preserves_published_bookkeeping_and_can_be_retried() {
+        use crate::game::{mods::ModsState, native_entity_refs::tests::with_game};
+        with_game(|game| {
+            game.mods = ModsState {
+                applied: Some(Default::default()),
+                ..Default::default()
+            };
+            game.mods.content_ids.insert("glint".to_owned());
+            game.mods.live_ids.insert("glint".to_owned());
+            game.settings.mods.enabled = ["glint".to_owned()].into();
+            let previous_root = game.options.resources.clone();
+            let previous_selected = game.mods.selected.clone();
+            let previous_refused = game.mods.refused.clone();
+            let next = game.next_mods();
+            let candidate = game.mods.for_reload(Path::new("/nonexistent"), next);
+            let (release, blocked) = mpsc::channel();
+            let mut reload = PackReload::spawn(ReloadKind::Selection, move |_| {
+                blocked.recv().unwrap();
+                Err("bad content resource".to_owned())
+            })
+            .unwrap();
+            reload.mods = Some(candidate);
+            game.pack_reload = Some(reload);
+            game.switch_mods();
+            assert!(
+                game.pending_pack_reload,
+                "the in-flight worker owns its outcome"
+            );
+            assert!(game.mods.applied.as_ref().unwrap().is_empty());
+            assert!(Arc::ptr_eq(&game.mods.selected, &previous_selected));
+            assert!(Arc::ptr_eq(&game.mods.refused, &previous_refused));
+            release.send(()).unwrap();
+            for _ in 0..500 {
+                if game
+                    .pack_reload
+                    .as_ref()
+                    .unwrap()
+                    .handle
+                    .as_ref()
+                    .unwrap()
+                    .is_finished()
+                {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            game.drive_pack_reload();
+            assert!(game.pack_reload.is_none());
+            assert_eq!(game.options.resources, previous_root);
+            assert!(game.mods.applied.as_ref().unwrap().is_empty());
+            assert!(Arc::ptr_eq(&game.mods.selected, &previous_selected));
+            assert!(Arc::ptr_eq(&game.mods.refused, &previous_refused));
+            assert_eq!(
+                game.next_mods(),
+                std::collections::BTreeSet::from(["glint".to_owned()])
+            );
+            assert!(
+                game.mods.data_reload.is_none(),
+                "no server data reload after a resource failure"
+            );
+        });
+    }
+
+    #[test]
+    #[ignore = "full resource staging: needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_successful_worker_publishes_its_own_content_snapshot_not_the_queued_choice() {
+        use crate::game::{mods::ModsState, native_entity_refs::tests::with_game};
+        let scratch =
+            std::env::temp_dir().join(format!("horizon-reload-publish-{}", std::process::id()));
+        let installed = scratch.join(horizon_client::mod_list::DIR);
+        std::fs::create_dir_all(&installed).unwrap();
+        let manifest =
+            "id='glint'\nname='Glint'\nversion='1'\napi='0.2'\ncapabilities=['registries']\n";
+        let asset = "assets/glint/lang/en_us.json";
+        let bytes = br#"{"glint.hello":"Hello"}"#;
+        std::fs::write(
+            installed.join("glint.hmod"),
+            horizon_mods::Package::write_files(manifest, &[(asset, bytes)]).unwrap(),
+        )
+        .unwrap();
+        with_game(|game| {
+            game.mods = ModsState {
+                applied: Some(Default::default()),
+                ..Default::default()
+            };
+            game.mods.content_ids.insert("glint".to_owned());
+            game.mods.live_ids.insert("glint".to_owned());
+            let wanted = std::collections::BTreeSet::from(["glint".to_owned()]);
+            game.settings.mods.enabled = wanted.clone();
+            let candidate = game.mods.for_reload(&scratch, wanted.clone());
+            let worker = candidate.clone();
+            let vanilla = game.vanilla_root();
+            let assets = game.pack.assets.clone();
+            let res = game.res.clone();
+            let context = game.pack.context.clone();
+            let listeners = game.register_client_reload_listeners();
+            let mut reload = PackReload::spawn(ReloadKind::Selection, move |progress| {
+                stage_pack(
+                    &vanilla,
+                    &[],
+                    &[],
+                    &worker,
+                    listeners,
+                    &assets,
+                    &res,
+                    &context,
+                    false,
+                    false,
+                    progress,
+                )
+                .map_err(|e| e.to_string())
+            })
+            .unwrap();
+            let selected = candidate.selected.clone();
+            let refused = candidate.refused.clone();
+            reload.mods = Some(candidate);
+            game.pack_reload = Some(reload);
+            // A later request to turn it off must wait, even though it matches
+            // the currently published set. It cannot relabel this worker's assets.
+            game.settings.mods.enabled.clear();
+            game.switch_mods();
+            assert!(game.pending_pack_reload);
+            assert!(game.mods.applied.as_ref().unwrap().is_empty());
+            for _ in 0..6000 {
+                if game
+                    .pack_reload
+                    .as_ref()
+                    .unwrap()
+                    .handle
+                    .as_ref()
+                    .unwrap()
+                    .is_finished()
+                {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            game.drive_pack_reload();
+            assert!(game.pack_reload.is_none());
+            assert_eq!(game.mods.applied.as_ref().unwrap(), &wanted);
+            assert!(Arc::ptr_eq(&game.mods.selected, &selected));
+            assert!(Arc::ptr_eq(&game.mods.refused, &refused));
+            assert_eq!(
+                std::fs::read(game.options.resources.join(asset)).unwrap(),
+                bytes
+            );
+            assert!(
+                game.settings.mods.enabled.is_empty(),
+                "the requested choice is not overwritten by completion"
+            );
+            assert!(
+                game.next_mods().is_empty(),
+                "the queued choice resolves against the newly published set"
+            );
+        });
+        std::fs::remove_dir_all(scratch).unwrap();
     }
 
     #[test]

@@ -45,18 +45,24 @@ worldgen) goes through the world's **Data Packs** screen and reopens the world.
 A switch of a mod whose content is only assets and data applies at once, in the world or on the title screen:
 
 1. **A root per mod set.** `mod_content::resource_root` builds into `mod-content/<stamp hash>/` instead of one
-   folder. A running game keeps reading the root it was given, and a switch never changes files under it. Roots
-   that are not the current one and are older than a day are removed when the game starts, so the cache holds one
-   root, or two after a switch.
+   folder. A running game keeps reading the root it was given. On the fork, cached mod-content roots (including
+   the old single-root layout) are not pruned by age: another process may still read them lazily, or through a
+   resource-pack overlay linked to them, after any amount of time. This retains disk usage until the player clears
+   the cache with all games using it closed. Safe automatic collection needs shared reader lifetime tracking.
 2. **Classify the switch** before applying it: build the new mod list (`accept_mod`, as `content_root` does) on a
    worker, and compare what each side **registers** (the ids of blocks and their declared state properties, items,
    mob effects, entity types, menu types, and the native component types). Equal registries mean the switch is live.
    Otherwise it needs a world reload (below), and the page says so on the mod's row before anything changes.
 3. **Client.** The pack reload already builds the new root and swaps the assets. It runs under its progress overlay;
-   the world keeps drawing.
+   the world keeps drawing. On the fork, each worker owns its candidate mod selection; applied bookkeeping changes
+   only when that worker's resource application succeeds. A failed spawn, stage or renderer setup leaves the
+   published selection available for a same-choice retry.
 4. **Server.** The server thread gets the new root (`options.resources`) and runs `reload_world_tables`, as `/reload`
    does: tables rebuilt, recipes and tags sent to the players, advancements reloaded. A LAN host's guests and the
-   window's own client get the same packets they get after `/reload`.
+   window's own client get the same packets they get after `/reload`. On the fork, a server prepare failure
+   restores the server's prior root and selection, reports the failure back to the window, and allows retrying the
+   data without rebuilding already published client assets. Client and server publication are separate phases,
+   not one atomic cross-thread transaction.
 5. **Multiplayer.** On someone else's server, the client never changes data: only assets switch live, and a mod that
    adds registries can't be turned on while connected ("Leave the server to turn this mod on"). On a LAN host, a
    live switch resyncs the guests; a registry change is refused while guests are connected, as it would disconnect

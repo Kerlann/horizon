@@ -27,7 +27,13 @@ Mods are **off by default**. A fresh install has no `horizon-mods` folder and pl
    restart, and its switch is frozen while a world is open. Packages with jar layers also wait for a restart,
    because those layers may contain world generation. On another server all content switches wait: the server
    owns its data. Code mods keep their startup content; pausing their dispatch is not a content unload.
-4. A mod that can't load shows why, in red, on its row.
+4. A mod that can't load shows why, in red, on its row. A failed live resource reload keeps the previous applied
+   selection, so the same choice can be retried. Server data reload failures are reported separately; already
+   published client assets stay loaded, while the server keeps its previous data if preparation fails.
+
+Live switches retain cached mod-content roots under `.horizon-cache/mod-content/`. Roots are not deleted by age:
+another running game or a linked resource-pack overlay may still read them. To reclaim this space, close every
+game using that game folder before clearing the cache.
 
 Two turned-on content mods never own the same namespace: the first by file name loads, and the other stays out with
 the reason in the log.

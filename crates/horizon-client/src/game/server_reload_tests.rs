@@ -328,6 +328,27 @@ fn server_reload_delivers_mod_files_overrides_and_preserves_all_data_on_failure(
             );
             assert!(game.fns.store.functions.contains_key("reload_test:keep"));
             assert_eq!(*live.lock().unwrap(), 8);
+            let previous_root = game.options.resources.clone();
+            let previous_applied = game.mods.applied.clone();
+            let previous_enabled = game.settings.mods.enabled.clone();
+            let previous_selected = game.mods.selected.clone();
+            let previous_refused = game.mods.refused.clone();
+            let previous_switched = game.mods.data_switched;
+            let sources = game
+                .mods
+                .for_reload(&root, ["reload_test".to_owned()].into());
+            let candidate_root = root.join("candidate-resources");
+            std::fs::create_dir_all(&candidate_root).unwrap();
+            let error = game.reload_mod_data(candidate_root, &sources).unwrap_err();
+            assert!(error.to_string().contains("rejected new machine data"));
+            assert_eq!(game.options.resources, previous_root);
+            assert_eq!(game.mods.applied, previous_applied);
+            assert_eq!(game.settings.mods.enabled, previous_enabled);
+            assert!(Arc::ptr_eq(&game.mods.selected, &previous_selected));
+            assert!(Arc::ptr_eq(&game.mods.refused, &previous_refused));
+            assert_eq!(game.mods.data_switched, previous_switched);
+            assert_eq!(game.fns.store.functions["reload_test:keep"], old_function);
+            assert_eq!(*live.lock().unwrap(), 8);
             reject.store(false, Ordering::Relaxed);
             write(&data, "not JSON");
             let error = game
@@ -341,6 +362,18 @@ fn server_reload_delivers_mod_files_overrides_and_preserves_all_data_on_failure(
             );
             assert_eq!(*live.lock().unwrap(), 8);
             assert_eq!(game.fns.store.functions["reload_test:keep"], old_function);
+            // Retry the same content selection after fixing its data.
+            write(&data, "4");
+            game.reload_mod_data(previous_root.clone(), &sources)
+                .unwrap();
+            assert_eq!(game.options.resources, previous_root);
+            assert_eq!(game.mods.applied, sources.applied);
+            assert_eq!(game.settings.mods.enabled, sources.applied.clone().unwrap());
+            assert!(Arc::ptr_eq(&game.mods.selected, &sources.selected));
+            assert!(Arc::ptr_eq(&game.mods.refused, &sources.refused));
+            assert!(game.mods.data_switched);
+            assert_eq!(*live.lock().unwrap(), 9);
+            assert_ne!(game.fns.store.functions["reload_test:keep"], old_function);
         })
     });
     std::fs::remove_dir_all(root).unwrap();
