@@ -119,7 +119,6 @@ mod decorated_pot;
 mod dedicated;
 mod deflect;
 mod dialogs;
-mod discord;
 mod dispense_fixture;
 mod dispenser;
 mod dragon;
@@ -20360,7 +20359,6 @@ impl Game<'_> {
                     let updated = Instant::now();
                     self.track_toggle_screens();
                     self.heal_hold_latches();
-                    self.update_discord_presence();
                     let steps = self.clock.advance(elapsed);
                     for _ in 0..steps {
                         let started = Instant::now();
@@ -23231,7 +23229,6 @@ fn run_event_loop(mut game: Game<'_>) -> Result<()> {
     game = split.host;
     narrator::stop();
     leave_fullscreen_after(&result, &mut game.settings);
-    horizon_client::discord_presence::stop();
     let result = result
         .map_err(Into::into)
         .and_then(|()| write_report(&game))
@@ -23744,7 +23741,6 @@ fn run_loading(
         App::Loading(loading) => leave_fullscreen_after(&result, &mut loading.settings),
     }
     result?;
-    horizon_client::discord_presence::stop();
     match app {
         App::Ready(mut split) => {
             write_report(&split.host)?;
@@ -23850,14 +23846,6 @@ pub fn run_with(launch: LaunchArguments, native: horizon_mods::runtime::Runtime)
     // Minecraft's constructor opens the narrator; a server has none.
     if options.execution_role.is_client() {
         narrator::start(&early_settings);
-    }
-    // "Playing Horizon" on Discord: never for a server; an automated run only talks to a test's fake Discord.
-    if options.dedicated.is_none() {
-        let automated = options.benchmark.is_some()
-            || options.offscreen
-            || options.frames.is_some()
-            || options.world_frames.is_some();
-        horizon_client::discord_presence::start(early_settings.extras.discord_presence, automated);
     }
     // Snapshots of derived tables live in the game folder, never beside the
     // shared resources.
