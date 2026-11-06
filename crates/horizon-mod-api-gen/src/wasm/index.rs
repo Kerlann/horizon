@@ -110,6 +110,7 @@ impl<'a> Index<'a> {
         let path = self.root.join(dir).join(file);
         let source = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         self.read.borrow_mut().push(path.clone());
+        let source = super::super::exports::expand(self.root, &source)?;
         let file = syn::parse_file(&source).map_err(|e| format!("{}: {e}", path.display()))?;
         self.expand_includes(file.items)
     }

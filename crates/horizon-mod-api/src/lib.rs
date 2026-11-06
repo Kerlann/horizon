@@ -5,16 +5,12 @@
 //! Generate the trait and dispatch with `cargo run -p xtask -- mod-api`.
 #![deny(missing_docs)]
 extern crate self as mod_api;
-mod registry_keys;
-mod unresolved_fluid;
-pub use unresolved_fluid::FluidIdentity;
 
 /// A saved fluid name retained for the lifetime of the process.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: only trusted engine boundaries create handles
 #[horizon_mod_api_macros::wasm(host_constructor = from_slot)]
 pub struct UnresolvedFluid(u64);
-pub use registry_keys::UnknownFluid;
 
 /// A block requested once through [`Registrar::block_key`]. Its load-owned slot survives reload.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -89,209 +85,8 @@ pub struct EffectKey(u32);
 #[horizon_mod_api_macros::wasm(host_constructor = from_slot)]
 pub struct BlockEntityTypeKey(u32);
 
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod biome;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod block_sprites;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod camera;
-mod command;
-pub use command::{CommandArgument, CommandArgumentValue, CommandInvocation};
-mod key_mapping;
-pub use key_mapping::{KeyConflictContext, NativeKeyRegistration};
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod containers;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod crafting;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod crash;
-mod debug_entries;
-pub use debug_entries::{DebugEntry, DebugGroup};
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod extras;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod extras_hud;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod first_person;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod fog;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod game;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod health;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod hud_layout;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod item_attributes;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod enchantments;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod item_tooltip;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod menu;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod merchant;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod mesher;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod mobs;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod mod_chunk_tickets;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod music;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod particles;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod recipe_book;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod render;
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod stations;
 use std::sync::{Arc, OnceLock};
 
-// hidden: a module of game-side types; mods use their re-exports
-#[doc(hidden)]
-pub mod __private;
-mod world_draw;
-pub use world_draw::{
-    DrawError, WorldDepth, WorldDrawUsage, WorldLine, WorldQuad, WorldRenderView,
-};
-mod model_layers;
-pub use model_layers::{
-    CubeDefinition, CubeDeformation, CubeListBuilder, LayerDefinition, MeshDefinition, ModelPart,
-    ModelPolygon, ModelVertex, PartId, PartPose,
-};
-mod phase;
-pub use horizon_mods::Side;
-pub use phase::{
-    DataLoadContext, DataLoadOrigin, LoadedMods, LoopContext, LoopSide, OwningLoad, OwningLoop,
-    PackageInfo, PackageKind, RegistrationContext,
-};
-mod advancement_progress;
-pub use advancement_progress::{AdvancementProgress, CriterionProgress};
-mod recipe_rule;
-pub use recipe_rule::{
-    FireworkShape, FireworkShapeIngredient, RecipeRule, RecipeTemplate, RecipeTrimPattern,
-};
-mod criteria;
-pub use criteria::{CriterionContext, CriterionTest, CriterionTestError, TriggerCriterionError};
-mod packets;
-pub use packets::{SendPacketError, ServerboundPlayPacket};
-mod scene;
-pub use block_sprites::BlockFaceTexture;
-pub use scene::{NativeSceneBlock, NativeSceneView, SceneBlockEntity};
-mod config_files;
-pub use config_files::{
-    CONFIG_FILE_MAX, CONFIG_LIST_MAX, ConfigEntry, ConfigEntryKind, ConfigFileError, ConfigFiles,
-    ConfigPath, ConfigStat,
-};
-mod tooltip_element;
-pub use tooltip_element::{TooltipElement, TooltipImage, TooltipPlace};
-mod screenshot;
-pub use screenshot::ScreenshotImage;
-mod file_to_id_converter;
-pub use file_to_id_converter::{FileToIdConverter, FileToIdConverterError};
-mod client_reload;
-mod pack_finders;
-pub use pack_finders::{
-    PackFinderError, PackFinders, PackPosition, PackRegistration, PackSource, PackType,
-};
-mod client_session;
-pub use client_session::{BlockBreakingState, ClientFrameStats, ClientServer};
-pub(crate) mod reload;
-mod reload_order;
-pub(crate) mod server_reload;
-pub use client_reload::{
-    ClientReloadContext, ClientReloadListener, ClientReloadListeners, VanillaClientListeners,
-};
-#[horizon_mod_api_macros::wasm(via = String)]
-pub use horizon_world::identifier::Identifier;
-pub use reload::{ReloadApply, ReloadResourceError};
-pub use reload_order::ReloadOrderError;
-pub use server_reload::{
-    ListenerKey, ServerReloadContext, ServerReloadListener, ServerReloadListeners,
-    ServerReloadResources, VanillaServerListeners,
-};
-// hidden: the game's registries and store, not part of the mod surface
-#[doc(hidden)]
-pub use server_reload::{RetainedListeners, ServerListenerRegistry};
-// hidden: the game's registry, not part of the mod surface
-#[doc(hidden)]
-pub use client_reload::ClientListenerRegistry;
-
-pub use crate::biome::{BiomeColors, SpawnEntry};
-pub use crate::block_sprites::{BlockSprites, FaceSprite, SpriteRef};
-pub use crate::camera::{CameraEntity, CameraType, FovPlayer};
-pub use crate::containers::{ModBlockEntity, ModContainer, ModEnergyBuffer, ModFluidTanks};
-pub use crate::crafting::{CraftResult, Ingredient, Recipe, RecipePropertyAddition};
-pub use crate::extras::Corner;
-pub use crate::extras_hud::Corners;
-pub use crate::first_person::Hand;
-pub use crate::fog::{FogData, FogType};
-pub use crate::game::{
-    CubeFace, NativeBlockEdit, NativeBlockRun, NativeClock, NativeColumnBlocks, NativeConfig,
-    NativeConfigFile, NativeConfigKind, NativeDataMapType, NativeExperienceOrb, NativeFalling,
-    NativeHeightmap, NativeHeldItem, NativeHit, NativeMapDecoration, NativeMapInfo,
-    NativeMobRender, NativeModEvent, NativePlayerRender, NativeShake, PhantomSpawnResult,
-    SleepProblem,
-};
-#[horizon_mod_api_macros::wasm(via = horizon_world::living_damage::DamageValues)]
-pub use crate::health::DamageContainer;
-pub use crate::health::{HurtSource, Reduction, ShieldBlock, Victim};
-pub use crate::hud_layout::{GuiDraw, HealthInputs};
-pub use crate::item_tooltip::TooltipDisplay;
-pub use crate::menu::{DragKind, LogicalSide, MenuClick, MouseButton, StackedOnOther, SwapWith};
-pub use crate::merchant::MerchantOffer;
-pub use crate::mesher::TintSource;
-pub use crate::mobs::PathComputationType;
-pub use crate::mod_chunk_tickets::TicketOwner as NativeTicketOwner;
-pub use crate::mod_chunk_tickets::{TicketSet, TicketValidation};
-pub use crate::music::{Music, MusicLayer};
-pub use crate::particles::ParticleOptions;
-pub use crate::recipe_book::RecipeBookCategory;
-pub use crate::render::{
-    BlockSpriteArrays, RenderHookId, RenderHooks, RenderNeeds, RenderNeedsEvent, WorldDrawn,
-    WorldDrawnEvent, render_hook_ids, wgpu,
-};
-pub use horizon_assets::item_model::{DisplayContext, StackView};
-pub use horizon_client_core::gamerules::Value as GameRuleValue;
-#[horizon_mod_api_macros::wasm(via = String)]
-pub use horizon_client_core::particle_type::ParticleType;
-pub use horizon_client_core::suggestion::Suggestion;
-#[horizon_mod_api_macros::wasm(via = horizon_client_core::text::TextForm)]
-pub use horizon_client_core::text::Text;
-#[horizon_mod_api_macros::wasm(via = (u64, Option<f64>))]
-pub use horizon_core::random::LegacyRandom;
-pub use horizon_core::{
-    arm_pose::ArmPose, game_mode::GameMode, geometry::Direction, position::BlockPos,
-    random::RandomSource,
-};
 /// The family of a client notification entering the toast queue.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -364,12 +159,6 @@ impl EnchantmentInfo {
     }
 }
 
-#[horizon_mod_api_macros::wasm(via = horizon_world::nbt::Tag)]
-pub use horizon_items::item_data::StackData;
-#[horizon_mod_api_macros::wasm(via = horizon_world::nbt::Tag)]
-pub use horizon_items::items::ItemStack;
-pub use horizon_items::items::TagRegistry;
-pub use horizon_world::consumable::UseAnimation;
 /// A fluid state copied from the engine. For engine-built values, amount is zero exactly for
 /// the empty fluid. A mod may change a placement event's copy; that mod-provided data is
 /// forwarded to later Parts and is never consumed by the engine.
@@ -395,24 +184,6 @@ impl FluidState {
         self.source
     }
 }
-#[horizon_mod_api_macros::wasm(via = Tag)]
-pub use horizon_world::nbt::Compound;
-#[horizon_mod_api_macros::wasm(via = Vec<u8>)]
-pub use horizon_world::nbt::Tag;
-pub use horizon_world::player_inventory::EquipmentSlot;
-pub use horizon_world::{
-    attachments::{
-        AttachmentCodec, AttachmentError, AttachmentForm, AttachmentPolicy, AttachmentStore,
-        AttachmentType, AttachmentValue, AttachmentWrite, Holder,
-    },
-    level::{
-        BlockId, ConnectionKind, Dimension as LevelDimension, LandingWrite, NeighbourUpdate,
-        PlacementContext,
-    },
-    loot::{LootStack, NativeLootContext},
-    registry::BlockStateId,
-};
-pub use serde_json;
 
 /// A hook's mutable block entity payload, with a read-only type identity.
 /// The private handle cannot be constructed or taken out by a mod.
@@ -4377,20 +4148,9 @@ impl NativeTriState {
 mod generated_host {
     include!(concat!(env!("OUT_DIR"), "/mod_api_generated_host.rs"));
 }
-// hidden: a game-side re-export, not part of the mod surface
-#[doc(hidden)]
-pub use generated_host::{Backend, BackendMut, ClientBackendMut};
-pub use generated_host::{
-    BlockEntityDrawContext, ClientHost, ClientSession, Commands, DrawContext, Host, HostSide,
-    LevelSide, Levels, Messages, Players, RenderAssets, ServerHost, WorldDrawContext,
-};
 
 /// Result of accessing or decoding an attachment.
 pub type AttachmentResult<T> = std::result::Result<T, AttachmentError>;
-
-// hidden: the game's maps behind the store, not part of the mod surface
-#[doc(hidden)]
-pub use horizon_world::attachments::{AttachmentHost, Attachments};
 
 /// A host is the store of its holders' attachments, so `TYPE.get(host, holder)` reads one.
 macro_rules! host_attachment_store {
@@ -4671,84 +4431,9 @@ pub trait LevelWriteHost: LevelTicksHost + LevelRandomHost {
     }
 }
 
-mod capability;
-pub use capability::{BlockSide, Capability, CapabilityKey, ITEMS};
-mod entity_capability;
-pub use entity_capability::{
-    ENTITY_AUTOMATION, ENTITY_ENERGY, ENTITY_FLUIDS, ENTITY_ITEMS, EntityCapabilityKey,
-};
-mod block_states;
-pub use block_states::{
-    BlockStates, HostBlockStates, StateConstraint, StateMatchError, StateProperty,
-};
-mod energy_capability;
-pub use energy_capability::{ENERGY, EnergyHandler, ITEM_ENERGY, move_energy};
-mod fluid_capability;
-pub use fluid_capability::{
-    FLUIDS, FluidIngredient, FluidIngredientError, FluidResource, FluidStack, ITEM_FLUIDS,
-    SizedFluidIngredient,
-};
-mod item_place;
-mod menu_slot;
-pub use menu_slot::MenuSlotBacking;
-mod transaction;
-pub use item_place::{ITEM_ITEMS, ItemCapabilityKey, ItemPlace, PlaceProvider};
-mod resource;
-pub use resource::{
-    ComponentId, EnchantmentEffect, ItemResource, Overanswered, PREVENT_ARMOR_CHANGE,
-    ResourceHandler, move_resources,
-};
-pub use transaction::{HostTransaction, Transaction, TransactionSeal, run_transaction};
-mod custom_spawners;
-pub use custom_spawners::{CustomSpawners, SpawnerEntry, SpawnerError, SpawnerKey, SpawnerKind};
-mod block_entity_data;
-pub use block_entity_data::BlockEntityDataError;
-mod block_entity_items;
-pub use block_entity_items::BlockEntityItemError;
-mod block_entity_type;
-pub use block_entity_type::{BlockEntityPartError, BlockEntityTypeBuilder};
-mod ticket_controller;
-pub use ticket_controller::TicketController;
-mod structure_template;
-pub use structure_template::{
-    StructureMirror, StructureRotation, StructureTemplateBlock, StructureTemplateSnapshot,
-};
-mod structure_type;
-/// The structure box a piece's `bounding_box` answers, in world blocks.
-pub use horizon_world::worldgen::structure::BoundingBox;
-pub use structure_type::{
-    BiomeId, ChunkPos, FoundStructure, GenerationContext, HeightmapType, NoiseBlock, NoiseColumn,
-    PieceContext, StructureError, StructurePiece, StructureRandom, StructureType,
-};
-mod part_table;
-#[cfg(any(test, feature = "testing"))]
-pub(crate) use part_table::install_parts;
-#[cfg(test)]
-pub(crate) use part_table::mark_game_thread;
-pub use part_table::{
-    Attached, BlockCapabilityProvider, BlockEntityProviders, BlockProvider, BlockProviderOf,
-    CapabilityProviders, EntityCapabilityProvider, EntityProvider, EntityProviderOf,
-    EntityProviders, ItemCapabilityProvider, ItemProvider, ItemProviderOf, OwnProvider, Parts,
-    ProvidedBy, Registrar, block_entity_providers, entity_providers, has_entity_providers,
-};
-pub(crate) use part_table::{InstalledProviders, answered, ask_providers, has_part_hook, parts};
-mod goals;
-pub use goals::{Goal, GoalContext, GoalFlags, GoalRegistrar, RegistrarMob};
-// hidden: the game's goal plumbing, not part of the mod surface
-#[doc(hidden)]
-pub use goals::{GoalCxBackend, GoalRegistrarBackend};
-
-#[cfg(target_arch = "wasm32")]
-mod wasm;
-#[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
-mod wasm_host;
-#[cfg(any(target_arch = "wasm32", feature = "wasm-host"))]
-mod wasm_refused;
-
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/mod_api_generated.rs"));
 }
-pub use generated::{EntityPart, Hooks};
 impl FallOnEvent<'_> {
     /// Ask for a write at the block the entity landed on. It is applied once the entity's
     /// batch has ticked, in the order asked, if the block is still the state it landed on.
@@ -4756,46 +4441,6 @@ impl FallOnEvent<'_> {
         self.writes.push(write);
     }
 }
-// hidden: a game-side re-export, not part of the mod surface
-#[doc(hidden)]
-pub use generated::*;
-/// Internal test-fixture attribute for modules with multiple hook sets; mods use `#[mod_api::horizon_mod]`.
-#[doc(hidden)]
-pub use horizon_mod_api_macros::__subscriptions;
-/// Mark a hook implementation and derive its subscriptions.
-///
-/// On `impl Hooks`, also exports `pub fn hooks()` using the mod's `Default`
-/// implementation. Put that impl at the crate root so the launcher finds it.
-/// On `impl RenderHooks`, derives subscriptions without another export.
-///
-/// An implementation without the attribute does not compile:
-/// ```compile_fail
-/// use mod_api::Hooks;
-/// struct Mod;
-/// impl Hooks for Mod {}
-/// ```
-/// Rustc rejects a misspelled trait method (E0407):
-/// ```compile_fail,E0407
-/// use mod_api::{self, Hooks};
-/// #[derive(Default)]
-/// struct Mod;
-/// #[mod_api::horizon_mod]
-/// impl Hooks for Mod {
-///     fn baby_entity_spwan(&self) {}
-/// }
-/// ```
-/// Two mod markers in one module define the same export:
-/// ```compile_fail,E0428
-/// use mod_api::{self, Hooks};
-/// #[derive(Default)] struct A;
-/// #[derive(Default)] struct B;
-/// #[mod_api::horizon_mod] impl Hooks for A {}
-/// #[mod_api::horizon_mod] impl Hooks for B {}
-/// ```
-pub use horizon_mod_api_macros::{horizon_mod, horizon_part, if_installed};
-
-#[cfg(test)]
-mod hooks_tests;
 
 #[cfg(test)]
 mod tests {
@@ -6251,3 +5896,5 @@ pub(crate) mod built {
         }
     }
 }
+
+include!(concat!(env!("OUT_DIR"), "/mod_api_exports_root.rs"));

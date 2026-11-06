@@ -834,8 +834,11 @@ hosts are small enough to implement whole. NeoForge's GameTest is the in-game co
 A new hook needs its declaration in the area file of `crates/horizon-mod-api/src/hooks/` (`///` lines and
 `#[hook(side = "server", contract = "cancel", out = "cancel")]` on `fn name();`; the argument list is in that folder's `mod.rs`), its `native_*` function with the placeholder body
 `let _ = (every, parameter);` (all its parameters, in order), and a run of `cargo run -p xtask -- mod-api`.
-That command only replaces the placeholder in `native_hooks/` with the `dispatch_<hook>` call; commit
-that source change and the declaration. The `horizon-mod-api-gen` build dependency generates the hook traits,
+Put that function in `crates/horizon-client/src/game/native_hooks/<area>.rs`, matching the declaration's
+area filename. The build discovers these modules automatically; do not add a module list entry. Shared
+support lives in `shared.rs`; `fire.rs` includes generated dispatch entry points, not hook implementations.
+That command only replaces the placeholder in its owning area file with the `dispatch_<hook>` call; commit
+that source change and the declaration. Fills are idempotent; rerun the command after a failed write. The `horizon-mod-api-gen` build dependency generates the hook traits,
 `Host` methods and dispatch code into Cargo's `OUT_DIR` when the game and renderer build, including release
 builds. These generated Rust files are not kept in the source tree or committed, and no manual regeneration
 is needed after a merge. Every hook needs a `mod_api` entry: the build fails naming any hook without one. A hook that stands in for a
@@ -870,6 +873,11 @@ Every host is an `AttachmentStore` (and `host.attachments()` gives it): the type
 stand on its few erased ones, so they work the same in a native mod and a wasm mod. A
 value keeps its own Rust type, shared: reading one clones it out, and copying a holder's
 data copies no value.
+
+`AttachmentHolder` keeps an existing typed handle when a system needs to store a holder
+identity: `Entity`, `Player`, `BlockEntity`, `Chunk` or `Level`. It is `Copy`, does not keep
+anything loaded, and follows each handle's ordinary stale-world and unload rules. Unlike
+the storage-relative `Holder`, it carries the handle's world scope.
 
 ```rust
 use mod_api::{AttachmentCodec, AttachmentError, AttachmentType, Compound, Holder, Tag};

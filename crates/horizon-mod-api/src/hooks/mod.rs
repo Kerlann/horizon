@@ -23,7 +23,7 @@
 //! | `neoforge`, `fabric`, `paper` | the counterpart's name, or a list of them, for the rustdoc and the gap lists |
 //! | `cancellable` | whether the NeoForge counterpart event is cancellable (documentation, not the contract) |
 //! | `version` | the contract version an injection's `hook_version` names; left out when it is 1 |
-//! | `target` | the game function that fires it; left out when it is `Game::native_<name>` in `native_hooks.rs` |
+//! | `target` | the game function that fires it; left out when it is `Game::native_<name>` in `native_hooks/<area>.rs` |
 //!
 //! A helper's arguments are `side`, `target` (left out when it is `Game::native_<name>`),
 //! `client_target` (a both-side helper whose client implementation differs), `receiver` (the handle it

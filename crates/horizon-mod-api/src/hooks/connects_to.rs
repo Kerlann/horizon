@@ -26,7 +26,7 @@ pub trait Hooks {
         scope = "block",
         key = "state",
         version = 2,
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_connects_to"
+        target = "horizon_client::game::native_hooks::connects_to::GameLevel<'_>::native_connects_to"
     )]
     fn connects_to(
         dimension: LevelDimension,

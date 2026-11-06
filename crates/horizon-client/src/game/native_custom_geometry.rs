@@ -1,3 +1,4 @@
+//! The typed submission surface; renderer storage is never exposed to mods.
 use super::Game;
 use horizon_client::world_geometry::WorldGeometry;
 use mod_api::{DrawError, WorldDrawUsage, WorldLine, WorldQuad};
@@ -21,6 +22,7 @@ impl Game<'_> {
         draw.quads(quads)
     }
     /// Queued counts and fixed capacities, shared by both depth modes and all listeners.
+    /// Capacity is allocated during setup, never grown during submission.
     pub(super) fn native_world_draw_usage(&self, draw: &WorldGeometry) -> WorldDrawUsage {
         draw.usage()
     }

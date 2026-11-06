@@ -26,7 +26,7 @@ pub struct Internal {
     /// Why this reachable layout cannot be accessed by the generated game table.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub opaque_reason: Option<&'static str>,
-    /// Type paths resolved through imports, keyed by their spelling in this signature.
+    /// Type and called-value paths resolved through imports, keyed by their source spelling.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub refs: BTreeMap<String, String>,
 }
@@ -51,11 +51,7 @@ struct Source {
 
 impl Source {
     fn offset(&self, position: proc_macro2::LineColumn) -> usize {
-        let line = self.lines[position.line - 1];
-        self.text[line..]
-            .char_indices()
-            .nth(position.column)
-            .map_or(self.text.len(), |(i, _)| line + i)
+        crate::points::offset(&self.text, &self.lines, position)
     }
 
     fn annotate(&mut self, attrs: &[syn::Attribute], start: Span, kind: &str, path: &str) {
@@ -125,7 +121,26 @@ impl<'ast> Visit<'ast> for TypeUses {
         syn::visit::visit_type_param(self, param);
     }
 
-    fn visit_block(&mut self, _: &'ast syn::Block) {}
+    fn visit_block(&mut self, block: &'ast syn::Block) {
+        struct Calls<'a>(&'a mut BTreeSet<String>);
+        impl<'ast> Visit<'ast> for Calls<'_> {
+            fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+                if let syn::Expr::Path(path) = &*call.func {
+                    self.0.insert(
+                        path.path
+                            .segments
+                            .iter()
+                            .map(|s| s.ident.to_string())
+                            .collect::<Vec<_>>()
+                            .join("::"),
+                    );
+                }
+                syn::visit::visit_expr_call(self, call);
+            }
+            fn visit_item(&mut self, _: &'ast Item) {}
+        }
+        Calls(&mut self.paths).visit_block(block);
+    }
     fn visit_expr(&mut self, _: &'ast syn::Expr) {}
     fn visit_item_mod(&mut self, _: &'ast syn::ItemMod) {}
 }
@@ -365,6 +380,7 @@ impl Shapes {
         self.scopes.entry(module.to_owned()).or_default();
         for item in items {
             let (ident, attrs) = match item {
+                Item::Fn(value) => (&value.sig.ident, &value.attrs),
                 Item::Struct(value) => (&value.ident, &value.attrs),
                 Item::Enum(value) => (&value.ident, &value.attrs),
                 Item::Type(value) => (&value.ident, &value.attrs),
@@ -519,6 +535,11 @@ impl Shapes {
         }
         if self.scopes.contains_key(base) {
             self.resolve(base, &tail.join("::"), seen)
+        } else if self.definitions.contains_key(base) {
+            Ok(BTreeMap::from([(
+                format!("{base}::{}", tail.join("::")),
+                false,
+            )]))
         } else {
             Ok(BTreeMap::new())
         }
@@ -1060,8 +1081,12 @@ impl Pass {
                     continue;
                 }
                 let resolved = shapes.resolve(&module, &written, &mut BTreeSet::new())?;
+                let unique = resolved.len() == 1;
                 for (path, imported) in resolved {
-                    if imported && let Some(entry) = self.entries.get_mut(&key) {
+                    if imported
+                        && unique
+                        && let Some(entry) = self.entries.get_mut(&key)
+                    {
                         entry.refs.insert(written.clone(), path.clone());
                     }
                     let Some(definitions) = shapes.definitions.get(&path).cloned() else {
@@ -1472,6 +1497,48 @@ pub(crate) struct ItemStack { #[allow(dead_code)] kind: StackKind }
             );
         }
         fs::remove_dir_all(out).unwrap();
+    }
+
+    #[test]
+    fn called_path_imports_resolve_sites_without_changing_signature_hashes() {
+        let fixture = Fixture::new(
+            "mod child { pub fn add(value: u32) -> u32 { value } pub struct Block; impl Block { fn make(value: u32) -> u32 { value } } } use child::{add as imported, Block as Alias}; struct Game; impl Game { fn make(value: u32) -> u32 { value } fn run(&self) { imported(1); Alias::make(1); Self::make(1); } }",
+        );
+        let entries = widen_with(&fixture.0, &[]).unwrap().entries;
+        let enclosing = entries
+            .iter()
+            .find(|e| e.path.ends_with("Game::run"))
+            .unwrap();
+        assert_eq!(
+            enclosing.refs["imported"],
+            "horizon_client::game::child::add"
+        );
+        assert_eq!(
+            enclosing.refs["Alias::make"],
+            "horizon_client::game::child::Block::make"
+        );
+        let rule = crate::crossing::Rule::new(&entries);
+        let sig = syn::parse_quote!(fn run(&self));
+        let lexical = crate::sites::analysis::Scope::scan(&sig, None);
+        for call in ["imported(1)", "Alias::make(1)", "Self::make(1)"] {
+            let expr = syn::parse_str(call).unwrap();
+            crate::sites::resolve::resolve(&expr, enclosing, &sig, &lexical, &entries, &rule)
+                .unwrap();
+        }
+        let old_hash = enclosing.hash.clone();
+        fixture.put(
+            "crates/horizon-client/src/game.rs",
+            "struct Game; impl Game { fn run(&self) {} }",
+        );
+        let changed = widen_with(&fixture.0, &[]).unwrap().entries;
+        assert_eq!(
+            changed
+                .iter()
+                .find(|e| e.path.ends_with("Game::run"))
+                .unwrap()
+                .hash,
+            old_hash
+        );
     }
 
     #[test]

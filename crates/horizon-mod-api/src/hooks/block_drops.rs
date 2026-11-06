@@ -8,7 +8,7 @@ pub trait Hooks {
         out = "cancel",
         neoforge = "BlockDropsEvent",
         cancellable = true,
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_block_drops"
+        target = "horizon_client::game::native_hooks::block_drops::GameLevel<'_>::native_block_drops"
     )]
     fn block_drops(
         dimension: LevelDimension,

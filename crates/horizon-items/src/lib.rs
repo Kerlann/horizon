@@ -16,6 +16,7 @@ pub mod flowers;
 pub mod item_data;
 pub mod item_nbt;
 pub mod items;
+pub mod kinetic_weapon;
 pub mod native_enchantment_hooks;
 pub mod random_sequences;
 pub mod recipe_filters;

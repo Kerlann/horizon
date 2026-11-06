@@ -12,7 +12,7 @@ pub trait Hooks {
         out = "cancel",
         neoforge = "NoteBlockEvent.Change",
         cancellable = true,
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_note_block_change"
+        target = "horizon_client::game::native_hooks::native_note_block_change::GameLevel<'_>::native_note_block_change"
     )]
     fn note_block_change();
 }

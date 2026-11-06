@@ -386,6 +386,8 @@ mod tests {
             pub struct NativeArmorHurt;
             #[derive(Clone, Copy)]
             pub struct ArmPose;
+            #[derive(Clone, Copy)]
+            pub enum BlockScreenEffect {}
             #[derive(Clone, Copy, Debug, PartialEq, Eq)]
             pub enum EffectApplicable {
                 Allow,

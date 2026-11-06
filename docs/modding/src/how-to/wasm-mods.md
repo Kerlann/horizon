@@ -137,6 +137,20 @@ the declared layouts and functions are unchanged.
 
 Native methods that collide with a field accessor use `call_<name>` (for example `call_set_mode`), determined from the full catalog field list, not the mod's declarations.
 
+### Batched fields
+
+Each copy field has an `x_field()` descriptor beside `x()` and `set_x()`.
+Use `get_many((game.copy_field(), other.value_field()))` to read a tuple of up to twelve
+fields in one crossing. It returns the matching tuple of typed `Result`s; a refused entry
+does not stop the others. Use `set_many((game.copy_field().write(7), other.value_field().write(11)))`
+to write a tuple. Both helpers are in `mod_internals::view`.
+
+`set_many` writes join the listener's journal like single writes and are applied on listener return
+or before a declared function call, not immediately at `set_many`. Reads see that journal,
+including the last successful write to a field in a batch. Batches pay the same per-entry
+base, path, journal scan and value fuel costs as single calls, including refused entries.
+Raw batches over twelve entries trap before dispatch; valid inputs are prepaid and read outputs are charged before return.
+
 ### Internals budgets and trust boundary
 
 Each listener call can retain at most 4,096 live nodes and journal 4,096 writes totaling 65,536

@@ -9,7 +9,7 @@ pub trait Hooks {
         scope = "block",
         key = "state",
         host = "level",
-        target = "horizon_client::game::native_hooks::HitLevel<'_>::native_fall_on"
+        target = "horizon_client::game::native_hooks::block_landing::HitLevel<'_>::native_fall_on"
     )]
     fn fall_on(
         dimension: &str,
@@ -29,7 +29,7 @@ pub trait Hooks {
         scope = "block",
         key = "state",
         host = "level",
-        target = "horizon_client::game::native_hooks::HitLevel<'_>::native_bounce_on"
+        target = "horizon_client::game::native_hooks::block_landing::HitLevel<'_>::native_bounce_on"
     )]
     fn bounce_on(
         dimension: &str,

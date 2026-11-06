@@ -37,6 +37,94 @@ pub mod runtime {
         fn node(&self) -> &Node;
     }
 
+    /// A generated copy-field descriptor for a batched read or write.
+    pub struct Field<'a, T> {
+        node: &'a Node,
+        index: u32,
+        ty: PhantomData<T>,
+    }
+    impl<'a, T: CopyValue> Field<'a, T> {
+        #[doc(hidden)]
+        pub fn new(node: &'a Node, index: u32) -> Self {
+            Self {
+                node,
+                index,
+                ty: PhantomData,
+            }
+        }
+        /// Pair this field with a value for `set_many`.
+        pub fn write(self, value: T) -> Write<'a> {
+            Write {
+                node: self.node,
+                index: self.index,
+                cells: flatten(value.to_value()),
+            }
+        }
+    }
+    /// A typed value paired with its destination field.
+    pub struct Write<'a> {
+        node: &'a Node,
+        index: u32,
+        cells: Vec<bindings::horizon::mod_internals::view::Cell>,
+    }
+    /// A tuple of generated field descriptors (up to twelve fields).
+    pub trait ReadFields {
+        type Results;
+        fn get(self) -> Self::Results;
+    }
+    /// A tuple of writes made by `Field::write` (up to twelve fields).
+    pub trait WriteFields {
+        type Results;
+        fn set(self) -> Self::Results;
+    }
+    /// Read up to twelve declared fields in one crossing, with one result per entry.
+    pub fn get_many<R: ReadFields>(fields: R) -> R::Results {
+        fields.get()
+    }
+    /// Journal up to twelve writes in one crossing, with one result per entry.
+    /// Writes join the listener's journal like single writes and are applied on listener return
+    /// or before a declared thunk call, not immediately at this call.
+    pub fn set_many<W: WriteFields>(writes: W) -> W::Results {
+        writes.set()
+    }
+    macro_rules! batches {
+        ($($t:ident:$i:tt),+) => {
+            impl<$($t: CopyValue),+> ReadFields for ($(Field<'_, $t>,)+) {
+                type Results = ($(Result<$t, Refusal>,)+);
+                fn get(self) -> Self::Results {
+                    let results = bindings::horizon::mod_internals::view::get_many(&[$((self.$i.node, self.$i.index)),+]);
+                    let mut results = results.into_iter();
+                    ($(results.next().expect("one result per field").and_then(|cells| {
+                        $t::from_value(unflatten(cells).map_err(wire_refusal)?)
+                    }),)+)
+                }
+            }
+            impl WriteFields for ($(batches!(@write $t),)+) {
+                type Results = ($(batches!(@result $t),)+);
+                fn set(self) -> Self::Results {
+                    let results = bindings::horizon::mod_internals::view::set_many(&[$((self.$i.node, self.$i.index, self.$i.cells)),+]);
+                    let mut results = results.into_iter();
+                    ($(batches!(@next results $t),)+)
+                }
+            }
+        };
+        (@write $t:ident) => { Write<'_> };
+        (@result $t:ident) => { Result<(), Refusal> };
+        (@next $r:ident $t:ident) => { $r.next().expect("one result per field") };
+    }
+    batches!(A:0);
+    batches!(A:0, B:1);
+    batches!(A:0, B:1, C:2);
+    batches!(A:0, B:1, C:2, D:3);
+    batches!(A:0, B:1, C:2, D:3, E:4);
+    batches!(A:0, B:1, C:2, D:3, E:4, F:5);
+    batches!(A:0, B:1, C:2, D:3, E:4, F:5, G:6);
+    batches!(A:0, B:1, C:2, D:3, E:4, F:5, G:6, H:7);
+    batches!(A:0, B:1, C:2, D:3, E:4, F:5, G:6, H:7, J:8);
+    batches!(A:0, B:1, C:2, D:3, E:4, F:5, G:6, H:7, J:8, K:9);
+    batches!(A:0, B:1, C:2, D:3, E:4, F:5, G:6, H:7, J:8, K:9, L:10);
+    batches!(A:0, B:1, C:2, D:3, E:4, F:5, G:6, H:7, J:8, K:9, L:10, M:11);
+
     /// A sequence node; elements are copied or reached as call-scoped nodes by their generated type.
     pub struct Seq<T>(Node, PhantomData<T>);
     impl<T: ViewType> Seq<T> {
