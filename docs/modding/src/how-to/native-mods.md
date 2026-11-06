@@ -172,9 +172,16 @@ or a cross-release compatibility range.
 
 Hooks are declared in Rust now, not in JSON: a hook or helper author adds a `#[hook(...)]` (or `#[helper(...)]`)
 declaration, with its `///` doc, to a file under `crates/horizon-mod-api/src/hooks/` (a new file for a new area, named
-for it, plus one `mod` line for it in `hooks/mod.rs`, in name order). `native-hooks.json` and
+for it). The generator discovers these files without a shared module list. `native-hooks.json` and
 `tools/native-hook-fragments/` are retired, and a file there fails the build. Collection updates
 the catalog, not a global API number, source comments or documentation histories.
+
+Hand-written API types have a selected public surface in `crates/horizon-mod-api/src/exports/<area>.rs`:
+module declarations and re-exports stay in their source area's fragment. Engine-only re-exports sit in a
+separate section of the same fragment and keep their existing paths. The generator discovers all fragments
+and includes each section at its original scope. A new hand-written area adds one fragment, while
+catalog-generated hook types need no export-list edit. Do not add declarations or re-export lists to
+`lib.rs`.
 
 ## Runtime packages and identity
 
@@ -191,7 +198,7 @@ a content package cannot shadow a compiled mod's id.
 Move the executable, prepared resources and canonical package directory together. The copied
 projects retain their flat manifest, crate, assets and data. The game's mod list and crash details
 use its embedded inventory, including code-only mods. Display names and descriptions come from the
-validated manifests; `NativeMod.title` and `NativeMod.description` are removed.
+validated manifests; Controls bindings are declared through `Registrar::register_key_mapping`, not a separate `NativeMod` metadata hook.
 
 `native-mods.json` is provenance and rebuild status, not game identity, authentication, announcements
 or startup input. The launcher retains it for build/status displays. The separate `horizon-server`

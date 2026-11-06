@@ -52,9 +52,113 @@ pub struct Installed {
 /// buttons. The keys the player chooses are kept in `ModList::keys`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NativePage {
-    /// Each key's name, label and default key (`key.keyboard.z`).
-    pub keys: Vec<[String; 3]>,
+    /// The keys the mod registers on Options > Controls, under its title.
+    pub mappings: Vec<KeyMapping>,
     pub buttons: Vec<String>,
+}
+
+/// A key a native mod registers on Options > Controls, under the mod's title.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct KeyMapping {
+    /// Its id within the mod (`zoom`); its saved binding is `key.<mod id>.<id>`.
+    pub id: String,
+    /// The label's translation key.
+    pub label: String,
+    /// The default key (`key.keyboard.z`).
+    pub key: String,
+    /// The default modifiers: [`SHIFT`], [`CONTROL`] and [`ALT`] bits.
+    pub modifiers: u32,
+    pub context: KeyConflictContext,
+    /// The category's translation key; empty for none.
+    pub category: String,
+}
+
+/// The screens in which two mappings can conflict.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+// exhaustive: the built-in conflict contexts
+pub enum KeyConflictContext {
+    #[default]
+    Universal,
+    InGame,
+    Gui,
+}
+impl KeyConflictContext {
+    pub fn conflicts(self, other: Self) -> bool {
+        self == Self::Universal || other == Self::Universal || self == other
+    }
+}
+/// Compare bindings, excluding unbound keys and pairs that are both at default.
+pub fn bindings_conflict(
+    (key, modifiers, context, at_default): (&str, u32, KeyConflictContext, bool),
+    (other_key, other_modifiers, other_context, other_default): (
+        &str,
+        u32,
+        KeyConflictContext,
+        bool,
+    ),
+) -> bool {
+    key != "key.keyboard.unknown"
+        && key == other_key
+        && modifiers == other_modifiers
+        && context.conflicts(other_context)
+        && (!at_default || !other_default)
+}
+
+#[cfg(test)]
+mod conflict_tests {
+    use super::{KeyConflictContext::*, bindings_conflict};
+
+    #[test]
+    fn contexts_modifiers_unbound_and_defaults_are_respected() {
+        let binding = ("key.keyboard.z", 0, InGame, false);
+        assert!(bindings_conflict(
+            binding,
+            ("key.keyboard.z", 0, Universal, true)
+        ));
+        assert!(!bindings_conflict(
+            binding,
+            ("key.keyboard.z", 0, Gui, false)
+        ));
+        assert!(!bindings_conflict(
+            binding,
+            ("key.keyboard.z", 1, InGame, false)
+        ));
+        assert!(!bindings_conflict(
+            ("key.keyboard.z", 0, InGame, true),
+            ("key.keyboard.z", 0, InGame, true)
+        ));
+        assert!(!bindings_conflict(
+            ("key.keyboard.unknown", 0, Universal, false),
+            ("key.keyboard.unknown", 0, Universal, false)
+        ));
+    }
+}
+
+/// The modifier bits of a key binding, in GLFW's input-event encoding.
+pub const SHIFT: u32 = 1;
+pub const CONTROL: u32 = 2;
+pub const ALT: u32 = 4;
+static MODIFIER_NAMES: [(u32, &str); 3] = [(SHIFT, "shift"), (CONTROL, "ctrl"), (ALT, "alt")];
+
+/// A binding's value in `horizon-mods.txt`: its modifiers' names, then its key, joined by `+`.
+fn encode_binding(key: &str, modifiers: u32) -> String {
+    let mut value: String = MODIFIER_NAMES
+        .iter()
+        .filter(|(bit, _)| modifiers & *bit != 0)
+        .map(|(_, name)| format!("{name}+"))
+        .collect();
+    value.push_str(key);
+    value
+}
+
+/// Reads a binding's value back; a value without `+` is a bare key with no modifiers.
+fn decode_binding(value: &str) -> (String, u32) {
+    let (names, key) = value.rsplit_once('+').unwrap_or(("", value));
+    let modifiers = names
+        .split('+')
+        .filter_map(|name| MODIFIER_NAMES.iter().find(|(_, n)| *n == name))
+        .fold(0u32, |bits, (bit, _)| bits | bit);
+    (key.to_owned(), modifiers)
 }
 
 impl ModList {
@@ -106,6 +210,27 @@ impl ModList {
         self.keys.get(id).map_or_else(Vec::new, |k| {
             k.iter().map(|(n, k)| (n.as_str(), k.as_str())).collect()
         })
+    }
+    /// Mod `id`'s key `name` as the player bound it (its key and modifiers), else `default`.
+    pub fn binding(&self, id: &str, name: &str, default: (&str, u32)) -> (String, u32) {
+        match self.keys.get(id).and_then(|k| k.get(name)) {
+            Some(value) => decode_binding(value),
+            None => (default.0.to_owned(), default.1),
+        }
+    }
+    /// Binds mod `id`'s key `name` to `key` with `modifiers`.
+    pub fn set_binding(&mut self, id: &str, name: &str, key: &str, modifiers: u32) {
+        let value = encode_binding(key, modifiers);
+        self.keys
+            .entry(id.to_owned())
+            .or_default()
+            .insert(name.to_owned(), value);
+    }
+    /// Drops the player's binding of mod `id`'s key `name`, so it is the default again.
+    pub fn reset_binding(&mut self, id: &str, name: &str) {
+        if let Some(keys) = self.keys.get_mut(id) {
+            keys.remove(name);
+        }
     }
     pub fn save(&self, dir: &Path) {
         let path = dir.join(FILE);
@@ -181,6 +306,43 @@ mod tests {
         );
         assert!(list.keys_of("other").is_empty());
         assert_eq!(ModList::parse(&list.serialize()), list);
+    }
+
+    #[test]
+    fn a_binding_with_modifiers_round_trips_in_its_keys_line() {
+        let mut list = ModList::default();
+        list.set_binding("zoom", "in", "key.keyboard.z", SHIFT | ALT);
+        assert_eq!(list.serialize(), "key.zoom.in:shift+alt+key.keyboard.z\n");
+        let again = ModList::parse(&list.serialize());
+        assert_eq!(
+            again.binding("zoom", "in", ("key.keyboard.q", 0)),
+            ("key.keyboard.z".to_owned(), SHIFT | ALT)
+        );
+    }
+
+    #[test]
+    fn a_plain_key_line_is_a_binding_without_modifiers() {
+        let list = ModList::parse("key.zoom.in:key.keyboard.x\n");
+        assert_eq!(
+            list.binding("zoom", "in", ("key.keyboard.q", CONTROL)),
+            ("key.keyboard.x".to_owned(), 0)
+        );
+        assert_eq!(
+            list.binding("zoom", "out", ("key.keyboard.q", CONTROL)),
+            ("key.keyboard.q".to_owned(), CONTROL)
+        );
+    }
+
+    #[test]
+    fn reset_restores_the_default_and_drops_the_line() {
+        let mut list = ModList::default();
+        list.set_binding("zoom", "in", "key.keyboard.x", CONTROL);
+        list.reset_binding("zoom", "in");
+        assert_eq!(
+            list.binding("zoom", "in", ("key.keyboard.q", CONTROL)),
+            ("key.keyboard.q".to_owned(), CONTROL)
+        );
+        assert_eq!(list.serialize(), "");
     }
 
     #[test]

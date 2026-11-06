@@ -12,10 +12,33 @@ use horizon_client::{
 };
 use horizon_world::consumable::UseAnimation;
 
+#[derive(Clone, Copy)]
+pub(super) enum ItemUseState {
+    Spear(horizon_client::spear::UseTiming),
+    Other(UseAnimation),
+}
+
+impl ItemUseState {
+    pub(super) fn animation(self) -> UseAnimation {
+        match self {
+            Self::Spear(_) => UseAnimation::Spear,
+            Self::Other(animation) => animation,
+        }
+    }
+}
+
 impl Game<'_> {
     /// Resolve an item's animation once for the caller's rendering decision.
     pub(super) fn item_use_animation(&self, stack: &ItemStack) -> UseAnimation {
+        self.item_use_state(stack).animation()
+    }
+
+    /// Select the animation and its already decoded spear timing together,
+    /// before firing the scoped override. No stack view is built per frame.
+    pub(super) fn item_use_state(&self, stack: &ItemStack) -> ItemUseState {
         let info = self.items().get(&stack.item);
+        let kinetic =
+            horizon_client::spear::UseTiming::of_stack(stack, info.and_then(|i| i.kinetic_timing));
         let fixed = match &*stack.item {
             "minecraft:bow" => Some(UseAnimation::Bow),
             "minecraft:crossbow" => Some(UseAnimation::Crossbow),
@@ -46,18 +69,19 @@ impl Game<'_> {
                     && info.is_some_and(|i| i.blocks_attacks.is_some()))
             {
                 UseAnimation::Block
-            } else if Kinetic::of(&stack.item).is_some() {
+            } else if kinetic.is_some() {
                 UseAnimation::Spear
             } else {
                 UseAnimation::None
             }
         });
         self.native_use_animation(stack, &mut animation);
-        // A spear pose needs the item's kinetic data; refuse that override if absent.
-        if animation == UseAnimation::Spear && Kinetic::of(&stack.item).is_none() {
-            animation = UseAnimation::None;
+        // A spear pose needs the effective stack's kinetic data, even when a
+        // scoped use_animation override requested it.
+        if animation == UseAnimation::Spear {
+            return kinetic.map_or(ItemUseState::Other(UseAnimation::None), ItemUseState::Spear);
         }
-        animation
+        ItemUseState::Other(animation)
     }
 
     /// `LivingEntity.startUsingItem` for the acting player's hand: nothing
@@ -417,11 +441,31 @@ mod tests {
                     "minecraft:crossbow" => UseAnimation::Crossbow,
                     "minecraft:trident" => UseAnimation::Trident,
                     "minecraft:brush" => UseAnimation::Brush,
-                    "minecraft:wooden_spear" => UseAnimation::Spear,
+                    "minecraft:wooden_spear"
+                        if event
+                            .stack
+                            .data()
+                            .is_none_or(|d| d.other("!minecraft:kinetic_weapon").is_none()) =>
+                    {
+                        UseAnimation::Spear
+                    }
+                    "minecraft:stick"
+                        if event
+                            .stack
+                            .data()
+                            .is_some_and(|d| d.other("minecraft:kinetic_weapon").is_some()) =>
+                    {
+                        UseAnimation::Spear
+                    }
                     _ => UseAnimation::None,
                 };
                 assert_eq!(*event.animation, expected);
-                *event.animation = if &*event.stack.item == "minecraft:stick" {
+                *event.animation = if &*event.stack.item == "minecraft:stick"
+                    || event
+                        .stack
+                        .data()
+                        .is_some_and(|d| d.other("!minecraft:kinetic_weapon").is_some())
+                {
                     UseAnimation::Spear
                 } else {
                     UseAnimation::Drink
@@ -478,7 +522,24 @@ mod tests {
                     )])),
                 );
                 assert_eq!(game.item_use_animation(&patched), UseAnimation::Drink);
-                assert_eq!(calls.load(Ordering::Relaxed), 7);
+                use horizon_world::nbt::Tag;
+                let mut kinetic_stick = horizon_client::items::ItemStack::new("minecraft:stick", 1);
+                kinetic_stick.data_mut().set_other(
+                    "minecraft:kinetic_weapon",
+                    Some(Tag::compound([("delay_ticks", Tag::Int(30))])),
+                );
+                assert!(matches!(
+                    game.item_use_state(&kinetic_stick),
+                    super::ItemUseState::Spear(_)
+                ));
+                let mut removed =
+                    horizon_client::items::ItemStack::new("minecraft:wooden_spear", 1);
+                removed.data_mut().set_other(
+                    "!minecraft:kinetic_weapon",
+                    Some(Tag::Compound(Default::default())),
+                );
+                assert_eq!(game.item_use_animation(&removed), UseAnimation::None);
+                assert_eq!(calls.load(Ordering::Relaxed), 9);
                 game.player = Some(
                     horizon_client::motion::PlayerMotion::new(
                         game.motion,
@@ -494,11 +555,20 @@ mod tests {
                     game.player_model.as_ref().unwrap().extra.use_animation,
                     UseAnimation::Drink
                 );
-                assert_eq!(calls.load(Ordering::Relaxed), 8);
+                assert_eq!(calls.load(Ordering::Relaxed), 10);
                 game.visible_hands[0].1 = game.inventory[game.selected].clone();
                 game.use_duration = 72_000;
                 let (overridden, _) = game.hand_geometry(0.0);
-                assert_eq!(calls.load(Ordering::Relaxed), 9);
+                assert_eq!(calls.load(Ordering::Relaxed), 11);
+                // A scoped spear override on a component-patched ordinary item
+                // must reach hand geometry without the old whitelist panic.
+                game.inventory[game.selected] = Some(kinetic_stick);
+                game.visible_hands[0].1 = game.inventory[game.selected].clone();
+                let (kinetic_geometry, _) = game.hand_geometry(0.0);
+                assert!(!kinetic_geometry.is_empty());
+                game.inventory[game.selected] =
+                    Some(horizon_client::items::ItemStack::new("minecraft:bow", 1));
+                game.visible_hands[0].1 = game.inventory[game.selected].clone();
                 mod_api::__private::install_parts(&[]).unwrap();
                 game.resolve_parts().unwrap();
                 let (vanilla, _) = game.hand_geometry(0.0);

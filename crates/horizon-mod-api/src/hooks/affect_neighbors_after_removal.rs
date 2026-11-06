@@ -14,7 +14,7 @@ pub trait Hooks {
         out = "updates",
         scope = "block",
         key = "state",
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_affect_neighbors_after_removal"
+        target = "horizon_client::game::native_hooks::affect_neighbors_after_removal::GameLevel<'_>::native_affect_neighbors_after_removal"
     )]
     fn affect_neighbors_after_removal();
 }

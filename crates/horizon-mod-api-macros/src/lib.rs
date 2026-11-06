@@ -6,6 +6,48 @@ use syn::{
     punctuated::Punctuated,
 };
 
+/// The staged call site's typed boundary. Only generated source invokes this macro.
+#[proc_macro]
+pub fn site(input: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(input with Punctuated::<syn::Expr, Token![,]>::parse_terminated);
+    let args: Vec<_> = args.iter().collect();
+    let [
+        wrap,
+        place,
+        listener,
+        recv_ty,
+        record,
+        output,
+        receiver,
+        args,
+        original,
+    ] = args.as_slice()
+    else {
+        return syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "expected fresh wrap name, site types, receiver, args and original",
+        )
+        .to_compile_error()
+        .into();
+    };
+    quote! {{
+        fn #wrap<'g>(__at: usize, __receiver: #recv_ty<'g, '_>, __args: &mut #record,
+            __original: &mut dyn FnMut(#recv_ty<'g, '_>, &mut #record) -> #output) -> #output {
+            ::mod_points::__private::wrap(::mod_points::SiteId::#place, __at, |__entry| {
+                match __entry {
+                    Some((__pointer, __next)) => {
+                        // SAFETY: registration checks this exact site's listener type.
+                        let __listener: #listener = unsafe { ::std::mem::transmute(__pointer) };
+                        __listener(__receiver, __args, &mut |__recv, __args| #wrap(__next, __recv, __args, __original))
+                    }
+                    None => __original(__receiver, __args),
+                }
+            })
+        }
+        #wrap(0, #receiver, &mut #args, &mut #original)
+    }}.into()
+}
+
 /// Keep only attributes that can gate a method, including nested `cfg_attr`s.
 fn cfg_meta(meta: &Meta) -> Option<Meta> {
     if meta.path().is_ident("cfg") {

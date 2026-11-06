@@ -2,8 +2,8 @@
   {
     "path": "horizon_client::game::Game",
     "kind": "struct",
-    "signature": "struct Game { copy: i64, child: Child }",
-    "hash": "a98f7c9ba7322f5f85745e234615a70594546bacba43f65dd1add8972edade9f"
+    "signature": "struct Game { copy: i64, child: Child, f0: i64, f1: i64, f2: i64, f3: i64, f4: i64, f5: i64, f6: i64, f7: i64, f8: i64, f9: i64, f10: i64, f11: i64 }",
+    "hash": "2c33eacb2a1b9d24ab538ea8cdff0054ec9d851e8a83d01f3a3855f93f8ffa93"
   },
   {
     "path": "horizon_client::game::Child",
@@ -37,5 +37,17 @@
     "refs": {
       "Game": "horizon_client::game::Game"
     }
-  }
+  },
+  {"path": "horizon_client::game::Game::f0", "kind": "field", "signature": "f0: i64", "hash": "e54b1e10133fea1679f1a3f91c585a9e97974e539aa8f5182dc1196cc232479c"},
+  {"path": "horizon_client::game::Game::f1", "kind": "field", "signature": "f1: i64", "hash": "0696bbc71bc79958334cef10ed59bcece2c6111058935d0ca775cf47a90f1d40"},
+  {"path": "horizon_client::game::Game::f2", "kind": "field", "signature": "f2: i64", "hash": "7bffe5c65a1e71d1024644ca5349ce449387dcd356d29ebc233ef1b6d9904745"},
+  {"path": "horizon_client::game::Game::f3", "kind": "field", "signature": "f3: i64", "hash": "18df59bf98ff016522a090f9972383e609b324aff5b6671ab0cbec8ff5bf29c0"},
+  {"path": "horizon_client::game::Game::f4", "kind": "field", "signature": "f4: i64", "hash": "f72d4784fda99b3f32c95b7c90ce1798fbfc7398b43ec17d88fce43bff1baa7c"},
+  {"path": "horizon_client::game::Game::f5", "kind": "field", "signature": "f5: i64", "hash": "fdd78980bf69696526b839d025d0baefc80f98f79687db5e5367cfee84022d3e"},
+  {"path": "horizon_client::game::Game::f6", "kind": "field", "signature": "f6: i64", "hash": "449e16b48e94af5e5e9fe023bd07b3dd1a7506226407fb2a3afbca94778d3348"},
+  {"path": "horizon_client::game::Game::f7", "kind": "field", "signature": "f7: i64", "hash": "1dfd852abddb8681d9d14b4c2e24ea05225f44fc1a2d4c20e0b522672b1ad438"},
+  {"path": "horizon_client::game::Game::f8", "kind": "field", "signature": "f8: i64", "hash": "587ca5a8e263c861d2efa9adc60e84712b9445c14b26e179724f4ecbd19502ee"},
+  {"path": "horizon_client::game::Game::f9", "kind": "field", "signature": "f9: i64", "hash": "a47cf3891cbd9dc370a9ad5839476827924680e47116b7f81f45f227ac8d26c5"},
+  {"path": "horizon_client::game::Game::f10", "kind": "field", "signature": "f10: i64", "hash": "fa3cc7a41ce4114b758b72f21499f482660981b94b843b229d83f11c818bb362"},
+  {"path": "horizon_client::game::Game::f11", "kind": "field", "signature": "f11: i64", "hash": "86c4d40aceb87a698f61bbb5863eeae57b1960129102d99656cc3c006f3fe341"}
 ]

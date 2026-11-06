@@ -2380,6 +2380,7 @@ fn the_single_biome_preset_is_customized_into_the_generator() {
         &crate::save::Level::read(&dir).unwrap_or_default(),
         false,
         &dir,
+        crate::gamerules::rule_registry(),
     );
     assert_eq!(options.single_biome, "minecraft:jungle");
 }
@@ -2667,5 +2668,133 @@ fn the_multiplayer_screens_have_their_own_ids() {
         }
         .id(),
         "disconnected"
+    );
+}
+
+#[test]
+fn creation_rules_keep_injected_registry_and_selected_values() {
+    use crate::gamerules::{GameRules, Rule, RuleRegistry, Value};
+    use std::sync::Arc;
+    let rule = Rule {
+        name: "example:enabled".into(),
+        category: "example:machines".into(),
+        default: Value::Bool(true),
+        min: 0,
+        max: 0,
+    };
+    let registry =
+        Arc::new(RuleRegistry::with_bool_rules(&["example:machines".into()], &[rule]).unwrap());
+    let mut fixture = Fixture::new();
+    fixture.title.set_rule_registry(registry.clone());
+    fixture.title.enter_singleplayer();
+    let Mode::Create { options, .. } = &fixture.title.mode else {
+        panic!("creation")
+    };
+    assert!(Arc::ptr_eq(options.rules.registry(), &registry));
+    assert_eq!(
+        options.rules.get("example:enabled"),
+        Some(Value::Bool(true))
+    );
+    fixture.title.close_rules(Exit::Apply(vec![(
+        "example:enabled".into(),
+        Value::Bool(false),
+    )]));
+    let Action::Create { options, .. } = fixture.title.create_action() else {
+        panic!("create")
+    };
+    assert!(Arc::ptr_eq(options.rules.registry(), &registry));
+    assert_eq!(
+        options.rules.get("example:enabled"),
+        Some(Value::Bool(false))
+    );
+    let reopened = GameRules::with_registry(registry, &[]);
+    assert_eq!(reopened.get("example:enabled"), Some(Value::Bool(true)));
+}
+
+#[test]
+fn recreate_rules_load_saved_values_and_default_new_rules() {
+    use crate::gamerules::{GameRules, Rule, RuleRegistry, Value};
+    use std::sync::Arc;
+    let fixture = Fixture::new();
+    let dir = fixture.root.join("world");
+    let definitions = |names: &[&str]| {
+        names
+            .iter()
+            .map(|name| Rule {
+                name: format!("example:{name}"),
+                category: "example:machines".into(),
+                default: Value::Bool(true),
+                min: 0,
+                max: 0,
+            })
+            .collect::<Vec<_>>()
+    };
+    let old = Arc::new(
+        RuleRegistry::with_bool_rules(&["example:machines".into()], &definitions(&["old"]))
+            .unwrap(),
+    );
+    let mut rules = GameRules::with_registry(old, &[]);
+    rules.set("example:old", Value::Bool(false));
+    rules.save(&dir).unwrap();
+    let current = Arc::new(
+        RuleRegistry::with_bool_rules(&["example:machines".into()], &definitions(&["old", "new"]))
+            .unwrap(),
+    );
+    let options =
+        WorldOptions::of_world(&crate::save::Level::default(), false, &dir, current.clone());
+    assert!(Arc::ptr_eq(options.rules.registry(), &current));
+    assert_eq!(options.rules.get("example:old"), Some(Value::Bool(false)));
+    assert_eq!(options.rules.get("example:new"), Some(Value::Bool(true)));
+}
+
+#[test]
+fn vanilla_creation_rules_keep_original_nbt_bytes() {
+    use crate::gamerules::{GameRules, RuleRegistry};
+    let mut fixture = Fixture::new();
+    fixture
+        .title
+        .set_rule_registry(std::sync::Arc::new(RuleRegistry::vanilla()));
+    fixture.title.enter_singleplayer();
+    let Mode::Create { options, .. } = &fixture.title.mode else {
+        panic!("creation")
+    };
+    let encode = |rules: &GameRules| {
+        horizon_world::nbt::write_named(&rules.to_nbt(), horizon_world::nbt::Limits::default())
+            .unwrap()
+    };
+    assert_eq!(encode(&options.rules), encode(&GameRules::default()));
+}
+
+#[test]
+fn late_registry_handoff_preserves_open_creation_edits() {
+    use crate::gamerules::{Rule, RuleRegistry, Value};
+    let rule = Rule {
+        name: "example:enabled".into(),
+        category: "example:machines".into(),
+        default: Value::Bool(true),
+        min: 0,
+        max: 0,
+    };
+    let registry = std::sync::Arc::new(
+        RuleRegistry::with_bool_rules(&["example:machines".into()], &[rule]).unwrap(),
+    );
+    let mut fixture = Fixture::new();
+    fixture.title.enter_singleplayer();
+    fixture.title.close_rules(Exit::Apply(vec![(
+        "minecraft:keep_inventory".into(),
+        Value::Bool(true),
+    )]));
+    fixture.title.set_rule_registry(registry.clone());
+    let Action::Create { options, .. } = fixture.title.create_action() else {
+        panic!("creation")
+    };
+    assert!(std::sync::Arc::ptr_eq(options.rules.registry(), &registry));
+    assert_eq!(
+        options.rules.get("minecraft:keep_inventory"),
+        Some(Value::Bool(true))
+    );
+    assert_eq!(
+        options.rules.get("example:enabled"),
+        Some(Value::Bool(true))
     );
 }

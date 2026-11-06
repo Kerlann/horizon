@@ -4,6 +4,7 @@ use super::{Dim, Game};
 use horizon_client::assets::Properties;
 use horizon_client::camera::NearPlane;
 use horizon_client::fog::{FogData, FogInputs, FogType, fog_type, update_rain_fog};
+use horizon_client::motion::PlayerMotion;
 use horizon_client::{
     animate_tick::{AnimateContext, animate_tick, campfire_particles, marker_particle_target},
     biome::Biomes,
@@ -16,9 +17,25 @@ use horizon_client::{
     hud_overlays,
     screen_effects::{ScreenInputs, ScreenQuad, lightmap_brightness, nausea_has_effect},
 };
-use horizon_core::random::{LegacyRandom, RandomSource};
-use horizon_world::{heightmap::HeightmapType, worldgen::terrain::TerrainBlockStates};
+use horizon_core::{
+    position::BlockPos,
+    random::{LegacyRandom, RandomSource},
+};
+use horizon_world::{
+    heightmap::HeightmapType, registry::BlockStateId, worldgen::terrain::TerrainBlockStates,
+};
+use mod_api::BlockScreenEffect;
 
+/// The block overlays of `ScreenEffectRenderer` a frame shows.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct BlockScreenEffects {
+    /// The view-blocking block the camera is inside, drawn with its particle texture.
+    block: Option<BlockStateId>,
+    /// The eye is under water.
+    water: bool,
+    /// The player burns, seen in first person.
+    on_fire: bool,
+}
 /// `getHeight(Heightmap.Types.MOTION_BLOCKING, x, z)` from the chunk's
 /// heightmap: one above the highest block in `blocks_motion_in_heightmap` or
 /// holding a fluid, however far above the camera it is.
@@ -264,11 +281,69 @@ impl Game<'_> {
             p.position.y + f64::from(p.dimensions.eye_height),
             p.position.z,
         ];
+        let effects = self.block_screen_effects(p, eye, partial, size, scale);
+        // ScreenEffectRenderer: the block's particle material.
+        let block_overlay = effects
+            .block
+            .and_then(|state| Self::block_particle_sprite(&self.pack, state));
+        let water = effects
+            .water
+            .then(|| (self.eye_brightness(eye), self.yaw, self.pitch));
+        // Hud.extractCameraOverlays; the spyglass scope (and its easing) is
+        // drawn on the HUD by draw_spyglass.
+        let fx = &self.screen_fx;
+        let overlays = hud_overlays::CameraOverlays {
+            vignette: self.vignette_shown().then_some((
+                fx.vignette_brightness,
+                self.border.warning_strength(p.position.x, p.position.z),
+            )),
+            first_person: self.camera_type.is_first_person(),
+            scoping: self.scoping(),
+            game_time_delta: 0.0,
+            equipment: match &self.armor[0] {
+                Some(stack) if &*stack.item == "minecraft:carved_pumpkin" => {
+                    vec!["misc/pumpkinblur".to_owned()]
+                }
+                _ => Vec::new(),
+            },
+            ticks_frozen: p.ticks_frozen,
+            percent_frozen: p.percent_frozen(),
+            partial,
+            portal: [fx.o_portal, fx.portal],
+            nausea: self.nausea_blend(partial),
+            screen_effect_scale: self.screen_effect_scale(),
+        };
+        let mut scope = self.scope_scale;
+        let gui_overlays =
+            hud_overlays::camera_overlays(size[0] as i32, size[1] as i32, &overlays, &mut scope);
+        self.screen_fx.build(&ScreenInputs {
+            sprites: &self.gui.atlas.sprites,
+            flags: &self.gui.atlas.flags,
+            aspect: size[0] as f32 / size[1].max(1) as f32,
+            partial,
+            block_overlay,
+            water,
+            on_fire: effects.on_fire,
+            fire_lower: f32::from(self.settings.extras.pvp.tweaks.fire_lower) / 100.0,
+            gui_overlays: &gui_overlays,
+        })
+    }
+    /// The block overlays `ScreenEffectRenderer` draws this frame for player `p` with its eye
+    /// at `eye`, less those a mod canceled in `extract_block_screen_effect`.
+    fn block_screen_effects(
+        &self,
+        p: &PlayerMotion,
+        eye: [f64; 3],
+        partial: f32,
+        size: [u32; 2],
+        scale: f32,
+    ) -> BlockScreenEffects {
         // `LevelExtractor.getViewBlockingState`: 8 points around the eye, each
         // tested with `BlockState.isViewBlocking` against the near plane.
         // ScreenEffectRenderer: none of it for a spectator (noPhysics).
         let spectator = self.spectator();
-        let mut block_overlay = None;
+        let modded = mod_api::__private::listened(mod_api::HookId::ExtractBlockScreenEffect);
+        let mut block = None;
         if !spectator {
             // Frustum.getNearPlaneBounds, moved to the eye.
             let (near_min, near_max) = horizon_client::camera::near_plane_bounds(
@@ -316,56 +391,55 @@ impl Game<'_> {
                     != horizon_client::blocks::RenderShape::Invisible
                     && self.state_view_blocking(state, pos, near_plane)
                 {
-                    // ScreenEffectRenderer: the block's particle material.
-                    block_overlay = Self::block_particle_sprite(&self.pack, state);
+                    if !modded || self.screen_effect_kept(BlockScreenEffect::Block, state, pos) {
+                        block = Some(state);
+                    }
                     break;
                 }
             }
         }
         let in_water =
             fog_type(&self.world, self.res.facts(), eye, &self.near_plane()) == FogType::Water;
-        let water =
-            (in_water && !spectator).then(|| (self.eye_brightness(eye), self.yaw, self.pitch));
-        // Hud.extractCameraOverlays; the spyglass scope (and its easing) is
-        // drawn on the HUD by draw_spyglass.
-        let fx = &self.screen_fx;
-        let overlays = hud_overlays::CameraOverlays {
-            vignette: self.vignette_shown().then_some((
-                fx.vignette_brightness,
-                self.border.warning_strength(p.position.x, p.position.z),
-            )),
-            first_person: self.camera_type.is_first_person(),
-            scoping: self.scoping(),
-            game_time_delta: 0.0,
-            equipment: match &self.armor[0] {
-                Some(stack) if &*stack.item == "minecraft:carved_pumpkin" => {
-                    vec!["misc/pumpkinblur".to_owned()]
-                }
-                _ => Vec::new(),
-            },
-            ticks_frozen: p.ticks_frozen,
-            percent_frozen: p.percent_frozen(),
-            partial,
-            portal: [fx.o_portal, fx.portal],
-            nausea: self.nausea_blend(partial),
-            screen_effect_scale: self.screen_effect_scale(),
-        };
-        let mut scope = self.scope_scale;
-        let gui_overlays =
-            hud_overlays::camera_overlays(size[0] as i32, size[1] as i32, &overlays, &mut scope);
-        self.screen_fx.build(&ScreenInputs {
-            sprites: &self.gui.atlas.sprites,
-            flags: &self.gui.atlas.flags,
-            aspect: size[0] as f32 / size[1].max(1) as f32,
-            partial,
-            block_overlay,
+        let eye_block = eye.map(|c| c.floor() as i32);
+        let water = in_water
+            && !spectator
+            && (!modded
+                || self.screen_effect_kept(
+                    BlockScreenEffect::Water,
+                    self.world.block(eye_block[0], eye_block[1], eye_block[2]),
+                    eye_block,
+                ));
+        // ModelBakery.FIRE_1, told to mods as the fire block at the player's block.
+        let feet = [p.position.x, p.position.y, p.position.z].map(|c| c.floor() as i32);
+        let fire = || self.pack.assets.registry.default_state("minecraft:fire");
+        let on_fire = self.camera_type.is_first_person()
+            && !spectator
+            && p.fire_ticks > 0
+            && (!modded
+                || fire().is_none_or(|fire| {
+                    self.screen_effect_kept(BlockScreenEffect::Fire, fire, feet)
+                }));
+        BlockScreenEffects {
+            block,
             water,
-            on_fire: self.camera_type.is_first_person()
-                && !self.spectator()
-                && self.player.as_ref().is_some_and(|p| p.fire_ticks > 0),
-            fire_lower: f32::from(self.settings.extras.pvp.tweaks.fire_lower) / 100.0,
-            gui_overlays: &gui_overlays,
-        })
+            on_fire,
+        }
+    }
+    /// `extract_block_screen_effect` for one overlay: false when a mod canceled it.
+    fn screen_effect_kept(
+        &self,
+        effect: BlockScreenEffect,
+        state: BlockStateId,
+        pos: [i32; 3],
+    ) -> bool {
+        let mut canceled = false;
+        self.native_extract_block_screen_effect(
+            effect,
+            state,
+            BlockPos::new(pos[0], pos[1], pos[2]),
+            &mut canceled,
+        );
+        !canceled
     }
     /// `Lightmap.getBrightness(getMaxLocalRawBrightness(eye))`.
     fn eye_brightness(&self, eye: [f64; 3]) -> f32 {
@@ -624,7 +698,7 @@ impl Game<'_> {
 }
 #[cfg(test)]
 mod tests {
-    use super::{Properties, World, splash_height};
+    use super::{BlockScreenEffects, Properties, World, splash_height};
     use horizon_client::chunk::Chunk;
     use horizon_world::registry::BlockStateId;
     use std::sync::Arc;
@@ -660,5 +734,95 @@ mod tests {
         // A roof within 10 blocks is where the splash lands.
         world.set(3, 8, 3, stone).unwrap();
         assert_eq!(splash_height(&world, &properties, 3, 1, 3), Some(9));
+    }
+
+    /// `extract_block_screen_effect`: a mod that cancels the overlay of stone at one position
+    /// leaves the frame's block overlays as they are with no block there, the fire overlay
+    /// included; dirt in the same place keeps its overlay.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_mod_cancels_the_screen_effect_of_one_block() {
+        use horizon_client::motion::PlayerMotion;
+        use horizon_core::{geometry::Vec3, position::BlockPos};
+        use mod_api::{
+            BlockScreenEffect, ClientHost, ExtractBlockScreenEffectEvent, Flow, Hooks, ModEntry,
+            Mods,
+        };
+        static SEEN: std::sync::Mutex<Vec<(BlockScreenEffect, BlockStateId, BlockPos)>> =
+            std::sync::Mutex::new(Vec::new());
+        struct Mod(BlockStateId);
+        #[mod_api::__subscriptions]
+        impl Hooks for Mod {
+            fn extract_block_screen_effect(
+                &self,
+                _: &dyn ClientHost,
+                event: &mut ExtractBlockScreenEffectEvent,
+            ) -> Flow {
+                SEEN.lock()
+                    .unwrap()
+                    .push((event.effect, event.state, event.pos));
+                if event.effect == BlockScreenEffect::Block
+                    && event.state == self.0
+                    && event.pos == BlockPos::new(0, 65, 0)
+                {
+                    Flow::Cancel
+                } else {
+                    Flow::Continue
+                }
+            }
+        }
+        super::super::native_entity_refs::tests::with_game(|game| {
+            let registry = &game.pack.assets.registry;
+            let state = |name: &str| registry.default_state(name).unwrap();
+            let (air, stone, dirt, fire) = (
+                state("minecraft:air"),
+                state("minecraft:stone"),
+                state("minecraft:dirt"),
+                state("minecraft:fire"),
+            );
+            game.world.chunks.insert(
+                (0, 0),
+                Arc::new(Chunk::with_layout(0, 0, game.world.layout())),
+            );
+            // The eye is at y 65.62, so all eight test points are in block (0, 65, 0).
+            let mut player = PlayerMotion::new(game.motion, Vec3::ZERO).unwrap();
+            player.position = Vec3::new(0.5, 64.0, 0.5);
+            player.fire_ticks = 100;
+            game.player = Some(player);
+            let effects = |game: &mut super::Game<'_>, block| {
+                game.world.set(0, 65, 0, block).unwrap();
+                let p = game.player.as_ref().unwrap();
+                let eye = [0.5, 64.0 + f64::from(p.dimensions.eye_height), 0.5];
+                game.block_screen_effects(p, eye, 0.0, [854, 480], 1.0)
+            };
+            let open = effects(game, air);
+            let in_dirt = effects(game, dirt);
+            assert_eq!(
+                effects(game, stone),
+                BlockScreenEffects {
+                    block: Some(stone),
+                    ..open
+                },
+                "stone shows its overlay"
+            );
+            let mods: Mods = vec![ModEntry::new("screen-effect", Box::new(Mod(stone)))].into();
+            mod_api::testing::with_mods(mods, || {
+                assert_eq!(effects(game, stone), open);
+                assert_eq!(effects(game, dirt), in_dirt);
+            });
+            assert_eq!(in_dirt.block, Some(dirt));
+            assert!(open.on_fire && !open.water);
+            let seen = SEEN.lock().unwrap();
+            let feet = BlockPos::new(0, 64, 0);
+            assert_eq!(
+                seen[..],
+                [
+                    (BlockScreenEffect::Block, stone, BlockPos::new(0, 65, 0)),
+                    (BlockScreenEffect::Fire, fire, feet),
+                    (BlockScreenEffect::Block, dirt, BlockPos::new(0, 65, 0)),
+                    (BlockScreenEffect::Fire, fire, feet),
+                ]
+            );
+        });
     }
 }

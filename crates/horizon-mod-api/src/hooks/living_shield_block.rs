@@ -18,7 +18,7 @@ pub trait Hooks {
         host = "level",
         neoforge = "LivingShieldBlockEvent",
         version = 2,
-        target = "horizon_client::game::native_hooks::HitLevel<'_>::native_living_shield_block"
+        target = "horizon_client::game::native_hooks::living_shield_block::HitLevel<'_>::native_living_shield_block"
     )]
     fn living_shield_block();
 }

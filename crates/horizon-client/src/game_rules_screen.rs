@@ -181,6 +181,27 @@ impl RulesScreen {
         }
     }
 
+    /// Adopt installed definitions without discarding pending edits.
+    pub fn rebind_registry(&mut self, registry: std::sync::Arc<crate::gamerules::RuleRegistry>) {
+        self.values.rebind_registry(registry.clone());
+        self.initial.rebind_registry(registry);
+        for rule in self
+            .values
+            .available_rules()
+            .filter(|rule| matches!(rule.default, Value::Int(_)))
+        {
+            if !self.numbers.iter().any(|(name, _)| name == &rule.name) {
+                let mut input = EditBox::new(0.0, 0.0, 44.0, 20.0);
+                input.focused = false;
+                if let Some(value) = self.values.get(&rule.name) {
+                    input.set_value(&value.to_string());
+                }
+                input.text_color = VALID;
+                self.numbers.push((rule.name.clone(), input));
+            }
+        }
+    }
+
     /// RuleList.populateChildren: the rules matching the search (id, name,
     /// category or description), by category, each sorted by description id.
     fn rows(&self) -> Vec<Row> {

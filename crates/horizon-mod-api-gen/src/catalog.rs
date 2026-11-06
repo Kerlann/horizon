@@ -390,8 +390,8 @@ pub const DECLARATIONS: &str = "crates/horizon-mod-api/src/hooks";
 pub(crate) const RETIRED: &[&str] = &["native-hooks.json", "tools/native-hook-fragments"];
 
 /// The game function a hook or helper named `name` is called from, when its declaration gives no `target`.
-fn default_target(name: &str) -> String {
-    format!("horizon_client::game::native_hooks::Game<'_>::native_{name}")
+fn default_target(name: &str, area: &str) -> String {
+    format!("horizon_client::game::native_hooks::{area}::Game<'_>::native_{name}")
 }
 
 /// An attribute argument as the entry structs read it.
@@ -474,6 +474,10 @@ impl Declared {
             path: path.to_owned(),
             error,
         };
+        let area = Path::new(path)
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| invalid("declaration file has no area name".into()))?;
         let file = syn::parse_file(text).map_err(|e| invalid(e.to_string()))?;
         for item in file.items {
             let syn::Item::Trait(declarations) = item else {
@@ -500,7 +504,7 @@ impl Declared {
                     })?;
                 entry
                     .entry("target")
-                    .or_insert_with(|| default_target(&name).into());
+                    .or_insert_with(|| default_target(&name, area).into());
                 match kind.as_str() {
                     "Hooks" => {
                         entry.insert("name".into(), name.clone().into());
@@ -839,7 +843,7 @@ mod tests {
         assert_eq!(thing.doc, "First line.\n\n Indented.");
         assert_eq!(
             thing.target,
-            "horizon_client::game::native_hooks::Game<'_>::native_thing"
+            "horizon_client::game::native_hooks::a::Game<'_>::native_thing"
         );
         assert!(thing.answered_by_mod && thing.cancellable == Some(true));
         assert_eq!((thing.version, thing.counterparts.neoforge.len()), (2, 2));

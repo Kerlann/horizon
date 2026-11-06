@@ -42,12 +42,6 @@ pub fn listened(hook: HookId) -> bool {
     crate::listened(hook)
 }
 
-pub use crate::generated::calls::*;
-pub use crate::part_table::{
-    HookParts, ItemKeyError, KnownIds, PartsRef, ResolvePartsError, block_entity_types,
-    block_listens, entity_parts, game_rule_bool_slot, game_rule_registry, has_entity_parts,
-    has_part_hook, has_scoped_hook, install_parts, mark_game_thread, parts, resolve_parts,
-};
 /// A read backend wrapper for a host the game builds narrowed: the mob tick's
 /// goal view hands itself out as its own backend (#1077).
 pub fn backend_ref(inner: &dyn Backend) -> crate::BackendRef<'_> {
@@ -60,26 +54,14 @@ pub fn backend_ref(inner: &dyn Backend) -> crate::BackendRef<'_> {
 pub fn backend_read<R>(host: &dyn crate::Host, read: impl FnOnce(&dyn Backend) -> R) -> Option<R> {
     host.backend().map(|backend| read(backend.open()))
 }
-pub use crate::phase::{
-    LoadAccess, ModPhase, PhaseError, PhaseOwner, check_access, current_phase, install_packages,
-};
-pub use crate::registry_keys::resolve_block_entity_types;
 /// The game's side of wasm mods, for `horizon-mod-wasm`.
 #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
 pub mod wasm_host {
-    pub use crate::wasm_host::{
-        Budgets, CallHost, CallRefused, EPOCH, Exports, Fuel, Instantiated, LoadError, Member,
-        State, instantiate, live_groups,
-    };
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/mod_api_exports_private_wasm_host.rs"
+    ));
 }
-/// The registered structure types, for the executable to hand to the engine's
-/// `StructureRegistry` before any world opens.
-pub use crate::structure_type::installed_structure_types;
-/// The mod's side of the exports other crates add to its world (the points crate's listeners).
-#[cfg(target_arch = "wasm32")]
-pub use crate::wasm::exported as wasm_guest;
-#[cfg(any(test, feature = "testing"))]
-pub use crate::{part_table::tests as part_tests, phase::with_test_packages};
 
 /// The trait mods installed, in dispatch order: the game's own list, not part of the mod surface.
 pub fn mods() -> &'static [ModEntry] {
@@ -99,32 +81,27 @@ pub fn loaded_mods() -> LoadedMods {
 
 /// The data-pack and resource reloads the game runs.
 pub mod reload {
-    pub use crate::reload::{
-        PreparedStep, RegisteredListener, ReloadFiles, ReloadStageError, apply_listeners,
-        prepare_listeners,
-    };
-    pub use crate::server_reload::{OrderedServerReload, RetainedEntry};
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/mod_api_exports_private_reload.rs"
+    ));
 }
 
 /// The structs the game fills for its hooks, each turned into the API's own with `From`.
 pub mod built {
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/mod_api_exports_private_built.rs"
+    ));
     /// Wrap a slot in the model store's published generation.
     pub fn model_ref(generation: u64, slot: u32) -> crate::ModelRef {
         crate::ModelRef(generation, slot)
     }
-    pub use crate::built::{
-        ChannelRef, NativeActiveEffect, NativeBlockClick, NativeExplosionStart, NativeItemClick,
-        NativeItemFished, NativeLifecycleContext, NativeLootDrops, NativePlayerAbilities,
-        NativePlayerExperience, NativePlayerFood, NativePortalShape, NativeScreenView,
-        NativeServerPlayer, SoundPlay, ToolUse,
-    };
-    pub use crate::config_files::built::{ConfigEntry, ConfigStat};
-    pub use crate::game::built::NativeConfigFile;
-    pub use crate::render::built::{BlockSpriteArrays, HandDrawn, WorldDrawn};
 }
 
 /// What the game reads of handles and calls on the API's own types.
 pub mod game {
+    include!(concat!(env!("OUT_DIR"), "/mod_api_exports_private_game.rs"));
     use crate::*;
     use std::fmt::Debug;
 
@@ -421,7 +398,6 @@ pub mod game {
         }
     }
 
-    pub use self::modblockentityviewnew::ModBlockEntityViewNew;
     mod modblockentityviewnew {
         #[allow(unused_imports)]
         use crate::*;
@@ -441,7 +417,6 @@ pub mod game {
         }
     }
 
-    pub use self::reloadfilesnew::ReloadFilesNew;
     mod reloadfilesnew {
         #[allow(unused_imports)]
         use crate::reload::*;
@@ -465,19 +440,6 @@ pub mod game {
     }
 }
 
-// hidden: load-owned key resolution, used by the game at the registry boundaries
-pub use crate::registry_keys::{
-    ResolvedBlock, block as resolved_block, effect as resolved_effect, resolve_blocks,
-    resolve_effects,
-};
-pub use crate::registry_keys::{
-    block_entity_type_key, block_entity_type_name, block_id as block_key_id,
-    effect_id as effect_key_id, item_id as item_key_id,
-};
-pub use crate::registry_keys::{
-    effect_key, fluid_id, fluid_key, fluid_key_utf16, resolve_fluids, world_fluid_key,
-};
-
 /// Construct a fluid state from an engine-owned state and its load-resolved key.
 pub fn engine_fluid_state(
     fluid: crate::FluidKey,
@@ -494,8 +456,5 @@ pub fn engine_fluid_state(
         source: state.is_source(),
     }
 }
-pub use crate::unresolved_fluid::{
-    identity_name as fluid_identity_name, intern as intern_unresolved_fluid,
-    lookup as lookup_unresolved_fluid, lookup_utf16 as lookup_unresolved_fluid_utf16,
-    matches_utf16 as fluid_identity_matches_utf16, name as unresolved_fluid_name,
-};
+
+include!(concat!(env!("OUT_DIR"), "/mod_api_exports_private.rs"));

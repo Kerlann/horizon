@@ -12,7 +12,7 @@ pub trait Hooks {
         out = "cancel",
         neoforge = "BlockGrowFeatureEvent",
         cancellable = true,
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_block_grow_feature"
+        target = "horizon_client::game::native_hooks::block_grow_feature::GameLevel<'_>::native_block_grow_feature"
     )]
     fn block_grow_feature();
 }

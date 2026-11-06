@@ -1,6 +1,12 @@
 //! Typed native-mod data attached to server-owned holders.
 #[doc(hidden)]
 pub mod index;
+mod lifetime;
+#[doc(hidden)]
+pub mod observer;
+
+#[doc(hidden)]
+pub use lifetime::AttachmentLifetime;
 
 use std::{
     any::Any,

@@ -353,14 +353,47 @@ impl LivingAttributes {
         kind: ValueKind,
         seed: impl FnOnce() -> Vec<Tag>,
     ) -> Option<f64> {
-        let map = match self.map.get() {
-            Some(map) => map,
+        let map = self.built_or_build(catalog, entity, seed)?;
+        map.value(Some(map.key(name)?), kind).ok()
+    }
+
+    /// `AttributeInstance.getModifiers` of `name`, in the order they were
+    /// added: None for an attribute the entity type does not have, an empty
+    /// list for one no modifier is on (an instance is created only by a write,
+    /// a worn item or the saved list). Read as `read` reads the value, over
+    /// the same built map.
+    pub fn modifiers(
+        &self,
+        catalog: &Arc<Catalog>,
+        entity: &str,
+        name: &str,
+        seed: impl FnOnce() -> Vec<Tag>,
+    ) -> Option<Vec<Modifier>> {
+        let map = self.built_or_build(catalog, entity, seed)?;
+        let key = map.key(name)?;
+        map.value(Some(key.clone()), ValueKind::Base).ok()?;
+        Some(
+            map.lookup(Some(&key))
+                .and_then(|handle| map.instance(&handle).ok())
+                .map(|instance| instance.modifiers().to_vec())
+                .unwrap_or_default(),
+        )
+    }
+
+    /// The map, built from `seed` if this is its first use.
+    fn built_or_build(
+        &self,
+        catalog: &Arc<Catalog>,
+        entity: &str,
+        seed: impl FnOnce() -> Vec<Tag>,
+    ) -> Option<&Live> {
+        match self.map.get() {
+            Some(map) => Some(map),
             None => {
                 let built = self.build(catalog, entity, seed()).ok()?;
-                self.map.get_or_init(|| Box::new(built))
+                Some(self.map.get_or_init(|| Box::new(built)))
             }
-        };
-        map.value(Some(map.key(name)?), kind).ok()
+        }
     }
 
     /// `LivingEntity.collectEquipmentChanges` for the item modifiers: every
