@@ -100,7 +100,7 @@ fn internals_add_refuses_missing_gated_and_shape_only_paths_without_partial_edit
         (
             "horizon_client::game::no_such_function",
             "E_INTERNAL_MISSING",
-            "which this game doesn't have.",
+            "which this game doesn't have; run cargo horizon-mod internals sync",
         ),
         (
             "horizon_client::pad::hardware::PadId",
@@ -110,7 +110,7 @@ fn internals_add_refuses_missing_gated_and_shape_only_paths_without_partial_edit
         (
             "horizon_world::World",
             "E_INTERNAL_MISSING",
-            "which this game doesn't have.",
+            "which this game doesn't have; run cargo horizon-mod internals sync",
         ),
     ] {
         let before = project.text();
@@ -292,4 +292,43 @@ fn unreadable_new_catalog_does_not_move_either_pin_or_hashes() {
         fs::read_to_string(project.dir.join("Cargo.toml")).unwrap(),
         cargo
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn internals_sync_invokes_the_launcher_and_never_edits_on_failure() {
+    use std::os::unix::fs::PermissionsExt;
+    let project = Project::new(
+        "sync-command",
+        "internals = [{ path = 'Unused', hash = 'old' }]\n",
+    );
+    let launcher = project.dir.join("test-launcher");
+    let invoke = || {
+        Command::new(env!("CARGO_BIN_EXE_cargo-horizon-mod"))
+            .args(["horizon-mod", "internals", "sync"])
+            .env("HORIZON_LAUNCHER", &launcher)
+            .current_dir(&project.dir)
+            .output()
+            .unwrap()
+    };
+    fs::write(&launcher, "#!/bin/sh\nexit 1\n").unwrap();
+    fs::set_permissions(&launcher, fs::Permissions::from_mode(0o755)).unwrap();
+    let before = project.text();
+    assert!(!invoke().status.success());
+    assert_eq!(project.text(), before);
+    fs::write(&launcher, r#"#!/bin/sh
+[ "$1" = native-build ] && [ "$2" = --sync-internals ] && [ "$3" = --trust-native-code ] && [ "$4" = "$PWD" ] || exit 2
+printf '%s\n' '[{"path":"Used","kind":"struct","signature":"struct Used","hash":"compiler"}]'
+"#).unwrap();
+    let report = success(&invoke());
+    assert!(report.contains("added: Used (struct)"));
+    assert!(report.contains("removed: Unused"));
+    let native = project.manifest().native.unwrap();
+    assert_eq!(native.internals.len(), 1);
+    assert_eq!(native.internals[0].hash, "compiler");
+    assert!(project.text().contains("# native settings"));
+    let before = project.text();
+    fs::write(&launcher, "#!/bin/sh\nprintf 'not JSON'\n").unwrap();
+    assert!(!invoke().status.success());
+    assert_eq!(project.text(), before);
 }

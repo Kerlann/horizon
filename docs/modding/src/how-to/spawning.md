@@ -24,6 +24,11 @@ fn finalize_spawn(&self, _: &dyn mod_api::Host, event: &mut mod_api::FinalizeSpa
 
 `finalize_spawn` fires only where vanilla calls `finalizeSpawn`, so a breeding, an infested block's silverfish or a thrown egg's chick does not tell it.
 
+For `/summon minecraft:ender_dragon` without NBT, command placement starts at zero
+rotation and consumes no random yaw draw. Skipping finalization also skips its
+follow-range and handedness draws. Spawn eggs retain their random placement yaw;
+an explicit NBT compound follows the load route without finalization.
+
 See [the hook notes](../reference/hook-notes.md#finalize-spawn) for what each spawn site covers and what is left out (group data, breeding, loads, worldgen structure mobs).
 
 ## Keeping or removing a mob

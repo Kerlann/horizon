@@ -3,7 +3,7 @@ use crate::manifest::Internal;
 use std::{fs, path::Path};
 
 /// One signature in `internals.json`, including guarded alternatives and lower-crate shapes.
-#[derive(Clone, Debug, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct ListedInternal {
     pub path: String,
     pub kind: String,
@@ -43,7 +43,7 @@ impl std::fmt::Display for Error {
         match self {
             Self::Missing { mod_id, path } => write!(
                 f,
-                "E_INTERNAL_MISSING: {mod_id} uses {path}, which this game doesn't have."
+                "E_INTERNAL_MISSING: {mod_id} uses {path}, which this game doesn't have; run cargo horizon-mod internals sync to discover this pin's used internals."
             ),
             Self::Changed {
                 mod_id,

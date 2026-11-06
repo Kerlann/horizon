@@ -5,6 +5,7 @@ use super::{CmdResult, CommandError, Context, Reader, SuggestionsBuilder};
 pub use horizon_client_core::registries::{
     CustomCompletionAction, Registries, RegistryIds, modify_custom_completions,
 };
+pub use horizon_core::game_mode::GameMode;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {
@@ -392,32 +393,6 @@ pub struct ItemInput {
     pub tag: bool,
     pub any: bool,
     pub components: Option<String>,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GameMode {
-    Survival,
-    Creative,
-    Adventure,
-    Spectator,
-}
-impl GameMode {
-    pub const ALL: [GameMode; 4] = [
-        GameMode::Survival,
-        GameMode::Creative,
-        GameMode::Adventure,
-        GameMode::Spectator,
-    ];
-    pub fn name(self) -> &'static str {
-        match self {
-            GameMode::Survival => "survival",
-            GameMode::Creative => "creative",
-            GameMode::Adventure => "adventure",
-            GameMode::Spectator => "spectator",
-        }
-    }
-    pub fn from_name(s: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|m| m.name() == s)
-    }
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum Arg {

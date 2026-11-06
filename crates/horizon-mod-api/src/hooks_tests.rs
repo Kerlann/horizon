@@ -176,6 +176,36 @@ fn scoped_mods_dispatch_and_restore_after_panic() {
 }
 
 #[test]
+fn native_switch_skips_and_resumes_subscribed_hooks() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct HostDouble;
+    impl Host for HostDouble {}
+    impl ClientHost for HostDouble {}
+    struct Counter(Arc<AtomicUsize>);
+    #[mod_api::__subscriptions]
+    impl Hooks for Counter {
+        fn client_tick_pre(&self, _: &mut dyn ClientHost, _: &mut ClientTickPreEvent) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let count = Arc::new(AtomicUsize::new(0));
+    testing::with_mods(
+        vec![ModEntry::new("counter", Box::new(Counter(count.clone())))].into(),
+        || {
+            assert_eq!(__private::mod_index("counter"), Some(0));
+            dispatch_client_tick_pre(&mut HostDouble);
+            assert!(__private::set_mod_enabled("counter", false));
+            dispatch_client_tick_pre(&mut HostDouble);
+            assert!(__private::set_mod_enabled("counter", true));
+            dispatch_client_tick_pre(&mut HostDouble);
+            assert!(!__private::set_mod_enabled("missing", false));
+        },
+    );
+    assert_eq!(count.load(Ordering::Relaxed), 2);
+}
+
+#[test]
 fn movement_input_writes_back_all_fields() {
     struct TestHost;
     impl Host for TestHost {}
@@ -312,24 +342,29 @@ fn render_gui_pre_cancel_reaches_the_game() {
 }
 
 #[test]
-fn window_resize_delivers_physical_dimensions() {
+fn window_resize_delivers_physical_and_gui_dimensions() {
     use std::sync::Mutex;
     struct TestHost;
     impl Host for TestHost {}
     impl ClientHost for TestHost {}
-    struct Listener(Arc<Mutex<Vec<(u32, u32)>>>);
+    struct Listener(Arc<Mutex<Vec<(u32, u32, u32, u32)>>>);
     #[mod_api::__subscriptions]
     impl Hooks for Listener {
         fn window_resize(&self, _: &mut dyn ClientHost, event: &mut WindowResizeEvent) {
-            self.0.lock().unwrap().push((event.width, event.height));
+            self.0.lock().unwrap().push((
+                event.width,
+                event.height,
+                event.gui_width,
+                event.gui_height,
+            ));
         }
     }
     let heard = Arc::new(Mutex::new(Vec::new()));
     testing::with_mods(
         vec![ModEntry::new("resize", Box::new(Listener(heard.clone())))].into(),
         || {
-            dispatch_window_resize(&mut TestHost, 1200, 900);
+            dispatch_window_resize(&mut TestHost, 1200, 900, 400, 300);
         },
     );
-    assert_eq!(*heard.lock().unwrap(), [(1200, 900)]);
+    assert_eq!(*heard.lock().unwrap(), [(1200, 900, 400, 300)]);
 }

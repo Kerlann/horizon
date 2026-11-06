@@ -111,6 +111,8 @@ pub use phase::{
     DataLoadContext, DataLoadOrigin, LoadedMods, LoopContext, LoopSide, OwningLoad, OwningLoop,
     PackageInfo, PackageKind, RegistrationContext,
 };
+mod advancement_progress;
+pub use advancement_progress::{AdvancementProgress, CriterionProgress};
 mod criteria;
 pub use criteria::{CriterionContext, CriterionTest, CriterionTestError, TriggerCriterionError};
 mod packets;
@@ -195,7 +197,8 @@ pub use horizon_client_core::text::Text;
 #[horizon_mod_api_macros::wasm(via = (u64, Option<f64>))]
 pub use horizon_core::random::LegacyRandom;
 pub use horizon_core::{
-    arm_pose::ArmPose, geometry::Direction, position::BlockPos, random::RandomSource,
+    arm_pose::ArmPose, game_mode::GameMode, geometry::Direction, position::BlockPos,
+    random::RandomSource,
 };
 /// The family of a client notification entering the toast queue.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1181,13 +1184,17 @@ pub struct NativeServerPlayer {
 /// `eco give <player:player> <amount:integer>`. Kinds: `word`, `text` (the
 /// rest of the line, last), `integer`, `number`, `boolean`, `player`,
 /// `item`, `block_pos`. Usages of one command share their words; the
-/// server merges them into one tree.
+/// server merges them into one tree. Each executable usage keeps its own level:
+/// a public `foo bar` lets everyone traverse `foo`, but does not make an
+/// operator-only `foo` executable. Optional arguments also allow execution at
+/// their preceding prefixes, at that usage's level.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct NativeCommand {
     /// The usage.
     pub usage: String,
-    /// The operator level a player needs to see and run it (0: everyone).
+    /// The operator level a player needs to run this usage (0: everyone).
+    /// Shared prefixes stay visible when needed to reach a lower-level usage.
     pub level: u8,
 }
 
@@ -2342,8 +2349,8 @@ impl LevelRef {
 /// raids file saves. `level.raid_at(host, pos)`, `level.raids(host)`,
 /// `level.raid(host, id)` and `mob.raid(host)` make one. A handle resolves
 /// again on each call: it reads as `None` or `false` once the raid is gone,
-/// for a handle of an earlier open, for a level that is not in place, and on a
-/// client.
+/// for a handle of an earlier open, for a closed level, and on a client.
+/// Reads and writes reach parked server levels without moving them into place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct RaidRef {
@@ -2850,53 +2857,6 @@ impl From<PlayerRef> for EntityRef {
     }
 }
 
-/// A player's game mode (vanilla's `GameType`).
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum GameMode {
-    /// Survival mode.
-    Survival,
-    /// Creative mode.
-    Creative,
-    /// Adventure mode.
-    Adventure,
-    /// Spectator mode.
-    Spectator,
-}
-
-impl GameMode {
-    /// Every mode, in id order.
-    pub const ALL: [Self; 4] = [
-        Self::Survival,
-        Self::Creative,
-        Self::Adventure,
-        Self::Spectator,
-    ];
-    /// `GameType.getId`: 0 survival, 1 creative, 2 adventure, 3 spectator.
-    pub fn id(self) -> i32 {
-        match self {
-            Self::Survival => 0,
-            Self::Creative => 1,
-            Self::Adventure => 2,
-            Self::Spectator => 3,
-        }
-    }
-    /// The mode with `GameType` id `id`, or None for an id vanilla doesn't
-    /// have.
-    pub fn from_id(id: i32) -> Option<Self> {
-        Self::ALL.into_iter().find(|mode| mode.id() == id)
-    }
-    /// `GameType.getName`: `survival`, `creative`, `adventure`, `spectator`.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Survival => "survival",
-            Self::Creative => "creative",
-            Self::Adventure => "adventure",
-            Self::Spectator => "spectator",
-        }
-    }
-}
-
 /// A custom boss bar (vanilla's `CustomBossEvent`, the `/bossbar` ones) of an
 /// open server world. It holds the world's epoch and the bar's UUID, so a bar
 /// that was removed (even if its id was added again) or a handle from an
@@ -3279,6 +3239,7 @@ pub type Mods = Arc<[ModEntry]>;
 pub(crate) struct Installed {
     mods: Mods,
     subscribers: horizon_client_core::subscribers::Subscribers,
+    disabled: Box<[std::sync::atomic::AtomicBool]>,
 }
 
 impl Installed {
@@ -3296,7 +3257,15 @@ impl Installed {
             mods.len(),
             subscriptions,
         );
-        Self { mods, subscribers }
+        let disabled = mods
+            .iter()
+            .map(|_| std::sync::atomic::AtomicBool::new(false))
+            .collect();
+        Self {
+            mods,
+            subscribers,
+            disabled,
+        }
     }
 }
 
@@ -3379,14 +3348,40 @@ pub(crate) fn listened(hook: generated::HookId) -> bool {
     installed().is_some_and(|installed| installed.subscribers.contains_any(hook as usize))
 }
 
+/// Switch an installed trait mod's subsequent dispatches on or off.
+pub(crate) fn set_mod_enabled(id: &str, on: bool) -> bool {
+    let Some(installed) = installed() else {
+        return false;
+    };
+    let mut found = false;
+    for (entry, disabled) in installed.mods.iter().zip(&*installed.disabled) {
+        if entry.id == id {
+            disabled.store(!on, std::sync::atomic::Ordering::Relaxed);
+            found = true;
+        }
+    }
+    found
+}
+
 /// Whether an installed mod subscribes to an injected hook.
 // hidden: a game-side helper, not part of the mod surface
 #[doc(hidden)]
 pub fn subscribed_by(index: usize, hook: Option<generated::HookId>) -> bool {
     hook.is_some_and(|hook| {
         installed().is_some_and(|installed| {
-            index < installed.mods.len() && installed.subscribers.contains(hook as usize, index)
+            index < installed.mods.len()
+                && !installed.disabled[index].load(std::sync::atomic::Ordering::Relaxed)
+                && installed.subscribers.contains(hook as usize, index)
         })
+    })
+}
+
+fn mod_index_on(index: usize) -> bool {
+    installed().is_none_or(|installed| {
+        installed
+            .disabled
+            .get(index)
+            .is_none_or(|disabled| !disabled.load(std::sync::atomic::Ordering::Relaxed))
     })
 }
 
@@ -3417,6 +3412,9 @@ fn entered_with_id(
         installed
             .subscribers
             .indices(hook_id as usize)
+            .filter(move |&index| {
+                !installed.disabled[index].load(std::sync::atomic::Ordering::Relaxed)
+            })
             .map(move |index| {
                 drop(crash_guard.take());
                 let entry = &installed.mods[index];
@@ -3442,18 +3440,21 @@ fn entered_parts<'a, P: ?Sized>(
     hook: &'static str,
 ) -> impl Iterator<Item = &'a P> {
     let mut guard = None;
-    parts.iter().map(move |attached| {
-        // The last part's mark goes first, as in `Entered`.
-        drop(guard.take());
-        guard = Some(crate::crash::enter_native_mod(
-            crate::crash::NativeModCall {
-                id: attached.mod_id,
-                hook,
-                part: Some(attached.type_name),
-            },
-        ));
-        &*attached.part
-    })
+    parts
+        .iter()
+        .filter(|attached| mod_index_on(attached.mod_index))
+        .map(move |attached| {
+            // The last part's mark goes first, as in `Entered`.
+            drop(guard.take());
+            guard = Some(crate::crash::enter_native_mod(
+                crate::crash::NativeModCall {
+                    id: attached.mod_id,
+                    hook,
+                    part: Some(attached.type_name),
+                },
+            ));
+            &*attached.part
+        })
 }
 
 struct Entered<'a> {
@@ -4573,16 +4574,6 @@ mod tests {
         assert_eq!(ran.get(), usize::from(cfg!(feature = "testing")));
     }
 
-    #[test]
-    fn game_modes_round_trip_through_their_ids() {
-        for mode in GameMode::ALL {
-            assert_eq!(GameMode::from_id(mode.id()), Some(mode));
-        }
-        assert_eq!(GameMode::from_id(-1), None);
-        assert_eq!(GameMode::from_id(4), None);
-        assert_eq!(GameMode::Adventure.name(), "adventure");
-    }
-
     struct Quiet;
     #[mod_api::__subscriptions]
     impl Hooks for Quiet {}
@@ -4847,6 +4838,44 @@ mod tests {
                 "minecraft:zombified_piglin".into()
             )]
         );
+    }
+
+    #[test]
+    fn game_mode_change_dispatches_the_shared_type_and_honors_cancellation() {
+        struct VetoSpectator;
+        #[mod_api::__subscriptions]
+        impl Hooks for VetoSpectator {
+            fn player_game_mode_changed(
+                &self,
+                _host: &mut dyn ServerHost,
+                event: &mut PlayerGameModeChangedEvent<'_>,
+            ) -> Flow {
+                assert_eq!((event.player, event.name), (7, "Probe"));
+                assert_eq!(event.from, horizon_core::game_mode::GameMode::Adventure);
+                if event.to == GameMode::Spectator {
+                    Flow::Cancel
+                } else {
+                    Flow::Continue
+                }
+            }
+        }
+        install(vec![ModEntry::new("mode-veto", Box::new(VetoSpectator))].into());
+        let mut host = Reader {
+            block: "minecraft:air",
+            lines: Vec::new(),
+        };
+        for (to, expected_cancel) in [(GameMode::Spectator, true), (GameMode::Survival, false)] {
+            let mut cancel = false;
+            dispatch_player_game_mode_changed(
+                &mut host,
+                7,
+                "Probe",
+                horizon_core::game_mode::GameMode::Adventure,
+                to,
+                &mut cancel,
+            );
+            assert_eq!(cancel, expected_cancel);
+        }
     }
 
     #[test]

@@ -100,8 +100,12 @@ jobs:
   # Formatting, clippy and the mod API's wasm32 check on GitHub's own runners, in parallel with verify's tests on
   # Dyna's: the fork's account has its own hosted pool, so a run's wall time is the longer of the two, not the sum.
   lint:
+    # Dyna's large runner for main's pushes and this repository's own pull requests (owner, 2026-11-05): its
+    # build folder persists, so clippy re-checks only what changed. A fork's pull request, or a run while the
+    # pool is down, stays on GitHub's runners with the snapshot cache below.
+    needs: changes
     if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ${{ needs.changes.outputs.self_hosted == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && 'dyna-large' || 'ubuntu-latest' }}
     # A cold lint (two full clippy graphs) takes 40+ minutes on GitHub runners: room to finish, main to save its cache.
     timeout-minutes: ${{ github.event_name == 'pull_request' && 75 || 100 }}
     env:
@@ -118,13 +122,31 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 tools/ci/rust_changes.py "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+      - name: Install Dyna runner dependencies without root
+        if: steps.rust.outputs.required != 'false' && runner.environment != 'github-hosted'
+        run: bash tools/ci/dyna_ci_deps.sh
       - name: Install Rust toolchain and the ALSA and udev headers the client links against
         if: steps.rust.outputs.required != 'false'
+        env:
+          HOSTED: ${{ runner.environment == 'github-hosted' }}
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
+          if [ "$HOSTED" = true ]; then
+            sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
+          else
+            if [ ! -x "$CARGO_HOME/bin/rustup" ]; then
+              curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal
+            fi
+            export PATH="$CARGO_HOME/bin:$PATH"
+            # The slot's build folder persists between jobs; point the checkout's target at it.
+            mkdir -p "$CARGO_TARGET_DIR"
+            ln -s "$CARGO_TARGET_DIR" target
+            # sccache can't wrap clippy-driver (`sccache clippy-driver rustc -vV` fails); the persistent
+            # build folder is the cache here, so lint runs without the runner's wrapper.
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+          fi
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
       - name: Lint cache toolchain
-        if: steps.rust.outputs.required != 'false'
+        if: steps.rust.outputs.required != 'false' && runner.environment == 'github-hosted'
         id: toolchain
         run: |
           echo "hash=$(rustc +stable -vV | sha256sum | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
@@ -133,7 +155,7 @@ jobs:
       # rust-cache's default removes workspace artifacts. Those are the expensive part here,
       # in two feature graphs; keep both, and publish a fresh snapshot from main every 6 hours.
       - uses: actions/cache/restore@v4
-        if: steps.rust.outputs.required != 'false'
+        if: steps.rust.outputs.required != 'false' && runner.environment == 'github-hosted'
         id: lint-cache
         with:
           path: |
@@ -144,11 +166,32 @@ jobs:
           restore-keys: |
             lint-workspace-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml') }}-
             lint-workspace-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.hash }}-
+      # A restore-key hit can predate a profile or dependency change: a successful download
+      # does not mean Cargo has artifacts for the requested graph (for example, #1190).
+      - name: Report lint cache compatibility
+        if: steps.rust.outputs.required != 'false' && runner.environment == 'github-hosted'
+        env:
+          REQUESTED_KEY: ${{ steps.lint-cache.outputs.cache-primary-key }}
+          MATCHED_KEY: ${{ steps.lint-cache.outputs.cache-matched-key }}
+        run: |
+          if [ -z "$MATCHED_KEY" ]; then
+            STATUS="No lint cache found; this run builds from cold."
+          elif [[ "$MATCHED_KEY" == "${REQUESTED_KEY%-*-*}-"* ]]; then
+            STATUS="Matching manifests and lockfile; unchanged Cargo units can be reused."
+          else
+            STATUS="Fallback cache from different manifests or lockfile; dependency or profile changes can require a full rebuild until main saves a matching snapshot."
+            echo "::notice::$STATUS"
+          fi
+          {
+            echo "### Lint workspace cache"
+            echo "$STATUS"
+            printf '\nRequested: `%s`\n\nRestored: `%s`\n\n' "$REQUESTED_KEY" "${MATCHED_KEY:-none}"
+          } >> "$GITHUB_STEP_SUMMARY"
       # A fresh checkout otherwise makes every workspace source newer than the cached artifacts.
       # Only byte-identical Git objects regain their cached mtimes; changed inputs stay new.
       - name: Restore unchanged source timestamps
         if: steps.rust.outputs.required != 'false'
-        run: python3 tools/ci/source_mtimes.py target/ci-source-mtimes.json
+        run: python3 tools/ci/source_mtimes.py target/ci-source-mtimes.json | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Check formatting and lint
         if: steps.rust.outputs.required != 'false'
         id: native-lint
@@ -165,7 +208,7 @@ jobs:
       # Publish native work even if the independent wasm check fails. Pull requests only read
       # main's snapshots; they can never replace a cache subsequently consumed by main.
       - uses: actions/cache/save@v4
-        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.native-lint.outcome == 'success' && steps.server-lint.outcome == 'success' && steps.lint-cache.outputs.cache-hit != 'true' }}
+        if: ${{ !cancelled() && runner.environment == 'github-hosted' && github.ref == 'refs/heads/main' && steps.native-lint.outcome == 'success' && steps.server-lint.outcome == 'success' && steps.lint-cache.outputs.cache-hit != 'true' }}
         with:
           path: |
             ~/.cargo/registry
@@ -453,6 +496,16 @@ jobs:
           for dir in minecraft datagen horizon-client tools; do
             ln -sfn "/cache/horizon-local/$dir" ".local/$dir"
           done
+      - uses: actions/setup-java@v4
+        if: steps.data.outputs.present != 'false' && matrix.shard == 'horizon-client'
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Generate the fishing test's vanilla reference inputs
+        if: steps.data.outputs.present != 'false' && matrix.shard == 'horizon-client'
+        run: |
+          reference=$(mktemp -d "$RUNNER_TEMP/fishing-reference.XXXXXX")
+          python3 tools/test_fishing_rng_parity.py --prepare-reference "$reference" --env-file "$GITHUB_ENV"
       - name: Run the ignored tests that need prepared data
         if: steps.data.outputs.present != 'false'
         env:
@@ -460,7 +513,7 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: |
           export HORIZON_TEST_RESOURCES="$PWD/.local/horizon-client/26.3"
-          python3 tools/ci/ignored_tests.py "$SHARD"
+          python3 tools/ci/with_xvfb.py python3 tools/ci/ignored_tests.py "$SHARD"
   # Aggregate the main-push and dispatch shards: green when each passed or was skipped.
   ignored-tests:
     needs: [changes, ignored-tests-shards]

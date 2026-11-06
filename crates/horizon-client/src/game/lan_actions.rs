@@ -36,8 +36,7 @@ use horizon_protocol::{
     text::literal,
 };
 use horizon_world::entity_move::EntityMoveWorld;
-use mod_api::ActionRefused;
-use mod_api::SoundSource;
+use mod_api::{ActionRefused, GameMode, SoundSource};
 use winit::keyboard::KeyCode;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1270,7 +1269,7 @@ impl Game<'_> {
         // The turn's previous mode, as `Game::set_mode` kept it: the mode left
         // by the turn's last change, when it changed more than once.
         let g = &mut host.hub.guests[i];
-        g.previous_game_mode = turn_previous.map(super::game_mode::mode_id_of);
+        g.previous_game_mode = turn_previous.map(GameMode::id);
         // The turn's abilities: a mode change made in it set the flags first
         // (`Game::set_mode`), then a mod's writes won, as in vanilla.
         if let Some(now) = turn_abilities
@@ -1405,13 +1404,7 @@ impl Game<'_> {
 
     /// The game mode fields without `set_mode`'s side effects on the host.
     fn set_mode_raw(&mut self, id: i32) {
-        use horizon_client::command::args::GameMode;
-        self.mode = match id {
-            1 => GameMode::Creative,
-            2 => GameMode::Adventure,
-            3 => GameMode::Spectator,
-            _ => GameMode::Survival,
-        };
+        self.mode = super::game_mode::mode_from_id(id);
         self.creative = self.mode == GameMode::Creative;
     }
 
@@ -4504,11 +4497,21 @@ impl Game<'_> {
                     return;
                 };
                 let g = &host.hub.guests[i];
-                (g.uuid, g.name.clone(), g.game_mode)
+                (
+                    g.uuid,
+                    g.name.clone(),
+                    super::game_mode::mode_from_id(g.game_mode),
+                )
             };
             let mut cancel = false;
-            if from != SPECTATOR {
-                self.native_player_game_mode_changed(uuid, &name, from, SPECTATOR, &mut cancel);
+            if from != GameMode::Spectator {
+                self.native_player_game_mode_changed(
+                    uuid,
+                    &name,
+                    from,
+                    GameMode::Spectator,
+                    &mut cancel,
+                );
             }
             if !cancel && let Some(host) = self.lan.as_mut() {
                 host.hub

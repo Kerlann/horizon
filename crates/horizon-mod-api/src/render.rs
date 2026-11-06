@@ -22,9 +22,23 @@ pub use wgpu;
 
 static RENDERERS: OnceLock<RenderInstalled> = OnceLock::new();
 
+/// A renderer and its owner's index in the installed mod dispatch order.
+// exhaustive: private fields; construction records ownership explicitly, never by trait-object identity.
+pub struct RenderEntry {
+    mod_index: usize,
+    hooks: &'static dyn RenderHooks,
+}
+
+impl RenderEntry {
+    /// Bind a renderer to its mod's index once, when the game installs its mods.
+    pub fn new(mod_index: usize, hooks: &'static dyn RenderHooks) -> Self {
+        Self { mod_index, hooks }
+    }
+}
+
 /// The renderers with their per-hook subscriber set, as [`install`] leaves them.
 struct RenderInstalled {
-    renderers: Box<[&'static dyn RenderHooks]>,
+    renderers: Box<[RenderEntry]>,
     subscribers: Subscribers,
 }
 
@@ -42,9 +56,10 @@ fn render_installed() -> Option<&'static RenderInstalled> {
     RENDERERS.get()
 }
 
-fn new_render_installed(renderers: Box<[&'static dyn RenderHooks]>) -> RenderInstalled {
+fn new_render_installed(renderers: Box<[RenderEntry]>) -> RenderInstalled {
     let subscriptions = renderers.iter().enumerate().flat_map(|(index, renderer)| {
         renderer
+            .hooks
             .subscribed()
             .iter()
             .flatten()
@@ -59,9 +74,7 @@ fn new_render_installed(renderers: Box<[&'static dyn RenderHooks]>) -> RenderIns
 }
 
 /// Install trait mod renderers in dispatch order, once per process.
-pub fn install(
-    renderers: Box<[&'static dyn RenderHooks]>,
-) -> Result<(), Box<[&'static dyn RenderHooks]>> {
+pub fn install(renderers: Box<[RenderEntry]>) -> Result<(), Box<[RenderEntry]>> {
     match RENDERERS.set(new_render_installed(renderers)) {
         Ok(()) => Ok(()),
         Err(installed) => Err(installed.renderers),
@@ -76,7 +89,8 @@ fn entered_render(
         installed
             .subscribers
             .indices(hook_id as usize)
-            .map(move |index| installed.renderers[index])
+            .filter(move |&index| crate::mod_index_on(installed.renderers[index].mod_index))
+            .map(move |index| installed.renderers[index].hooks)
     })
 }
 
@@ -239,6 +253,11 @@ mod tests {
 
     /// Install renderers for this test thread, as [`install`] does once per process.
     fn install_for_test(renderers: Box<[&'static dyn RenderHooks]>) -> &'static RenderInstalled {
+        let renderers = renderers
+            .iter()
+            .enumerate()
+            .map(|(index, &hooks)| RenderEntry::new(index, hooks))
+            .collect();
         let installed = Box::leak(Box::new(new_render_installed(renderers)));
         TEST_RENDERERS.set(Some(installed));
         installed
@@ -267,6 +286,38 @@ mod tests {
         fn render_needs(&self, _event: &mut RenderNeedsEvent<'_>) {
             self.0.fetch_add(1, Ordering::Relaxed);
         }
+    }
+
+    #[test]
+    fn shared_renderer_identity_does_not_merge_mod_owners() {
+        use crate as mod_api;
+
+        struct Owner;
+        #[crate::__subscriptions]
+        impl crate::Hooks for Owner {}
+        let mods = vec![
+            crate::ModEntry::new("first", Box::new(Owner)),
+            crate::ModEntry::new("second", Box::new(Owner)),
+        ]
+        .into();
+        crate::testing::with_mods(mods, || {
+            let count = Arc::new(AtomicUsize::new(0));
+            let hooks = Box::leak(Box::new(CountingNeeds(count.clone())));
+            // Both owners intentionally return the very same trait object.
+            let renderers = vec![RenderEntry::new(0, hooks), RenderEntry::new(1, hooks)].into();
+            let installed = Box::leak(Box::new(new_render_installed(renderers)));
+            TEST_RENDERERS.set(Some(installed));
+            assert!(crate::__private::set_mod_enabled("first", false));
+            native_render_needs(&mut RenderNeeds::default());
+            assert_eq!(count.load(Ordering::Relaxed), 1);
+            assert!(crate::__private::set_mod_enabled("second", false));
+            native_render_needs(&mut RenderNeeds::default());
+            assert_eq!(count.load(Ordering::Relaxed), 1);
+            assert!(crate::__private::set_mod_enabled("first", true));
+            native_render_needs(&mut RenderNeeds::default());
+            assert_eq!(count.load(Ordering::Relaxed), 2);
+        });
+        TEST_RENDERERS.set(None);
     }
 
     #[test]

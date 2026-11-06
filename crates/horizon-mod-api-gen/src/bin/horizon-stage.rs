@@ -4,23 +4,26 @@ use std::path::PathBuf;
 
 fn main() {
     let args: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
-    let [root, list, internals] = &args[..] else {
-        eprintln!("usage: horizon-stage ROOT POINTS_JSON INTERNALS_JSON");
+    let discovery = args.last().is_some_and(|arg| arg == "--sync-internals");
+    let positional = if discovery {
+        &args[..args.len() - 1]
+    } else {
+        &args[..]
+    };
+    let [root, list, internals] = positional else {
+        eprintln!("usage: horizon-stage ROOT POINTS_JSON INTERNALS_JSON [--sync-internals]");
         std::process::exit(2);
     };
-    // Internals first, so the manifest lists the game's own items and not the points' raw types.
-    let staged = horizon_mod_api_gen::internals::widen(root).and_then(|widened| {
-        let text = serde_json::to_string_pretty(&widened.entries).map_err(|e| e.to_string())?;
-        std::fs::write(internals, text + "\n")
-            .map_err(|e| format!("{}: {e}", internals.display()))?;
-        let staged = horizon_mod_api_gen::points::stage(root)?;
-        let points = horizon_mod_api_gen::points::game_points(root)?;
-        let text = serde_json::to_string_pretty(&points).map_err(|e| e.to_string())?;
-        std::fs::write(list, text + "\n").map_err(|e| format!("{}: {e}", list.display()))?;
-        Ok((staged, widened))
-    });
-    match staged {
-        Ok((staged, widened)) => {
+    let mode = if discovery {
+        horizon_mod_api_gen::staging::Mode::Discovery
+    } else {
+        horizon_mod_api_gen::staging::Mode::Build
+    };
+    match horizon_mod_api_gen::staging::stage(root, list, internals, mode) {
+        Ok(horizon_mod_api_gen::staging::Staged {
+            points: staged,
+            internals: widened,
+        }) => {
             println!(
                 "staged {} points ({} with a head only, {} with a raw form) in {} files",
                 staged.points, staged.head_only, staged.raw, staged.files

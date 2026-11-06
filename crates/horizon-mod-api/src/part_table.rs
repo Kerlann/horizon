@@ -97,7 +97,7 @@ pub struct Parts {
     /// order.
     entity_capabilities: Capabilities<EntityProviderOf>,
     /// The mods' own item places (`ItemPlace::Mod`), by provider name.
-    place_providers: HashMap<&'static str, (&'static str, Arc<dyn PlaceProvider>)>,
+    place_providers: HashMap<&'static str, PlaceProviderPart>,
     /// Only the parts that override each scoped hook, resolved at load or reload.
     hooks: Vec<Option<HookParts>>,
 }
@@ -133,11 +133,19 @@ pub(crate) struct BlockEntityTypeRequest {
 #[derive(Clone)]
 pub(crate) struct CapabilityPart<P> {
     mod_id: &'static str,
+    mod_index: usize,
     /// The handler type it gives, for refusing a capability name answered with two.
     type_name: &'static str,
     /// Asked ahead of the game's own provider.
     before_game: bool,
     provider: P,
+}
+
+#[derive(Clone)]
+struct PlaceProviderPart {
+    mod_id: &'static str,
+    mod_index: usize,
+    provider: Arc<dyn PlaceProvider>,
 }
 
 /// What answers a capability for a block entity of one type: given the block entity and the
@@ -210,31 +218,33 @@ pub struct OwnProvider {
 // hidden: a lookup's view of the registrar's table, not part of the mod surface
 #[doc(hidden)]
 pub trait CapabilityProviders {
-    /// Whether any mod answers capability `name` of the things `by` names.
+    /// Whether any mod registered capability `name` for the things `by` names. This presence
+    /// check includes disabled mods; enumeration skips their providers.
     fn provided(&self, by: ProvidedBy, name: &str) -> bool;
-    /// The `index`th provider of block entity capability `name` for block entity type `kind`,
-    /// with its mod and whether it is asked ahead of the game.
+    /// The next enabled provider of block entity capability `name` for block entity type `kind`,
+    /// with its mod and whether it is asked ahead of the game. `index` starts at zero and advances
+    /// past every visited registration, including disabled ones.
     fn block_entity_provider(
         &self,
         name: &str,
         kind: &str,
-        index: u32,
+        index: &mut u32,
     ) -> Option<(BlockProviderOf, &'static str, bool)>;
-    /// The `index`th provider of item capability `name` for item `item`.
+    /// The next enabled provider of item capability `name` for item `item`, advancing `index`.
     fn item_provider(
         &self,
         name: &str,
         item: &str,
-        index: u32,
+        index: &mut u32,
     ) -> Option<(ItemProviderOf, &'static str, bool)>;
-    /// The `index`th provider of entity capability `name` for entity type `kind`.
+    /// The next enabled provider of entity capability `name` for entity type `kind`, advancing `index`.
     fn entity_provider(
         &self,
         name: &str,
         kind: &str,
-        index: u32,
+        index: &mut u32,
     ) -> Option<(EntityProviderOf, &'static str, bool)>;
-    /// The provider of the item places named `name`, with its mod.
+    /// The enabled provider of the item places named `name`, with its mod.
     fn place_provider(&self, name: &str) -> Option<(Arc<dyn PlaceProvider>, &'static str)>;
 }
 
@@ -253,40 +263,39 @@ impl CapabilityProviders for InstalledProviders {
         &self,
         name: &str,
         kind: &str,
-        index: u32,
+        index: &mut u32,
     ) -> Option<(BlockProviderOf, &'static str, bool)> {
-        nth(&installed()?.keys.capabilities, name, kind, index)
+        next(&installed()?.keys.capabilities, name, kind, index)
     }
     fn item_provider(
         &self,
         name: &str,
         item: &str,
-        index: u32,
+        index: &mut u32,
     ) -> Option<(ItemProviderOf, &'static str, bool)> {
-        nth(&installed()?.keys.item_capabilities, name, item, index)
+        next(&installed()?.keys.item_capabilities, name, item, index)
     }
     fn entity_provider(
         &self,
         name: &str,
         kind: &str,
-        index: u32,
+        index: &mut u32,
     ) -> Option<(EntityProviderOf, &'static str, bool)> {
-        nth(&installed()?.keys.entity_capabilities, name, kind, index)
+        next(&installed()?.keys.entity_capabilities, name, kind, index)
     }
     fn place_provider(&self, name: &str) -> Option<(Arc<dyn PlaceProvider>, &'static str)> {
-        let (owner, provider) = installed()?.keys.place_providers.get(name)?;
-        Some((provider.clone(), *owner))
+        let part = installed()?.keys.place_providers.get(name)?;
+        super::mod_index_on(part.mod_index).then(|| (part.provider.clone(), part.mod_id))
     }
 }
 
-fn nth<P: Clone>(
+fn next<P: Clone>(
     table: &Capabilities<P>,
     name: &str,
     id: &str,
-    index: u32,
+    index: &mut u32,
 ) -> Option<(P, &'static str, bool)> {
-    let part = table.get(name)?.get(id)?.get(index as usize)?;
-    Some((part.provider.clone(), part.mod_id, part.before_game))
+    next_provider(table.get(name)?.get(id)?, index)
 }
 
 /// A provider by its handler type: one case for each handler type `mod_api`'s keys name
@@ -712,23 +721,22 @@ pub fn has_entity_providers<T: ?Sized + 'static, C: 'static>(
         .is_some_and(|by_kind| !by_kind.is_empty())
 }
 
-/// Asks the providers `nth` gives (by index, in the order they are asked: those registered
-/// `before_game`, then the others), and the game's own (`game`: whether it answers) between the
+/// Asks the providers `next` gives (advancing a registration cursor in dispatch order: those
+/// registered `before_game`, then the others), and the game's own (`game`: whether it answers) between the
 /// two, in the fork's chosen order (NeoForge's javadoc doesn't state one between mods'
 /// providers and the game's); the first to answer wins. `get` takes a provider of this
 /// capability's handler type out of its case: a provider of a mod's own type the asker isn't
 /// linked with is passed over.
 pub(crate) fn ask_providers<O, P: ?Sized + 'static, T: ?Sized>(
     host: &mut dyn ServerHost,
-    nth: impl Fn(u32) -> Option<(O, &'static str, bool)>,
+    next: impl Fn(&mut u32) -> Option<(O, &'static str, bool)>,
     get: impl Fn(&O) -> Option<&Arc<P>>,
     call: impl Fn(&P, &mut dyn ServerHost) -> Option<Box<T>>,
     game: impl FnOnce(&mut dyn ServerHost) -> bool,
 ) -> Answer<T> {
     let mut game = Some(game);
     let mut index = 0;
-    while let Some((provider, owner, before_game)) = nth(index) {
-        index += 1;
+    while let Some((provider, owner, before_game)) = next(&mut index) {
         if !before_game
             && let Some(game) = game.take()
             && game(host)
@@ -784,7 +792,7 @@ impl<T: ?Sized + 'static> BlockEntityProviders<T> {
         let at = self.at;
         let answer = ask_providers(
             host,
-            |index| self.parts.nth(index),
+            |index| next_provider(self.parts, index),
             BlockProviderOf::get::<T>,
             |provider, host| provider.provide(host, at),
             |_| game,
@@ -835,7 +843,7 @@ impl<T: ?Sized + 'static, C: Copy + 'static> EntityProviders<T, C> {
         let (entity, context) = (self.entity, self.context);
         match ask_providers(
             host,
-            |index| self.parts.nth(index),
+            |index| next_provider(self.parts, index),
             EntityProviderOf::get::<T, C>,
             |provider, host| provider.provide(host, entity, context),
             |_| game,
@@ -846,16 +854,19 @@ impl<T: ?Sized + 'static, C: Copy + 'static> EntityProviders<T, C> {
     }
 }
 
-/// A provider list's `index`th, as [`CapabilityProviders`] gives it.
-trait Nth<P> {
-    fn nth(&self, index: u32) -> Option<(P, &'static str, bool)>;
-}
-
-impl<P: Clone> Nth<P> for [CapabilityPart<P>] {
-    fn nth(&self, index: u32) -> Option<(P, &'static str, bool)> {
-        let part = self.get(index as usize)?;
-        Some((part.provider.clone(), part.mod_id, part.before_game))
+/// Walk only this capability and type's registrations, once each even if a provider switches
+/// a mod off during the lookup. The table and the game's direct lookups share this path.
+fn next_provider<P: Clone>(
+    parts: &[CapabilityPart<P>],
+    index: &mut u32,
+) -> Option<(P, &'static str, bool)> {
+    while let Some(part) = parts.get(*index as usize) {
+        *index += 1;
+        if super::mod_index_on(part.mod_index) {
+            return Some((part.provider.clone(), part.mod_id, part.before_game));
+        }
     }
+    None
 }
 
 fn attached<'a, 'k, P: ?Sized>(
@@ -1226,6 +1237,7 @@ impl PartRegistrar {
             at,
             CapabilityPart {
                 mod_id: me,
+                mod_index: self.mod_index,
                 type_name: handler,
                 before_game,
                 provider,
@@ -1526,16 +1538,21 @@ impl Registrar for PartRegistrar {
             ));
             return;
         }
-        if let Some((other, _)) = self.parts.place_providers.get(name) {
+        if let Some(other) = self.parts.place_providers.get(name) {
             self.refused.push(format!(
                 "item places {name} are provided twice, by {} and {}",
-                *other, self.mod_id
+                other.mod_id, self.mod_id
             ));
             return;
         }
-        self.parts
-            .place_providers
-            .insert(name, (self.mod_id, provider));
+        self.parts.place_providers.insert(
+            name,
+            PlaceProviderPart {
+                mod_id: self.mod_id,
+                mod_index: self.mod_index,
+                provider,
+            },
+        );
     }
 }
 
@@ -4962,6 +4979,200 @@ pub mod tests {
         fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
             Some(BlockEntityRef { level, position })
         }
+    }
+
+    #[test]
+    fn disabled_capability_providers_are_skipped_and_resume() {
+        struct Later;
+        #[mod_api::__subscriptions]
+        impl Hooks for Later {
+            fn register(&self, r: &mut dyn Registrar, _: &crate::RegistrationContext) {
+                let ordered = r.block_entity_type_key("test:ordered");
+                r.block_entity_capability(&ITEMS, &ordered, |_, _| Some(Box::new(Marked(99))));
+                r.item_capability(&ITEM_ITEMS, "test:ordered_item", |_, _| {
+                    Some(Box::new(Marked(99)))
+                });
+                r.entity_capability(&ENTITY_ITEMS, "test:robot", |_, _, ()| {
+                    Some(Box::new(Marked(99)))
+                });
+            }
+        }
+        let mods: crate::Mods = vec![
+            ModEntry::new("doubler", Box::new(Doubler)),
+            ModEntry::new("later", Box::new(Later)),
+        ]
+        .into();
+        crate::install(mods.clone());
+        install_parts(&mods).unwrap();
+        mark_game_thread();
+
+        // These lookup objects keep their indexed registrations, not a snapshot of enabled mods.
+        let at = BlockSide {
+            level: here(),
+            pos: [7, 64, 0],
+            side: None,
+        };
+        let direct_block = || block_entity_providers(&ITEMS, &Ordered, at).unwrap();
+        let robot = EntityRef::new(NativeWorldEpoch::new(1), 3);
+        let mut player = Player::default();
+        let direct_entity =
+            || entity_providers(&ENTITY_ITEMS, &Player::default(), robot, ()).unwrap();
+        let block_before_disable = direct_block();
+        let entity_before_disable = direct_entity();
+        let check = |without_game: Option<usize>, with_game: usize, robot_size: Option<usize>| {
+            let host: &mut dyn ServerHost = &mut Ordered;
+            let block = here().capability(host, &ITEMS, [7, 64, 0], None);
+            assert_eq!(block.map(|found| found.size(host)), without_game);
+            let block = here().capability(host, &ITEMS, [9, 64, 0], None).unwrap();
+            assert_eq!(block.size(host), with_game);
+            assert_eq!(
+                direct_block()
+                    .ask(host, false)
+                    .map(|found| found.size(host)),
+                without_game
+            );
+            assert_eq!(
+                direct_block().ask(host, true).map(|found| found.size(host)),
+                None
+            );
+            for (damage, expected) in [(0, without_game), (1, Some(with_game))] {
+                let host: &mut dyn ServerHost =
+                    &mut HeldItem(stack("test:ordered_item", 1, damage));
+                let item = HAND.capability(host, &ITEM_ITEMS);
+                assert_eq!(item.map(|found| found.size(host)), expected);
+            }
+            let host: &mut dyn ServerHost = &mut Player::default();
+            let entity = robot.capability(host, &ENTITY_ITEMS, ());
+            assert_eq!(entity.map(|found| found.size(host)), robot_size);
+            assert_eq!(
+                direct_entity()
+                    .ask(host, false)
+                    .map(|found| found.size(host)),
+                robot_size
+            );
+        };
+        // At x = 9 Doubler replaces the game's block provider, while the item with damage 1
+        // uses the game's handler (27), so check that special block answer separately.
+        assert_eq!(
+            here()
+                .capability(&mut Ordered, &ITEMS, [9, 64, 0], None)
+                .unwrap()
+                .size(&mut Ordered),
+            3
+        );
+        assert!(crate::set_mod_enabled("doubler", false));
+        check(Some(99), 27, Some(99));
+        assert_eq!(
+            block_before_disable
+                .ask(&mut Ordered, false)
+                .unwrap()
+                .size(&mut Ordered),
+            99
+        );
+        let entity = entity_before_disable.ask(&mut player, false).unwrap();
+        assert_eq!(entity.size(&mut player), 99);
+        assert!(crate::set_mod_enabled("later", false));
+        check(None, 27, None);
+        assert!(crate::set_mod_enabled("later", true));
+        check(Some(99), 27, Some(99));
+        assert!(crate::set_mod_enabled("doubler", true));
+        assert_eq!(
+            here()
+                .capability(&mut Ordered, &ITEMS, [7, 64, 0], None)
+                .unwrap()
+                .size(&mut Ordered),
+            1
+        );
+        assert_eq!(
+            robot
+                .capability(&mut player, &ENTITY_ITEMS, ())
+                .unwrap()
+                .size(&mut player),
+            3
+        );
+        let host: &mut dyn ServerHost = &mut HeldItem(stack("test:ordered_item", 1, 0));
+        assert_eq!(HAND.capability(host, &ITEM_ITEMS).unwrap().size(host), 1);
+    }
+
+    #[test]
+    fn disabling_a_provider_during_lookup_does_not_skip_the_next_mod() {
+        struct SwitchOff;
+        #[mod_api::__subscriptions]
+        impl Hooks for SwitchOff {
+            fn register(&self, r: &mut dyn Registrar, _: &crate::RegistrationContext) {
+                let ordered = r.block_entity_type_key("test:ordered");
+                r.block_entity_capability(&ITEMS, &ordered, |_, _| {
+                    assert!(crate::set_mod_enabled("switch", false));
+                    None
+                });
+                r.block_entity_capability(&ITEMS, &ordered, |_, _| {
+                    panic!("a disabled mod's later provider must not run")
+                });
+            }
+        }
+        struct Later;
+        #[mod_api::__subscriptions]
+        impl Hooks for Later {
+            fn register(&self, r: &mut dyn Registrar, _: &crate::RegistrationContext) {
+                let ordered = r.block_entity_type_key("test:ordered");
+                r.block_entity_capability(&ITEMS, &ordered, |_, _| Some(Box::new(Marked(99))));
+            }
+        }
+        let mods: crate::Mods = vec![
+            ModEntry::new("switch", Box::new(SwitchOff)),
+            ModEntry::new("later", Box::new(Later)),
+        ]
+        .into();
+        crate::install(mods.clone());
+        install_parts(&mods).unwrap();
+        mark_game_thread();
+        let found = here()
+            .capability(&mut Ordered, &ITEMS, [7, 64, 0], None)
+            .unwrap();
+        assert_eq!(
+            (found.owner(), found.size(&mut Ordered)),
+            ("later".into(), 99)
+        );
+    }
+
+    #[test]
+    fn disabled_place_providers_refuse_reads_and_writes_and_resume() {
+        game_thread();
+        let mut player = Player::default();
+        let charm = ItemPlace::Mod {
+            provider: "test:charms",
+            key: 4,
+        };
+        assert_eq!(
+            insert(&mut player, &charm, stack("minecraft:stick", 3, 0)),
+            3
+        );
+        assert!(crate::set_mod_enabled("chemist", false));
+        assert_eq!(
+            charm.amount(&mut player),
+            3,
+            "another mod's flag is independent"
+        );
+        assert!(crate::set_mod_enabled("doubler", false));
+        assert!(charm.stack(&mut player).is_none());
+        assert_eq!(insert(&mut player, &charm, stick()), 0);
+        let resource = ItemResource::of(&stick());
+        assert_eq!(
+            player.transaction(|host, tx| Ok::<_, ()>(charm.extract(host, tx, &resource, 1))),
+            Ok(0)
+        );
+        assert_eq!(
+            player.slots[&24].count, 3,
+            "disabled writes leave the place unchanged"
+        );
+        assert!(crate::set_mod_enabled("doubler", true));
+        assert_eq!(charm.amount(&mut player), 3);
+        assert_eq!(insert(&mut player, &charm, stick()), 1);
+        assert_eq!(
+            player.transaction(|host, tx| Ok::<_, ()>(charm.extract(host, tx, &resource, 1))),
+            Ok(1)
+        );
+        assert_eq!(charm.amount(&mut player), 3);
     }
 
     #[test]

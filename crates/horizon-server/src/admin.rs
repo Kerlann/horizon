@@ -196,17 +196,48 @@ fn load<E: horizon_server_files::user_lists::Entry>(dir: &Path, file: &str) -> U
     list
 }
 
-/// `GET /api/v1/mods`: the native mods the game program was built with. The launcher writes them to
-/// `native-mods.json` beside a build it makes; a release or Nightly has none, so the list is empty.
+/// The inventory response at the engine control boundary.
+#[derive(serde::Deserialize)]
+struct RuntimeMods {
+    mods: Vec<RuntimeMod>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct RuntimeMod {
+    id: String,
+    version: String,
+}
+
+/// `GET /api/v1/mods`: the running engine's package inventory, with build provenance kept separate.
 pub fn mods(shared: &Shared) -> Response {
+    let mut game = match running(shared) {
+        Ok(game) => game,
+        Err(response) => return response,
+    };
+    let reply = match game.ask("server-mods") {
+        Ok(reply) => reply,
+        Err(e) => return Response::error(409, &format!("the game didn't answer: {e}")),
+    };
+    let runtime: RuntimeMods = match serde_json::from_value(reply) {
+        Ok(runtime) => runtime,
+        Err(e) => {
+            return Response::error(
+                409,
+                &format!("the game's mod inventory is unavailable: {e}"),
+            );
+        }
+    };
     let built = config::Config::load(&shared.dir)
         .ok()
         .and_then(|c| launch::program_in(&c, &shared.dir, shared.install.as_ref()).ok())
         .and_then(|p| std::fs::read_to_string(p.with_file_name("native-mods.json")).ok());
-    Response::json(200, &built_with(built.as_deref()))
+    Response::json(
+        200,
+        &json!({ "mods": runtime.mods, "provenance": built_with(built.as_deref()) }),
+    )
 }
 
-/// [`mods`]' answer for the text of a `native-mods.json` (None: no program, or no such file).
+/// Build provenance from `native-mods.json` (None: no program, or no such file).
 fn built_with(built: Option<&str>) -> Value {
     let info: Value = built
         .and_then(|b| serde_json::from_str(b).ok())
@@ -656,7 +687,7 @@ mod tests {
     }
 
     #[test]
-    fn mods_come_from_the_build_record() {
+    fn build_record_is_only_provenance() {
         let none = built_with(None);
         assert_eq!(
             (none["engine"]["found"].clone(), none["native"].clone()),
@@ -673,6 +704,113 @@ mod tests {
         // A release has no record's mods; a broken file is no mods.
         assert_eq!(built_with(Some("{}"))["native"], json!([]));
         assert_eq!(built_with(Some("nope"))["native"], json!([]));
+    }
+
+    #[test]
+    fn mods_use_runtime_inventory_and_report_unavailability() {
+        use std::{
+            io::{BufRead, BufReader, Write},
+            net::TcpListener,
+            time::Duration,
+        };
+
+        let dir = std::env::temp_dir().join(format!(
+            "horizon-server-runtime-mods-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(config::FILE), config::TEMPLATE).unwrap();
+        config::update(&dir, "engine", "path", toml::Value::String("engine".into())).unwrap();
+        std::fs::write(dir.join("engine"), "test program").unwrap();
+        std::fs::write(
+            dir.join("native-mods.json"),
+            r#"{"horizon":"old-build","mods":[{"id":"built_only","version":"0","sha256":"ff"}]}"#,
+        )
+        .unwrap();
+        let shared = Shared::with_install(&dir, None);
+        let call = || {
+            crate::api::route(
+                &shared,
+                &crate::http::Request {
+                    method: "GET".into(),
+                    path: "/api/v1/mods".into(),
+                    query: String::new(),
+                    headers: Vec::new(),
+                    body: Vec::new(),
+                },
+            )
+        };
+        shared.set_phase(Phase::Stopped);
+        let stopped = call();
+        assert_eq!(stopped.status, 409);
+        assert!(stopped.body.contains("isn't running"));
+        assert!(!stopped.body.contains("built_only"));
+
+        shared.set_phase(Phase::Running);
+        // A running phase with a missing control endpoint is not an empty inventory.
+        assert_eq!(call().status, 409);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let path = launch::control_path(&dir);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            path,
+            json!({"port": listener.local_addr().unwrap().port(), "token": "test-token"})
+                .to_string(),
+        )
+        .unwrap();
+        let inventory = json!([
+            {"id": "native_loaded", "version": "2"},
+            {"id": "wasm_loaded", "version": "3"},
+            {"id": "content_loaded", "version": "4"},
+        ]);
+        // The mock owns only the transport: the real endpoint must authenticate and issue the query.
+        let replies = [
+            Some(json!({"mods": inventory})),
+            Some(json!({"mods": []})),
+            Some(json!({"error": "unknown request"})),
+            Some(json!({"mods": [{"id": "broken", "version": null}]})),
+            None,
+        ];
+        let peer = std::thread::spawn(move || {
+            for reply in replies {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut reader = BufReader::new(socket.try_clone().unwrap());
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                assert_eq!(line.trim(), "auth test-token");
+                writeln!(socket, "{{\"ok\":true}}").unwrap();
+                line.clear();
+                reader.read_line(&mut line).unwrap();
+                assert_eq!(line.trim(), "server-mods");
+                if let Some(reply) = reply {
+                    writeln!(socket, "{reply}").unwrap();
+                }
+            }
+        });
+        let running = call();
+        assert_eq!(running.status, 200);
+        let body: Value = serde_json::from_str(&running.body).unwrap();
+        assert_eq!(body["mods"], inventory);
+        assert_eq!(body["provenance"]["engine"]["horizon"], "old-build");
+        assert_eq!(body["provenance"]["native"][0]["id"], "built_only");
+        assert!(body.get("native").is_none());
+        let empty = call();
+        assert_eq!(empty.status, 200);
+        let empty: Value = serde_json::from_str(&empty.body).unwrap();
+        assert_eq!(empty["mods"], json!([]));
+        assert_eq!(empty["provenance"]["native"][0]["id"], "built_only");
+        for _ in 0..3 {
+            let unavailable = call();
+            assert_eq!(unavailable.status, 409);
+            assert!(!unavailable.body.contains("built_only"));
+            let body: Value = serde_json::from_str(&unavailable.body).unwrap();
+            assert!(body.get("mods").is_none());
+        }
+        peer.join().unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

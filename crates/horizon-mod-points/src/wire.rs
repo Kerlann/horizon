@@ -1,5 +1,5 @@
 //! How a point's record crosses to a wasm mod and back, through the one generic `listeners`
-//! interface (`wit/points.wit`): nothing here is per point. Each record's [`Record`] impl,
+//! interface (`wit/points.wit`): nothing here is per point. Each record's codec,
 //! generated beside it, lowers its fields to [`Value`]s in order; the mod's guest lifts them into
 //! the record ([`Lift`]), runs its listener and lowers them again; the game writes them back.
 use std::borrow::Cow;
@@ -161,7 +161,7 @@ pub fn field<'v, T: Wire<'v>>(fields: &mut std::slice::Iter<'v, Value>) -> Resul
 /// `field`'s new value, from the next of the fields a listener left.
 pub fn taken<T: WriteBack>(
     field: &T,
-    fields: &mut std::vec::IntoIter<Value>,
+    fields: &mut impl Iterator<Item = Value>,
 ) -> Result<T, Mismatch> {
     field.taken(fields.next().ok_or(Mismatch)?)
 }
@@ -259,7 +259,7 @@ pub use guest::{FromHost, fire, listener};
 /// forwarded with its record.
 #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
 mod host {
-    use super::Record;
+    use super::{Mismatch, Record, Value};
     use crate::PointId;
 
     /// The host a point hands its listeners.
@@ -278,8 +278,35 @@ mod host {
         fn forward(&self, place: PointId, host: PointHost<'_>, record: &mut dyn Record);
     }
 
-    /// A [`Forward`] as the mod's `Points`.
-    pub struct Forwarded(pub Box<dyn Forward>);
+    // Keep monomorphizations private: non-generic impls involving a public trait or record
+    // export their methods even when the other half of the impl is private.
+    pub(crate) struct Forwarded<F: ?Sized>(pub(crate) Box<F>);
+    pub(crate) struct RecordRef<'a, R>(pub(crate) &'a mut R);
+
+    /// A concrete record's codec, generic over its field sink and source so only the erased
+    /// `RecordRef` crosses crates, not a method per public record.
+    pub(crate) trait Fields {
+        fn lower(&self, fields: &mut impl Extend<Value>);
+        fn write_back(&mut self, fields: impl Iterator<Item = Value>) -> Result<(), Mismatch>;
+    }
+
+    impl<R: Fields> Record for RecordRef<'_, R> {
+        fn lower(&self) -> Vec<Value> {
+            let mut fields = Vec::new();
+            self.0.lower(&mut fields);
+            fields
+        }
+        fn write_back(&mut self, fields: Vec<Value>) -> Result<(), Mismatch> {
+            self.0.write_back(fields.into_iter())
+        }
+    }
+
+    /// A wasm mod's listeners as the game's `Points`, without exposing its per-place methods.
+    pub fn forwarded(forward: Box<dyn Forward>) -> Box<dyn crate::Points> {
+        Box::new(Forwarded(forward))
+    }
 }
 #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
-pub use host::{Forward, Forwarded, PointHost};
+pub(crate) use host::{Fields, Forwarded, RecordRef};
+#[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
+pub use host::{Forward, PointHost, forwarded};

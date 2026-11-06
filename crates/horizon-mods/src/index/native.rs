@@ -2,7 +2,7 @@
 use super::Facts;
 use std::{collections::BTreeMap, io::Read, path::Path};
 
-pub const MIXINS_REV: &str = "e8cd0aa38cffef49cb2e088ef716baa107148c02";
+pub const MIXINS_REV: &str = "5a64af938ec86b00d53d16a408aabc0038fb3e57";
 
 /// Where the prebuilt game (#589) is released: one `prebuilt-<commit>` prerelease per daily build
 /// of this fork's main (Diverges from upstream: horizon-rust/horizon has none).

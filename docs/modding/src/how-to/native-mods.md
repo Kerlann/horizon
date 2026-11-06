@@ -32,10 +32,16 @@ For the rare case the API does not cover, raw injections change the game's Rust 
 using [horizon-mixins](https://github.com/horizon-rust/horizon-mixins) (MIT, by levzzz5154, made for Horizon).
 An injection is an escape hatch; request a typed hook for the behavior it needs.
 
-Native mods are native code with the player's rights, not sandboxed. They are always on in the launcher: there is no
-switch. The first install shows a trust notice, and every build waits behind a red warning; the registry lists one only
-after a review (its later releases are checked by machine); and they play in a game of their own, built for the
-instance they are installed in.
+Native mods are native code with the player's rights, not sandboxed. The first install shows a trust notice,
+and every build waits behind a red warning; the registry lists one only after a review (its later releases are
+checked by machine). They play in a game of their own, built for the instance they are installed in.
+
+Options > Mods can pause a loaded code mod without rebuilding. Native and wasm mods use the same switch:
+subsequent hooks, render hooks, Parts, slot listeners and capability-provider lookups skip the disabled owner's
+registrations. Re-enabling resumes those registrations without re-registering them. This pauses dispatch, not
+unloads code or undoes earlier world changes; a trapped wasm group stays stopped even if its switch is turned
+back on. Content-mod selection stays frozen while a world is open, including on a browser project page. A browser
+install that finishes after a world opens waits until the world closes before activating its content.
 
 Villager handles preserve the full signed integer level (at least 1), including values above the
 five vanilla trade tiers. Higher levels use the master badge and do not gain further vanilla trades.
@@ -75,6 +81,19 @@ restricted level host. Native and wasm mods use the same calls: service methods
 are generated imports, and acquiring a service just reborrows the current call's
 frame resource. Block and fluid scheduling stays on `LevelTicksHost`, and
 `tick_stats()` stays on `ServerHost`.
+
+## Observing advancement progress
+
+Subscribe to `player_advancement_progress` to inspect the whole advancement immediately after
+one criterion is granted or revoked, before its completion rewards. `event.progress.criteria`
+includes obtained and unobtained criteria; `obtained_at` is the original saved grant date or
+`None`. `requirements` lists the OR groups, `completed_requirements` counts satisfied groups,
+and `done` is the game's completion result. This also describes first-tick and reload grants
+for the event's player, even when another player's state is in place.
+
+Keep `event.progress.clone()` if it is needed later: the owned `AdvancementProgress` snapshot
+cannot change the player's progress and is not updated by subsequent events. No-op grants and
+revokes do not fire. The snapshot uses the same plain-data bindings in native and wasm mods.
 
 ## Filtering toast notifications
 
@@ -186,6 +205,16 @@ and code mods; the scaffold does not create one.
 
 Raw injections belong in the same manifest as `[[native.injection]]` tables. The decision ladder, the fields and the
 forms are in the modding book: [Injections](../injections.md).
+
+### Raid handles
+
+Raid handles returned by `LevelRef::raid`, `raid_at` and `raids` resolve their
+own loaded server level even while another dimension is in place. Raid reads,
+omen-level writes and `stop` do not swap levels. Raider lists and living health
+come from that level's mobs; raid ids are local to a level. A closed level, an
+earlier world epoch or a client refuses the handle. Entity handles in a parked
+raid's member list keep their identity; their ordinary entity operations still
+require the entity's level to be in place.
 
 ### Named hook points
 
@@ -807,9 +836,13 @@ Point a server at it:
     horizon-server --dir SERVER restart
 
 Updates do not rebuild a pinned `engine.path`: build a new export folder, set `engine.path` to it, restart, and keep
-the old folder for manual rollback. The supervisor does not auto-update or rebuild a pinned engine path, and there
-is no supervisor-to-engine inventory query or managed native rebuild/update workflow yet (remaining work in
-horizon-rust/horizon#6304). Configuration mod matching is implemented as described above.
+the old folder for manual rollback. The supervisor does not auto-update or rebuild a pinned engine path
+(remaining work in horizon-rust/horizon#6304). To inspect the running server, its authenticated
+[`GET /api/v1/mods`](../../../api/server.md) queries the engine's canonical `LoadedMods` inventory:
+`mods` lists loaded native, wasm and content package ids and versions in inventory order.
+`provenance` separately reports the configured program's build record, which may differ and is never
+used as an inventory fallback. A stopped or unreachable engine returns HTTP 409, not an empty list.
+Configuration mod matching is implemented as described above.
 Native mods run unsandboxed: only build code you have read and trust.
 `--trust-native-code` records the operator's decision; an agent must not supply that consent.
 

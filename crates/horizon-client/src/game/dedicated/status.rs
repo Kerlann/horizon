@@ -1,10 +1,12 @@
 //! What `horizon-server` asks the dedicated server on its control endpoint (`--control-socket`, docs/server.md
 //! section 2): `server-status` answers with the tick rate, the tick times `/tick query` reports, the players
-//! (including their positions) and the loaded chunks; `console <line>` runs a console command and answers with the lines it logged;
+//! (including their positions) and the loaded chunks; `server-mods` answers with the canonical loaded package
+//! inventory; `console <line>` runs a console command and answers with the lines it logged;
 //! `server-events <since>` answers the typed events after that number (events.rs); `management <connection>
 //! <json>` edits the lists as vanilla's management protocol does (management.rs).
-//! `player-expect <uuid> [seconds]`, `player-export <uuid> [freeze]` and `player-release <uuid> ...` are a
-//! proxy's, for a player it moves between two servers (transfer.rs).
+//! `player-expect <uuid> [seconds]`, `player-drop <uuid>`, `player-export <uuid> [freeze]`,
+//! `player-release <uuid> ...`, `player-import <uuid> <json>` and `player-confirm <uuid> ...` are a proxy's,
+//! for a player it moves between two servers (transfer.rs).
 use super::{ServerState, capture_log};
 use crate::game::Game;
 use serde_json::{Value, json};
@@ -45,6 +47,7 @@ impl Game<'_> {
         while let Some(request) = self.control.as_ref().and_then(|c| c.try_recv()) {
             let reply = match request.line.trim().split_once(' ') {
                 _ if request.line.trim() == "server-status" => self.server_status(state),
+                _ if request.line.trim() == "server-mods" => server_mods(),
                 Some(("server-events", since)) => {
                     super::events::since(since.trim().parse().unwrap_or(0))
                 }
@@ -169,6 +172,15 @@ impl Game<'_> {
     }
 }
 
+/// Reads the same package inventory as registration and the runtime Host.
+fn server_mods() -> Value {
+    let mods: Vec<_> = mod_api::__private::loaded_mods()
+        .iter()
+        .map(|package| json!({ "id": package.id(), "version": package.version() }))
+        .collect();
+    json!({ "mods": mods })
+}
+
 fn player_status(
     name: &str,
     uuid: u128,
@@ -189,8 +201,24 @@ fn player_status(
 
 #[cfg(test)]
 mod tests {
-    use super::player_status;
+    use super::{player_status, server_mods};
     use serde_json::json;
+
+    #[test]
+    fn server_mods_uses_canonical_inventory_order() {
+        mod_api::__private::with_test_packages(&["second", "first"], || {
+            assert_eq!(
+                server_mods(),
+                json!({"mods": [
+                    {"id": "second", "version": "1"},
+                    {"id": "first", "version": "1"},
+                ]})
+            );
+        });
+        mod_api::__private::with_test_packages(&[], || {
+            assert_eq!(server_mods(), json!({"mods": []}));
+        });
+    }
 
     #[test]
     fn player_status_includes_coordinates() {

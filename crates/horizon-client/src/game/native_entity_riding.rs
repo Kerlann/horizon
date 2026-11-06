@@ -144,7 +144,7 @@ impl Game<'_> {
         }
         if !force {
             match rider {
-                Target::Player if self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft) => {
+                Target::Player if self.keys.held(horizon_client::actions::Action::Sneak) => {
                     return false;
                 }
                 Target::Mob(id)
@@ -186,14 +186,17 @@ impl Game<'_> {
                 }
             }
             Target::Mob(id) => {
-                if !self.mobs.iter().any(|m| m.id == id && m.alive())
-                    || self.riding == Some(id)
-                    || self.ridden_by_guest(id)
-                    || self
-                        .mobs
-                        .iter()
-                        .any(|m| !m.removed && m.extra.mount == Some(id))
-                {
+                let Some(mob) = self.mobs.iter().find(|m| m.id == id && m.alive()) else {
+                    return false;
+                };
+                let players = self.boat_players(id).max(usize::from(mob.rider.is_some()));
+                let mobs = self
+                    .mobs
+                    .iter()
+                    .filter(|m| !m.removed && m.alive() && m.extra.mount == Some(id))
+                    .count()
+                    .max(usize::from(mob.extra.rider.is_some()));
+                if !horizon_client::mobs::riders::can_add_passenger(mob, players + mobs) {
                     return false;
                 }
             }
@@ -249,10 +252,10 @@ impl Game<'_> {
     ///
     /// Players and mobs can ride a mob, boat or minecart. Returns false for
     /// unsupported entity pairs, stale or held-out handles, a full stored
-    /// vehicle, a cycle, or a canceled mount or dismount. Mob vehicles and
-    /// minecarts store one passenger; boats store one mob and up to two
-    /// passengers in total. `force` bypasses normal admission checks, not
-    /// these storage limits. Player boarding cooldown and the strider's
+    /// vehicle, a cycle, or a canceled mount or dismount. Mob vehicle capacity
+    /// follows its species; minecarts store one passenger and boats store one
+    /// mob and up to two passengers in total. `force` bypasses normal
+    /// admission checks, not these storage limits. Player boarding cooldown and the strider's
     /// eye-in-lava admission check are not yet represented by the game.
     pub(super) fn native_entity_start_riding(
         &mut self,
@@ -395,6 +398,51 @@ mod tests {
                 }
                 assert!(events.lock().unwrap().is_empty());
             });
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn camel_admits_multiple_mob_passengers_but_not_a_fourth() {
+        super::super::native_entity_refs::tests::with_game(|game| {
+            for (id, name) in [
+                (70, "minecraft:camel"),
+                (71, "minecraft:camel_husk"),
+                (72, "minecraft:happy_ghast"),
+            ] {
+                let kind = game.res.mob_types().get(name).unwrap().clone();
+                game.mobs.push(Mob::new(id, kind, Vec3::ZERO, 0.0));
+            }
+            for id in 73..=76 {
+                let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+                game.mobs.push(Mob::new(id, kind, Vec3::ZERO, 0.0));
+            }
+            game.riding = Some(70);
+            assert!(game.start_riding_target(Target::Mob(73), Target::Mob(70), true));
+            assert!(game.start_riding_target(Target::Mob(74), Target::Mob(70), true));
+            assert!(!game.start_riding_target(Target::Mob(75), Target::Mob(70), true));
+            let mut riding = horizon_client::lan::entity::Riding::default();
+            game.lan_riding(&[(70, 1)], &mut riding);
+            assert_eq!(riding.passengers(70), &[1, 73, 74]);
+            game.dismount_mob(73);
+            game.dismount_mob(74);
+            game.riding = None;
+            for vehicle in [70, 71, 72] {
+                let capacity = if vehicle == 72 { 4 } else { 3 };
+                for rider in 73..73 + capacity {
+                    assert!(game.start_riding_target(
+                        Target::Mob(rider),
+                        Target::Mob(vehicle),
+                        true
+                    ));
+                }
+                if capacity == 3 {
+                    assert!(!game.start_riding_target(Target::Mob(76), Target::Mob(vehicle), true));
+                }
+                for rider in 73..73 + capacity {
+                    game.dismount_mob(rider);
+                }
+            }
         });
     }
 

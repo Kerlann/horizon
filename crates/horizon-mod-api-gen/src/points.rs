@@ -906,7 +906,7 @@ pub(crate) fn records(points: &[GamePoint]) -> String {
         }
         /// A wasm mod's listeners as the game's `Points`: every place forwarded with its record.
         #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
-        impl Points for crate::wire::Forwarded {
+        impl<F: crate::wire::Forward + ?Sized> Points for crate::wire::Forwarded<F> {
             fn subscribed(&self) -> &'static [Option<PointId>] {
                 self.0.subscribed()
             }

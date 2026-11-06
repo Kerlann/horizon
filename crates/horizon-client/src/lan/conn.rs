@@ -14,7 +14,7 @@ use super::{
 };
 use horizon_protocol::{
     PROTOCOL_VERSION,
-    connection::{ConnWriter, Connection},
+    connection::{ConnWriter, Connection, Counters},
     crypto::{offline_uuid, server_hash, uuid_string},
     packets::{
         Empty,
@@ -243,6 +243,9 @@ pub struct PlayerSender {
     pub pending: Arc<AtomicUsize>,
     held: Arc<Mutex<Vec<Vec<u8>>>>,
     to: To,
+    /// The connection's bytes on the wire (after compression and encryption), counted by its
+    /// network thread: `horizon-report`'s network use per player. None for a test's channel.
+    wire: Option<Arc<Counters>>,
 }
 #[derive(Clone)]
 enum To {
@@ -260,6 +263,7 @@ impl PlayerSender {
             pending,
             held: Arc::default(),
             to: To::Channel(tx),
+            wire: None,
         }
     }
     /// A connectionless actor has no writer, queue or packet delivery.
@@ -268,7 +272,17 @@ impl PlayerSender {
             pending: Arc::default(),
             held: Arc::default(),
             to: To::Disabled,
+            wire: None,
         }
+    }
+    /// The bytes received from and sent to the client on the wire so far.
+    pub fn wire_bytes(&self) -> Option<(u64, u64)> {
+        self.wire.as_ref().map(|c| {
+            (
+                c.bytes_in.load(Ordering::Relaxed).max(0) as u64,
+                c.bytes_out.load(Ordering::Relaxed).max(0) as u64,
+            )
+        })
     }
     /// Whether the client has answered no keep-alive for too long.
     pub fn timed_out(&self) -> bool {
@@ -1343,6 +1357,7 @@ fn play(
         pending,
         held: Arc::default(),
         to: To::Pool(outbox.clone(), watch.clone()),
+        wire: Some(c.reader.counters.clone()),
     };
     let required_pack = shared
         .config

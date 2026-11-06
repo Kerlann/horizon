@@ -125,8 +125,10 @@ impl Game<'_> {
         self.options_from_title = from_title;
         self.options_to_game = false;
         let minecart_improvements = self.minecart_improvements();
+        let mods_live = self.mods_live_now();
         let ui = &mut self.ui.options;
         ui.open_at(!from_title && self.title.is_none(), page);
+        ui.mods_live = mods_live;
         ui.minecart_improvements = minecart_improvements;
         let root = self.options.resources.clone();
         ui.languages = lang::available(&[&root]);
@@ -346,6 +348,8 @@ impl Game<'_> {
                 Event::Changed => {
                     self.settings.save(&Self::options_path());
                     self.apply_settings();
+                    self.switch_mods();
+                    self.sync_native_switches();
                     self.sync_pregen_option();
                     self.sync_agent_control();
                     self.ui.options.agent_status = self.agent_status_lines();
@@ -426,6 +430,18 @@ impl Game<'_> {
                     let _ = std::fs::create_dir_all(&dir);
                     super::packs::open_folder(&dir);
                 }
+                Event::BrowseMods => {
+                    let ui = &mut self.ui.options.mod_browser;
+                    self.mod_jobs.browse(ui, Self::game_dir());
+                }
+                Event::InstallMod(id) => {
+                    if self.player.is_none() {
+                        let ui = &mut self.ui.options.mod_browser;
+                        self.mod_jobs.install(ui, Self::game_dir(), id);
+                    }
+                }
+                // The website, through ConfirmLinkScreen as other links.
+                Event::OpenModPage(url) => self.confirm_trusted_link(&url, Screen::Options),
                 Event::ListShaderPacks => {
                     self.settings.shader_packs =
                         horizon_client::shader_pack_list::scan(&Self::shader_packs_dir());
@@ -447,6 +463,7 @@ impl Game<'_> {
                 Event::NativeSettings(i) => self.native_settings_refresh(i),
                 Event::NativeButton(i, b) => self.native_settings_event(i, b),
                 Event::Credits => self.open_win_screen(false, super::win::Finish::Options),
+                Event::HudEditor => self.open_hud_editor(true),
                 // AccessibilityOptionsScreen's link button: ConfirmLinkScreen
                 // back to the options screen.
                 Event::AccessibilityHelp => {
@@ -507,6 +524,10 @@ impl Game<'_> {
     pub(super) fn apply_ui_settings(&mut self) {
         horizon_client::hud::GUI_SCALE.store(
             self.settings.gui_scale,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        horizon_client::hud::GUI_UNICODE.store(
+            self.settings.force_unicode,
             std::sync::atomic::Ordering::Relaxed,
         );
         if horizon_client_render::mipmap::set_dither_cutouts(
@@ -584,17 +605,25 @@ impl Game<'_> {
     pub(super) fn resize_state_of(&self, size: winit::dpi::PhysicalSize<u32>) -> ResizeState {
         ResizeState {
             size,
-            gui_scale: self.settings.gui_scale,
-            fullscreen: self.settings.fullscreen,
-            force_unicode: self.settings.force_unicode,
+            gui_size: horizon_client::window::GuiSize::new(
+                [size.width, size.height],
+                self.settings.gui_scale,
+                self.settings.force_unicode,
+            )
+            .size,
         }
     }
-    /// Fires `window_resize` once when the physical size or a GUI setting differs from the last report.
+    /// Fires `window_resize` once when the physical or GUI-scaled dimensions change.
     pub(super) fn notify_window_resize(&mut self) {
         let Some(window) = &self.window else { return };
         let now = self.resize_state_of(window.inner_size());
         if now.differs_from(&mut self.resize_state) {
-            self.native_window_resize(now.size.width, now.size.height);
+            self.native_window_resize(
+                now.size.width,
+                now.size.height,
+                now.gui_size[0],
+                now.gui_size[1],
+            );
         }
     }
     /// `Window.updateFullscreenState`: a fullscreen change made by the window
@@ -709,7 +738,7 @@ fn detected_controller_style(
     fallback: horizon_client::gamepad::GlyphStyle,
 ) -> horizon_client::gamepad::GlyphStyle {
     device.map_or(fallback, |d| {
-        horizon_client::gamepad::GlyphStyle::of_vendor(d.vendor)
+        horizon_client::gamepad::GlyphStyle::of_device(d.vendor, d.product)
     })
 }
 
@@ -743,12 +772,10 @@ mod resize_state_tests {
     use super::ResizeState;
     use winit::dpi::PhysicalSize;
 
-    fn state(width: u32, fullscreen: bool) -> ResizeState {
+    fn state(width: u32, unicode: bool) -> ResizeState {
         ResizeState {
-            size: PhysicalSize::new(width, 480),
-            gui_scale: 2,
-            fullscreen,
-            force_unicode: false,
+            size: PhysicalSize::new(width, 720),
+            gui_size: horizon_client::window::GuiSize::new([width, 720], 3, unicode).size,
         }
     }
 
@@ -765,9 +792,33 @@ mod resize_state_tests {
     /// A settings-only change at an unchanged physical size still reports.
     #[test]
     fn a_settings_only_change_reports() {
-        let mut last = Some(state(640, false));
-        assert!(!state(640, false).differs_from(&mut last));
-        assert!(state(640, true).differs_from(&mut last));
+        let mut last = Some(state(960, false));
+        assert!(!state(960, false).differs_from(&mut last));
+        assert!(state(960, true).differs_from(&mut last));
+    }
+    #[test]
+    fn settings_that_leave_dimensions_unchanged_do_not_report() {
+        let size = PhysicalSize::new(1280, 960);
+        let before = ResizeState {
+            size,
+            gui_size: horizon_client::window::GuiSize::new([1280, 960], 2, false).size,
+        };
+        let mut last = Some(before);
+        let unicode = ResizeState {
+            size,
+            gui_size: horizon_client::window::GuiSize::new([1280, 960], 2, true).size,
+        };
+        assert!(!unicode.differs_from(&mut last));
+        let automatic = ResizeState {
+            size,
+            gui_size: horizon_client::window::GuiSize::new([1280, 960], 0, false).size,
+        };
+        assert!(automatic.differs_from(&mut last));
+        let larger_limit = ResizeState {
+            size,
+            gui_size: horizon_client::window::GuiSize::new([1280, 960], 100, false).size,
+        };
+        assert!(!larger_limit.differs_from(&mut last));
     }
 }
 

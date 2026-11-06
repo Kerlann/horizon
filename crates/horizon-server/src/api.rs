@@ -180,8 +180,8 @@ pub const ROUTES: [Route; 32] = [
         method: "GET",
         path: "/api/v1/mods",
         takes: "",
-        answers: "`engine` (`found`, `target`, `base`, `horizon`, `hooks`) and `native` (id, version, sha256), from the `native-mods.json` the launcher wrote beside the game program",
-        what: "The native mods the server's game program was built with",
+        answers: "`mods` (id, version) from the running engine's LoadedMods inventory; `provenance` contains `engine` (found, target, base, horizon, hooks) and `native` (id, version, sha256) from the configured program's native-mods.json. 409 when the runtime inventory is unavailable",
+        what: "The packages loaded by the running server, with build provenance separate",
     },
     Route {
         method: "POST",

@@ -52,7 +52,24 @@ struct Siege {
     spot: [i32; 3],
 }
 
+/// A level's living raid members, in mob-list order.
+pub(super) fn members(mobs: &[Mob], id: i32) -> impl Iterator<Item = &Mob> {
+    mobs.iter().filter(move |m| {
+        m.alive() && !m.removed && raider::state(m).is_some_and(|s| s.raid_id == Some(id))
+    })
+}
+
 impl Raiding {
+    pub(super) fn raids(&self, dimension: &str) -> Option<&Raids> {
+        self.loaded
+            .filter(|dim| dim.id() == dimension)
+            .map(|_| &self.raids)
+    }
+    pub(super) fn raids_mut(&mut self, dimension: &str) -> Option<&mut Raids> {
+        self.loaded
+            .filter(|dim| dim.id() == dimension)
+            .map(|_| &mut self.raids)
+    }
     /// Exchange the level-held parts (`ServerLevel.getRaids`) with another
     /// level's (game/levels.rs).
     pub(super) fn swap_level(&mut self, other: &mut Self) {
@@ -458,7 +475,7 @@ impl Game<'_> {
     }
     /// The raids of the level in place, once they are read (`read_raids`).
     pub(super) fn raids_in_place(&self) -> Option<&Raids> {
-        (self.raiding.loaded == Some(self.dim)).then_some(&self.raiding.raids)
+        self.raiding.raids(self.dim.id())
     }
     /// `ServerLevel.getRaidAt`.
     pub(super) fn raiding_nearby(&self, at: [i32; 3]) -> Option<i32> {
@@ -480,19 +497,12 @@ impl Game<'_> {
         true
     }
     pub(super) fn raid_command_stop(&mut self, id: i32) {
-        if let Some(r) = self.raiding.raids.get_mut(id) {
-            r.stop();
-            let center = r.center;
+        if let Some(center) = self.raiding.raids.stop(id) {
             self.native_raid_state_change(id, center, "stopped");
         }
     }
     pub(super) fn raid_set_omen(&mut self, id: i32, level: i32) -> i32 {
-        let Some(r) = self.raiding.raids.get_mut(id) else {
-            return 0;
-        };
-        let before = std::mem::replace(&mut r.omen_level, level);
-        self.raiding.raids.dirty = true;
-        before
+        self.raiding.raids.set_omen_level(id, level).unwrap_or(0)
     }
     pub(super) fn raid_glow(&mut self, id: i32) {
         for m in &mut self.mobs {
@@ -519,9 +529,7 @@ impl Game<'_> {
     }
     /// A raid's members (`groupRaiderMap`): the living raiders it counts.
     pub(super) fn raid_members(&self, id: i32) -> impl Iterator<Item = &Mob> {
-        self.mobs.iter().filter(move |m| {
-            m.alive() && !m.removed && raider::state(m).is_some_and(|s| s.raid_id == Some(id))
-        })
+        members(&self.mobs, id)
     }
     /// `getHealthOfLivingRaiders`, leaving out one raider.
     fn raid_living_health(&self, id: i32, except: Option<u32>) -> f32 {

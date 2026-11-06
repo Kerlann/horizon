@@ -5,6 +5,7 @@
 //!   `--template native [--horizon <commit>]`, a native trait mod's bundle, pinned to the
 //!   newest prebuilt game unless `--horizon` names a commit.
 //! - `update [--horizon <commit>]`: repin this native mod and diff/refresh declared internals.
+//! - `internals sync`: discover used internals through the launcher and replace their declarations.
 //! - `internals add <path>… [--kind <kind>]`: declare internals with hashes from the pinned prebuilt game.
 //! - `build`: the `.hmod` in `target/horizon-mod/`, with the mod's `assets/`
 //!   and `data/`; with `--wasm`, a Rust mod built to `mod.wasm` first (`wasm.rs`).
@@ -58,7 +59,7 @@ fn main() -> ExitCode {
         Some("use-jar") => jar::run(&args[1..]),
         Some("internals") => internals::run(&args[1..]),
         Some("update") => update(Path::new("."), flag(&args[1..], "--horizon")),
-        _ => Err("usage: cargo horizon-mod new <path> [--name \"Name\"] [--template content|native [--horizon <commit>]] | update [--horizon <commit>] | internals add <path>… [--kind <kind>] | build [--wasm] | wasm-std <out.wasm> | run [--game <horizon-client>] [-- <game args>] | check <file> [--kind <kind>] [--key <public key> --signature <file.minisig>] [--json] | registry build|review|check|list | use-jar <path>".into()),
+        _ => Err("usage: cargo horizon-mod new <path> [--name \"Name\"] [--template content|native [--horizon <commit>]] | update [--horizon <commit>] | internals sync | internals add <path>… [--kind <kind>] | build [--wasm] | wasm-std <out.wasm> | run [--game <horizon-client>] [-- <game args>] | check <file> [--kind <kind>] [--key <public key> --signature <file.minisig>] [--json] | registry build|review|check|list | use-jar <path>".into()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

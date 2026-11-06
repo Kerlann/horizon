@@ -256,7 +256,8 @@ fn fill(
         nodes.push(Node {
             name: name.clone(),
             kind: if argument { 2 } else { 1 },
-            executable: child["executable"].as_bool().unwrap_or(false),
+            executable: child["executable"].as_bool().unwrap_or(false)
+                && child["execution_level"].as_u64().unwrap_or(0) <= u64::from(level),
             restricted: required > 0,
             children: Vec::new(),
             redirect: redirect(child),
@@ -441,6 +442,42 @@ mod tests {
             ["", "me", "tell", "say", "stop", "action", "message"]
         );
         assert!(op.nodes[3].restricted);
+    }
+
+    #[test]
+    fn native_execution_levels_filter_runnable_flags_not_public_children() {
+        let mods = serde_json::json!({"type": "root", "children": {
+            "foo": {"type": "literal", "executable": true, "execution_level": 4,
+                "children": {"bar": {"type": "literal", "executable": true, "execution_level": 0}}}
+        }});
+        let tree = CommandTree { root: Value::Null };
+        for level in 0..=4 {
+            let packet = tree.packet_with(level, true, &Builtin::default(), &mods);
+            let foo = packet.nodes.iter().find(|n| n.name == "foo").unwrap();
+            assert_eq!(foo.executable, level == 4);
+            assert!(!foo.restricted, "public child keeps the root traversable");
+            assert!(
+                packet
+                    .nodes
+                    .iter()
+                    .find(|n| n.name == "bar")
+                    .unwrap()
+                    .executable
+            );
+            let dispatcher =
+                crate::command::network::from_packet(&packet, &crate::command::Dispatcher::new());
+            let registries = crate::command::Registries::default();
+            assert_eq!(
+                dispatcher.parse("foo", &registries).executable().is_ok(),
+                level == 4
+            );
+            assert!(
+                dispatcher
+                    .parse("foo bar", &registries)
+                    .executable()
+                    .is_ok()
+            );
+        }
     }
 
     #[test]

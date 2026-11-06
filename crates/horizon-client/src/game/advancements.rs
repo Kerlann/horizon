@@ -2,6 +2,7 @@
 //! events (`CriteriaTriggers`), awarding with rewards, the toast and the
 //! chat announcement, and `players/advancements/<uuid>.json`.
 use super::{Dim, Game};
+use horizon_client::actions::Action;
 use horizon_client::{
     advancements::{self as adv, EntityView, Frame, ItemView, Progress, Tree},
     hud::{HudBatch, rgba},
@@ -19,6 +20,30 @@ use std::{
     sync::Arc,
     time::Instant,
 };
+
+#[cfg(test)]
+mod progress_tests;
+
+/// Capture the owning progress without changing its dates or requirement semantics.
+fn progress_snapshot(a: &adv::Advancement, progress: &Progress) -> mod_api::AdvancementProgress {
+    let obtained = progress.criteria.get(&a.id);
+    mod_api::AdvancementProgress::new(
+        a.criteria
+            .iter()
+            .map(|criterion| {
+                mod_api::CriterionProgress::new(
+                    criterion.name.clone(),
+                    obtained
+                        .and_then(|criteria| criteria.get(&criterion.name))
+                        .cloned(),
+                )
+            })
+            .collect(),
+        a.requirements.clone(),
+        progress.counts(a).0 as u32,
+        progress.done(a),
+    )
+}
 
 pub(super) struct Toast {
     icon: String,
@@ -594,7 +619,7 @@ impl Game<'_> {
             on_fire: p.fire_ticks > 0,
             sneaking: p.pose == horizon_client::pose::Pose::Crouching,
             // Input.shift: the held key, as `BlockItem.place`'s sneaking reads it.
-            input_sneak: self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft),
+            input_sneak: self.keys.held(Action::Sneak),
             sprinting: p.sprinting,
             swimming: p.pose == horizon_client::pose::Pose::Swimming,
             flying: p.flying,
@@ -760,7 +785,7 @@ impl Game<'_> {
             let was = self.adv.progress.done(a);
             let criterion = &a.criteria[ci].name;
             if self.adv.progress.grant(&a.id, criterion, &date) {
-                self.advancement_progress(&a.id, criterion, NativeProgressType::Grant);
+                self.advancement_progress(a, criterion, NativeProgressType::Grant);
             }
             self.progress_changed(ai);
             if !was && self.adv.progress.done(a) {
@@ -771,7 +796,7 @@ impl Game<'_> {
     /// `PlayerAdvancements.award` / `revoke` after a criterion's progress changed.
     fn advancement_progress(
         &mut self,
-        advancement: &str,
+        advancement: &adv::Advancement,
         criterion: &str,
         progress_type: NativeProgressType,
     ) {
@@ -783,13 +808,17 @@ impl Game<'_> {
             self.lan_acting_entity,
             self.lan_acting_name.clone(),
         ) {
+            let progress = progress_snapshot(advancement, &self.adv.progress);
             self.native_player_advancement_progress(
-                uuid,
-                entity_id as i32,
-                &name,
-                advancement,
-                criterion,
-                progress_type,
+                mod_api::__private::PlayerAdvancementProgressCall {
+                    player: uuid,
+                    player_entity_id: entity_id as i32,
+                    name: &name,
+                    advancement: &advancement.id,
+                    criterion,
+                    progress_type,
+                    progress: &progress,
+                },
             );
         }
     }
@@ -811,14 +840,32 @@ impl Game<'_> {
                     continue;
                 };
                 fresh.push(grant.clone());
-                self.native_player_advancement_progress(
-                    task.player,
-                    task.entity_id,
-                    &task.name,
-                    &grant.advancement,
-                    &grant.criterion,
-                    NativeProgressType::Grant,
-                );
+                if mod_api::__private::listened(mod_api::HookId::PlayerAdvancementProgress) {
+                    let guest = self
+                        .lan
+                        .as_ref()
+                        .expect("granted guest's host")
+                        .hub
+                        .guest(task.conn)
+                        .expect("granted guest");
+                    let definition = task
+                        .sync
+                        .advancements
+                        .definition(&grant.advancement)
+                        .expect("granted advancement");
+                    let progress = progress_snapshot(definition, &guest.advancements);
+                    self.native_player_advancement_progress(
+                        mod_api::__private::PlayerAdvancementProgressCall {
+                            player: task.player,
+                            player_entity_id: task.entity_id,
+                            name: &task.name,
+                            advancement: &grant.advancement,
+                            criterion: &grant.criterion,
+                            progress_type: NativeProgressType::Grant,
+                            progress: &progress,
+                        },
+                    );
+                }
                 if let Some(host) = self.lan.as_mut() {
                     host.hub.reward_native_tick(&task, grant, was_done);
                 }
@@ -2283,7 +2330,7 @@ impl Game<'_> {
             let was = self.adv.progress.done(a);
             if self.adv.progress.grant(&a.id, c, &date) {
                 changed = true;
-                self.advancement_progress(&a.id, c, NativeProgressType::Grant);
+                self.advancement_progress(a, c, NativeProgressType::Grant);
                 self.progress_changed(index);
                 if !was && self.adv.progress.done(a) {
                     self.award(index);
@@ -2301,11 +2348,11 @@ impl Game<'_> {
         let a = &tree.list[index];
         self.progress_changed(index);
         match criterion {
-            Some(c) => self.revoke_criterion(&a.id, c),
+            Some(c) => self.revoke_criterion(a, c),
             None => {
                 let mut any = false;
                 for c in &a.criteria {
-                    any |= self.revoke_criterion(&a.id, &c.name);
+                    any |= self.revoke_criterion(a, &c.name);
                 }
                 any
             }
@@ -2313,8 +2360,8 @@ impl Game<'_> {
     }
     /// `PlayerAdvancements.revoke(holder, criterion)`: the progress change and
     /// the hook for it.
-    fn revoke_criterion(&mut self, advancement: &str, criterion: &str) -> bool {
-        let revoked = self.adv.progress.revoke(advancement, criterion);
+    fn revoke_criterion(&mut self, advancement: &adv::Advancement, criterion: &str) -> bool {
+        let revoked = self.adv.progress.revoke(&advancement.id, criterion);
         if revoked {
             self.advancement_progress(advancement, criterion, NativeProgressType::Revoke);
         }

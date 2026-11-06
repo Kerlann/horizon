@@ -2,11 +2,11 @@
 //! entries name the places its `mod.wasm` fills. At load each is checked against this game's
 //! points and against the mod's own listeners, then the mod registers in the points crate's one
 //! list of listeners, exactly as a native mod does: its places fire it through
-//! `mod_points::wire::Forwarded`, as hook calls within its group's limits.
+//! `mod_points::wire::forwarded`, as hook calls within its group's limits.
 use crate::Refusal;
 use horizon_mods::manifest::{InjectionKind, Manifest};
 use mod_api::__private::wasm_host::{CallHost, Exports};
-use mod_points::__private::wire::{Forward, Forwarded, HostKind, PointHost, Record, Value};
+use mod_points::__private::wire::{Forward, HostKind, PointHost, Record, Value, forwarded};
 use mod_points::PointId;
 use mod_points::places::{IDS, NAMES, SHAPES, TARGETS};
 use std::collections::BTreeSet;
@@ -108,7 +108,7 @@ impl Listening {
             fire: self.fire,
             places: Box::leak(self.places.into_boxed_slice()),
         };
-        mod_points::register(id, Box::leak(Box::new(Forwarded(Box::new(listeners)))))
+        mod_points::register(id, Box::leak(forwarded(Box::new(listeners))))
     }
 }
 

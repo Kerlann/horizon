@@ -35,7 +35,6 @@ horizon-client-lib mobs::cem::tests::names_reach_horizons_models horizon-rust/ho
 # Load starvation: the far-decoration worker runs at idle priority against a fixed 30 s deadline, so it passes on
 # an idle host.
 horizon-client-lib vanillagen::lod::tests::decorated_lod_refines_real_seed_canopies_and_all_dimensions horizon-rust/horizon#8583 flaky
-horizon-client-render lod::tests::real_mesh_clips_near_chunks_and_preserves_water_and_edited_surfaces horizon-rust/horizon#8583
 horizon-client-render gfx::frame_gen::optical_flow::tests::finds_a_shift_and_a_scene_change horizon-rust/horizon#8627 flaky # llvmpipe/lavapipe scene-change threshold; horizon-rust/horizon#9138 fixes the race
 # The clear-budget fixture writes colortexNFormat in the one-line comment form Iris ignores
 # (fixture bug, one-line fix tracked in the issue); red where the runner has an adapter, a skip-pass where it has none.

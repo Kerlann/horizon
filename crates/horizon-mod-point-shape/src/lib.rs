@@ -486,7 +486,11 @@ impl Shape {
             });
             items.forwards.extend(quote! {
                 fn #method(&self, #host args: &mut #record) {
-                    self.0.forward(PointId::#variant, crate::wire::PointHost::#forwarded, args)
+                    self.0.forward(
+                        PointId::#variant,
+                        crate::wire::PointHost::#forwarded,
+                        &mut crate::wire::RecordRef(args),
+                    )
                 }
             });
             items.variants.extend(quote!(#variant,));
@@ -563,21 +567,37 @@ impl Shape {
         } else {
             quote!(#record)
         };
+        let lowered = quote!(#(crate::wire::Wire::lower(&self.#fields)),*);
+        let write_back = quote! {
+            let taken = (#(crate::wire::taken(&self.#fields, &mut fields)?,)*);
+            crate::wire::end(&mut fields)?;
+            (#(self.#fields,)*) = taken;
+            ::std::result::Result::Ok(())
+        };
         quote! {
-            #[cfg(any(target_arch = "wasm32", feature = "wasm-host"))]
+            #[cfg(target_arch = "wasm32")]
             impl #lifetime crate::wire::Record for #record #lifetime {
                 fn lower(&self) -> ::std::vec::Vec<crate::wire::Value> {
-                    ::std::vec![#(crate::wire::Wire::lower(&self.#fields)),*]
+                    ::std::vec![#lowered]
                 }
                 fn write_back(
                     &mut self,
                     fields: ::std::vec::Vec<crate::wire::Value>,
                 ) -> ::std::result::Result<(), crate::wire::Mismatch> {
                     let mut fields = fields.into_iter();
-                    let taken = (#(crate::wire::taken(&self.#fields, &mut fields)?,)*);
-                    crate::wire::end(&mut fields)?;
-                    (#(self.#fields,)*) = taken;
-                    ::std::result::Result::Ok(())
+                    #write_back
+                }
+            }
+            #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
+            impl #lifetime crate::wire::Fields for #record #lifetime {
+                fn lower(&self, fields: &mut impl ::std::iter::Extend<crate::wire::Value>) {
+                    fields.extend([#lowered]);
+                }
+                fn write_back(
+                    &mut self,
+                    mut fields: impl ::std::iter::Iterator<Item = crate::wire::Value>,
+                ) -> ::std::result::Result<(), crate::wire::Mismatch> {
+                    #write_back
                 }
             }
             #[cfg(target_arch = "wasm32")]

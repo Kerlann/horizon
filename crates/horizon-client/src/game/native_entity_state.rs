@@ -77,7 +77,7 @@ impl Game<'_> {
     pub(super) fn native_entity_is_shift_key_down(&self, entity: EntityRef) -> Option<bool> {
         if !self.is_logical_server() {
             return Some(match self.native_client_entity_target(entity)? {
-                Target::Player => self.keys.contains(&winit::keyboard::KeyCode::ShiftLeft),
+                Target::Player => self.keys.held(horizon_client::actions::Action::Sneak),
                 _ => false,
             });
         }

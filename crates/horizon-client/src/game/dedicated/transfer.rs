@@ -1,8 +1,10 @@
 //! A proxy's requests on the control endpoint, for a player it moves between two servers:
-//! `player-expect <uuid> [seconds]` (the target is told who is coming),
+//! `player-expect <uuid> [seconds]` (the target is told who is coming; its login is held),
+//! `player-drop <uuid>` (the target forgets it, and lets a held player go),
 //! `player-export <uuid> [freeze]` (the source answers with the player's record) and
-//! `player-release <uuid> <hand-over> moved [announce] | abort` (the source lets the player
-//! go). They run
+//! `player-release <uuid> <hand-over> moved [announce] | abort` (the source lets the player go),
+//! `player-import <uuid> <json>` and `player-confirm <uuid> <hand-over>` (the target takes the
+//! record and lets the held player in). They run
 //! between two ticks, on the server thread, so the player is never caught half-way through a
 //! tick. The rules are `lan/arrivals.rs`'s. All of them are refused while `server.toml`'s
 //! `[transfer]` is off.
@@ -14,8 +16,30 @@ use std::time::Instant;
 
 impl Game<'_> {
     /// A proxy's `player-*` request; the reply is one JSON line, `{"ok": true, ...}` or
-    /// `{"error": "..."}`.
+    /// `{"error": "..."}`. Each request writes one line to the log with what became of it
+    /// (`arrivals::request_log`): a hand-over that failed leaves a trace.
     pub(super) fn player_request(&mut self, verb: &str, args: &str) -> Value {
+        // The name is read before the request runs: a release or a drop takes the player away.
+        let name = args
+            .split_whitespace()
+            .next()
+            .and_then(arrivals::parse_uuid)
+            .and_then(|uuid| {
+                self.lan
+                    .as_ref()?
+                    .hub
+                    .guests
+                    .iter()
+                    .find(|g| g.uuid == uuid)
+                    .map(|g| g.name.clone())
+            });
+        let reply = self.run_player_request(verb, args);
+        let (level, line) = arrivals::request_log(verb, name.as_deref(), args, &reply);
+        super::log(level, &line);
+        reply
+    }
+
+    fn run_player_request(&mut self, verb: &str, args: &str) -> Value {
         let Some(host) = self.lan.as_ref() else {
             return json!({ "error": "the server is not open to players" });
         };
@@ -27,7 +51,13 @@ impl Game<'_> {
                 Some(host) => arrivals::expect_request(&mut host.hub, args, Instant::now()),
                 None => json!({ "error": "the server is not open to players" }),
             },
+            "player-drop" => match self.lan.as_mut() {
+                Some(host) => arrivals::drop_request(&mut host.hub, args),
+                None => json!({ "error": "the server is not open to players" }),
+            },
             "player-export" => self.player_export(args),
+            "player-import" => self.player_import(args),
+            "player-confirm" => self.player_confirm(args),
             "player-release" => match self.lan.as_mut() {
                 Some(host) => arrivals::release_request(&mut host.hub, args),
                 None => json!({ "error": "the server is not open to players" }),
@@ -54,6 +84,173 @@ impl Game<'_> {
             return json!({ "error": "player-export takes a unique id and at most freeze" });
         }
         self.export_from(uuid, freeze)
+    }
+
+    /// `player-import <uuid> <json>`: applies a record to the held player (`lan/import.rs`), with
+    /// its advancements and statistics, which need the game's tree and counters, and the mods'
+    /// attachments. Unless the request says `"place": false`, it then places the player as
+    /// `player-confirm` does, its file written first.
+    fn player_import(&mut self, args: &str) -> Value {
+        let Some((id, request)) = args.trim().split_once(char::is_whitespace) else {
+            return json!({ "error": "player-import needs a unique id and a request" });
+        };
+        let Some(uuid) = arrivals::parse_uuid(id) else {
+            return json!({ "error": "player-import needs the player's unique id" });
+        };
+        let request: Value = match serde_json::from_str(request.trim()) {
+            Ok(v) => v,
+            Err(e) => return json!({ "error": format!("the request is not JSON: {e}") }),
+        };
+        let Some(host) = self.lan.as_mut() else {
+            return json!({ "error": "the server is not open to players" });
+        };
+        // A retry after the commit, whose reply was lost: the player is placed from this
+        // hand-over already, and the answer is the same.
+        let retried = request["record"]["handover"]
+            .as_str()
+            .and_then(arrivals::parse_handover)
+            .and_then(|id| host.hub.placed_arrival(uuid, id).map(|g| (id, g)));
+        if let Some((id, i)) = retried {
+            return json!({
+                "ok": true,
+                "handover": arrivals::handover_text(id),
+                "placed": true,
+                "announced": host.hub.guests[i].arrival_announce,
+                "recentered": host.hub.guests[i].arrival_recentered,
+                "retried": true,
+            });
+        }
+        let result = horizon_client::lan::import::import_player(&mut host.hub, uuid, &request);
+        match result {
+            Ok(done) => {
+                self.take_arrival_records(uuid, &done);
+                let handover = arrivals::handover_text(done.handover);
+                let placed = if done.place {
+                    self.place_arrival(uuid, done.handover)
+                } else {
+                    Ok(false)
+                };
+                match placed {
+                    Ok(placed) => json!({
+                        "ok": true,
+                        "handover": handover,
+                        "parts": done.parts,
+                        "placed": placed,
+                        "announced": done.announce,
+                        "recentered": done.recentered,
+                    }),
+                    Err(e) => json!({ "error": e }),
+                }
+            }
+            Err(e) => json!({ "error": e }),
+        }
+    }
+
+    /// What an import brought that the game keeps itself: the advancements (`PlayerAdvancements
+    /// .applyFrom` drops those this server lacks), the statistics, and the attachments of a whole
+    /// import, which saves copy from the game's own map (`guest_attachments_into`).
+    fn take_arrival_records(&mut self, uuid: u128, done: &horizon_client::lan::import::Imported) {
+        let tree = self.advancement_tree();
+        let host = self.lan.as_mut().expect("server host is present");
+        let Some(g) = host.hub.guests.iter_mut().find(|g| g.uuid == uuid) else {
+            return;
+        };
+        if let Some(saved) = &done.advancements {
+            let mut progress = horizon_client::advancements::Progress::from_json(saved);
+            progress
+                .criteria
+                .retain(|id, _| tree.by_id.contains_key(id));
+            g.advancements = progress;
+            g.advancements_loaded = true;
+        }
+        if done.attachments {
+            self.guest_attachments.insert(g.conn, g.attachments.clone());
+        }
+        if let Some(stats) = &done.stats {
+            let play = host.play.entry(g.conn).or_default();
+            play.stats = crate::game::stats::Stats::from_json(stats);
+            play.stats.mark_all_dirty();
+        }
+    }
+
+    /// `player-confirm <uuid> <hand-over>`: places a held player whose record of that hand-over was
+    /// imported without placing it.
+    fn player_confirm(&mut self, args: &str) -> Value {
+        let Some(host) = self.lan.as_ref() else {
+            return json!({ "error": "the server is not open to players" });
+        };
+        match arrivals::confirm_args(&host.hub, args) {
+            // A retry after the commit, whose reply was lost: the same answer.
+            Ok((uuid, id)) if host.hub.placed_arrival(uuid, id).is_some() => {
+                let i = host.hub.placed_arrival(uuid, id).unwrap_or_default();
+                json!({
+                    "ok": true,
+                    "placed": true,
+                    "announced": host.hub.guests[i].arrival_announce,
+                    "retried": true,
+                })
+            }
+            Ok((uuid, id)) => match self.place_arrival(uuid, id) {
+                Ok(_) => {
+                    let announced = self
+                        .lan
+                        .as_ref()
+                        .expect("server host is present")
+                        .hub
+                        .guests
+                        .iter()
+                        .find(|g| g.uuid == uuid)
+                        .is_some_and(|g| g.arrival_announce);
+                    json!({ "ok": true, "placed": true, "announced": announced })
+                }
+                Err(e) => json!({ "error": e }),
+            },
+            Err(e) => json!({ "error": e }),
+        }
+    }
+
+    /// The hand-over's commit point on the target: the arrival's player file, advancements and
+    /// statistics are written, synchronously, then it is placed. Only then does the reply say
+    /// `ok`, so a proxy that sends `player-release moved` to the source after it knows a copy of
+    /// the player is on disk here. When the file cannot be written the player stays held and
+    /// imported: the proxy can confirm again or drop it.
+    fn place_arrival(&mut self, uuid: u128, id: u128) -> Result<bool, String> {
+        self.lan
+            .as_ref()
+            .expect("server host is present")
+            .hub
+            .imported_arrival(uuid, id)?;
+        // An autosave of this player still in flight must not land after this write.
+        // Its completion fires save hooks, so the Host must still see the server.
+        let _ = self.finish_player_autosaves(true);
+        let host = self.lan.as_mut().expect("server host is present");
+        let i = host.hub.imported_arrival(uuid, id)?;
+        let mut g = host.hub.guests.remove(i);
+        Self::guest_attachments_into(&self.guest_attachments, &mut g);
+        let written =
+            horizon_client::lan::playerdata::save_now(&g, &self.world_root).and_then(|()| {
+                self.write_arrival_records(self.lan.as_ref().expect("server host is present"), &g)
+            });
+        let name = g.name.clone();
+        let host = self.lan.as_mut().expect("server host is present");
+        host.hub.guests.insert(i, g);
+        written?;
+        let announced = host.hub.confirm_arrival(uuid, id)?;
+        let directory = horizon_client::lan::playerdata::directory(&self.world_root);
+        self.native_player_save_to_file(uuid, &name, &directory);
+        self.arrival_placed(uuid, &name, announced);
+        Ok(true)
+    }
+
+    /// What the game does once a held player is placed: the log's lines, and the mods' "logged
+    /// in" (`native_player_logged_in`), which a held login did not send, so a placed arrival
+    /// is heard of as any login and its leaving later is not the mods' first word of it.
+    fn arrival_placed(&mut self, uuid: u128, name: &str, announced: bool) {
+        super::log("INFO", &arrivals::placed_line(name));
+        if announced {
+            super::log("INFO", &format!("System chat: {name} joined the game"));
+        }
+        self.native_player_logged_in(uuid, name);
     }
 
     fn export_from(&mut self, uuid: u128, freeze: bool) -> Value {

@@ -610,7 +610,6 @@ def run_horizon(args, distance):
         command.append("--offscreen")
     for carry in dev_mods(args):
         command += ["--dev-mod", str(carry)]
-    # Benchmark runs stay out of the live count and send nothing (docs/telemetry.md).
     env = lab.game_env()
     if args.warm:
         # A first start to the title screen builds what later starts reuse (the content-mod

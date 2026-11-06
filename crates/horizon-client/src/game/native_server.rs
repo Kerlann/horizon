@@ -154,14 +154,15 @@ fn usage_nodes(usage: &str) -> Result<Vec<(String, Value, bool)>, String> {
 
 /// Native mods' commands as a root in the commands report's format
 /// (`lan::commands`, which sends each player what their level allows), and
-/// each command's level: the lowest of its usages. A node is runnable where
-/// only optional arguments follow it. A command vanilla has (`vanilla`
+/// each command's traversal level: the lowest of its usages. A node is runnable where
+/// only optional arguments follow it, at the lowest level of those executable usages.
+/// A command vanilla has (`vanilla`
 /// answers) or a usage that doesn't parse is left out, with why.
 pub(super) fn command_tree(
     commands: &[NativeCommand],
     vanilla: impl Fn(&str) -> bool,
 ) -> (Value, HashMap<String, u8>, Vec<String>) {
-    let mut root = Map::new();
+    let mut root: Map<String, Value> = Map::new();
     let mut levels: HashMap<String, u8> = HashMap::new();
     let mut problems = Vec::new();
     for command in commands {
@@ -176,6 +177,32 @@ pub(super) fn command_tree(
             problems.push(format!("`{}`: vanilla has /{}", command.usage, nodes[0].0));
             continue;
         }
+        // A rejected usage must not open an earlier executable prefix or lower its level.
+        let mut children = &root;
+        let mut conflict = None;
+        for (name, node, _) in &nodes {
+            let Some(entry) = children.get(name) else {
+                break;
+            };
+            // `word` and `text` share a parser; their properties tell them apart.
+            if entry["type"] != node["type"]
+                || entry["parser"] != node["parser"]
+                || entry["properties"] != node["properties"]
+            {
+                conflict = Some(name);
+                break;
+            }
+            children = entry["children"]
+                .as_object()
+                .expect("working tree children");
+        }
+        if let Some(name) = conflict {
+            problems.push(format!(
+                "`{}`: `{name}` is another kind in an earlier usage",
+                command.usage
+            ));
+            continue;
+        }
         let mut children = &mut root;
         for (i, (name, node, _)) in nodes.iter().enumerate() {
             let runnable = nodes.get(i + 1).is_none_or(|n| n.2);
@@ -185,19 +212,13 @@ pub(super) fn command_tree(
                 n["level"] = 4.into();
                 n
             });
-            // `word` and `text` share a parser; their properties tell them apart.
-            if entry["type"] != node["type"]
-                || entry["parser"] != node["parser"]
-                || entry["properties"] != node["properties"]
-            {
-                problems.push(format!(
-                    "`{}`: `{name}` is another kind in an earlier usage",
-                    command.usage
-                ));
-                break;
-            }
             if runnable {
                 entry["executable"] = true.into();
+                let level = entry["execution_level"]
+                    .as_u64()
+                    .unwrap_or(4)
+                    .min(command.level.into());
+                entry["execution_level"] = level.into();
             }
             let level = entry["level"]
                 .as_u64()
@@ -281,6 +302,12 @@ pub(super) fn register_dispatcher(
             dispatcher.requires(id, level);
             if node["executable"] == true {
                 dispatcher.executes(id, handler);
+                dispatcher.requires_execution(
+                    id,
+                    node["execution_level"]
+                        .as_u64()
+                        .expect("runnable usage level") as u8,
+                );
             }
             if let Some(children) = node["children"].as_object() {
                 add(dispatcher, id, children, handler);
@@ -866,7 +893,10 @@ impl Game<'_> {
     /// `ServerPlayerGameMode.getGameModeForPlayer`; Paper `HumanEntity#getGameMode`.
     /// None for stale, offline or unavailable players (including displaced outer players).
     pub(super) fn native_player_game_mode(&self, player: PlayerRef) -> Option<GameMode> {
-        GameMode::from_id(self.player_read_both(player)?.mode())
+        match self.player_read_both(player)? {
+            PlayerRead::Acting { .. } => Some(self.mode),
+            PlayerRead::Guest(guest) => GameMode::from_id(guest.game_mode),
+        }
     }
 
     /// Changes a player's game mode as `ServerPlayer.setGameMode` and
@@ -883,7 +913,7 @@ impl Game<'_> {
         }
         let mut changed = false;
         self.native_as_player_handle(player, |game| {
-            changed = game.set_game_mode(super::game_mode::mode_from_id(mode.id()));
+            changed = game.set_game_mode(mode);
         }) && changed
     }
 
@@ -1552,8 +1582,8 @@ impl Game<'_> {
         }
     }
 
-    /// The level a guest needs for a mod's command (`line`, without its
-    /// slash), when a mod registered it.
+    /// The traversal level of a mod's root (`line`, without its slash), when registered.
+    /// The parsed executable node enforces its own usage level separately.
     pub(super) fn native_command_level(host: &LanHost, line: &str) -> Option<u8> {
         let name = line.split(' ').next().unwrap_or_default();
         host.native_commands.as_ref()?.levels.get(name).copied()
@@ -2152,6 +2182,180 @@ mod tests {
                 .executable()
                 .is_err()
         );
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn native_unauthorized_commands_never_reach_the_listener() {
+        struct Commands(Arc<Mutex<Vec<String>>>);
+        #[mod_api::__subscriptions]
+        impl mod_api::Hooks for Commands {
+            fn register_commands(
+                &self,
+                _: &mut dyn mod_api::ServerHost,
+                event: &mut mod_api::RegisterCommandsEvent<'_>,
+            ) {
+                event.commands.extend([
+                    NativeCommand::op("foo [value:integer]", 4),
+                    NativeCommand::new("foo bar"),
+                ]);
+            }
+            fn perform_command(
+                &self,
+                _: &mut dyn mod_api::ServerHost,
+                event: &mut mod_api::PerformCommandEvent<'_>,
+            ) -> mod_api::Flow {
+                self.0.lock().unwrap().push(event.command.to_owned());
+                mod_api::Flow::Cancel
+            }
+        }
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let mods = vec![mod_api::ModEntry::new(
+            "commands",
+            Box::new(Commands(heard.clone())),
+        )]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                super::super::native_item_places::tests::open_to_lan(game);
+                game.register_native_commands();
+                game.lan.as_mut().unwrap().hub.guests.push(player_guest());
+                for line in ["foo", "foo 7", "foo nope"] {
+                    assert!(game.perform_native_command(1, 0, line));
+                }
+                assert!(
+                    heard.lock().unwrap().is_empty(),
+                    "denied usages must not call a mod"
+                );
+                assert!(game.perform_native_command(1, 0, "foo bar"));
+                assert!(game.perform_native_command(1, 4, "foo"));
+                assert!(game.perform_native_command(1, 4, "foo 7"));
+                assert_eq!(*heard.lock().unwrap(), ["foo bar", "foo", "foo 7"]);
+            });
+        });
+    }
+
+    #[test]
+    fn native_executable_permissions_do_not_follow_public_descendants() {
+        for optional in [false, true] {
+            for reverse in [false, true] {
+                let admin = if optional {
+                    "foo [value:integer]"
+                } else {
+                    "foo"
+                };
+                let mut commands = vec![NativeCommand::op(admin, 4), NativeCommand::new("foo bar")];
+                if reverse {
+                    commands.reverse();
+                }
+                let (tree, _, problems) = tree(&commands);
+                assert!(problems.is_empty(), "{problems:?}");
+                let mut dispatcher = Dispatcher::new();
+                register_dispatcher(&mut dispatcher, &tree, "native_mod_command");
+                for permission in 0..=4 {
+                    let registries = horizon_client::command::Registries {
+                        permission,
+                        ..Default::default()
+                    };
+                    for line in ["foo", "foo bar", "foo 7"] {
+                        let allowed =
+                            line == "foo bar" || permission == 4 && (line == "foo" || optional);
+                        assert_eq!(
+                            dispatcher.parse(line, &registries).executable().is_ok(),
+                            allowed,
+                            "{commands:?}, level {permission}, {line}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn native_public_prefixes_do_not_open_admin_children() {
+        for reverse in [false, true] {
+            let mut commands = vec![NativeCommand::new("foo"), NativeCommand::op("foo bar", 4)];
+            if reverse {
+                commands.reverse();
+            }
+            let (tree, _, problems) = tree(&commands);
+            assert!(problems.is_empty(), "{problems:?}");
+            let mut dispatcher = Dispatcher::new();
+            register_dispatcher(&mut dispatcher, &tree, "native_mod_command");
+            for permission in 0..=4 {
+                let registries = horizon_client::command::Registries {
+                    permission,
+                    ..Default::default()
+                };
+                assert!(dispatcher.parse("foo", &registries).executable().is_ok());
+                assert_eq!(
+                    dispatcher
+                        .parse("foo bar", &registries)
+                        .executable()
+                        .is_ok(),
+                    permission == 4
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn native_shared_executable_prefix_takes_its_lowest_usage_level() {
+        for reverse in [false, true] {
+            let mut commands = vec![
+                NativeCommand::op("foo [value:integer]", 4),
+                NativeCommand::op("foo", 2),
+            ];
+            if reverse {
+                commands.reverse();
+            }
+            let (tree, _, problems) = tree(&commands);
+            assert!(problems.is_empty(), "{problems:?}");
+            let mut dispatcher = Dispatcher::new();
+            register_dispatcher(&mut dispatcher, &tree, "native_mod_command");
+            for permission in 0..=4 {
+                let registries = horizon_client::command::Registries {
+                    permission,
+                    ..Default::default()
+                };
+                assert_eq!(
+                    dispatcher.parse("foo", &registries).executable().is_ok(),
+                    permission >= 2
+                );
+                assert_eq!(
+                    dispatcher.parse("foo 7", &registries).executable().is_ok(),
+                    permission == 4
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn native_rejected_usage_cannot_open_an_executable_prefix() {
+        let (tree, _, problems) = tree(&[
+            NativeCommand::op("foo <value:integer>", 4),
+            NativeCommand::new("foo [value:word]"),
+        ]);
+        assert_eq!(problems.len(), 1);
+        let mut dispatcher = Dispatcher::new();
+        register_dispatcher(&mut dispatcher, &tree, "native_mod_command");
+        for permission in 0..=4 {
+            let registries = horizon_client::command::Registries {
+                permission,
+                ..Default::default()
+            };
+            assert!(dispatcher.parse("foo", &registries).executable().is_err());
+            assert!(
+                dispatcher
+                    .parse("foo hello", &registries)
+                    .executable()
+                    .is_err()
+            );
+            assert_eq!(
+                dispatcher.parse("foo 7", &registries).executable().is_ok(),
+                permission == 4
+            );
+        }
     }
 
     #[test]

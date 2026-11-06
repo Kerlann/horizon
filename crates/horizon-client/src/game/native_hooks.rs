@@ -1012,14 +1012,15 @@ use horizon_world::{
     registry::{BlockRegistry, BlockStateId},
 };
 use mod_api::__private::game::IngredientTest;
+use mod_api::GameMode;
 pub use mod_api::game::{NativeClock, NativeShake, PhantomSpawnResult, SleepProblem};
 use mod_api::{
     self, Answered, BlockPlacement, ClientReloadListeners, EnchantmentInfo, EntityRef,
     GameRuleActor, InteractionKey, LivingRef, NativeCamera, NativeCommand, NativeDispensed,
     NativeHandRender, NativeKeyMapping, NativeLifecycleContext, NativeNoteBlockChange,
-    NativeProgressType, NativeServerPlayer, PathComputationType, Placement, PlayerRef,
-    RecipeBookCategory, ScreenOpening, ScreenshotImage, ServerReloadListeners, ServerTickPhase,
-    TicketController, ToolUse, WorldPhase,
+    NativeServerPlayer, PathComputationType, Placement, PlayerRef, RecipeBookCategory,
+    ScreenOpening, ScreenshotImage, ServerReloadListeners, ServerTickPhase, TicketController,
+    ToolUse, WorldPhase,
 };
 use mod_api::{
     AttachmentStore, BonemealSource, ChunkRef, FluidStack, GameRuleValue, LandingWrite, LevelRef,
@@ -3321,9 +3322,15 @@ impl Game<'_> {
     ) {
         self.fire_mouse_button_pre(button, pressed, modifiers, canceled);
     }
-    /// The physical window size changed.
-    pub(super) fn native_window_resize(&mut self, width: u32, height: u32) {
-        self.fire_window_resize(width, height);
+    /// The physical or scaled GUI dimensions changed.
+    pub(super) fn native_window_resize(
+        &mut self,
+        width: u32,
+        height: u32,
+        gui_width: u32,
+        gui_height: u32,
+    ) {
+        self.fire_window_resize(width, height, gui_width, gui_height);
     }
     /// An accepted raw button event finished dispatch, including a screen handler's early return.
     pub(super) fn native_mouse_button_post(&mut self, button: i32, pressed: bool, modifiers: u32) {
@@ -4861,13 +4868,13 @@ impl Game<'_> {
         self.fire_creative_slot(player, name, slot, item, count, cancel);
     }
     /// A server player's game mode is about to change (NeoForge's
-    /// `PlayerChangeGameModeEvent`): from `from` to `to` (0 survival, 1
-    /// creative, 2 adventure, 3 spectator, as `NativeServerPlayer`'s
-    /// `game_mode`), `player` being the UUID and `name` the name. Heard for
+    /// `PlayerChangeGameModeEvent`): from `from` to `to`, both the shared
+    /// `GameMode` used by commands and `PlayerRef`. `player` is the UUID and
+    /// `name` the name. Heard for
     /// the `/gamemode` command, the F3+F4 switcher's packet and a hardcore
     /// world's respawn into spectator, once for each change to a different
-    /// mode; not for the world's default mode a player joins with. Set
-    /// `cancel` and the player keeps their mode (nothing is sent, the
+    /// mode; not for the world's default mode a player joins with. Return
+    /// `Flow::Cancel` and the player keeps their mode (nothing is sent, the
     /// command counts it as no change). For a change the game makes inside
     /// a player's turn their state is swapped in; for the hardcore respawn
     /// it is not.
@@ -4875,8 +4882,8 @@ impl Game<'_> {
         &mut self,
         player: u128,
         name: &str,
-        from: i32,
-        to: i32,
+        from: GameMode,
+        to: GameMode,
         cancel: &mut bool,
     ) {
         self.fire_player_game_mode_changed(player, name, from, to, cancel);
@@ -5438,25 +5445,13 @@ impl Game<'_> {
     }
     /// A criterion of a server player's advancement was granted or revoked, after its progress changed
     /// and before any completion rewards. A grant or revoke that changes nothing is not heard.
-    /// The full advancement progress is
-    /// not yet exposed (tracked on #29).
+    /// The call carries a snapshot of all criterion dates and requirement results at this mutation;
+    /// no player-progress storage is borrowed while listeners run.
     pub(super) fn native_player_advancement_progress(
         &mut self,
-        player: u128,
-        player_entity_id: i32,
-        name: &str,
-        advancement: &str,
-        criterion: &str,
-        progress_type: NativeProgressType,
+        call: mod_api::__private::PlayerAdvancementProgressCall<'_>,
     ) {
-        self.fire_player_advancement_progress(
-            player,
-            player_entity_id,
-            name,
-            advancement,
-            criterion,
-            progress_type,
-        );
+        self.fire_player_advancement_progress(call);
     }
     /// A statistic is about to be awarded to a server player, before its count and scoreboard criteria
     /// change. `stat_type` and `stat` are ids such as `minecraft:mined` and `minecraft:stone`, and
@@ -10640,7 +10635,7 @@ impl Game<'_> {
     pub(super) fn native_mapping(&self, name: &str) -> Option<NativeKeyMapping> {
         let &(_, key) = MAPPINGS.iter().find(|m| m.0 == name)?;
         let down = match key {
-            Some(k) => self.keys.contains(&k),
+            Some(k) => self.movement_key_held(k),
             None => self.mouse_held()[usize::from(name == "key.use")],
         };
         Some(NativeKeyMapping {
@@ -11936,35 +11931,51 @@ impl Game<'_> {
             .collect();
         self.draw_tooltip_lines(batch, &lines, self.cursor.0, self.cursor.1);
     }
-    /// Options > Mods' rows for the native mods, after the others.
+    /// Options > Mods' rows for loaded code mods, after the content-only rows.
     pub(super) fn list_native_mods(&mut self) {
         let mut mods = Vec::new();
         self.native_mods(&mut mods);
         let native = self.mods.native.clone();
-        self.settings
+        // Wasm proxies are installed in the same dispatch table as native mods. Their rows
+        // need the same live switch and settings page, not a frozen content-only toggle.
+        let mut rows: Vec<_> = self
+            .settings
             .mods
             .installed
-            .retain(|row| row.native.is_none() && !native.built().iter().any(|m| m.id == row.id));
-        for package in native.packages() {
+            .iter()
+            .filter(|row| {
+                mod_api::__private::mod_index(&row.id).is_some()
+                    && !native.built().iter().any(|m| m.id == row.id)
+            })
+            .cloned()
+            .collect();
+        rows.extend(native.packages().iter().map(|package| {
             let m = &package.manifest;
-            let mut buttons = Vec::new();
-            self.native_settings(&m.id, &mut buttons);
-            let page = NativePage {
-                keys: mods
-                    .iter_mut()
-                    .find(|page| page.id == m.id)
-                    .map(|page| std::mem::take(&mut page.keys))
-                    .unwrap_or_default(),
-                buttons,
-            };
-            self.settings.mods.installed.push(Installed {
+            Installed {
                 id: m.id.clone(),
                 title: [m.name.as_str(), " ", m.version.as_str()].concat(),
                 description: m.description.clone(),
                 problem: None,
                 dev: false,
-                native: Some(page),
+                native: None,
+            }
+        }));
+        self.settings
+            .mods
+            .installed
+            .retain(|row| !rows.iter().any(|code| code.id == row.id));
+        for mut row in rows {
+            let mut buttons = Vec::new();
+            self.native_settings(&row.id, &mut buttons);
+            row.native = Some(NativePage {
+                keys: mods
+                    .iter_mut()
+                    .find(|page| page.id == row.id)
+                    .map(|page| std::mem::take(&mut page.keys))
+                    .unwrap_or_default(),
+                buttons,
             });
+            self.settings.mods.installed.push(row);
         }
     }
     /// A click on button `button` of native mod `i`'s page (its index in
