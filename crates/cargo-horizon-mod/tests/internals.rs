@@ -371,3 +371,66 @@ printf '%s\n' '[{"path":"Used","kind":"struct","signature":"struct Used","hash":
     assert!(!invoke().status.success());
     assert_eq!(project.text(), before);
 }
+
+fn wasm_sync_project(name: &str) -> (Project, PathBuf) {
+    let project = Project::new(name, "");
+    let repo = project.dir.join("repo");
+    fs::create_dir_all(repo.join("crates/horizon-mod-api-gen/wasm-internals")).unwrap();
+    fs::write(repo.join("Cargo.toml"), "[workspace]\n").unwrap();
+    let manifest = format!(
+        "id='example'\nname='Example'\nversion='0.1.0'\napi='0.2'\ncapabilities=['registries']\n[wasm]\nsha512='{}'\ntoolchain='nightly'\n[native]\ninternals=[{{path='z::last',hash='a'}},{{path='a::first',hash='b'}}]\n[[native.injection]]\nid='fell'\ntarget='a::first'\nkind='HEAD'\nraw='fell'\n",
+        "a".repeat(128)
+    );
+    fs::write(project.dir.join(MANIFEST), manifest).unwrap();
+    (project, repo)
+}
+
+#[test]
+fn wasm_sync_twice_is_identical() {
+    let (project, repo) = wasm_sync_project("sync-twice");
+    let repo = repo.to_str().unwrap();
+    let before = project.text();
+    success(&project.run(&["internals", "sync", "--repo", repo]));
+    let path = PathBuf::from(repo).join("crates/horizon-mod-api-gen/wasm-internals/example.txt");
+    let bytes = fs::read(&path).unwrap();
+    assert!(success(&project.run(&["internals", "sync", "--repo", repo])).contains("unchanged"));
+    assert_eq!(fs::read(path).unwrap(), bytes);
+    assert_eq!(project.text(), before);
+}
+
+#[test]
+fn wasm_sync_sorts_and_deduplicates() {
+    let (project, repo) = wasm_sync_project("sync-sorted");
+    success(&project.run(&["internals", "sync", "--repo", repo.to_str().unwrap()]));
+    assert_eq!(
+        fs::read_to_string(repo.join("crates/horizon-mod-api-gen/wasm-internals/example.txt"))
+            .unwrap(),
+        "# example: written by cargo horizon-mod internals sync from horizon-mod.toml\na::first\nz::last\n"
+    );
+}
+
+#[test]
+fn native_sync_refuses_repo() {
+    let project = Project::new("sync-native-repo", "");
+    let output = project.run(&["internals", "sync", "--repo", "."]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("usage:"));
+}
+
+#[test]
+fn wasm_sync_finds_workspace_upward() {
+    let (project, repo) = wasm_sync_project("sync-upward");
+    let mod_dir = repo.join("mods/example");
+    fs::create_dir_all(&mod_dir).unwrap();
+    fs::copy(project.dir.join(MANIFEST), mod_dir.join(MANIFEST)).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_cargo-horizon-mod"))
+        .args(["horizon-mod", "internals", "sync"])
+        .current_dir(mod_dir)
+        .output()
+        .unwrap();
+    success(&output);
+    assert!(
+        repo.join("crates/horizon-mod-api-gen/wasm-internals/example.txt")
+            .is_file()
+    );
+}

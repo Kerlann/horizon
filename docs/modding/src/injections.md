@@ -400,3 +400,7 @@ or the writes already applied before it.
   pass.
 - A hook point's contract is versioned: `hook_version` names the contract a mod built against. A contract
   never changes; an incompatible change adds a version.
+
+### Syncing wasm internals to a game repository
+
+From a wasm mod directory, run `cargo horizon-mod internals sync --repo <path>` to write its reviewed `crates/horizon-mod-api-gen/wasm-internals/<mod_id>.txt` input in the Horizon repository. Without `--repo`, the command searches upward for the Horizon workspace. It reads only `horizon-mod.toml`, combining declared internal paths and raw injection targets in sorted, deduplicated order; it does not change the manifest or run the launcher. Commit the resulting file to the game repository. The `--repo` option is not valid for native mods.

@@ -14,7 +14,8 @@ use std::{
 };
 use toml_edit::{DocumentMut, Item, Value};
 
-const USAGE: &str = "usage: cargo horizon-mod internals sync [--repo <path>] | add <path>… [--kind <kind>]";
+const USAGE: &str =
+    "usage: cargo horizon-mod internals sync [--repo <path>] | add <path>… [--kind <kind>]";
 const CATALOG: &str = "internals.json";
 const CATALOG_LIMIT: u64 = 64 << 20;
 const ARCHIVE_LIMIT: u64 = 4 << 30;
@@ -140,30 +141,63 @@ fn sync(dir: &Path, repo: Option<&Path>) -> Result<(), String> {
     if let Some(wasm) = &manifest.wasm {
         let repo = match repo {
             Some(repo) => repo.to_path_buf(),
-            None => dir.canonicalize().map_err(|e| e.to_string())?.ancestors()
-                .find(|path| path.join("Cargo.toml").is_file() && path.join("crates/horizon-mod-api-gen").is_dir())
-                .ok_or("Could not find a Horizon workspace; pass --repo <path>")?.to_path_buf(),
+            None => dir
+                .canonicalize()
+                .map_err(|e| e.to_string())?
+                .ancestors()
+                .find(|path| {
+                    path.join("Cargo.toml").is_file()
+                        && path.join("crates/horizon-mod-api-gen").is_dir()
+                })
+                .ok_or("Could not find a Horizon workspace; pass --repo <path>")?
+                .to_path_buf(),
         };
         let directory = repo.join("crates/horizon-mod-api-gen/wasm-internals");
         if !repo.join("Cargo.toml").is_file() || !directory.is_dir() {
             return Err(format!("{}: not a Horizon workspace", repo.display()));
         }
         let output = directory.join(format!("{}.txt", manifest.id));
-        let paths: BTreeSet<&str> = wasm.internals().iter().map(|entry| entry.path.as_str())
-            .chain(wasm.points().iter().filter_map(|entry| entry.target.as_deref())).collect();
-        let mut contents = format!("# {}: written by cargo horizon-mod internals sync from horizon-mod.toml\n", manifest.id);
-        for path in paths { contents.push_str(path); contents.push('\n'); }
+        let paths: BTreeSet<&str> = wasm
+            .internals()
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .chain(
+                wasm.points()
+                    .iter()
+                    .filter(|entry| entry.raw.is_some())
+                    .filter_map(|entry| entry.target.as_deref()),
+            )
+            .collect();
+        let mut contents = format!(
+            "# {}: written by cargo horizon-mod internals sync from horizon-mod.toml\n",
+            manifest.id
+        );
+        for path in paths {
+            contents.push_str(path);
+            contents.push('\n');
+        }
         let changed = match fs::read(&output) {
             Ok(old) => old != contents.as_bytes(),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
             Err(error) => return Err(format!("{}: {error}", output.display())),
         };
-        if changed { atomic_write(&output, contents)?; }
-        println!("{}: {}", output.display(), if changed { "changed" } else { "unchanged" });
+        if changed {
+            atomic_write(&output, contents)?;
+        }
+        println!(
+            "{}: {}",
+            output.display(),
+            if changed { "changed" } else { "unchanged" }
+        );
         return Ok(());
     }
-    if repo.is_some() { return Err(USAGE.into()); }
-    manifest.native.as_ref().ok_or("internals sync needs a [native] or [wasm] mod")?;
+    if repo.is_some() {
+        return Err(USAGE.into());
+    }
+    manifest
+        .native
+        .as_ref()
+        .ok_or("internals sync needs a [native] or [wasm] mod")?;
     let launcher =
         std::env::var_os("HORIZON_LAUNCHER").unwrap_or_else(|| "horizon-launcher".into());
     let output = std::process::Command::new(launcher)
@@ -265,7 +299,7 @@ fn replace(text: &str, entries: &[ListedInternal]) -> Result<(String, String), S
     let entries: Vec<_> = entries.iter().collect();
     upsert(
         &mut doc,
-        retained.native.as_ref().expect("native manifest"),
+        &retained.native.as_ref().expect("native manifest").internals,
         &entries,
     )?;
     Ok((doc.to_string(), report))
