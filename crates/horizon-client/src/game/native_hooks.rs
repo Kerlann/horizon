@@ -12352,8 +12352,6 @@ fn client_packet_view(packet: &horizon_protocol::packets::play::Clientbound) -> 
 
 #[cfg(test)]
 mod tests {
-    use mod_api::__private::game::*;
-
     #[test]
     fn client_packet_view_exposes_the_type_and_custom_payload_only() {
         use horizon_protocol::packets::{
@@ -12758,7 +12756,6 @@ mod tests {
         use horizon_client::chunk::Chunk;
         use horizon_client::containers::{BlockEntity, ModBlockEntity, ModBlockEntityFields};
         use horizon_client::save::{decode_block_entity, encode_block_entity};
-        use mod_api;
         use std::sync::Arc;
 
         with_game(|game| {
