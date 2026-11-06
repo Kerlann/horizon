@@ -172,9 +172,16 @@ or a cross-release compatibility range.
 
 Hooks are declared in Rust now, not in JSON: a hook or helper author adds a `#[hook(...)]` (or `#[helper(...)]`)
 declaration, with its `///` doc, to a file under `crates/horizon-mod-api/src/hooks/` (a new file for a new area, named
-for it, plus one `mod` line for it in `hooks/mod.rs`, in name order). `native-hooks.json` and
+for it). The generator discovers these files without a shared module list. `native-hooks.json` and
 `tools/native-hook-fragments/` are retired, and a file there fails the build. Collection updates
 the catalog, not a global API number, source comments or documentation histories.
+
+Hand-written API types have a selected public surface in `crates/horizon-mod-api/src/exports/<area>.rs`:
+module declarations and re-exports stay in their source area's fragment. A nested `mod __private` groups
+engine-only re-exports; its `built`, `game`, `reload` and `wasm_host` sections retain those existing paths.
+The generator discovers all fragments and includes each section at its original scope. A new hand-written
+area adds one fragment, while catalog-generated hook types need no export-list edit. Do not add declarations
+or re-export lists to `lib.rs` or `__private.rs`.
 
 ## Runtime packages and identity
 
