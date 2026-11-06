@@ -3079,14 +3079,30 @@ pub struct NativePlayerAbilities {
     pub walk_speed: f32,
 }
 
-/// A block entity at a position in an open level. A replacement at the same
-/// position resolves to the new entity, unlike vanilla's object identity.
-/// A removed entity or a handle from an earlier world open reads as `None`.
+/// One block entity in an open level, identified by its lifecycle generation.
+/// Removal, replacement or chunk reload invalidates the handle, even at the same
+/// position. In-place data edits and temporary tick take/put preserve identity.
+/// Stale handles read as `None`; Result-returning methods report `Stale`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct BlockEntityRef {
     pub(crate) level: LevelRef,
     pub(crate) position: [i32; 3],
+    pub(crate) generation: u64,
+}
+
+/// Why a block-entity operation could not resolve its target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum BlockEntityError {
+    /// The entity was removed, replaced, unloaded or belongs to another level epoch.
+    Stale,
+}
+
+impl NoBackend for BlockEntityError {
+    fn no_backend() -> Self {
+        Self::Stale
+    }
 }
 
 /// Non-paused authoritative server ticks since open (not game or frame time).

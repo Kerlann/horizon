@@ -4,9 +4,9 @@
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum BlockEntityDataError {
-    /// The handle is stale, unloaded, missing, vanilla, client-side or not in the
-    /// server level currently in place. A replacement at the same position is
-    /// followed, as with the other block-entity handle methods.
+    /// The handle no longer identifies a loaded entity in the requested level.
+    Stale,
+    /// The entity is vanilla, not a configured mod holder, or not writable here.
     Unavailable,
     /// The requested vector exceeds the game's mod-menu data-slot limit.
     TooManySlots {

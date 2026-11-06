@@ -215,10 +215,21 @@ fn data_slot_sizing_after_creation_and_load_joins_the_existing_journal() {
             game.world.block_entities.remove(&pos);
             assert_eq!(
                 entity.set_data_slots(game, vec![8]),
-                Err(BlockEntityDataError::Unavailable)
+                Err(BlockEntityDataError::Stale)
             );
             assert_eq!(loaded_pos, pos);
             game.world.block_entities.insert(loaded_pos, loaded);
+            assert_eq!(
+                entity.data_slots(game),
+                None,
+                "old identity stays stale after load"
+            );
+            let entity = game
+                .native_block_entity_ref(
+                    game.native_level("minecraft:overworld").unwrap(),
+                    [1, 64, 1],
+                )
+                .unwrap();
             assert_eq!(
                 entity.data_slots(game),
                 Some(vec![]),

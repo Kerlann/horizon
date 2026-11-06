@@ -6,6 +6,9 @@ pub trait Helpers {
         target = "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_ref"
     )]
     fn block_entity();
+    /// Open this loaded block entity's menu. Ok(false) means a non-provider,
+    /// cancelled open or unconnected/wrong-level player; a stale block entity
+    /// returns BlockEntityError::Stale, never the replacement at its position.
     #[helper(
         side = "server",
         receiver = "player",
@@ -124,8 +127,8 @@ pub trait Helpers {
     /// change calls setChanged and the normal menu broadcast sends its values.
     /// Returns Ok(true) for a change, Ok(false) for identical values, or a typed
     /// BlockEntityDataError for an unavailable holder or too many slots (currently
-    /// 256, the mod-menu limit). No values are clamped. Resolution follows the
-    /// existing level-and-position handle, including replacement at that position.
+    /// 256, the mod-menu limit). No values are clamped. A removed, replaced or
+    /// reloaded holder returns BlockEntityDataError::Stale; reacquire its handle.
     #[helper(
         side = "server",
         receiver = "block_entity",
@@ -135,7 +138,8 @@ pub trait Helpers {
     /// Read an internal slot of a configured mod block entity on the server or
     /// the client's own loaded copy. A lazily missing slot is empty. Bounds use
     /// the current container's declared count; saved excess slots are not exposed.
-    /// Returns BlockEntityItemError for unavailable holders or invalid indices.
+    /// Returns BlockEntityItemError for unavailable holders or invalid indices;
+    /// removed, replaced or reloaded holders return Stale.
     #[helper(
         side = "both",
         receiver = "block_entity",
@@ -149,7 +153,7 @@ pub trait Helpers {
     /// Changed runs at root commit. None clears; identical values return Ok(false).
     /// Bounds and registered/component stack limits are checked without clamping.
     /// Refusals return BlockEntityItemError without partial writes or Changed.
-    /// Public positional handles follow replacements and their current container.
+    /// A removed, replaced or reloaded holder returns BlockEntityItemError::Stale.
     #[helper(
         side = "server",
         receiver = "block_entity",

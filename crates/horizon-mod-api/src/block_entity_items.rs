@@ -4,8 +4,9 @@
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum BlockEntityItemError {
-    /// Missing, stale, unloaded, vanilla or not a configured mod container.
-    /// Writes also refuse client-side and parked-level targets.
+    /// The handle no longer identifies a loaded entity in the requested level.
+    Stale,
+    /// The entity is vanilla, not a configured mod holder, or not writable here.
     Unavailable,
     /// The index is outside the current container's declared slots.
     SlotOutOfBounds {

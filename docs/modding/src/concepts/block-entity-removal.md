@@ -31,10 +31,10 @@ removed entity or remove a newly created one. `After::Changed` and `After::Updat
 position-based; `root_commit` coalesces `Changed` but does not generally coalesce `Updated`.
 Neither direct deletion nor assuming the present journal already handles lifecycle changes is safe.
 
-`BlockEntityRef` in `horizon-mod-api/src/lib.rs` identifies a level and position, not an object:
-`native_block_entity_target` resolves the entity currently loaded there. A replacement at that
-position resolves through the same handle; an absent entity or an old world epoch does not. The
-contract below preserves this existing identity rule rather than introducing generation-based handles.
+`BlockEntityRef` in `horizon-mod-api/src/lib.rs` identifies a level, position and lifecycle generation.
+`native_block_entity_target` rejects a replacement or reloaded entity at that position, just as it
+rejects an absent entity or an old world epoch. In-place payload edits preserve identity. The
+contract below preserves this identity rule; it does not offer transactional lifecycle writes yet.
 
 ## Removal contract
 
@@ -66,9 +66,9 @@ contract below preserves this existing identity rule rather than introducing gen
   outer transaction. Root commit makes the final state durable and publishes its effects. Unwinding
   must abort just as an ordinary failure does. If multiple writes at one position occur, the result
   and side effects must respect their documented order without duplicating drops or updates.
-- While absent, an existing position handle resolves to no entity. After abort it resolves to the
-  restored entity; after a committed replacement it resolves to the replacement, as the existing
-  handle contract requires. A handle from an earlier world open remains invalid. A retained capability
+- While absent, an existing handle resolves to no entity. After abort it resolves to the
+  restored entity and generation; after a committed replacement it stays stale. A new handle
+  must be acquired for the replacement. A handle from an earlier world open remains invalid. A retained capability
   reference must not bypass these resolution and lifetime rules.
 
 ## Example: a chest
@@ -83,8 +83,8 @@ abort, relative to the inner entry state.
 
 If the root instead commits, the normal block replacement runs once, with its normal handling of
 contents and viewers, and clients receive the resulting block and entity changes. The old chest is
-no longer accessible; if the new block has a block entity, the position handle resolves to that new
-entity. Actual drop and menu behavior must match the block's normal lifecycle rather than an
+no longer accessible through its old handle; if the new block has a block entity, acquire a new
+handle for it. Actual drop and menu behavior must match the block's normal lifecycle rather than an
 invented generic chest rule.
 
 ## Required implementation tests

@@ -536,7 +536,11 @@ pub mod tests {
             Some(BackendRef::of(self))
         }
         fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(BlockEntityRef { level, position })
+            Some(BlockEntityRef {
+                level,
+                position,
+                generation: 1,
+            })
         }
     }
 

@@ -2748,10 +2748,11 @@ handle, an entity the client doesn't track and a level it doesn't show:
 - The entities are those of the level in place (the one a hook runs in) and the server's players, whatever their level.
 - `host.block_entity(level, pos)` finds a block entity in a loaded chunk, including in parked levels;
   `kind`, `position`, `level` and `data` read it. A removed or temporarily taken-out entity reads `None`;
-  a replacement at the same position resolves to the new entity, unlike vanilla's object identity.
-- `player.open_menu(host, block_entity)` opens its menu on the server and returns true only when opened. It returns
-  false for stale or wrong-level handles, non-providers, cancelled opens, and players without a connection (including
-  fake players), since no connection can receive the menu.
+  removal, replacement and chunk reload invalidate its generation, even at the same position.
+  Reacquire a handle to address the replacement. In-place payload edits retain identity.
+- `player.open_menu(host, block_entity)` opens its menu on the server and returns `Ok(true)` only when opened.
+  `Err(BlockEntityError::Stale)` means the block entity no longer resolves. `Ok(false)` means a wrong-level
+  player, non-provider, cancelled open, or player without a connection (including fake players).
 - `block_entity.viewers(host)` lists the players with its container open on the server, read from their open menus
   when called: players in its level, not spectators or fake players, a double chest's menu on both halves. `None` for
   a stale handle or a client.

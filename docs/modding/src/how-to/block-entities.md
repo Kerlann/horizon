@@ -51,3 +51,12 @@ indices, unknown/air/zero-count stacks and counts above the registered or
 component-overridden maximum return `BlockEntityItemError`, never a partial write
 or silent count clamp. A positional handle follows a replacement and validates
 its current container; this is distinct from an identity-strict automatic restore.
+
+## Retaining a handle
+
+A `BlockEntityRef` names one live entity, not every entity later placed at its position.
+Removal, replacement and chunk reload invalidate it; acquire another with
+`host.block_entity(level, position)`. In-place saved-data edits and temporary tick
+storage preserve identity. Option reads return `None` for a stale handle; item and
+menu-data Result methods return their error's `Stale` variant. No stale write
+reaches the replacement.

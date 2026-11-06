@@ -47,6 +47,7 @@ pub enum Ticking {
 pub struct BlockEntities {
     map: HashMap<Pos, BlockEntity>,
     attachments: HashMap<Pos, horizon_world::attachments::Attachments>,
+    generations: FxHashMap<Pos, u64>,
     /// `Level.blockEntityTickers`: positions and the slot each was given.
     tickers: Arc<Vec<(Pos, u32)>>,
     /// `LevelChunk.tickersInLevel`: the live slot of each ticking position.
@@ -185,6 +186,23 @@ pub fn chunk_map_order(positions: impl IntoIterator<Item = Pos>) -> Vec<Pos> {
 }
 
 impl BlockEntities {
+    /// Runtime identity, retained while an entity is temporarily taken for its tick.
+    pub fn generation(&self, pos: &Pos) -> Option<u64> {
+        self.generations.get(pos).copied()
+    }
+    /// Restore the identity captured with an existing entity by a transaction.
+    pub fn restore_generation(&mut self, pos: Pos, generation: u64) {
+        assert!(self.map.contains_key(&pos));
+        self.generations.insert(pos, generation);
+    }
+    fn new_generation(&mut self, pos: Pos) {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        let generation = NEXT
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+            .expect("block entity generations exhausted");
+        self.generations.insert(pos, generation);
+    }
     /// Whether the ticking table has been built.
     pub fn has_states(&self) -> bool {
         !self.states.is_empty()
@@ -349,6 +367,7 @@ impl BlockEntities {
         };
         if !self.map.get(&pos).is_some_and(same_type) {
             self.attachments.remove(&pos);
+            self.new_generation(pos);
         }
         let new_box = shows_box(&entity);
         self.asleep.remove(&pos);
@@ -376,6 +395,7 @@ impl BlockEntities {
     ) -> &mut BlockEntity {
         let absent = !self.map.contains_key(&pos);
         if absent {
+            self.new_generation(pos);
             self.add(pos);
         }
         self.asleep.remove(&pos);
@@ -390,6 +410,8 @@ impl BlockEntities {
     }
     /// `LevelChunk.removeBlockEntity`: the block entity and its slot.
     pub fn remove(&mut self, pos: &Pos) -> Option<BlockEntity> {
+        self.generations.remove(pos);
+        self.out.remove(pos);
         self.attachments.remove(pos);
         self.asleep.remove(pos);
         self.cancel(pos);
@@ -412,7 +434,9 @@ impl BlockEntities {
     }
     /// Brings back what `take` took, in its slot.
     pub fn put(&mut self, pos: Pos, entity: BlockEntity) {
-        self.out.remove(&pos);
+        if !self.out.remove(&pos) {
+            self.new_generation(pos);
+        }
         self.asleep.remove(&pos);
         if matches!(entity, BlockEntity::Mod(_)) {
             self.mods.entry(chunk_of(pos)).or_default().insert(pos);
@@ -445,10 +469,12 @@ impl BlockEntities {
             &mut self.attachments,
         );
         let (mods, boxes) = (&mut self.mods, &mut self.boxes);
+        let generations = &mut self.generations;
         self.asleep.clear();
         self.map.retain(|p, e| {
             let kept = keep(p, e);
             if !kept {
+                generations.remove(p);
                 attachments.remove(p);
                 *freed |= live.remove(p).is_some();
                 pending.remove(p);
@@ -459,6 +485,7 @@ impl BlockEntities {
         });
     }
     pub fn clear(&mut self) {
+        self.generations.clear();
         self.attachments.clear();
         self.map.clear();
         self.mods.clear();
@@ -480,6 +507,7 @@ impl BlockEntities {
     pub fn load_chunk(&mut self, entities: Vec<(Pos, BlockEntity)>) {
         let order = chunk_map_order(entities.iter().map(|(p, _)| *p));
         for (p, e) in entities {
+            self.new_generation(p);
             self.attachments.remove(&p);
             self.asleep.remove(&p);
             let new_is_mod = matches!(e, BlockEntity::Mod(_));
@@ -584,6 +612,49 @@ mod tests {
             .iter()
             .map(|(p, _)| *p)
             .collect()
+    }
+
+    #[test]
+    fn generations_follow_identity_not_position_or_tick_storage() {
+        let mut b = level();
+        let p = (1, 64, 1);
+        b.get_or_insert_with(p, hopper);
+        let first = b.generation(&p).unwrap();
+        b.insert(p, hopper()); // Same-type payload load, as /data does.
+        assert_eq!(b.generation(&p), Some(first));
+        let taken = b.take(&p).unwrap();
+        assert_eq!(b.generation(&p), Some(first));
+        b.put(p, taken);
+        assert_eq!(b.generation(&p), Some(first));
+        b.insert(
+            p,
+            BlockEntity::Mod(Box::new(crate::chunk::block_entity::ModBlockEntity::new(
+                "test:other".into(),
+                Default::default(),
+            ))),
+        );
+        let replaced = b.generation(&p).unwrap();
+        assert_ne!(replaced, first);
+        b.remove(&p);
+        assert_eq!(b.generation(&p), None);
+        b.insert(p, hopper());
+        let recreated = b.generation(&p).unwrap();
+        assert_ne!(recreated, replaced);
+        b.unload(|pos| *pos == p);
+        assert_eq!(b.generation(&p), None);
+        b.load_chunk(vec![(p, hopper())]);
+        let loaded = b.generation(&p).unwrap();
+        assert_ne!(loaded, recreated);
+        b.load_chunk(vec![(p, hopper())]);
+        assert_ne!(b.generation(&p), Some(loaded));
+        let before_clear = b.generation(&p).unwrap();
+        b.clear();
+        assert_eq!(b.generation(&p), None);
+        b.insert(p, hopper());
+        assert_ne!(b.generation(&p), Some(before_clear));
+        let mut another = level();
+        another.insert(p, hopper());
+        assert_ne!(b.generation(&p), another.generation(&p));
     }
 
     /// Unloading a chunk removes its block entities and leaves the others'

@@ -60,7 +60,11 @@ pub mod tests {
     #[cfg(test)]
     impl Host for EnergyWorld {
         fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(BlockEntityRef { level, position })
+            Some(BlockEntityRef {
+                level,
+                position,
+                generation: 1,
+            })
         }
         fn backend(&self) -> Option<BackendRef<'_>> {
             Some(BackendRef::of(self))
