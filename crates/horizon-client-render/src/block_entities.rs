@@ -97,6 +97,7 @@ pub struct BlockEntities {
 
 /// Storage-owned identity passed to attachment residency observers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct BlockEntityIdentity {
     pub position: [i32; 3],
     pub generation: u64,

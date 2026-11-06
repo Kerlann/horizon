@@ -580,11 +580,7 @@ pub mod tests {
             Some(BackendRef::of(self))
         }
         fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(BlockEntityRef {
-                level,
-                position,
-                generation: 1,
-            })
+            Some(crate::__private::game::block_entity_ref(level, position, 1))
         }
     }
     #[cfg(test)]
@@ -1243,11 +1239,7 @@ pub mod tests {
             (item == "minecraft:iron_sword").then_some(default)
         }
         fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(BlockEntityRef {
-                level,
-                position,
-                generation: 1,
-            })
+            Some(crate::__private::game::block_entity_ref(level, position, 1))
         }
     }
     #[cfg(test)]
