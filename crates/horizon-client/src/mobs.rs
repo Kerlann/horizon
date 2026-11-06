@@ -5197,6 +5197,176 @@ pub(crate) mod sensor_scan_tests {
             println!("{n} mobs: per tick {before:.3} ms -> {after:.3} ms");
         }
     }
+
+    /// Prototype for world-lead's design (not for merge): what a stable read
+    /// view of the whole world costs next to what the tick already pays.
+    #[test]
+    #[ignore]
+    fn world_view_proto_cost() {
+        use std::time::Instant;
+        let kind = kind();
+        println!(
+            "size_of Mob {} B, Seen {} B, Option<Box<Mob>> {} B",
+            std::mem::size_of::<Mob>(),
+            std::mem::size_of::<Seen>(),
+            std::mem::size_of::<Option<Box<Mob>>>()
+        );
+        /// One deferred write, as a mod's queued change would be.
+        #[derive(Clone, Copy)]
+        enum Deferred {
+            Push { id: u32, by: [f64; 3] },
+            Hurt { id: u32, amount: f32 },
+            Remove { id: u32 },
+        }
+        /// The row a mod's read of any entity answers from.
+        #[derive(Clone, Copy)]
+        struct Row {
+            id: u32,
+            kind: u16,
+            dim: u8,
+            pos: [f64; 3],
+            vel: [f64; 3],
+            health: f32,
+        }
+        for n in [1000u32, 5000, 20000] {
+            let mut mobs: Vec<Mob> = (0..n)
+                .map(|id| Mob::new(id + 1, kind.clone(), Vec3::new(id as f64, 64.0, 0.0), 0.0))
+                .collect();
+            let reps = 20;
+            let per = |t: Instant| t.elapsed().as_secs_f64() * 1e6 / reps as f64;
+
+            // 1. Today: take the whole list for the tick, put it back.
+            let t = Instant::now();
+            for _ in 0..reps {
+                let taken = std::mem::take(&mut mobs);
+                mobs = std::hint::black_box(taken);
+            }
+            let take_all = per(t);
+
+            // 2. Lift one entity at a time (swap with a spare, tick, swap back).
+            let mut spare = Mob::new(0, kind.clone(), Vec3::ZERO, 0.0);
+            let t = Instant::now();
+            for _ in 0..reps {
+                for i in 0..mobs.len() {
+                    std::mem::swap(&mut mobs[i], &mut spare);
+                    std::hint::black_box(&mut spare);
+                    std::mem::swap(&mut mobs[i], &mut spare);
+                }
+            }
+            let lift_swap = per(t);
+
+            // 3. Lift one with a boxed list: the take is a pointer move.
+            let mut boxed: Vec<Option<Box<Mob>>> =
+                mobs.iter().cloned().map(|m| Some(Box::new(m))).collect();
+            let t = Instant::now();
+            for _ in 0..reps {
+                for i in 0..boxed.len() {
+                    let m = boxed[i].take();
+                    std::hint::black_box(&m);
+                    boxed[i] = m;
+                }
+            }
+            let lift_box = per(t);
+            drop(boxed);
+
+            // 4. The id table: build, then look every mob up; against the
+            //    scan `level_entity` does today (here over one list of 19).
+            let t = Instant::now();
+            let mut table = crate::fast_hash::FxHashMap::<u32, (u8, u8, u32)>::default();
+            for _ in 0..reps {
+                table.clear();
+                table.extend(mobs.iter().enumerate().map(|(i, m)| (m.id, (0u8, 0u8, i as u32))));
+            }
+            let build = per(t);
+            let wanted: Vec<u32> = (0..n).map(|i| (i * 7919) % n + 1).collect();
+            let t = Instant::now();
+            let mut a = 0u64;
+            for _ in 0..reps {
+                for id in &wanted {
+                    a += u64::from(table.get(id).map_or(0, |e| e.2));
+                }
+            }
+            let lookup_table = per(t) / n as f64 * 1e3;
+            let probes = 200usize;
+            let t = Instant::now();
+            let mut b = 0u64;
+            for id in wanted.iter().take(probes) {
+                b += mobs.iter().position(|m| m.id == *id).unwrap_or(0) as u64;
+            }
+            let lookup_scan = t.elapsed().as_secs_f64() * 1e9 / probes as f64;
+            std::hint::black_box((a, b));
+
+            // 5. The read rows (what a snapshot of every entity carries) and
+            //    the deferred writes queue.
+            let t = Instant::now();
+            let mut rows: Vec<Row> = Vec::with_capacity(mobs.len());
+            for _ in 0..reps {
+                rows.clear();
+                rows.extend(mobs.iter().map(|m| Row {
+                    id: m.id,
+                    kind: 0,
+                    dim: 0,
+                    pos: [m.position.x, m.position.y, m.position.z],
+                    vel: [m.velocity.x, m.velocity.y, m.velocity.z],
+                    health: m.health,
+                }));
+            }
+            let rows_build = per(t);
+            let t = Instant::now();
+            let mut full = Vec::with_capacity(mobs.len());
+            for _ in 0..reps {
+                full.clear();
+                full.extend(mobs.iter().map(|m| m.seen(None)));
+            }
+            let seen_build = per(t);
+            let mut queue: Vec<Deferred> = Vec::new();
+            let t = Instant::now();
+            let mut hit = 0u64;
+            for _ in 0..reps {
+                queue.clear();
+                for id in 1..=n {
+                    queue.push(match id % 3 {
+                        0 => Deferred::Push { id, by: [0.1, 0.0, 0.0] },
+                        1 => Deferred::Hurt { id, amount: 1.0 },
+                        _ => Deferred::Remove { id },
+                    });
+                }
+                for d in queue.drain(..) {
+                    hit += match d {
+                        Deferred::Push { id, by } => u64::from(id) + by[0] as u64,
+                        Deferred::Hurt { id, amount } => u64::from(id) + amount as u64,
+                        Deferred::Remove { id } => u64::from(id),
+                    };
+                }
+            }
+            let queue_all = per(t);
+            std::hint::black_box((hit, &rows, &full));
+
+            // 6. A second level: reading a parked level is a map get then the
+            //    same table.
+            let mut levels = crate::fast_hash::FxHashMap::<u8, &crate::fast_hash::FxHashMap<u32, (u8, u8, u32)>>::default();
+            levels.insert(1, &table);
+            let t = Instant::now();
+            let mut c = 0u64;
+            for _ in 0..reps {
+                for id in &wanted {
+                    c += u64::from(levels.get(&1).and_then(|l| l.get(id)).map_or(0, |e| e.2));
+                }
+            }
+            let parked_lookup = per(t) / n as f64 * 1e3;
+            std::hint::black_box(c);
+
+            println!(
+                "n={n}: take-all {take_all:.2} us | lift-swap {lift_swap:.0} us ({:.0} ns/mob) | lift-box {lift_box:.0} us ({:.1} ns/mob) | table build {build:.0} us, lookup {lookup_table:.1} ns vs scan {lookup_scan:.0} ns, parked lookup {parked_lookup:.1} ns | rows {rows_build:.0} us ({} B/row), Seen {seen_build:.0} us ({} B) | queue push+apply {queue_all:.0} us ({:.1} ns/cmd, {} B)",
+                lift_swap * 1e3 / n as f64,
+                lift_box * 1e3 / n as f64,
+                std::mem::size_of::<Row>(),
+                std::mem::size_of::<Seen>(),
+                queue_all * 1e3 / n as f64,
+                std::mem::size_of::<Deferred>(),
+            );
+        }
+    }
 }
 #[cfg(test)]
 mod push_tests {
@@ -6485,4 +6655,5 @@ mod visibility_percent_tests {
         sneaking.sneaking = true;
         assert_eq!(sneaking.visibility_percent(Species::Skeleton), 0.4);
     }
+
 }

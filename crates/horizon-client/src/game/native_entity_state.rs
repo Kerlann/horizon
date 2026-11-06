@@ -626,6 +626,7 @@ mod tests {
                 ticks: 21,
                 health: 5,
                 no_gravity: true,
+                attachment_lifetime: Default::default(),
             });
             let orb = game.native_entity(43).unwrap();
             assert_eq!(orb.tick_count(game), Some(21));
