@@ -440,23 +440,26 @@ impl Group {
         }
         // A thread already inside a group never waits for another one.
         let inside = INSIDE.with(Cell::get) > 0;
-        let deadline = Instant::now()
-            + if inside {
-                Duration::ZERO
-            } else {
-                self.budgets.wait
-            };
-        let store = loop {
-            if call == Call::Worldgen && !inside {
-                break self.store.lock().unwrap_or_else(|e| e.into_inner());
+        let store = match self.store.try_lock() {
+            Ok(guard) => guard,
+            Err(TryLockError::Poisoned(e)) => e.into_inner(),
+            Err(TryLockError::WouldBlock) if inside => return Err(CallRefused::Busy),
+            Err(TryLockError::WouldBlock) if call == Call::Worldgen => {
+                self.store.lock().unwrap_or_else(|e| e.into_inner())
             }
-            match self.store.try_lock() {
-                Ok(guard) => break guard,
-                Err(TryLockError::Poisoned(e)) => break e.into_inner(),
-                Err(TryLockError::WouldBlock) if Instant::now() < deadline => {
-                    std::thread::sleep(Duration::from_micros(50))
+            Err(TryLockError::WouldBlock) => {
+                let deadline = Instant::now() + self.budgets.wait;
+                loop {
+                    if Instant::now() >= deadline {
+                        return Err(CallRefused::Busy);
+                    }
+                    std::thread::sleep(Duration::from_micros(50));
+                    match self.store.try_lock() {
+                        Ok(guard) => break guard,
+                        Err(TryLockError::Poisoned(e)) => break e.into_inner(),
+                        Err(TryLockError::WouldBlock) => {}
+                    }
                 }
-                Err(TryLockError::WouldBlock) => return Err(CallRefused::Busy),
             }
         };
         // A call that waited may find the group stopped by the trap of the one it waited for.
