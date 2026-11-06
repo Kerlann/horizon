@@ -451,7 +451,7 @@ fn installs_checked_turns_on_and_removes() {
     assert_eq!(said, ["Coordinates HUD was taken down and is off: Test."]);
     assert_eq!(
         fs::read_to_string(home.join("horizon-mods.txt")).unwrap(),
-        ""
+        "mod.coords_hud:false\n"
     );
 
     installed::remove(&home, "coords_hud").unwrap();

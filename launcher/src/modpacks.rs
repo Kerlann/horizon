@@ -294,6 +294,7 @@ pub fn import(path: &Path, log: Log) -> Result<Imported, String> {
         pack.name.clone()
     };
     let work = ports_dir().join(slug(&name));
+    let _lock = crate::browser::lock_home(&profile_home(&work)).map_err(|e| e.to_string())?;
     log(format!("Importing {name} into {}", work.display()));
     pipeline::import(path, &work, log)?;
     pipeline::inventory(&work, false, log)?;
@@ -310,6 +311,7 @@ pub fn port(
     from: Option<&Path>,
     log: Log,
 ) -> Result<Imported, String> {
+    let _lock = crate::browser::lock_home(&profile_home(work)).map_err(|e| e.to_string())?;
     pipeline::port(work, resources, from, log)?;
     prepare_resourcepacks(work);
     load(work)
@@ -359,6 +361,7 @@ pub fn outcome(pack: &Imported) -> String {
 
 /// Removes an imported pack: its jars, ports and the profile's saves.
 pub fn remove(work: &Path) -> Result<(), String> {
+    let _lock = crate::browser::lock_home(&profile_home(work)).map_err(|e| e.to_string())?;
     if horizon_pack::is_pack(work) {
         return horizon_pack::remove(work);
     }
@@ -377,6 +380,10 @@ pub fn profile_home(work: &Path) -> PathBuf {
 /// copied in the first time, so keys and video settings carry over) and its carried-over mods.
 /// A modpack from Horizon's registry (`horizon-packs/<id>/`) plays its own profile the same way.
 pub fn apply_profile(cmd: &mut Command, work: &Path) -> Result<(), String> {
+    let home = profile_home(work);
+    let own_home = backend::game_home();
+    let _locks =
+        horizon_mods::install_lock::lock_homes(&[&home, &own_home]).map_err(|e| e.to_string())?;
     if horizon_pack::is_pack(work) {
         return horizon_pack::apply(cmd, work);
     }
@@ -386,10 +393,9 @@ pub fn apply_profile(cmd: &mut Command, work: &Path) -> Result<(), String> {
         return Err("No content mods or resource packs are available: port the pack first.".into());
     }
     prepare_resourcepacks(work);
-    let home = profile_home(work);
     fs::create_dir_all(&home).map_err(|e| format!("{}: {e}", home.display()))?;
     let options = home.join("options.txt");
-    let own = backend::game_home().join("options.txt");
+    let own = own_home.join("options.txt");
     if !options.exists() && own.is_file() {
         let _ = fs::copy(own, &options);
     }

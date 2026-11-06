@@ -312,7 +312,7 @@ fn java_mods_are_ported_turned_on_refused_on_clashes_and_removed() {
     assert!(!home.join("horizon-mods/ruby").exists());
     assert_eq!(
         fs::read_to_string(home.join("horizon-mods.txt")).unwrap(),
-        ""
+        "mod.ruby:false\n"
     );
     fs::remove_dir_all(&home).unwrap();
 }

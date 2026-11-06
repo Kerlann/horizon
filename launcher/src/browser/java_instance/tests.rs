@@ -247,6 +247,14 @@ fn installs_jars_with_dependencies_then_updates_and_removes() {
     assert!(
         home.join("mods/map-2.jar.disabled").is_file() && !home.join("mods/map-2.jar").exists()
     );
+    // A stale UI row must not rename a file that has since been reused.
+    fs::write(home.join(&entry.file), b"a different local file").unwrap();
+    assert!(set_on(&home, &entry, false).is_err());
+    assert_eq!(
+        fs::read(home.join(&entry.file)).unwrap(),
+        b"a different local file"
+    );
+    fs::remove_file(home.join(&entry.file)).unwrap();
     let entry = Installed::load(&home).lookup("map").cloned().unwrap();
     assert!(!is_on(&home, &entry));
     assert!(update_for(&fake, &t, &entry).unwrap().is_none());

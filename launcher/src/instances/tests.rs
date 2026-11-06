@@ -376,6 +376,29 @@ fn deleted_instances_go_to_the_trash_and_are_forgotten() {
 }
 
 #[test]
+fn deleting_an_instance_keeps_its_home_locked_after_the_move() {
+    let root = scratch("delete-transaction");
+    let (home, data, trash) = (root.join("home"), root.join("data"), root.join("trash"));
+    player_home(&home);
+    let instance = create_in(&home, &data, "Survival", None, None).unwrap();
+    delete_in(&home, &data, "Survival", &|path| {
+        crate::desktop_seams::to_folder(path, &trash)?;
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    assert!(crate::browser::try_lock_home(&instance.home).is_none());
+                    assert!(!instance.home.exists(), "locking must not recreate it");
+                })
+                .join()
+                .unwrap();
+        });
+        Ok(())
+    })
+    .unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn the_mod_browser_installs_for_the_instance_loader() {
     let vanilla = JavaGame {
         minecraft: "1.21.1".into(),

@@ -28,9 +28,6 @@ pub(super) struct ModsState {
     /// The content mods the loaded resources were built with: a switch the
     /// game can apply live moves it to the player's choice (`switch_mods`).
     pub(super) applied: Option<std::collections::BTreeSet<String>>,
-    /// A live switch's resource reload is running: when it applied, the server
-    /// reloads its data from the new root. Its start, for the log.
-    pub(super) live: Option<std::time::Instant>,
     /// The content mods installed, and those of them with only assets and
     /// data (`mod_content::live_switch`): they switch with a world open.
     pub(super) content_ids: std::collections::BTreeSet<String>,
@@ -666,13 +663,28 @@ impl Game<'_> {
     /// server's data reload (`mods_reloaded`); those that add blocks, items or
     /// worldgen wait for a restart, and the Mods page says so.
     pub(super) fn switch_mods(&mut self) {
-        let Some(applied) = self.mods.applied.clone() else {
-            return;
-        };
-        let wanted = self.settings.mods.enabled.clone();
-        if applied == wanted {
+        if self.pack_reload.is_some() {
+            // Even a switch back to the current set must be queued: the
+            // in-flight reload may be staging the opposite choice.
+            self.pending_pack_reload = true;
             return;
         }
+        let applied = self.applied_mods();
+        let next = self.mod_reload_selection();
+        let changed = applied
+            .symmetric_difference(&next)
+            .any(|id| self.mods.content_ids.contains(id));
+        if changed {
+            self.reload_packs();
+        } else {
+            self.mods.applied = Some(next);
+        }
+    }
+    /// Compute a reload's selection without publishing it as applied. Queued
+    /// reloads read the latest choice when they actually start, not when queued.
+    pub(super) fn mod_reload_selection(&mut self) -> std::collections::BTreeSet<String> {
+        let applied = self.applied_mods();
+        let wanted = self.settings.mods.enabled.clone();
         // Native mods' `mod.<id>` lines follow the player's choice as they are
         // (`sync_native_switches`); a content mod with blocks, items or
         // worldgen keeps the state it loaded with until a restart.
@@ -693,33 +705,13 @@ impl Game<'_> {
         }
         self.ui.options.mods_note = (!waiting.is_empty())
             .then(|| lang::tr("horizon.mods.switch.restart", &[&waiting.join(", ")]));
-        let changed = applied
-            .symmetric_difference(&next)
-            .any(|id| content.contains(id));
-        if !changed {
-            self.mods.applied = Some(next);
-            return;
-        }
-        log::info!(
-            "Horizon: content mods switched live: {:?} -> {:?}",
-            applied,
-            next
-        );
-        self.mods.applied = Some(next);
-        self.mods.live = Some(std::time::Instant::now());
-        self.reload_packs();
+        next
     }
     /// A live switch's resources applied: the server reloads its data packs
     /// from the new root, as `/reload` does (recipes, tags, loot tables,
     /// advancements, functions), and sends them to its players.
-    pub(super) fn mods_reloaded(&mut self, applied: bool) {
-        let Some(started) = self.mods.live.take() else {
-            return;
-        };
+    pub(super) fn mods_reloaded(&mut self, started: std::time::Instant) {
         let resources_ms = started.elapsed().as_millis();
-        if !applied {
-            return;
-        }
         let root = self.options.resources.clone();
         let enabled = self.applied_mods();
         let selected = self.mods.selected.clone();
@@ -727,7 +719,8 @@ impl Game<'_> {
         let reload = move |g: &mut Game<'_>| {
             let at = std::time::Instant::now();
             g.options.resources = root;
-            g.settings.mods.enabled = enabled.clone();
+            // This is runtime state, not a player edit to persist from the
+            // server's settings snapshot on a later unrelated save.
             g.mods.applied = Some(enabled);
             g.mods.selected = selected;
             g.mods.refused = refused;
@@ -801,6 +794,30 @@ pub(super) fn living_mod_types()
 mod tests {
     use super::*;
     use horizon_mods::runtime::{BuiltMod, Runtime};
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn a_reload_plan_does_not_publish_unapplied_switches_or_settings_edits() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            let ids = |values: &[&str]| -> std::collections::BTreeSet<String> {
+                values.iter().map(|id| (*id).to_owned()).collect()
+            };
+            let applied = ids(&["old_assets", "old_registry"]);
+            game.mods.applied = Some(applied.clone());
+            game.mods.content_ids =
+                ids(&["old_assets", "new_assets", "old_registry", "new_registry"]);
+            game.mods.live_ids = ids(&["old_assets", "new_assets"]);
+            game.settings.mods.enabled = ids(&["new_assets", "new_registry"]);
+            let settings_baseline = game.settings.saved_mods.clone();
+            let next = game.mod_reload_selection();
+            assert_eq!(next, ids(&["new_assets", "old_registry"]));
+            assert_eq!(game.applied_mods(), applied);
+            assert_eq!(game.settings.saved_mods, settings_baseline);
+            // Failing before publication still leaves the same choice to retry.
+            assert_eq!(game.mod_reload_selection(), next);
+            assert_eq!(game.applied_mods(), applied);
+        });
+    }
 
     const BUILT: &[BuiltMod] = &[BuiltMod {
         id: "machine_sample",

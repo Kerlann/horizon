@@ -279,35 +279,13 @@ impl Game<'_> {
         if self.ui.vanilla_root.as_os_str().is_empty() {
             self.ui.vanilla_root = vanilla.clone();
         }
-        let enabled = self.applied_mods();
-        // Only content-only packages are selectable on reload. Keep code packages' validated
-        // startup manifests: changing their content must not install code or registries live.
-        let content =
-            horizon_mods::selection::content_packages(&Self::game_dir(), &enabled, &self.mods.dev)
-                .filter(|p| {
-                    p.package.manifest.wasm.is_none()
-                        && !self
-                            .mods
-                            .native
-                            .built()
-                            .iter()
-                            .any(|built| built.id == p.package.manifest.id)
-                });
-        let code = self
-            .mods
-            .selected
-            .iter()
-            .filter(|p| p.package.manifest.wasm.is_some())
-            .map(|p| horizon_mods::selection::SelectedPackage {
-                path: p.path.clone(),
-                package: horizon_mods::Package {
-                    manifest: p.package.manifest.clone(),
-                    icon: p.package.icon.clone(),
-                },
-            });
-        self.mods.selected = content.chain(code).collect();
-        self.mods.refused = Default::default();
-        let mod_sources = self.mods.clone();
+        let enabled = match kind {
+            ReloadKind::Selection => self.mod_reload_selection(),
+            ReloadKind::Server => self.applied_mods(),
+        };
+        let mut mod_sources = self.mods.clone();
+        mod_sources.applied = Some(enabled.clone());
+        let home = Self::game_dir();
         let (selected, server) = (
             self.settings.resource_packs.clone(),
             self.server_packs.active.clone(),
@@ -323,6 +301,35 @@ impl Game<'_> {
         // registering mod for crash attribution.
         let client_listeners = self.register_client_reload_listeners();
         self.pack_reload = Some(PackReload::spawn(kind, move |progress| {
+            // Select and read package bytes under the installer's lock on this
+            // worker, not the window thread. Install/removal cannot split the
+            // manifest snapshot from the immutable resource root it builds.
+            let _lock = horizon_mods::install_lock::lock_home(&home).map_err(|e| e.to_string())?;
+            // Only content-only packages are selectable on reload. Keep code
+            // packages' validated startup manifests; never discover new code here.
+            let content =
+                horizon_mods::selection::content_packages(&home, &enabled, &mod_sources.dev)
+                    .filter(|p| {
+                        p.package.manifest.wasm.is_none()
+                            && !mod_sources
+                                .native
+                                .built()
+                                .iter()
+                                .any(|built| built.id == p.package.manifest.id)
+                    });
+            let code = mod_sources
+                .selected
+                .iter()
+                .filter(|p| p.package.manifest.wasm.is_some())
+                .map(|p| horizon_mods::selection::SelectedPackage {
+                    path: p.path.clone(),
+                    package: horizon_mods::Package {
+                        manifest: p.package.manifest.clone(),
+                        icon: p.package.icon.clone(),
+                    },
+                });
+            mod_sources.selected = content.chain(code).collect();
+            mod_sources.refused = Default::default();
             stage_pack(
                 &vanilla,
                 &selected,
@@ -352,7 +359,6 @@ impl Game<'_> {
             staged.and_then(|staged| self.apply_staged_pack(staged).map_err(|e| e.to_string()));
         match kind {
             ReloadKind::Selection => {
-                self.mods_reloaded(result.is_ok());
                 if let Err(e) = result {
                     self.selection_reload_failed(&e);
                 }
@@ -370,6 +376,8 @@ impl Game<'_> {
     pub(super) fn apply_staged_pack(&mut self, staged: StagedPack) -> horizon_client::Result<()> {
         let StagedPack {
             root,
+            mod_sources,
+            started,
             client_applies,
             gui,
             pack,
@@ -419,7 +427,16 @@ impl Game<'_> {
                 return Err(error);
             }
         };
-        // Everything loaded: switch over.
+        // Everything loaded: publish exactly the mod snapshot that built this
+        // root. A failed stage or GPU preparation leaves the old selection intact.
+        let mods_changed = mod_sources.applied.as_ref().is_some_and(|next| {
+            self.applied_mods()
+                .symmetric_difference(next)
+                .any(|id| self.mods.content_ids.contains(id))
+        });
+        self.mods.applied = mod_sources.applied;
+        self.mods.selected = mod_sources.selected;
+        self.mods.refused = mod_sources.refused;
         self.waypoint_styles = horizon_client::locator_bar::WaypointStyles::load(&root);
         self.armor_stand_assets.reload_trims(&root);
         self.random_tick_sections.clear();
@@ -523,6 +540,9 @@ impl Game<'_> {
         super::client_reload::apply_client_reload(client_applies);
         self.refresh_loop_context();
         self.native_client_resources_reloaded();
+        if mods_changed {
+            self.mods_reloaded(started);
+        }
         Ok(())
     }
 }
@@ -544,6 +564,7 @@ pub(super) fn stage_pack(
     japanese: bool,
     progress: &super::Progress,
 ) -> horizon_client::Result<StagedPack> {
+    let started = std::time::Instant::now();
     let root = startup_root(vanilla_root, selected, server, mod_sources)?;
     progress.set(1);
     // The mod listeners prepare against the merged root before the heavy
@@ -605,6 +626,8 @@ pub(super) fn stage_pack(
     progress.set(3);
     Ok(StagedPack {
         root,
+        mod_sources: mod_sources.clone(),
+        started,
         client_applies,
         gui,
         pack,
@@ -621,6 +644,9 @@ pub(super) fn stage_pack(
 /// it on the render thread).
 pub(super) struct StagedPack {
     pub root: PathBuf,
+    /// Only published with the resources it built, never before staging succeeds.
+    mod_sources: super::mods::ModsState,
+    started: std::time::Instant,
     /// The mod reload listeners' prepared applies, run when the rest of the
     /// staged pack is published.
     pub client_applies: Vec<super::client_reload::PreparedClientReload>,
@@ -823,6 +849,34 @@ mod tests {
         assert_eq!(reload.progress.line(), "Loading pack tables");
         assert_eq!(ran_on.recv().unwrap().as_deref(), Some("pack-reload"));
         assert!(reload.finished().is_none(), "the outcome is taken once");
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn reversing_a_switch_during_staging_queues_the_current_choice_too() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            game.mods.applied = Some(Default::default());
+            game.settings.mods.enabled.clear();
+            game.pending_pack_reload = false;
+            let (send, receive) = mpsc::channel();
+            game.pack_reload = Some(
+                PackReload::spawn(ReloadKind::Selection, move |_| {
+                    receive.recv().unwrap();
+                    Err("the earlier selection failed".into())
+                })
+                .unwrap(),
+            );
+            // The requested set equals the applied one, but the worker could
+            // still be loading the previous request to turn a mod on.
+            game.switch_mods();
+            assert!(game.pending_pack_reload);
+            assert!(game.applied_mods().is_empty());
+            send.send(()).unwrap();
+            let (_, result) = wait(game.pack_reload.as_mut().unwrap());
+            assert!(result.is_err());
+            game.pack_reload = None;
+            assert!(game.applied_mods().is_empty());
+        });
     }
 
     #[test]

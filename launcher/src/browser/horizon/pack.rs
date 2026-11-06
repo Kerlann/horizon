@@ -164,14 +164,16 @@ fn install_version_in(
 /// Turns the game's command into the pack's profile: its own game folder (the player's
 /// options.txt copied in when the pack brings none), its taken-down mods turned off first.
 pub fn apply(cmd: &mut Command, work: &Path) -> Result<(), String> {
-    let _lock = crate::browser::lock_home(&home(work)).map_err(|e| e.to_string())?;
+    let home = home(work);
+    let own_home = crate::backend::game_home();
+    let _locks =
+        horizon_mods::install_lock::lock_homes(&[&home, &own_home]).map_err(|e| e.to_string())?;
     if !is_pack(work) {
         return Err(format!("{} is not an installed modpack.", work.display()));
     }
-    let home = home(work);
     fs::create_dir_all(&home).map_err(|e| format!("{}: {e}", home.display()))?;
     let options = home.join("options.txt");
-    let own = crate::backend::game_home().join("options.txt");
+    let own = own_home.join("options.txt");
     if !options.exists() && own.is_file() {
         let _ = fs::copy(own, &options);
     }

@@ -34,6 +34,16 @@ fn registry() -> &'static Registry {
 /// Resolve aliases without creating a home before acquiring its lock. A profile
 /// may be absent (or being deleted); resolve its nearest existing ancestor.
 fn normalize_home(home: &Path) -> io::Result<PathBuf> {
+    resolve_home(home, 0)
+}
+
+fn resolve_home(home: &Path, links: usize) -> io::Result<PathBuf> {
+    if links >= 40 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "too many symbolic links in game home",
+        ));
+    }
     let absolute = std::path::absolute(home)?;
     let mut ancestor = absolute.as_path();
     let mut missing = Vec::new();
@@ -57,22 +67,26 @@ fn normalize_home(home: &Path) -> io::Result<PathBuf> {
                     } else {
                         ancestor.parent().ok_or(e)?.join(target)
                     };
-                    for name in missing.into_iter().rev() {
-                        target.push(name);
+                    for part in missing.into_iter().rev() {
+                        target.push(part);
                     }
-                    return normalize_home(&target);
+                    return resolve_home(&target, links + 1);
                 }
-                let Some(name) = ancestor.file_name() else {
+                let Some(part) = ancestor.components().next_back() else {
                     return Err(e);
                 };
-                missing.push(name);
+                missing.push(part.as_os_str());
                 ancestor = ancestor.parent().ok_or(e)?;
             }
             Err(e) => return Err(e),
         }
     };
-    for name in missing.into_iter().rev() {
-        path.push(name);
+    for part in missing.into_iter().rev() {
+        if part == ".." {
+            path.pop();
+        } else {
+            path.push(part);
+        }
     }
     #[cfg(windows)]
     {
@@ -189,6 +203,19 @@ fn acquire(home: &Path, blocking: bool) -> io::Result<Option<HomeLockGuard>> {
 /// temporary directory; lock files there are independent of profile lifetimes.
 pub fn lock_home(home: &Path) -> io::Result<HomeLockGuard> {
     acquire(home, true).map(|guard| guard.expect("blocking acquisition returns a guard"))
+}
+
+/// Lock several homes in canonical path order, before holding any home lock.
+/// Use this for copying a settings/package snapshot between profiles so opposite
+/// copies cannot deadlock. Aliases of one home acquire only one guard.
+pub fn lock_homes(homes: &[&Path]) -> io::Result<Vec<HomeLockGuard>> {
+    let mut paths = homes
+        .iter()
+        .map(|home| normalize_home(home))
+        .collect::<io::Result<Vec<_>>>()?;
+    paths.sort();
+    paths.dedup();
+    paths.iter().map(|path| lock_home(path)).collect()
 }
 
 /// Acquires exclusive mutation access without waiting for another thread or

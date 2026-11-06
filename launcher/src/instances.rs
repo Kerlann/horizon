@@ -420,6 +420,7 @@ fn delete_in(
             instance.name
         ));
     }
+    let _lock = crate::browser::lock_home(&instance.home).map_err(|e| e.to_string())?;
     trash(&instance.work)
         .map_err(|e| format!("{} could not go to the Trash: {e}", instance.name))?;
     let mut store = Store::load(data);
@@ -537,6 +538,14 @@ fn create_in(
         .find(|s| !taken(s))
         .unwrap();
     let dir = game_home.join(OWN).join(&slug);
+    let source = from.map_or(game_home, |instance| instance.home.as_path());
+    let _locks =
+        horizon_mods::install_lock::lock_homes(&[source, &dir]).map_err(|e| e.to_string())?;
+    // Another creator may have chosen the same free name before we acquired
+    // the destination lock. Never copy over its newly published profile.
+    if dir.exists() {
+        return Err(name_taken(name));
+    }
     let made = match from {
         Some(from) => copy_home(&from.home, &dir),
         None if minecraft.is_some() => fs::create_dir_all(&dir),

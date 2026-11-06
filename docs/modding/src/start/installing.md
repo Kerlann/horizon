@@ -29,6 +29,17 @@ Mods are **off by default**. A fresh install has no `horizon-mods` folder and pl
    owns its data. Code mods keep their startup content; pausing their dispatch is not a content unload.
 4. A mod that can't load shows why, in red, on its row.
 
+A live selection becomes applied only after its resource reload succeeds. A failed stage keeps the previous
+resource selection and does not ask the integrated server to load the failed selection's data. The requested
+switches remain saved, so a later reload can retry them. A switch made while another reload is running waits
+for that reload and then uses the latest requested selection.
+
+The game and launcher serialize package changes, profile removal and switch/key saves per game folder. An
+unrelated game settings save merges only the player's changed switches and keys into the latest on-disk list;
+it does not restore an old copy over launcher changes. An install that finishes while a world is open waits
+until the world closes before the game enables its content. These locks coordinate Horizon processes, not
+manual edits or another launcher's writes.
+
 Two turned-on content mods never own the same namespace: the first by file name loads, and the other stays out with
 the reason in the log.
 

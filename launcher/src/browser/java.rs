@@ -65,6 +65,7 @@ pub fn check_file(
     file: &FileRef,
     progress: &dyn Fn(f32),
 ) -> Result<Check, String> {
+    let _lock = super::lock_home(home).map_err(|e| e.to_string())?;
     let dir = checked_dir(home, file).ok_or("Its source gives no checksum.")?;
     if let Some(c) = read_check(&dir) {
         return Ok(c);
@@ -122,24 +123,18 @@ pub fn is_enabled(home: &Path, id: &str) -> bool {
 
 /// Turns mod `id` on (or off) in `horizon-mods.txt`, keeping the other lines.
 pub fn set_enabled(home: &Path, id: &str, on: bool) -> Result<(), String> {
-    let _lock = super::lock_home(home).map_err(|e| e.to_string())?;
-    fs::create_dir_all(home).map_err(|e| format!("{}: {e}", home.display()))?;
-    let path = home.join(MODS_LIST);
-    let text = fs::read_to_string(&path).unwrap_or_default();
-    let key = format!("mod.{id}");
-    let mut lines: Vec<String> = text
-        .lines()
-        .filter(|l| l.split_once(':').is_none_or(|(k, _)| k.trim() != key))
-        .map(str::to_owned)
-        .collect();
-    if on {
-        lines.push(format!("{key}:true"));
-    }
-    let mut out = lines.join("\n");
-    if !out.is_empty() {
-        out.push('\n');
-    }
-    fs::write(&path, out).map_err(|e| format!("{}: {e}", path.display()))
+    let mut mods = horizon_mods::mod_list::ModList::default();
+    mods.save(home, &mut String::new(), |fresh| {
+        if on {
+            fresh.disabled.remove(id);
+            fresh.enabled.insert(id.to_owned());
+        } else {
+            fresh.enabled.remove(id);
+            // Built code defaults to on; deleting the line would resume it.
+            fresh.disabled.insert(id.to_owned());
+        }
+    })
+    .map_err(|e| format!("{}: {e}", home.join(MODS_LIST).display()))
 }
 
 fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
@@ -329,9 +324,23 @@ mod tests {
         set_enabled(&home, "gem", false).unwrap();
         assert_eq!(
             fs::read_to_string(home.join(MODS_LIST)).unwrap(),
-            "mod.coords_hud:true\n"
+            "mod.coords_hud:true\nmod.ruby:false\nmod.gem:false\n"
         );
+        let switches = horizon_mods::mod_list::ModList::load(&home);
+        assert!(switches.disabled.contains("ruby") && switches.disabled.contains("gem"));
         fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn an_unreadable_switch_file_is_not_replaced_by_an_empty_snapshot() {
+        let home = std::env::temp_dir().join(format!(
+            "horizon-java-mods-unreadable-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(home.join(MODS_LIST)).unwrap();
+        assert!(set_enabled(&home, "ruby", true).is_err());
+        assert!(home.join(MODS_LIST).is_dir());
+        fs::remove_dir_all(home).unwrap();
     }
 
     #[test]

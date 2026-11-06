@@ -52,6 +52,52 @@ fn different_homes_do_not_block_each_other() {
 }
 
 #[test]
+fn missing_paths_and_parent_components_keep_their_identity_when_created() {
+    let root = scratch("missing-parent");
+    let home = root.join("profile/home");
+    let alias = root.join("missing/../profile/home");
+    let first = lock_home(&alias).unwrap();
+    assert!(!home.exists(), "locking never creates the profile");
+    fs::create_dir_all(&home).unwrap();
+    // This would wait for our own OS lock if the normalized keys differed.
+    let second = try_lock_home(&home).unwrap();
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| assert!(try_lock_home(&home).is_none()))
+            .join()
+            .unwrap();
+    });
+    drop(first);
+    drop(second);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn multi_home_snapshots_use_one_order_and_deduplicate_aliases() {
+    let first = scratch("multi-first");
+    let second = scratch("multi-second");
+    let guards = lock_homes(&[&first, &second, &first.join(".")]).unwrap();
+    assert_eq!(guards.len(), 2);
+    let (send, receive) = channel();
+    std::thread::scope(|scope| {
+        let worker = scope.spawn(|| {
+            assert!(try_lock_home(&first).is_none());
+            assert!(try_lock_home(&second).is_none());
+            send.send(()).unwrap();
+            // An opposite source/destination order must acquire the same order.
+            let _guards = lock_homes(&[&second, &first]).unwrap();
+            send.send(()).unwrap();
+        });
+        receive.recv_timeout(Duration::from_secs(5)).unwrap();
+        drop(guards);
+        receive.recv_timeout(Duration::from_secs(5)).unwrap();
+        worker.join().unwrap();
+    });
+    fs::remove_dir_all(first).unwrap();
+    fs::remove_dir_all(second).unwrap();
+}
+
+#[test]
 fn filesystem_errors_refuse_mutation_and_release_the_reservation() {
     let home = scratch("error");
     let lock = lock_path(&normalize_home(&home).unwrap());

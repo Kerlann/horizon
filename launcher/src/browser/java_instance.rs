@@ -201,6 +201,16 @@ pub fn is_on(home: &Path, entry: &Entry) -> bool {
 /// Turns the mod `entry` on or off by renaming its file; it stays installed.
 pub fn set_on(home: &Path, entry: &Entry, on: bool) -> Result<(), String> {
     let _lock = super::lock_home(home).map_err(|e| e.to_string())?;
+    let installed = Installed::load(home);
+    if installed
+        .find(entry.source, &entry.project)
+        .is_none_or(|now| now.file != entry.file || now.version != entry.version)
+    {
+        return Err(crate::i18n::trf(
+            "{title} changed since it was listed. Refresh the mod list before changing it.",
+            &[("title", &entry.title)],
+        ));
+    }
     if entry.kind != Kind::Mod {
         return Err(format!(
             "{} isn't a mod: only mods turn on and off.",

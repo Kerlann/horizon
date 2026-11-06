@@ -485,6 +485,7 @@ pub fn curseforge_folders(os: Os, folders: &Folders) -> Vec<PathBuf> {
 /// logs, and only what an instance holds from a folder shared with the launcher. Nothing in
 /// the other launcher's folder changes.
 pub fn copy_game(found: &Found, to: &Path) -> std::io::Result<()> {
+    let _locks = horizon_mods::install_lock::lock_homes(&[&found.game, to])?;
     fs::create_dir_all(to)?;
     let Ok(entries) = fs::read_dir(&found.game) else {
         return Ok(());
