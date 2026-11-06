@@ -25,6 +25,7 @@
 //! the start of the next tick, from the block state then.
 use crate::chunk::block_entity::{BlockEntity, ModContainer, ModEnergyBuffer, ModFluidTanks};
 use crate::fast_hash::{FxHashMap, FxHashSet};
+use horizon_world::attachments::{Attachments, observer::AttachmentObserver};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -46,8 +47,9 @@ pub enum Ticking {
 #[derive(Default)]
 pub struct BlockEntities {
     map: HashMap<Pos, BlockEntity>,
-    attachments: HashMap<Pos, horizon_world::attachments::Attachments>,
     generations: FxHashMap<Pos, u64>,
+    attachments: HashMap<Pos, Attachments>,
+    attachment_observer: Option<Arc<dyn AttachmentObserver<BlockEntityIdentity>>>,
     /// `Level.blockEntityTickers`: positions and the slot each was given.
     tickers: Arc<Vec<(Pos, u32)>>,
     /// `LevelChunk.tickersInLevel`: the live slot of each ticking position.
@@ -91,6 +93,40 @@ pub struct BlockEntities {
     /// Like `mods`, one taken out stays listed until `put` or `remove`.
     boxes: FxHashSet<Pos>,
     asleep: FxHashSet<Pos>,
+}
+
+/// Storage-owned identity passed to attachment residency observers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct BlockEntityIdentity {
+    pub position: [i32; 3],
+    pub generation: u64,
+}
+
+fn identity(pos: Pos, generations: &FxHashMap<Pos, u64>) -> BlockEntityIdentity {
+    BlockEntityIdentity {
+        position: [pos.0, pos.1, pos.2],
+        generation: generations[&pos],
+    }
+}
+
+fn retire_attachments(
+    maps: &mut HashMap<Pos, Attachments>,
+    observer: Option<&Arc<dyn AttachmentObserver<BlockEntityIdentity>>>,
+    generations: &FxHashMap<Pos, u64>,
+    pos: &Pos,
+) {
+    if let Some(previous) = maps.remove(pos) {
+        if let Some(observer) = observer {
+            observer.unload(identity(*pos, generations));
+        }
+        drop(previous);
+    }
+}
+
+impl Drop for BlockEntities {
+    fn drop(&mut self) {
+        self.unload_attachments();
+    }
 }
 
 /// A structure or test instance block: the block entities whose box the frame may draw.
@@ -193,7 +229,15 @@ impl BlockEntities {
     /// Restore the identity captured with an existing entity by a transaction.
     pub fn restore_generation(&mut self, pos: Pos, generation: u64) {
         assert!(self.map.contains_key(&pos));
-        self.generations.insert(pos, generation);
+        if self.generation(&pos) != Some(generation) {
+            retire_attachments(
+                &mut self.attachments,
+                self.attachment_observer.as_ref(),
+                &self.generations,
+                &pos,
+            );
+            self.generations.insert(pos, generation);
+        }
     }
     fn new_generation(&mut self, pos: Pos) {
         use std::sync::atomic::{AtomicU64, Ordering};
@@ -203,6 +247,28 @@ impl BlockEntities {
             .expect("block entity generations exhausted");
         self.generations.insert(pos, generation);
     }
+    /// Bind this dimension's authoritative maps, including saved entries not yet read.
+    pub fn observe_attachments(
+        &mut self,
+        observer: Arc<dyn AttachmentObserver<BlockEntityIdentity>>,
+    ) {
+        self.unload_attachments();
+        for (pos, map) in &mut self.attachments {
+            if map.has_index_entries() || map.has_index_binding() {
+                let _ = observer.bind(identity(*pos, &self.generations), map);
+            }
+        }
+        self.attachment_observer = Some(observer);
+    }
+
+    fn unload_attachments(&self) {
+        if let Some(observer) = &self.attachment_observer {
+            for pos in self.attachments.keys() {
+                observer.unload(identity(*pos, &self.generations));
+            }
+        }
+    }
+
     /// Whether the ticking table has been built.
     pub fn has_states(&self) -> bool {
         !self.states.is_empty()
@@ -261,7 +327,13 @@ impl BlockEntities {
         if !self.map.contains_key(&pos) && !self.out.contains(&pos) {
             return None;
         }
-        Some(self.attachments.entry(pos).or_default())
+        let map = self.attachments.entry(pos).or_default();
+        if let Some(observer) = &self.attachment_observer
+            && !map.has_index_binding()
+        {
+            let _ = observer.bind(identity(pos, &self.generations), map);
+        }
+        Some(map)
     }
     /// The attachment map of the block entity at `pos`, if it has one.
     pub fn attachments(&self, pos: Pos) -> Option<&horizon_world::attachments::Attachments> {
@@ -277,7 +349,12 @@ impl BlockEntities {
         match data {
             Some(data) => self.restore_attachments(pos, data),
             None => {
-                self.attachments.remove(&pos);
+                retire_attachments(
+                    &mut self.attachments,
+                    self.attachment_observer.as_ref(),
+                    &self.generations,
+                    &pos,
+                );
             }
         }
     }
@@ -295,8 +372,15 @@ impl BlockEntities {
     }
     /// Restore a loaded block entity's attachment map.
     pub fn restore_attachments(&mut self, pos: Pos, data: horizon_world::attachments::Attachments) {
-        if self.map.contains_key(&pos) {
-            self.attachments.insert(pos, data);
+        if self.map.contains_key(&pos) || self.out.contains(&pos) {
+            let map = self.attachments.entry(pos).or_default();
+            map.replace_contents(data);
+            if let Some(observer) = &self.attachment_observer
+                && map.has_index_entries()
+                && !map.has_index_binding()
+            {
+                let _ = observer.bind(identity(pos, &self.generations), map);
+            }
         }
     }
     /// Whether any mod block entity is in the map: until one is, a block change
@@ -366,7 +450,13 @@ impl BlockEntities {
             (old, new) => std::mem::discriminant(old) == std::mem::discriminant(new),
         };
         if !self.map.get(&pos).is_some_and(same_type) {
-            self.attachments.remove(&pos);
+            retire_attachments(
+                &mut self.attachments,
+                self.attachment_observer.as_ref(),
+                &self.generations,
+                &pos,
+            );
+            self.out.remove(&pos);
             self.new_generation(pos);
         }
         let new_box = shows_box(&entity);
@@ -410,15 +500,18 @@ impl BlockEntities {
     }
     /// `LevelChunk.removeBlockEntity`: the block entity and its slot.
     pub fn remove(&mut self, pos: &Pos) -> Option<BlockEntity> {
+        retire_attachments(
+            &mut self.attachments,
+            self.attachment_observer.as_ref(),
+            &self.generations,
+            pos,
+        );
         self.generations.remove(pos);
         self.out.remove(pos);
-        self.attachments.remove(pos);
         self.asleep.remove(pos);
         self.cancel(pos);
         let removed = self.map.remove(pos);
-        if matches!(removed, Some(BlockEntity::Mod(_))) {
-            forget_mod(&mut self.mods, *pos);
-        }
+        forget_mod(&mut self.mods, *pos);
         self.boxes.remove(pos);
         removed
     }
@@ -455,6 +548,16 @@ impl BlockEntities {
     pub fn unload(&mut self, mut gone: impl FnMut(&Pos) -> bool) {
         let asleep = std::mem::take(&mut self.asleep);
         self.retain(|p, _| !gone(p));
+        let mut out = std::mem::take(&mut self.out);
+        out.retain(|pos| {
+            if gone(pos) {
+                self.remove(pos);
+                false
+            } else {
+                true
+            }
+        });
+        self.out = out;
         self.asleep = asleep;
         let map = &self.map;
         self.asleep.retain(|p| map.contains_key(p));
@@ -470,12 +573,13 @@ impl BlockEntities {
         );
         let (mods, boxes) = (&mut self.mods, &mut self.boxes);
         let generations = &mut self.generations;
+        let observer = self.attachment_observer.as_ref();
         self.asleep.clear();
         self.map.retain(|p, e| {
             let kept = keep(p, e);
             if !kept {
+                retire_attachments(attachments, observer, generations, p);
                 generations.remove(p);
-                attachments.remove(p);
                 *freed |= live.remove(p).is_some();
                 pending.remove(p);
                 forget_mod(mods, *p);
@@ -485,6 +589,7 @@ impl BlockEntities {
         });
     }
     pub fn clear(&mut self) {
+        self.unload_attachments();
         self.generations.clear();
         self.attachments.clear();
         self.map.clear();
@@ -507,8 +612,14 @@ impl BlockEntities {
     pub fn load_chunk(&mut self, entities: Vec<(Pos, BlockEntity)>) {
         let order = chunk_map_order(entities.iter().map(|(p, _)| *p));
         for (p, e) in entities {
+            retire_attachments(
+                &mut self.attachments,
+                self.attachment_observer.as_ref(),
+                &self.generations,
+                &p,
+            );
             self.new_generation(p);
-            self.attachments.remove(&p);
+            self.out.remove(&p);
             self.asleep.remove(&p);
             let new_is_mod = matches!(e, BlockEntity::Mod(_));
             self.note_box(p, Some(&e));
@@ -593,6 +704,9 @@ impl BlockEntities {
         self.cancel(pos);
     }
 }
+
+#[cfg(test)]
+mod attachment_tests;
 
 #[cfg(test)]
 mod tests {

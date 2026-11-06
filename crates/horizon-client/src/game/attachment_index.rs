@@ -58,8 +58,25 @@ impl Game<'_> {
                     _ => None,
                 },
             )));
+        self.world
+            .block_entities
+            .observe_attachments(Arc::new(IndexedAttachmentObserver::new(
+                index,
+                move |identity: horizon_client::block_entities::BlockEntityIdentity| {
+                    Some(AttachmentHolder::BlockEntity(
+                        mod_api::__private::game::block_entity_ref(
+                            level,
+                            identity.position,
+                            identity.generation,
+                        ),
+                    ))
+                },
+            )));
     }
 }
+
+#[cfg(test)]
+mod block_entity_tests;
 
 #[cfg(test)]
 mod tests {

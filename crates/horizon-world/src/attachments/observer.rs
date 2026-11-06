@@ -9,13 +9,13 @@ use super::{AttachmentRegistration, Attachments, Holder, index::AttachmentIndex}
 /// A dimension's attachment residency observer, independent of its typed handles.
 /// Storage explicitly binds authoritative maps and unloads holders; map Drop and
 /// detached save/COW copies must never imply residency changes.
-pub trait AttachmentObserver: Send + Sync {
+pub trait AttachmentObserver<I = Holder>: Send + Sync {
     /// Bind the authoritative map, or leave it untouched if the holder cannot be
     /// represented or the dimension index has expired.
-    fn bind(&self, holder: Holder, map: &mut Attachments) -> Option<AttachmentRegistration>;
+    fn bind(&self, holder: I, map: &mut Attachments) -> Option<AttachmentRegistration>;
     /// Retire current membership at a trusted storage boundary, without relying on
     /// a map-held token. Return false for unsupported, absent or expired holders.
-    fn unload(&self, holder: Holder) -> bool;
+    fn unload(&self, holder: I) -> bool;
 }
 
 /// A reusable observer that resolves ready-to-use typed handles only at residency
@@ -39,18 +39,18 @@ impl<H, F> IndexedAttachmentObserver<H, F> {
     }
 }
 
-impl<H, F> AttachmentObserver for IndexedAttachmentObserver<H, F>
+impl<H, F, I> AttachmentObserver<I> for IndexedAttachmentObserver<H, F>
 where
     H: Copy + Eq + Hash + Send + Sync + 'static,
-    F: Fn(Holder) -> Option<H> + Send + Sync,
+    F: Fn(I) -> Option<H> + Send + Sync,
 {
-    fn bind(&self, holder: Holder, map: &mut Attachments) -> Option<AttachmentRegistration> {
+    fn bind(&self, holder: I, map: &mut Attachments) -> Option<AttachmentRegistration> {
         let index = self.index.upgrade()?;
         let holder = (self.resolve)(holder)?;
         Some(map.bind_index(&index, holder))
     }
 
-    fn unload(&self, holder: Holder) -> bool {
+    fn unload(&self, holder: I) -> bool {
         let Some(index) = self.index.upgrade() else {
             return false;
         };
