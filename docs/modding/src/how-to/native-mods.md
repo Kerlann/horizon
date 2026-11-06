@@ -594,7 +594,10 @@ ingredient parses its own JSON with — call it where a data load hook hands you
 `ingredient` hook does while the game resolves recipes. `test(&FluidStack)` asks whether a tank's
 fluid answers, and `fluids()` lists the fluids it accepts, in tag order, for a recipe book. A kind
 outside the standard shapes fails the parse: fluids have no custom ingredient hook, and components
-are not checked — any stack of a named fluid answers.
+are not checked — any stack of a named fluid answers. `from_json` returns a typed error for an
+unregistered name not already retained by the engine; it never interns arbitrary guest input.
+`fluids()` returns `FluidIdentity` values, including opaque unresolved handles. `FluidStack::new`
+takes a `FluidKey`; its `key()` returns `None` for an unresolved identity.
 
 `SizedFluidIngredient` adds the amount, as NeoForge's `SizedFluidIngredient`:
 `{"ingredient": <fluid ingredient>, "amount": 500}` in millibuckets, `"amount"` defaulting to a

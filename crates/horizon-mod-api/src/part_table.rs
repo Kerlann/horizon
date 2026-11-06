@@ -1713,6 +1713,14 @@ pub mod tests {
         }
         super::install_registrar(registrar).unwrap();
         crate::registry_keys::resolve_effects().unwrap();
+        crate::registry_keys::resolve_fluids(&[
+            "minecraft:empty",
+            "minecraft:water",
+            "minecraft:flowing_water",
+            "minecraft:lava",
+            "minecraft:flowing_lava",
+        ])
+        .unwrap();
         if let Some(types) = horizon_client_core::block_entity_types::current() {
             crate::registry_keys::resolve_block_entity_types(types).unwrap();
         }
@@ -3482,8 +3490,12 @@ pub mod tests {
             1
         }
         fn resource(&self, host: &mut dyn ServerHost, _: usize) -> Option<FluidResource> {
-            (self.amount(host, 0) > 0)
-                .then(|| FluidResource::of(&FluidStack::new("minecraft:water", 1)))
+            (self.amount(host, 0) > 0).then(|| {
+                FluidResource::of(&FluidStack::new(
+                    crate::registry_keys::fluid_key("minecraft:water").unwrap(),
+                    1,
+                ))
+            })
         }
         fn amount(&self, host: &mut dyn ServerHost, _: usize) -> u32 {
             ROBOT_FLUID
@@ -3492,7 +3504,12 @@ pub mod tests {
                 .unwrap_or(0)
         }
         fn capacity(&self, _: &mut dyn ServerHost, index: usize, resource: &FluidResource) -> u32 {
-            if index == 0 && resource == &FluidResource::of(&FluidStack::new("minecraft:water", 1))
+            if index == 0
+                && resource
+                    == &FluidResource::of(&FluidStack::new(
+                        crate::registry_keys::fluid_key("minecraft:water").unwrap(),
+                        1,
+                    ))
             {
                 1000
             } else {
@@ -3564,6 +3581,7 @@ pub mod tests {
     #[mod_api::__subscriptions]
     impl Hooks for FixtureContent {
         fn register(&self, r: &mut dyn Registrar, _: &crate::RegistrationContext) {
+            r.declare_fluid("potion");
             for id in CAPABILITY_TYPES {
                 r.block_entity_type(id)
                     .blocks(&[&format!("test:{id}")])
@@ -3594,6 +3612,14 @@ pub mod tests {
         .into();
         super::super::install(mods.clone());
         install_parts(&mods).unwrap();
+        crate::registry_keys::resolve_fluids(&[
+            "minecraft:water",
+            "minecraft:lava",
+            "minecraft:flowing_water",
+            "minecraft:flowing_lava",
+            "minecraft:empty",
+        ])
+        .unwrap();
         mark_game_thread();
         mods
     }
@@ -5790,7 +5816,10 @@ pub mod tests {
         };
         FluidStack {
             components: Some(Box::new(components)),
-            ..FluidStack::new("test:potion", amount)
+            ..FluidStack::new(
+                crate::registry_keys::fluid_key("test:potion").unwrap(),
+                amount,
+            )
         }
     }
 
@@ -5812,7 +5841,7 @@ pub mod tests {
         // The same fluid with other components, or another fluid, doesn't go in.
         for other in [
             potion(500, "minecraft:poison"),
-            FluidStack::new("test:potion", 500),
+            FluidStack::new(crate::registry_keys::fluid_key("test:potion").unwrap(), 500),
         ] {
             world.tank(SOURCE, Some(other.clone()), true);
             assert_eq!(world.moved((SOURCE, None), (TANK, None), 4000), Ok(0));
@@ -5820,7 +5849,10 @@ pub mod tests {
             assert_eq!(world.held(TANK), Some(potion(600, "minecraft:healing")));
         }
         // A drain-only tank has no capacity, and nothing moves.
-        let water = FluidStack::new("minecraft:water", 1000);
+        let water = FluidStack::new(
+            crate::registry_keys::fluid_key("minecraft:water").unwrap(),
+            1000,
+        );
         world.tank(SOURCE, Some(water.clone()), true);
         world.tank(TANK, None, false);
         let host: &mut dyn ServerHost = &mut world;
@@ -5833,7 +5865,12 @@ pub mod tests {
     #[test]
     fn a_fluid_move_tries_again_with_what_the_target_took_and_loses_nothing() {
         game_thread();
-        let water = |amount| FluidStack::new("minecraft:water", amount);
+        let water = |amount| {
+            FluidStack::new(
+                crate::registry_keys::fluid_key("minecraft:water").unwrap(),
+                amount,
+            )
+        };
         type Setup = fn(&mut GameTank, &mut GameTank);
         let cases: [(&str, Setup, u32); 6] = [
             // Half of each offer: no request is ever taken whole, so nothing moves.
@@ -5881,7 +5918,12 @@ pub mod tests {
     #[test]
     fn a_handler_answering_more_than_it_was_asked_aborts_the_whole_move_and_loses_no_fluid() {
         game_thread();
-        let water = |amount| Some(FluidStack::new("minecraft:water", amount));
+        let water = |amount| {
+            Some(FluidStack::new(
+                crate::registry_keys::fluid_key("minecraft:water").unwrap(),
+                amount,
+            ))
+        };
         for (liar, at) in [("test:gives_more", SOURCE), ("test:takes_more", TANK)] {
             let mut world = TankWorld::default();
             world.tank(SOURCE, water(1000), true);

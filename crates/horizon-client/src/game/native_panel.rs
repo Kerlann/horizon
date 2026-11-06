@@ -573,9 +573,10 @@ mod tests {
         }
     }
     fn fluid(id: &str, amount: u32) -> FluidStack {
-        FluidStack::new(id, amount)
+        FluidStack::new(mod_api::__private::fluid_key(id).unwrap(), amount)
     }
     fn view() -> NativeRecipeView {
+        mod_api::__private::part_tests::game_thread();
         NativeRecipeView {
             layout: NativeRecipeLayout::Grid,
             width: 5,

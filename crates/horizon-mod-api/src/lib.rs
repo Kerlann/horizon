@@ -6,7 +6,15 @@
 #![deny(missing_docs)]
 extern crate self as mod_api;
 mod registry_keys;
+mod unresolved_fluid;
 pub use registry_keys::UnknownFluid;
+pub use unresolved_fluid::FluidIdentity;
+
+/// A fluid name retained from unavailable content for the process lifetime.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+// exhaustive: its private field permits only host-created handles
+#[horizon_mod_api_macros::wasm(host_constructor = from_slot)]
+pub struct UnresolvedFluid(u64);
 
 /// A block requested once through [`Registrar::block_key`]. Its load-owned slot survives reload.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -4606,7 +4614,8 @@ mod energy_capability;
 pub use energy_capability::{ENERGY, EnergyHandler, ITEM_ENERGY, move_energy};
 mod fluid_capability;
 pub use fluid_capability::{
-    FLUIDS, FluidIngredient, FluidResource, FluidStack, ITEM_FLUIDS, SizedFluidIngredient,
+    FLUIDS, FluidIngredient, FluidIngredientError, FluidResource, FluidStack, ITEM_FLUIDS,
+    SizedFluidIngredient,
 };
 mod item_place;
 mod menu_slot;

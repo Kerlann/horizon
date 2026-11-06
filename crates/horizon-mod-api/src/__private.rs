@@ -438,3 +438,7 @@ pub use crate::registry_keys::{
     effect_id as effect_key_id,
 };
 pub use crate::registry_keys::{effect_key, fluid_id, fluid_key, resolve_fluids};
+pub use crate::unresolved_fluid::{
+    identity_name as fluid_identity_name, intern as intern_unresolved_fluid,
+    lookup as lookup_unresolved_fluid, name as unresolved_fluid_name,
+};

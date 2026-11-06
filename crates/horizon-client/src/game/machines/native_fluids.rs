@@ -134,10 +134,26 @@ fn side_tanks(tanks: &ModFluidTanks, side: Option<Direction>) -> Vec<usize> {
 /// water and lava, discarding their components as NeoForge's `CauldronFluidContent` does:
 /// the one place a fluid's components are dropped, and what comes out of a cauldron is plain.
 fn game_holds(fluid: &FluidStack, at: &FluidAt) -> bool {
+    let id = mod_api::__private::fluid_identity_name(fluid.fluid);
     match at {
-        FluidAt::Mod(_) => tank_fluid(&fluid.fluid) && !fluid.has_components(),
-        FluidAt::Cauldron(_) => matches!(&*fluid.fluid, "minecraft:water" | "minecraft:lava"),
+        FluidAt::Mod(_) => tank_fluid(&id) && !fluid.has_components(),
+        FluidAt::Cauldron(_) => matches!(id.as_str(), "minecraft:water" | "minecraft:lava"),
     }
+}
+
+#[derive(Debug)]
+struct UnknownLiveFluid;
+
+fn fluid_identity(id: &str) -> Result<mod_api::FluidIdentity, UnknownLiveFluid> {
+    if let Some(key) = mod_api::__private::fluid_key(id) {
+        return Ok(mod_api::FluidIdentity::Resolved(key));
+    }
+    if let Some(handle) = mod_api::__private::lookup_unresolved_fluid(id) {
+        return Ok(mod_api::FluidIdentity::Unresolved(handle));
+    }
+    static WARNED: std::sync::Once = std::sync::Once::new();
+    WARNED.call_once(|| log::warn!("An unrecognized live fluid id is unavailable"));
+    Err(UnknownLiveFluid)
 }
 
 /// A capability amount in the fluid helpers' millibuckets.
@@ -298,12 +314,21 @@ impl Game<'_> {
                     .tank_state(at.pos, tanks.tanks.len())?
                     .swap_remove(real);
                 let amount = u32::try_from(amount).ok().filter(|&amount| amount > 0)?;
-                Some(FluidStack::new(&fluid?, amount))
+                let id = fluid?;
+                let identity = fluid_identity(&id).ok()?;
+                Some(FluidStack {
+                    fluid: identity,
+                    amount,
+                    components: None,
+                })
             }
             // All a cauldron holds is what a bucket's drain takes.
             FluidAt::Cauldron(kind) if tank == 0 => {
                 let (fluid, amount, _) = kind.drain(1000)?;
-                Some(FluidStack::new(fluid, amount.unsigned_abs()))
+                Some(FluidStack::new(
+                    mod_api::__private::fluid_key(fluid)?,
+                    amount.unsigned_abs(),
+                ))
             }
             FluidAt::Cauldron(_) => None,
         }
@@ -345,6 +370,7 @@ impl Game<'_> {
             return None;
         }
         let amount = mb(fluid.amount);
+        let id = mod_api::__private::fluid_identity_name(fluid.fluid);
         let took = match self.capability_tanks(at) {
             Some(at) if !game_holds(&fluid, &at) => 0,
             Some(FluidAt::Mod(tanks)) => {
@@ -357,18 +383,18 @@ impl Game<'_> {
                     return Some(fluid);
                 };
                 let entry = &mut state[real];
-                if entry.1 > 0 && entry.0.as_deref() != Some(&*fluid.fluid) {
+                if entry.1 > 0 && entry.0.as_deref() != Some(id.as_str()) {
                     return Some(fluid);
                 }
                 let add = (tanks.tanks[real] - entry.1).clamp(0, amount);
                 if add > 0 {
-                    entry.0 = Some(fluid.fluid.to_string());
+                    entry.0 = Some(id.to_owned());
                     entry.1 += add;
                     self.set_tank_state(at.pos, &state);
                 }
                 add
             }
-            Some(FluidAt::Cauldron(kind)) if tank == 0 => match kind.fill(&fluid.fluid, amount) {
+            Some(FluidAt::Cauldron(kind)) if tank == 0 => match kind.fill(&id, amount) {
                 Some((took, to)) if self.cauldron_set(at.pos, to) => took,
                 _ => 0,
             },
@@ -399,17 +425,23 @@ impl Game<'_> {
                 let entry = &mut state[real];
                 let take = entry.1.clamp(0, max);
                 let fluid = entry.0.clone().filter(|_| take > 0)?;
+                let identity = fluid_identity(&fluid).ok()?;
                 entry.1 -= take;
                 if entry.1 == 0 {
                     entry.0 = None;
                 }
                 self.set_tank_state(at.pos, &state);
-                Some(FluidStack::new(&fluid, take.unsigned_abs()))
+                Some(FluidStack {
+                    fluid: identity,
+                    amount: take.unsigned_abs(),
+                    components: None,
+                })
             }
             FluidAt::Cauldron(kind) if tank == 0 => {
                 let (fluid, took, to) = kind.drain(max)?;
+                let key = mod_api::__private::fluid_key(fluid)?;
                 self.cauldron_set(at.pos, to)
-                    .then(|| FluidStack::new(fluid, took.unsigned_abs()))
+                    .then(|| FluidStack::new(key, took.unsigned_abs()))
             }
             FluidAt::Cauldron(_) => None,
         }
@@ -563,26 +595,39 @@ mod tests {
     #[test]
     fn a_cauldron_takes_water_and_lava_whatever_their_components_and_a_mod_tank_none_with_them() {
         use super::{CauldronFluids, FluidAt, FluidStack, game_holds};
+        mod_api::__private::part_tests::game_thread();
         let potion = |fluid| FluidStack {
             components: Some(Box::new(horizon_client::item_data::StackData {
                 potion: Some(Arc::from("minecraft:healing")),
                 ..Default::default()
             })),
-            ..FluidStack::new(fluid, 1000)
+            ..FluidStack::new(mod_api::__private::fluid_key(fluid).unwrap(), 1000)
         };
         let cauldron = FluidAt::Cauldron(CauldronFluids::Empty);
         let tank = FluidAt::Mod(Arc::default());
         for fluid in ["minecraft:water", "minecraft:lava"] {
             assert!(game_holds(&potion(fluid), &cauldron), "{fluid}");
-            assert!(game_holds(&FluidStack::new(fluid, 1000), &tank), "{fluid}");
+            assert!(
+                game_holds(
+                    &FluidStack::new(mod_api::__private::fluid_key(fluid).unwrap(), 1000),
+                    &tank
+                ),
+                "{fluid}"
+            );
             assert!(!game_holds(&potion(fluid), &tank), "{fluid}");
         }
         assert!(!game_holds(&potion("test:potion"), &cauldron));
         // What a cauldron gives is named by its fluid alone: its components are gone.
         let (fluid, amount, _) = CauldronFluids::Water(3).drain(1000).unwrap();
         assert_eq!(
-            FluidStack::new(fluid, amount.unsigned_abs()),
-            FluidStack::new("minecraft:water", 1000)
+            FluidStack::new(
+                mod_api::__private::fluid_key(fluid).unwrap(),
+                amount.unsigned_abs()
+            ),
+            FluidStack::new(
+                mod_api::__private::fluid_key("minecraft:water").unwrap(),
+                1000
+            )
         );
     }
 
@@ -617,9 +662,12 @@ mod tests {
         ) -> Option<mod_api::FluidResource> {
             let real = *self.reached.get(index)?;
             let (fluid, amount) = self.state(host).swap_remove(real);
-            fluid
-                .filter(|_| amount > 0)
-                .map(|fluid| mod_api::FluidResource::of(&FluidStack::new(&fluid, 1)))
+            fluid.filter(|_| amount > 0).map(|fluid| {
+                mod_api::FluidResource::of(&FluidStack::new(
+                    mod_api::__private::fluid_key(&fluid).unwrap(),
+                    1,
+                ))
+            })
         }
         fn amount(&self, host: &mut dyn ServerHost, index: usize) -> u32 {
             self.reached
@@ -641,7 +689,11 @@ mod tests {
             resource: &mod_api::FluidResource,
         ) -> bool {
             index < self.reached.len()
-                && resource == &mod_api::FluidResource::of(&FluidStack::new("minecraft:water", 1))
+                && resource
+                    == &mod_api::FluidResource::of(&FluidStack::new(
+                        mod_api::__private::fluid_key("minecraft:water").unwrap(),
+                        1,
+                    ))
         }
         fn insert(
             &self,
@@ -720,6 +772,7 @@ mod tests {
         #[mod_api::__subscriptions]
         impl Hooks for WaterTanks {
             fn register(&self, r: &mut dyn Registrar, _: &mod_api::RegistrationContext) {
+                r.declare_fluid("chocolate");
                 let kind = r
                     .block_entity_type("water_tank")
                     .blocks(&["fluid_filter_test:water_tank"])
@@ -795,8 +848,14 @@ mod tests {
                 }
                 // The default takes a mod's fluid; a scoped answer does not affect it.
                 let source = level.capability(game, &FLUIDS, from, None).unwrap();
-                let chocolate = FluidResource::of(&FluidStack::new("create:chocolate", 1));
-                let water = FluidResource::of(&FluidStack::new("minecraft:water", 1));
+                let chocolate = FluidResource::of(&FluidStack::new(
+                    mod_api::__private::fluid_key("fluid_filter_test:chocolate").unwrap(),
+                    1,
+                ));
+                let water = FluidResource::of(&FluidStack::new(
+                    mod_api::__private::fluid_key("minecraft:water").unwrap(),
+                    1,
+                ));
                 assert_eq!(source.owner(), "the game");
                 assert!(source.is_valid(game, 0, &chocolate));
                 assert_eq!(
@@ -809,7 +868,10 @@ mod tests {
                 assert_eq!(source.amount(game, 0), 1000);
 
                 // A refusal must protect both a previously filled tank and an empty one.
-                game.set_tank_state(to, &tanks(&[(Some("create:chocolate"), 1000), (None, 0)]));
+                game.set_tank_state(
+                    to,
+                    &tanks(&[(Some("fluid_filter_test:chocolate"), 1000), (None, 0)]),
+                );
                 let target = level.capability(game, &FLUIDS, to, None).unwrap();
                 assert_eq!(target.owner(), "fluid_filter_test");
                 for index in 0..2 {
@@ -899,14 +961,14 @@ mod tests {
                 assert_eq!(
                     game.tank_state(from, 2),
                     Some(tanks(&[
-                        (Some("create:chocolate"), 1000),
+                        (Some("fluid_filter_test:chocolate"), 1000),
                         (Some("minecraft:water"), 800)
                     ]))
                 );
                 assert_eq!(
                     game.tank_state(to, 2),
                     Some(tanks(&[
-                        (Some("create:chocolate"), 900),
+                        (Some("fluid_filter_test:chocolate"), 900),
                         (Some("minecraft:water"), 700)
                     ]))
                 );
