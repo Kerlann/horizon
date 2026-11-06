@@ -144,6 +144,7 @@ impl BlockEntityTypeKey {
 
 /// A fluid requested by a mod but absent from the completed registry.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct UnknownFluid {
     /// Mod that requested the fluid.
     pub mod_id: &'static str,
