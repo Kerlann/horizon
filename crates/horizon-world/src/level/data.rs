@@ -731,6 +731,8 @@ fn build_with_gameplay<G: GameplayStateSource>(
         return Err(fail("fluid registry order differs from Horizon's"));
     }
 
+    let fluid_state_definitions = crate::fluid_definitions::load(behaviour, &fluids)?;
+
     // Tags.
     let bundle = read_json(&root.join("block-tags.json"))?;
     let mut definitions = TagDefinitions::default();
@@ -1120,6 +1122,7 @@ fn build_with_gameplay<G: GameplayStateSource>(
         shapes,
         shape_info,
         fluid_tags,
+        fluid_definitions: fluid_state_definitions,
         blocks,
         items,
         potted_by_content,

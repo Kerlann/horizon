@@ -24,7 +24,7 @@ use std::{
 };
 
 const MAGIC: &[u8; 8] = b"HZBEHAV\0";
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
 const FILE_NAME: &str = "behaviours-v2.bin";
 const REGISTRY_MAGIC: &[u8; 8] = b"HZREGIS\0";
 const REGISTRY_VERSION: u32 = 1;
@@ -48,6 +48,7 @@ struct Snapshot {
     shapes: Vec<Shape>,
     shape_info: Vec<[u8; 3]>,
     fluid_tags: [u8; 6],
+    fluid_definitions: HashMap<String, crate::fluid_definitions::FluidDefinition>,
     blocks: Vec<Block>,
     items: HashMap<String, Item>,
 }
@@ -555,6 +556,7 @@ impl Snapshot {
             shapes,
             shape_info,
             fluid_tags,
+            fluid_definitions: behaviours.fluid_definitions.clone(),
             blocks,
             items,
         }
@@ -744,6 +746,7 @@ impl Snapshot {
             shapes,
             shape_info,
             fluid_tags,
+            fluid_definitions: self.fluid_definitions,
             blocks,
             items,
             potted_by_content,

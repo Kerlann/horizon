@@ -980,6 +980,7 @@ pub struct Behaviours {
     shapes: Vec<VoxelShape>,
     shape_info: Vec<data::ShapeInfo>,
     pub fluid_tags: data::FluidTags,
+    fluid_definitions: HashMap<String, crate::fluid_definitions::FluidDefinition>,
     blocks: Vec<BlockData>,
     items: HashMap<String, ItemBinding>,
     potted_by_content: HashMap<BlockId, BlockId>,
@@ -991,6 +992,11 @@ pub struct Behaviours {
 }
 
 impl Behaviours {
+    /// Registered fluid state definitions from the prepared behavior data.
+    pub fn fluid_definitions(&self) -> &HashMap<String, crate::fluid_definitions::FluidDefinition> {
+        &self.fluid_definitions
+    }
+
     /// Load from a prepared client resource directory (`.local/horizon-client/<version>`).
     pub fn load(registry: &BlockRegistry, resources_dir: &Path) -> io::Result<Self> {
         data::load(registry, resources_dir)
