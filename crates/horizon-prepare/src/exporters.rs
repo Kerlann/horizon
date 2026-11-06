@@ -1,6 +1,7 @@
 //! Only original Horizon classes are packaged. The pinned jars remain player supplied.
 use crate::*;
 
+// Cache-key probe: this comment changes no preparation behavior.
 const SETTINGS: &str = "exporters-v1 --release -proc:none -encoding UTF-8";
 const SERVER: &[&str] = &[
     "VanillaHeightmapOracle",
