@@ -147,6 +147,7 @@ pub mod points {
         super::execution_role::host_side(game)
     }
 }
+mod cauldron_mod;
 mod explosion;
 mod extras;
 mod falling_damage;
@@ -14673,13 +14674,48 @@ impl Game<'_> {
     fn use_on_cauldron(&mut self, pos: [i32; 3]) -> Result<bool> {
         use horizon_client::cauldron::{self, Outcome};
         let registry = self.pack.assets.registry;
-        let Some((state, under_water)) = self.cauldron_at(pos) else {
-            return Ok(false);
-        };
         let Some(held) = self.held() else {
             return Ok(false);
         };
+        let state_id = self.world.block(pos[0], pos[1], pos[2]);
+        let block = registry.state(state_id);
         let removes_dye = cauldron::removes_dye(self.items(), &held.item);
+        let tag_first = block.is_some_and(|s| s.name == "minecraft:water_cauldron") && removes_dye;
+        let selected = (!tag_first)
+            .then(|| {
+                mod_api::__private::parts("cauldron").cauldron_interaction(state_id, &held.item)
+            })
+            .flatten();
+        if let Some((owner, handler)) = selected {
+            let slot = self.held_slot();
+            let player = self.native_acting_id();
+            let result = mod_api::run_transaction(self, |game, _| {
+                game.journal_player(player);
+                let mut context = cauldron_mod::Context {
+                    game,
+                    pos,
+                    slot,
+                    player,
+                    wrote: false,
+                };
+                let result = handler.interact(&mut context)?;
+                if result == mod_api::CauldronOutcome::Pass && context.wrote {
+                    return Err(mod_api::CauldronInteractionError::WriteOnPass);
+                }
+                Ok(result)
+            });
+            return match result {
+                Ok(mod_api::CauldronOutcome::Pass) => Ok(false),
+                Ok(_) => Ok(true),
+                Err(error) => {
+                    log::warn!("mod {owner}: cauldron interaction failed: {error:?}");
+                    Ok(true)
+                }
+            };
+        }
+        let Some((state, under_water)) = self.cauldron_at(pos) else {
+            return Ok(false);
+        };
         let slot = self.held_slot();
         let player = self.native_acting_id();
         if self.transactions.is_empty() {
@@ -22277,6 +22313,7 @@ impl Game<'_> {
                 item: &|id| items.items.contains_key(id),
                 state_count: registry.len(),
                 state_block: &|state| &registry.state(BlockStateId(state as u32)).unwrap().name,
+                vanilla_cauldron_pair: &horizon_client::cauldron::vanilla_pair,
             },
         )
         .map_err(|refused| match refused {
@@ -22288,6 +22325,9 @@ impl Game<'_> {
                     .collect::<Vec<_>>()
                     .join("\n")
             ),
+            mod_api::__private::ResolvePartsError::CauldronPairs(errors) => {
+                format!("Mod cauldron pairs refused: {errors:?}")
+            }
             mod_api::__private::ResolvePartsError::Parts(errors) => {
                 format!("Mod parts refused:\n{}", errors.join("\n"))
             }

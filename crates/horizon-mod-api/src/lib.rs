@@ -165,6 +165,11 @@ mod recipe_rule;
 pub use recipe_rule::{
     FireworkShape, FireworkShapeIngredient, RecipeRule, RecipeTemplate, RecipeTrimPattern,
 };
+mod cauldron_interaction;
+pub use cauldron_interaction::{
+    CauldronInteraction, CauldronInteractionContext, CauldronInteractionError, CauldronOutcome,
+    CauldronPrediction, CauldronPredictionContext, EffectError,
+};
 mod criteria;
 pub use criteria::{CriterionContext, CriterionTest, CriterionTestError, TriggerCriterionError};
 mod packets;

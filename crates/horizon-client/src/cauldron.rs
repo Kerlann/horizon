@@ -200,6 +200,25 @@ fn interactions() -> &'static [std::collections::HashMap<String, Action>; 4] {
     })
 }
 
+/// The vanilla dispatcher selected by a cauldron block.
+fn vanilla_kind(block: &str) -> Option<usize> {
+    match block {
+        "minecraft:cauldron" => Some(0),
+        "minecraft:water_cauldron" => Some(1),
+        "minecraft:lava_cauldron" => Some(2),
+        "minecraft:powder_snow_cauldron" => Some(3),
+        _ => None,
+    }
+}
+/// Whether this block belongs to the vanilla cauldron family.
+pub fn vanilla_block(block: &str) -> bool {
+    vanilla_kind(block).is_some()
+}
+/// Whether a vanilla cauldron dispatcher already owns this exact item pair.
+pub fn vanilla_pair(block: &str, item: &str) -> bool {
+    vanilla_kind(block).is_some_and(|kind| interactions()[kind].contains_key(item))
+}
+
 /// The cauldron interaction of the held item (`useItemOn`); the hand stack is
 /// changed through `player`. `removes_dye` is whether the held item is in the
 /// `cauldron_can_remove_dye` tag.
@@ -212,12 +231,8 @@ pub fn interact(
     let Some(held) = player.hand().clone() else {
         return pass();
     };
-    let kind = match cauldron.name.as_str() {
-        "minecraft:cauldron" => 0,
-        "minecraft:water_cauldron" => 1,
-        "minecraft:lava_cauldron" => 2,
-        "minecraft:powder_snow_cauldron" => 3,
-        _ => return pass(),
+    let Some(kind) = vanilla_kind(&cauldron.name) else {
+        return pass();
     };
     let level: u8 = cauldron
         .properties

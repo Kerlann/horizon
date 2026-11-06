@@ -75,6 +75,13 @@ fn insert_part<P: ?Sized>(
     true
 }
 
+#[derive(Clone)]
+struct CauldronEntry {
+    mod_id: &'static str,
+    mod_index: usize,
+    handler: Arc<dyn super::CauldronInteraction>,
+}
+
 /// Every mod's parts, by the id of the thing they are attached to, in dispatch order.
 #[derive(Clone, Default)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
@@ -88,6 +95,8 @@ pub struct Parts {
     block_entity_kinds: HashMap<Box<str>, Vec<Attached<dyn BlockEntityPart>>>,
     items: HashMap<Box<str>, Vec<Attached<dyn ItemPart>>>,
     menus: HashMap<Box<str>, Vec<Attached<dyn MenuPart>>>,
+    cauldrons: HashMap<Box<str>, HashMap<Box<str>, CauldronEntry>>,
+    cauldron_states: Vec<Option<Arc<HashMap<Box<str>, CauldronEntry>>>>,
     /// Capability providers by capability name, then by block entity type, in registration
     /// order.
     capabilities: Capabilities<BlockProviderOf>,
@@ -504,12 +513,26 @@ pub struct ItemKeyError {
     pub id: String,
 }
 
+/// A registered pair that duplicates a vanilla interaction.
+#[derive(Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct CauldronPairError {
+    /// Registering mod.
+    pub mod_id: &'static str,
+    /// Canonical block identity.
+    pub block: super::Identifier,
+    /// Canonical item identity.
+    pub item: super::Identifier,
+}
+
 /// Refusals at the Parts load boundary.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ResolvePartsError {
     /// An item key names no loaded item.
     ItemKeys(Vec<ItemKeyError>),
+    /// A registered cauldron pair collides with vanilla.
+    CauldronPairs(Vec<CauldronPairError>),
     /// Legacy block or item Part registration refusals.
     Parts(Vec<String>),
 }
@@ -525,6 +548,8 @@ pub struct KnownIds<'a> {
     pub state_count: usize,
     /// The block id of a block state, by state index.
     pub state_block: &'a dyn Fn(usize) -> &'a str,
+    /// Tests a canonical pair against the game's vanilla cauldron dispatcher.
+    pub vanilla_cauldron_pair: &'a dyn Fn(&str, &str) -> bool,
 }
 
 /// Resolve this thread's game's parts against its tags (`block_tags`, `item_tags`: flattened,
@@ -556,6 +581,28 @@ pub fn resolve_parts(
         return Err(ResolvePartsError::Parts(unknown));
     }
     let mut parts = installed.keys.clone();
+    let mut collisions = Vec::new();
+    for (block, entries) in &parts.cauldrons {
+        for (item, entry) in entries {
+            if (known.vanilla_cauldron_pair)(block, item) {
+                collisions.push(CauldronPairError {
+                    mod_id: entry.mod_id,
+                    block: super::Identifier::parse(block).expect("registered block id"),
+                    item: super::Identifier::parse(item).expect("registered item id"),
+                });
+            }
+        }
+    }
+    if !collisions.is_empty() {
+        return Err(ResolvePartsError::CauldronPairs(collisions));
+    }
+    let mut indexed = HashMap::new();
+    for (name, entries) in &parts.cauldrons {
+        indexed.insert(name.as_ref(), Arc::new(entries.clone()));
+    }
+    parts.cauldron_states = (0..known.state_count)
+        .map(|state| indexed.get((known.state_block)(state)).cloned())
+        .collect();
     add_tagged(
         &mut parts.blocks,
         &installed.tags.blocks,
@@ -684,6 +731,25 @@ impl HookParts {
 }
 
 impl Parts {
+    /// Whether any successfully registered pair owns this resolved block state.
+    pub fn cauldron_family_contains(&self, state: BlockStateId) -> bool {
+        self.cauldron_states
+            .get(state.0 as usize)
+            .is_some_and(Option::is_some)
+    }
+    /// Find a registered interaction by resolved state and borrowed item id.
+    pub fn cauldron_interaction(
+        &self,
+        state: BlockStateId,
+        item: &str,
+    ) -> Option<(&'static str, Arc<dyn super::CauldronInteraction>)> {
+        let entry = self
+            .cauldron_states
+            .get(state.0 as usize)?
+            .as_ref()?
+            .get(item)?;
+        super::mod_index_on(entry.mod_index).then(|| (entry.mod_id, entry.handler.clone()))
+    }
     pub(crate) fn for_hook(&self, hook: HookId) -> Option<&HookParts> {
         self.hooks.get(hook as usize).and_then(Option::as_ref)
     }
@@ -949,6 +1015,13 @@ pub trait Registrar {
     /// `LoadingValidationCallback`). A world's tickets of a controller no loaded mod registers are
     /// dropped when it loads.
     fn register_ticket_controller(&mut self, name: &str, validates: bool) -> TicketController;
+    /// Register a pair-specific cauldron interaction. Duplicate and vanilla pairs are refused at load.
+    fn register_cauldron_interaction(
+        &mut self,
+        block: super::BlockKey,
+        item: super::ItemKey,
+        handler: Arc<dyn super::CauldronInteraction>,
+    );
     /// Attach `part`, of kind `kind` (its type's name), to block `block`.
     fn attach_block_part(
         &mut self,
@@ -1370,6 +1443,40 @@ impl PartRegistrar {
 }
 
 impl Registrar for PartRegistrar {
+    fn register_cauldron_interaction(
+        &mut self,
+        block: super::BlockKey,
+        item: super::ItemKey,
+        handler: Arc<dyn super::CauldronInteraction>,
+    ) {
+        let keys = self.registry_keys.borrow();
+        let Some(block) = keys.blocks.id(block.0) else {
+            self.refused
+                .push(format!("mod {}: invalid block key", self.mod_id));
+            return;
+        };
+        let Some(item) = keys.items.id(item.0) else {
+            self.refused
+                .push(format!("mod {}: invalid item key", self.mod_id));
+            return;
+        };
+        let entries = self.parts.cauldrons.entry(block.into()).or_default();
+        if let Some(first) = entries.get(item) {
+            self.refused.push(format!(
+                "cauldron pair {block} / {item} registered by {} and {}",
+                first.mod_id, self.mod_id
+            ));
+            return;
+        }
+        entries.insert(
+            item.into(),
+            CauldronEntry {
+                mod_id: self.mod_id,
+                mod_index: self.mod_index,
+                handler,
+            },
+        );
+    }
     fn game_rule_category(&mut self, id: &str) -> Result<(), super::GameRuleError> {
         let result = (|| {
             let id = if id.contains(':') {
@@ -2023,6 +2130,7 @@ pub mod tests {
                     item: known,
                     state_count: 0,
                     state_block: &|_| unreachable!(),
+                    vanilla_cauldron_pair: &|_, _| false,
                 },
             )
         };
@@ -2091,6 +2199,7 @@ pub mod tests {
                 item: &|_| false,
                 state_count: states.len(),
                 state_block: &|i| states[i],
+                vanilla_cauldron_pair: &|_, _| false,
             },
         )
         .unwrap();
@@ -4102,6 +4211,7 @@ pub mod tests {
                     4 => "test:press",
                     _ => "minecraft:air",
                 },
+                vanilla_cauldron_pair: &|_, _| false,
             },
         )
     }
@@ -4261,6 +4371,7 @@ pub mod tests {
                 item: &|_| true,
                 state_count: 0,
                 state_block: &|_| unreachable!(),
+                vanilla_cauldron_pair: &|_, _| false,
             },
         )
         .unwrap_err();

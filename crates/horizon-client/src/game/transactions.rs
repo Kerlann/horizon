@@ -131,6 +131,18 @@ pub(super) enum DeferredEffect {
         volume: f32,
         pitch: f32,
     },
+    OwnedSound {
+        sound: String,
+        at: [f64; 3],
+        volume: f32,
+        pitch: f32,
+    },
+    Stat {
+        player: u128,
+        stat_type: mod_api::NativeStatType,
+        id: String,
+        amount: i32,
+    },
 }
 
 impl Level {
@@ -367,6 +379,20 @@ impl Game<'_> {
                     volume,
                     pitch,
                 } => self.audio.play(sound, Some(at), volume, pitch),
+                DeferredEffect::OwnedSound {
+                    sound,
+                    at,
+                    volume,
+                    pitch,
+                } => self.audio.play(&sound, Some(at), volume, pitch),
+                DeferredEffect::Stat {
+                    player,
+                    stat_type,
+                    id,
+                    amount,
+                } => {
+                    self.native_as_player(player, |g| g.award_stat(stat_type.path(), &id, amount));
+                }
             },
             // Only reached through a root commit, which sets the block itself.
             After::Block(_) => {}

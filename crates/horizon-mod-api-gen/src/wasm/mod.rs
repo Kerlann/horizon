@@ -46,6 +46,8 @@ pub(super) const IMPORTS: &[&str] = &[
     "ClientReloadListeners",
     "ServerReloadResources",
     "CriterionContext",
+    "CauldronInteractionContext",
+    "CauldronPredictionContext",
 ];
 
 /// Imported traits a call never hands over, each reached through another's method instead.
@@ -104,6 +106,7 @@ const EXPORTS: &[&str] = &[
     "ClientReloadListener",
     "PlaceProvider",
     "CriterionTest",
+    "CauldronInteraction",
 ];
 
 /// Every exported trait: [`EXPORTS`], then the handler traits `mod_api`'s capability keys name
