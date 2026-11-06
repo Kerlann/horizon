@@ -137,30 +137,37 @@ pub fn enabled(home: &Path) -> Vec<Mod> {
     out
 }
 
-fn hnmods(home: &Path) -> Vec<std::path::PathBuf> {
-    let mut paths: Vec<_> = fs::read_dir(home.join(native_mods::INSTALLED))
-        .map(|dir| dir.flatten().map(|e| e.path()).collect())
-        .unwrap_or_default();
-    paths.retain(|p| p.extension().is_some_and(|e| e == "hnmod"));
-    paths.sort();
-    paths
-}
-
-/// The native mods turned on in game folder `home` that pin Horizon commit `revision` (those naming
-/// a hook points' version follow the others, so they pin nothing).
+/// The native mods turned on in game folder `home` that pin Horizon commit `revision`.
 pub fn pinning(home: &Path, revision: &str) -> Vec<String> {
-    hnmods(home)
+    bundles_on(home)
         .into_iter()
-        .filter_map(|path| horizon_mods::index::native::Bundle::read(&path).ok())
-        .filter(|b| {
-            b.manifest
-                .native
-                .as_ref()
-                .is_some_and(|n| n.horizon == revision)
-        })
-        .filter(|b| java::is_enabled(home, &b.manifest.id))
+        .filter(|b| b.manifest.native.as_ref().expect("native bundle").horizon == revision)
         .map(|b| b.manifest.id)
         .collect()
+}
+
+/// The readable native mods turned on in game folder `home`.
+pub fn bundles_on(home: &Path) -> Vec<horizon_mods::index::native::Bundle> {
+    hmods(home)
+        .into_iter()
+        .filter_map(|path| horizon_mods::index::native::Bundle::read(&path).ok())
+        .filter(|b| java::is_enabled(home, &b.manifest.id))
+        .collect()
+}
+
+/// Paths declared by a native package, in manifest order.
+pub fn declared_internals(manifest: &horizon_mods::Manifest) -> Vec<String> {
+    manifest
+        .native
+        .as_ref()
+        .map(|native| {
+            native
+                .internals
+                .iter()
+                .map(|entry| entry.path.clone())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// A native file not tracked by the registry/browser, including GitHub installs.
@@ -169,6 +176,7 @@ pub struct Installed {
     pub file: String,
     pub id: String,
     pub version: String,
+    pub internals: Vec<String>,
     pub origin: Option<crate::github_mods::Origin>,
     /// The validated package icon, or the package error (the file remains removable).
     pub icon: Result<Option<Arc<horizon_mods::icon::Icon>>, String>,
@@ -192,10 +200,15 @@ pub fn untracked(home: &Path) -> Vec<Installed> {
             let origin = (path.file_stem()?.to_str()? == id)
                 .then(|| crate::github_mods::origin(home, &id))
                 .flatten();
+            let internals = package
+                .as_ref()
+                .map(|p| declared_internals(&p.manifest))
+                .unwrap_or_default();
             Some(Installed {
                 file,
                 id,
                 version,
+                internals,
                 origin,
                 icon: package.map(|p| p.icon.map(Arc::new)),
             })
@@ -380,10 +393,22 @@ mod tests {
             java::set_enabled(&home, id, true).unwrap();
         }
         assert_eq!(state(&enabled(&home), None), State::NotBuilt);
+        let mut pins = pinning(&home, &"a".repeat(40));
+        pins.sort();
+        assert_eq!(
+            pins,
+            ["github", "local", "registry"],
+            "fit reads the enabled flat packages, including a renamed local file"
+        );
+        assert!(pinning(&home, &"b".repeat(40)).is_empty());
         for id in ["registry", "github", "local"] {
             java::set_enabled(&home, id, false).unwrap();
         }
         assert_eq!(state(&enabled(&home), None), State::NoMods);
+        assert!(
+            bundles_on(&home).is_empty(),
+            "disabled packages pin nothing"
+        );
         assert_eq!(
             untracked(&home).len(),
             2,

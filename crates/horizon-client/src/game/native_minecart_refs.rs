@@ -216,6 +216,31 @@ impl Game<'_> {
     ) -> bool {
         self.native_minecart_edit(cart, Some(CartKind::Hopper), |c| c.enabled = enabled)
     }
+
+    /// A command block minecart's command (`MinecartCommandBlock.getCommandBlock().getCommand()`).
+    /// None for another kind of cart.
+    pub(super) fn native_minecart_command(&self, cart: MinecartRef) -> Option<String> {
+        let cart = self.native_minecart(cart)?;
+        (cart.kind == CartKind::CommandBlock).then(|| cart.command.command.clone())
+    }
+
+    /// Sets a command block minecart's command (`BaseCommandBlock.setCommand`, which resets the
+    /// success count), then `MinecartCommandBase.onUpdated`, as the edit screen's save does: the
+    /// synced command and last output follow, so clients' editors show the new command. The
+    /// output and its tracking are kept, and no chat note is sent. An activator rail then runs
+    /// the new command. False for another kind of cart.
+    pub(super) fn native_minecart_set_command(&mut self, cart: MinecartRef, command: &str) -> bool {
+        let Some(id) = self
+            .native_minecart(cart)
+            .filter(|c| c.kind == CartKind::CommandBlock)
+            .map(|c| c.id)
+        else {
+            return false;
+        };
+        self.native_minecart_edit(cart, None, |c| c.command.set_command(command));
+        self.cart_command_updated(id);
+        true
+    }
 }
 
 #[cfg(test)]
@@ -444,6 +469,27 @@ mod tests {
             );
             assert!(!rideable.set_hopper_enabled(game, false));
             assert_eq!(rideable.hopper_enabled(game), None);
+
+            // Command block: the write resets the success count and syncs the command and output
+            // for clients (`onUpdated`), and the cart then runs the new command.
+            let command = carts[5];
+            assert_eq!(command.command(game).as_deref(), Some(""));
+            game.carts[5].command.success_count = 3;
+            assert!(command.set_command(game, "gamerule mob_griefing false"));
+            assert_eq!(
+                command.command(game).as_deref(),
+                Some("gamerule mob_griefing false")
+            );
+            let cart = &game.carts[5];
+            assert_eq!(cart.command.success_count, 0);
+            assert_eq!(cart.synced_command, "gamerule mob_griefing false");
+            assert_eq!(cart.synced_output, cart.command.last_output_string());
+            let id = command.entity().id();
+            assert!(game.ui.rules.bool("mob_griefing"));
+            assert!(game.perform_cart_command(id));
+            assert!(!game.ui.rules.bool("mob_griefing"), "the new command ran");
+            assert!(!rideable.set_command(game, "say hi"));
+            assert_eq!(rideable.command(game), None);
 
             let stale = MinecartRef::new(EntityRef::new(
                 NativeWorldEpoch::new(rideable.entity().epoch().get() + 1),

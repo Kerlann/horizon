@@ -239,7 +239,14 @@ impl Game<'_> {
             d(i.pos[0]),
             d(i.pos[1]),
             d(i.pos[2]),
-            self.fixture_who(alive(i.source), names),
+            match i.source {
+                Some(horizon_client_core::who::EventSource::Entity(id))
+                    if self.level_entity(id as i32).is_some() =>
+                {
+                    names.get(&id).cloned().unwrap_or_else(|| format!("e{id}"))
+                }
+                source => self.fixture_who(alive(source.and_then(|s| s.actor())), names),
+            },
             self.fixture_who(alive(i.owner), names)
         )
     }
@@ -750,6 +757,23 @@ impl Game<'_> {
                         );
                     }
                     self.remember_mob_player_credit(id);
+                }
+                // Creeper.ignite: the next tick primes the fuse.
+                "ignite" | "ate" => {
+                    let id = sources
+                        .get(words[1][1..].parse::<usize>().unwrap_or(usize::MAX))
+                        .copied()
+                        .ok_or("no such mob")?;
+                    let mut events = Vec::new();
+                    if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
+                        if words[0] == "ignite" {
+                            m.extra.flag = true;
+                        } else {
+                            // Mob.ate.
+                            horizon_client::mobs::ai::ate(m, &mut events);
+                        }
+                    }
+                    self.handle_mob_events(events)?;
                 }
                 "set" => {
                     let n = |i: usize| words[i].parse::<i32>().unwrap_or(0);

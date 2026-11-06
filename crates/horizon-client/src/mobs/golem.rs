@@ -806,6 +806,27 @@ mod crack_sound_tests {
         k.max_health = 100.0;
         Mob::new(1, kind, Vec3::ZERO, 0.0)
     }
+    /// `LivingEntity.actuallyHurt`: absorbed damage from a player is credited in
+    /// tenths; other attackers and a hit with nothing absorbed credit nothing.
+    #[test]
+    fn player_hit_credits_dealt_absorbed() {
+        let mut test_level = crate::health::TestLevel::new(0);
+        let level = &mut test_level.level();
+        let mut m = golem();
+        m.absorption = 4.0;
+        assert!(m.damage(level, 1.5, Damage::player([0.0, 0.0, 1.0])));
+        assert_eq!(m.dealt_absorbed, 15);
+        m.invulnerable = 0;
+        assert!(m.damage(level, 10.0, Damage::player([0.0, 0.0, 1.0])));
+        assert_eq!(m.dealt_absorbed, 15 + 25);
+        m.invulnerable = 0;
+        m.damage(level, 2.0, Damage::player([0.0, 0.0, 1.0]));
+        assert_eq!(m.dealt_absorbed, 40);
+        let mut other = golem();
+        other.absorption = 4.0;
+        other.damage(level, 1.5, Damage::of(crate::mobs::DamageKind::Generic));
+        assert_eq!(other.dealt_absorbed, 0);
+    }
     /// One hit of `amount` past the golem's hurt frames: how often it played
     /// `entity.iron_golem.damage`.
     fn cracks(level: &mut crate::health::DamageLevel<'_>, m: &mut Mob, amount: f32) -> usize {

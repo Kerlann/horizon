@@ -104,7 +104,7 @@ impl Game<'_> {
     /// Each name tag this frame.
     fn name_tags(&self, camera: glam::DVec3, alpha: f64) -> Vec<NameTag> {
         let hooks = !mod_api::__private::mods().is_empty();
-        let target = self.mob_hit().map(|(i, _)| self.mobs[i].id);
+        let target = self.mob_hit().map(|(i, _, _)| self.mobs[i].id);
         let viewer = self.player_team();
         let mut tags = Vec::new();
         let players = self.other_players();
@@ -366,7 +366,7 @@ impl Game<'_> {
             .then(|| self.frame_hit())
             .flatten()
             .filter(|(_, distance)| {
-                self.before_block(*distance) && self.mob_hit().is_none_or(|(_, d)| d > *distance)
+                self.before_block(*distance) && self.mob_hit().is_none_or(|(_, d, _)| d > *distance)
             })
             .map(|(index, _)| index);
         let frames = if hooks {

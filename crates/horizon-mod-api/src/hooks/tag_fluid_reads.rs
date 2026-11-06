@@ -32,4 +32,19 @@ pub trait Helpers {
         target = "horizon_client::game::native_world_read::Game<'_>::native_level_fluid_state"
     )]
     fn level_fluid_state();
+    #[helper(
+        side = "both",
+        target = "horizon_client::game::native_world_read::Game<'_>::native_fluid_is_same"
+    )]
+    fn fluid_is_same();
+    #[helper(
+        side = "both",
+        target = "horizon_client::game::native_world_read::Game<'_>::native_fluid_bucket"
+    )]
+    fn fluid_bucket();
+    #[helper(
+        side = "both",
+        target = "horizon_client::game::native_world_read::Game<'_>::native_fluid_pickup_sound"
+    )]
+    fn fluid_pickup_sound();
 }

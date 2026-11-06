@@ -40,6 +40,42 @@ instance they are installed in.
 Villager handles preserve the full signed integer level (at least 1), including values above the
 five vanilla trade tiers. Higher levels use the master badge and do not gain further vanilla trades.
 
+## Server services and player handles
+
+Server hooks reach commands through `host.commands()`: `run_command(line)` uses
+console permission level 4 and the existing console command path, while
+`feedback(text)` answers the current command source. `host.messages()` provides
+`broadcast(text)` (including the broadcast hook and server log) and
+`text_allowed(text)` (the server chat filter).
+
+`host.players().server_players()` returns `Vec<PlayerRef>` in connection order;
+`host.players().acting_player()` returns the optional `PlayerRef` whose state is
+swapped in for this hook. The online list includes connected players even during
+nested player turns; a displaced body's reads still refuse where they did before.
+Read identity through `player.uuid()`, `player.name(host)`,
+`player.permission_level(host)` and `player.address(host)`. The address is the
+connection IP without a port (the forwarded address behind a Velocity proxy),
+empty for an acting player with no known connection. Name, permission and address
+reads retain connected identities during displacement and refuse stale handles.
+Use the entity and living handles for world-state reads.
+No snapshot of event data is returned by these services.
+
+Send to one player with `player.tell(host, text)`, `action_bar(host, text)` or
+`tab_list(host, header, footer)`. `set_nickname(host, nickname)`,
+`set_sleep_ignored(host, ignored)` and `hide(host, permission)` keep their existing
+server behavior. Messaging reaches the acting player and other connected players,
+including displaced online records; it refuses stale or disconnected identities.
+Vanish state is stored by UUID and can be changed with a retained handle after
+disconnection, until its world epoch closes. It cannot target arbitrary offline
+UUIDs; retain the handle value, not the borrowed service. Nickname and sleep
+writes still require an online player. The settings survive reconnects.
+
+These small services exist only on `ServerHost`, not `Host`, `ClientHost` or a
+restricted level host. Native and wasm mods use the same calls: service methods
+are generated imports, and acquiring a service just reborrows the current call's
+frame resource. Block and fluid scheduling stays on `LevelTicksHost`, and
+`tick_stats()` stays on `ServerHost`.
+
 ## Filtering toast notifications
 
 Implement `Hooks::toast_add` to filter a client notification before it enters its
@@ -163,6 +199,55 @@ a version. New parameters before the out-parameter, with the old ones kept in na
 binding names a parameter, and a trait mod's event gains fields; a test that calls the `dispatch_*` function passes them. Helpers (`native_text`, `native_player`…) have no hook entry; the catalog's `helpers` list names the ones
 the generated `Host` offers, and they are kept stable as the hook points are. A test (`catalog_matches_hook_points`) keeps the
 catalog and the hook points' sources (`native_hooks.rs`, `horizon-mod-api`'s `render.rs`, `horizon-world`'s `loot.rs`) in step.
+
+### State flags on the living handles
+
+`host.living(entity)` and `host.mob(entity)` make the handles of [#7387](../reference/hook-notes.md)'s handle design, and
+the state flags sit where vanilla keeps them: the ones `LivingEntity` owns read and write through `LivingRef`, the ones
+`Mob` owns through `MobRef`. Reads take the shared host, writes the server one; a stale handle or a kind the game keeps
+no such state for reads `None` and writes `false`, as every handle does.
+
+Through `LivingRef`: the glide (`is_gliding`, `gliding_ticks`, `stop_gliding`), the sleep of a server player or a
+villager (`is_sleeping`, `sleeping_pos`, `start_sleeping`, `stop_sleeping`, `set_sleeping_pos`, `clear_sleeping_pos`),
+the jump of the player in place (`is_jumping`, `set_is_jumping`), climbing (`is_climbing`, the same `onClimbable`
+movement uses, including the gliding exclusion for vines) and the baby read (`baby`). Server player sleep writes
+work for the integrated owner, LAN guests and dedicated-server guests in the level in place, both inside and
+outside their own turn; guests in another dimension and fake players refuse all four sleep writes without
+mutation. A suspended outer actor is unavailable during a nested turn. Glide counters and stops follow the
+same authoritative body across turns. These reads do not add client tracked-entity coverage.
+
+`start_sleeping` requires a bed with an available sleep shape before changing any state (a villager also refuses an
+occupied bed). It moves the sleeper onto that shape and occupies the bed. `stop_sleeping` stands the sleeper up
+beside the bed with the normal wake animation, teleport and pose sync; the usual level pass frees a player's bed.
+`set_sleeping_pos` and `clear_sleeping_pos` only change a player's sleeping position/pose, without moving them,
+occupying a bed or playing a wake animation. The next entity sync publishes the changed pose and bed to clients.
+Villagers use `start_sleeping`/`stop_sleeping`, not the raw player position setters.
+
+Through `MobRef`: `no_ai`/`set_no_ai` (`Mob.isNoAi` and `setNoAi`: the mob stands, saved as `NoAI`) and
+`set_baby` (`Mob.setBaby` through the canonical species-specific setup). Ageable mobs start at their species'
+baby age (`-48000` for a sniffer, otherwise `-24000`) or become adults at `0`, including the age-boundary
+attribute, navigation and AI changes. Their age is saved as `Age` where the kind saves one. Non-ageable babies,
+such as zombies and piglins, keep their non-growing baby state instead. A species with no baby form refuses
+`set_baby` without changing anything. Neither `set_baby` nor `set_no_ai` changes `PersistenceRequired`.
+
+The persistence pair `persistence_required`/`set_persistence_required` reads and sets `Mob.isPersistenceRequired`;
+vanilla gives that setter no way back. `requires_custom_persistence` is a separate despawn predicate
+(`Mob.requiresCustomPersistence` and its species overrides): passengers, leashes and species-specific reasons
+such as an enderman carrying a block. It is independent of `PersistenceRequired` and `NoAI`, not an alias for
+either flag. The separately modeled dragon has no such predicate and answers `None` to this query, even though
+its persistence flag can be read and set. A `/summon` and a spawn egg set their flags before the entity-join hook
+runs, so a mod's own write in that hook is what stays.
+
+### Client effect interpolation
+
+`LivingRef::effect_blend_factor(host, effect, partial)` reads the local player's client effect blend.
+A newly blended ordinary effect reads 0 before its first effect tick, then interpolates to its
+post-countdown target each client tick: 1 while active, 0 once expired. A finite effect that expires
+on its first tick never rises; an infinite effect still has the initial interpolation.
+An unblended addition starts at its target immediately; replacing an existing effect keeps its blend.
+Darkness and nausea use their existing longer fades. Pass the render partial tick unchanged: the read
+does not clamp it. A missing effect reads `Some(0.0)`; an unknown effect, stale handle or entity other
+than the local player reads `None`. Other visible entities' effect blends are not yet supported.
 
 ### The build's warnings
 
@@ -471,6 +556,11 @@ trusting native code is the player's decision, never an agent's.
    `/etc/os-release` (Debian, Ubuntu and Mint:
    `sudo apt install build-essential pkg-config libasound2-dev libudev-dev`). SteamOS has GCC without the C
    library's headers, and a read-only system: native builds don't work there yet.
+   On Windows, Smart App Control can block newly compiled build scripts or toolchain programs with
+   `os error 4551`. The launcher adds advice when it sees that error; it does not check the setting
+   before a build. To build after a block, Windows Security > App & browser control > Smart App Control
+   settings offers an off switch. On some Windows versions, turning it back on requires reinstalling
+   Windows. Content mods need no build and work with Smart App Control on.
    `horizon-launcher rust status|install|remove`.
 2. **horizon-mixins**, at the exact commit the mods name (`[native] mixins` in `horizon-mod.toml`),
    built once with that cargo (`cargo install --locked --git … --rev …`) into `native/tools/<commit>/`.

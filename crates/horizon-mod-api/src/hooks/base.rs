@@ -43,6 +43,16 @@ pub trait Hooks {
         cancellable = false
     )]
     fn server_about_to_start();
+    /// Fired once immediately after `server_about_to_start`, before the server
+    /// accepts play, on both integrated and dedicated servers. A failed startup
+    /// still reaches `server_stopped`.
+    #[hook(
+        side = "server",
+        contract = "listen",
+        neoforge = "ServerStartingEvent",
+        cancellable = false
+    )]
+    fn server_starting();
     /// The server has opened its worlds and is about to run its tick loop
     /// (NeoForge's `ServerStartedEvent`): every level is loaded, no player has
     /// joined, and the first tick has not run. Fired where `WorldOpenReady` was,
@@ -56,12 +66,13 @@ pub trait Hooks {
         cancellable = false
     )]
     fn server_started();
-    /// The server begins an orderly stop (NeoForge's `ServerStoppingEvent`):
+    /// The server begins teardown (NeoForge's `ServerStoppingEvent`), including
+    /// after startup or the tick loop failed:
     /// the start of vanilla's `MinecraftServer.stopServer`, with the worlds
     /// still loaded and the players still connected and not yet saved, so a
     /// mod can save its own data or tell them. `native_world_lifecycle`'s
     /// `WorldCloseFinal` follows once the worlds are saved. A server whose loop
-    /// fails stops without this (`WorldCloseFailed` reports it).
+    /// fails still fires this before the final save attempt and `server_stopped`.
     #[hook(
         side = "server",
         contract = "listen",
@@ -70,6 +81,20 @@ pub trait Hooks {
         cancellable = false
     )]
     fn server_stopping();
+    /// Fired once at the end of server teardown, after `server_stopping` and
+    /// the final save attempt and storage release. Also fired when startup or
+    /// teardown fails after startup began, including when a shutdown listener
+    /// panics, on integrated and dedicated servers.
+    /// Failed opens save only worlds already adopted by the server (the prepared
+    /// level is installed; the session lock alone is not adoption). A failed
+    /// save still reaches this hook, but does not emit `WorldCloseFinal`.
+    #[hook(
+        side = "server",
+        contract = "listen",
+        neoforge = "ServerStoppedEvent",
+        cancellable = false
+    )]
+    fn server_stopped();
     /// The authoritative server tick's phases: `ServerTickStart` before any
     /// level is ticked (NeoForge's `ServerTickEvent.Pre`), `ServerTickEnd`
     /// after the last (`.Post`). Read blocks with `native_server_block`, by
@@ -361,7 +386,7 @@ pub trait Hooks {
     /// without its slash, for a command a mod registered and the player's
     /// level allows: set `ran` when it is yours. The player's state is
     /// swapped in for the call, so `native_player` and the other helpers
-    /// read that player; `native_feedback` answers them. A single player's
+    /// read that player; `host.commands().feedback()` answers them. A single player's
     /// owner console (`horizon-ctl command`) reaches it too, as the owner at
     /// level 4.
     #[hook(side = "server", contract = "cancel", out = "ran")]
@@ -534,7 +559,7 @@ pub trait Hooks {
     /// A player fills (`stack` an empty bucket) or empties a bucket at `pos`:
     /// `BucketItem.use`, where it asks `Level.mayInteract`. Set `canceled`
     /// and the bucket does nothing. Server-side, for every player of the
-    /// world (`native_acting_player` says who).
+    /// world (`host.players().acting_player()` says who).
     #[hook(side = "server", contract = "cancel", out = "canceled")]
     fn fill_bucket();
     /// A player attacks the entity `entity` (`Entity.getId`) of type `kind`
@@ -542,7 +567,7 @@ pub trait Hooks {
     /// at `pos`: `ServerGamePacketListenerImpl.handleInteract`'s attack, once
     /// in reach, where `Player.attack` starts. Set `canceled` and the blow
     /// does nothing (no damage, no knockback, the frame keeps its item).
-    /// Server-side, for every player of the world (`native_acting_player`
+    /// Server-side, for every player of the world (`host.players().acting_player()`
     /// says who).
     #[hook(side = "server", contract = "cancel", out = "canceled")]
     fn attack_entity();
@@ -670,13 +695,21 @@ pub trait Hooks {
     /// every player of the world (the helpers read the acting one).
     #[hook(side = "server", contract = "cancel", out = "canceled")]
     fn left_click_block();
-    /// A living player's server tick ends (`ServerPlayer.tick`): once a tick
-    /// for every player in the world, after their digging, item use,
-    /// cooldowns, statistics and advancements. The helpers read that player.
-    /// Players still tick under `/tick freeze`; a dead player doesn't, nor
-    /// does one killed earlier in the same tick.
-    #[hook(side = "server", contract = "listen")]
-    fn player_tick();
+    /// Before a player's tick on both logical sides (NeoForge 26.3
+    /// `PlayerTickEvent.Pre`). Non-cancellable, including death-screen ticks.
+    /// `player` identifies the ticked player; on the server their state is
+    /// acting. Fires before sleep, cooldowns and body work. Players still tick
+    /// under `/tick freeze`, but not while the level is paused.
+    #[hook(side = "both", contract = "listen", neoforge = "PlayerTickEvent.Pre")]
+    fn player_tick_pre(player: PlayerRef);
+    /// After a player's tick on both logical sides (NeoForge 26.3
+    /// `PlayerTickEvent.Post`). Non-cancellable, including death-screen ticks.
+    /// `player` is the same identity as in `player_tick_pre`; on the server
+    /// their state is acting. Runs after body work and server-side item,
+    /// arrow and XP pickups, so reads see the completed tick. Client reads
+    /// see only the state available to that client, not future server updates.
+    #[hook(side = "both", contract = "listen", neoforge = "PlayerTickEvent.Post")]
+    fn player_tick_post(player: PlayerRef);
     /// An entity joins the server level `dimension` (NeoForge's
     /// `EntityJoinLevelEvent`): vanilla's `PersistentEntitySectionManager.addEntity`.
     /// `loaded_from_disk` is true for an entity coming back with its chunk,
@@ -701,7 +734,9 @@ pub trait Hooks {
     /// invulnerable or dead entity, fire on a fire-resistant one), is about to hurt entity
     /// `entity` of type `kind` (`minecraft:zombie`, `minecraft:player`) by `source`: its damage
     /// type (`minecraft:fall`), causing entity (`DamageSource.getEntity`: the shooter of an
-    /// arrow), direct entity (`getDirectEntity`: the arrow), 0 for none or not known, and
+    /// arrow), direct entity (`getDirectEntity`: the projectile's entity id when the
+    /// damage type names one, on a player, mob or ender dragon; 0 for `magic()` and any
+    /// other source with no direct entity, even during that projectile's impact), and
     /// where it comes from (`getSourcePosition`). `victim` is where the entity stands and
     /// looks, and `weapon` the direct entity's weapon (`getWeaponItem`) when it is known.
     /// `container` holds the damage before any reduction: change its `new_damage`, or the
@@ -761,7 +796,7 @@ pub trait Hooks {
     /// `MobEffect.applyEffectTick`: the content mod's effect `effect` acts on
     /// `entity` in `dimension` (`minecraft:overworld`). Clear `keep` and the
     /// effect ends now, before it counts down. `entity` is a mob's
-    /// `Entity.getId`, None for a player (`native_acting_player` says who).
+    /// `Entity.getId`, None for a player (`host.players().acting_player()` says who).
     /// It runs inside the entity's tick: a mob's world borrows the game
     /// there, so the game is read-only, and it does not hold the ticking
     /// mobs, nor the player's effects. `holder` identifies the holder; Host
@@ -818,14 +853,14 @@ pub trait Hooks {
     fn chunk_unload();
     /// `player` (`name`) joined the game (NeoForge's
     /// `PlayerLoggedInEvent`): placed in the world and listed in
-    /// `native_server_players`, so `native_net_send_to_player` reaches them.
+    /// `host.players().server_players()`, so `native_net_send_to_player` reaches them.
     /// Once a join, with no player's state swapped in. Server-side.
     #[hook(side = "server", contract = "listen")]
     fn player_logged_in();
     /// `player` (`name`) left the game (NeoForge's `PlayerLoggedOutEvent`), by
     /// any path: a lost connection, a kick, the server stopping or failing.
     /// Once for each player `native_player_logged_in` told of. They've already
-    /// left `native_server_players`, except when the server stops, which tells
+    /// left `host.players().server_players()`, except when the server stops, which tells
     /// before it saves, with them still listed and able to get a last message.
     /// Server-side.
     #[hook(side = "server", contract = "listen")]
@@ -1313,7 +1348,7 @@ pub trait Hooks {
     /// NeoForge's `LivingEntityUseItemEvent.Start`: `entity` starts using
     /// `stack` in `hand` (`LivingEntity.startUsingItem`), for `duration`
     /// ticks (`native_use_duration`'s answer). `entity` is a mob's
-    /// `Entity.getId`, None for a player (`native_acting_player` says who);
+    /// `Entity.getId`, None for a player (`host.players().acting_player()` says who);
     /// only players fire it so far. Change `duration` (consumables, potions,
     /// spyglasses and mods' items count to it; below 0 refuses the use, and
     /// 0 runs it out on its first tick, as `native_living_entity_use_item_tick`
@@ -1383,7 +1418,7 @@ pub trait Hooks {
     /// `canceled` to stop it: nothing runs and nothing is answered but the
     /// lines pushed to `replies`, which go to the player as system chat.
     /// No player's state is swapped in and the server's player list is busy
-    /// with this one, so `native_tell` and the other helpers that take a UUID
+    /// with this one, so `PlayerRef::tell` and the other player helpers
     /// reach nobody here: answer through `replies`. Once for each command a
     /// player sends, on a server, and for each line of a quiet command batch
     /// (`horizon:quiet_commands`, whose replies are dropped). A command the
@@ -1401,8 +1436,8 @@ pub trait Hooks {
     /// or sent through `horizon-server console`
     /// (`DedicatedServer.handleConsoleInputs`), without its slash: set `ran`
     /// when it is yours. There is no player: the source is the console, at
-    /// permission level 4, so `native_acting_player` is None and the
-    /// player-only helpers give nothing; `native_feedback` answers on the
+    /// permission level 4, so `host.players().acting_player()` is None and the
+    /// player-only helpers give nothing; `host.commands().feedback()` answers on the
     /// console. A name no mod registered goes to vanilla's dispatcher as
     /// before.
     #[hook(side = "server", contract = "cancel", out = "ran")]
@@ -2334,7 +2369,7 @@ pub trait Hooks {
     /// afterwards). Rewrite `lines` (made four lines again) and that is what
     /// the sign gets, without a second look from the chat filter, or set
     /// `cancel` and the sign keeps its old text. With the player's state
-    /// swapped in, so `native_tell` and the helpers that act on the player
+    /// swapped in, so `PlayerRef::tell` and the helpers that act on the player
     /// reach them. Once for each update a player sends on a server. Not told:
     /// the host's own editing of a sign on a LAN or single-player world
     /// (the editor writes into their world directly), and the sign changes
@@ -2413,7 +2448,7 @@ pub trait Hooks {
     /// A player's client started (`flying`) or stopped flying (vanilla's
     /// `handlePlayerAbilities`, which honours it only for a player who may
     /// fly: creative or spectator), heard once for each change, on a server,
-    /// with the player's state swapped in, so `native_tell` and the other
+    /// with the player's state swapped in, so `PlayerRef::tell` and the other
     /// helpers reach them. The player is already flying or not as asked, as
     /// vanilla leaves them; set `cancel` to refuse it: they keep the state
     /// they had and the server sends their abilities back, as vanilla does
@@ -2654,7 +2689,7 @@ pub trait Hooks {
     /// value that is not a number ignored), and the game still looks down
     /// from it for ground it may land on. Canceling ends the effect: no teleport and no
     /// more attempts. The player's state is swapped in
-    /// (`native_acting_player`). Foxes are not heard. Diverges from upstream: renamed from
+    /// (`host.players().acting_player()`). Foxes are not heard. Diverges from upstream: renamed from
     /// `chorus_fruit_teleport`.
     #[hook(
         side = "server",
@@ -2748,7 +2783,7 @@ pub trait Hooks {
     /// `damage` (0 or less: none). Canceling
     /// keeps the player where they are: no endermite roll, no teleport, no
     /// damage and no sound; the pearl is used up either way. The player's
-    /// state is swapped in (`native_acting_player`). The hit itself is
+    /// state is swapped in (`host.players().acting_player()`). The hit itself is
     /// heard by `native_projectile_impact`.
     #[hook(
         side = "server",
@@ -3167,7 +3202,7 @@ pub trait Hooks {
     /// longer valid, nor during a drag.
     /// Asked once per click, where vanilla asks `quickMoveStack` again while
     /// it keeps moving the same item. The player's state is swapped in, so
-    /// `native_acting_player` names them; `entity` is out of the world
+    /// `host.players().acting_player()` names them; `entity` is out of the world
     /// during the call, as in `native_menu_button`.
     #[hook(
         side = "server",
@@ -3231,7 +3266,7 @@ pub trait Hooks {
     /// empties `minecraft:water`): where `BucketItem.use` has found the block
     /// the fluid goes into and the player may build there, right before it is
     /// placed. Set `cancel` and nothing is poured and the bucket stays full.
-    /// The player's state is swapped in, so `native_tell` answers them. Only
+    /// The player's state is swapped in, so `PlayerRef::tell` answers them. Only
     /// for guests of a server. `native_fill_bucket` hears this click too (and
     /// the filling one) without the player and the fluid. Not heard: a
     /// dispenser, a cauldron, and a fluid a block places itself.
@@ -3254,7 +3289,7 @@ pub trait Hooks {
     /// spectator) and before the menu that was open closes. Set `cancel` and
     /// nothing opens: the open menu stays as it was and the click is spent.
     /// The player's state is swapped in for the call, as for
-    /// `native_perform_command`, so `native_acting_player`, `native_tell` and
+    /// `native_perform_command`, so `host.players().acting_player()`, `PlayerRef::tell` and
     /// the item helpers reach them. Not heard: a menu a mod opens
     /// (`native_open_menu`), the inventory screen, and the editors (sign,
     /// book, command block). Server-side, for every player of the world.
@@ -3275,8 +3310,8 @@ pub trait Hooks {
     /// packet passed vanilla's checks (a creative player, a real slot, a valid
     /// stack) and before the slot changes or the stack drops. Set `cancel`
     /// and the packet is ignored. The player's state is swapped in for the
-    /// call, as for `native_perform_command`, so `native_acting_player`,
-    /// `native_tell` and the item helpers reach them. Not heard: stacks a
+    /// call, as for `native_perform_command`, so `host.players().acting_player()`,
+    /// `PlayerRef::tell` and the item helpers reach them. Not heard: stacks a
     /// creative player gets other ways (middle-click pick block, `/give`).
     /// Server-side, for every player of the world.
     #[hook(
@@ -3294,8 +3329,8 @@ pub trait Hooks {
     /// included. Heard once for the change a player's turn made as a whole, so
     /// two changes in one tick arrive as one. Not heard: the full food bar a
     /// respawn gives, the food a player joins with and the host of a LAN
-    /// world. The player's state is swapped in, so `native_acting_player`,
-    /// `native_tell` and the item helpers reach them. On a server.
+    /// world. The player's state is swapped in, so `host.players().acting_player()`,
+    /// `PlayerRef::tell` and the item helpers reach them. On a server.
     #[hook(
         side = "server",
         contract = "cancel",
@@ -3306,7 +3341,7 @@ pub trait Hooks {
     /// An item frame (`minecraft:item_frame`, `minecraft:glow_item_frame`) or
     /// a painting (`minecraft:painting`), `kind` its entity type and `pos` the
     /// block it hangs in, is about to break: a server player's hit
-    /// (`player`, their state swapped in, so `native_tell` answers them), a
+    /// (`player`, their state swapped in, so `PlayerRef::tell` answers them), a
     /// blast, or the wall it hangs on gone (`player` None for both). Where
     /// `BlockAttachedEntity.hurtServer` and its survival check would kill
     /// it, before anything drops or sounds. Set `cancel` and it stays, as it
@@ -3328,7 +3363,7 @@ pub trait Hooks {
     /// `HangingEntityItem.useOn` and `LeadItem.useOn` create it, once it is
     /// known to fit and before anything is placed or used up. Set `cancel`
     /// and nothing is placed: the item stays in the player's hand. The
-    /// player's state is swapped in, so `native_tell` answers them. Only for
+    /// player's state is swapped in, so `PlayerRef::tell` answers them. Only for
     /// guests of a server; `/summon`, a dispenser and the game's own player
     /// are not heard, nor is a lead tied to a mob or a boat.
     #[hook(
@@ -3346,7 +3381,7 @@ pub trait Hooks {
     /// is not heard for a creative player's tools (they take no wear) nor when
     /// Unbreaking already saved the item, nor for the wear of a mob's armour or
     /// of a tool a dispenser uses, nor the host of a LAN world. The player's
-    /// state is swapped in, so `native_acting_player`, `native_tell` and the
+    /// state is swapped in, so `host.players().acting_player()`, `PlayerRef::tell` and the
     /// item helpers reach them. Once for each wear, on a server.
     #[hook(
         side = "server",
@@ -3364,8 +3399,8 @@ pub trait Hooks {
     /// death's is placed for good (a bed or anchor, or the world spawn's
     /// free column, after the fallback when a respawn block was gone). The
     /// level of `to` is the one in place, and the player's state is swapped
-    /// in, as for `native_perform_command`: `native_acting_player`,
-    /// `native_tell`, the item helpers and the rest reach them. Heard for:
+    /// in, as for `native_perform_command`: `host.players().acting_player()`,
+    /// `PlayerRef::tell`, the item helpers and the rest reach them. Heard for:
     /// Nether and End portals (also riding a vehicle, and leaving the End as
     /// its winner), `/execute in ... run tp` and any other command that
     /// teleports a player into another level, and the death respawn. Not
@@ -3402,7 +3437,7 @@ pub trait Hooks {
     /// highlights it. This hides the command from the client only: the
     /// server still runs a typed one, `native_player_command` stops it.
     /// For a player who is already on, their state is swapped in and the
-    /// helpers (`native_tell`...) work; for one who is joining it is not, and
+    /// helpers (`PlayerRef::tell`...) work; for one who is joining it is not, and
     /// their client has no world to tell yet. The tree the hub sends again by
     /// itself (after a respawn or a change of level) keeps the last answer
     /// and does not ask again; the integrated server's owner is not asked
@@ -3431,7 +3466,7 @@ pub trait Hooks {
     /// a reel-in (2 to 4) nothing happens, the bobber stays out and the rod
     /// takes no wear. The bobber ending by itself (too far, the rod put
     /// away, the owner dying), nor the host of a LAN world's rod. The
-    /// player's state is swapped in, so `native_acting_player`, `native_tell`
+    /// player's state is swapped in, so `host.players().acting_player()`, `PlayerRef::tell`
     /// and the item helpers reach them. Once for each cast, bite and reel-in,
     /// on a server.
     #[hook(
@@ -3521,7 +3556,7 @@ pub trait Hooks {
     /// join message, `native_player_logged_in`) happens. Once for each player
     /// who joins, on a server. The player is not placed yet and their client
     /// has no world to show a message in, so no player's state is swapped in
-    /// and `native_tell` reaches nobody: the refusal `reason` is the answer.
+    /// and `PlayerRef::tell` reaches nobody: the refusal `reason` is the answer.
     /// The checks that need no mod (name, whitelist, bans, a full server,
     /// the proxy's forwarding) refuse earlier, on the connection, and this
     /// hook does not hear those players.
@@ -3561,7 +3596,7 @@ pub trait Hooks {
     /// changes. It cannot be stopped, and it hears what the client asks, not
     /// what the server does: a sprint that ends by itself (a hit's knockback,
     /// hunger, a wall) is not reported. The player's state is swapped in, so
-    /// the helpers and `native_tell` work. Once for each change, on a server.
+    /// the helpers and `PlayerRef::tell` work. Once for each change, on a server.
     #[hook(side = "server", contract = "listen")]
     fn player_sprint();
     /// `player` (`name`) pressed the swap-hands key: heard before the main and
@@ -3570,7 +3605,7 @@ pub trait Hooks {
     /// `PlayerSwapHandItemsEvent`), not for a spectator. Set `cancel` to keep
     /// the items where they are: the player's client, which swapped them at
     /// once, gets its slots back. The player's state is swapped in, so
-    /// `native_acting_player`, `native_tell` and the item helpers reach them.
+    /// `host.players().acting_player()`, `PlayerRef::tell` and the item helpers reach them.
     /// Once for each press, on a server. Not heard: the same swap made in an
     /// open inventory (hovering a slot and pressing the key, a menu click) and
     /// the host of a LAN world.
@@ -3596,7 +3631,7 @@ pub trait Hooks {
     /// has reached the player's state and their client (an inter-level
     /// teleport: when the new level is entered, before it has loaded around
     /// them), so it cannot stop it. The player's state is swapped in, so the
-    /// helpers that read the acting player and `native_tell` work. Once for
+    /// helpers that read the acting player and `PlayerRef::tell` work. Once for
     /// each teleported player, on a server. Ender pearls and chorus fruit
     /// have their own hooks; a spectator's teleport menu is not heard yet;
     /// portals and respawns are not teleports here.
@@ -3613,7 +3648,7 @@ pub trait Hooks {
     /// effects apply. Listen only: whether the totem saves is decided inside
     /// the health state machine, before a mod is asked, so a mod cannot veto
     /// it from here. The player's state is swapped in, so
-    /// `native_acting_player`, `native_tell` and the item helpers reach them.
+    /// `host.players().acting_player()`, `PlayerRef::tell` and the item helpers reach them.
     /// Once for each totem, on a server; the host of a LAN world's totem is
     /// not heard.
     #[hook(
@@ -3627,7 +3662,7 @@ pub trait Hooks {
     /// successfully loaded, 1 declined, 2 failed download, 3 accepted, 4
     /// downloaded, 5 invalid URL, 6 failed reload, 7 discarded. Heard when the
     /// packet arrives, after the server has handled it; it cannot be stopped.
-    /// The player's state is swapped in, so the helpers and `native_tell`
+    /// The player's state is swapped in, so the helpers and `PlayerRef::tell`
     /// work. The pack a dedicated server offers in the configuration
     /// (`resource-pack` in `server.properties`) is answered before the
     /// player has joined, and those answers are not heard. Once for each
@@ -3644,7 +3679,7 @@ pub trait Hooks {
     /// TNT at `pos` is about to be lit (primed): a flint and steel or a fire
     /// charge on it, fire burning it, a redstone signal, an arrow, or a
     /// dispenser's flint and steel or TNT item. `player` is the server player
-    /// whose click lit it, with their state swapped in (so `native_tell`
+    /// whose click lit it, with their state swapped in (so `PlayerRef::tell`
     /// answers them), None when no player is behind it (fire, redstone, an
     /// arrow, a dispenser). Set `cancel` and it is not primed: a TNT block
     /// stays where it is (one that fire or a signal had already taken out is
@@ -3691,7 +3726,7 @@ pub trait Hooks {
     /// tick (`VehicleMoveEvent`): `from` and `to` are its positions, heard
     /// after the tick moved it. Once a tick for each vehicle that carries a
     /// server player, whose state is then swapped in (as for
-    /// `native_perform_command`: `native_acting_player`, `native_tell` and
+    /// `native_perform_command`: `host.players().acting_player()`, `PlayerRef::tell` and
     /// the item helpers reach them; `player` is their UUID), and for one a
     /// server player rode and left, until it has stood still for ten
     /// seconds (`player` is none, nobody is swapped in). It only hears.
@@ -3725,9 +3760,8 @@ pub trait Hooks {
     )]
     fn player_advancement_done();
     /// A criterion of a server player's advancement was granted or revoked, after its progress changed
-    /// and before any completion rewards, except the `minecraft:tick` criteria granted on a network
-    /// player's first tick or a reload, which are heard after that tick's rewards and packets (tracked
-    /// on #29). A grant or revoke that changes nothing is not heard. The full advancement progress is
+    /// and before any completion rewards. A grant or revoke that changes nothing is not heard.
+    /// The full advancement progress is
     /// not yet exposed (tracked on #29).
     #[hook(
         side = "server",
@@ -4293,7 +4327,7 @@ pub trait Hooks {
     /// `special_price_diff`, `price_multiplier`, `xp`. The change stands: the
     /// next click and the offers sent to the player see it. Not asked for a
     /// trade window without a trader. The player's state is swapped in
-    /// (`native_acting_player`). Server-side. Version 2: was a listen hook
+    /// (`host.players().acting_player()`). Server-side. Version 2: was a listen hook
     /// returning the offer read-only; now collects the live offer as `out`
     /// (the moment upstream's separate `merchant_offer_traded` covered).
     #[hook(
@@ -4494,24 +4528,43 @@ pub trait Helpers {
     fn summon();
     #[helper(
         side = "server",
+        service = "players",
         target = "horizon_client::game::native_server::Game<'_>::native_server_players"
     )]
     fn server_players();
+    /// The connection IP without its port (the forwarded address behind a Velocity proxy),
+    /// including displaced connected players. Empty for an acting player with no known
+    /// connection; None for a stale or unavailable player.
     #[helper(
         side = "server",
-        target = "horizon_client::game::native_server::Game<'_>::native_tell"
+        receiver = "player",
+        target = "horizon_client::game::native_server::Game<'_>::native_player_address"
     )]
-    fn tell();
+    fn player_address();
     #[helper(
         side = "server",
-        target = "horizon_client::game::native_server::Game<'_>::native_action_bar"
+        receiver = "player",
+        target = "horizon_client::game::native_server::Game<'_>::native_player_name"
     )]
-    fn action_bar();
+    fn player_name();
     #[helper(
         side = "server",
-        target = "horizon_client::game::native_server::Game<'_>::native_tab_list"
+        receiver = "player",
+        target = "horizon_client::game::native_server::Game<'_>::native_player_tell"
     )]
-    fn tab_list();
+    fn player_tell();
+    #[helper(
+        side = "server",
+        receiver = "player",
+        target = "horizon_client::game::native_server::Game<'_>::native_player_action_bar"
+    )]
+    fn player_action_bar();
+    #[helper(
+        side = "server",
+        receiver = "player",
+        target = "horizon_client::game::native_server::Game<'_>::native_player_tab_list"
+    )]
+    fn player_tab_list();
     #[helper(
         side = "server",
         target = "horizon_client::game::native_server::Game<'_>::native_tick_stats"
@@ -4519,36 +4572,43 @@ pub trait Helpers {
     fn tick_stats();
     #[helper(
         side = "server",
-        target = "horizon_client::game::native_server::Game<'_>::native_sleep_ignored"
+        receiver = "player",
+        target = "horizon_client::game::native_server::Game<'_>::native_player_set_sleep_ignored"
     )]
-    fn sleep_ignored();
+    fn player_set_sleep_ignored();
     #[helper(
         side = "server",
-        target = "horizon_client::game::native_server::Game<'_>::native_set_nickname"
+        receiver = "player",
+        target = "horizon_client::game::native_server::Game<'_>::native_player_set_nickname"
     )]
-    fn set_nickname();
+    fn player_set_nickname();
     #[helper(
         side = "server",
+        service = "messages",
         target = "horizon_client::game::native_server::Game<'_>::native_text_allowed"
     )]
     fn text_allowed();
     #[helper(
         side = "server",
+        service = "messages",
         target = "horizon_client::game::native_server::Game<'_>::native_broadcast"
     )]
     fn broadcast();
     #[helper(
         side = "server",
+        service = "commands",
         target = "horizon_client::game::native_server::Game<'_>::native_feedback"
     )]
     fn feedback();
     #[helper(
         side = "server",
+        service = "players",
         target = "horizon_client::game::native_server::Game<'_>::native_acting_player"
     )]
     fn acting_player();
     #[helper(
         side = "server",
+        service = "commands",
         target = "horizon_client::game::native_server::Game<'_>::native_run_command"
     )]
     fn run_command();
@@ -4581,8 +4641,6 @@ pub trait Helpers {
         target = "horizon_client::game::native_biome_colors::Game<'_>::native_refresh_biome_colors"
     )]
     fn refresh_biome_colors();
-    #[helper(side = "both")]
-    fn day_time();
     #[helper(side = "both")]
     fn max_stack_size();
     #[helper(side = "client")]
@@ -4641,6 +4699,21 @@ pub trait Helpers {
     fn block_entity_sync();
     #[helper(side = "client")]
     fn play_local_sound();
+    /// How many particles the client's level has alive (`ParticleEngine.countParticles`): every
+    /// live group, item pickups, firework starters and the elder guardian apparition included.
+    /// Queued particles (including starters and apparitions before their first particle tick)
+    /// and emitters are not counted. 0 once `clear_particles` was asked, and on a server.
+    #[helper(side = "client")]
+    fn particle_count();
+    /// Removes every particle, queued particle and emitter of the client's level
+    /// (`ParticleEngine.clearParticles`), item pickups, firework starters and the elder guardian
+    /// apparition included. It takes `&self`, so a screen or render hook can ask: the clear
+    /// lands before the next frame is drawn or the next particle tick, whichever comes first,
+    /// paused or not. HUD, screen, fog and geometry callbacks clear before that frame's particle
+    /// draws and colored particle lights; a request during particle extraction discards that
+    /// extraction too. Unrelated entity geometry and item/mod lights stay. False on a server.
+    #[helper(side = "client")]
+    fn clear_particles();
     #[helper(side = "client")]
     fn fill();
     #[helper(side = "client")]
@@ -4726,9 +4799,10 @@ pub trait Helpers {
     fn dimension();
     #[helper(
         side = "server",
-        target = "horizon_client::game::native_server::Game<'_>::native_hide_player"
+        receiver = "player",
+        target = "horizon_client::game::native_server::Game<'_>::native_player_hide"
     )]
-    fn hide_player();
+    fn player_hide();
     #[helper(side = "client")]
     fn item_stack();
     #[helper(side = "client")]

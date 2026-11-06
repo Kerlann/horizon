@@ -13,4 +13,10 @@ pub trait Helpers {
         target = "horizon_client::game::native_entity_remove::Game<'_>::native_entity_remove"
     )]
     fn entity_remove();
+    #[helper(
+        side = "server",
+        receiver = "entity",
+        target = "horizon_client::game::native_entity_remove::Game<'_>::native_entity_spawn_at_location"
+    )]
+    fn entity_spawn_at_location();
 }

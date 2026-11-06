@@ -73,11 +73,13 @@ impl Game<'_> {
                     .trigger_event(a, b);
             }
             Some(Ticker::Shulker { .. }) => {
-                self.be_anims
-                    .shulkers
-                    .entry(pos)
-                    .or_default()
-                    .trigger_event(a, b);
+                let shulker = self.be_anims.shulkers.entry(pos).or_default();
+                if shulker.trigger_event(a, b) {
+                    // Diverges from upstream: collision/support queries use a
+                    // snapshot. Publish this status change before entity hooks,
+                    // rather than waiting for tick_block_entities' full sync.
+                    self.world.shulkers.insert(pos, shulker.clone());
+                }
             }
             Some(Ticker::Bell) => {
                 let gathered = self.bell_gather(pos);

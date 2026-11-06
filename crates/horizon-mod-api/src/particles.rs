@@ -1,6 +1,23 @@
 //! Moved here from the game so mods can name it.
 #[allow(unused_imports)]
 use crate::*;
+
+/// The listener of a vibration signal (`VibrationParticleOption`), independent
+/// of its resolved rendering destination and of the network protocol.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum PositionSource {
+    /// A block listener, addressed by its block coordinates (not its centre).
+    Block([i32; 3]),
+    /// An entity listener, addressed by its network id and an offset above its feet.
+    Entity {
+        /// The entity's network id, preserved as the protocol's signed value.
+        id: i32,
+        /// The vertical offset from the entity's feet, in blocks.
+        y_offset: f32,
+    },
+}
+
 /// `ParticleOptions` with the parameters of the option classes used here.
 #[derive(Clone, Debug)]
 // exhaustive: the game builds it with a literal; mods only read it
@@ -23,9 +40,11 @@ pub struct ParticleOptions {
     /// `GeyserParticleOptions.waterBlocks` and `GeyserBaseParticleOptions`'
     /// `waterBlocks` and `burstImpulseBase` (0 where the type has none).
     pub geyser: Option<(i32, f32)>,
-    /// `VibrationParticleOption`: the listener the signal flies to and its
-    /// arrival time in ticks (`ParticleEngine::vibration` is the same particle).
-    pub vibration: Option<([f64; 3], i32)>,
+    /// `VibrationParticleOption`: the listener's position source, the resolved
+    /// point the signal flies to and its arrival time in ticks. The source is
+    /// sent to clients; the resolved point is used for local rendering
+    /// (`ParticleEngine::vibration` is the same particle).
+    pub vibration: Option<(PositionSource, [f64; 3], i32)>,
     /// A native mod's own particle type, by its namespaced name (`mymod:spark`):
     /// `SimpleParticleType` plus the provider `particles/<name>.json` names.
     pub mod_particle: Option<String>,
@@ -67,10 +86,11 @@ impl ParticleOptions {
             ..Self::simple(ty)
         }
     }
-    /// `VibrationParticleOption(destination, arrivalInTicks)`.
-    pub fn vibration(dest: [f64; 3], ticks: i32) -> Self {
+    /// `VibrationParticleOption(destination, arrivalInTicks)`: the listener's
+    /// position source and the resolved point this engine flies the signal to.
+    pub fn vibration(source: PositionSource, dest: [f64; 3], ticks: i32) -> Self {
         Self {
-            vibration: Some((dest, ticks)),
+            vibration: Some((source, dest, ticks)),
             ..Self::simple(ParticleType::Vibration)
         }
     }

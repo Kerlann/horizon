@@ -52,6 +52,8 @@ pub(super) enum Event {
     About(HashMap<String, Vec<String>>),
     /// Registry files taken down that the launcher turned off.
     TakenDown(Vec<String>),
+    /// What the automatic updates did (`horizon::auto`).
+    AutoUpdated(Vec<String>),
     /// A project page's part, an image or a filter's values (`mods_project`).
     Loaded(super::mods_project::Loaded),
     /// The palette's registry mods for its search of that number.
@@ -395,6 +397,13 @@ impl Launcher {
                     m.about.extend(about);
                     m.results_list.reset();
                 }
+                Event::AutoUpdated(lines) => {
+                    if !lines.is_empty() {
+                        m.message = Some(Ok(lines.join("\n")));
+                        m.installed = installed::Installed::load(&m.home()).entries;
+                        m.installed_list.reset();
+                    }
+                }
                 Event::TakenDown(lines) => {
                     m.message = Some(Ok(lines.join("\n")));
                     m.installed = installed::Installed::load(&m.home()).entries;
@@ -472,10 +481,16 @@ impl Launcher {
                 .ok_or_else(|| format!("{} isn't set up.", source.label()))
                 .and_then(|s| s.search(&query));
             let about: HashMap<String, Vec<String>> = match (&result, source) {
-                (Ok(found), SourceId::Horizon) => found
-                    .iter()
-                    .map(|p| (p.id.clone(), horizon::trust_and_capabilities(&p.id)))
-                    .collect(),
+                (Ok(found), SourceId::Horizon) => {
+                    let instance = horizon_launcher::instances::selected();
+                    found
+                        .iter()
+                        .map(|p| {
+                            let lines = horizon::trust_and_capabilities(&p.id, Some(&instance));
+                            (p.id.clone(), lines)
+                        })
+                        .collect()
+                }
                 _ => HashMap::new(),
             };
             let _ = tx.send(Event::Found(search, offset, result));
@@ -505,6 +520,27 @@ impl Launcher {
             let lines = horizon::turn_off_revoked(&index, &home);
             if !lines.is_empty() {
                 let _ = tx.send(Event::TakenDown(lines));
+            }
+        });
+    }
+
+    /// At start: recover interrupted updates, then update every Horizon instance's registry
+    /// content when enabled ([`auto_update`]), reading the selected instance's list again after.
+    pub(super) fn mods_auto_update(&mut self) {
+        let enabled = self.settings.auto_updates_mods();
+        let list: Vec<AutoTarget> = self
+            .instances
+            .list
+            .iter()
+            .map(|i| AutoTarget {
+                instance: i.clone(),
+            })
+            .collect();
+        let tx = self.mods.tx.clone();
+        std::thread::spawn(move || {
+            let lines = auto_update(&list, enabled);
+            if !lines.is_empty() {
+                let _ = tx.send(Event::AutoUpdated(lines));
             }
         });
     }
@@ -1068,10 +1104,10 @@ impl Launcher {
         let java = self.mods.java_for(self.mods.kind).is_some();
         let source_note = (switches(self.mods.kind) && !java)
             .then(|| div().flex().child(self.mods_source_switch(cx)));
-        // The registry lists only what was made for Horizon: no "everything", no Modrinth filters,
-        // only its sort.
+        // The registry lists only what was made for Horizon: no "everything", and of the filters
+        // only its categories.
         let registry = self.mods.source == SourceId::Horizon && !java;
-        let filters = (!registry).then(|| self.mods_filters(cx));
+        let filters = self.mods_filters(cx);
         // The registry's sort sits below the GitHub row, above the list it orders.
         let registry_sort = registry.then(|| self.mods_sort_bar(cx));
         let controls = div()
@@ -1088,7 +1124,7 @@ impl Launcher {
                     .when(!registry && !java, |d| d.child(toggle)),
             )
             .children(source_note)
-            .children(filters)
+            .child(filters)
             .children(self.mods_target_line(cx));
         // The kinds are inventory tabs on the panel that holds the open one.
         let body = blocks::panel(&t).flex().flex_col().gap(px(24.)).p(px(20.));
@@ -1418,21 +1454,24 @@ impl Launcher {
             let detail = div()
                 .flex()
                 .flex_col()
-                .child(format!(
-                    "{}{} · {}{} · {}",
+                .child({
+                    let from = e
+                        .source
+                        .shown_for(&e.project)
+                        .map(|s| trf("from {source}", &[("source", s)]));
+                    let needed = e
+                        .dependency
+                        .then(|| tr("needed by another pack").to_string());
+                    let origin: Vec<String> = from.into_iter().chain(needed).collect();
                     e.verdict
-                        .as_ref()
-                        .map(|v| format!("{} · ", tr(v)))
-                        .unwrap_or_default(),
-                    e.number,
-                    trf("from {source}", &[("source", e.source.label())]),
-                    if e.dependency {
-                        format!(", {}", tr("needed by another pack"))
-                    } else {
-                        String::new()
-                    },
-                    e.file
-                ))
+                        .iter()
+                        .map(|v| tr(v).to_string())
+                        .chain([e.number.clone()])
+                        .chain((!origin.is_empty()).then(|| origin.join(", ")))
+                        .chain([e.file.clone()])
+                        .collect::<Vec<_>>()
+                        .join(" · ")
+                })
                 .children(instance.as_ref().filter(|_| is_native).map(|name| {
                     div()
                         .text_color(t.ink)
@@ -1602,7 +1641,9 @@ impl Launcher {
                 by.push(trf("by {author}", &[("author", &p.author)]));
             }
             by.push(trf("{count} downloads", &[("count", &count(p.downloads))]));
-            by.push(trf("from {source}", &[("source", p.source.label())]));
+            if let Some(source) = p.source.shown_for(&p.id) {
+                by.push(trf("from {source}", &[("source", source)]));
+            }
             if !p.license.is_empty() {
                 by.push(p.license.clone());
             }
@@ -1668,8 +1709,33 @@ impl Launcher {
     }
 }
 
+/// An instance whose registry projects may update.
+pub(super) struct AutoTarget {
+    pub(super) instance: instances::Instance,
+}
+
+/// Updates the registry projects of `targets`: Horizon's own instances only, never a modpack's
+/// profile, whose pack pins its mods. Returns what happened for the page's notice.
+pub(super) fn auto_update(targets: &[AutoTarget], enabled: bool) -> Vec<String> {
+    let mut lines = Vec::new();
+    for t in targets {
+        let i = &t.instance;
+        let pack = i.id.starts_with("pack:") || i.id.starts_with("port:");
+        let (false, None) = (pack, &i.java) else {
+            continue;
+        };
+        let ctx = horizon::auto::Context {
+            in_pack: horizon::auto::in_pack(&i.home),
+        };
+        if let Some(report) = horizon::auto::run(&i.home, &ctx, enabled, &|_, _| {}) {
+            lines.extend(report.lines());
+        }
+    }
+    lines
+}
+
 /// Where a kind's tab searches first: Horizon's registry for mods and shader packs, Modrinth for
-/// the rest (data packs are only there).
+/// the rest.
 fn source_for(kind: PackKind) -> SourceId {
     match kind {
         PackKind::Mod | PackKind::Shader => SourceId::Horizon,
@@ -1677,14 +1743,10 @@ fn source_for(kind: PackKind) -> SourceId {
     }
 }
 
-/// Whether a kind's tab picks its source: mods, modpacks and resource packs are on both Horizon's
-/// registry and Modrinth; Horizon's shader packs are on its registry only, data packs on Modrinth
-/// only.
+/// Whether a kind's tab picks its source: mods, modpacks, resource packs and data packs are on
+/// both Horizon's registry and Modrinth; Horizon's shader packs are on its registry only.
 pub(super) fn switches(kind: PackKind) -> bool {
-    matches!(
-        kind,
-        PackKind::Mod | PackKind::ResourcePack | PackKind::Modpack
-    )
+    kind != PackKind::Shader
 }
 
 impl Launcher {

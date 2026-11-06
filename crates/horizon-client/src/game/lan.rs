@@ -632,7 +632,7 @@ fn mob_variant_meta(
 /// from the defaults the client constructs), with vanilla's entry indices:
 /// Entity 0..=7, LivingEntity 8..=14, Mob 15, then the subclasses.
 /// `defaults` gets the defaults of the entries that can go back to theirs.
-fn mob_meta(
+pub(super) fn mob_meta(
     m: &Mob,
     hub: &Hub,
     player_entity: Option<i32>,
@@ -671,10 +671,13 @@ fn mob_meta(
             serializer::OPTIONAL_COMPONENT,
             Value::OptText(Some(horizon_protocol::text::literal(name))),
         ));
-        if m.name_visible {
-            meta.push((3, serializer::BOOLEAN, Value::Bool(true)));
-        }
     }
+    if m.name_visible {
+        meta.push((3, serializer::BOOLEAN, Value::Bool(true)));
+    }
+    // A name taken away or hidden again is sent as none / false.
+    defaults.push((2, serializer::OPTIONAL_COMPONENT, Value::OptText(None)));
+    defaults.push((3, serializer::BOOLEAN, Value::Bool(false)));
     // LivingEntity.DATA_LIVING_ENTITY_FLAGS: using an item 1, in the off
     // hand 2 (a skeleton draws its bow, a witch raises her potion).
     let using = i8::from(m.extra.using_item > 0) | i8::from(m.extra.using_off_hand) << 1;
@@ -1623,6 +1626,12 @@ impl Game<'_> {
         }
         self.award_leave_game_to_all();
         self.save_leaving_guests();
+        self.lan_disconnect(announce);
+    }
+
+    /// The transport close, separate from player callbacks and saves so that
+    /// server shutdown can still disconnect after one of those unwinds.
+    pub(super) fn lan_disconnect(&mut self, announce: bool) {
         let Some(mut host) = self.lan.take() else {
             return;
         };
@@ -1700,7 +1709,8 @@ impl Game<'_> {
             return;
         }
         Self::guest_attachments_into(&self.guest_attachments, guest);
-        if guest.placed {
+        // A proxy released this record to another server, which now owns saving it.
+        if guest.placed && !guest.released {
             let _ = self.finish_player_autosaves(true);
             if self
                 .lan
@@ -1866,6 +1876,7 @@ impl Game<'_> {
     ) {
         if !guest.participates_in_player_simulation()
             || !guest.placed
+            || guest.released
             || self.adv.tree.list.is_empty()
         {
             return;
@@ -2354,7 +2365,7 @@ impl Game<'_> {
                             let host = self.lan.as_mut()?;
                             let at = host.hub.guests.len();
                             host.hub.guests.push(*guest);
-                            self.guest_close_all(conn);
+                            self.guest_disconnected(conn);
                             let Some(host) = self.lan.as_mut() else {
                                 unreachable!("LanHost dropped inside a tick; closes are deferred")
                             };
@@ -2387,11 +2398,15 @@ impl Game<'_> {
                             "INFO",
                             &format!("{} lost connection: {}", guest.name, guest.left_reason),
                         );
-                        super::dedicated::log(
-                            "INFO",
-                            &format!("System chat: {} left the game", guest.name),
-                        );
-                    } else if self.player.is_some() && guest.placed {
+                        // A player moved to another server without `announce` was not
+                        // announced as leaving, so the line is not logged either.
+                        if !guest.quiet_leave {
+                            super::dedicated::log(
+                                "INFO",
+                                &format!("System chat: {} left the game", guest.name),
+                            );
+                        }
+                    } else if self.player.is_some() && guest.placed && !guest.quiet_leave {
                         // ServerGamePacketListenerImpl.removePlayerFromWorld.
                         let who = self.player_text(&guest.name, guest.uuid);
                         self.system_message(
@@ -4156,6 +4171,50 @@ mod tests {
         );
     }
 
+    /// A mod's custom name and its visibility reach the tracking players
+    /// (`Entity.DATA_CUSTOM_NAME`, `DATA_CUSTOM_NAME_VISIBLE`), and taking
+    /// them away is sent as none / false.
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn a_mods_custom_name_and_its_visibility_are_sent() {
+        super::super::native_entity_refs::tests::with_game(|game| {
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:zombie")
+                .unwrap()
+                .clone();
+            let at = horizon_core::geometry::Vec3::new(0.5, 70.0, 0.5);
+            game.mobs.push(Mob::new(12, kind, at, 0.0));
+            let mob = game.native_entity(12).unwrap();
+            let hub = meta_hub("CustomNameMetaTest");
+            let meta_of = |game: &super::super::Game<'_>| {
+                let m = game.mobs.iter().find(|m| m.id == 12).unwrap();
+                let (mut meta, mut defaults) = (Vec::new(), Vec::new());
+                super::mob_meta(m, &hub, None, 0, &mut meta, &mut defaults);
+                (meta, defaults)
+            };
+            assert!(
+                mob.set_custom_name(game, Some(horizon_client::text::Text::literal("Grumbles")))
+            );
+            assert!(mob.set_custom_name_visible(game, true));
+            let (meta, _) = meta_of(game);
+            let sent = horizon_protocol::text::literal("Grumbles");
+            assert!(meta.contains(&(
+                2,
+                serializer::OPTIONAL_COMPONENT,
+                Value::OptText(Some(sent))
+            )));
+            assert!(meta.contains(&(3, serializer::BOOLEAN, Value::Bool(true))));
+            assert!(mob.set_custom_name(game, None));
+            assert!(mob.set_custom_name_visible(game, false));
+            let (meta, defaults) = meta_of(game);
+            assert!(meta.iter().all(|e| e.0 != 2 && e.0 != 3), "{meta:?}");
+            assert!(defaults.contains(&(2, serializer::OPTIONAL_COMPONENT, Value::OptText(None))));
+            assert!(defaults.contains(&(3, serializer::BOOLEAN, Value::Bool(false))));
+        });
+    }
+
     /// A content mod's living type sends the entity data of its template's
     /// class (`Zombie.DATA_BABY_ID`, the villager's unhappy counter), entry
     /// for entry what its template sends.
@@ -4176,6 +4235,7 @@ mod tests {
         for (template, id) in [
             ("minecraft:zombie", "ruby:ghoul"),
             ("minecraft:villager", "ruby:settler"),
+            ("minecraft:wandering_trader", "ruby:merchant"),
         ] {
             assert_eq!(
                 meta_of(id),

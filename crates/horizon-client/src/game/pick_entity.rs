@@ -45,7 +45,7 @@ impl Game<'_> {
                 )
             }),
             self.mob_hit()
-                .map(|(index, distance)| hit(self.mobs[index].id, distance, true)),
+                .map(|(index, distance, _)| hit(self.mobs[index].id, distance, true)),
             self.redirectable_hit().map(|(index, distance)| {
                 hit(self.creatures.projectiles[index].id, distance, false)
             }),

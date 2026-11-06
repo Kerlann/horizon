@@ -156,9 +156,9 @@ fn slept_on(bed: &str, part: Option<&str>, foot: Option<(&str, Option<&str>)>) -
 /// `VoxelShape.max(Axis.Y)` of the boxes the pack gives a block, in the
 /// block's own coordinates: the top of the bed, `1.0` for a full cube, and
 /// `None` for a shape with nothing in it (`VoxelShape.isEmpty`).
-fn shape_top(boxes: &[[f64; 6]], base_y: f64) -> Option<f64> {
+fn shape_top(boxes: impl IntoIterator<Item = [f64; 6]>, base_y: f64) -> Option<f64> {
     boxes
-        .iter()
+        .into_iter()
         .map(|b| b[4] - base_y)
         .fold(None, |top: Option<f64>, y| {
             Some(top.map_or(y, |top| top.max(y)))
@@ -178,12 +178,13 @@ fn pos_to_bed(head: [i32; 3], height: f64) -> Vec3 {
 
 impl Game<'_> {
     /// The bed's `part`: head or foot.
-    fn bed_part(&self, state: BlockStateId) -> Option<String> {
+    fn bed_part(&self, state: BlockStateId) -> Option<&str> {
         self.pack
             .assets
             .registry
             .state(state)
-            .and_then(|s| s.properties.get("part").cloned())
+            .and_then(|s| s.properties.get("part"))
+            .map(String::as_str)
     }
     /// `LivingEntity.startSleeping`'s height: the top of the shape the player
     /// lies on, measured from the head's own y - a straw bed's head from its
@@ -191,23 +192,25 @@ impl Game<'_> {
     /// player does not lie down at all.
     pub(super) fn sleep_height(&self, head: [i32; 3]) -> Option<f64> {
         let state = self.world.block(head[0], head[1], head[2]);
-        let name = self.res.facts().get(state).name.to_owned();
+        if !self.is_bed(state) {
+            return None;
+        }
+        let name = &self.res.facts().get(state).name;
         let part = self.bed_part(state);
         let step = self.bed_forward(state);
         let foot_at = [head[0] - step[0], head[1], head[2] - step[2]];
         let foot_state = self.world.block(foot_at[0], foot_at[1], foot_at[2]);
-        let foot_name = self.res.facts().get(foot_state).name.to_owned();
+        let foot_name = &self.res.facts().get(foot_state).name;
         let foot_part = self.bed_part(foot_state);
-        let on = slept_on(
-            &name,
-            part.as_deref(),
-            Some((&foot_name, foot_part.as_deref())),
-        )?;
+        let on = slept_on(name, part, Some((foot_name, foot_part)))?;
         let at = match on {
             SleepOn::Head => head,
             SleepOn::Foot => foot_at,
         };
-        shape_top(&self.outline_boxes(at), f64::from(at[1]))
+        shape_top(
+            self.outline_boxes_iter(&self.world, &self.be_anims, at, true),
+            f64::from(at[1]),
+        )
     }
     /// Where the sleeper lies (`setPosToBed`), when the bed gives it a shape.
     pub(super) fn sleeping_position(&self, head: [i32; 3]) -> Option<Vec3> {
@@ -267,15 +270,15 @@ mod tests {
     fn the_height_is_the_top_of_the_shape() {
         // The boxes are the pack's, in world space, as `outline_boxes` gives them.
         let bed = [[10.0, 70.0, 5.0, 11.0, 70.5625, 6.0]];
-        assert_eq!(shape_top(&bed, 70.0), Some(0.5625));
+        assert_eq!(shape_top(bed, 70.0), Some(0.5625));
         let pillow = [[10.0, 70.0, 5.0, 11.0, 70.6875, 6.0]];
-        assert_eq!(shape_top(&pillow, 70.0), Some(0.6875));
+        assert_eq!(shape_top(pillow, 70.0), Some(0.6875));
         let two = [
             [10.0, 70.0, 5.0, 11.0, 70.5625, 6.0],
             [10.0, 70.0, 5.0, 10.5, 70.25, 5.5],
         ];
-        assert_eq!(shape_top(&two, 70.0), Some(0.5625), "the tallest box");
-        assert_eq!(shape_top(&[], 70.0), None, "a bed with no shape");
+        assert_eq!(shape_top(two, 70.0), Some(0.5625), "the tallest box");
+        assert_eq!(shape_top([], 70.0), None, "a bed with no shape");
     }
 
     /// `setPosToBed`: `0.125` above the height, in the middle of the block.

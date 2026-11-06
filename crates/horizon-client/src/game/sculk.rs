@@ -12,12 +12,14 @@ use horizon_client::{
     particles::{ParticleOptions, ParticleType},
     sculk::{self, Context, Info, SculkEntity, SculkKind, WardenSpawnTracker},
 };
+use horizon_client_core::who::EventSource;
 use horizon_core::{
-    geometry::{Direction, Vec3},
+    geometry::{Aabb, Direction, Vec3},
     position::BlockPos,
     random::RandomSource,
 };
 use horizon_world::registry::BlockStateId;
+use mod_api::particles::PositionSource;
 use std::collections::HashSet;
 use winit::keyboard::KeyCode;
 
@@ -316,7 +318,7 @@ impl Game<'_> {
         }
     }
     /// `ServerPlayer`'s `warden_spawn_tracker` from the player data.
-    fn load_warden_tracker(&mut self) {
+    pub(super) fn load_warden_tracker(&mut self) {
         if self.sculk.tracker_loaded {
             return;
         }
@@ -537,7 +539,7 @@ impl Game<'_> {
             .as_ref()
             .map_or((true, true), |p| (p.health.dead_or_dying(), self.creative));
         Context {
-            source: Some(Who::Player),
+            source: Some(Who::Player.into()),
             owner: None,
             affected_state: state,
             dampening_state: self.state_dampens(state),
@@ -555,7 +557,7 @@ impl Game<'_> {
     }
     fn context_of_mob(&self, mob: Option<&Mob>, id: u32, state: Option<BlockStateId>) -> Context {
         Context {
-            source: Some(Who::Mob(id)),
+            source: Some(Who::Mob(id).into()),
             owner: None,
             affected_state: state,
             dampening_state: self.state_dampens(state),
@@ -576,6 +578,38 @@ impl Game<'_> {
                 dampening_state: self.state_dampens(state),
                 ..Context::default()
             },
+        }
+    }
+
+    /// `GameEvent.Context.of(entity, state)` for a non-living entity.
+    pub(super) fn entity_event_context(&self, id: u32, state: Option<BlockStateId>) -> Context {
+        let dampens = self
+            .dropped
+            .iter()
+            .find(|item| item.id == id)
+            .is_some_and(|item| {
+                world_items!(self)
+                    .item_tags
+                    .get("minecraft:dampens_vibrations")
+                    .is_some_and(|tag| tag.contains(item.stack.item.as_ref()))
+            });
+        Context {
+            source: Some(EventSource::Entity(id)),
+            affected_state: state,
+            dampening_state: self.state_dampens(state),
+            dampens,
+            ..Context::default()
+        }
+    }
+
+    fn event_source_context(
+        &self,
+        source: Option<EventSource>,
+        state: Option<BlockStateId>,
+    ) -> Context {
+        match source {
+            Some(EventSource::Entity(id)) => self.entity_event_context(id, state),
+            _ => self.who_context(source.and_then(EventSource::actor), state),
         }
     }
 
@@ -718,7 +752,7 @@ impl Game<'_> {
         // a shrieker cannot trigger it).
         if listens
             && matches!(kind, SculkKind::Sensor | SculkKind::Calibrated)
-            && ctx.source == Some(Who::Player)
+            && ctx.source == Some(Who::Player.into())
             && !ctx.spectator
             && ctx.stepping_carefully
             && sculk::ignored_when_sneaking(event)
@@ -916,7 +950,8 @@ impl Game<'_> {
                     .vibration
                     .tick(time, adjacent, true, |d| d.floor() as i32);
                 if let Some((info, travel)) = tick.started {
-                    self.vibration_particle(info.pos, center(key), travel);
+                    let source = PositionSource::Block([key.0, key.1, key.2]);
+                    self.vibration_particle(source, info.pos, center(key), travel);
                 }
                 if let Some(info) = tick.received {
                     self.sculk_receive(key, info)?;
@@ -966,7 +1001,7 @@ impl Game<'_> {
                 }
             }
             SculkKind::Shrieker => {
-                let by_player = info.owner.or(info.source);
+                let by_player = info.owner.or(info.source.and_then(EventSource::actor));
                 self.try_shriek(
                     key,
                     by_player == Some(Who::Player) || self.rides_player(by_player),
@@ -983,7 +1018,7 @@ impl Game<'_> {
     fn activate_sensor(
         &mut self,
         key: (i32, i32, i32),
-        source: Option<Who>,
+        source: Option<EventSource>,
         power: i32,
         frequency: i32,
     ) -> Result<()> {
@@ -997,7 +1032,7 @@ impl Game<'_> {
                 let relative = (key.0 + n[0], key.1 + n[1], key.2 + n[2]);
                 let state = self.world.block(relative.0, relative.1, relative.2);
                 if self.state_is(&self.sculk.tables.resonator, state) {
-                    let ctx = self.who_context(source, Some(state));
+                    let ctx = self.event_source_context(source, Some(state));
                     self.post_game_event(
                         sculk::RESONANCE[frequency as usize - 1],
                         center(relative),
@@ -1012,7 +1047,7 @@ impl Game<'_> {
                 }
             }
         }
-        let ctx = self.who_context(source, None);
+        let ctx = self.event_source_context(source, None);
         self.post_game_event(sculk::TENDRILS_CLICKING, center(key), ctx);
         self.with_level(|b, level, ticks| b.sculk_sensor_click(level, ticks, pos));
         self.process_level_events()
@@ -1075,7 +1110,7 @@ impl Game<'_> {
                                 event: "minecraft:step",
                                 distance,
                                 pos: at,
-                                source: Some(who),
+                                source: Some(who.into()),
                                 owner: None,
                             },
                             time,
@@ -1299,7 +1334,7 @@ impl Game<'_> {
         self.sculk.darkness = darkness_blend_tick(&self.potions.effects, self.sculk.darkness);
     }
     /// The darkness effect's blend factor at the partial tick.
-    fn darkness_blend(&self, partial: f32) -> f32 {
+    pub(super) fn darkness_blend(&self, partial: f32) -> f32 {
         let (previous, current) = self.sculk.darkness;
         previous + (current - previous) * partial
     }
@@ -1579,12 +1614,42 @@ impl Game<'_> {
         }
     }
 
-    fn vibration_particle(&mut self, from: [f64; 3], to: [f64; 3], ticks: i32) {
-        self.particles.vibration(from, to, ticks);
+    /// `ServerLevel.sendParticles(new VibrationParticleOption(...), origin,
+    /// 1, 0, 0, 0, 0)` from `VibrationSystem.Ticker.trySelectAndScheduleVibration`:
+    /// the window draws it when it is a client, and every player within 32
+    /// blocks is sent it.
+    fn vibration_particle(
+        &mut self,
+        source: PositionSource,
+        from: [f64; 3],
+        to: [f64; 3],
+        ticks: i32,
+    ) {
+        let options = ParticleOptions::vibration(source, to, ticks);
+        if self.options.execution_role.is_client() {
+            self.particles.vibration(from, to, ticks);
+        }
+        self.lan_send_particles(super::lan_particles::QueuedParticle {
+            dimension: self.dim.id(),
+            options,
+            state: None,
+            at: from,
+            spread: [0.0; 3],
+            speed: [0.0; 3],
+            count: 1,
+            randomization: 0,
+        });
     }
-    /// A vibration travelling to a warden (`MobEvent::Vibration`).
-    pub(super) fn mob_vibration_particle(&mut self, from: [f64; 3], to: [f64; 3], ticks: i32) {
-        self.vibration_particle(from, to, ticks);
+    /// A vibration travelling to a warden or allay (`MobEvent::Vibration`).
+    pub(super) fn mob_vibration_particle(
+        &mut self,
+        source: horizon_protocol::entity_data::PositionSource,
+        from: [f64; 3],
+        to: [f64; 3],
+        ticks: i32,
+    ) {
+        let source = super::lan_particles::particle_position_source(&source);
+        self.vibration_particle(source, from, to, ticks);
     }
     /// `Warden.clientDiggingParticles`: thirty crumbs of the block underfoot.
     pub(super) fn warden_dig_particles(&mut self, at: [f64; 3]) {
@@ -1630,6 +1695,17 @@ impl Game<'_> {
             ctx.player = owner == Some(Who::Player) || self.rides_player(owner);
         }
         self.post_game_event(event, at, ctx);
+    }
+    /// Retain the projectile as the landing event source and the
+    /// shooter as its owner, even when the projectile is held out for ticking.
+    pub(super) fn projectile_landed_event(&mut self, id: u32, owner: Option<Who>, at: [f64; 3]) {
+        let ctx = Context {
+            source: (id != 0).then_some(EventSource::Entity(id)),
+            owner,
+            player: owner == Some(Who::Player) || self.rides_player(owner),
+            ..Context::default()
+        };
+        self.post_game_event("minecraft:projectile_land", at, ctx);
     }
     /// The player shot or threw something.
     pub(super) fn player_projectile_shot(&mut self) {
@@ -1682,21 +1758,30 @@ impl Game<'_> {
             self.sculk.falling_items.insert(id);
         }
         if on_ground && self.sculk.falling_items.remove(&id) {
-            self.post_landing_event(position, false);
+            // EntityType.ITEM: 0.25 by 0.25.
+            let bounds = Aabb::new(
+                Vec3::new(position.x - 0.125, position.y, position.z - 0.125),
+                Vec3::new(position.x + 0.125, position.y + 0.25, position.z + 0.125),
+            );
+            self.post_landing_event(position, bounds, false);
         }
     }
 
     /// `Entity.checkFallDamage` emits HIT_GROUND after the block's fallOn.
-    pub(super) fn post_landing_event(&mut self, position: Vec3, living: bool) {
+    pub(super) fn post_landing_event(&mut self, position: Vec3, bounds: Aabb, living: bool) {
         if self.remote.is_some() || self.options.execution_role.is_client() {
             return;
         }
         self.sculk_prepare();
-        let state = self.world.block(
-            position.x.floor() as i32,
-            (position.y - 0.2).floor() as i32,
-            position.z.floor() as i32,
-        );
+        // mainSupportingBlockPos, or the block's state at getOnPosLegacy.
+        let state = match self.supporting_block(position, bounds) {
+            Some(support) => self.world.block(support.x, support.y, support.z),
+            None => self.world.block(
+                position.x.floor() as i32,
+                (position.y - 0.2).floor() as i32,
+                position.z.floor() as i32,
+            ),
+        };
         let mut context = self.who_context(None, Some(state));
         context.living = living;
         self.post_game_event(
@@ -1973,6 +2058,39 @@ impl Game<'_> {
         self.res.facts().get(self.world.block(x, y, z)).fluid
             == horizon_client::blocks::Fluid::Water
     }
+    /// `Entity.checkSupportingBlock`: the block under this box closest to the
+    /// entity. Everything but the player works it out when it asks.
+    fn supporting_block(&self, position: Vec3, bounds: Aabb) -> Option<BlockPos> {
+        let (min, max) = (bounds.min_position(), bounds.max_position());
+        let foot = Aabb::new(
+            Vec3::new(min.x, min.y - 1.0e-6, min.z),
+            Vec3::new(max.x, min.y, max.z),
+        );
+        let mut scene = horizon_client::collisions::SceneCollisions {
+            world: &self.world,
+            binding: self.collision,
+            subject: None,
+        };
+        horizon_world::ground_support::find_supporting_block(
+            &mut scene,
+            horizon_world::collision_context::CollisionContext::position(position.y),
+            position,
+            foot,
+            1_000_000,
+        )
+        .ok()
+        .flatten()
+    }
+    /// `Entity.mainSupportingBlockPos` of a player or mob on the ground.
+    fn main_support(&self, who: Who) -> Option<BlockPos> {
+        match who {
+            Who::Player => self.player.as_ref()?.ground.supporting_block,
+            Who::Mob(id) => {
+                let mob = self.mobs.iter().find(|m| m.id == id)?;
+                self.supporting_block(mob.position, mob.bounds())
+            }
+        }
+    }
     /// `Entity.move`'s emission: footsteps, swimming, landing and splashes.
     fn entity_motion_events(
         &mut self,
@@ -2001,9 +2119,19 @@ impl Game<'_> {
             at[1] - previous.last[1],
             at[2] - previous.last[2],
         );
-        // Entity.checkFallDamage: touching down after falling.
+        // Entity.checkFallDamage: touching down after falling, with the state
+        // of mainSupportingBlockPos (the block's state at getOnPosLegacy without one).
         if on_ground && (!previous.on_ground || dy < -1.0e-6) && dy < 0.0 && !in_water {
-            self.post_entity_event("minecraft:hit_ground", who);
+            let state = match self.main_support(who) {
+                Some(support) => self.world.block(support.x, support.y, support.z),
+                None => self.world.block(
+                    at[0].floor() as i32,
+                    (at[1] - 0.2).floor() as i32,
+                    at[2].floor() as i32,
+                ),
+            };
+            let ctx = self.who_context(Some(who), Some(state));
+            self.post_game_event("minecraft:hit_ground", at, ctx);
         }
         // Entity.updateInWaterStateAndDoFluidPushing: entering water splashes.
         if in_water && !previous.in_water {
@@ -2014,14 +2142,14 @@ impl Game<'_> {
             return;
         }
         let horizontal = ((dx * dx + dz * dz).sqrt() * f64::from(0.6f32)) as f32;
-        let block = (
+        // Entity.getOnPos without a supporting block. Finding a mob's support
+        // waits for a step that is due: this runs for every mob on every tick.
+        let unsupported = self.world.block(
             at[0].floor() as i32,
-            (at[1] - 0.2).floor() as i32,
+            (at[1] - 1.0e-5).floor() as i32,
             at[2].floor() as i32,
         );
-        let state = self.world.block(block.0, block.1, block.2);
-        let air = self.res.facts().is_air(state);
-        let climbable = self.state_is(&self.sculk.tables.climbable, state);
+        let climbable = self.state_is(&self.sculk.tables.climbable, unsupported);
         let travelled = if climbable {
             ((dx * dx + dy * dy + dz * dz).sqrt() * f64::from(0.6f32)) as f32
         } else {
@@ -2031,9 +2159,22 @@ impl Game<'_> {
             return;
         };
         entry.move_dist += travelled;
-        if entry.move_dist > entry.next_step && !air {
+        let move_dist = entry.move_dist;
+        if move_dist <= entry.next_step {
+            return;
+        }
+        // Entity.applyMovementEmissionAndPlaySound: the state at getOnPos, so a
+        // carpet and not the block under it.
+        let state = match on_ground.then(|| self.main_support(who)).flatten() {
+            Some(support) => self.world.block(support.x, support.y, support.z),
+            None => unsupported,
+        };
+        let air = self.res.facts().is_air(state);
+        let Some(entry) = self.sculk.steps.get_mut(&who) else {
+            return;
+        };
+        if !air {
             let steps_on_block = on_ground || climbable;
-            let move_dist = entry.move_dist;
             if steps_on_block {
                 entry.next_step = if warden {
                     // Warden.nextStep
@@ -2106,10 +2247,10 @@ fn flaps(species: Species, resting: bool, on_ground: bool, age: u32) -> bool {
     }
 }
 
-fn event_cause(source: Option<Who>, acting_player: Option<u32>) -> Option<u32> {
+fn event_cause(source: Option<EventSource>, acting_player: Option<u32>) -> Option<u32> {
     match source {
-        Some(Who::Player) => acting_player,
-        Some(Who::Mob(id)) => Some(id),
+        Some(EventSource::Player) => acting_player,
+        Some(EventSource::Mob(id) | EventSource::Entity(id)) => Some(id),
         None => None,
     }
 }
@@ -2120,10 +2261,80 @@ mod tests {
 
     #[test]
     fn game_event_cause_uses_acting_guest() {
-        assert_eq!(event_cause(Some(Who::Player), Some(42)), Some(42));
-        assert_eq!(event_cause(Some(Who::Player), None), None);
-        assert_eq!(event_cause(Some(Who::Mob(7)), Some(42)), Some(7));
+        assert_eq!(event_cause(Some(Who::Player.into()), Some(42)), Some(42));
+        assert_eq!(event_cause(Some(Who::Player.into()), None), None);
+        assert_eq!(event_cause(Some(Who::Mob(7).into()), Some(42)), Some(7));
+        assert_eq!(
+            event_cause(Some(EventSource::Entity(99)), Some(42)),
+            Some(99)
+        );
         assert_eq!(event_cause(None, Some(42)), None);
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn dropped_wool_dampens_its_own_vibrations() {
+        use crate::game::native_entity_refs::tests::with_game;
+        use horizon_client::{chunk::Chunk, items::ItemStack};
+        use std::sync::Arc;
+
+        with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            game.sculk_prepare();
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let sensor = game
+                .pack
+                .assets
+                .registry
+                .default_state("minecraft:sculk_sensor")
+                .unwrap();
+            game.world.set(1, 64, 1, sensor).unwrap();
+            game.sculk_sync_index();
+            game.spawn_item(
+                ItemStack::new("minecraft:white_wool", 1),
+                [3.5, 64.0, 1.5],
+                [0.0; 3],
+                0,
+            );
+            let id = game.dropped[0].id;
+            let entity = game.native_entity(id).unwrap();
+            assert!(game.native_entity_game_event(entity, "minecraft:step"));
+            assert!(
+                game.sculk_entity((1, 64, 1))
+                    .unwrap()
+                    .vibration
+                    .selector
+                    .current
+                    .is_none()
+            );
+            game.dropped[0].stack = ItemStack::new("minecraft:stone", 1);
+            assert!(game.native_entity_game_event(entity, "minecraft:step"));
+            let (info, _) = game
+                .sculk_entity((1, 64, 1))
+                .unwrap()
+                .vibration
+                .selector
+                .current
+                .unwrap();
+            assert_eq!(info.source, Some(EventSource::Entity(id)));
+            game.sculk_entity((1, 64, 1))
+                .unwrap()
+                .vibration
+                .selector
+                .current = None;
+            game.projectile_landed_event(123, Some(Who::Player), [3.5, 64.0, 1.5]);
+            let (info, _) = game
+                .sculk_entity((1, 64, 1))
+                .unwrap()
+                .vibration
+                .selector
+                .current
+                .unwrap();
+            assert_eq!(info.source, Some(EventSource::Entity(123)));
+            assert_eq!(info.owner, Some(Who::Player));
+        });
     }
 
     /// `vanilla_game_event` hears `GameEvent.Context.affectedState`: the state a context

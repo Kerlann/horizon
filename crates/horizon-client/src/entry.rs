@@ -5,10 +5,9 @@ use mod_api::__private::game::*;
 
 /// Start the game. The executable supplies the allocator and retains the mod API marker.
 pub fn main() {
-    main_with(Vec::new(), &[], &[]);
+    main_with(Vec::new(), &[], &[], &[]);
 }
 
-/// Start the game with named trait mods in dispatch order.
 /// Whether a mod's `__HORIZON_POINTS` names a method, at compile time: the launcher's generated
 /// `main` checks each point injection with it.
 #[doc(hidden)]
@@ -21,9 +20,20 @@ pub type NativePoints = (
     fn(&'static dyn mod_api::Hooks) -> &'static dyn mod_points::Points,
 );
 
+/// A native mod's raw listener (#589), which the generated `main` makes after its typed `let`
+/// checked the function against the place's listener type.
+pub use mod_points::__private::RawListener as NativeRaw;
+
+/// The places raw listeners register at, named by the generated `main`.
+#[doc(hidden)]
+pub use mod_points::PointId;
+
+/// Start the game with named trait mods in dispatch order, their `impl Points` and their raw
+/// listeners.
 pub fn main_with(
     mut mods: Vec<mod_api::ModEntry>,
     points: &[NativePoints],
+    raw: &[NativeRaw],
     built: &'static [horizon_mods::runtime::BuiltMod],
 ) {
     let exe = std::env::current_exe();
@@ -91,6 +101,12 @@ pub fn main_with(
             std::process::exit(game::exit_code::ERROR);
         }
     }
+    for listener in raw {
+        if let Err(error) = mod_points::__private::register_raw(listener) {
+            eprintln!("Horizon: {}: {error}", listener.id());
+            std::process::exit(game::exit_code::ERROR);
+        }
+    }
     // Wasm mods' listeners after the native ones', as their hooks are.
     for listening in wasm_listening {
         if let Err(error) = listening.register() {
@@ -98,7 +114,7 @@ pub fn main_with(
             std::process::exit(game::exit_code::ERROR);
         }
     }
-    crate::game::points::attach_installed();
+    mod_points::__private::seal();
     let help = launch.is_information_request();
     logging::set_game_home(launch.context.home.clone());
     // The dedicated server logs in its own folder, as vanilla's does; the game in its home.

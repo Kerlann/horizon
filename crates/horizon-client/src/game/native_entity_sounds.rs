@@ -6,7 +6,6 @@
 //! that is not in the level in place (a player in a parked level).
 use super::{Game, commands::Target};
 use horizon_client::mobs::Species;
-use horizon_client::sculk::Context;
 use mod_api::{EntityRef, SoundSource};
 
 /// `Monster`'s sound source is hostile, and so are a few mobs that are not
@@ -97,7 +96,7 @@ impl Game<'_> {
     /// `Entity.gameEvent(event)`: game event `event` (`minecraft:step`...)
     /// at the entity's position with the entity as its source, which sculk
     /// sensors, shriekers, wardens and allays in range hear. A player or mob
-    /// is the event's source entity; for another kind the event has none.
+    /// is the event's source entity; other entities retain their own id.
     /// False for an event vanilla doesn't have, a dead guest and a guest while
     /// another one acts.
     pub(super) fn native_entity_game_event(&mut self, entity: EntityRef, event: &str) -> bool {
@@ -138,7 +137,8 @@ impl Game<'_> {
                 true
             }
             _ => {
-                self.post_game_event(event, at, Context::default());
+                let ctx = self.entity_event_context(entity.id(), None);
+                self.post_game_event(event, at, ctx);
                 true
             }
         }

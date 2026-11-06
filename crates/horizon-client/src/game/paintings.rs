@@ -186,8 +186,10 @@ impl Game<'_> {
         if &*stack.item != "minecraft:painting" {
             return false;
         }
+        // HangingEntityItem.mayPlace: never on a top or bottom face (FAIL).
         let Some(facing) = painting_facing(hit.face) else {
-            return false;
+            self.use_failed = true;
+            return true;
         };
         let pos = [
             hit.pos[0] + hit.face[0],
@@ -216,13 +218,14 @@ impl Game<'_> {
                 fitting.push(v);
             }
         }
+        // Nothing fits: CONSUME, which ItemStack.useOn still counts as a use.
         let Some(largest) = fitting.iter().map(|v| v.width * v.height).max() else {
-            return false;
+            self.award_stat("used", &stack.item, 1);
+            return true;
         };
         fitting.retain(|v| v.width * v.height >= largest);
-        let pick = self
-            .world
-            .random
+        // Util.getRandomSafe(variants, candidate.random): the painting's own random.
+        let pick = super::dispenser::entity_random()
             .next_int_bound(fitting.len() as i32)
             .unwrap_or(0) as usize;
         let v = &fitting[pick];
@@ -233,7 +236,8 @@ impl Game<'_> {
         if let Some(v) = self.painting_variants.of_stack(stack).cloned() {
             (candidate.variant, candidate.width, candidate.height) = (v.id, v.width, v.height);
             if !self.painting_survives(&candidate) {
-                return false;
+                self.award_stat("used", &stack.item, 1);
+                return true;
             }
         }
         if self.hanging_place_cancelled("minecraft:painting", pos) {
@@ -247,11 +251,16 @@ impl Game<'_> {
         ];
         self.audio
             .play("minecraft:entity.painting.place", Some(at), 1.0, 1.0);
+        // HangingEntityItem.useOn: ENTITY_PLACE at the painting, by the player, before it is
+        // added; ItemStack.useOn then counts the use.
+        let ctx = self.player_context(None);
+        self.post_game_event("minecraft:entity_place", at, ctx);
         self.paintings.push(candidate);
         self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
         if !self.creative {
             self.consume_held();
         }
+        self.award_stat("used", &stack.item, 1);
         // HangingEntityItem.useOn returns SUCCESS: the hand swings.
         self.swing_arm();
         true
@@ -306,8 +315,6 @@ impl Game<'_> {
         if by_player && self.creative {
             return true;
         }
-        // HangingEntity.spawnAtLocation: 0.15 out from the wall.
-        let s = p.step().map(f64::from);
         let stack = ItemStack {
             item: Arc::from("minecraft:painting"),
             count: 1,
@@ -316,7 +323,7 @@ impl Game<'_> {
         };
         self.spawn_item(
             stack,
-            [at[0] + s[0] * 0.15, at[1], at[2] + s[2] * 0.15],
+            super::frames::hanging_drop_position(at, p.step()),
             [0.0; 3],
             10,
         );

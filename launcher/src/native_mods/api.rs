@@ -1,5 +1,5 @@
 //! The launcher's generated executable for trait mods.
-use super::Bundle;
+use super::{internals, Bundle};
 use std::fs;
 use std::path::Path;
 
@@ -23,7 +23,18 @@ fn path_dep(path: &str) -> toml::Table {
 
 const MAIN_TEMPLATE: &str = "crates/horizon-client/src/native_main.rs.template";
 
-pub(super) fn main_rs(template: &str, mods: &[&horizon_mods::Manifest]) -> String {
+pub(super) fn template(path: &Path) -> Result<String, String> {
+    fs::read_to_string(path).ok()
+        .filter(|template| ["/* MOD_ENTRIES */", "/* MOD_POINTS */", "/* MOD_RAW */", "/* BUILT_MODS */"].iter()
+            .all(|marker| template.matches(marker).count() == 1))
+        .ok_or_else(|| crate::i18n::tr("This game source has no native inventory entry template. Update Horizon and rebuild the mods against this game.").to_string())
+}
+
+pub(super) fn main_rs(
+    template: &str,
+    mods: &[&horizon_mods::Manifest],
+    listed: &[super::inject::ListedPoint],
+) -> String {
     let entries = mods
         .iter()
         .enumerate()
@@ -45,7 +56,15 @@ pub(super) fn main_rs(template: &str, mods: &[&horizon_mods::Manifest]) -> Strin
         .filter(|(_, m)| !super::inject::of(m).is_empty())
         .map(|(i, m)| format!("        ({:?}, mod_{i}::__horizon_points),\n", m.id))
         .collect::<String>();
+    let raw = mods.iter().enumerate().flat_map(|(i, manifest)| {
+        super::inject::raw_of(manifest).into_iter().map(move |injection| {
+            let point = listed.iter().find(|point| point.target == injection.target).expect("raw target checked");
+            let place = point.place(injection.at_return);
+            format!("        mod_{i}_internals::raw::{place}({:?}, mod_{i}::{}), // injection {:?}\n", manifest.id, injection.method, injection.id)
+        })
+    }).collect::<String>();
     template
+        .replace("/* MOD_RAW */", &raw)
         .replace("/* MOD_ENTRIES */", &entries)
         .replace("/* MOD_POINTS */", &points)
         .replace("/* BUILT_MODS */", &inventory)
@@ -65,9 +84,14 @@ pub(super) const API_PACKAGE: &str = "horizon-mod-api";
 /// The injection points' package, which a mod that listens at points also depends on (#589).
 pub(super) const POINTS_PACKAGE: &str = "horizon-mod-points";
 
+/// The per-mod facade's package, rewritten to its generated crate.
+pub(super) const INTERNALS_PACKAGE: &str = "horizon-internals";
 /// Each game package a mod may depend on, with its library's name.
-pub(super) const PACKAGES: [(&str, &str); 2] =
-    [(API_PACKAGE, "mod_api"), (POINTS_PACKAGE, "mod_points")];
+pub(super) const PACKAGES: [(&str, &str); 3] = [
+    (API_PACKAGE, "mod_api"),
+    (POINTS_PACKAGE, "mod_points"),
+    (INTERNALS_PACKAGE, "internals"),
+];
 
 /// A dependency on one of [`PACKAGES`], under `[dependencies]` or a `[target.*]` table.
 struct ApiDependency {
@@ -78,13 +102,21 @@ struct ApiDependency {
 }
 
 impl ApiDependency {
-    fn value_mut<'a>(&self, cargo: &'a mut toml::Table) -> &'a mut toml::Value {
+    fn table_mut<'a>(&self, cargo: &'a mut toml::Table) -> &'a mut toml::Table {
         match &self.target {
-            Some(target) => {
-                &mut cargo["target"][target.as_str()]["dependencies"][self.key.as_str()]
-            }
-            None => &mut cargo["dependencies"][self.key.as_str()],
+            Some(target) => cargo["target"][target.as_str()]["dependencies"]
+                .as_table_mut()
+                .expect("parsed dependencies"),
+            None => cargo["dependencies"]
+                .as_table_mut()
+                .expect("parsed dependencies"),
         }
+    }
+
+    fn value_mut<'a>(&self, cargo: &'a mut toml::Table) -> &'a mut toml::Value {
+        self.table_mut(cargo)
+            .get_mut(&self.key)
+            .expect("parsed dependency")
     }
 }
 
@@ -112,7 +144,7 @@ impl std::fmt::Display for ProjectError {
                 &[("mod", mod_id)],
             ),
             Self::GameDependency { mod_id, key } => trf(
-                "{mod}: Cargo.toml depends on the game ({key}). A mod depends on horizon-mod-api alone.",
+                "E_GAME_DEPENDENCY: {mod}: Cargo.toml depends on the game ({key}). Declare game internals through horizon-internals instead.",
                 &[("mod", mod_id), ("key", key)],
             ),
         };
@@ -134,6 +166,41 @@ impl<'a> Project<'a> {
             .and_then(toml::Value::as_str)
             .ok_or_else(|| ProjectError::PackageName { mod_id: mod_id() })?
             .to_owned();
+        for table in std::iter::once(&cargo).chain(
+            cargo
+                .get("target")
+                .and_then(toml::Value::as_table)
+                .into_iter()
+                .flat_map(|targets| targets.values())
+                .filter_map(toml::Value::as_table),
+        ) {
+            for kind in [
+                "dependencies",
+                "dev-dependencies",
+                "build-dependencies",
+                "dev_dependencies",
+                "build_dependencies",
+            ] {
+                for (key, value) in table
+                    .get(kind)
+                    .and_then(toml::Value::as_table)
+                    .into_iter()
+                    .flatten()
+                {
+                    if value
+                        .get("package")
+                        .and_then(toml::Value::as_str)
+                        .unwrap_or(key)
+                        == "horizon-client"
+                    {
+                        return Err(ProjectError::GameDependency {
+                            mod_id: mod_id(),
+                            key: key.clone(),
+                        });
+                    }
+                }
+            }
+        }
         let mut api_deps = Vec::new();
         for (target, dependencies) in dependency_tables(&cargo) {
             for (key, value) in dependencies {
@@ -151,12 +218,6 @@ impl<'a> Project<'a> {
                         library,
                     });
                     continue;
-                }
-                if package == "horizon-client" {
-                    return Err(ProjectError::GameDependency {
-                        mod_id: mod_id(),
-                        key: key.clone(),
-                    });
                 }
             }
         }
@@ -217,6 +278,7 @@ pub(super) fn stage(
     projects: &[Project<'_>],
     declared: &[Vec<super::dependencies::Dependency>],
     resolution: &super::dependencies::Resolution,
+    catalog: &internals::Catalog,
 ) -> Result<bool, String> {
     let mods: Vec<_> = resolution
         .order
@@ -226,10 +288,10 @@ pub(super) fn stage(
     if mods.is_empty() {
         return Ok(false);
     }
-    let template = fs::read_to_string(stage.join(MAIN_TEMPLATE)).ok()
-        .filter(|template| ["/* MOD_ENTRIES */", "/* BUILT_MODS */"].iter()
-            .all(|marker| template.matches(marker).count() == 1))
-        .ok_or_else(|| crate::i18n::tr("This game source has no native inventory entry template. Update Horizon and rebuild the mods against this game.").to_string())?;
+    let facades = catalog
+        .prepare(mods.iter().map(|(_, project)| &project.bundle.manifest))
+        .map_err(|e| e.to_string())?;
+    let template = template(&stage.join(MAIN_TEMPLATE))?;
     let packages: std::collections::HashMap<_, _> = mods
         .iter()
         .map(|(_, project)| (project.bundle.manifest.id.as_str(), project.package.clone()))
@@ -262,7 +324,11 @@ pub(super) fn stage(
         let package = project.package.clone();
         for api in &project.api_deps {
             let dependency = api.value_mut(&mut manifest);
-            let mut rewritten = path_dep(&format!("../../crates/{}", api.package));
+            let mut rewritten = path_dep(&if api.package == INTERNALS_PACKAGE {
+                format!("../../{}", internals::relative(&bundle.manifest.id))
+            } else {
+                format!("../../crates/{}", api.package)
+            });
             if let Some(old) = dependency.as_table() {
                 // A renamed dependency also needs its package name.
                 for key in ["package", "features"] {
@@ -271,7 +337,20 @@ pub(super) fn stage(
                     }
                 }
             }
+            if api.package == INTERNALS_PACKAGE {
+                rewritten.insert(
+                    "package".into(),
+                    internals::package(&bundle.manifest.id).into(),
+                );
+            }
             *dependency = toml::Value::Table(rewritten);
+            // Cargo treats a key differing from `package` as the crate's alias. Preserve the
+            // facade's library name when giving its per-mod package a unique name.
+            if api.package == INTERNALS_PACKAGE && api.key == INTERNALS_PACKAGE {
+                let table = api.table_mut(&mut manifest);
+                let value = table.remove(&api.key).expect("rewritten dependency");
+                table.insert("internals".into(), value);
+            }
         }
         let targets: Vec<_> = declared[*index]
             .iter()
@@ -293,6 +372,22 @@ pub(super) fn stage(
             );
         }
         deps.insert(format!("mod_{i}"), toml::Value::Table(dep));
+        if internals::needed(&bundle.manifest)
+            || project
+                .api_deps
+                .iter()
+                .any(|dep| dep.package == INTERNALS_PACKAGE)
+        {
+            internals::stage(stage, project, &facades[bundle.manifest.id.as_str()])?;
+            let facade = internals::relative(&bundle.manifest.id);
+            let mut dependency = path_dep(&format!("../../{facade}"));
+            dependency.insert(
+                "package".into(),
+                internals::package(&bundle.manifest.id).into(),
+            );
+            deps.insert(format!("mod_{i}_internals"), toml::Value::Table(dependency));
+            members.push(facade);
+        }
         members.push(relative);
     }
     // Beside horizon-client, so its build script (the Windows stack size and icon, for the
@@ -350,8 +445,11 @@ pub(super) fn stage(
         .iter()
         .map(|(_, project)| &project.bundle.manifest)
         .collect();
-    fs::write(game.join("src/main.rs"), main_rs(&template, &manifests))
-        .map_err(|e| e.to_string())?;
+    fs::write(
+        game.join("src/main.rs"),
+        main_rs(&template, &manifests, &catalog.points),
+    )
+    .map_err(|e| e.to_string())?;
     let root = stage.join("Cargo.toml");
     let mut workspace = read(&root)?;
     let list = workspace
@@ -446,7 +544,7 @@ mod tests {
         extra.side = horizon_mods::Side::Client;
         let mods = [&base, &extra];
         for count in 0..=2 {
-            let text = main_rs(template, &mods[..count]);
+            let text = main_rs(template, &mods[..count], &[]);
             let facts: Vec<_> = text
                 .lines()
                 .filter(|line| line.contains(" => mod_"))
@@ -496,6 +594,7 @@ mod tests {
             std::slice::from_ref(&project),
             &[vec![]],
             &resolution,
+            &internals::Catalog::default(),
         )
         .unwrap_err();
         assert!(err.contains("Update Horizon"), "{err}");
@@ -508,7 +607,8 @@ mod tests {
             &stage_dir,
             std::slice::from_ref(&project),
             &[vec![]],
-            &resolution
+            &resolution,
+            &internals::Catalog::default(),
         )
         .is_err());
         assert!(!stage_dir.join("native-api").exists());
@@ -521,7 +621,8 @@ mod tests {
             &stage_dir,
             std::slice::from_ref(&project),
             &[vec![]],
-            &resolution
+            &resolution,
+            &internals::Catalog::default(),
         )
         .unwrap());
         let root = read(&stage_dir.join("Cargo.toml")).unwrap();
@@ -578,7 +679,14 @@ mod tests {
         fs::write(stage_dir.join("crates/horizon-client/Cargo.toml"), "[package]\nname = 'horizon-client'\nversion = '0.1.0'\n[build-dependencies]\nhorizon-mod-api-gen = { path = '../horizon-mod-api-gen' }\n").unwrap();
         let bundle = super::super::bundle_in(&dir).unwrap().unwrap();
         let project = Project::read(&bundle).unwrap();
-        stage(&stage_dir, &[project], &[vec![]], &resolution).unwrap();
+        stage(
+            &stage_dir,
+            &[project],
+            &[vec![]],
+            &resolution,
+            &internals::Catalog::default(),
+        )
+        .unwrap();
         assert!(main().contains(r#""example" => mod_0::hooks,"#));
         let game = read(&stage_dir.join(GAME).join("Cargo.toml")).unwrap();
         assert_eq!(
@@ -600,7 +708,14 @@ mod tests {
             fs::write(source.join("mod_api.rs"), text).unwrap();
             let bundle = super::super::bundle_in(&dir).unwrap().unwrap();
             let project = Project::read(&bundle).unwrap();
-            let error = stage(&stage_dir, &[project], &[vec![]], &resolution).unwrap_err();
+            let error = stage(
+                &stage_dir,
+                &[project],
+                &[vec![]],
+                &resolution,
+                &internals::Catalog::default(),
+            )
+            .unwrap_err();
             assert!(error.contains("Update Horizon and rebuild"), "{error}");
             assert!(!stage_dir.join(GAME).exists());
             assert!(!stage_dir.join("native-api").exists());
@@ -610,6 +725,7 @@ mod tests {
             &[],
             &[],
             &super::super::dependencies::Resolution { order: vec![] },
+            &internals::Catalog::default(),
         )
         .unwrap());
         fs::remove_dir_all(dir).unwrap();

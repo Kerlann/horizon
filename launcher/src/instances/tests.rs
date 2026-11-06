@@ -438,7 +438,20 @@ fn switching_what_an_instance_plays_keeps_its_worlds_mods_and_settings() {
     let made = create_in(&home, &data, "Mine", None, None).unwrap();
     put(&made.home.join("saves/Base/level.dat"), "base");
     put(&made.home.join("saves/Base/region/r.0.0.mca"), "region");
-    put(&made.home.join("mods/minimap.hmod"), "hmod");
+    put(
+        &made
+            .home
+            .join(crate::browser::java::MODS_DIR)
+            .join("minimap.hmod"),
+        "content hmod",
+    );
+    put(
+        &made
+            .home
+            .join(crate::native_mods::INSTALLED)
+            .join("treefall.hmod"),
+        "native hmod",
+    );
     put(&made.home.join("options.txt"), "fov:90");
     edit_in(&home, &data, &made.id, |m| {
         m.version = Some("nightly-2026-11-01-c9d474d".into())
@@ -453,13 +466,13 @@ fn switching_what_an_instance_plays_keeps_its_worlds_mods_and_settings() {
         }),
     };
 
-    // Horizon to Fabric: Horizon's mod stops loading; its world is opened by another version.
+    // Horizon to Fabric: both kinds of Horizon mod stop loading; its world changes version.
     let now = find_in(&list_in(&home, &data), &made.id).unwrap();
     assert_eq!(
         unkept(&now, &fabric("1.21.1"), "26.3"),
         [
             Unkept::Mods {
-                count: 1,
+                count: 2,
                 made_for: "Horizon".into()
             },
             Unkept::Worlds {

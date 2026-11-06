@@ -970,37 +970,76 @@ impl Game<'_> {
 
     /// The players on this server, in the order they joined. Empty on a
     /// client and in a world nobody else can join.
-    pub(super) fn native_server_players(&self) -> Vec<NativeServerPlayer> {
+    pub(super) fn native_server_players(&self) -> Vec<PlayerRef> {
+        let Some(epoch) = self.native_lifecycle.epoch() else {
+            return Vec::new();
+        };
         let Some(host) = &self.lan else {
             return Vec::new();
         };
+        // Construct from the online records, not the live-body resolver: outer
+        // players remain connected while their bodies are displaced by a turn.
         host.hub
             .online_players()
             .map(|g| {
-                NativeServerPlayer::from(mod_api::__private::built::NativeServerPlayer {
-                    uuid: g.uuid,
-                    name: g.name.clone(),
-                    permission: g.permission,
-                    dimension: g.dimension.clone(),
-                    position: g.position,
-                    game_mode: g.game_mode,
-                    health: g.health,
-                    yaw: g.yaw,
-                    pitch: g.pitch,
-                    entity_id: g.entity_id,
-                    address: g.address.ip().to_string(),
-                })
+                mod_api::__private::game::player_ref(
+                    mod_api::EntityRef::new(epoch, g.entity_id as u32),
+                    g.uuid,
+                )
             })
             .collect()
     }
+
+    /// A connected player's record, including one displaced by a nested turn.
+    pub(super) fn online_player_record(&self, player: PlayerRef) -> Option<&Guest> {
+        (self.native_lifecycle.epoch()? == player.entity().epoch()).then_some(())?;
+        self.lan
+            .as_ref()?
+            .hub
+            .online_players()
+            .find(|g| g.uuid == player.uuid() && g.entity_id as u32 == player.entity().id())
+    }
+
+    /// The stable name of a connected or acting player. None for a stale or
+    /// unavailable player; displaced online players retain their identity.
+    pub(super) fn native_player_name(&self, player: PlayerRef) -> Option<String> {
+        if self.native_acting_player() == Some(player) {
+            return self.lan_acting_name.clone();
+        }
+        Some(self.online_player_record(player)?.name.clone())
+    }
+
+    /// The IP address the player connects from, without the port (behind a
+    /// Velocity proxy, the address the proxy forwards). Displaced connected
+    /// players keep their address; an acting player with no known connection
+    /// has an empty address. None for a stale or unavailable player.
+    pub(super) fn native_player_address(&self, player: PlayerRef) -> Option<String> {
+        if let Some(guest) = self.online_player_record(player) {
+            return Some(guest.address.ip().to_string());
+        }
+        (self.native_acting_player() == Some(player)).then(String::new)
+    }
+
+    /// Validate identity without requiring a live body: sending to an online
+    /// displaced player still works, as it did through the UUID send path.
+    fn message_player_uuid(&self, player: PlayerRef) -> Option<u128> {
+        (self.native_acting_player() == Some(player) || self.online_player_record(player).is_some())
+            .then_some(player.uuid())
+    }
     /// A system line in that player's chat, also inside a player's hook for
     /// the acting player; false when they aren't on.
-    pub(super) fn native_tell(&mut self, uuid: u128, line: Text) -> bool {
+    pub(super) fn native_player_tell(&mut self, player: PlayerRef, line: Text) -> bool {
+        let Some(uuid) = self.message_player_uuid(player) else {
+            return false;
+        };
         self.native_send(uuid, system_chat(&line))
     }
     /// A line over that player's hotbar (the action bar), also inside a
     /// player's hook for the acting player; false when they aren't on.
-    pub(super) fn native_action_bar(&mut self, uuid: u128, line: Text) -> bool {
+    pub(super) fn native_player_action_bar(&mut self, player: PlayerRef, line: Text) -> bool {
+        let Some(uuid) = self.message_player_uuid(player) else {
+            return false;
+        };
         let packet = C::SystemChat(play::SystemChat {
             content: component_nbt(&line.component()),
             overlay: true,
@@ -1077,7 +1116,15 @@ impl Game<'_> {
     /// The lines over and under that player's list of players (Tab):
     /// `ClientboundTabListPacket`, an empty text for none. False when they
     /// aren't on.
-    pub(super) fn native_tab_list(&mut self, uuid: u128, header: &Text, footer: &Text) -> bool {
+    pub(super) fn native_player_tab_list(
+        &mut self,
+        player: PlayerRef,
+        header: &Text,
+        footer: &Text,
+    ) -> bool {
+        let Some(uuid) = self.message_player_uuid(player) else {
+            return false;
+        };
         let packet = C::TabList(play::TabList {
             header: component_nbt(&header.component()),
             footer: component_nbt(&footer.component()),
@@ -1098,9 +1145,16 @@ impl Game<'_> {
     /// ignored player who isn't in bed is left out of the players the night
     /// needs asleep, as a spectator is (an away-from-keyboard mod). Kept
     /// until a mod sets it back or the server stops, also if they leave and
-    /// come back. Only where no player's state is swapped in, as
-    /// `native_run_command`; false there and when they aren't on.
-    pub(super) fn native_sleep_ignored(&mut self, uuid: u128, ignored: bool) -> bool {
+    /// come back. False when the server list is unavailable, the handle is
+    /// stale or the player isn't online.
+    pub(super) fn native_player_set_sleep_ignored(
+        &mut self,
+        player: PlayerRef,
+        ignored: bool,
+    ) -> bool {
+        let Some(uuid) = self.message_player_uuid(player) else {
+            return false;
+        };
         let Some(host) = &mut self.lan else {
             return false;
         };
@@ -1119,11 +1173,15 @@ impl Game<'_> {
     /// lose them from the Tab list and the world (their client stops
     /// tracking the player, as it does a spectator), and don't read their
     /// joining or leaving; players of `level` or more still see them, and
-    /// a player made an operator meanwhile sees them again. By UUID: kept
-    /// for a player who is off (who joins hidden), until a mod sets it again
-    /// or the server stops. Works anywhere on a server, inside a player's
-    /// hook too; false on a client and in a world nobody else can join.
-    pub(super) fn native_hide_player(&mut self, uuid: u128, level: Option<u8>) -> bool {
+    /// a player made an operator meanwhile sees them again. Kept by UUID, even
+    /// after this handle disconnects (the player rejoins hidden), until a mod sets it again
+    /// or the server stops. Works inside a player's hook too; false for a stale
+    /// world epoch, on a client and in a world nobody else can join.
+    pub(super) fn native_player_hide(&mut self, player: PlayerRef, level: Option<u8>) -> bool {
+        if self.native_lifecycle.epoch() != Some(player.entity().epoch()) {
+            return false;
+        }
+        let uuid = player.uuid();
         let Some(host) = &mut self.lan else {
             return false;
         };
@@ -1138,10 +1196,17 @@ impl Game<'_> {
     /// again. Hovering the shown name gives the real one, which stays in the
     /// log, commands, selectors and the server's events. Kept until a mod
     /// sets it again or the server stops (also if they leave and come back).
-    /// Plain text: the mod checks it (`native_text_allowed`, its length,
-    /// other players' names). Only where no player's state is swapped in,
-    /// as `native_run_command`; false there and when they aren't on.
-    pub(super) fn native_set_nickname(&mut self, uuid: u128, nickname: Option<&str>) -> bool {
+    /// Plain text: the mod checks it (`Messages::text_allowed`, its length,
+    /// other players' names). False when the server list is unavailable,
+    /// the handle is stale or the player isn't online.
+    pub(super) fn native_player_set_nickname(
+        &mut self,
+        player: PlayerRef,
+        nickname: Option<&str>,
+    ) -> bool {
+        let Some(uuid) = self.message_player_uuid(player) else {
+            return false;
+        };
         let Some(host) = &mut self.lan else {
             return false;
         };
@@ -1209,32 +1274,13 @@ impl Game<'_> {
     /// swapped in (`native_perform_command`, `native_right_click_block`,
     /// `native_use_on`, `native_break_block`...): None outside such a
     /// hook.
-    pub(super) fn native_acting_player(&self) -> Option<NativeServerPlayer> {
-        let p = self.player.as_ref()?;
-        Some(NativeServerPlayer::from(
-            mod_api::__private::built::NativeServerPlayer {
-                uuid: self.lan_acting_uuid?,
-                name: self.lan_acting_name.clone()?,
-                permission: self.lan_acting_permission?,
-                dimension: self.dim.id().to_owned(),
-                position: [p.position.x, p.position.y, p.position.z],
-                game_mode: self.mode_id(),
-                health: p.health.health(),
-                yaw: p.yaw,
-                pitch: p.pitch,
-                entity_id: self.native_acting_entity() as i32,
-                address: self
-                    .lan
-                    .as_ref()
-                    .and_then(|host| {
-                        host.hub
-                            .guests
-                            .iter()
-                            .find(|g| Some(g.uuid) == self.lan_acting_uuid)
-                    })
-                    .map(|g| g.address.ip().to_string())
-                    .unwrap_or_default(),
-            },
+    pub(super) fn native_acting_player(&self) -> Option<PlayerRef> {
+        self.player.as_ref()?;
+        self.lan_acting_name.as_ref()?;
+        self.lan_acting_permission?;
+        Some(mod_api::__private::game::player_ref(
+            mod_api::EntityRef::new(self.native_lifecycle.epoch()?, self.native_acting_entity()),
+            self.lan_acting_uuid?,
         ))
     }
     /// Runs `line` (no slash) as the server's console does: permission

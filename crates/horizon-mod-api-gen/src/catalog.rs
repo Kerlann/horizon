@@ -118,6 +118,8 @@ pub struct Helper {
     pub receiver: Option<String>,
     #[serde(default)]
     pub backend: bool,
+    /// The small service that owns this global helper, instead of the flat host.
+    pub service: Option<String>,
 }
 
 /// A drawing surface of the game's that drawing hooks get as a trait object (the catalog's
@@ -363,6 +365,21 @@ impl Helper {
             })?;
         if helper.client_target.is_some() && helper.side != Side::Both {
             return Err(CatalogError::ClientTargetNeedsBoth(name));
+        }
+        if let Some(service) = &helper.service {
+            let error = if !matches!(service.as_str(), "commands" | "messages" | "players") {
+                Some("unknown service")
+            } else if helper.receiver.is_some() || helper.backend {
+                Some("a service helper has no receiver or backend")
+            } else {
+                None
+            };
+            if let Some(error) = error {
+                return Err(CatalogError::InvalidHelper {
+                    helper: name,
+                    error: error.into(),
+                });
+            }
         }
         Ok(helper)
     }
@@ -708,6 +725,19 @@ mod tests {
             .unwrap()
             .extend(extra.as_object().unwrap().clone());
         hook
+    }
+
+    #[test]
+    fn service_helpers_reject_unknown_services_and_handle_backends() {
+        for attrs in [
+            r#"service = "unknown""#,
+            r#"service = "commands", receiver = "player""#,
+            r#"service = "messages", backend = true"#,
+        ] {
+            let source =
+                format!(r#"trait Helpers {{ #[helper(side = "server", {attrs})] fn example(); }}"#);
+            assert!(super::Catalog::parse(&[("test.rs".into(), source)]).is_err());
+        }
     }
 
     #[test]

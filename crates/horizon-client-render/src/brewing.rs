@@ -90,9 +90,20 @@ pub fn effect_lines<'a>(
                 );
             }
             let instant = effect(e).is_some_and(|d| d.instant);
-            let scaled = (duration as f32 * scale) as i32;
-            if !instant && scaled > 20 {
-                line = format!("{line} ({})", format_duration(scaled));
+            if !instant {
+                if duration == -1 {
+                    // MobEffectInstance.isInfiniteDuration: formatDuration says
+                    // the infinite sign, not a time.
+                    line = format!(
+                        "{line} ({})",
+                        translate("effect.duration.infinite").unwrap_or_else(|| "∞".to_owned())
+                    );
+                } else {
+                    let scaled = (duration as f32 * scale) as i32;
+                    if scaled > 20 {
+                        line = format!("{line} ({})", format_duration(scaled));
+                    }
+                }
             }
             (line, effect(e).map_or(Category::Neutral, |d| d.category))
         })
@@ -742,5 +753,16 @@ mod tests {
         assert_eq!(stand.items[0], Some(awkward));
         assert_eq!(&*stand.items[1].as_ref().unwrap().item, "minecraft:emerald");
         assert_eq!(stand.items[3].as_ref().map(|s| s.count), Some(1));
+    }
+
+    #[test]
+    fn infinite_effects_say_the_infinite_sign() {
+        // MobEffectInstance.isInfiniteDuration: a -1 duration says the
+        // infinite sign, not a time; a short one still says nothing.
+        let translate = |key: &str| (key == "effect.duration.infinite").then(|| "∞".to_owned());
+        let lines = effect_lines([("minecraft:resistance", -1, 0)], 1.0, &translate);
+        assert_eq!(lines[0].0, "resistance (∞)");
+        let lines = effect_lines([("minecraft:resistance", 15, 0)], 1.0, &translate);
+        assert_eq!(lines[0].0, "resistance");
     }
 }

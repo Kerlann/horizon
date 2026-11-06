@@ -53,7 +53,7 @@ pub trait Helpers {
     )]
     fn level_game_time();
     #[helper(
-        side = "server",
+        side = "both",
         receiver = "level",
         target = "horizon_client::game::native_level_refs::Game<'_>::native_level_day_time"
     )]

@@ -1,12 +1,14 @@
 //! Removing an entity for native server mods, through an `EntityRef`
 //! (docs/modding/src/how-to/native-mods.md, "Entity and level handles", #7387): `Entity.discard`
 //! and `Entity.remove` with a reason. Nothing dies and nothing drops loot.
+//! `Entity.spawnAtLocation` drops an item at one.
 //! The handle reads as gone from the call on, as `isRemoved` does. A mob
 //! leaves at once; the other kinds leave at the level's next sweep of
 //! departed entities, a few times per tick, so a hook that removes one never
 //! shifts the lists the game is walking. A vehicle with a chest spills it, as vanilla's `remove` does.
 use super::{Game, commands::Target};
-use horizon_core::position::BlockPos;
+use horizon_client::items::ItemStack;
+use horizon_core::{geometry::Vec3, position::BlockPos};
 use mod_api::{EntityRef, NativeRemovalReason};
 
 impl Game<'_> {
@@ -41,6 +43,48 @@ impl Game<'_> {
                 true
             }
         }
+    }
+    /// Drops `stack` at the entity's feet, `y_offset` above
+    /// (`Entity.spawnAtLocation`), or 0.15 out along a frame or painting's
+    /// horizontal facing (`HangingEntity.spawnAtLocation`), moving as a new item does, with the
+    /// default pickup delay: the item entity. None for an empty stack or an
+    /// unknown item, a stale handle, a player in another level, or an item a
+    /// mod kept out.
+    pub(super) fn native_entity_spawn_at_location(
+        &mut self,
+        entity: EntityRef,
+        stack: ItemStack,
+        y_offset: f32,
+    ) -> Option<EntityRef> {
+        if !self.stack_spawns(&stack) {
+            return None;
+        }
+        let target = self.native_entity_target(entity)?;
+        if let Target::Guest(conn) = target
+            && self.command_guest(conn)?.dimension != self.dim.id()
+        {
+            return None;
+        }
+        let at = self.target_position(target)?;
+        let [x, y, z] = match target {
+            Target::Frame(id) => {
+                let frame = self.item_frames.iter().find(|frame| frame.id == id)?;
+                super::frames::hanging_drop_position(at, frame.step())
+            }
+            Target::Painting(id) => {
+                let painting = self.paintings.iter().find(|painting| painting.id == id)?;
+                super::frames::hanging_drop_position(at, painting.step())
+            }
+            _ => at,
+        };
+        // Found by its id: the hooks the spawn runs may add entities after it.
+        let id = self.next_entity + 1;
+        self.spawn_at_location(Vec3::new(x, y, z), f64::from(y_offset), stack);
+        self.dropped
+            .iter()
+            .rev()
+            .any(|d| d.id == id)
+            .then(|| EntityRef::new(entity.epoch(), id))
     }
     /// A mob leaves the level: its effects act first when it was killed.
     fn remove_mob_now(&mut self, id: u32, killed: bool) {
@@ -203,6 +247,104 @@ mod tests {
             let player = game.native_entity(20).unwrap();
             assert!(!player.discard(game));
             assert!(game.player.is_some());
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn spawn_at_location_drops_an_item_above_the_entity() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::{items::ItemStack, mobs::Mob};
+        use horizon_core::geometry::Vec3;
+
+        with_game(|game| {
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:zombie")
+                .unwrap()
+                .clone();
+            game.mobs
+                .push(Mob::new(12, kind, Vec3::new(3.5, 70.0, -2.5), 0.0));
+            let mob = game.native_entity(12).unwrap();
+            let item = mob
+                .spawn_at_location(game, ItemStack::new("minecraft:carrot", 2), 0.5)
+                .unwrap();
+            let dropped = game.dropped.iter().find(|d| d.id == item.id()).unwrap();
+            assert_eq!(&*dropped.stack.item, "minecraft:carrot");
+            assert_eq!(dropped.stack.count, 2);
+            assert_eq!(dropped.position, Vec3::new(3.5, 70.5, -2.5));
+            assert_eq!(dropped.pickup_delay, 10);
+            // An empty stack or an unknown item drops nothing; nor does a gone entity.
+            let before = game.dropped.len();
+            assert!(
+                mob.spawn_at_location(game, ItemStack::new("minecraft:carrot", 0), 0.0)
+                    .is_none()
+            );
+            assert!(
+                mob.spawn_at_location(game, ItemStack::new("minecraft:no_such_item", 1), 0.0)
+                    .is_none()
+            );
+            assert!(mob.discard(game));
+            assert!(
+                mob.spawn_at_location(game, ItemStack::new("minecraft:carrot", 1), 0.0)
+                    .is_none()
+            );
+            assert_eq!(game.dropped.len(), before);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn spawn_at_location_offsets_hanging_entities_out_from_the_wall() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::entities::{ItemFrame, Painting};
+        use horizon_client::items::ItemStack;
+        use horizon_core::geometry::Vec3;
+
+        with_game(|game| {
+            for (id, glow, facing) in [(12, false, 5), (13, true, 4)] {
+                game.item_frames.push(ItemFrame {
+                    join: Default::default(),
+                    id,
+                    pos: [0, 64, 0],
+                    facing,
+                    glow,
+                    item: None,
+                    rotation: 0,
+                    drop_chance: 1.0,
+                    fixed: false,
+                    invisible: false,
+                    check_interval: 0,
+                    custom_name: None,
+                });
+            }
+            game.paintings.push(Painting {
+                join: Default::default(),
+                id: 14,
+                pos: [0, 64, 0],
+                facing: 2,
+                variant: "minecraft:kebab".into(),
+                width: 1,
+                height: 1,
+                check_interval: 0,
+            });
+            // East frame, west glow frame, north painting. Expected origins
+            // are the hanging center plus 0.15 facing out and the 0.5 Y offset.
+            for (id, expected) in [
+                (12, Vec3::new(0.18125, 65.0, 0.5)),
+                (13, Vec3::new(0.81875, 65.0, 0.5)),
+                (14, Vec3::new(0.5, 65.0, 0.81875)),
+            ] {
+                let entity = game.native_entity(id).unwrap();
+                let item = entity
+                    .spawn_at_location(game, ItemStack::new("minecraft:carrot", 2), 0.5)
+                    .unwrap();
+                let dropped = game.dropped.iter().find(|d| d.id == item.id()).unwrap();
+                assert_eq!(dropped.position, expected);
+                assert_eq!(dropped.stack.count, 2);
+                assert_eq!(dropped.pickup_delay, 10);
+            }
         });
     }
 

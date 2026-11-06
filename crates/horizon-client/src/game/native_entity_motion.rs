@@ -197,7 +197,7 @@ impl Game<'_> {
     /// corner. None for the kinds whose box Horizon doesn't keep (displays,
     /// markers, End crystals, the dragon). API 379.
     pub(super) fn native_entity_bounding_box(&self, entity: EntityRef) -> Option<[[f64; 3]; 2]> {
-        let t = self.native_entity_target(entity)?;
+        let t = self.native_entity_read_target(entity)?;
         if let Some(p) = self.native_client_player(t) {
             return Some(corners(p.bounds()));
         }

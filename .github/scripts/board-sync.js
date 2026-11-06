@@ -11,12 +11,14 @@
 // PR author, when empty. Phase is filled from a "**Phase.** <name>" line in the body when empty.
 // Pinned issues stay off the board.
 module.exports = async ({ github, context, core }) => {
+  const FULL = context.eventName === 'schedule' || context.eventName === 'workflow_dispatch';
   const OWNER = 'arismoko', REPO = 'horizon', NUMBER = 1;
   // GitHub answers 502 on heavy pages now and then; retry those a few times.
   const q = async (query, vars = {}) => {
     for (let i = 0; ; i++) {
       try { return await github.graphql(query, vars); }
-      catch (e) { if (i >= 4 || !/50[234]|timeout/i.test(String(e.status || e.message))) throw e; await new Promise(r => setTimeout(r, 5000 * (i + 1))); }
+      // GraphQL also answers "Something went wrong while executing your query" (no status) on heavy pages.
+      catch (e) { if (i >= 4 || !/50[234]|timeout|something went wrong/i.test(`${e.status} ${e.message}`)) throw e; await new Promise(r => setTimeout(r, 5000 * (i + 1))); }
     }
   };
 
@@ -31,7 +33,7 @@ module.exports = async ({ github, context, core }) => {
   // Board items, keyed by content node id.
   const items = new Map();
   for (let after = null; ;) {
-    const page = (await q(`query($id:ID!,$a:String){node(id:$id){... on ProjectV2{items(first:100,after:$a){
+    const page = (await q(`query($id:ID!,$a:String){node(id:$id){... on ProjectV2{items(first:50,after:$a){
       pageInfo{hasNextPage endCursor}
       nodes{id content{... on Issue{id} ... on PullRequest{id}}
         s:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}
@@ -68,8 +70,10 @@ module.exports = async ({ github, context, core }) => {
           else s = claimed ? 'In progress' : 'Todo';
           want.set(n.id, { status: s, owner: who.length ? who.join(', ') : (claimedBy || n.author?.login || ''), phase: phaseOption[phaseName], number: n.number, issue: kind === 'issues', open: state === 'OPEN' });
         }
-        // Closed items only matter while they are on the board; stop paging closed lists early.
-        if (!page.pageInfo.hasNextPage || (state !== 'OPEN' && after !== null)) break;
+        // Closed items only matter while they are on the board. Event runs read the 80 most recently
+        // updated closed items; the scheduled run reads them all, so a merge an event run missed
+        // (a burst of merges, a skipped pending run) still reaches Done within 15 minutes.
+        if (!page.pageInfo.hasNextPage || (state !== 'OPEN' && !FULL && after !== null)) break;
         after = page.pageInfo.endCursor;
       }
     }

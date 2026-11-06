@@ -2,7 +2,10 @@
 //! and its payloads). Plain data, as vanilla's block entities are world data;
 //! their behaviour lives with the features that use them (`containers`,
 //! `brewing`, `signs`, ...), which re-export these types under their old paths.
-use horizon_client_core::{text::Text, who::Who};
+use horizon_client_core::{
+    text::Text,
+    who::{EventSource, Who},
+};
 use horizon_items::{banner_layer::BannerLayer, items::ItemStack};
 use horizon_world::{
     level::sculk::SculkSpreader,
@@ -290,6 +293,16 @@ pub struct SignText {
     pub glowing: bool,
     /// The `click_event` in each line's component style, as saved.
     pub click: [Option<Tag>; 4],
+    /// Each line's saved component when it is more than plain text (a colour,
+    /// siblings, a list), so its style survives loading, saving and the
+    /// network. See `SignText::message` for a line edited since.
+    pub saved: [Option<SavedLine>; 4],
+}
+/// A sign line's saved component and the text it showed when it was read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SavedLine {
+    pub text: String,
+    pub component: Tag,
 }
 /// `SignBlockEntity` / `HangingSignBlockEntity` data.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -307,7 +320,7 @@ pub struct Info {
     pub event: &'static str,
     pub distance: f32,
     pub pos: [f64; 3],
-    pub source: Option<Who>,
+    pub source: Option<EventSource>,
     pub owner: Option<Who>,
 }
 /// `VibrationSelector`: the closest, then highest-frequency candidate of a tick.

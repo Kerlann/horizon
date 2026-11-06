@@ -1359,7 +1359,16 @@ impl Game<'_> {
         // The fractional tick makes the smooth chat extra's slide move every
         // frame; vanilla's fade reads it too.
         let now = self.visual_ticks() as f32 + self.clock.fraction() as f32;
-        self.ui.chat.draw(batch, &self.gui.atlas, now, focused);
+        // NeoForge's `CustomizeGuiOverlayEvent.Chat`: a mod may move the chat's bottom-left
+        // corner, and the chat is drawn shifted by as much (`Gui.renderChat`'s translate).
+        let (width, height) = (batch.width as i32, batch.height as i32);
+        let (home_x, home_y) = (0, height - 40);
+        let (mut x, mut y) = (home_x, home_y);
+        self.native_customize_chat_overlay(width, height, focused, &mut x, &mut y);
+        let offset = [(x - home_x) as f32, (y - home_y) as f32];
+        self.ui
+            .chat
+            .draw_at(batch, &self.gui.atlas, now, focused, offset);
     }
     /// `HoverEvent.EntityTooltipInfo.getTooltipLines`: the name when the
     /// event has one, the entity type and the UUID.
@@ -1671,8 +1680,49 @@ impl Game<'_> {
         self.take_screenshot();
         true
     }
+    /// Readback is complete: fire the client hook, then save the image it left.
+    pub(super) fn save_screenshot(
+        &mut self,
+        mut pending: horizon_client::gfx::PendingScreenshot,
+    ) -> Option<std::result::Result<[u32; 2], String>> {
+        if self.ui.screenshot_message.as_ref() != Some(&pending.path) {
+            // Another request replaced F2 before its frame was drawn.
+            self.ui.screenshot_message = None;
+            return Some(pending.save().map_err(|e| e.to_string()));
+        }
+        let mut file_name = pending
+            .path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        let mut message = None;
+        let mut cancel = false;
+        self.native_screenshot(
+            pending.image_mut(),
+            &mut file_name,
+            &mut message,
+            &mut cancel,
+        );
+        if cancel {
+            self.post_screenshot_chat(screenshot_cancel_line(message));
+            self.ui.screenshot_message = None;
+            return None;
+        }
+        let root = horizon_client::logging::player_dir().join("screenshots");
+        let result = pending
+            .save_in(&root, &file_name)
+            .map_err(|e| e.to_string());
+        self.ui.screenshot_message = Some(pending.path);
+        self.finish_screenshot(&result, message);
+        Some(result)
+    }
     /// After a frame: report a finished F2 screenshot in chat.
-    pub(super) fn finish_screenshot(&mut self, result: &std::result::Result<[u32; 2], String>) {
+    pub(super) fn finish_screenshot(
+        &mut self,
+        result: &std::result::Result<[u32; 2], String>,
+        message: Option<Text>,
+    ) {
         let Some(path) = self.ui.screenshot_message.take() else {
             return;
         };
@@ -1688,10 +1738,14 @@ impl Game<'_> {
                         ..Style::default()
                     },
                 );
-                Text::translate("screenshot.success", &[link])
+                message.unwrap_or_else(|| Text::translate("screenshot.success", &[link]))
             }
             Err(e) => Text::translate("screenshot.failure", &[Text::literal(e.clone())]),
         };
+        self.post_screenshot_chat(message);
+    }
+
+    fn post_screenshot_chat(&mut self, message: Text) {
         let focused = self.screen == Screen::Chat;
         self.ui.chat.add(
             &self.gui.atlas,
@@ -1702,6 +1756,16 @@ impl Game<'_> {
             focused,
         );
     }
+}
+
+/// `ScreenshotEvent.getCancelMessage`: the listener's line, or the default reason.
+pub(super) fn screenshot_cancel_line(message: Option<Text>) -> Text {
+    message.unwrap_or_else(|| {
+        Text::translate(
+            "screenshot.failure",
+            &[Text::translate("horizon.screenshot.canceled", &[])],
+        )
+    })
 }
 /// `yyyy-MM-dd_HH.mm.ss[_n].png` (Util.getFilenameFormattedDateTime, in local time).
 pub fn screenshot_name(dir: &std::path::Path) -> String {
@@ -1734,6 +1798,19 @@ const LINK_COPY: usize = 1;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn canceled_screenshot_keeps_a_custom_line_or_the_default_reason() {
+        let custom = Text::literal("kept");
+        assert_eq!(screenshot_cancel_line(Some(custom.clone())), custom);
+        assert_eq!(
+            screenshot_cancel_line(None),
+            Text::translate(
+                "screenshot.failure",
+                &[Text::translate("horizon.screenshot.canceled", &[])]
+            )
+        );
+    }
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]

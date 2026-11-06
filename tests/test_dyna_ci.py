@@ -56,10 +56,10 @@ class DynaRoutingTests(unittest.TestCase):
         for item in ("vars.DYNA_CI_SELF_HOSTED", "vars.DYNA_CI_POOL_UNTIL", "github.event_name",
                      "github.event.pull_request.head.repo.full_name == github.repository", "dyna_ci_runner.sh"):
             self.assertIn(item, route)
-        for name in ("verify", "launcher"):
+        for name, label in (("verify", "dyna-large"), ("launcher", "dyna-medium")):
             block = blocks[name]
             self.assertIn("needs: changes", block)
-            self.assertIn("needs.changes.outputs.self_hosted == 'true' && 'dyna-medium'", block)
+            self.assertIn(f"needs.changes.outputs.self_hosted == 'true' && '{label}'", block)
             self.assertNotIn("secrets.", block)
             self.assertNotIn("permissions:", block)
         self.assertIn("runs-on: ubuntu-latest", blocks["pool-watch"])

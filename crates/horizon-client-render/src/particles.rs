@@ -1089,10 +1089,30 @@ impl ParticleLevel<'_> {
     }
 }
 
+/// One `particlesToAdd` FIFO across render groups: admission shares the engine RNG.
+#[allow(
+    clippy::large_enum_variant,
+    reason = "inline ordinary particles avoid an allocation per spawn"
+)]
+enum PendingParticle {
+    Ordinary(Particle),
+    Starter(Starter),
+    ElderGuardian,
+}
+
+impl PendingParticle {
+    fn ordinary(&self) -> Option<&Particle> {
+        match self {
+            Self::Ordinary(particle) => Some(particle),
+            _ => None,
+        }
+    }
+}
+
 /// `ParticleEngine` plus the sprite sets of `ParticleResources`.
 pub struct ParticleEngine {
     particles: Vec<Particle>,
-    pending: Vec<Particle>,
+    pending: Vec<PendingParticle>,
     /// `ParticleEngine.random`, handed to every `ParticleProvider`.
     random: LegacyRandom,
     /// `ClientLevel.random` as particle constructors use it (`level.getRandom()`).
@@ -1127,6 +1147,7 @@ pub struct ParticleEngine {
     pub particle_level: u8,
     /// FireworkParticles.Starter instances.
     starters: Vec<Starter>,
+    elder_guardians: Vec<i32>,
     /// `ClientExplosionTracker` tracked explosions pending debris generation.
     tracked_explosions: Vec<TrackedExplosion>,
     /// Local sounds requested by particles (dripstone drips, firework bursts):
@@ -1138,7 +1159,10 @@ pub struct ParticleEngine {
     /// and cobweb models, resolved for the ground), one per model layer.
     pub item_sprites: HashMap<ParticleType, Vec<String>>,
 }
-/// `ParticleGroup.MAX_PARTICLES` (per render group; one group here).
+/// `ElderGuardianParticle.lifetime`.
+pub const ELDER_GUARDIAN_LIFETIME: i32 = 30;
+
+/// `ParticleGroup.MAX_PARTICLES` (per render group).
 const MAX_PARTICLES: usize = 16384;
 /// `ParticleLimit.SPORE_BLOSSOM`, the only limited particle.
 const SPORE_BLOSSOM_LIMIT: usize = 1000;
@@ -1313,6 +1337,7 @@ impl ParticleEngine {
             set_sprites: Vec::new(),
             emitters: Vec::new(),
             starters: Vec::new(),
+            elder_guardians: Vec::new(),
             tracked_explosions: Vec::new(),
             camera: [0.0; 3],
             particle_level: 0,
@@ -1335,7 +1360,8 @@ impl ParticleEngine {
         // Controllers' numeric sprite-set handles belong to this resource
         // generation. Discard them rather than selecting another set after reload.
         self.particles.retain(|p| p.controller.is_none());
-        self.pending.retain(|p| p.controller.is_none());
+        self.pending
+            .retain(|p| p.ordinary().is_none_or(|p| p.controller.is_none()));
         self.atlas = atlas
             .iter()
             .map(|(name, &rect)| (name.clone(), (rect, translucent.contains(name))))
@@ -1463,9 +1489,19 @@ impl ParticleEngine {
     pub fn is_empty(&self) -> bool {
         self.particles.is_empty()
     }
+    /// The live particles of the groups this engine holds, as `ParticleEngine.countParticles`
+    /// counts them: ordinary particles, firework starters (`NO_RENDER`) and elder guardian
+    /// apparitions (`ELDER_GUARDIANS`). Queued particles and tracking emitters are not counted.
+    pub fn group_count(&self) -> usize {
+        self.particles.len() + self.starters.len() + self.elder_guardians.len()
+    }
+    /// `ParticleEngine.clearParticles`, for the groups this engine holds: the live
+    /// particles, firework starters, elder guardians, queued particles and tracking emitters.
     pub fn clear(&mut self) {
         self.emitters.clear();
         self.particles.clear();
+        self.starters.clear();
+        self.elder_guardians.clear();
         self.pending.clear();
     }
     /// `VibrationSignalParticle`'s body: the signal leaves `from` aimed at the
@@ -1494,11 +1530,11 @@ impl ParticleEngine {
     pub fn vibration(&mut self, from: [f64; 3], to: [f64; 3], ticks: i32) {
         let mut q = Self::vibration_particle(from, to, ticks);
         q.set = self.set_of(ParticleType::Vibration);
-        self.pending.push(q);
+        self.pending.push(PendingParticle::Ordinary(q));
     }
     /// `ParticleEngine.add` (via `particlesToAdd`, applied on the next tick).
     pub fn push(&mut self, particle: Particle) {
-        self.pending.push(particle);
+        self.pending.push(PendingParticle::Ordinary(particle));
     }
     /// Create a named billboard with custom compiled behavior and no vanilla
     /// motion. Like `add`, respects camera distance and the Particles setting.
@@ -1798,14 +1834,14 @@ impl ParticleEngine {
                 && self
                     .particles
                     .iter()
-                    .chain(self.pending.iter())
+                    .chain(self.pending.iter().filter_map(PendingParticle::ordinary))
                     .filter(|q| q.ty == ParticleType::SporeBlossomAir)
                     .count()
                     >= SPORE_BLOSSOM_LIMIT
             {
                 return;
             }
-            self.pending.push(particle);
+            self.pending.push(PendingParticle::Ordinary(particle));
         }
     }
     /// How many particles of each type were made so far.
@@ -2844,8 +2880,8 @@ impl ParticleEngine {
             // the listener the signal flies to and its arrival time; the sprite
             // is the set's own draw from the engine's random.
             T::Vibration => {
-                let (dest, ticks) = o.vibration?;
-                let mut q = Self::vibration_particle(p, dest, ticks);
+                let (_, dest, ticks) = o.vibration.as_ref()?;
+                let mut q = Self::vibration_particle(p, *dest, *ticks);
                 q.set = set;
                 q.sprite = self.sprite_from_set(ty);
                 q
@@ -3371,7 +3407,16 @@ impl ParticleEngine {
         self.sprite_from_age(&mut q);
         q
     }
-    /// ClientLevel.createFireworks: a Starter (or poofs without explosions).
+    /// Queue an elder guardian apparition, admitted with the other particles after ticking.
+    pub fn elder_guardian(&mut self) {
+        self.pending.push(PendingParticle::ElderGuardian);
+    }
+    /// Ticks left for each admitted `ElderGuardianParticle`, for its model renderer.
+    pub fn elder_guardians(&self) -> &[i32] {
+        &self.elder_guardians
+    }
+    /// ClientLevel.createFireworks: queue a Starter (or poofs without explosions).
+    /// Like other particles it is admitted after the next tick, without being aged.
     pub fn fireworks(
         &mut self,
         at: [f64; 3],
@@ -3394,7 +3439,7 @@ impl ParticleEngine {
         let twinkle = explosions.iter().any(|e| e.twinkle);
         let lifetime = explosions.len() as i32 * 2 - 1 + if twinkle { 15 } else { 0 };
         let far = (0..3).map(|i| (at[i] - camera[i]).powi(2)).sum::<f64>() >= 256.0;
-        self.starters.push(Starter {
+        self.pending.push(PendingParticle::Starter(Starter {
             at,
             v,
             explosions,
@@ -3402,7 +3447,7 @@ impl ParticleEngine {
             lifetime,
             twinkle_delay: twinkle,
             far,
-        });
+        }));
     }
     fn tick_starters(&mut self) {
         for mut s in std::mem::take(&mut self.starters) {
@@ -3491,7 +3536,7 @@ impl ParticleEngine {
         });
         let [r, g, b] = rgb(c);
         let p = self.spark(s.at, v, [r, g, b, 0.99], fade, e.trail, e.twinkle);
-        self.pending.push(p);
+        self.pending.push(PendingParticle::Ordinary(p));
     }
     fn spark_ball(
         &mut self,
@@ -3554,6 +3599,10 @@ impl ParticleEngine {
         }
     }
     pub fn tick(&mut self, level: &ParticleLevel) {
+        self.elder_guardians.retain_mut(|left| {
+            *left -= 1;
+            *left >= 0
+        });
         self.tick_starters();
         self.tick_explosions(level);
         for (options, feet, width, height, life) in std::mem::take(&mut self.emitters) {
@@ -3568,26 +3617,41 @@ impl ParticleEngine {
         }
         particles.retain(|p| !p.removed);
         self.particles = particles;
-        let pending = std::mem::take(&mut self.pending);
-        for mut p in pending {
-            if p.pre_tick {
-                p.pre_tick = false;
-                self.tick_particle(&mut p, level);
-                p.after_constructor_tick();
-            }
-            // ParticleGroup.add: the last quarter fills with decreasing probability.
-            let size = self.particles.len();
-            if size >= MAX_PARTICLES {
-                continue;
-            }
-            if size >= 12288 {
-                let free = (MAX_PARTICLES - size) as f32 / 4096.0;
-                if self.random.next_float() >= free * free {
-                    continue;
+        for pending in std::mem::take(&mut self.pending) {
+            match pending {
+                PendingParticle::Starter(starter) => {
+                    if self.group_has_space(self.starters.len()) {
+                        self.starters.push(starter);
+                    }
+                }
+                PendingParticle::ElderGuardian => {
+                    if self.group_has_space(self.elder_guardians.len()) {
+                        self.elder_guardians.push(ELDER_GUARDIAN_LIFETIME);
+                    }
+                }
+                PendingParticle::Ordinary(mut p) => {
+                    if p.pre_tick {
+                        p.pre_tick = false;
+                        self.tick_particle(&mut p, level);
+                        p.after_constructor_tick();
+                    }
+                    if self.group_has_space(self.particles.len()) {
+                        self.particles.push(p);
+                    }
                 }
             }
-            self.particles.push(p);
         }
+    }
+    /// `ParticleGroup.add`: each group's last quarter fills with decreasing probability.
+    fn group_has_space(&mut self, size: usize) -> bool {
+        if size >= MAX_PARTICLES {
+            return false;
+        }
+        if size >= 12288 {
+            let free = (MAX_PARTICLES - size) as f32 / 4096.0;
+            return self.random.next_float() < free * free;
+        }
+        true
     }
     /// `ClientExplosionTracker.tick`: throws up to 512 debris particles across all
     /// explosions tracked in this tick, weighted by each explosion's block count.
@@ -4211,7 +4275,7 @@ impl ParticleEngine {
                 if trail && p.age < p.lifetime / 2 && (p.age + p.lifetime) % 2 == 0 {
                     let mut child = self.spark(p.position, [0.0; 3], p.rgba, fade, false, twinkle);
                     child.age = child.lifetime / 2;
-                    self.pending.push(child);
+                    self.pending.push(PendingParticle::Ordinary(child));
                 }
             }
             Behaviour::Spell { original_alpha } => {
@@ -4793,6 +4857,207 @@ const CREEPER: [[f64; 2]; 12] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn with_empty_particle_level(test: impl FnOnce(&ParticleLevel<'_>)) {
+        use horizon_world::{
+            DATA_VERSION,
+            collision::CachedCollisionRegistry,
+            nbt::Tag,
+            registry::{BlockRegistry, BlockStateId},
+        };
+        let states = || Tag::List(vec![Tag::String("minecraft:air".into())]);
+        let registry = BlockRegistry::from_nbt(&Tag::compound([
+            ("DataVersion", Tag::Int(DATA_VERSION)),
+            ("states", states()),
+            ("defaults", Tag::compound([("minecraft:air", Tag::Int(0))])),
+        ]))
+        .unwrap();
+        let cached = CachedCollisionRegistry::from_nbt(
+            &Tag::compound([
+                ("DataVersion", Tag::Int(DATA_VERSION)),
+                ("states", states()),
+                ("shapes", Tag::List(vec![])),
+                ("cached_shapes", Tag::IntArray(vec![-1])),
+            ]),
+            &registry,
+        )
+        .unwrap();
+        let collision = BlockCollisionRegistry::new(std::sync::Arc::new(cached)).unwrap();
+        let facts = BlockFacts {
+            states: vec![],
+            air: BlockStateId(0),
+            woods: HashMap::new(),
+            sign_texts: HashMap::new(),
+        };
+        let world = World::new(BlockStateId(0), 0);
+        test(&ParticleLevel {
+            world: &world,
+            facts: &facts,
+            collision: &collision,
+            player: None,
+        });
+    }
+
+    #[test]
+    fn special_particles_wait_for_admission_without_ticking_or_counting() {
+        with_empty_particle_level(|level| {
+            let mut engine = ParticleEngine::new(Path::new(""), &HashMap::new(), &HashSet::new());
+            engine.fireworks(
+                [0.0; 3],
+                [0.0; 3],
+                vec![FireworkExplosion::default(); 4],
+                [0.0; 3],
+            );
+            engine.elder_guardian();
+            assert_eq!(engine.group_count(), 0);
+            assert!(engine.elder_guardians().is_empty());
+            assert!(engine.sounds.is_empty());
+            engine.tick(level);
+            // No spark exists yet: these are exactly the starter and apparition, not
+            // a count inflated by the firework's first burst.
+            assert_eq!(engine.group_count(), 2);
+            assert_eq!(engine.elder_guardians(), [30]);
+            assert!(engine.sounds.is_empty());
+            engine.elder_guardian();
+            assert_eq!(engine.group_count(), 2);
+            engine.tick(level);
+            assert_eq!(engine.elder_guardians(), [29, 30]);
+            assert_eq!(
+                engine.sounds.len(),
+                1,
+                "starter first ticks after admission"
+            );
+        });
+    }
+
+    #[test]
+    fn clear_removes_live_and_pending_special_particles_without_resurrection() {
+        with_empty_particle_level(|level| {
+            let mut engine = ParticleEngine::new(Path::new(""), &HashMap::new(), &HashSet::new());
+            for admitted in [false, true] {
+                engine.fireworks(
+                    [0.0; 3],
+                    [0.0; 3],
+                    vec![FireworkExplosion::default()],
+                    [0.0; 3],
+                );
+                engine.elder_guardian();
+                if admitted {
+                    engine.tick(level);
+                }
+                engine.clear();
+                assert_eq!(engine.group_count(), 0);
+                engine.tick(level);
+                assert_eq!(engine.group_count(), 0);
+                assert!(engine.sounds.is_empty());
+            }
+        });
+    }
+
+    #[test]
+    fn cross_group_admission_preserves_fifo_reservoir_draws() {
+        with_empty_particle_level(|level| {
+            // Seed 0 draws 0.73096776, 0.831441, 0.24053639. A group at
+            // 12,288 always accepts (but draws); one at 12,832 accepts below
+            // 0.75201416. These independent outcomes distinguish enqueue order.
+            for order in [[0, 1, 2], [1, 0, 2], [2, 0, 1], [0, 2, 1]] {
+                let mut engine =
+                    ParticleEngine::new(Path::new(""), &HashMap::new(), &HashSet::new());
+                let mut ordinary = Particle::blank(ParticleType::Flame, [0.0; 3]);
+                ordinary.lifetime = 100;
+                engine.particles = vec![ordinary.clone(); 12_288];
+                engine.elder_guardians = vec![30; 12_832];
+                // Dormant live starters consume no RNG or enqueue any children on this tick.
+                engine.starters = (0..12_832)
+                    .map(|_| Starter {
+                        at: [0.0; 3],
+                        v: [0.0; 3],
+                        explosions: Vec::new(),
+                        life: 1,
+                        lifetime: 100,
+                        twinkle_delay: false,
+                        far: false,
+                    })
+                    .collect();
+                for group in order {
+                    match group {
+                        0 => engine.push(ordinary.clone()),
+                        1 => engine.elder_guardian(),
+                        2 => engine.fireworks(
+                            [0.0; 3],
+                            [0.0; 3],
+                            vec![FireworkExplosion::default()],
+                            [0.0; 3],
+                        ),
+                        _ => unreachable!(),
+                    }
+                }
+                engine.random = LegacyRandom::new(0);
+                engine.tick(level);
+                assert_eq!(engine.particles.len(), 12_289);
+                assert_eq!(
+                    engine.elder_guardians.len(),
+                    if order[1] == 1 { 12_832 } else { 12_833 },
+                    "guardian in {order:?}"
+                );
+                assert_eq!(
+                    engine.starters.len(),
+                    if order[1] == 2 { 12_832 } else { 12_833 },
+                    "starter in {order:?}"
+                );
+            }
+            // The exact two-group counterexample: ordinary then guardian must
+            // assign the second draw to the guardian, rejecting it.
+            let mut engine = ParticleEngine::new(Path::new(""), &HashMap::new(), &HashSet::new());
+            let mut ordinary = Particle::blank(ParticleType::Flame, [0.0; 3]);
+            ordinary.lifetime = 100;
+            engine.particles = vec![ordinary.clone(); 12_288];
+            engine.elder_guardians = vec![30; 12_832];
+            engine.push(ordinary);
+            engine.elder_guardian();
+            engine.random = LegacyRandom::new(0);
+            engine.tick(level);
+            assert_eq!(engine.particles.len(), 12_289);
+            assert_eq!(engine.elder_guardians.len(), 12_832);
+            assert_eq!(engine.group_count(), 25_121);
+        });
+    }
+
+    #[test]
+    fn special_particles_admission_obeys_the_group_limit() {
+        with_empty_particle_level(|level| {
+            let mut engine = ParticleEngine::new(Path::new(""), &HashMap::new(), &HashSet::new());
+            for _ in 0..20_000 {
+                engine.elder_guardian();
+            }
+            assert_eq!(engine.group_count(), 0);
+            engine.tick(level);
+            assert!((12_288..=16_384).contains(&engine.group_count()));
+            engine.clear();
+            engine.tick(level);
+            assert_eq!(engine.group_count(), 0);
+        });
+    }
+
+    #[test]
+    fn guardian_lifetime_starts_only_after_particle_admission() {
+        with_empty_particle_level(|level| {
+            let mut engine = ParticleEngine::new(Path::new(""), &HashMap::new(), &HashSet::new());
+            engine.elder_guardian();
+            engine.tick(level);
+            for left in (0..30).rev() {
+                engine.tick(level);
+                assert_eq!(engine.elder_guardians(), [left]);
+                assert_eq!(engine.group_count(), 1);
+            }
+            engine.tick(level);
+            assert_eq!(
+                engine.group_count(),
+                0,
+                "Particle.tick removes at age++ >= lifetime"
+            );
+        });
+    }
 
     #[test]
     fn particle_light_cache_reuses_exact_blocks_and_fails_open_on_collisions() {
@@ -5376,8 +5641,10 @@ mod tests {
         // Destination offset (-15, 7, 15); the unused top byte is ignored.
         engine.block_teleportation([4, 12, -5], 0xff01_0f1fu32 as i32, [16, 8, 16]);
         assert_eq!(engine.pending.len(), 128);
-        assert!(engine.pending.iter().all(|p| p.ty == ParticleType::Portal));
-        let first = &engine.pending[0];
+        assert!(engine.pending.iter().all(|p| {
+            matches!(p, PendingParticle::Ordinary(p) if p.ty == ParticleType::Portal)
+        }));
+        let first = engine.pending[0].ordinary().unwrap();
         assert_eq!(
             first.position.map(f64::to_bits),
             [0x3fd18220c05a530a, 0x402b001e6be383c1, 0xbfc76bf5c46dbe5c]
@@ -5387,7 +5654,11 @@ mod tests {
             [0xbfaa91aee0000000, 0x3f95c78ce0000000, 0x3f9c24a0e0000000]
         );
         assert_eq!(
-            engine.pending[127].position.map(f64::to_bits),
+            engine.pending[127]
+                .ordinary()
+                .unwrap()
+                .position
+                .map(f64::to_bits),
             [0xbfd728b135cb9ef6, 0x402ddd72dc6d0019, 0x3fe0b5775a29f186]
         );
         assert_eq!(engine.level_random.state(), 99_413_408_083_437);
@@ -5403,7 +5674,7 @@ mod tests {
         let data = (-7 + 127) << 16 | (-3 + 127) << 8 | (9 + 127);
         engine.block_teleportation([4, 12, -5], data, [127, 127, 127]);
         assert_eq!(engine.pending.len(), 128);
-        for p in &engine.pending {
+        for p in engine.pending.iter().map(|p| p.ordinary().unwrap()) {
             let [x, y, z] = p.position;
             assert!((-3.0..5.0).contains(&x), "{x}");
             assert!((8.5..12.5).contains(&y), "{y}");
@@ -5522,6 +5793,7 @@ mod tests {
             engine
                 .pending
                 .iter()
+                .filter_map(PendingParticle::ordinary)
                 .all(|p| p.ty == ParticleType::SporeBlossomAir)
         );
         // A type without a `ParticleLimit` is not capped.
@@ -5537,11 +5809,19 @@ mod tests {
     #[test]
     fn a_vibration_option_makes_the_signal_its_provider_draws() {
         let mut engine = ParticleEngine::new(Path::new(""), &HashMap::new(), &HashSet::new());
-        let options = ParticleOptions::vibration([10.5, 70.5, -3.5], 20);
+        let options = ParticleOptions::vibration(
+            mod_api::particles::PositionSource::Block([10, 70, -4]),
+            [10.5, 70.5, -3.5],
+            20,
+        );
         // Within the camera's 32 blocks, so only the provider decides.
         engine.add_with(&options, [0.5, 1.5, 0.5], [0.0; 3], false, false);
         assert_eq!(engine.made().get("vibration"), Some(&1));
-        let q = engine.pending.first().expect("the signal is made");
+        let q = engine
+            .pending
+            .first()
+            .and_then(PendingParticle::ordinary)
+            .expect("the signal is made");
         assert_eq!(q.ty, ParticleType::Vibration);
         assert_eq!(q.lifetime, 20);
         assert!((q.size - 0.3).abs() < 1e-6);
@@ -5565,6 +5845,34 @@ mod tests {
             engine.make(&bare, [0.0; 3], [0.0; 3], 1).is_none(),
             "no destination, no signal"
         );
+    }
+    #[test]
+    fn entity_vibration_options_draw_toward_the_resolved_point() {
+        let mut engine = ParticleEngine::new(Path::new(""), &HashMap::new(), &HashSet::new());
+        let options = ParticleOptions::vibration(
+            mod_api::particles::PositionSource::Entity {
+                id: 42,
+                y_offset: 1.15,
+            },
+            [-2.25, 65.75, 4.5],
+            7,
+        );
+        // The renderer consumes the resolved point, not the entity id or offset.
+        // Options remain reusable; making a signal does not consume its source.
+        for _ in 0..2 {
+            engine.add_with(&options, [0.5, 1.5, 0.5], [0.0; 3], false, false);
+        }
+        assert_eq!(engine.made().get("vibration"), Some(&2));
+        assert_eq!(engine.pending.len(), 2);
+        for q in &engine.pending {
+            let q = q.ordinary().expect("a vibration is an ordinary particle");
+            assert_eq!(q.ty, ParticleType::Vibration);
+            assert_eq!(q.lifetime, 7);
+            assert!(matches!(
+                &q.behaviour,
+                Behaviour::Vibration { dest, .. } if *dest == [-2.25, 65.75, 4.5]
+            ));
+        }
     }
     #[test]
     fn particle_names_round_trip() {

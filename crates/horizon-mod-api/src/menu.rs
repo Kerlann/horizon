@@ -114,6 +114,8 @@ pub struct AnvilUpdate {
     /// the mods set.
     pub vanilla: AnvilVanilla,
     pub output: Option<ItemStack>,
+    /// Signed level cost, preserved as set by `AnvilUpdateEvent.setXpCost`.
+    /// A negative cost prevents taking the result (as does zero), not a level refund.
     pub xp_cost: i32,
     pub material_cost: i32,
 }
@@ -153,15 +155,15 @@ impl AnvilUpdate {
     }
 
     /// The mods' answer, in place of `result`: a cancel leaves no result at
-    /// cost 0; otherwise their output, level cost (0 or more) and material
-    /// cost. A changed output is no longer only a rename.
+    /// cost 0; otherwise their output, signed level cost and nonnegative
+    /// material cost. A changed output is no longer only a rename.
     pub fn answer(self, cancel: bool, result: &mut crate::stations::AnvilResult) {
         if cancel {
             *result = crate::stations::AnvilResult::default();
             return;
         }
         result.only_renaming &= self.output == self.vanilla.output;
-        result.cost = self.xp_cost.max(0);
+        result.cost = self.xp_cost;
         result.repair_item_count_cost = self.material_cost.max(0) as u32;
         result.result = self.output;
     }

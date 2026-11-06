@@ -391,6 +391,8 @@ impl Game<'_> {
         }
     }
     pub(super) fn tick_particles(&mut self) {
+        // A client mod's `clear_particles`, before this tick adds any.
+        self.apply_mod_particle_clear();
         let eye = self.eye_position();
         if let Some(e) = eye {
             let brightness = self.eye_brightness(e);

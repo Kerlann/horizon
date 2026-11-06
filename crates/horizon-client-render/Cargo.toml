@@ -81,6 +81,7 @@ test-support = []
 workspace = true
 
 [dev-dependencies]
+tempfile = "3"
 horizon-mod-api = { path = "../horizon-mod-api", features = ["testing"] }
 horizon-items = { path = "../horizon-items", features = ["test-support"] }
 naga = { version = "30.0.1", features = ["wgsl-in", "hlsl-out", "glsl-out", "msl-out", "spv-out"] }

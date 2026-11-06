@@ -586,6 +586,334 @@ mod tests {
         );
     }
 
+    /// A scoped provider using the block entity's saved tanks. Capacity describes the
+    /// storage; validity independently limits new contents to plain water. Old contents
+    /// remain drainable even when they would no longer be accepted.
+    struct WaterTank {
+        entity: mod_api::BlockEntityRef,
+        reached: Vec<usize>,
+    }
+
+    impl WaterTank {
+        fn state(&self, host: &dyn mod_api::Host) -> Vec<Tank> {
+            read_tanks(&self.entity.data(host).unwrap(), 2)
+        }
+
+        fn write(&self, host: &mut dyn ServerHost, state: &[Tank]) -> bool {
+            let mut nbt = Compound::new();
+            write_tanks(&mut nbt, state);
+            self.entity.merge_data(host, nbt)
+        }
+    }
+
+    impl mod_api::ResourceHandler<mod_api::FluidResource> for WaterTank {
+        fn size(&self, _: &mut dyn ServerHost) -> usize {
+            self.reached.len()
+        }
+        fn resource(
+            &self,
+            host: &mut dyn ServerHost,
+            index: usize,
+        ) -> Option<mod_api::FluidResource> {
+            let real = *self.reached.get(index)?;
+            let (fluid, amount) = self.state(host).swap_remove(real);
+            fluid
+                .filter(|_| amount > 0)
+                .map(|fluid| mod_api::FluidResource::of(&FluidStack::new(&fluid, 1)))
+        }
+        fn amount(&self, host: &mut dyn ServerHost, index: usize) -> u32 {
+            self.reached
+                .get(index)
+                .map_or(0, |&real| self.state(host)[real].1.max(0).unsigned_abs())
+        }
+        fn capacity(
+            &self,
+            _: &mut dyn ServerHost,
+            index: usize,
+            _: &mod_api::FluidResource,
+        ) -> u32 {
+            if index < self.reached.len() { 4000 } else { 0 }
+        }
+        fn is_valid(
+            &self,
+            _: &mut dyn ServerHost,
+            index: usize,
+            resource: &mod_api::FluidResource,
+        ) -> bool {
+            index < self.reached.len()
+                && resource == &mod_api::FluidResource::of(&FluidStack::new("minecraft:water", 1))
+        }
+        fn insert(
+            &self,
+            host: &mut dyn ServerHost,
+            _: &Transaction,
+            index: usize,
+            resource: &mod_api::FluidResource,
+            amount: u32,
+        ) -> u32 {
+            if !self.is_valid(host, index, resource) {
+                return 0;
+            }
+            let mut state = self.state(host);
+            let entry = &mut state[self.reached[index]];
+            if entry.1 > 0 && entry.0.as_deref() != Some("minecraft:water") {
+                return 0;
+            }
+            let took = amount.min((4000 - entry.1).max(0).unsigned_abs());
+            if took == 0 {
+                return 0;
+            }
+            entry.0 = Some("minecraft:water".into());
+            entry.1 += took as i32;
+            if self.write(host, &state) { took } else { 0 }
+        }
+        fn extract(
+            &self,
+            host: &mut dyn ServerHost,
+            _: &Transaction,
+            index: usize,
+            resource: &mod_api::FluidResource,
+            amount: u32,
+        ) -> u32 {
+            let Some(&real) = self.reached.get(index) else {
+                return 0;
+            };
+            if self.resource(host, index).as_ref() != Some(resource) {
+                return 0;
+            }
+            let mut state = self.state(host);
+            let entry = &mut state[real];
+            let took = amount.min(entry.1.max(0).unsigned_abs());
+            if took == 0 {
+                return 0;
+            }
+            entry.1 -= took as i32;
+            if entry.1 == 0 {
+                entry.0 = None;
+            }
+            if self.write(host, &state) { took } else { 0 }
+        }
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_scoped_tank_can_refuse_a_fluid() {
+        use super::super::super::native_entity_refs::tests::{run_fresh_cases, with_game_at};
+        if run_fresh_cases(
+            "game::machines::native_fluids::tests::a_scoped_tank_can_refuse_a_fluid",
+            "HORIZON_SCOPED_FLUID_CHILD",
+            &["valid"],
+        ) {
+            return;
+        }
+        use horizon_client::{
+            chunk::Chunk,
+            containers::{ModBlockEntity, ModBlockEntityFields},
+            fast_hash::FxHashMap,
+        };
+        use mod_api::{
+            FLUIDS, FluidResource, Hooks, ModEntry, Mods, NativeBlockUpdateFlags, Registrar,
+            move_resources,
+        };
+
+        struct WaterTanks;
+        #[mod_api::__subscriptions]
+        impl Hooks for WaterTanks {
+            fn register(&self, r: &mut dyn Registrar, _: &mod_api::RegistrationContext) {
+                let kind = r
+                    .block_entity_type("water_tank")
+                    .blocks(&["fluid_filter_test:water_tank"])
+                    .build();
+                r.block_entity_capability_before_game(&FLUIDS, &kind, |host, at| {
+                    // The same block entity type elsewhere keeps the game's default handler.
+                    (at.pos == [2, 64, 0]).then(|| {
+                        Box::new(WaterTank {
+                            entity: host.block_entity(at.level, at.pos).unwrap(),
+                            reached: if at.side == Some(Direction::Down) {
+                                vec![1, 0]
+                            } else {
+                                vec![0, 1]
+                            },
+                        })
+                            as Box<dyn mod_api::ResourceHandler<FluidResource>>
+                    })
+                });
+            }
+            fn blocks(
+                &self,
+                _: &mod_api::RegistrationContext,
+                event: &mut mod_api::BlocksEvent<'_>,
+            ) {
+                event.blocks.push(horizon_mods::content::Block {
+                    id: "fluid_filter_test:water_tank".into(),
+                    template: "minecraft:stone".into(),
+                    ..Default::default()
+                });
+            }
+        }
+        let mods: Mods = vec![ModEntry::new("fluid_filter_test", Box::new(WaterTanks))].into();
+        mod_api::__private::install_parts(&mods).unwrap();
+        mod_api::testing::with_mods(mods, || {
+            let base =
+                std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+            let root = super::super::super::mods::content_root(&base, &Default::default()).unwrap();
+            with_game_at(root, |game| {
+                game.options.dedicated = Some(Vec::new());
+                game.world
+                    .chunks
+                    .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+                let level = game.native_level("minecraft:overworld").unwrap();
+                let block = game
+                    .pack
+                    .assets
+                    .registry
+                    .default_state("fluid_filter_test:water_tank")
+                    .unwrap();
+                let mut table = ModFluidTanks::default();
+                table.tanks = vec![4000, 4000];
+                table.inputs = vec![0, 1];
+                table.outputs = vec![0, 1];
+                table.faces = std::array::from_fn(|_| vec![1, 0]);
+                game.world
+                    .block_entities
+                    .set_mod_fluids(FxHashMap::from_iter([(block.0, Arc::new(table))]));
+                let (from, to) = ([0, 64, 0], [2, 64, 0]);
+                for pos in [from, to] {
+                    assert!(game.native_level_set_block(
+                        level,
+                        pos,
+                        block,
+                        NativeBlockUpdateFlags::NEIGHBORS
+                    ));
+                    game.world.block_entities.insert(
+                        (pos[0], pos[1], pos[2]),
+                        BlockEntity::Mod(Box::new(ModBlockEntity::new(
+                            "fluid_filter_test:water_tank".into(),
+                            ModBlockEntityFields::default(),
+                        ))),
+                    );
+                }
+                // The default takes a mod's fluid; a scoped answer does not affect it.
+                let source = level.capability(game, &FLUIDS, from, None).unwrap();
+                let chocolate = FluidResource::of(&FluidStack::new("create:chocolate", 1));
+                let water = FluidResource::of(&FluidStack::new("minecraft:water", 1));
+                assert_eq!(source.owner(), "the game");
+                assert!(source.is_valid(game, 0, &chocolate));
+                assert_eq!(
+                    game.transaction(|host, tx| Ok::<_, ()>(
+                        source.insert(host, tx, 0, &chocolate, 1000)
+                    )),
+                    Ok(1000)
+                );
+                assert_eq!(source.resource(game, 0), Some(chocolate.clone()));
+                assert_eq!(source.amount(game, 0), 1000);
+
+                // A refusal must protect both a previously filled tank and an empty one.
+                game.set_tank_state(to, &tanks(&[(Some("create:chocolate"), 1000), (None, 0)]));
+                let target = level.capability(game, &FLUIDS, to, None).unwrap();
+                assert_eq!(target.owner(), "fluid_filter_test");
+                for index in 0..2 {
+                    assert_eq!(target.capacity(game, index, &chocolate), 4000);
+                    assert!(!target.is_valid(game, index, &chocolate));
+                    assert_eq!(
+                        game.transaction(|host, tx| Ok::<_, ()>(
+                            target.insert(host, tx, index, &chocolate, 500)
+                        )),
+                        Ok(0)
+                    );
+                }
+                assert_eq!(target.amount(game, 0), 1000);
+                assert_eq!(target.resource(game, 0), Some(chocolate.clone()));
+                assert_eq!(target.amount(game, 1), 0);
+                assert_eq!(target.resource(game, 1), None);
+                assert_eq!(
+                    game.transaction(|host, tx| move_resources(
+                        host,
+                        &source,
+                        &target,
+                        |_| true,
+                        500,
+                        tx
+                    )),
+                    Ok(0)
+                );
+                assert_eq!(source.amount(game, 0), 1000);
+                assert_eq!(target.amount(game, 0), 1000);
+                assert_eq!(target.amount(game, 1), 0);
+
+                // Water is valid but cannot replace another fluid; it can fill the empty tank.
+                assert!(target.is_valid(game, 0, &water));
+                assert_eq!(
+                    game.transaction(|host, tx| Ok::<_, ()>(
+                        target.insert(host, tx, 0, &water, 500)
+                    )),
+                    Ok(0)
+                );
+                assert!(target.is_valid(game, 1, &water));
+                assert_eq!(
+                    game.transaction(|host, tx| Ok::<_, ()>(
+                        target.insert(host, tx, 1, &water, 500)
+                    )),
+                    Ok(500)
+                );
+                assert_eq!(target.resource(game, 1), Some(water.clone()));
+                assert_eq!(target.amount(game, 1), 500);
+                let sided = level
+                    .capability(game, &FLUIDS, to, Some(Direction::Down))
+                    .unwrap();
+                assert_eq!(sided.resource(game, 0), Some(water.clone()));
+                assert_eq!(sided.amount(game, 0), 500);
+                // A drain does not consult acceptance, so an old refused fluid is recoverable.
+                assert_eq!(
+                    game.transaction(|host, tx| Ok::<_, ()>(
+                        target.extract(host, tx, 0, &chocolate, 100)
+                    )),
+                    Ok(100)
+                );
+                assert_eq!(target.amount(game, 0), 900);
+                assert_eq!(
+                    game.transaction(|host, tx| Ok::<_, ()>(
+                        source.insert(host, tx, 1, &water, 1000)
+                    )),
+                    Ok(1000)
+                );
+                assert_eq!(
+                    game.transaction(|host, tx| move_resources(
+                        host,
+                        &source,
+                        &target,
+                        |resource| resource == &water,
+                        200,
+                        tx
+                    )),
+                    Ok(200)
+                );
+                assert_eq!(source.amount(game, 1), 800);
+                assert_eq!(target.amount(game, 1), 700);
+                let abort: Result<(), ()> = game.transaction(|host, tx| {
+                    assert_eq!(target.insert(host, tx, 1, &water, 200), 200);
+                    Err(())
+                });
+                assert!(abort.is_err());
+                assert_eq!(target.amount(game, 1), 700);
+                assert_eq!(
+                    game.tank_state(from, 2),
+                    Some(tanks(&[
+                        (Some("create:chocolate"), 1000),
+                        (Some("minecraft:water"), 800)
+                    ]))
+                );
+                assert_eq!(
+                    game.tank_state(to, 2),
+                    Some(tanks(&[
+                        (Some("create:chocolate"), 900),
+                        (Some("minecraft:water"), 700)
+                    ]))
+                );
+            })
+        });
+    }
+
     fn tanks(list: &[(Option<&str>, i32)]) -> Vec<Tank> {
         list.iter()
             .map(|&(fluid, amount)| (fluid.map(str::to_owned), amount))

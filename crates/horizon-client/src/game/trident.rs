@@ -377,6 +377,10 @@ impl Game<'_> {
             .player
             .as_ref()
             .map(|p| [p.position.x, p.position.y, p.position.z]);
+        // Counted (on the server) before the throw or the spin.
+        if self.remote.is_none() {
+            self.award_stat("used", "minecraft:trident", 1);
+        }
         if riptide > 0 {
             // `hurtWithoutBreaking` and the sound belong to the server; a server's
             // client only launches.
@@ -627,6 +631,17 @@ impl Game<'_> {
             }
             // ThrownTrident.tick: Loyalty needs its owner, who is in this level.
             let owner_eye = catchers.iter().find(|c| c.guest == t.guest).map(|c| c.eye);
+            // `isAcceptibleReturnOwner` fails for a dead or spectating owner: the
+            // trident drops as an item when it can be picked up, then goes.
+            if t.loyalty > 0
+                && (t.dealt_damage || t.no_physics)
+                && catchers.iter().any(|c| c.guest == t.guest && !c.touches)
+            {
+                if !t.creative_only {
+                    self.spawn_at_location(t.position, f64::from(0.1f32), t.stack.clone());
+                }
+                continue;
+            }
             if t.loyalty > 0
                 && (t.dealt_damage || t.no_physics)
                 && let Some(owner_eye) = owner_eye
@@ -823,8 +838,8 @@ impl Game<'_> {
                             self.thrower_hit(t.guest, &victim, direct, damage);
                         }
                         // Projectile.onHit: the landing is heard, at the hit.
-                        self.projectile_event(
-                            "minecraft:projectile_land",
+                        self.projectile_landed_event(
+                            t.id,
                             Some(Who::Player),
                             [t.position.x, t.position.y, t.position.z],
                         );
@@ -873,8 +888,8 @@ impl Game<'_> {
                     } else if let Some((stop, block, _)) = clip {
                         // Projectile.onHit on a block: PROJECTILE_LAND at the
                         // block's centre.
-                        self.projectile_event(
-                            "minecraft:projectile_land",
+                        self.projectile_landed_event(
+                            t.id,
                             Some(Who::Player),
                             [
                                 f64::from(block.x) + 0.5,
@@ -961,28 +976,6 @@ impl Game<'_> {
     }
     /// ThrownTridentRenderer.
     pub(super) fn trident_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
-        let Some(model) = &self.trident_model else {
-            return;
-        };
-        let Some(uv) = self
-            .gui
-            .atlas
-            .sprites
-            .get("entity/trident/trident")
-            .map(|r| [r.u0, r.v0, r.u1, r.v1])
-        else {
-            return;
-        };
-        // The texture's OptiFine emissive overlay, drawn again full bright.
-        let glow = self
-            .res
-            .mob_data()
-            .emissive
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .overlay("entity/trident/trident")
-            .and_then(|e| self.gui.atlas.sprites.get(e))
-            .map(|r| [r.u0, r.v0, r.u1, r.v1]);
         // AbstractArrow.shouldRenderAtSqrDistance: ten times the default.
         let range = 10.0
             * super::entity_culling::default_range(
@@ -1013,13 +1006,53 @@ impl Game<'_> {
                 ];
                 (t, at)
             });
+        self.draw_tridents(camera, live, out);
+    }
+
+    pub(super) fn pickup_trident_geometry(
+        &self,
+        camera: glam::DVec3,
+        alpha: f64,
+        out: &mut Vec<Vertex>,
+    ) {
         // ItemPickupParticle: a picked-up trident flying to its collector,
         // drawn with the render state extracted at partial tick 1.
         let taken = self.pickups.live.iter().filter_map(|p| match &p.taken {
             super::pickups::Taken::Trident(t) => Some((&**t, super::pickups::position(p, alpha))),
             _ => None,
         });
-        for (t, at) in live.chain(taken) {
+        self.draw_tridents(camera, taken, out);
+    }
+
+    fn draw_tridents<'a>(
+        &self,
+        camera: glam::DVec3,
+        tridents: impl Iterator<Item = (&'a ThrownTrident, [f64; 3])>,
+        out: &mut Vec<Vertex>,
+    ) {
+        let Some(model) = &self.trident_model else {
+            return;
+        };
+        let Some(uv) = self
+            .gui
+            .atlas
+            .sprites
+            .get("entity/trident/trident")
+            .map(|r| [r.u0, r.v0, r.u1, r.v1])
+        else {
+            return;
+        };
+        // The texture's OptiFine emissive overlay, drawn again full bright.
+        let glow = self
+            .res
+            .mob_data()
+            .emissive
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .overlay("entity/trident/trident")
+            .and_then(|e| self.gui.atlas.sprites.get(e))
+            .map(|r| [r.u0, r.v0, r.u1, r.v1]);
+        for (t, at) in tridents {
             let p = glam::DVec3::from_array(at) - camera;
             let base = glam::Mat4::from_translation(p.as_vec3())
                 * glam::Mat4::from_rotation_y((t.yaw - 90.0).to_radians())

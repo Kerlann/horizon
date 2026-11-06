@@ -1617,7 +1617,8 @@ impl B {
                         // Sniffer.spawnChildFromBreeding: the experience
                         // (finalizeSpawnChildFromBreeding), then the plop,
                         // both from the parent's random; the game lays the
-                        // egg.
+                        // egg. Vanilla makes the draw inside the `mob_drops`
+                        // check, so it is skipped with the rule off.
                         let at = [m.position.x, m.position.y, m.position.z];
                         if let Some(amount) = super::breeding_experience(m, cx.w.mob_drops) {
                             cx.events.push(MobEvent::Experience { at, amount });

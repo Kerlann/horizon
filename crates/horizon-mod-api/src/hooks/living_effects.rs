@@ -43,4 +43,10 @@ pub trait Helpers {
         target = "horizon_client::game::native_living_effects::Game<'_>::native_living_potion_affected"
     )]
     fn living_potion_affected();
+    #[helper(
+        side = "client",
+        receiver = "living",
+        target = "horizon_client::game::native_living_effects::Game<'_>::native_living_effect_blend_factor"
+    )]
+    fn living_effect_blend_factor();
 }

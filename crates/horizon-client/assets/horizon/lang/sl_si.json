@@ -460,5 +460,6 @@
   "horizon.pack.filter.realistic": "Realno",
   "horizon.pack.filter.simplistic": "Poenostavljeno",
   "horizon.pack.filter.vanillaLike": "Podobno vaniliji",
-  "horizon.pack.addFailed": "Paketa ni bilo mogoče dodati: %s"
+  "horizon.pack.addFailed": "Paketa ni bilo mogoče dodati: %s",
+  "Shader Packs...": "Shader paketi..."
 }

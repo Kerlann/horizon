@@ -27,6 +27,9 @@ pub(super) const IMPORTS: &[&str] = &[
     "LevelTicksHost",
     "LevelWriteHost",
     "ConfigFiles",
+    "Commands",
+    "Messages",
+    "Players",
     "menu::SlotView",
     "Registrar",
     "CapabilityProviders",
@@ -46,6 +49,9 @@ pub(super) const IMPORTS: &[&str] = &[
 /// Imported traits a call never hands over, each reached through another's method instead.
 pub(super) const REACHED: &[(&str, &str, &str)] = &[
     ("ConfigFiles", "host", "Ok(h.config_files())"),
+    ("Commands", "server_host_mut", "Ok(h.commands())"),
+    ("Messages", "server_host", "Ok(h.messages())"),
+    ("Players", "server_host", "Ok(h.players())"),
     // A level hook's host first: inside a level write it is the one the call hands over.
     (
         "AttachmentStore",
@@ -509,11 +515,16 @@ pub fn generate(root: &Path, included: &[(&str, &str)]) -> Result<Wasm, String> 
     surface.types.views = views(&mut surface.types)?;
     coverage(&surface)?;
     let methods: Vec<&Method> = surface.methods.iter().collect();
-    let wit = wit::package(&surface.types, &methods, &api_version(root)?)?;
+    let imports: Vec<&Method> = methods
+        .iter()
+        .copied()
+        .filter(|m| !frame_accessor(m))
+        .collect();
+    let wit = wit::package(&surface.types, &imports, &api_version(root)?)?;
     Ok(Wasm {
         providers: providers.clone(),
         guest: sides::guest(&surface.types, &methods, &wit, &hooks)?,
-        host: sides::host(&surface.types, &methods, &wit, &hooks, &servers)?,
+        host: sides::host(&surface.types, &imports, &wit, &hooks, &servers)?,
         wit,
         sources: surface.types.index.read.take(),
         unbound: surface
@@ -522,6 +533,14 @@ pub fn generate(root: &Path, included: &[(&str, &str)]) -> Result<Wasm, String> 
             .map(|u| format!("{}::{}: {}", u.owner, u.name, u.why))
             .collect(),
     })
+}
+
+/// A frame resource already reborrowed through `REACHED`: acquiring it on the
+/// guest needs no wire call. Its trait methods are the actual imports.
+pub(super) fn frame_accessor(method: &Method) -> bool {
+    method.params.is_empty()
+        && IMPORTS.contains(&method.owner)
+        && matches!(&method.ret, Ty::Dyn(name, _) if REACHED.iter().any(|(owner, ..)| name == owner))
 }
 
 /// The coverage check: every method of the bound traits crosses to wasm, or its doc says why
@@ -549,7 +568,7 @@ fn coverage(surface: &Surface<'_>) -> Result<(), String> {
         surface
             .methods
             .iter()
-            .filter(|m| excused(m.owner, &m.name))
+            .filter(|m| excused(m.owner, &m.name) && !frame_accessor(m))
             .map(|m| {
                 format!(
                     "{}::{} crosses to wasm: remove `{NOT_ON_WASM}` from its doc",
@@ -718,15 +737,142 @@ fn method(
 
 fn hidden(attrs: &[syn::Attribute]) -> bool {
     attrs.iter().any(|attr| {
-        attr.path().is_ident("doc")
-            && quote::ToTokens::to_token_stream(attr)
-                .to_string()
-                .contains("hidden")
+        matches!(&attr.meta, syn::Meta::List(list)
+            if list.path.is_ident("doc") && list.tokens.to_string() == "hidden")
     })
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn server_services_use_native_forwards_and_frame_resources() {
+        std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(|| {
+                let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+                let generated =
+                    super::super::sources(&root, super::super::FillMode::Require).unwrap();
+                let included = [
+                    ("mod_api_generated.rs", generated.hooks.as_str()),
+                    ("mod_api_generated_host.rs", generated.host.as_str()),
+                    ("native_render_generated.rs", generated.render.as_str()),
+                ];
+                let wasm = super::generate(&root, &included).unwrap();
+                let mut resolve = wit_parser::Resolve::default();
+                let package = resolve.push_str("mod-api.wit", &wasm.wit).unwrap();
+                let package = &resolve.packages[package];
+                for (service, methods) in [
+                    ("commands", &["run-command", "feedback"][..]),
+                    ("messages", &["broadcast", "text-allowed"][..]),
+                    ("players", &["acting-player", "server-players"][..]),
+                ] {
+                    let interface = &resolve.interfaces[package.interfaces[service]];
+                    for method in methods {
+                        assert!(interface.functions.contains_key(*method));
+                    }
+                    let host = &resolve.interfaces[package.interfaces["server-host"]];
+                    assert!(
+                        !host.functions.contains_key(service),
+                        "no unit accessor import"
+                    );
+                    for method in methods {
+                        assert!(!host.functions.contains_key(*method));
+                    }
+                }
+                let backend = &resolve.interfaces[package.interfaces["backend-mut"]];
+                for method in [
+                    "player-tell",
+                    "player-action-bar",
+                    "player-tab-list",
+                    "player-hide",
+                    "player-set-nickname",
+                    "player-set-sleep-ignored",
+                ] {
+                    assert!(
+                        backend.functions.contains_key(method),
+                        "missing {method}: {:?}",
+                        backend.functions.keys()
+                    );
+                }
+                let reads = &resolve.interfaces[package.interfaces["backend"]];
+                for name in ["player-address", "player-permission-level"] {
+                    assert!(reads.functions.contains_key(name), "missing {name}");
+                    assert!(!wasm.unbound.iter().any(|method| {
+                        method == &format!("Backend::{}", name.replace('-', "_"))
+                    }));
+                }
+                for interface in package.interfaces.values() {
+                    assert!(!resolve.interfaces[*interface].functions.contains_key("player-op-level"));
+                }
+                let declarations = syn::parse_file(&generated.host).unwrap();
+                let player = declarations.items.iter().find_map(|item| match item {
+                    syn::Item::Impl(item)
+                        if matches!(&*item.self_ty, syn::Type::Path(ty) if ty.path.is_ident("PlayerRef")) => Some(item),
+                    _ => None,
+                }).unwrap();
+                let methods: Vec<_> = player.items.iter().filter_map(|item| match item {
+                    syn::ImplItem::Fn(method) => Some(method.sig.ident.to_string()),
+                    _ => None,
+                }).collect();
+                assert!(methods.iter().any(|method| method == "address"));
+                assert!(methods.iter().any(|method| method == "permission_level"));
+                assert!(!methods.iter().any(|method| method == "op_level"));
+                let implementation = syn::parse_file(&generated.implementation).unwrap();
+                for (service, methods) in [
+                    ("Commands", &["run_command", "feedback"][..]),
+                    ("Messages", &["broadcast", "text_allowed"][..]),
+                    ("Players", &["acting_player", "server_players"][..]),
+                    ("Backend", &["player_address", "player_permission_level"][..]),
+                ] {
+                    let item = implementation
+                        .items
+                        .iter()
+                        .find_map(|i| match i {
+                            syn::Item::Impl(i)
+                                if i.trait_
+                                    .as_ref()
+                                    .is_some_and(|(_, p, _)| p.is_ident(service)) =>
+                            {
+                                Some(i)
+                            }
+                            _ => None,
+                        })
+                        .unwrap();
+                    for name in methods {
+                        let method = item
+                            .items
+                            .iter()
+                            .find_map(|i| match i {
+                                syn::ImplItem::Fn(f) if f.sig.ident == name => Some(f),
+                                _ => None,
+                            })
+                            .unwrap();
+                        assert_eq!(method.block.stmts.len(), 1);
+                        let syn::Stmt::Expr(syn::Expr::MethodCall(call), _) =
+                            &method.block.stmts[0]
+                        else {
+                            panic!("native forward")
+                        };
+                        assert_eq!(call.method, format!("native_{name}"));
+                    }
+                }
+                assert!(wasm.host.contains("Ok(h.commands())"));
+                assert!(wasm.host.contains("Ok(h.messages())"));
+                assert!(wasm.host.contains("Ok(h.players())"));
+                assert!(
+                    !wasm
+                        .unbound
+                        .iter()
+                        .any(|name| name.starts_with("Commands::")
+                            || name.starts_with("Messages::")
+                            || name.starts_with("Players::"))
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
     #[test]
     fn client_handle_writes_have_their_own_wasm_backend() {
         std::thread::Builder::new()

@@ -6,6 +6,7 @@ use horizon_client::{
     items::ItemStack,
     mesher::Vertex,
     mobs::{Mob, Species, render},
+    particles::ELDER_GUARDIAN_LIFETIME,
 };
 
 /// `CarriedBlockLayer.submit`: block models use coordinates in [0, 1].
@@ -70,29 +71,24 @@ fn antenna_block_matrix(head: glam::Mat4, flowerbed_shift: bool) -> glam::Mat4 {
     }
 }
 
-/// `ElderGuardianParticle.lifetime`.
-pub(super) const APPARITION_TICKS: i32 = 30;
-
 impl Game<'_> {
-    /// Count the elder guardian's apparition down.
-    pub(super) fn tick_apparition(&mut self) {
-        self.creatures.elder_apparition = (self.creatures.elder_apparition - 1).max(0);
-    }
     /// `ElderGuardianParticleGroup`: the ghostly elder guardian that swings
     /// up in front of the camera while the curse is laid, fading in and out.
     pub(super) fn elder_apparition_geometry(&self, alpha: f64, out: &mut Vec<Vertex>) {
-        let left = self.creatures.elder_apparition;
-        if left <= 0 {
-            return;
+        for &left in self.particles.elder_guardians() {
+            self.elder_guardian_geometry(left, alpha, out);
         }
+    }
+
+    fn elder_guardian_geometry(&self, left: i32, alpha: f64, out: &mut Vec<Vertex>) {
         let Some(kind) = self.res.mob_types().get("minecraft:elder_guardian") else {
             return;
         };
         let Some(r) = self.gui.atlas.sprites.get("entity/guardian_elder").copied() else {
             return;
         };
-        let age = (APPARITION_TICKS - left) as f32 + alpha as f32;
-        let t = (age / APPARITION_TICKS as f32).clamp(0.0, 1.0);
+        let age = (ELDER_GUARDIAN_LIFETIME - left) as f32 + alpha as f32;
+        let t = age / ELDER_GUARDIAN_LIFETIME as f32;
         let fade = 0.05 + 0.5 * (t * std::f32::consts::PI).sin();
         let color = (((fade * 255.0) as u32) << 24) | 0x00FF_FFFF;
         let (yaw, pitch) = (self.yaw.to_radians(), self.pitch.to_radians());

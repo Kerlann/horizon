@@ -88,6 +88,14 @@ fn center(f: &ItemFrame) -> [f64; 3] {
     let (lo, hi) = f.bounds();
     std::array::from_fn(|i| (lo[i] + hi[i]) / 2.0)
 }
+/// `HangingEntity.spawnAtLocation`: drops sit 0.15 out from the wall.
+pub(super) fn hanging_drop_position(center: [f64; 3], step: [i32; 3]) -> [f64; 3] {
+    [
+        center[0] + f64::from(step[0]) * 0.15,
+        center[1],
+        center[2] + f64::from(step[2]) * 0.15,
+    ]
+}
 impl Game<'_> {
     /// `ItemFrame.survives` (not fixed): no collision, a solid block behind
     /// (or a diode for wall frames), no overlapping hanging entity.
@@ -185,7 +193,9 @@ impl Game<'_> {
             ..horizon_client::chunk::MIN_Y + horizon_client::chunk::HEIGHT)
             .contains(&pos[1])
         {
-            return false;
+            // ItemFrameItem.mayPlace's FAIL.
+            self.use_failed = true;
+            return true;
         }
         let frame = ItemFrame {
             join: Default::default(),
@@ -201,8 +211,10 @@ impl Game<'_> {
             check_interval: 0,
             custom_name,
         };
+        // HangingEntity.survives false: CONSUME, which ItemStack.useOn still counts as a use.
         if !self.frame_survives(&frame) {
-            return false;
+            self.award_stat("used", &stack.item, 1);
+            return true;
         }
         let kind = if glow {
             "minecraft:glow_item_frame"
@@ -215,11 +227,16 @@ impl Game<'_> {
         self.next_entity += 1;
         self.audio
             .play(&sound(&frame, "place"), Some(center(&frame)), 1.0, 1.0);
+        // HangingEntityItem.useOn: ENTITY_PLACE at the frame, by the player, before it is
+        // added; ItemStack.useOn then counts the use.
+        let ctx = self.player_context(None);
+        self.post_game_event("minecraft:entity_place", center(&frame), ctx);
         self.world.modified.insert((pos[0] >> 4, pos[2] >> 4));
         self.item_frames.push(frame);
         if !self.creative {
             self.consume_held();
         }
+        self.award_stat("used", &stack.item, 1);
         true
     }
     /// The frame under the crosshair within reach and its distance.
@@ -390,9 +407,8 @@ impl Game<'_> {
         if !self.ui.rules.bool("entity_drops") || (by_player && self.creative) {
             return;
         }
-        let s = f.step().map(f64::from);
         let c = center(f);
-        let at = [c[0] + s[0] * 0.15, c[1], c[2] + s[2] * 0.15];
+        let at = hanging_drop_position(c, f.step());
         let mut drops = Vec::new();
         if with_frame {
             // `ItemFrame.getFrameItemStackWithData` (glow frames share it).

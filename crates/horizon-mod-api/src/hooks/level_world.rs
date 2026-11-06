@@ -19,6 +19,12 @@ pub trait Helpers {
         target = "horizon_client::game::native_level_world::Game<'_>::native_level_game_rule"
     )]
     fn level_game_rule();
+    #[helper(
+        side = "server",
+        receiver = "level",
+        target = "horizon_client::game::native_level_world::Game<'_>::native_level_game_rules"
+    )]
+    fn level_game_rules();
     /// The rain and thunder levels of this level, each 0.0 to 1.0
     /// (`Level.getRainLevel` and `Level.getThunderLevel` at partial tick 1.0).
     /// Both are 0 where the level cannot have weather. Reads any open server

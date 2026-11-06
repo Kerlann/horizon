@@ -206,6 +206,11 @@ fn fixture(window: Arc<Window>) -> Result<(), Box<dyn std::error::Error>> {
         scaled: false,
     });
     renderer.render(&frame)?;
+    renderer
+        .screenshot_result
+        .take()
+        .expect("CPU readback")?
+        .save()?;
     let expected = read(&out.join("cpu.png"));
     let matches = expected
         .as_chunks::<4>()
@@ -250,6 +255,11 @@ fn fixture(window: Arc<Window>) -> Result<(), Box<dyn std::error::Error>> {
         scaled: false,
     });
     renderer.render(&frame)?;
+    renderer
+        .screenshot_result
+        .take()
+        .expect("GPU readback")?
+        .save()?;
     assert_eq!(
         read(&out.join("gpu.png")),
         expected,

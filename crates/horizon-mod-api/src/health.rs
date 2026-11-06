@@ -11,6 +11,11 @@ pub use horizon_world::living_damage::{DamageContainer, Reduction};
 pub struct HurtSource<'a> {
     pub damage_type: &'a str,
     pub causing: i32,
+    /// The projectile's entity id when the damage type names one (an arrow, a thrown
+    /// entity, an owned wither skull), including an ownerless projectile; the attacker
+    /// itself for melee when known. 0 when the source names none, including `magic()`
+    /// dealt during a projectile's impact (an ownerless wither skull, a tipped arrow's
+    /// instant harm).
     pub direct: i32,
     pub position: Option<[f64; 3]>,
 }

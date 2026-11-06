@@ -509,6 +509,22 @@ fn the_lifecycle_moments_fire_once_each_in_order() {
                 .unwrap()
                 .push(format!("about_to_start dedicated={}", e.dedicated));
         }
+        fn server_starting(
+            &self,
+            _host: &mut dyn ServerHost,
+            e: &mut mod_api::ServerStartingEvent,
+        ) {
+            self.0
+                .lock()
+                .unwrap()
+                .push(format!("starting dedicated={}", e.dedicated));
+        }
+        fn server_stopped(&self, _host: &mut dyn ServerHost, e: &mut mod_api::ServerStoppedEvent) {
+            self.0
+                .lock()
+                .unwrap()
+                .push(format!("stopped dedicated={}", e.dedicated));
+        }
         fn server_started(&self, _host: &mut dyn ServerHost, e: &mut mod_api::ServerStartedEvent) {
             self.0
                 .lock()
@@ -568,6 +584,7 @@ fn the_lifecycle_moments_fire_once_each_in_order() {
             game.native_lifecycle_world_closed();
             log.lock().unwrap().clear();
             game.native_server_about_to_start(true);
+            game.native_server_starting(true);
             game.native_lifecycle_open_started();
             game.native_lifecycle_world_ready();
             game.native_lifecycle_world_ready();
@@ -575,6 +592,7 @@ fn the_lifecycle_moments_fire_once_each_in_order() {
             game.native_server_stopping(true);
             game.native_lifecycle_world_closed();
             game.native_lifecycle_world_closed();
+            game.native_server_stopped(true);
             game.native_game_shutting_down();
             game.options.execution_role = crate::game::execution_role::ExecutionRole::Client;
             game.native_client_stopping();
@@ -586,9 +604,11 @@ fn the_lifecycle_moments_fire_once_each_in_order() {
         *log.lock().unwrap(),
         [
             "about_to_start dedicated=true",
+            "starting dedicated=true",
             "started dedicated=true",
             "stopping dedicated=true",
             "WorldCloseFinal",
+            "stopped dedicated=true",
             "shutting_down server",
             "client_stopping",
             "client_stopped",

@@ -7,6 +7,7 @@
 //! network pays nothing.
 pub mod abilities;
 mod advancements;
+pub use advancements::ServerAdvancements;
 pub mod anticheat;
 pub mod arrivals;
 pub mod attributes;

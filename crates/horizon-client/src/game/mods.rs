@@ -222,15 +222,36 @@ pub(super) fn content_overlay(
         manifest: &p.package.manifest,
         content_only: true,
     });
-    for source in native.chain(content) {
+    let mut seen = std::collections::HashSet::new();
+    let packages: Vec<_> = native
+        .chain(content)
+        .filter(|source| {
+            !refused
+                .iter()
+                .any(|missing| missing.owners.contains(&source.manifest.id))
+        })
+        .filter(|source| seen.insert(source.manifest.id.as_str()))
+        .collect();
+    let dependencies: Vec<_> = packages
+        .iter()
+        .map(|source| horizon_mods::dependencies::from_manifest(&source.manifest.dependencies))
+        .collect();
+    let inputs: Vec<_> = packages
+        .iter()
+        .zip(&dependencies)
+        .map(|(source, dependencies)| horizon_mods::dependencies::Mod {
+            id: &source.manifest.id,
+            version: &source.manifest.version,
+            has_api: false,
+            dependencies,
+        })
+        .collect();
+    let order = horizon_mods::dependencies::resolve_content(&inputs)
+        .map_err(|error| error.to_string())?
+        .order;
+    for index in order {
+        let source = &packages[index];
         let m = source.manifest;
-        // Only content packages can be omitted independently: none has code.
-        if refused.iter().any(|missing| missing.owners.contains(&m.id)) {
-            continue;
-        }
-        if mods.iter().any(|c| c.id == m.id) {
-            continue;
-        }
         // The items this mod's native code declares may be a file item's crafting remainder.
         let declared: Vec<String> = native_declared()
             .items
@@ -288,6 +309,20 @@ pub(super) fn content_overlay(
             log::warn!("Horizon: {e}");
         }
     }
+    // Content validation may refuse a package. Revalidate against what really
+    // loaded so dependents cannot start with a missing required content mod.
+    let loaded: Vec<_> = inputs
+        .into_iter()
+        .filter(|package| {
+            mods.iter().any(|content| content.id == package.id)
+                || sources
+                    .native
+                    .built()
+                    .iter()
+                    .any(|native| native.id == package.id)
+        })
+        .collect();
+    horizon_mods::dependencies::resolve_content(&loaded).map_err(|error| error.to_string())?;
     let root = mod_content::resource_root(root, jar_store, &mods, &here.join(".horizon-cache"))?;
     Ok(ContentOverlay {
         root,
@@ -569,12 +604,16 @@ pub(super) fn living_mod_types()
         r#""width":0.6,"height":1.95,"eye_height":1.74,"category":"monster","fire_immune":false"#;
     let villager =
         r#""width":0.6,"height":1.95,"eye_height":1.62,"category":"misc","fire_immune":false"#;
+    let trader =
+        r#""width":0.6,"height":1.95,"eye_height":1.62,"category":"creature","fire_immune":false"#;
     let table = format!(
         r#"{{"minecraft:zombie":{{{zombie},"attributes":{{"minecraft:max_health":20.0,"minecraft:movement_speed":0.23000000417232513}}}},
         "minecraft:villager":{{{villager},"attributes":{{"minecraft:max_health":20.0,"minecraft:movement_speed":0.5}}}},
+        "minecraft:wandering_trader":{{{trader},"attributes":{{"minecraft:max_health":20.0,"minecraft:movement_speed":0.7}}}},
         "minecraft:snowball":{{"width":0.25,"height":0.25,"eye_height":0.0,"category":"misc","fire_immune":false}},
         "ruby:ghoul":{{{zombie},"attributes":{{"minecraft:max_health":40.0,"minecraft:movement_speed":0.23000000417232513}},"template":"minecraft:zombie"}},
         "ruby:settler":{{{villager},"attributes":{{"minecraft:max_health":20.0,"minecraft:movement_speed":0.5}},"template":"minecraft:villager"}},
+        "ruby:merchant":{{{trader},"attributes":{{"minecraft:max_health":20.0,"minecraft:movement_speed":0.7}},"template":"minecraft:wandering_trader"}},
         "ruby:bolt":{{"width":0.25,"height":0.25,"eye_height":0.0,"category":"misc","fire_immune":false,"template":"minecraft:snowball"}}}}"#
     );
     // A folder per call: tests run in parallel in one process, and each removes its own.
@@ -694,6 +733,42 @@ mod tests {
         );
     }
 
+    /// A content mod's type from the wandering trader, the neutral template
+    /// whose behaviour is all goals: a trader under its own id, with a
+    /// trader's goals, that saves what a trader saves and loads back.
+    #[test]
+    fn a_mod_trader_type_is_a_wandering_trader_under_its_own_id() {
+        use horizon_client::mobs::{Mob, Species};
+        use horizon_world::nbt::Tag;
+        let types = living_mod_types();
+        let merchant = &types["ruby:merchant"];
+        assert_eq!(merchant.species, Species::WanderingTrader);
+        assert_eq!(merchant.class_id(), "minecraft:wandering_trader");
+        let at = horizon_core::geometry::Vec3::new(0.5, 64.0, 0.5);
+        let trader = Mob::new(1, types["minecraft:wandering_trader"].clone(), at, 0.0);
+        let merchant = Mob::new(2, merchant.clone(), at, 0.0);
+        assert!(merchant.ai.goals.has("Float") && trader.ai.goals.has("Float"));
+        let saved = |m: &Mob| horizon_client::entity_nbt::mob_to_nbt(m, [0, 0, 0, 2], None, None);
+        let keys = |tag: &Tag| -> Vec<String> {
+            let Tag::Compound(map) = tag else {
+                panic!("a mob saves a compound");
+            };
+            map.keys().map(|k| k.to_string_lossy()).collect()
+        };
+        let tag = saved(&merchant);
+        assert_eq!(
+            keys(&tag),
+            keys(&saved(&trader)),
+            "it saves what a trader saves"
+        );
+        let loaded =
+            horizon_client::entity_nbt::mob_from_nbt(&tag, &types, 3, None).expect("it loads back");
+        assert_eq!(
+            (loaded.kind.id.as_str(), loaded.species()),
+            ("ruby:merchant", Species::WanderingTrader)
+        );
+    }
+
     #[test]
     fn standalone_models_collect_only_on_the_client() {
         use mod_api::{self, Hooks, ModEntry, StandaloneModelsEvent, testing::with_mods};
@@ -759,6 +834,83 @@ mod tests {
         ];
         let bytes = horizon_mods::Package::write_files(&manifest, files).unwrap();
         std::fs::write(dir.join(format!("{id}.hmod")), bytes).unwrap();
+    }
+
+    #[test]
+    fn content_overlay_validates_dependencies_and_orders_layers() {
+        const MODE: &str = "HORIZON_CONTENT_DEPENDENCY_TEST";
+        if std::env::var_os(MODE).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "game::mods::tests::content_overlay_validates_dependencies_and_orders_layers",
+                    "--nocapture",
+                ])
+                .env(MODE, "1")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        let f = Fixture::new("content-dependencies");
+        let write = |id: &str, version: &str, dependencies: &str| {
+            let dir = f.0.join(id);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("horizon-mod.toml"), format!(
+                "id='{id}'\nname='{id}'\nversion='{version}'\napi='0.2'\nside='both'\ncapabilities=['registries']\n{dependencies}"
+            )).unwrap();
+            dir
+        };
+        let addon = write("alpha", "1", "[dependencies]\nzbase='^1'");
+        let base_mod = write("zbase", "1", "");
+        let base = f.0.join("resources");
+        std::fs::create_dir_all(&base).unwrap();
+        let mut sources = ModsState {
+            dev: vec![addon.clone(), base_mod.clone()],
+            ..Default::default()
+        };
+        let enabled = Default::default();
+        sources.select(&f.0, &enabled);
+        let overlay = content_overlay(&base, &sources, &f.0.join("jars")).unwrap();
+        assert_eq!(
+            overlay
+                .mods
+                .iter()
+                .map(|m| m.id.as_str())
+                .collect::<Vec<_>>(),
+            ["zbase", "alpha"]
+        );
+        sources.dev = vec![addon.clone()];
+        sources.select(&f.0, &enabled);
+        let error = content_overlay(&base, &sources, &f.0.join("jars"))
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(error.contains("alpha") && error.contains("zbase"));
+        write(
+            "alpha",
+            "1",
+            "[dependencies]\nzbase={version='^1', optional=true}",
+        );
+        sources.select(&f.0, &enabled);
+        assert!(content_overlay(&base, &sources, &f.0.join("jars")).is_ok());
+        write("zbase", "2", "");
+        sources.dev.push(base_mod.clone());
+        sources.select(&f.0, &enabled);
+        let error = content_overlay(&base, &sources, &f.0.join("jars"))
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(error.contains("installed version is 2"));
+        write("zbase", "1", "[dependencies]\nalpha='^1'");
+        sources.select(&f.0, &enabled);
+        assert!(
+            content_overlay(&base, &sources, &f.0.join("jars"))
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("cycle")
+        );
     }
 
     #[test]

@@ -24,8 +24,9 @@ pub(super) struct GuestStation {
     pub(super) kind: StationKind,
     pub(super) pos: [i32; 3],
     menu: Box<Menu>,
-    /// The data slots the client was last sent.
-    sent_data: Vec<i32>,
+    /// The data slots the client was last sent. `None` is not sent yet,
+    /// which is not a cost: an anvil's signed cost may be `i32::MIN`.
+    sent_data: Vec<Option<i32>>,
     /// The game time of the menu's last sound (`lastSoundTime`).
     last_sound: u64,
 }
@@ -801,22 +802,46 @@ impl Game<'_> {
             items: items.iter().map(|s| host.hub.stack(s)).collect(),
             carried: host.hub.stack(&carried),
         });
-        gs.sent_data.resize(gs.menu.data.len(), i32::MIN);
+        // ContainerSetData's value is a short. An anvil cost outside it
+        // would change sign (`-65535` as `+1`), so the signed cost follows
+        // on `horizon:anvil_cost` after that short.
+        gs.sent_data.resize(gs.menu.data.len(), None);
         let mut data = Vec::new();
+        let mut wide_cost = None;
+        let anvil = gs.kind == StationKind::Anvil;
+        let window = gs.window;
         for (k, &v) in gs.menu.data.iter().enumerate() {
-            if gs.sent_data[k] != v {
-                gs.sent_data[k] = v;
-                data.push(C::ContainerSetData(play::ContainerSetData {
-                    container: gs.window,
-                    id: k as i16,
-                    value: v as i16,
-                }));
+            if gs.sent_data[k] == Some(v) {
+                continue;
             }
+            gs.sent_data[k] = Some(v);
+            let mut value = v as i16;
+            if anvil && k == 0 {
+                let synced = horizon_protocol::anvil_cost::sync(v);
+                value = synced.short;
+                wide_cost = synced.wide;
+            }
+            data.push(C::ContainerSetData(play::ContainerSetData {
+                container: window,
+                id: k as i16,
+                value,
+            }));
         }
         host.hub.send_to(conn, &packet);
         host.hub.guests[gi].inventory_told();
         for packet in data {
             host.hub.send_to(conn, &packet);
+        }
+        if let Some(cost) = wide_cost {
+            host.hub.send_to(
+                conn,
+                &C::CustomPayload(horizon_protocol::packets::configuration::CustomPayload {
+                    channel: horizon_protocol::anvil_cost::CHANNEL.into(),
+                    data: horizon_protocol::anvil_cost::encode(
+                        horizon_protocol::anvil_cost::Cost { window, cost },
+                    ),
+                }),
+            );
         }
     }
 

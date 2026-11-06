@@ -58,7 +58,7 @@ pub fn generate_points(root: &Path, out_dir: &Path) -> Result<(), String> {
     let src = root.join("crates/horizon-client/src");
     println!("cargo:rerun-if-changed={}", src.join("game.rs").display());
     println!("cargo:rerun-if-changed={}", src.join("game").display());
-    for path in super::points::tracked(&src)? {
+    for path in super::points::tracked(root)? {
         println!("cargo:rerun-if-changed={}", path.display());
     }
     let code = super::points::records(&super::points::game_points(root)?);
@@ -85,8 +85,12 @@ pub(super) fn track(root: &Path) -> Result<(), String> {
         root.join("crates/horizon-mod-api/src/lib.rs").display()
     );
     for retired in super::catalog::RETIRED {
-        // Tracked while absent too: a file that appears must fail the next build.
-        println!("cargo:rerun-if-changed={}", root.join(retired).display());
+        // Only while present: Cargo reruns a build script on every build for a path that doesn't
+        // exist. One that appears fails the next generation, and every fresh build, such as CI's.
+        let path = root.join(retired);
+        if path.exists() {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
     }
     directory(&root.join(super::catalog::DECLARATIONS), "rs", false)?;
     directory(&root.join("crates/horizon-client/src/game"), "rs", true)?;

@@ -426,5 +426,6 @@
   "horizon.pack.filter.realistic": "Realistiku",
   "horizon.pack.filter.simplistic": "Simplistiku",
   "horizon.pack.filter.vanillaLike": "Tixbah lill-vanilla",
-  "horizon.pack.addFailed": "Il-pakkett ma setax jiġi miżjud: %s"
+  "horizon.pack.addFailed": "Il-pakkett ma setax jiġi miżjud: %s",
+  "Shader Packs...": "Pakketti Shader..."
 }

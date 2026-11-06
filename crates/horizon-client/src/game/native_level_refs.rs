@@ -413,10 +413,16 @@ impl Game<'_> {
         Some(self.world.game_time)
     }
     /// The time of day in ticks (`Level.getOverworldClockTime`), shared by
-    /// every level; it keeps counting past 24000. API 381.
+    /// every level; it keeps counting past 24000. On a client, the synchronized
+    /// Overworld clock, advanced at its server-supplied rate, even when the
+    /// displayed dimension has a different default clock. API 381.
     pub(super) fn native_level_day_time(&self, level: LevelRef) -> Option<i64> {
-        self.native_level_world(level)?;
-        Some(self.world.day_time)
+        self.native_level_read_world(level)?;
+        if self.is_logical_server() {
+            Some(self.world.day_time)
+        } else {
+            self.remote.as_ref().map(|r| r.overworld_clock_time())
+        }
     }
 }
 

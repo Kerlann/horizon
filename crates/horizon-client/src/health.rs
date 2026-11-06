@@ -376,6 +376,8 @@ pub type Held = [Option<crate::items::ItemStack>; 2];
 pub struct Attack {
     /// The attacking entity's id, 0 for none.
     pub attacker: i32,
+    /// The projectile delivering this hit, if any (`DamageSource.getDirectEntity`).
+    pub projectile: Option<i32>,
     /// The verified causing player's UUID, when the attacker is a player.
     pub player_uuid: Option<[i32; 4]>,
     /// What it holds, or none when it is not known (no native mod listens: the game only
@@ -385,9 +387,31 @@ pub struct Attack {
 /// The attack of a hit nobody started: environment damage, falls, a level built outside a hit.
 pub static NO_ATTACK: Attack = Attack {
     attacker: 0,
+    projectile: None,
     player_uuid: None,
     held: [None, None],
 };
+/// Whether vanilla's factory for `damage_type` passes the projectile as
+/// `DamageSource.getDirectEntity` (`arrow`, `trident`, `thrown`, `spit`,
+/// `fireball`, `unattributed_fireball`, `wither_skull`, `wind_charge`,
+/// `fireworks`, `mob_projectile`, `indirect_magic`). `magic()` does not, and
+/// neither does a blast: those stay entity-free even during a projectile's impact.
+pub fn names_its_projectile(damage_type: &str) -> bool {
+    matches!(
+        damage_type,
+        "minecraft:arrow"
+            | "minecraft:trident"
+            | "minecraft:fireball"
+            | "minecraft:unattributed_fireball"
+            | "minecraft:wither_skull"
+            | "minecraft:mob_projectile"
+            | "minecraft:thrown"
+            | "minecraft:wind_charge"
+            | "minecraft:fireworks"
+            | "minecraft:spit"
+            | "minecraft:indirect_magic"
+    )
+}
 impl Attack {
     /// The main-hand stack of `direct`, a hit's direct entity, when it is the attacker
     /// (`DamageSource.getWeaponItem`: the direct entity's weapon), else none.
@@ -395,6 +419,15 @@ impl Attack {
         self.held[0]
             .as_ref()
             .filter(|_| direct != 0 && direct == self.attacker)
+    }
+    /// This impact's direct entity for `damage_type`: the projectile when the
+    /// type names one, else 0. Melee uses the attacker and does not call this.
+    pub fn projectile_direct(&self, damage_type: &str) -> i32 {
+        if names_its_projectile(damage_type) {
+            self.projectile.unwrap_or(0)
+        } else {
+            0
+        }
     }
 }
 impl DamageLevel<'_> {
@@ -1110,7 +1143,10 @@ impl ServerDamageEnvironment<Attributes> for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: 0,
+            direct: self
+                .level
+                .attack()
+                .projectile_direct(&self.source.definition().name),
             position: None,
         };
         self.level
@@ -1121,7 +1157,10 @@ impl ServerDamageEnvironment<Attributes> for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: 0,
+            direct: self
+                .level
+                .attack()
+                .projectile_direct(&self.source.definition().name),
             position: None,
         };
         self.level
@@ -1206,7 +1245,10 @@ impl HurtWorld for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: 0,
+            direct: self
+                .level
+                .attack()
+                .projectile_direct(&self.source.definition().name),
             position: None,
         };
         let canceled = self.level.incoming_canceled(
@@ -1257,7 +1299,10 @@ impl HurtWorld for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: 0,
+            direct: self
+                .level
+                .attack()
+                .projectile_direct(&self.source.definition().name),
             position: None,
         };
         let Some(block) =
@@ -1332,7 +1377,10 @@ impl HurtWorld for Environment<'_> {
         let source = HurtSource {
             damage_type: &self.source.definition().name,
             causing: self.causing,
-            direct: 0,
+            direct: self
+                .level
+                .attack()
+                .projectile_direct(&self.source.definition().name),
             position: None,
         };
         // A native mod may cancel the totem: the player dies.
@@ -1444,6 +1492,7 @@ mod tests {
         let sword = crate::items::ItemStack::new("minecraft:iron_sword", 1);
         let attack = Attack {
             attacker: 7,
+            projectile: None,
             player_uuid: None,
             held: [Some(sword.clone()), None],
         };
@@ -1452,6 +1501,25 @@ mod tests {
         assert_eq!(attack.weapon_of(9), None);
         assert_eq!(attack.weapon_of(0), None);
         assert_eq!(NO_ATTACK.weapon_of(0), None);
+    }
+    #[test]
+    fn magic_during_a_projectile_impact_names_no_direct_entity() {
+        // DamageSources.magic() is entity-free. An ownerless wither skull and a
+        // tipped arrow's instant harm both deal it while the projectile's attack
+        // is still in scope; arrow, wither_skull and indirect_magic name it.
+        let attack = Attack {
+            attacker: 0,
+            projectile: Some(12),
+            player_uuid: None,
+            held: [None, None],
+        };
+        assert_eq!(attack.projectile_direct("minecraft:arrow"), 12);
+        assert_eq!(attack.projectile_direct("minecraft:wither_skull"), 12);
+        assert_eq!(attack.projectile_direct("minecraft:spit"), 12);
+        assert_eq!(attack.projectile_direct("minecraft:indirect_magic"), 12);
+        assert_eq!(attack.projectile_direct("minecraft:magic"), 0);
+        assert_eq!(attack.projectile_direct("minecraft:explosion"), 0);
+        assert_eq!(NO_ATTACK.projectile_direct("minecraft:arrow"), 0);
     }
     #[test]
     fn a_knockback_hook_cannot_make_the_push_nonfinite() {

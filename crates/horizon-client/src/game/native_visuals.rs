@@ -1,6 +1,43 @@
 use super::Game;
 use horizon_client::{dynamic_light, gizmos};
 
+/// Non-particle requests survive a late particle clear. Select the combined nearest
+/// lights only after particle extraction, so removed particles cannot displace them.
+#[derive(Default)]
+pub(super) struct FrameVisuals {
+    item_lights: Vec<mod_api::NativeColoredLight>,
+    mod_lights: Vec<mod_api::NativeColoredLight>,
+}
+
+impl FrameVisuals {
+    pub(super) fn finish(
+        self,
+        game: &Game<'_>,
+        camera: glam::DVec3,
+    ) -> Vec<dynamic_light::Colored> {
+        let particle_lights = game
+            .renderer
+            .as_ref()
+            .and_then(|r| r.particle_lights())
+            .map_or_else(Vec::new, |entries| {
+                game.particles
+                    .lights(entries, game.clock.camera_fraction() as f32)
+            });
+        dynamic_light::select_colored(
+            self.mod_lights
+                .into_iter()
+                .map(|l| (l.at, l.rgb, l.radius, l.intensity))
+                .chain(particle_lights)
+                .chain(
+                    self.item_lights
+                        .into_iter()
+                        .map(|l| (l.at, l.rgb, l.radius, l.intensity)),
+                ),
+            camera,
+        )
+    }
+}
+
 fn rim_target_valid(
     loaded: bool,
     state: horizon_world::registry::BlockStateId,
@@ -13,18 +50,10 @@ impl Game<'_> {
     /// Frame-local requests never persist after a mod is removed or a world changes.
     pub(super) fn native_frame_visuals(
         &self,
-        camera: glam::DVec3,
         alpha: f64,
         lines: &mut Vec<gizmos::Line>,
-    ) -> Vec<dynamic_light::Colored> {
-        let mut particle_lights = self
-            .renderer
-            .as_ref()
-            .and_then(|r| r.particle_lights())
-            .map_or_else(Vec::new, |entries| {
-                self.particles
-                    .lights(entries, self.clock.camera_fraction() as f32)
-            });
+    ) -> FrameVisuals {
+        let mut visuals = FrameVisuals::default();
         // Held and dropped items whose block the pack's `[[lights]]` colour shine in that colour,
         // as far as their dynamic light reaches.
         if let Some(renderer) = self.renderer.as_ref().filter(|r| r.has_light_colors()) {
@@ -37,7 +66,7 @@ impl Game<'_> {
                     continue;
                 }
                 let [r, g, b] = color.map(|c| (c / top * 255.0).round() as u32);
-                particle_lights.push((
+                visuals.item_lights.push(mod_api::NativeColoredLight::new(
                     source.at.to_array(),
                     r << 16 | g << 8 | b,
                     f32::from(source.level),
@@ -46,7 +75,7 @@ impl Game<'_> {
             }
         }
         let Some(player) = self.native_player() else {
-            return dynamic_light::select_colored(particle_lights.into_iter(), camera);
+            return visuals;
         };
         let mut rims = Vec::new();
         let mut lights = Vec::new();
@@ -114,7 +143,8 @@ impl Game<'_> {
                 edges += 1;
             }
         }
-        let sources = lights.into_iter().take(8).filter(|l| {
+        lights.truncate(8);
+        lights.retain(|l| {
             close(l.at)
                 && l.rgb <= 0xffffff
                 && l.radius.is_finite()
@@ -126,12 +156,8 @@ impl Game<'_> {
                     (l.at[2].floor() as i32).div_euclid(16),
                 ))
         });
-        dynamic_light::select_colored(
-            sources
-                .map(|l| (l.at, l.rgb, l.radius, l.intensity))
-                .chain(particle_lights),
-            camera,
-        )
+        visuals.mod_lights = lights;
+        visuals
     }
 }
 
@@ -184,7 +210,9 @@ mod tests {
 
                 let mut lines = Vec::new();
                 let camera = glam::DVec3::new(0.5, 66.0, 0.5);
-                let lights = game.native_frame_visuals(camera, 0.0, &mut lines);
+                let lights = game
+                    .native_frame_visuals(0.0, &mut lines)
+                    .finish(game, camera);
                 assert_eq!(lines.len(), 12, "a full block's twelve edges");
                 assert!(
                     lines

@@ -704,12 +704,10 @@ pub(super) struct Remote {
     /// slot updates (`creative_sync_stacks`).
     synced: Vec<Option<ItemStack>>,
     decode_errors: u32,
-    clock: Option<i32>,
-    /// `ClientClockManager.ClientClockInstance`'s rate and partial tick for
-    /// the level's clock (its total is `world.day_time`), and
-    /// `lastTickGameTime`.
-    clock_rate: f32,
-    clock_partial: f32,
+    /// Connection-owned `ClientClockManager` state, retained across dimensions.
+    clocks: HashMap<i32, play::ClockState>,
+    default_clock: Option<i32>,
+    overworld_clock: Option<i32>,
     clock_game_time: i64,
     /// `ClientChunkCache.Storage`'s view centre (ClientboundSetChunkCacheCenterPacket).
     chunk_center: (i32, i32),
@@ -1002,8 +1000,7 @@ impl Game<'_> {
         self.clear_remote_projectiles();
         self.creatures.projectiles.clear();
         self.dropped.clear();
-        self.particles.clear();
-        self.pickups.clear();
+        self.clear_client_particles();
         self.falling.clear();
         self.mining = None;
         self.container = None;
@@ -1173,9 +1170,9 @@ impl Game<'_> {
             player_type,
             synced: vec![None; CREATIVE_SYNCED],
             decode_errors: 0,
-            clock: None,
-            clock_rate: 1.0,
-            clock_partial: 0.0,
+            clocks: HashMap::new(),
+            default_clock: None,
+            overworld_clock: None,
             clock_game_time: 0,
             chunk_center: (0, 0),
             backlog: VecDeque::new(),
@@ -1317,6 +1314,7 @@ impl Game<'_> {
             Some(reason) => horizon_client::multiplayer::Screen::Disconnected {
                 reason,
                 retry: None,
+                lines: std::cell::Cell::new(1),
             },
             None => horizon_client::multiplayer::Screen::list(&saves),
         });
@@ -1384,7 +1382,10 @@ impl Game<'_> {
         let list = &mut self.potions.effects.list;
         match list.iter_mut().find(|x| x.id == id) {
             // forceAddEffect's copyBlendState: an updated effect keeps its fade.
-            Some(existing) => *existing = e,
+            Some(existing) => {
+                e.client_blend = existing.client_blend;
+                *existing = e;
+            }
             None => {
                 // ClientboundUpdateMobEffectPacket.shouldBlend (flag 8).
                 let blend = p.flags & 8 != 0;
@@ -1394,6 +1395,9 @@ impl Game<'_> {
                     let (o_nausea, nausea) = screen_effects::nausea_blend_added(&e, blend);
                     self.screen_fx.o_nausea = o_nausea;
                     self.screen_fx.nausea = nausea;
+                } else if !blend {
+                    let has_effect = !e.ends_within(0);
+                    e.client_blend = (has_effect, has_effect);
                 }
                 list.push(e);
             }
@@ -2231,6 +2235,7 @@ impl Game<'_> {
             r.chunk_format =
                 Arc::new(ChunkFormat::new(&r.dimension, biomes, bits).in_column(column));
             r.registries = registries;
+            r.resolve_clocks();
         }
     }
     /// Switch to a (possibly new) dimension: a fresh client level.
@@ -2271,6 +2276,8 @@ impl Game<'_> {
                 .in_column(shape.column()),
         );
         r.dimension = dimension;
+        r.resolve_clocks();
+        self.world.day_time = r.clock_time(r.default_clock);
         r.level = spawn.dimension.clone();
         r.hashed_seed = spawn.seed;
         r.game_mode = spawn.game_type;
@@ -2325,8 +2332,7 @@ impl Game<'_> {
             self.clear_remote_objects();
             self.clear_remote_projectiles();
             self.dropped.clear();
-            self.particles.clear();
-            self.pickups.clear();
+            self.clear_client_particles();
             if let Some(r) = self.remote.as_mut() {
                 r.entities.clear();
                 r.lerps.clear();
@@ -3266,6 +3272,10 @@ impl Game<'_> {
                     Err(e) => log::debug!("Horizon: a bad menu extra payload: {e}"),
                 }
             }
+            // An anvil cost the data-slot short cannot hold, after that short.
+            C::CustomPayload(p) if p.channel == horizon_protocol::anvil_cost::CHANNEL => {
+                self.remote_anvil_wide_cost(&p.data);
+            }
             // The server's recipes its native mods asked to send.
             C::CustomPayload(p) if p.channel == horizon_client::lan::recipes::CONTENT_CHANNEL => {
                 self.remote_recipe_content(&p.data);
@@ -3289,6 +3299,10 @@ impl Game<'_> {
                 if let Some(r) = self.remote.as_mut() {
                     r.reconfiguring = None;
                     r.attachments.clear();
+                    // A new ClientPacketListener owns a fresh clock manager.
+                    r.clocks.clear();
+                    r.clock_game_time = 0;
+                    self.world.game_time = 0;
                 }
                 // handleLogin makes a new MultiPlayerGameMode (carried index 0) and a
                 // new LocalPlayer (slot 0, no effects, riding nothing: the server
@@ -3819,17 +3833,16 @@ impl Game<'_> {
                     for (index, _, value) in &p.values {
                         if let (14, Value::OptPos(bed)) = (index, value) {
                             let code = bed.map_or(0, |b| self.bed_facing(b));
+                            let at = bed.and_then(|head| self.sleeping_position(head));
                             if let Some(m) = self.mob_index.get_mut(&mut self.mobs, p.id as u32) {
                                 m.extra.ints[1] = code;
-                                if let Some(head) = *bed {
-                                    // LivingEntity.onSyncedDataUpdated(SLEEPING_POS_ID): setPosToBed.
-                                    let at = Vec3::new(
-                                        f64::from(head[0]) + 0.5,
-                                        f64::from(head[1]) + 0.5625 + 0.125,
-                                        f64::from(head[2]) + 0.5,
-                                    );
-                                    m.position = at;
-                                    m.previous = at;
+                                if bed.is_some() {
+                                    // setPosToBed leaves the server's position alone
+                                    // when the client's bed has no sleep shape.
+                                    if let Some(at) = at {
+                                        m.position = at;
+                                        m.previous = at;
+                                    }
                                     m.head_pitch = 0.0;
                                     m.previous_head_pitch = 0.0;
                                 }
@@ -3863,17 +3876,17 @@ impl Game<'_> {
                                 self.sleeping = *bed;
                                 if let Some(head) = *bed {
                                     // LivingEntity.onSyncedDataUpdated(SLEEPING_POS_ID): setPosToBed.
-                                    let at = Vec3::new(
-                                        f64::from(head[0]) + 0.5,
-                                        f64::from(head[1]) + 0.5625 + 0.125,
-                                        f64::from(head[2]) + 0.5,
-                                    );
+                                    let at = self.sleeping_position(head);
                                     if let Some(pl) = self.player.as_mut() {
-                                        pl.position = at;
+                                        if let Some(at) = at {
+                                            pl.position = at;
+                                        }
                                         pl.velocity = Vec3::ZERO;
                                         pl.pitch = 0.0;
                                     }
-                                    self.previous_position = at;
+                                    if let Some(at) = at {
+                                        self.previous_position = at;
+                                    }
                                     self.pitch = 0.0;
                                     self.snap_player_model_pitch();
                                 }
@@ -4493,42 +4506,22 @@ impl Game<'_> {
                     total: p.total,
                 }
             }
-            // ClientPacketListener.handleSetTime: the game time, then
-            // ClientClockManager.handleUpdates: the clock catches up with the
-            // game time and takes the server's state. Only this level's
-            // default world clock is applied — a packet that only updates
-            // another clock (the End's) must not overwrite day_time, or the
-            // sky follows game_time and looks inverted vs the server's day.
+            // ClientPacketListener.handleSetTime / ClientClockManager.handleUpdates:
+            // advance all clocks to the packet's game time before applying its
+            // (possibly partial) updates. The sky still uses only the default clock.
             C::SetTime(p) => {
                 self.world.game_time = p.game_time;
                 self.remote_clock_tick();
-                let clock = {
-                    let r = self.remote.as_ref();
-                    let names =
-                        r.and_then(|r| r.registries.registries.get("minecraft:world_clock"));
-                    let tracked = r.and_then(|r| r.clock);
-                    let wanted = r
-                        .and_then(|r| r.dimension.default_clock.clone())
-                        .or_else(|| r.map(|r| r.dimension.name.clone()))
-                        .unwrap_or_else(|| "minecraft:overworld".into());
-                    let name = |id: i32| {
-                        names
-                            .and_then(|n| n.get(id as usize))
-                            .map(|(n, _)| n.as_str())
-                    };
-                    p.clocks
-                        .iter()
-                        .find(|c| name(c.clock) == Some(wanted.as_str()))
-                        .or_else(|| tracked.and_then(|id| p.clocks.iter().find(|c| c.clock == id)))
-                        .cloned()
-                };
-                if let Some(c) = clock {
-                    self.world.day_time = c.total_ticks;
-                    if let Some(r) = self.remote.as_mut() {
-                        r.clock = Some(c.clock);
-                        r.clock_rate = c.rate;
-                        r.clock_partial = c.partial_tick;
+                if let Some(r) = self.remote.as_mut() {
+                    for clock in p.clocks {
+                        if r.registries
+                            .name("minecraft:world_clock", clock.clock)
+                            .is_some()
+                        {
+                            r.clocks.insert(clock.clock, clock);
+                        }
                     }
+                    self.world.day_time = r.clock_time(r.default_clock);
                 }
             }
             C::GameEvent(p) => match p.event {
@@ -4547,7 +4540,7 @@ impl Game<'_> {
                 // GUARDIAN_ELDER_EFFECT: the apparition, and the curse sound
                 // unless the elder guardian is silent.
                 10 => {
-                    self.creatures.elder_apparition = super::mob_blocks::APPARITION_TICKS;
+                    self.particles.elder_guardian();
                     if p.param == 1.0
                         && let Some(at) = self.player.as_ref().map(|m| m.position)
                     {
@@ -6112,14 +6105,10 @@ impl Game<'_> {
         // Window callbacks only queue clicks, so an interaction cannot leak
         // between CLIENT_TICK_END and a later pong.
         self.remote_handle_input();
-        // Player.tick's ItemCooldowns.tick, in ClientLevel.tickEntities after
-        // handleKeybinds: this path replaces `tick_world`'s for a server's
-        // client (multiplayer and the default single player), so the entries
-        // advance here or the slot stays shaded until the server says the
-        // entry ended. `onCooldownEnded` is the plain ItemCooldowns' no-op on
-        // a client. Ticking it after the keybinds keeps a held use from
-        // trying again a tick before the server's entry ends.
-        self.cooldowns.tick();
+        self.tick_remote_player(running, hold)
+    }
+
+    fn tick_remote_player(&mut self, running: bool, hold: bool) -> Result<()> {
         // Inventory.tick's ItemStack.inventoryTick: the pop time runs down.
         if !hold {
             for pop in &mut self.hotbar_pop {
@@ -6166,8 +6155,6 @@ impl Game<'_> {
             self.tick_client_ambient();
             self.tick_client_effects();
         }
-        // Player.tick's sleep counter (the darkening and the wake-up fade).
-        self.sleep_timer = super::tick_sleep_timer(self.sleep_timer, self.sleeping.is_some());
         // Gui.tick: the titles, the action bar and the held item's name.
         if !hold {
             self.tick_hud();
@@ -6199,6 +6186,48 @@ impl Game<'_> {
             }
             return Ok(());
         }
+        // LocalPlayer.tick reaches Player.tick only once the client has loaded
+        // and the player's chunk is there; its endpoints bracket that work
+        // alone, also on the death screen, not the level pass before it.
+        let player = self
+            .remote
+            .as_ref()
+            .is_some_and(|r| r.loaded_sent)
+            .then(|| {
+                (mod_api::__private::listened(mod_api::HookId::PlayerTickPre)
+                    || mod_api::__private::listened(mod_api::HookId::PlayerTickPost))
+                .then(|| self.native_local_player())
+                .flatten()
+            })
+            .flatten();
+        if let Some(player) = player {
+            self.native_player_tick_pre(mod_api::__private::PlayerTickPreCall { player });
+        }
+        let result = self.tick_local_player(entity_collisions, pushed, sprint_window);
+        if let Some(player) = player {
+            self.native_player_tick_post(mod_api::__private::PlayerTickPostCall { player });
+        }
+        result
+    }
+
+    /// `LocalPlayer.tick`'s `Player.tick` work: input, riding, motion, sleep
+    /// and the state the server hears.
+    fn tick_local_player(
+        &mut self,
+        entity_collisions: Vec<horizon_core::geometry::Aabb>,
+        pushed: Vec3,
+        sprint_window: i32,
+    ) -> Result<()> {
+        // Player.tick's ItemCooldowns.tick, after Pre and after
+        // handleKeybinds: this path replaces `tick_world`'s for a server's
+        // client (multiplayer and the default single player), so the entries
+        // advance here or the slot stays shaded until the server says the
+        // entry ended. `onCooldownEnded` is the plain ItemCooldowns' no-op on
+        // a client. Ticking it after the keybinds keeps a held use from
+        // trying again a tick before the server's entry ends.
+        self.cooldowns.tick();
+        // Player.tick's sleep counter (the darkening and the wake-up fade).
+        self.sleep_timer = super::tick_sleep_timer(self.sleep_timer, self.sleeping.is_some());
         let stick = self.pad_move();
         if self.player.is_none() {
             return Ok(());
@@ -6262,7 +6291,7 @@ impl Game<'_> {
         // reaches its own write when this window is a server client.
         self.rope_rot_old = (self.yaw, self.pitch);
         // A passenger moves with its vehicle (Entity.rideTick), not by itself.
-        let riding = self.screen != Screen::Dead && self.remote_ride(keys);
+        let riding = self.screen != Screen::Dead && self.remote_ride(keys, sprint_window)?;
         // The server sends no passenger's position: they sit where their
         // vehicles are now.
         self.position_riders();
@@ -6294,20 +6323,19 @@ impl Game<'_> {
         if self.screen == Screen::Dead {
             self.ui.death_time = self.ui.death_time.saturating_add(1);
         }
+        let sleeping = self.sleeping;
+        let sleep_position = sleeping.and_then(|head| self.sleeping_position(head));
         let Some(player) = self.player.as_mut() else {
             return Ok(());
         };
         let was_gliding = player.fall_flying;
         let dead = self.screen == Screen::Dead;
-        // LivingEntity.isImmobile: a sleeper lies still in the bed.
-        let sleeping = self.sleeping;
-        if let Some(head) = sleeping {
-            player.position = Vec3::new(
-                f64::from(head[0]) + 0.5,
-                // setPosToBed: the bed's top (getSleepHeight) and 0.125 above it.
-                f64::from(head[1]) + 0.5625 + 0.125,
-                f64::from(head[2]) + 0.5,
-            );
+        // LivingEntity.isImmobile: a sleeper lies still, even if its bed's
+        // shape is unavailable here; only the server decides when to wake.
+        if sleeping.is_some() {
+            if let Some(at) = sleep_position {
+                player.position = at;
+            }
             player.velocity = Vec3::ZERO;
             player.pitch = 0.0;
         } else if !dead && !riding {
@@ -6842,23 +6870,43 @@ impl Game<'_> {
         };
         let mut lerps = std::mem::take(&mut r.lerps);
         let mut cart_lerps = std::mem::take(&mut r.cart_lerps);
-        let stepped = &mut r.stepped;
-        let head_lerps = &mut r.head_lerps;
-        let players = &r.level_players;
-        let tab_players = &r.tab_players;
         let mut using = Vec::new();
         let mut mob_fx = water_fx;
-        for (m, rain) in self.mobs.iter_mut().zip(rain) {
-            let player = players.contains_key(&(m.id as i32));
+        let tick_listened = mod_api::__private::listened(mod_api::HookId::PlayerTickPre)
+            || mod_api::__private::listened(mod_api::HookId::PlayerTickPost);
+        for (i, rain) in rain.into_iter().enumerate() {
+            let id = self.mobs[i].id;
+            let player = self
+                .remote
+                .as_ref()
+                .unwrap()
+                .level_players
+                .contains_key(&(id as i32));
+            if (!running && !player) || driven == Some(id) {
+                continue;
+            }
+            let player_ref = tick_listened
+                .then(|| {
+                    self.remote.as_ref().and_then(|r| {
+                        let uuid = *r.level_players.get(&(id as i32))?;
+                        Some(mod_api::__private::game::player_ref(
+                            mod_api::EntityRef::new(self.native_lifecycle.epoch()?, id),
+                            uuid,
+                        ))
+                    })
+                })
+                .flatten();
+            let r = self.remote.as_mut().unwrap();
+            let stepped = &mut r.stepped;
+            let players = &r.level_players;
+            let tab_players = &r.tab_players;
+            let m = &mut self.mobs[i];
             if player {
                 // AvatarRenderer.extractRenderState: isSpectator, from the player list.
                 m.extra.spectator = players
                     .get(&(m.id as i32))
                     .and_then(|uuid| tab_players.get(uuid))
                     .is_some_and(|t| t.game_mode == SPECTATOR);
-            }
-            if (!running && !player) || driven == Some(m.id) {
-                continue;
             }
             m.previous = m.position;
             // `Entity.deltaMovementOnPreviousTick`: the elytra's flight yaw
@@ -6937,6 +6985,13 @@ impl Game<'_> {
             {
                 place_interpolated(m, at);
             }
+            // `ClientLevel.tickNonPassenger`'s `commonTick` interpolated the
+            // entity before `Player.tick`, which `Pre` precedes.
+            if let Some(player) = player_ref {
+                self.native_player_tick_pre(mod_api::__private::PlayerTickPreCall { player });
+            }
+            let head_lerps = &mut self.remote.as_mut().unwrap().head_lerps;
+            let m = &mut self.mobs[i];
             // LivingEntity.aiStep: the head's own interpolation.
             if let Some((yaw, steps)) = head_lerps.get_mut(&(m.id as i32))
                 && *steps > 0
@@ -7062,6 +7117,9 @@ impl Game<'_> {
                 }
                 _ => {}
             }
+            if let Some(player) = player_ref {
+                self.native_player_tick_post(mod_api::__private::PlayerTickPostCall { player });
+            }
         }
         // ExperienceOrb.tick runs on a client too (all but the merges and the
         // push out of a block, which are the server's): gravity, buoyancy,
@@ -7156,7 +7214,11 @@ impl Game<'_> {
                 &mut |splash| entered.push(splash),
             );
         }
-        head_lerps.retain(|_, (_, steps)| *steps > 0);
+        self.remote
+            .as_mut()
+            .unwrap()
+            .head_lerps
+            .retain(|_, (_, steps)| *steps > 0);
         // Entity.doWaterSplashEffect on this window: Level.addParticle draws
         // the bubbles and splashes. ClientLevel.playSeededSound drops
         // Entity.playSound, so the sound stays the server's.
@@ -7741,7 +7803,7 @@ impl Game<'_> {
         // A boat, minecart, item frame, armor stand or painting nearer than
         // any mob: the server uses it (AbstractBoat.interact boards it).
         if let Some(hit) = self.remote_object_hit(false)
-            && self.mob_hit().is_none_or(|(_, d)| hit.distance < d)
+            && self.mob_hit().is_none_or(|(_, d, _)| hit.distance < d)
             && self.before_block(hit.distance)
         {
             // Interaction.interact answers SUCCESS when it responds and
@@ -7825,14 +7887,14 @@ impl Game<'_> {
             }
             return true;
         }
-        if let Some((i, distance)) = self.mob_hit()
+        if let Some((i, distance, location)) = self.mob_hit()
             && self.before_block(distance)
         {
             let id = self.mobs[i].id as i32;
             self.send(S::Interact(play::Interact {
                 id,
                 hand: hand_id(hand),
-                location: [0.0, 1.0, 0.0],
+                location,
                 secondary: sneaking,
             }));
             // Player.interactOn: another player passes, and so does a mob
@@ -9235,7 +9297,7 @@ impl Game<'_> {
         // A ghast's fireball or a wind charge nearer than any mob: the
         // server turns it (game/deflect.rs).
         if let Some((i, distance)) = self.redirectable_hit()
-            && self.mob_hit().is_none_or(|(_, d)| distance <= d)
+            && self.mob_hit().is_none_or(|(_, d, _)| distance <= d)
             && self.before_block(distance)
             && self.creatures.projectiles[i].id != 0
         {
@@ -9249,7 +9311,7 @@ impl Game<'_> {
             }
             self.reset_attack_strength();
         } else if let Some(hit) = self.remote_object_hit(true)
-            && self.mob_hit().is_none_or(|(_, d)| hit.distance < d)
+            && self.mob_hit().is_none_or(|(_, d, _)| hit.distance < d)
             && self.before_block(hit.distance)
         {
             // VehicleEntity.hurtServer, ItemFrame and ArmorStand hurtServer,
@@ -9259,7 +9321,7 @@ impl Game<'_> {
                 self.remote_sweep_event(&kind, living);
             }
             self.reset_attack_strength();
-        } else if let Some((i, distance)) = self.mob_hit()
+        } else if let Some((i, distance, _)) = self.mob_hit()
             && self.before_block(distance)
         {
             // Minecraft.startAttack: an item's attack_range must hold the hit.
@@ -9272,7 +9334,7 @@ impl Game<'_> {
                     self.mobs[i].kind.id.trim_start_matches("minecraft:")
                 );
                 self.remote_sweep_event(&kind, true);
-                self.pvp_attacked(self.mobs[i].id as i32);
+                self.pvp_attacked(self.mobs[i].id as i32, distance);
                 self.remote_player_attack(i);
                 self.reset_attack_strength();
             }
@@ -10432,10 +10494,13 @@ impl Game<'_> {
         };
         let delta = self.world.game_time - r.clock_game_time;
         r.clock_game_time = self.world.game_time;
-        let partial = f64::from(r.clock_partial) + delta as f64 * f64::from(r.clock_rate);
-        let full = partial.floor();
-        r.clock_partial = (partial - full) as f32;
-        self.world.day_time += full as i64;
+        for clock in r.clocks.values_mut() {
+            let partial = f64::from(clock.partial_tick) + delta as f64 * f64::from(clock.rate);
+            let full = partial.floor();
+            clock.partial_tick = (partial - full) as f32;
+            clock.total_ticks += full as i64;
+        }
+        self.world.day_time = r.clock_time(r.default_clock);
     }
     pub(super) fn remote_status(&self) -> Option<serde_json::Value> {
         let r = self.remote.as_ref()?;
@@ -11060,6 +11125,38 @@ impl ClientMenu {
 }
 
 impl Remote {
+    /// Resolve registry keys only when registries or the dimension change.
+    fn resolve_clocks(&mut self) {
+        self.overworld_clock = self
+            .registries
+            .id("minecraft:world_clock", "minecraft:overworld");
+        self.default_clock = self
+            .dimension
+            .default_clock
+            .as_deref()
+            .and_then(|name| self.registries.id("minecraft:world_clock", name));
+        for id in [self.overworld_clock, self.default_clock]
+            .into_iter()
+            .flatten()
+        {
+            self.clocks.entry(id).or_insert(play::ClockState {
+                clock: id,
+                total_ticks: 0,
+                partial_tick: 0.0,
+                rate: 1.0,
+            });
+        }
+    }
+
+    fn clock_time(&self, id: Option<i32>) -> i64 {
+        id.and_then(|id| self.clocks.get(&id))
+            .map_or(0, |c| c.total_ticks)
+    }
+
+    pub(super) fn overworld_clock_time(&self) -> i64 {
+        self.clock_time(self.overworld_clock)
+    }
+
     /// `Minecraft.level != null`: from `handleLogin` until the next
     /// `handleConfigurationStart` (`clearClientLevel`). Minecraft.tick sends
     /// CLIENT_TICK_END only then, so a client waiting for the server's Login
@@ -11260,7 +11357,200 @@ mod interaction_event_tests;
 mod native_entity_tests;
 
 #[cfg(test)]
+mod effect_blend_tests;
+
+#[cfg(test)]
 mod tests {
+    /// Sleeping metadata and the local tick use the loaded bed's shape, not
+    /// a red-bed constant. Missing client data must not replace a server pose
+    /// or decide to wake the player.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn client_sleep_metadata_and_tick_preserve_shape_and_authoritative_positions() {
+        use super::super::{execution_role::ExecutionRole, native_entity_refs::tests::with_game};
+        use horizon_client::{chunk::Chunk, mobs::Mob, motion::PlayerMotion};
+        use horizon_core::geometry::Vec3;
+        use horizon_protocol::{
+            buf::Reader,
+            connection::Pipe,
+            entity_data::{Value, serializer},
+            packets::play::{self, Clientbound as C},
+        };
+
+        let deliver = |game: &mut super::super::Game<'_>, packet: C| {
+            let body = packet.encode();
+            let mut reader = Reader::new(&body);
+            let id = reader.varint().unwrap();
+            game.handle_packet(C::decode(id, reader.rest()).unwrap())
+                .unwrap();
+        };
+        let metadata = |id, bed: Option<[i32; 3]>| {
+            C::SetEntityData(play::SetEntityData {
+                id,
+                values: vec![
+                    (
+                        6,
+                        serializer::POSE,
+                        Value::Id(if bed.is_some() { 2 } else { 0 }),
+                    ),
+                    (14, serializer::OPTIONAL_BLOCK_POS, Value::OptPos(bed)),
+                ],
+            })
+        };
+        let teleport = |position: Vec3| {
+            C::PlayerPosition(play::PlayerPosition {
+                teleport: 1,
+                position: [position.x, position.y, position.z],
+                delta: [0.0; 3],
+                yaw: 0.0,
+                pitch: 30.0,
+                relatives: 0,
+            })
+        };
+
+        with_game(|game| {
+            game.options.execution_role = ExecutionRole::Client;
+            let (client, server) = Pipe::pair();
+            game.connect_local(client, "sleep-client").unwrap();
+            let remote = game.remote.as_mut().unwrap();
+            remote.logged_in = true;
+            remote.loaded_sent = true;
+            remote.entity_id = 42;
+            remote.level_players.insert(66, 789);
+            let kind = remote.player_type.as_ref().unwrap().clone();
+            let authoritative = Vec3::new(8.5, 70.0, 8.5);
+            game.player = Some(PlayerMotion::new(game.motion, authoritative).unwrap());
+            game.mobs.push(Mob::new(66, kind, authoritative, 0.0));
+            game.streaming
+                .insert_remote(&mut game.world, Chunk::empty(0, 0));
+            let registry = game.pack.assets.registry;
+            let air = registry.default_state("minecraft:air").unwrap();
+            let stone = registry.default_state("minecraft:stone").unwrap();
+
+            // Straw's foot is 4/16 high; red's shape is 9/16. These expected
+            // positions are independent of sleeping_position and its helpers.
+            for (name, complete, head, expected) in [
+                (
+                    "minecraft:straw_bed",
+                    true,
+                    [5, 64, 5],
+                    Some(Vec3::new(5.5, 64.375, 5.5)),
+                ),
+                (
+                    "minecraft:red_bed",
+                    true,
+                    [5, 64, 5],
+                    Some(Vec3::new(5.5, 64.6875, 5.5)),
+                ),
+                ("minecraft:straw_bed", false, [5, 64, 5], None),
+                ("minecraft:stone", false, [5, 64, 5], None),
+                ("minecraft:straw_bed", false, [37, 64, 5], None),
+            ] {
+                let case = (name, complete, head);
+                game.world.set(5, 64, 5, air).unwrap();
+                game.world.set(5, 64, 6, air).unwrap();
+                if head[0] == 5 {
+                    let state = if name == "minecraft:stone" {
+                        stone
+                    } else {
+                        registry
+                            .resolve(&horizon_world::chunk::BlockState {
+                                name: name.into(),
+                                properties: [
+                                    ("facing", "north"),
+                                    ("occupied", "false"),
+                                    ("part", "head"),
+                                ]
+                                .into_iter()
+                                .map(|(k, v)| (k.into(), v.into()))
+                                .collect(),
+                            })
+                            .unwrap()
+                    };
+                    game.world.set(5, 64, 5, state).unwrap();
+                    if complete {
+                        let mut foot = registry.state(state).unwrap().clone();
+                        foot.properties.insert("part".into(), "foot".into());
+                        game.world
+                            .set(5, 64, 6, registry.id(&foot).unwrap())
+                            .unwrap();
+                    }
+                } else {
+                    assert!(!game.world.chunks.contains_key(&(2, 0)));
+                }
+                deliver(game, teleport(authoritative));
+                let other = game.mob_index.get_mut(&mut game.mobs, 66).unwrap();
+                other.position = authoritative;
+                other.previous = authoritative;
+                other.head_pitch = 30.0;
+                other.previous_head_pitch = 30.0;
+                game.sleep_timer = 17;
+                deliver(game, metadata(66, Some(head)));
+                deliver(game, metadata(42, Some(head)));
+                let at = expected.unwrap_or(authoritative);
+                assert_eq!(
+                    game.player.as_ref().unwrap().position,
+                    at,
+                    "own metadata: {case:?}"
+                );
+                assert_eq!(game.previous_position, at, "own old position: {case:?}");
+                let other = game.mob_index.get(&game.mobs, 66).unwrap();
+                assert_eq!(other.position, at, "other metadata: {case:?}");
+                assert_eq!(other.previous, at, "other old position: {case:?}");
+                assert_eq!((other.head_pitch, other.previous_head_pitch), (0.0, 0.0));
+                assert_eq!(game.sleeping, Some(head));
+                assert_eq!(game.sleep_timer, 0);
+
+                // A correct authoritative teleport cannot be overwritten by
+                // the next sleeping tick, even while this client's bed is absent.
+                deliver(game, teleport(at));
+                game.player.as_mut().unwrap().velocity = Vec3::new(0.3, -0.4, 0.2);
+                for timer in 1..=2 {
+                    game.tick_remote_player(true, false).unwrap();
+                    assert_eq!(game.sleep_timer, timer, "local tick must execute: {case:?}");
+                    assert_eq!(game.sleeping, Some(head));
+                    let player = game.player.as_ref().unwrap();
+                    assert_eq!(player.position, at, "own tick: {case:?}");
+                    assert_eq!(player.velocity, Vec3::ZERO);
+                    assert_eq!(player.pitch, 0.0);
+                    assert_eq!(
+                        game.mob_index.get(&game.mobs, 66).unwrap().position,
+                        at,
+                        "other tick: {case:?}"
+                    );
+                }
+
+                deliver(game, metadata(66, None));
+                deliver(game, metadata(42, None));
+                assert_eq!(game.sleeping, None);
+                assert_eq!(
+                    game.player.as_ref().unwrap().position,
+                    at,
+                    "clearing metadata does not relocate"
+                );
+                let other = game.mob_index.get(&game.mobs, 66).unwrap();
+                assert_eq!(other.position, at);
+                assert_eq!(other.extra.ints[1], 0);
+                assert_eq!(other.extra.synced_pose, 0);
+                deliver(game, C::Animate(play::Animate { id: 42, action: 0 }));
+                assert_eq!(game.sleep_timer, 100);
+                let wake = Vec3::new(9.5, 70.1, 9.5);
+                deliver(game, teleport(wake));
+                assert_eq!(game.player.as_ref().unwrap().position, wake);
+                game.tick_remote_player(true, false).unwrap();
+                assert_eq!(game.sleeping, None);
+                assert_eq!(game.sleep_timer, 101);
+                let player = game.player.as_ref().unwrap();
+                assert_eq!(
+                    (player.position.x, player.position.z),
+                    (wake.x, wake.z),
+                    "wake tick must not snap to bed: {case:?}"
+                );
+            }
+            server.shutdown();
+        });
+    }
+
     /// `ClientChatReceivedEvent`: a mod's replacement is the line the chat
     /// shows, a cancelled system line never shows, and a cancelled message
     /// held by Chat Delay lets the next one through in the same tick.
@@ -11882,8 +12172,8 @@ mod tests {
     }
 
     /// The `both` handle reads answer on a client from its own copy: the local
-    /// player's health, effects, equipment and last death, the blocks of the
-    /// level it shows and the entities it tracks.
+    /// player's health, effects, equipment and last death, the blocks and time
+    /// of day of the level it shows and the entities it tracks.
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn client_handle_reads_answer_from_the_clients_copy() {
@@ -12006,6 +12296,27 @@ mod tests {
             assert_eq!(level.block_property(game, [160, 64, 0], "facing"), None);
             assert_eq!(game.world.chunks.len(), chunks);
 
+            // The time of day, as the server's clock last set it.
+            game.set_registries({
+                let mut registries = (*game.remote.as_ref().unwrap().registries).clone();
+                registries.registries.insert(
+                    "minecraft:world_clock".into(),
+                    vec![("minecraft:overworld".into(), None)],
+                );
+                Arc::new(registries)
+            });
+            game.handle_packet(C::SetTime(play::SetTime {
+                game_time: 100,
+                clocks: vec![play::ClockState {
+                    clock: 0,
+                    total_ticks: 30_000,
+                    partial_tick: 0.0,
+                    rate: 1.0,
+                }],
+            }))
+            .unwrap();
+            assert_eq!(level.day_time(game), Some(30_000));
+
             // An entity the server told the client of; others read None.
             let pig = game
                 .remote
@@ -12046,11 +12357,232 @@ mod tests {
             assert_eq!(living.health(game), None);
             assert_eq!(level.block(game, at), None);
             assert!(!level.is_loaded(game, at));
+            assert_eq!(level.day_time(game), None);
             assert_eq!(player.last_death_location(game), None);
 
             // The server's role keeps its own reads: a client handle names nothing there.
             game.options.execution_role = ExecutionRole::IntegratedServer;
             assert_eq!(game.native_entity_target(untracked), None);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn client_day_time_reads_overworld_clock_across_packets_and_levels() {
+        use super::super::{execution_role::ExecutionRole, native_entity_refs::tests::with_game};
+        use horizon_protocol::{
+            connection::Pipe,
+            packets::play::{self, Clientbound as C},
+        };
+        use mod_api::LevelRef;
+        use std::sync::Arc;
+
+        with_game(|game| {
+            game.options.execution_role = ExecutionRole::Client;
+            let (client, _server) = Pipe::pair();
+            game.connect_local(client, "ClockReadTest").unwrap();
+            let mut registries = (*game.remote.as_ref().unwrap().registries).clone();
+            let dimensions = vec![
+                ("minecraft:overworld".into(), None),
+                ("minecraft:the_end".into(), None),
+                ("minecraft:the_nether".into(), None),
+            ];
+            registries
+                .registries
+                .insert("minecraft:world_clock".into(), dimensions[..2].to_vec());
+            registries
+                .registries
+                .insert("minecraft:dimension_type".into(), dimensions);
+            let registries = Arc::new(registries);
+            game.set_registries(registries.clone());
+            let mut spawn = play::SpawnInfo {
+                dimension_type: 1,
+                dimension: "minecraft:the_end".into(),
+                seed: 0,
+                game_type: 1,
+                previous_game_type: None,
+                debug: false,
+                flat: true,
+                last_death: None,
+                portal_cooldown: 0,
+                sea_level: 63,
+            };
+            let login = |spawn| {
+                C::Login(play::Login {
+                    player_id: 7,
+                    hardcore: false,
+                    levels: vec!["minecraft:overworld".into(), "minecraft:the_end".into()],
+                    max_players: 1,
+                    chunk_radius: 2,
+                    simulation_distance: 2,
+                    reduced_debug_info: false,
+                    show_death_screen: true,
+                    limited_crafting: false,
+                    spawn,
+                    online_mode: false,
+                    enforces_secure_chat: false,
+                })
+            };
+            let state = |clock, total_ticks, partial_tick, rate| play::ClockState {
+                clock,
+                total_ticks,
+                partial_tick,
+                rate,
+            };
+            game.handle_packet(login(spawn.clone())).unwrap();
+            let end = game.native_level("minecraft:the_end").unwrap();
+            let wrong_level = LevelRef::new(end.epoch(), "minecraft:overworld");
+            assert_eq!(wrong_level.day_time(game), None);
+            game.handle_packet(C::SetTime(play::SetTime {
+                game_time: 100,
+                clocks: vec![state(0, 30_000, 0.0, 1.0), state(1, 100, 0.0, 1.0)],
+            }))
+            .unwrap();
+            assert_eq!(end.day_time(game), Some(30_000));
+            assert_eq!(
+                game.world.day_time, 100,
+                "the sky follows the End default clock"
+            );
+
+            // An Overworld-only update must not select it as the End sky clock.
+            game.handle_packet(C::SetTime(play::SetTime {
+                game_time: 104,
+                clocks: vec![state(0, 40_000, 0.75, 0.5)],
+            }))
+            .unwrap();
+            assert_eq!(end.day_time(game), Some(40_000));
+            assert_eq!(game.world.day_time, 104);
+            game.tick_remote_level().unwrap();
+            assert_eq!(end.day_time(game), Some(40_001));
+            assert_eq!(game.world.day_time, 105);
+            game.tick_remote_level().unwrap();
+            assert_eq!(end.day_time(game), Some(40_001));
+            assert_eq!(game.world.day_time, 106);
+
+            // Empty time syncs advance every retained clock by the game-time delta.
+            game.handle_packet(C::SetTime(play::SetTime {
+                game_time: 110,
+                clocks: vec![],
+            }))
+            .unwrap();
+            assert_eq!(end.day_time(game), Some(40_003));
+            assert_eq!(game.world.day_time, 110);
+            // A paused clock stays put even while the client's game time runs.
+            game.handle_packet(C::SetTime(play::SetTime {
+                game_time: 110,
+                clocks: vec![state(0, 50_000, 0.25, 0.0)],
+            }))
+            .unwrap();
+            game.tick_remote_level().unwrap();
+            assert_eq!(end.day_time(game), Some(50_000));
+            assert_eq!(game.world.day_time, 111);
+
+            // A frozen world ticks neither clock; packets still catch both up.
+            game.handle_packet(C::SetTime(play::SetTime {
+                game_time: 111,
+                clocks: vec![state(0, 60_000, 0.0, 2.0)],
+            }))
+            .unwrap();
+            game.handle_packet(C::TickingState(play::TickingState {
+                rate: 20.0,
+                frozen: true,
+            }))
+            .unwrap();
+            game.tick_remote_level().unwrap();
+            assert_eq!(game.world.game_time, 111);
+            assert_eq!(end.day_time(game), Some(60_000));
+            assert_eq!(game.world.day_time, 111);
+            game.handle_packet(C::SetTime(play::SetTime {
+                game_time: 114,
+                clocks: vec![],
+            }))
+            .unwrap();
+            assert_eq!(end.day_time(game), Some(60_006));
+            assert_eq!(game.world.day_time, 114);
+            // Backward corrections use the same signed delta and fractional state.
+            game.handle_packet(C::SetTime(play::SetTime {
+                game_time: 113,
+                clocks: vec![],
+            }))
+            .unwrap();
+            assert_eq!(end.day_time(game), Some(60_004));
+            assert_eq!(game.world.day_time, 113);
+            game.handle_packet(C::TickingState(play::TickingState {
+                rate: 20.0,
+                frozen: false,
+            }))
+            .unwrap();
+
+            // Same-level respawn keeps the epoch and the connection's clocks.
+            game.handle_packet(C::Respawn(play::Respawn {
+                spawn: spawn.clone(),
+                keep: 0,
+            }))
+            .unwrap();
+            assert_eq!(end.day_time(game), Some(60_004));
+            spawn.dimension_type = 0;
+            spawn.dimension = "minecraft:overworld".into();
+            game.handle_packet(C::Respawn(play::Respawn {
+                spawn: spawn.clone(),
+                keep: 0,
+            }))
+            .unwrap();
+            assert_eq!(end.day_time(game), None);
+            let overworld = game.native_level("minecraft:overworld").unwrap();
+            assert_eq!(overworld.day_time(game), Some(60_004));
+            assert_eq!(
+                game.world.day_time, 60_004,
+                "select the new default from retained clocks"
+            );
+            game.tick_remote_level().unwrap();
+            assert_eq!(overworld.day_time(game), Some(60_006));
+            assert_eq!(game.world.day_time, 60_006);
+
+            // A dimension without a default clock must not select the prior one.
+            spawn.dimension_type = 2;
+            spawn.dimension = "minecraft:the_nether".into();
+            game.handle_packet(C::Respawn(play::Respawn {
+                spawn: spawn.clone(),
+                keep: 0,
+            }))
+            .unwrap();
+            let nether = game.native_level("minecraft:the_nether").unwrap();
+            assert_eq!(overworld.day_time(game), None);
+            assert_eq!(nether.day_time(game), Some(60_006));
+            assert_eq!(game.world.day_time, 0);
+
+            // Login starts a new listener epoch, even on the same connection.
+            game.handle_packet(login(spawn.clone())).unwrap();
+            assert_eq!(nether.day_time(game), None);
+            let fresh = game.native_level("minecraft:the_nether").unwrap();
+            assert_eq!(fresh.day_time(game), Some(0));
+            game.handle_packet(C::SetTime(play::SetTime {
+                game_time: 1,
+                clocks: vec![],
+            }))
+            .unwrap();
+            assert_eq!(
+                fresh.day_time(game),
+                Some(1),
+                "the new clock anchor and rate are fresh too"
+            );
+            game.handle_packet(C::SetTime(play::SetTime {
+                game_time: 1,
+                clocks: vec![state(0, 7_000, 0.0, 1.0)],
+            }))
+            .unwrap();
+            assert_eq!(fresh.day_time(game), Some(7_000));
+            assert_eq!(game.world.day_time, 0);
+            game.client_logging_out();
+            assert_eq!(fresh.day_time(game), None);
+            let (client, _server) = Pipe::pair();
+            game.connect_local(client, "ClockReadTest").unwrap();
+            assert_eq!(fresh.day_time(game), None);
+            game.set_registries(registries);
+            game.handle_packet(login(spawn)).unwrap();
+            let reconnected = game.native_level("minecraft:the_nether").unwrap();
+            assert_eq!(fresh.day_time(game), None);
+            assert_eq!(reconnected.day_time(game), Some(0));
         });
     }
 
@@ -12271,6 +12803,52 @@ mod tests {
             assert_ne!(game.native_lifecycle.epoch(), Some(replaced));
             game.client_logging_out();
             assert!(game.native_lifecycle.epoch().is_none());
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn connection_and_dimension_replacement_clear_every_particle_group() {
+        use super::super::{
+            execution_role::ExecutionRole, native_entity_refs::tests::with_game,
+            native_hooks::particle_count_tests::fill,
+        };
+        use horizon_client::level_loading::Reason;
+        use horizon_protocol::{connection::Pipe, packets::play::SpawnInfo};
+        with_game(|game| {
+            game.options.execution_role = ExecutionRole::Client;
+            fill(game);
+            // Include pending particles as well as live groups before replacing the connection.
+            game.particles.elder_guardian();
+            let (client, _server) = Pipe::pair();
+            game.connect_local(client, "ParticleReset").unwrap();
+            assert_eq!(game.client_particle_count(), 0);
+            assert!(game.pickups.live.is_empty());
+            game.tick_particles();
+            assert_eq!(game.client_particle_count(), 0);
+            let spawn = SpawnInfo {
+                dimension_type: 0,
+                dimension: "minecraft:overworld".into(),
+                seed: 0,
+                game_type: 1,
+                previous_game_type: None,
+                debug: false,
+                flat: true,
+                last_death: None,
+                portal_cooldown: 0,
+                sea_level: 63,
+            };
+            fill(game);
+            game.particles.elder_guardian();
+            game.enter_remote_dimension(&spawn, false, Reason::Other);
+            assert_eq!(game.client_particle_count(), 0);
+            assert!(game.pickups.live.is_empty());
+            game.tick_particles();
+            assert_eq!(
+                game.client_particle_count(),
+                0,
+                "pending groups cannot return in the new level"
+            );
         });
     }
 
@@ -13351,5 +13929,276 @@ mod tests {
         assert_eq!(respawn.event, 11);
         assert_eq!(crafting.event, 12);
         assert!(crafting.param == 1.0);
+    }
+}
+
+#[cfg(test)]
+mod player_tick_tests {
+    use super::super::native_entity_refs::tests::with_game;
+    use super::super::native_item_places::tests::{guest, open_to_lan};
+    use horizon_client::items::ItemStack;
+    use mod_api::{Host, HostSide, PlayerRef};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Debug, PartialEq)]
+    struct Snapshot {
+        phase: &'static str,
+        side: &'static str,
+        uuid: u128,
+        diamonds: u32,
+        xp: i32,
+        cooldown: Option<i32>,
+    }
+
+    struct Log(Arc<Mutex<Vec<Snapshot>>>);
+    impl Log {
+        fn record(&self, side: HostSide<'_>, player: PlayerRef, phase: &'static str) {
+            let (host, side, cooldown): (&dyn Host, _, _) = match side {
+                HostSide::Server(host) => {
+                    assert_eq!(
+                        host.players().acting_player().unwrap().uuid(),
+                        player.uuid()
+                    );
+                    let cooldown = player
+                        .item_cooldowns(host)
+                        .unwrap()
+                        .first()
+                        .map(|c| c.ticks_left);
+                    (host, "server", cooldown)
+                }
+                HostSide::Client(host) => {
+                    if host.local_player() != Some(player) {
+                        assert_eq!(player.uuid(), 789);
+                        assert_eq!(player.entity().id(), 66);
+                        assert!(player.inventory(host).is_none());
+                    }
+                    (host, "client", None)
+                }
+            };
+            self.0.lock().unwrap().push(Snapshot {
+                phase,
+                side,
+                uuid: player.uuid(),
+                diamonds: player
+                    .inventory(host)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter(|s| &*s.item == "minecraft:diamond")
+                    .map(|s| s.count)
+                    .sum(),
+                xp: player.experience(host).map_or(0, |xp| xp.total),
+                cooldown,
+            });
+        }
+    }
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for Log {
+        fn player_tick_pre(&self, host: HostSide<'_>, event: &mut mod_api::PlayerTickPreEvent) {
+            self.record(host, event.player, "pre");
+        }
+        fn player_tick_post(&self, host: HostSide<'_>, event: &mut mod_api::PlayerTickPostEvent) {
+            self.record(host, event.player, "post");
+        }
+        fn can_continue_sleeping(
+            &self,
+            _: &mut dyn mod_api::ServerHost,
+            event: &mut mod_api::CanContinueSleepingEvent<'_>,
+        ) -> Option<bool> {
+            // The sleep rule runs inside the tick, never ahead of Pre.
+            let heard = self.0.lock().unwrap();
+            assert_eq!(heard.last().unwrap().phase, "pre");
+            assert_eq!(heard.last().unwrap().uuid, event.entity);
+            Some(false)
+        }
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn guest_tick_brackets_sleep_cooldowns_pickups_and_death() {
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let mods = vec![mod_api::ModEntry::new(
+            "log",
+            Box::new(Log(Arc::clone(&heard))),
+        )]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            with_game(|game| {
+                open_to_lan(game);
+                let mut g = guest(1);
+                g.loaded = true;
+                g.bed = Some([0, 0, 0]);
+                g.sleeping = true;
+                g.sleep_timer = 4;
+                let mut other = guest(2);
+                other.loaded = true;
+                other.position = [50.0, 0.0, 50.0];
+                let host = game.lan.as_mut().unwrap();
+                host.hub.guests.extend([g, other]);
+                host.play
+                    .entry(1)
+                    .or_default()
+                    .cooldowns
+                    .add("minecraft:ender_pearl".into(), 3);
+                let diamond = ItemStack::new("minecraft:diamond", 2);
+                game.spawn_item(diamond.clone(), [0.0; 3], [0.0; 3], 0);
+                let level = game.native_level("minecraft:overworld").unwrap();
+                assert!(game.native_level_award_experience(level, 0.0, 0.0, 0.0, 7));
+                game.tick_guests();
+                let observations = heard.lock().unwrap();
+                assert_eq!(
+                    observations
+                        .iter()
+                        .map(|s| (s.phase, s.uuid))
+                        .collect::<Vec<_>>(),
+                    [("pre", 123), ("post", 123), ("pre", 124), ("post", 124)]
+                );
+                assert_eq!(
+                    observations[0],
+                    Snapshot {
+                        phase: "pre",
+                        side: "server",
+                        uuid: 123,
+                        diamonds: 0,
+                        xp: 0,
+                        cooldown: Some(3)
+                    }
+                );
+                assert_eq!(
+                    observations[1],
+                    Snapshot {
+                        phase: "post",
+                        side: "server",
+                        uuid: 123,
+                        diamonds: 2,
+                        xp: 7,
+                        cooldown: Some(2)
+                    }
+                );
+                assert_eq!(observations[2].diamonds, 0);
+                drop(observations);
+                assert_eq!(game.lan.as_ref().unwrap().hub.guests[0].sleep_timer, 100);
+                assert!(game.lan.as_ref().unwrap().hub.guests[0].bed.is_none());
+                assert!(game.inventory.iter().all(Option::is_none));
+                heard.lock().unwrap().clear();
+                // A real zero-health death-screen tick still gets both endpoints,
+                // without use/cooldown/pickup work re-enabled.
+                let g = &mut game.lan.as_mut().unwrap().hub.guests[0];
+                g.dead = true;
+                g.health = 0.0;
+                game.spawn_item(diamond, [0.0; 3], [0.0; 3], 0);
+                assert!(game.native_level_award_experience(level, 0.0, 0.0, 0.0, 7));
+                game.tick_guests();
+                let observations = heard.lock().unwrap();
+                assert_eq!(
+                    observations[0],
+                    Snapshot {
+                        phase: "pre",
+                        side: "server",
+                        uuid: 123,
+                        diamonds: 2,
+                        xp: 7,
+                        cooldown: Some(2)
+                    }
+                );
+                assert_eq!(
+                    observations[1],
+                    Snapshot {
+                        phase: "post",
+                        side: "server",
+                        uuid: 123,
+                        diamonds: 2,
+                        xp: 7,
+                        cooldown: Some(2)
+                    }
+                );
+                assert_eq!(observations.len(), 4);
+                assert_eq!(game.dropped.len(), 1);
+            })
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn client_player_ticks_on_the_death_screen_too() {
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let mods = vec![mod_api::ModEntry::new(
+            "log",
+            Box::new(Log(Arc::clone(&heard))),
+        )]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            with_game(|game| {
+                game.options.execution_role = super::super::execution_role::ExecutionRole::Client;
+                let (client, server) = horizon_protocol::connection::Pipe::pair();
+                game.connect_local(client, "tick-client").unwrap();
+                let remote = game.remote.as_mut().unwrap();
+                remote.logged_in = true;
+                remote.profile = 456;
+                remote.entity_id = 42;
+                game.player = horizon_client::motion::PlayerMotion::new(
+                    game.motion,
+                    horizon_core::geometry::Vec3::ZERO,
+                )
+                .ok();
+                game.remote.as_mut().unwrap().level_players.insert(66, 789);
+                let kind = game
+                    .remote
+                    .as_ref()
+                    .unwrap()
+                    .player_type
+                    .as_ref()
+                    .unwrap()
+                    .clone();
+                game.mobs.push(horizon_client::mobs::Mob::new(
+                    66,
+                    kind,
+                    horizon_core::geometry::Vec3::ZERO,
+                    0.0,
+                ));
+                game.cooldowns.add("minecraft:ender_pearl".into(), 3);
+                game.sleep_timer = 4;
+                // LocalPlayer.tick waits for the client load and its chunk: only
+                // the other player's pair runs, and the level pass still ticks.
+                game.tick_remote().unwrap();
+                // Player.tick owns both counters, so they wait with it.
+                assert_eq!(game.cooldowns.remaining().next().unwrap().1, 3);
+                assert_eq!(game.sleep_timer, 4);
+                let phases = || {
+                    std::mem::take(&mut *heard.lock().unwrap())
+                        .iter()
+                        .map(|s| (s.phase, s.side, s.uuid))
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(phases(), [("pre", "client", 789), ("post", "client", 789)]);
+                game.remote.as_mut().unwrap().loaded_sent = true;
+                game.streaming
+                    .insert_remote(&mut game.world, horizon_client::chunk::Chunk::empty(0, 0));
+                // The other player's tick ends before the local player's starts.
+                game.tick_remote().unwrap();
+                assert_eq!(game.cooldowns.remaining().next().unwrap().1, 2);
+                assert_eq!(game.sleep_timer, 5);
+                game.screen = super::super::Screen::Dead;
+                game.player
+                    .as_mut()
+                    .unwrap()
+                    .set_health(0.0, false)
+                    .unwrap();
+                game.tick_remote().unwrap();
+                assert_eq!(
+                    phases(),
+                    [
+                        ("pre", "client", 789),
+                        ("post", "client", 789),
+                        ("pre", "client", 456),
+                        ("post", "client", 456),
+                        ("pre", "client", 789),
+                        ("post", "client", 789),
+                        ("pre", "client", 456),
+                        ("post", "client", 456)
+                    ]
+                );
+                server.shutdown();
+            })
+        });
     }
 }

@@ -12,6 +12,8 @@ impl Hooks for Mod {
     /// A player joined the server (NeoForge's `PlayerLoggedInEvent`): greet them.
     fn player_logged_in(&self, host: &mut dyn ServerHost, event: &mut PlayerLoggedInEvent<'_>) {
         let line = format!("{id} says hello, {}!", event.name);
-        host.tell(event.player, Text::literal(line));
+        if let Some(player) = host.player(event.player) {
+            player.tell(host, Text::literal(line));
+        }
     }
 }

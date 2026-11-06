@@ -72,7 +72,7 @@ pub(super) fn tool_manifest(bundle: &Bundle) -> Result<(), String> {
         .native()
         .injection
         .iter()
-        .filter(|injection| injection.trait_method.is_none())
+        .filter(|injection| injection.helper.is_some())
         .collect();
     if !helpers.is_empty() {
         manifest.insert(

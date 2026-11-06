@@ -3,6 +3,7 @@
 
 pub mod config;
 mod install;
+pub mod prune;
 
 use config::Config;
 pub use install::Install;

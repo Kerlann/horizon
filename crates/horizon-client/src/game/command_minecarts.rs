@@ -19,7 +19,7 @@ impl Game<'_> {
     }
     /// `MinecartCommandBase.onUpdated`: the cart's command and last output go
     /// into its synched data (`DATA_ID_COMMAND_NAME`, `DATA_ID_LAST_OUTPUT`).
-    fn cart_command_updated(&mut self, id: u32) {
+    pub(super) fn cart_command_updated(&mut self, id: u32) {
         if let Some(c) = self.command_cart_mut(id) {
             c.synced_command = c.command.command.clone();
             c.synced_output = c.command.last_output_string();

@@ -95,3 +95,7 @@ fn client_packet_hands_a_mod_the_type_and_custom_payload() {
         [("voicechat:secret".to_string(), vec![1, 2, 3])]
     );
 }
+
+// Fluid acceptance is scoped to a FLUIDS provider, not a global Hooks method.
+// Its default/refused/accepted writes are covered with a real Game backend in
+// game/machines/native_fluids.rs::tests::a_scoped_tank_can_refuse_a_fluid.

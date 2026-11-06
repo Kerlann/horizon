@@ -1,6 +1,9 @@
 //! The `player_modes` hooks and helpers: declarations the mod API generator reads (see `hooks/mod.rs`).
 
 pub trait Helpers {
+    /// The player's operator permission level, 0 through 4; the single-player owner
+    /// has 4 with commands allowed. Displaced connected players retain their level.
+    /// None for a stale or unavailable player.
     #[helper(
         side = "server",
         receiver = "player",

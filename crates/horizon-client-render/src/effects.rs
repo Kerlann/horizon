@@ -15,6 +15,9 @@ pub struct EffectInstance {
     pub ambient: bool,
     pub visible: bool,
     pub hidden: Option<Box<EffectInstance>>,
+    /// Previous and current client blend factors for effects with no blend
+    /// duration. Darkness and nausea use their existing longer fades instead.
+    pub client_blend: (bool, bool),
 }
 impl EffectInstance {
     pub fn new(id: &'static str, duration: i32, amplifier: i32) -> Self {
@@ -25,6 +28,7 @@ impl EffectInstance {
             ambient: false,
             visible: true,
             hidden: None,
+            client_blend: (false, false),
         }
     }
     fn infinite(&self) -> bool {
@@ -74,12 +78,13 @@ impl EffectInstance {
         changed
     }
     /// `MobEffectInstance.tickClient`: a client counts its effects down
-    /// (the server removes them).
+    /// (the server removes them), then advances the zero-duration blend.
     pub fn tick_client(&mut self) {
         if self.infinite() || self.duration > 0 {
             self.tick_down();
             self.downgrade();
         }
+        self.client_blend = (self.client_blend.1, !self.ends_within(0));
     }
     /// Counts down this instance and its hidden chain without promoting it.
     pub fn tick_down(&mut self) {

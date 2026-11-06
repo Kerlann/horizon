@@ -293,13 +293,16 @@ pub fn horizon_part(_attribute: TokenStream, input: TokenStream) -> TokenStream 
     expand(parse_macro_input!(input as ItemImpl), false)
 }
 
-/// `#[point(side = "server" | "client" | "both", name = "…", hot)]` on a `Game` method: an
-/// injection point (#589), a slot the launcher fills at load for the mods whose `impl Points` listens
-/// there. The staging pass that builds the prebuilt game (and the launcher's source builds) puts it
-/// on every method [`point_shape::eligible`] admits; the source tree carries none. Its head checks
-/// the slot (one atomic load and a branch while nothing listens) and hands each listener the side's
-/// host and the parameters with API types, which it may change; its return does the same with the
-/// value returned, unless that value borrows the game.
+/// `#[point(side = "server" | "client" | "both", name = "…", raw, free)]` on a function: an
+/// injection point (#589), a slot the launcher fills at load for the mods that listen there. The
+/// staging pass that builds the prebuilt game (and the launcher's source builds) puts it on every
+/// function [`point_shape::eligible`] admits; the source tree carries none. Its head checks the slot
+/// (one atomic load and a branch while nothing listens), then hands each `impl Points` listener the
+/// parameters with API types (and, on a `Game` method with a `side`, the side's host), and each raw
+/// listener (`raw`: the pass declared its record and listener types beside the function) the
+/// receiver and a `&mut` to every parameter; each may change them. Its return does the same with
+/// the value returned; a value that borrows reaches only raw listeners, as itself. `free` marks a
+/// free function, whose body moves to a sibling function rather than an associated one.
 #[proc_macro_attribute]
 pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
     let mut function = parse_macro_input!(input as ImplItemFn);
@@ -321,7 +324,7 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
     // The body moves to an inlined inner function, so the return listeners run however it
-    // returns; the outer function takes each parameter by a plain name.
+    // returns; the outer function takes each parameter by a plain, mutable name.
     let inner = syn::Ident::new(
         &format!(
             "__point_{}",
@@ -332,6 +335,10 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
     let mut outer = function.clone();
     let mut call = Vec::new();
     let mut passed = Vec::new();
+    // Where each typed parameter lives while the listeners run: in the API record, or a local.
+    let mut places = std::collections::HashMap::new();
+    // For each native-width parameter: the raw listener's local, and its write-back.
+    let mut widened = Vec::new();
     for (i, input) in outer.sig.inputs.iter_mut().enumerate() {
         let syn::FnArg::Typed(typed) = input else {
             continue;
@@ -341,19 +348,36 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
             _ => None,
         };
         let plain = format_ident!("__p{i}");
-        *typed.pat = syn::parse_quote!(#plain);
+        *typed.pat = syn::parse_quote!(mut #plain);
         match original.and_then(|name| shape.args.iter().find(|arg| arg.name == name)) {
             Some(arg) => {
                 let name = &arg.name;
                 passed.push(plain);
-                call.push(match (&arg.ty, point_shape::wide(&arg.ty)) {
-                    (syn::Type::Reference(_), _) => quote!(&*__args.#name),
-                    // A native width crosses as 64 bits: back to the parameter's own type.
-                    (ty, Some(_)) => quote!(__args.#name as #ty),
-                    (_, None) => quote!(__args.#name),
-                });
+                match point_shape::wide(&arg.ty) {
+                    // A native width crosses the record as 64 bits, and a raw listener gets it
+                    // back in its own type, in a local written back after it.
+                    Some(wide) => {
+                        let (ty, local) = (&arg.ty, format_ident!("__w{i}"));
+                        places.insert(i, quote!(#local));
+                        widened.push((
+                            quote!(let mut #local = __args.#name as #ty;),
+                            quote!(__args.#name = #local as #wide;),
+                        ));
+                        call.push(quote!(__args.#name as #ty));
+                    }
+                    None => {
+                        places.insert(i, quote!(__args.#name));
+                        call.push(match arg.ty {
+                            syn::Type::Reference(_) => quote!(&*__args.#name),
+                            _ => quote!(__args.#name),
+                        });
+                    }
+                }
             }
-            None => call.push(quote!(#plain)),
+            None => {
+                places.insert(i, quote!(#plain));
+                call.push(quote!(#plain));
+            }
         }
     }
     // The inner function's type and const parameters, named at the call: one only in the return
@@ -374,30 +398,30 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
     } else {
         quote!(::<#(#generics),*>)
     };
-    // What the listeners get for `self`: the shape's host.
-    let host = match (shape.mutable, shape.side) {
-        (false, _) => quote!(self),
-        (true, point_shape::Side::Both) => quote!(crate::game::points::host_side(&mut *self)),
-        (true, _) => quote!(&mut *self),
+    let (receiver, callee) = match (shape.receiver, shape.free) {
+        (point_shape::Receiver::None, true) => (quote!(), quote!(#inner)),
+        (point_shape::Receiver::None, false) => (quote!(), quote!(Self::#inner)),
+        (point_shape::Receiver::Shared, _) => (quote!(self,), quote!(self.#inner)),
+        (point_shape::Receiver::Mut, _) => (quote!(&mut *self,), quote!(self.#inner)),
+    };
+    let erased_receiver = match shape.receiver {
+        point_shape::Receiver::None => quote!(::std::ptr::null_mut()),
+        point_shape::Receiver::Shared => quote!(self as *const Self as *mut ()),
+        point_shape::Receiver::Mut => quote!(&mut *self as *mut Self as *mut ()),
+    };
+    // What the API listeners get before their record: the shape's host, if it has one.
+    let host = match (shape.receiver, shape.side) {
+        (_, None) => quote!(),
+        (point_shape::Receiver::Mut, Some(point_shape::Side::Both)) => {
+            quote!(crate::game::points::host_side(&mut *self),)
+        }
+        (point_shape::Receiver::Mut, Some(_)) => quote!(&mut *self,),
+        (_, Some(_)) => quote!(self,),
     };
     let record = shape.record();
-    let fire = |variant: &syn::Ident, method: &syn::Ident| {
-        let name = method.to_string();
-        quote! {
-            crate::game::points::fire(
-                crate::game::points::PointId::#variant,
-                #name,
-                &mut |__points| __points.#method(#host, &mut __args),
-            )
-        }
-    };
-    let listened = |variant: &syn::Ident| quote!(crate::game::points::POINTS[crate::game::points::PointId::#variant as usize].load(::std::sync::atomic::Ordering::Acquire));
-    let (head_variant, head_method) = (
-        shape.variant(),
-        syn::Ident::new(&shape.name, proc_macro2::Span::call_site()),
-    );
-    let head_listened = listened(&head_variant);
-    let head_fire = fire(&head_variant, &head_method);
+    let outcome = shape.raw_outcome(&function.sig);
+    // A raw `result` is the API record's when the API carries the value, else a slot of its own.
+    let api_result = matches!(shape.returns, point_shape::Returns::Value(_));
     // A native-width value crosses the record as 64 bits.
     let (widen, narrow) = match &shape.returns {
         point_shape::Returns::Value(ty) => match point_shape::wide(ty) {
@@ -406,52 +430,201 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
         },
         _ => (quote!(), quote!()),
     };
-    let stop = match &shape.returns {
-        point_shape::Returns::Unit => quote!(if __args.cancel {
+    let result_place = match (&shape.returns, api_result) {
+        (point_shape::Returns::Value(ty), true) if point_shape::wide(ty).is_some() => {
+            let wide = point_shape::wide(ty);
+            widened.push((
+                quote!(let mut __w_result = __args.result.map(|__value| __value as #ty);),
+                quote!(__args.result = __w_result.map(|__value| __value as #wide);),
+            ));
+            quote!(__w_result)
+        }
+        (_, true) => quote!(__args.result),
+        (_, false) => quote!(__result_slot),
+    };
+    let (unpack, repack): (Vec<_>, Vec<_>) = widened.into_iter().unzip();
+    // The raw record, built afresh for each firing from the places the parameters live.
+    let raw_record = {
+        let ty = shape.raw_record();
+        let fields = point_shape::raw_fields(&function.sig)
+            .into_iter()
+            .map(|field| {
+                let (name, place) = (field.name, &places[&field.input]);
+                quote!(#name: &mut #place)
+            });
+        let outcome = match outcome {
+            point_shape::RawOutcome::Cancel => quote!(cancel: &mut __args.cancel,),
+            point_shape::RawOutcome::Result(_) => quote!(result: &mut #result_place,),
+            point_shape::RawOutcome::None => quote!(),
+        };
+        quote!(#ty { #(#fields,)* #outcome })
+    };
+    let fire = |variant: &syn::Ident, method: &syn::Ident, api: bool| {
+        let name = method.to_string();
+        let api = api.then(|| {
+            quote! {
+                mod_points::__private::fire(
+                    mod_points::PointId::#variant,
+                    #name,
+                    &mut |__points| __points.#method(#host &mut __args),
+                );
+            }
+        });
+        let raw = shape.raw.then(|| {
+            let listener = shape.raw_listener();
+            quote! {
+                #(#unpack)*
+                mod_points::__private::fire_raw(
+                    mod_points::PointId::#variant,
+                    #name,
+                    &mut |__kind| match __kind {
+                        mod_points::__private::RawKind::Typed(__function) => {
+                            // SAFETY: registration guarantees this point's listener type.
+                            unsafe {
+                                ::std::mem::transmute::<*const (), #listener>(__function)(
+                                    #receiver &mut #raw_record,
+                                )
+                            }
+                        }
+                        mod_points::__private::RawKind::Erased(__function) => {
+                            // SAFETY: this slot supplies its exact receiver and raw record types.
+                            unsafe {
+                                __function(
+                                    mod_points::PointId::#variant as usize,
+                                    #erased_receiver,
+                                    &mut #raw_record as *mut _ as *mut (),
+                                )
+                            }
+                        }
+                    },
+                );
+                #(#repack)*
+            }
+        });
+        quote!(#api #raw)
+    };
+    let listened = |variant: &syn::Ident| quote!(mod_points::__private::POINTS[mod_points::PointId::#variant as usize].load(::std::sync::atomic::Ordering::Acquire));
+    let (head_variant, head_method) = (
+        shape.variant(),
+        syn::Ident::new(&shape.name, proc_macro2::Span::call_site()),
+    );
+    let head_listened = listened(&head_variant);
+    let head_fire = fire(&head_variant, &head_method, true);
+    let result_slot = match &outcome {
+        point_shape::RawOutcome::Result(_) if shape.raw && !api_result => {
+            quote!(let mut __result_slot = None;)
+        }
+        _ => quote!(),
+    };
+    let stop = match (&shape.returns, &outcome) {
+        (point_shape::Returns::Unit, _) => quote!(if __args.cancel {
             return;
         }),
-        point_shape::Returns::UnitResult => quote!(if __args.cancel {
+        (point_shape::Returns::UnitResult, _) => quote!(if __args.cancel {
             return Ok(());
         }),
-        point_shape::Returns::Value(_) => quote!(if let Some(__result) = __args.result.take() {
-            return __result #narrow;
-        }),
-        point_shape::Returns::Opaque => quote!(),
+        (point_shape::Returns::Value(_), _) => {
+            quote!(if let Some(__result) = __args.result.take() {
+                return __result #narrow;
+            })
+        }
+        (_, point_shape::RawOutcome::Result(_)) if shape.raw => {
+            quote!(if let Some(__result) = __result_slot.take() {
+                return __result;
+            })
+        }
+        _ => quote!(),
     };
-    let returned = if shape.has_return() {
+    let returned = if shape.at_return() {
         let (variant, method) = (
             shape.return_variant(),
             format_ident!("{}_return", shape.name),
         );
         let return_listened = listened(&variant);
-        let return_fire = fire(&variant, &method);
-        let body = match &shape.returns {
-            point_shape::Returns::Value(_) => quote! {
+        let name = method.to_string();
+        let api = match (&shape.returns, shape.has_return()) {
+            (_, false) => quote!(),
+            (point_shape::Returns::Value(_), true) => quote! {
                 __args.result = Some(__result #widen);
-                #return_fire;
-                return __args.result.map_or(__result, |__value| __value #narrow);
+                mod_points::__private::fire(
+                    mod_points::PointId::#variant,
+                    #name,
+                    &mut |__points| __points.#method(#host &mut __args),
+                );
+                let __result = __args.result.map_or(__result, |__value| __value #narrow);
             },
-            _ => quote!(#return_fire;),
+            (_, true) => quote! {
+                mod_points::__private::fire(
+                    mod_points::PointId::#variant,
+                    #name,
+                    &mut |__points| __points.#method(#host &mut __args),
+                );
+            },
         };
+        let raw = shape.raw.then(|| {
+            let listener = shape.raw_return_listener();
+            let (receiver, erased_receiver) = if shape.borrowed_return {
+                (quote!(), quote!(::std::ptr::null_mut()))
+            } else {
+                (receiver.clone(), erased_receiver.clone())
+            };
+            let value = match &function.sig.output {
+                syn::ReturnType::Type(..) => quote!(&mut __result),
+                syn::ReturnType::Default => quote!(),
+            };
+            quote! {
+                #[allow(unused_mut)]
+                let mut __result = __result;
+                mod_points::__private::fire_raw(
+                    mod_points::PointId::#variant,
+                    #name,
+                    &mut |__kind| match __kind {
+                        mod_points::__private::RawKind::Typed(__function) => {
+                            // SAFETY: registration guarantees this place's return listener type.
+                            unsafe {
+                                ::std::mem::transmute::<*const (), #listener>(__function)(
+                                    #receiver #value
+                                )
+                            }
+                        }
+                        mod_points::__private::RawKind::Erased(__function) => {
+                            // SAFETY: this slot supplies its exact receiver and return types.
+                            unsafe {
+                                __function(
+                                    mod_points::PointId::#variant as usize,
+                                    #erased_receiver,
+                                    &mut __result as *mut _ as *mut (),
+                                )
+                            }
+                        }
+                    },
+                );
+            }
+        });
         quote! {
             if #return_listened {
-                #body
+                #api
+                #raw
+                return __result;
             }
         }
     } else {
         quote!()
     };
     outer.block = syn::parse_quote!({
-        let mut __args = crate::game::points::#record::__new(#(#passed),*);
+        #[allow(unused_mut)]
+        let mut __args = mod_points::#record::__new(#(#passed),*);
+        #result_slot
         if #head_listened {
-            #head_fire;
+            #head_fire
             #stop
         }
-        let __result = self.#inner #turbofish(#(#call),*);
+        let __result = #callee #turbofish(#(#call),*);
         #returned
         __result
     });
-    outer.attrs.retain(|attr| !attr.path().is_ident("inline"));
+    // The outer function keeps the function's own `#[inline]`: a small accessor in a lower crate
+    // (`Chunk::get`) stays inlinable into its callers, slot check and all.
     function.sig.ident = inner;
     function.vis = syn::Visibility::Inherited;
     function

@@ -942,6 +942,18 @@ fn login_and_configure(
             features: sync.features.clone(),
         }),
     )?;
+    // Send before the existing known-pack request: its reply is the ordering
+    // barrier for the client's mod-list answer, with no extra Ping/Pong.
+    // Vanilla clients ignore the unknown payload and offer an empty list.
+    let server_mods = horizon_protocol::mod_list::local();
+    let mut client_mods = Vec::new();
+    send(
+        c,
+        cfg::Clientbound::CustomPayload(cfg::CustomPayload {
+            channel: horizon_protocol::mod_list::CHANNEL.into(),
+            data: horizon_protocol::mod_list::encode(&server_mods),
+        }),
+    )?;
     let core = KnownPack {
         namespace: CORE_PACK.0.into(),
         id: CORE_PACK.1.into(),
@@ -963,6 +975,24 @@ fn login_and_configure(
                 brand = horizon_protocol::buf::Reader::new(&p.data)
                     .string(32767)
                     .unwrap_or(brand);
+            }
+            cfg::Serverbound::CustomPayload(p)
+                if p.channel == horizon_protocol::mod_list::CHANNEL =>
+            {
+                match horizon_protocol::mod_list::decode(&p.data) {
+                    Ok(list) => client_mods = list,
+                    Err(error) => {
+                        let text = mod_list_unreadable(&error);
+                        let reason = super::data::component_nbt(&text.component());
+                        let _ = send(c, cfg::Clientbound::Disconnect(cfg::Disconnect { reason }));
+                        lost(
+                            shared,
+                            &format!("{name} ({})", uuid_string(uuid)),
+                            &text.plain(),
+                        );
+                        return Ok(None);
+                    }
+                }
             }
             cfg::Serverbound::SelectKnownPacks(p) => break p.packs == vec![core.clone()],
             _ => {}
@@ -996,47 +1026,6 @@ fn login_and_configure(
                 data: crate::lod_net::Offer::new(shared.config.lod_distance).encode(),
             }),
         )?;
-    }
-    // Even an empty server asks: a client may have extra both-side mods.
-    let server_mods = horizon_protocol::mod_list::local();
-    let mut client_mods = Vec::new();
-    if brand == "horizon" {
-        send(
-            c,
-            cfg::Clientbound::CustomPayload(cfg::CustomPayload {
-                channel: horizon_protocol::mod_list::CHANNEL.into(),
-                data: horizon_protocol::mod_list::encode(&server_mods),
-            }),
-        )?;
-        send(c, cfg::Clientbound::Ping(cfg::Ping { id: 1 }))?;
-        // A client that does not answer has no mods to offer.
-        loop {
-            let (id, payload) = c.recv().map_err(e)?;
-            match decode_config(id, &payload).map_err(e)? {
-                cfg::Serverbound::CustomPayload(p)
-                    if p.channel == horizon_protocol::mod_list::CHANNEL =>
-                {
-                    match horizon_protocol::mod_list::decode(&p.data) {
-                        Ok(list) => client_mods = list,
-                        Err(error) => {
-                            let text = mod_list_unreadable(&error);
-                            let reason = super::data::component_nbt(&text.component());
-                            let _ =
-                                send(c, cfg::Clientbound::Disconnect(cfg::Disconnect { reason }));
-                            lost(
-                                shared,
-                                &format!("{name} ({})", uuid_string(uuid)),
-                                &text.plain(),
-                            );
-                            return Ok(None);
-                        }
-                    }
-                }
-                cfg::Serverbound::Pong(p) if p.id == 1 => break,
-                cfg::Serverbound::ClientInformation(i) => info = i,
-                _ => {}
-            }
-        }
     }
     let difference = horizon_protocol::mod_list::compare(&server_mods, &client_mods);
     if !difference.is_empty() {
@@ -1866,7 +1855,7 @@ mod tests {
                     )
                     .unwrap();
                 }
-                cfg::Clientbound::Ping(p) => c.send(&cfg::Serverbound::Pong(p).encode()).unwrap(),
+                cfg::Clientbound::Ping(_) => panic!("unexpected mod-list round trip"),
                 cfg::Clientbound::Disconnect(d) => {
                     assert!(
                         horizon_protocol::text::plain(&d.reason, &Default::default())
@@ -1876,6 +1865,93 @@ mod tests {
                 }
                 cfg::Clientbound::FinishConfiguration(_) => panic!("extra mod was accepted"),
                 _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn mod_lists_use_the_known_pack_barrier_without_a_ping() {
+        use horizon_protocol::mod_list::{self, Entry, Side};
+        for (brand, reply) in [
+            ("horizon", None),
+            ("vanilla", None),
+            ("horizon", Some(vec![])),
+            (
+                "horizon",
+                Some(vec![Entry {
+                    id: "client_only".into(),
+                    version: "1".into(),
+                    side: Side::Client,
+                }]),
+            ),
+        ] {
+            let config = crate::lan::NetConfig {
+                announce: false,
+                listen: false,
+                ..crate::lan::NetConfig::lan(0, "Owner - World".into(), 8)
+            };
+            let lan = crate::lan::Lan::start_with(Arc::new(SyncData::empty()), config).unwrap();
+            let mut c = Connection::local(lan.connect_local().unwrap());
+            c.reader
+                .set_read_timeout(Some(Duration::from_secs(10)))
+                .unwrap();
+            login_profile(&mut c, "Owner");
+            c.send(
+                &login::Serverbound::LoginAcknowledged(horizon_protocol::packets::Empty).encode(),
+            )
+            .unwrap();
+            let mut data = horizon_protocol::buf::Writer::new();
+            data.string(brand);
+            c.send(
+                &cfg::Serverbound::CustomPayload(cfg::CustomPayload {
+                    channel: "minecraft:brand".into(),
+                    data: data.data,
+                })
+                .encode(),
+            )
+            .unwrap();
+            let mut offered = false;
+            let mut barrier = false;
+            loop {
+                let (id, payload) = c.recv().unwrap();
+                match cfg::Clientbound::decode(id, &payload).unwrap() {
+                    cfg::Clientbound::CustomPayload(p) if p.channel == mod_list::CHANNEL => {
+                        assert!(!barrier, "mod offer must precede the ordering barrier");
+                        assert!(!offered);
+                        assert!(mod_list::decode(&p.data).unwrap().is_empty());
+                        offered = true;
+                        if let Some(list) = &reply {
+                            c.send(
+                                &cfg::Serverbound::CustomPayload(cfg::CustomPayload {
+                                    channel: mod_list::CHANNEL.into(),
+                                    data: mod_list::encode(list),
+                                })
+                                .encode(),
+                            )
+                            .unwrap();
+                        }
+                    }
+                    cfg::Clientbound::SelectKnownPacks(p) => {
+                        assert!(offered);
+                        barrier = true;
+                        c.send(&cfg::Serverbound::SelectKnownPacks(p).encode())
+                            .unwrap();
+                    }
+                    cfg::Clientbound::Ping(_) => panic!("mod negotiation added a round trip"),
+                    cfg::Clientbound::Disconnect(d) => panic!("unexpected refusal: {:?}", d.reason),
+                    cfg::Clientbound::FinishConfiguration(_) => {
+                        assert!(barrier);
+                        c.send(
+                            &cfg::Serverbound::FinishConfiguration(
+                                horizon_protocol::packets::Empty,
+                            )
+                            .encode(),
+                        )
+                        .unwrap();
+                        break;
+                    }
+                    _ => {}
+                }
             }
         }
     }
@@ -1926,9 +2002,7 @@ mod tests {
                     )
                     .unwrap();
                 }
-                cfg::Clientbound::Ping(p) => {
-                    let _ = c.send(&cfg::Serverbound::Pong(p).encode());
-                }
+                cfg::Clientbound::Ping(_) => panic!("unexpected mod-list round trip"),
                 cfg::Clientbound::Disconnect(d) => {
                     let text = horizon_protocol::text::plain(&d.reason, &Default::default());
                     assert!(text.contains("couldn't be read"));

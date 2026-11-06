@@ -6,7 +6,7 @@ use horizon_client::{
 };
 use horizon_world::{
     chunk::BlockState,
-    fluid::FluidState,
+    fluid::{FluidKind, FluidState},
     level::Behaviours,
     registry::{BlockRegistry, BlockStateId},
 };
@@ -58,6 +58,11 @@ pub(super) fn fluid_in_tag(items: &Items, fluid: &str, tag: &str) -> bool {
         &horizon_client::command::args::normalized(tag),
         &horizon_client::command::args::normalized(fluid),
     )
+}
+
+/// The fluid a registry id names, with or without `minecraft:`.
+fn fluid_kind(fluid: &str) -> Option<FluidKind> {
+    FluidKind::from_name(&horizon_client::command::args::normalized(fluid))
 }
 
 impl Game<'_> {
@@ -122,6 +127,31 @@ impl Game<'_> {
     ) -> Option<FluidState> {
         let state = self.native_level_state(level, pos)?;
         self.native_state_fluid_state(state)
+    }
+
+    /// Whether `fluid` and `other` are the same fluid (`Fluid.isSame`): a source and its
+    /// flowing form are, so `minecraft:water` and `minecraft:flowing_water` are the same, water
+    /// and lava not. Names are fluid ids, with or without `minecraft:`; false when either
+    /// names no fluid.
+    pub(super) fn native_fluid_is_same(&self, fluid: &str, other: &str) -> bool {
+        match (fluid_kind(fluid), fluid_kind(other)) {
+            (Some(fluid), Some(other)) => fluid.same_family(other),
+            _ => false,
+        }
+    }
+
+    /// The bucket item that picks `fluid` up (`Fluid.getBucket`), `minecraft:water_bucket` for
+    /// water and flowing water. None for `minecraft:empty`, whose bucket is air, and for a name
+    /// no fluid has.
+    pub(super) fn native_fluid_bucket(&self, fluid: &str) -> Option<&'static str> {
+        horizon_world::level::fluid_bucket(fluid_kind(fluid)?)
+    }
+
+    /// The sound event a bucket plays as it picks `fluid` up (`Fluid.getPickupSound`),
+    /// `minecraft:item.bucket.fill_lava` for lava and flowing lava. None for
+    /// `minecraft:empty`, which has none, and for a name no fluid has.
+    pub(super) fn native_fluid_pickup_sound(&self, fluid: &str) -> Option<&'static str> {
+        horizon_world::level::fluid_pickup_sound(fluid_kind(fluid)?)
     }
 
     /// Read a loaded block in a server tick hook, without loading a chunk.
@@ -519,6 +549,41 @@ mod tests {
             );
             game.session_lock = None;
             let _ = std::fs::remove_dir_all(dir);
+        });
+    }
+
+    /// Sources and their flowing forms are one fluid, the empty fluid has no bucket and no
+    /// pickup sound, and a name no fluid has answers nothing, through a mod's `Host`.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn fluid_sameness_buckets_and_pickup_sounds_follow_vanilla() {
+        with_game(|game| {
+            let host: &dyn mod_api::Host = game;
+            assert!(host.fluid_is_same("minecraft:water", "minecraft:flowing_water"));
+            assert!(host.fluid_is_same("flowing_lava", "lava"));
+            assert!(host.fluid_is_same("minecraft:empty", "minecraft:empty"));
+            assert!(!host.fluid_is_same("minecraft:water", "minecraft:lava"));
+            assert!(!host.fluid_is_same("minecraft:water", "minecraft:empty"));
+            assert!(!host.fluid_is_same("nope:missing", "nope:missing"));
+
+            assert_eq!(
+                host.fluid_bucket("minecraft:flowing_water"),
+                Some("minecraft:water_bucket")
+            );
+            assert_eq!(host.fluid_bucket("lava"), Some("minecraft:lava_bucket"));
+            assert_eq!(host.fluid_bucket("minecraft:empty"), None);
+            assert_eq!(host.fluid_bucket("nope:missing"), None);
+
+            assert_eq!(
+                host.fluid_pickup_sound("minecraft:water"),
+                Some("minecraft:item.bucket.fill")
+            );
+            assert_eq!(
+                host.fluid_pickup_sound("minecraft:flowing_lava"),
+                Some("minecraft:item.bucket.fill_lava")
+            );
+            assert_eq!(host.fluid_pickup_sound("minecraft:empty"), None);
+            assert_eq!(host.fluid_pickup_sound("nope:missing"), None);
         });
     }
 

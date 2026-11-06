@@ -34,6 +34,26 @@ impl BucketContent {
     }
 }
 
+/// `Fluid.getBucket`: the filled bucket that holds `fluid`, flowing or not. None for the
+/// empty fluid, whose bucket is `Items.AIR`.
+pub fn fluid_bucket(fluid: FluidKind) -> Option<&'static str> {
+    match fluid {
+        FluidKind::Water | FluidKind::FlowingWater => Some("minecraft:water_bucket"),
+        FluidKind::Lava | FluidKind::FlowingLava => Some("minecraft:lava_bucket"),
+        FluidKind::Empty => None,
+    }
+}
+
+/// `Fluid.getPickupSound`: the sound of a bucket filling with `fluid`, flowing or not. None
+/// for the empty fluid, which has none.
+pub fn fluid_pickup_sound(fluid: FluidKind) -> Option<&'static str> {
+    match fluid {
+        FluidKind::Water | FluidKind::FlowingWater => Some("minecraft:item.bucket.fill"),
+        FluidKind::Lava | FluidKind::FlowingLava => Some("minecraft:item.bucket.fill_lava"),
+        FluidKind::Empty => None,
+    }
+}
+
 impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     /// `BucketPickup.pickupBlock(user, level, pos, state)`: the filled bucket
     /// that results, None when the block gives nothing. `creative` is whether
@@ -42,11 +62,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let b = self.b;
         let state = self.state(pos);
         let item = if b.instance_of(state, Class::Liquid) {
-            match b.fluid(state).kind() {
-                FluidKind::Water | FluidKind::FlowingWater => "minecraft:water_bucket",
-                FluidKind::Lava | FluidKind::FlowingLava => "minecraft:lava_bucket",
-                FluidKind::Empty => return None,
-            }
+            fluid_bucket(b.fluid(state).kind())?
         } else if b.implements(state, Interface::SimpleWaterlogged)
             && b.table.has(state, b.props.waterlogged)
         {

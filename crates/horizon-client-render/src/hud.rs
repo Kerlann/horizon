@@ -1514,6 +1514,7 @@ fn clip_polygon(poly: &[HudVertex], axis: usize, limit: f32, keep_below: bool) -
 }
 /// The GUI Scale option (0 = auto).
 pub static GUI_SCALE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+pub static GUI_UNICODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 /// One frame of overlay geometry in GUI pixels.
 pub struct HudBatch {
     pub vertices: Vec<HudVertex>,
@@ -1573,19 +1574,16 @@ impl HudBatch {
     /// Window.calculateScale: the largest scale keeping >= 320x240 GUI pixels,
     /// capped by the GUI Scale option (0 = auto).
     pub fn new(window: [u32; 2]) -> Self {
-        let limit = GUI_SCALE.load(std::sync::atomic::Ordering::Relaxed);
-        let mut scale = 1;
-        while (limit == 0 || scale < limit)
-            && window[0] / (scale + 1) >= 320
-            && window[1] / (scale + 1) >= 240
-        {
-            scale += 1;
-        }
+        let gui = horizon_client_input::window::GuiSize::new(
+            window,
+            GUI_SCALE.load(std::sync::atomic::Ordering::Relaxed),
+            GUI_UNICODE.load(std::sync::atomic::Ordering::Relaxed),
+        );
         Self {
             vertices: Vec::new(),
-            scale: scale as f32,
-            width: (window[0] as f32 / scale as f32).ceil(),
-            height: (window[1] as f32 / scale as f32).ceil(),
+            scale: gui.scale as f32,
+            width: gui.size[0] as f32,
+            height: gui.size[1] as f32,
             patches: Vec::new(),
             blends: Vec::new(),
             end_portal: EndPortalFill::default(),
@@ -3330,7 +3328,14 @@ mod tests {
                 image_width: 176,
             };
             let vanilla = crate::inventory_effects::EffectsLayout::vanilla(space.available());
-            crate::inventory_effects::panels(&space, &vanilla, &[effect], 20.0, &|_| None, &|_| 60)
+            crate::inventory_effects::panels(
+                &space,
+                &vanilla,
+                std::slice::from_ref(&effect),
+                20.0,
+                &|_| None,
+                &|_| 60,
+            )
         };
         batch.vertices.clear();
         crate::inventory_effects::paint(&mut batch, &atlas, &panels, [0, 0]);
@@ -4177,7 +4182,15 @@ texture=wide",
         };
         batch.vertices.clear();
         let tooltip = inventory_effects::paint(&mut batch, &atlas, &panels, [257, 44]);
-        assert_eq!(tooltip.unwrap()[0].0, "levitation");
+        let lines = inventory_effects::tooltip(tooltip.unwrap());
+        let plain: Vec<_> = lines.iter().map(|(t, c)| (t.plain(), *c)).collect();
+        assert_eq!(
+            plain,
+            [
+                ("levitation".to_owned(), u32::MAX),
+                ("∞".to_owned(), u32::MAX)
+            ]
+        );
         assert_eq!(batch.vertices.len(), 24);
         assert_eq!(batch.vertices[18].pos, [257.0, 44.0]);
         assert_eq!(batch.vertices[18].uv, [rect.u0, rect.v0]);
@@ -4191,7 +4204,14 @@ texture=wide",
                 image_width: 176,
             };
             let vanilla = crate::inventory_effects::EffectsLayout::vanilla(space.available());
-            crate::inventory_effects::panels(&space, &vanilla, &[effect], 20.0, &|_| None, &|_| 60)
+            crate::inventory_effects::panels(
+                &space,
+                &vanilla,
+                std::slice::from_ref(&effect),
+                20.0,
+                &|_| None,
+                &|_| 60,
+            )
         };
         batch.vertices.clear();
         assert!(inventory_effects::paint(&mut batch, &atlas, &panels, [0, 0]).is_none());

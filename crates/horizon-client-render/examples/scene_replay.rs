@@ -389,7 +389,11 @@ fn replay(window: Arc<Window>) -> Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
-            match renderer.screenshot_result.take() {
+            let result = renderer
+                .screenshot_result
+                .take()
+                .map(|result| result.and_then(|pending| pending.save().map_err(|e| e.to_string())));
+            match result {
                 Some(Ok(_)) => {}
                 Some(Err(e)) => notes.push(format!("screenshot: {e}")),
                 None => notes.push("screenshot: not saved".into()),
@@ -648,6 +652,7 @@ fn remesh(
                         nether_shading: false,
                         shader_pack_lighting: false,
                         separate_ao: false,
+                        shader_pack: false,
                         assets,
                         render,
                         tables: &tables,

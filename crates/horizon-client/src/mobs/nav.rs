@@ -809,6 +809,7 @@ mod tests {
             &root,
             &[],
             true,
+            true,
             |world, _| world.shape =
                 crate::chunk::LevelShape::new(0, 128, 128, true, false).unwrap(),
             |world, types| {
@@ -835,6 +836,7 @@ mod tests {
         assert!(crate::mobs::world::with_resource_test_world(
             &root,
             &[],
+            true,
             true,
             |world, registry| {
                 world.chunks.insert(

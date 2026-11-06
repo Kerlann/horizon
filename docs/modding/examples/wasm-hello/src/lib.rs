@@ -19,7 +19,8 @@ struct Stick;
 #[mod_api::horizon_part]
 impl ItemPart for Stick {
     fn use_item(&self, host: &mut dyn ServerHost, event: &mut UseItemEvent<'_>) -> Flow {
-        host.broadcast(Text::literal(format!("a {} was used", event.stack.item)));
+        host.messages()
+            .broadcast(Text::literal(format!("a {} was used", event.stack.item)));
         Flow::Continue
     }
 }
@@ -46,7 +47,8 @@ impl Points for Mod {
         };
         let ticks = self.ticks.fetch_add(1, Ordering::Relaxed) + 1;
         if ticks % 200 == 0 {
-            host.broadcast(Text::literal(format!("hello_wasm: {ticks} server ticks")));
+            host.messages()
+                .broadcast(Text::literal(format!("hello_wasm: {ticks} server ticks")));
         }
     }
 }

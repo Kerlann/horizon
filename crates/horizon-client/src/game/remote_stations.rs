@@ -82,7 +82,8 @@ impl Game<'_> {
             (Kind::Loom, 0) => s.loom.selected = usize::try_from(value).ok(),
             // StonecutterMenu.selectedRecipeIndex.
             (Kind::Stonecutter, 0) => s.selected = usize::try_from(value).ok(),
-            // AnvilMenu.cost.
+            // AnvilMenu.cost. A cost outside this short is corrected by
+            // `remote_anvil_wide_cost`, which arrives after this packet.
             (Kind::Anvil, 0) => s.anvil.cost = i32::from(value),
             // EnchantmentMenu: costs, the seed (the screen's glyph names),
             // the clues' enchantments and levels.
@@ -114,6 +115,23 @@ impl Game<'_> {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// `horizon:anvil_cost`, after the anvil's `ContainerSetData` short: the
+    /// signed level cost when that short cannot hold it.
+    pub(super) fn remote_anvil_wide_cost(&mut self, data: &[u8]) {
+        let Ok(cost) = horizon_protocol::anvil_cost::decode(data) else {
+            log::debug!("Horizon: a bad anvil cost payload");
+            return;
+        };
+        if !self.remote_station_open(cost.window) {
+            return;
+        }
+        if let Some(s) = self.station.as_mut()
+            && s.kind == Kind::Anvil
+        {
+            s.anvil.cost = cost.cost;
         }
     }
 

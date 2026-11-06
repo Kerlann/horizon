@@ -220,6 +220,7 @@ impl Launcher {
                     .map(|(kind, _)| self.kind_badge(*kind).relative()),
             )
             .children(chip)
+            .children(self.internals_chip(&row.file, &row.internals))
             .children(update.map(|u| u.relative()))
             .child(
                 controls

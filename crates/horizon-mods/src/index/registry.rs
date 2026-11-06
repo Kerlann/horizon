@@ -56,7 +56,7 @@ pub struct Entry {
     /// Defaults to the repository's address.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source: String,
-    /// `icons/<id>.png` in the registry repository, or an `https://` address.
+    /// `icons/<id>.png` in the registry repository, required before the project is listed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
     /// 1 to 3 of the kind's categories ([`rules::categories`]).
@@ -65,8 +65,7 @@ pub struct Entry {
     /// Free-form, lowercase, at most 10.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
-    /// At most 8, in order: `screenshots/<id>/<name>.png|.jpg` in the registry repository, or
-    /// `https://` addresses.
+    /// At most 8, in order: `screenshots/<id>/<name>.png|.jpg` in the registry repository.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub screenshots: Vec<String>,
     /// The author's minisign public key.
@@ -211,9 +210,6 @@ impl Entry {
         }
         for e in rules::check(&self.kind, &self.description, &self.categories, &self.tags) {
             errors.push(format!("{id}: {e}"));
-        }
-        if rules::REQUIRED && self.icon.is_none() {
-            errors.push(format!("{id}: has no icon (icons/{id}.png, a square PNG)"));
         }
         if self.screenshots.len() > rules::MAX_SCREENSHOTS {
             errors.push(format!(
@@ -404,6 +400,7 @@ pub fn project(entry: &Entry, src: &Sources) -> Result<Project, Vec<String>> {
         key: entry.key.as_ref().map(|k| k.trim().to_owned()),
         versions,
         downloads: 0,
+        stars: 0,
     })
 }
 
@@ -628,6 +625,25 @@ pub fn build(src: &Sources) -> Result<Index, Vec<String>> {
     let mut errors = Vec::new();
     let mut projects = Vec::new();
     for entry in entries.iter().filter(|e| listed(e, src)) {
+        // A listed project's page is complete (registry v2's rollout, step 4).
+        let page = match &entry.repo {
+            Some(_) => Cache::read(src.registry, &entry.id)
+                .map(|c| c.page)
+                .unwrap_or_default(),
+            None => Page::default(),
+        };
+        let e = entry.resolved(&page);
+        errors.extend(
+            rules::check_required(
+                &e.id,
+                &e.description,
+                &e.categories,
+                e.icon.as_deref(),
+                &e.screenshots,
+            )
+            .into_iter()
+            .map(|problem| format!("{}: {problem}", e.id)),
+        );
         match project(entry, src) {
             Ok(p) => projects.push(p),
             Err(e) => errors.extend(e),
@@ -749,6 +765,14 @@ pub fn review(base: &[Entry], head: &[Entry], author: &str) -> Review {
         }
     }
     for new in head {
+        // Every version is a submission, checked and reviewed: the registry no longer follows a
+        // repository's releases (entries from before keep theirs until they are pinned).
+        if new.repo.is_some() && base.iter().all(|e| e.id != new.id || e.repo.is_none()) {
+            r.errors.push(format!(
+                "{}: the registry doesn't follow repositories any more: list each version's file (the form, or [[versions]])",
+                new.id
+            ));
+        }
         if !base.iter().any(|e| e.id == new.id) {
             r.notes.push(format!(
                 "{}: a new {} by {}{}",

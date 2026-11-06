@@ -844,17 +844,43 @@ impl Chat {
     /// Draws [`Chat::layout`] into the HUD batch, and with the chat screen
     /// open the restricted prompt above the lines.
     pub fn draw(&self, batch: &mut HudBatch, atlas: &HudAtlas, ticks: f32, focused: bool) {
-        let draws = self.layout(batch.height as i32, ticks, focused);
-        hud_layout::paint(batch, atlas, &draws);
+        self.draw_at(batch, atlas, ticks, focused, [0.0; 2]);
+    }
+    /// [`Chat::draw`] moved by `offset` GUI pixels (a mod's `CustomizeGuiOverlayEvent.Chat`,
+    /// `Gui.renderChat`'s translate).
+    pub fn draw_at(
+        &self,
+        batch: &mut HudBatch,
+        atlas: &HudAtlas,
+        ticks: f32,
+        focused: bool,
+        offset: [f32; 2],
+    ) {
+        let paint = |batch: &mut HudBatch, draws: Vec<GuiDraw>| {
+            if offset == [0.0; 2] {
+                hud_layout::paint(batch, atlas, &draws);
+            } else {
+                let mut moved = Vec::with_capacity(draws.len() + 2);
+                moved.push(GuiDraw::Push(vec![PoseOp::Translate(offset[0], offset[1])]));
+                moved.extend(draws);
+                moved.push(GuiDraw::Pop);
+                hud_layout::paint(batch, atlas, &moved);
+            }
+        };
+        paint(batch, self.layout(batch.height as i32, ticks, focused));
         let restricted = focused && self.abilities.any_restriction();
         if restricted {
-            let prompt = self.restricted_prompt(&atlas.font, batch.height as i32);
-            hud_layout::paint(batch, atlas, &prompt);
+            paint(
+                batch,
+                self.restricted_prompt(&atlas.font, batch.height as i32),
+            );
         }
         if focused && self.search_prompt {
             let row = if restricted { 2 } else { 1 };
-            let prompt = self.search_prompt(&atlas.font, batch.height as i32, row);
-            hud_layout::paint(batch, atlas, &prompt);
+            paint(
+                batch,
+                self.search_prompt(&atlas.font, batch.height as i32, row),
+            );
         }
     }
     /// `ChatComponent.extractRenderState` for `FOREGROUND_RESTRICTED`: a

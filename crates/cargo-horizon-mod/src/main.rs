@@ -4,7 +4,8 @@
 //! - `new <path> [--name "Name"]`: a content mod from the template; with
 //!   `--template native [--horizon <commit>]`, a native trait mod's bundle, pinned to the
 //!   newest prebuilt game unless `--horizon` names a commit.
-//! - `update [--horizon <commit>]`: repin this native mod, to the newest prebuilt game by default.
+//! - `update [--horizon <commit>]`: repin this native mod and diff/refresh declared internals.
+//! - `internals add <path>… [--kind <kind>]`: declare internals with hashes from the pinned prebuilt game.
 //! - `build`: the `.hmod` in `target/horizon-mod/`, with the mod's `assets/`
 //!   and `data/`; with `--wasm`, a Rust mod built to `mod.wasm` first (`wasm.rs`).
 //! - `wasm-std <out.wasm>`: the standard library member the game ships for wasm mods.
@@ -16,6 +17,7 @@
 //! - `use-jar <path>`: list an exact original Java jar as a passive asset/data source.
 use horizon_mods::{Content, Manifest, Package, index::native, manifest::MANIFEST};
 mod check;
+mod internals;
 mod jar;
 mod registry;
 mod wasm;
@@ -54,8 +56,9 @@ fn main() -> ExitCode {
         Some("check") => check(&args[1..]),
         Some("registry") => registry::main(&args[1..]),
         Some("use-jar") => jar::run(&args[1..]),
+        Some("internals") => internals::run(&args[1..]),
         Some("update") => update(Path::new("."), flag(&args[1..], "--horizon")),
-        _ => Err("usage: cargo horizon-mod new <path> [--name \"Name\"] [--template content|native [--horizon <commit>]] | update [--horizon <commit>] | build [--wasm] | wasm-std <out.wasm> | run [--game <horizon-client>] [-- <game args>] | check <file> [--kind <kind>] [--key <public key> --signature <file.minisig>] [--json] | registry build|review|check|list | use-jar <path>".into()),
+        _ => Err("usage: cargo horizon-mod new <path> [--name \"Name\"] [--template content|native [--horizon <commit>]] | update [--horizon <commit>] | internals add <path>… [--kind <kind>] | build [--wasm] | wasm-std <out.wasm> | run [--game <horizon-client>] [-- <game args>] | check <file> [--kind <kind>] [--key <public key> --signature <file.minisig>] [--json] | registry build|review|check|list | use-jar <path>".into()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -203,31 +206,52 @@ fn newest_prebuilt(releases: &serde_json::Value) -> Option<String> {
     })
 }
 
-/// Repins the native mod in `dir`: its `[native] horizon` and its mod API dependency's `rev`.
+/// Repins the native mod and its API dependencies, reporting signature changes before writing.
 fn update(dir: &Path, horizon: Option<&str>) -> Result<(), String> {
+    let path = dir.join(MANIFEST);
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let manifest = Manifest::parse(&text)?;
+    let native = manifest
+        .native
+        .as_ref()
+        .ok_or("update needs a [native] mod")?;
+    let mut doc: toml_edit::DocumentMut = text
+        .parse()
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let cargo_path = dir.join("Cargo.toml");
+    let cargo_text = std::fs::read_to_string(&cargo_path)
+        .map_err(|e| format!("{}: {e}", cargo_path.display()))?;
+    let mut cargo: toml_edit::DocumentMut = cargo_text
+        .parse()
+        .map_err(|e| format!("{}: {e}", cargo_path.display()))?;
     let horizon = pin(horizon)?;
-    let edit = |file: &str, at: &[&str]| -> Result<(), String> {
-        let path = dir.join(file);
-        let text =
-            std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let mut doc: toml_edit::DocumentMut = text
-            .parse()
-            .map_err(|e| format!("{}: {e}", path.display()))?;
-        let (last, tables) = at.split_last().expect("a key");
-        let mut item = doc.as_item_mut();
-        for key in tables {
-            item = item
-                .get_mut(key)
-                .ok_or_else(|| format!("{}: no {}", path.display(), at.join(".")))?;
+    for package in ["horizon-mod-api", "horizon-internals"] {
+        let dependency = cargo
+            .get_mut("dependencies")
+            .and_then(|deps| deps.get_mut(package))
+            .filter(|dep| !dep.is_none());
+        if package == "horizon-internals" && dependency.is_none() {
+            continue;
         }
-        let value = item
-            .get_mut(last)
-            .ok_or_else(|| format!("{}: no {}", path.display(), at.join(".")))?;
-        *value = toml_edit::value(horizon.as_str());
-        std::fs::write(&path, doc.to_string()).map_err(|e| format!("{}: {e}", path.display()))
-    };
-    edit(MANIFEST, &["native", "horizon"])?;
-    edit("Cargo.toml", &["dependencies", "horizon-mod-api", "rev"])?;
+        let rev = dependency
+            .and_then(|dep| dep.get_mut("rev"))
+            .and_then(toml_edit::Item::as_value_mut)
+            .ok_or_else(|| format!("Cargo.toml: no dependencies.{package}.rev"))?;
+        internals::set_string(rev, &horizon);
+    }
+    if !native.internals.is_empty() {
+        let old = internals::load(dir, &native.horizon)?;
+        let new = internals::load(dir, &horizon)?;
+        print!("{}", internals::refresh(&manifest, &mut doc, &old, &new)?);
+    }
+    internals::set_string(
+        doc["native"]["horizon"].as_value_mut().expect("native pin"),
+        &horizon,
+    );
+    let candidate = doc.to_string();
+    std::fs::write(&path, candidate).map_err(|e| format!("{}: {e}", path.display()))?;
+    std::fs::write(&cargo_path, cargo.to_string())
+        .map_err(|e| format!("{}: {e}", cargo_path.display()))?;
     println!("Pinned to Horizon {horizon}");
     Ok(())
 }

@@ -666,6 +666,40 @@ impl Launcher {
         Some(wrap.into_any_element())
     }
 
+    /// Declared game internals beside the mod's route.
+    pub(super) fn internals_chip(&self, file: &str, paths: &[String]) -> Option<Stateful<Div>> {
+        if paths.is_empty() {
+            return None;
+        }
+        let pal = Pal::of(&self.theme);
+        let paths = paths.to_vec();
+        let count = paths.len().to_string();
+        let background = self.theme.well;
+        Some(
+            div()
+                .id(SharedString::from(format!("internals-{file}")))
+                .flex()
+                .flex_none()
+                .items_center()
+                .h(px(18.))
+                .px(px(7.))
+                .rounded_full()
+                .bg(pal.faint)
+                .child(
+                    text_in(11., pal.muted)
+                        .child(trf("Uses game internals ({count})", &[("count", &count)])),
+                )
+                .tooltip(move |_, cx| {
+                    cx.new(|_| InternalsTooltip {
+                        paths: paths.clone(),
+                        ink: pal.ink,
+                        background,
+                    })
+                    .into()
+                }),
+        )
+    }
+
     /// The kind badge beside a mod's name.
     pub(super) fn kind_badge(&self, kind: ModKind) -> Div {
         let pal = Pal::of(&self.theme);
@@ -678,6 +712,28 @@ impl Launcher {
             .rounded_full()
             .bg(pal.faint)
             .child(text_in(11., pal.muted).child(kind.label()))
+    }
+}
+
+struct InternalsTooltip {
+    paths: Vec<String>,
+    ink: Hsla,
+    background: Hsla,
+}
+
+impl Render for InternalsTooltip {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .flex()
+            .flex_col()
+            .p(px(8.))
+            .rounded(px(8.))
+            .bg(self.background)
+            .children(
+                self.paths
+                    .iter()
+                    .map(|path| text_in(12., self.ink).child(path.clone())),
+            )
     }
 }
 

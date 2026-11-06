@@ -10,6 +10,7 @@ members = [
     "crates/horizon-world",
     "crates/horizon-client",
     "crates/horizon-mod-points",
+    "crates/horizon-internals",
     "crates/horizon-client-lib",
     "crates/horizon-client-core",
     "crates/horizon-client-input",
@@ -85,6 +86,15 @@ libmimalloc-sys = { path = "third_party/libmimalloc-sys" }
 # example and test binary hundreds of megabytes and slow to link.
 [profile.dev]
 debug = "line-tables-only"
+
+# The 512 MiB jar-boundary test still hashes every byte; run the hash kernel optimized.
+# Likewise, the API generator repeatedly parses the game's sources with syn.
+# These dependencies stay cached in CI, unlike workspace test binaries.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.syn]
+opt-level = 3
 
 [profile.release]
 lto = "thin"

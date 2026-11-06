@@ -4,7 +4,7 @@
 //! anything runs: a mod set the prebuilt game can't serve, or a revision with no prebuilt
 //! release, builds from source, and the build log says why. A prebuilt build that fails is an
 //! error like any other build's, never retried from source.
-use super::{api, dependencies, inject, Profile, Target};
+use super::{api, dependencies, inject, internals, Profile, Target};
 use crate::i18n::{tr, trf};
 use crate::rust_toolchain::{self, Toolchain};
 use horizon_mods::index::native;
@@ -382,6 +382,8 @@ fn rustc(rust: &Toolchain, game: &Path, out: &Path, edition: &str) -> Command {
 /// Compiles the mods (`resolution`'s order, each with its installed mod dependencies) and the
 /// launcher's executable against the prebuilt game in `game`, into `out`. Returns the executable
 /// and the dynamic libraries it loads, to be installed beside it.
+// Unlike the source workspace, this route invokes rustc with only selected --extern
+// libraries; it does not resolve or compile arbitrary transitive Cargo dependencies.
 pub(super) fn compile(
     rust: &Toolchain,
     game: &Path,
@@ -390,14 +392,25 @@ pub(super) fn compile(
     declared: &[Vec<dependencies::Dependency>],
     resolution: &dependencies::Resolution,
 ) -> Result<(PathBuf, Vec<PathBuf>), String> {
+    let catalog = internals::Catalog::read(game)?;
+    let generated = catalog
+        .prepare(projects.iter().map(|project| &project.bundle.manifest))
+        .map_err(|e| e.to_string())?;
+    for project in projects {
+        catalog.log_raw(&project.bundle.manifest)?;
+    }
     let _ = fs::remove_dir_all(out);
     fs::create_dir_all(out).map_err(|e| e.to_string())?;
     let deps = game.join("deps");
     let api_library = library(&deps, "mod_api")?;
     let mut libraries = std::collections::HashMap::new();
-    for (_, name) in api::PACKAGES {
-        libraries.insert(name, library(&deps, name)?);
+    for (package, name) in api::PACKAGES {
+        if package != api::INTERNALS_PACKAGE {
+            libraries.insert(name, library(&deps, name)?);
+        }
     }
+    let game_library = library(&deps, "horizon_client")?;
+    let mut facades = std::collections::HashMap::new();
     let mut rlibs: std::collections::HashMap<&str, PathBuf> = std::collections::HashMap::new();
     for &index in &resolution.order {
         let project = &projects[index];
@@ -418,13 +431,52 @@ pub(super) fn compile(
                 .and_then(toml::Value::as_str)
                 .unwrap_or("src/lib.rs"),
         );
+        let api_dependencies = project.api_dependencies();
+        if internals::needed(&project.bundle.manifest)
+            || api_dependencies
+                .iter()
+                .any(|(_, package)| *package == "internals")
+        {
+            let source = out.join(format!("internals_{id}.rs"));
+            let facade = &generated[id];
+            fs::write(&source, &facade.source).map_err(|e| e.to_string())?;
+            let rlib = out.join(format!("libinternals_{id}.rlib"));
+            let mut cmd = rustc(rust, game, out, "2024");
+            cmd.args(["--crate-type", "rlib", "--crate-name", "internals"])
+                .arg("-C")
+                .arg(format!("metadata={id}"))
+                .arg("--extern")
+                .arg(format!("horizon_client={}", game_library.display()))
+                .arg("--extern")
+                .arg(format!("mod_points={}", libraries["mod_points"].display()))
+                .arg("-o")
+                .arg(&rlib)
+                .arg(source);
+            for krate in &facade.crates {
+                if krate != "horizon_client" {
+                    cmd.arg("--extern")
+                        .arg(format!("{krate}={}", library(&deps, krate)?.display()));
+                }
+            }
+            super::run(
+                cmd,
+                &trf("Compiling {mod}'s declared internals", &[("mod", id)]),
+                |_| {},
+            )?;
+            facades.insert(id, rlib);
+        }
         let mut cmd = rustc(rust, game, out, edition);
         cmd.args(["--crate-type", "rlib", "--crate-name", &krate])
             .arg("-C")
             .arg(format!("metadata={id}"));
-        for (name, package) in project.api_dependencies() {
+        for (name, package) in api_dependencies {
+            let library = if package == "internals" {
+                &facades[id]
+            } else {
+                &libraries[package]
+            };
             cmd.arg("--extern")
-                .arg(format!("{name}={}", libraries[package].display()));
+                .arg(format!("{name}={}", library.display()));
         }
         for dependency in &declared[index] {
             let Some(rlib) = rlibs.get(dependency.id.as_str()) else {
@@ -444,15 +496,15 @@ pub(super) fn compile(
         super::run(cmd, &format!("Compiling {id}"), |_| {})?;
         rlibs.insert(id, out.join(format!("lib{krate}.rlib")));
     }
-    let template = fs::read_to_string(game.join(TEMPLATE)).map_err(|e| e.to_string())?;
+    let template = api::template(&game.join(TEMPLATE))?;
     let manifests: Vec<_> = resolution
         .order
         .iter()
         .map(|&i| &projects[i].bundle.manifest)
         .collect();
     let main = out.join("main.rs");
-    fs::write(&main, api::main_rs(&template, &manifests)).map_err(|e| e.to_string())?;
-    let game_library = library(&deps, "horizon_client")?;
+    fs::write(&main, api::main_rs(&template, &manifests, &catalog.points))
+        .map_err(|e| e.to_string())?;
     let binary = out.join(crate::backend::CLIENT);
     let mut cmd = rustc(rust, game, out, "2024");
     cmd.args(["--crate-type", "bin", "--crate-name", "horizon_native_game"])
@@ -469,6 +521,10 @@ pub(super) fn compile(
         let id = projects[index].bundle.manifest.id.as_str();
         cmd.arg("--extern")
             .arg(format!("mod_{position}={}", rlibs[id].display()));
+        if let Some(facade) = facades.get(id) {
+            cmd.arg("--extern")
+                .arg(format!("mod_{position}_internals={}", facade.display()));
+        }
     }
     // The game's libraries load from beside the executable.
     let origin = match std::env::consts::OS {

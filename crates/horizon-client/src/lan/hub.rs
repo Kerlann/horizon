@@ -226,6 +226,10 @@ pub struct TickGrants {
     pub player: u128,
     pub entity_id: i32,
     pub name: String,
+    pub conn: u32,
+    pub now_millis: i64,
+    pub first_tick: bool,
+    pub sync: Arc<SyncData>,
     pub grants: Vec<super::advancements::CriterionGrant>,
 }
 
@@ -305,6 +309,7 @@ pub struct Hub {
     /// Criteria `CriteriaTriggers.TICK` granted to players, for the game to
     /// tell the mods.
     pub native_advancement_grants: Vec<TickGrants>,
+    pub native_reload_pending: bool,
     /// Whether any native mod is loaded: `Input` and `Sneak` events only exist for them, so
     /// the hub queues none otherwise. The game sets it before each poll.
     pub mods_loaded: bool,
@@ -752,6 +757,7 @@ impl Hub {
             attachment_snapshots: Vec::new(),
             sync_attachments: false,
             native_advancement_grants: Vec::new(),
+            native_reload_pending: false,
             mods_loaded: false,
             hidden: Default::default(),
             teams: Vec::new(),
@@ -1124,10 +1130,18 @@ impl Hub {
         }
         let max = transfers.settings.max_freeze_ticks;
         for g in &mut self.guests {
-            if g.handover
-                .as_ref()
-                .is_some_and(|h| super::arrivals::frozen_too_long(h.since, self.ticks, max))
-            {
+            let Some(h) = &g.handover else {
+                continue;
+            };
+            // A frozen player takes no damage, but the void and `/kill` still kill: its
+            // record is then not what is left of it, and `player-release moved` must fail.
+            if g.dead {
+                g.handover = None;
+                events.push(HostEvent::Warn(format!(
+                    "{} died while frozen for a hand-over: the hand-over is over",
+                    g.name,
+                )));
+            } else if super::arrivals::frozen_too_long(h.since, self.ticks, max) {
                 g.handover = None;
                 events.push(HostEvent::Warn(format!(
                     "{} was frozen for a hand-over for {max} ticks and nothing finished it: let go",
@@ -1358,7 +1372,7 @@ impl Hub {
         let joined = C::SystemChat(play::SystemChat {
             content: yellow_names(
                 "multiplayer.player.joined",
-                vec![display_name(&self.loop_context, self.guests[i].uuid, &name)],
+                vec![self.player_display_name(self.guests[i].uuid, &name)],
             ),
             overlay: false,
         })
@@ -2195,7 +2209,7 @@ impl Hub {
         let left = C::SystemChat(play::SystemChat {
             content: yellow_names(
                 "multiplayer.player.left",
-                vec![display_name(&self.loop_context, g.uuid, &g.name)],
+                vec![self.player_display_name(g.uuid, &g.name)],
             ),
             overlay: false,
         })
@@ -2204,9 +2218,53 @@ impl Hub {
             if o.tab_hidden.remove(&g.uuid) {
                 continue;
             }
-            o.sender.send(left.clone());
+            if !g.quiet_leave {
+                o.sender.send(left.clone());
+            }
         }
         g
+    }
+
+    /// Takes the frozen player `uuid` out of the world because a proxy moved it to another
+    /// server, for the hand-over `id`: the others see it go (its entity and its player-list
+    /// entry), but nothing is saved (the other server has the player now) and, unless
+    /// `announce`, the "left the game" line is not sent. The game is told it left, marked
+    /// released, so it saves nothing.
+    ///
+    /// Refused when the player is not in that hand-over: another one, or none because the
+    /// freeze ran out (the player has played on since, and the record the other server has is
+    /// older), or a player who died while frozen.
+    pub fn release_moved(
+        &mut self,
+        uuid: u128,
+        id: u128,
+        announce: bool,
+    ) -> Result<(), &'static str> {
+        let i = self.handover_of(uuid, id)?;
+        let g = &mut self.guests[i];
+        g.quiet_leave = !announce;
+        g.left_reason = "moved to another server".to_owned();
+        g.sender
+            .disconnect(translatable("multiplayer.disconnect.generic", &[]));
+        let mut gone = self.remove_guest(i, "moved to another server");
+        gone.released = true;
+        gone.handover = None;
+        self.pending_kicks.push(HostEvent::Left(Box::new(gone)));
+        Ok(())
+    }
+
+    /// The guest index of the player `uuid` while it is frozen for the hand-over `id`.
+    pub fn handover_of(&self, uuid: u128, id: u128) -> Result<usize, &'static str> {
+        let Some(i) = self.guests.iter().position(|g| g.uuid == uuid) else {
+            return Err("that player is not connected to this server");
+        };
+        let g = &self.guests[i];
+        match &g.handover {
+            _ if g.dead => Err("that player died during the hand-over"),
+            None => Err("that player is not in a hand-over (or its freeze ran out)"),
+            Some(h) if h.id != id => Err("that is not the player's current hand-over"),
+            Some(_) => Ok(i),
+        }
     }
 
     /// `ServerTickRateManager.updateStepTicks` / `updateStateToClients`:
@@ -3218,26 +3276,31 @@ impl Hub {
                     .map_or(0, |d| d.as_millis() as i64);
                 let sync = self.sync.clone();
                 let g = &mut self.guests[i];
-                let first = sync.advancements.first_tick(
-                    &sync,
-                    now,
-                    &mut g.advancements,
-                    &mut g.recipe_book,
-                );
-                if let Some(add) = first.recipe_book_add {
-                    g.send(&raw(ids::RECIPE_BOOK_ADD, add));
-                }
-                g.send(&raw(ids::UPDATE_ADVANCEMENTS, first.update_advancements));
                 if self.mods_loaded {
                     self.native_advancement_grants.push(TickGrants {
+                        conn: g.conn,
                         player: g.uuid,
                         entity_id: g.entity_id,
                         name: g.name.clone(),
-                        grants: first.granted,
+                        now_millis: now,
+                        first_tick: true,
+                        grants: sync.advancements.tick_candidates(&g.advancements),
+                        sync,
                     });
+                } else {
+                    let first = sync.advancements.first_tick(
+                        &sync,
+                        now,
+                        &mut g.advancements,
+                        &mut g.recipe_book,
+                    );
+                    if let Some(add) = first.recipe_book_add {
+                        g.send(&raw(ids::RECIPE_BOOK_ADD, add));
+                    }
+                    g.send(&raw(ids::UPDATE_ADVANCEMENTS, first.update_advancements));
+                    g.advancements_visible = sync.advancements.visibility(&g.advancements);
+                    g.advancements_changed.clear();
                 }
-                g.advancements_visible = sync.advancements.visibility(&g.advancements);
-                g.advancements_changed.clear();
             } else {
                 self.flush_advancements(i, true);
             }
@@ -3413,7 +3476,19 @@ impl Hub {
             }
             g.advancements_visible.clear();
             g.advancements_changed.clear();
-            if let Some(add) = sync.advancements.reload(
+            if self.mods_loaded {
+                sync.advancements.prune_progress(&mut g.advancements);
+                self.native_advancement_grants.push(TickGrants {
+                    conn: g.conn,
+                    player: g.uuid,
+                    entity_id: g.entity_id,
+                    name: g.name.clone(),
+                    now_millis: now,
+                    first_tick: false,
+                    grants: sync.advancements.tick_candidates(&g.advancements),
+                    sync: sync.clone(),
+                });
+            } else if let Some(add) = sync.advancements.reload(
                 &sync,
                 now,
                 &mut g.advancements,
@@ -3422,15 +3497,18 @@ impl Hub {
             ) {
                 g.send(&raw(ids::RECIPE_BOOK_ADD, add));
             }
-            if self.mods_loaded {
-                self.native_advancement_grants.push(TickGrants {
-                    player: g.uuid,
-                    entity_id: g.entity_id,
-                    name: g.name.clone(),
-                    grants: granted,
-                });
-            }
         }
+        if self.mods_loaded {
+            self.native_reload_pending = true;
+            return;
+        }
+        self.finish_reload_resources();
+    }
+
+    /// Finish a reload only after its tick grants and their hooks have run.
+    pub fn finish_reload_resources(&mut self) {
+        self.native_reload_pending = false;
+        let sync = self.sync.clone();
         // broadcastAll(ClientboundUpdateTagsPacket).
         self.broadcast(&C::UpdateTags(sync.tags.clone()));
         // For each player: ClientboundUpdateRecipesPacket, then
@@ -3445,6 +3523,79 @@ impl Hub {
             }
             self.send_initial_recipe_book(i);
         }
+    }
+
+    /// Grant one queued criterion. The caller fires its hook before `reward_native_tick`.
+    pub fn grant_native_tick(
+        &mut self,
+        task: &TickGrants,
+        grant: &super::advancements::CriterionGrant,
+    ) -> Option<bool> {
+        if !Arc::ptr_eq(&self.sync, &task.sync) {
+            return None;
+        }
+        let guest = self.guests.iter_mut().find(|g| {
+            g.conn == task.conn && g.uuid == task.player && g.entity_id == task.entity_id
+        })?;
+        task.sync
+            .advancements
+            .grant_tick(&mut guest.advancements, grant, task.now_millis)
+    }
+
+    /// Apply a completion's rewards after the hook, using the live progress.
+    pub fn reward_native_tick(
+        &mut self,
+        task: &TickGrants,
+        grant: &super::advancements::CriterionGrant,
+        was_done: bool,
+    ) {
+        if !Arc::ptr_eq(&self.sync, &task.sync) {
+            return;
+        }
+        let Some(guest) = self.guests.iter_mut().find(|g| {
+            g.conn == task.conn && g.uuid == task.player && g.entity_id == task.entity_id
+        }) else {
+            return;
+        };
+        if let Some(add) = task.sync.advancements.reward_tick(
+            &task.sync,
+            &guest.advancements,
+            &mut guest.recipe_book,
+            grant,
+            was_done,
+        ) {
+            guest.send(&raw(ids::RECIPE_BOOK_ADD, add));
+        }
+    }
+
+    /// Send the first advancement snapshot after all its grants and hooks.
+    pub fn finish_native_first_tick(
+        &mut self,
+        task: &TickGrants,
+        fresh: &[super::advancements::CriterionGrant],
+    ) {
+        if !task.first_tick || !Arc::ptr_eq(&self.sync, &task.sync) {
+            return;
+        }
+        let Some(guest) = self.guests.iter_mut().find(|g| {
+            g.conn == task.conn && g.uuid == task.player && g.entity_id == task.entity_id
+        }) else {
+            return;
+        };
+        let mut unlocked = std::mem::take(&mut guest.recipes_unlocked);
+        unlocked.retain(|id| guest.recipe_book.knows(id));
+        if let Some(add) = task.sync.advancements.recipes_added(&unlocked, &task.sync) {
+            guest.send(&raw(ids::RECIPE_BOOK_ADD, add));
+        }
+        let (update, visible) = task.sync.advancements.first_snapshot(
+            &task.sync,
+            &guest.advancements,
+            fresh,
+            task.now_millis,
+        );
+        guest.send(&raw(ids::UPDATE_ADVANCEMENTS, update));
+        guest.advancements_visible = visible;
+        guest.advancements_changed.clear();
     }
 
     /// `PlayerAdvancements.flushDirty` and the recipes the player unlocked
@@ -4857,6 +5008,32 @@ mod tests {
         bob.dimension = "minecraft:overworld".into();
         hub.guests.push(bob);
         (hub, rx)
+    }
+
+    #[test]
+    fn an_empty_advancement_tree_still_sends_a_first_reset_after_staging() {
+        let (mut hub, rx) = hub_with_a_guest();
+        hub.mods_loaded = true;
+        hub.sync_player_state(0);
+        let task = hub.native_advancement_grants.pop().unwrap();
+        assert!(task.grants.is_empty());
+        let before: Vec<_> = rx.try_iter().collect();
+        assert!(!before.iter().any(|out| match out {
+            crate::lan::Out::Packet(body) =>
+                horizon_protocol::buf::Reader::new(body).varint().ok()
+                    == Some(ids::UPDATE_ADVANCEMENTS),
+            _ => false,
+        }));
+        hub.finish_native_first_tick(&task, &[]);
+        let found = rx.try_iter().any(|out| match out {
+            crate::lan::Out::Packet(body) => {
+                let mut reader = horizon_protocol::buf::Reader::new(&body);
+                reader.varint().ok() == Some(ids::UPDATE_ADVANCEMENTS)
+                    && reader.bool().ok() == Some(true)
+            }
+            _ => false,
+        });
+        assert!(found, "the first packet resets the client's empty tree");
     }
 
     /// `onGameRuleChanged`: a changed `reduced_debug_info` reaches each player

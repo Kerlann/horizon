@@ -218,8 +218,10 @@ impl Game<'_> {
                         &broken,
                     );
                     self.award_stat("broken", &broken.item, 1);
-                    self.inventory[self.selected] =
-                        Some(ItemStack::new("minecraft:fishing_rod", 1));
+                    // hurtAndConvertOnBreak keeps the broken stick's components.
+                    let mut rod = stack.transmute("minecraft:fishing_rod", 1);
+                    rod.damage = 0;
+                    self.inventory[self.selected] = Some(rod);
                 }
             }
         }
@@ -1109,13 +1111,32 @@ mod tests {
             game.mobs.push(Mob::new(21, kind, Vec3::ZERO, 0.0));
             game.riding = Some(21);
             let mut stick = ItemStack::new("minecraft:carrot_on_a_stick", 1);
-            stick.damage = game.items().get(&stick.item).unwrap().max_damage - 1;
+            let max = game.items().get(&stick.item).unwrap().max_damage;
+            stick.data_mut().custom_name = Some(horizon_world::nbt::Tag::String("Old Nag".into()));
+            // One point short of breaking: the shared durability path adds wear.
+            stick.damage = max - 8;
+            let (updated, broken) = game.damage_stack(&stick, 7, true);
+            assert!(broken.is_none());
+            assert_eq!(updated.unwrap().damage, max - 1);
+            stick.damage = max - 7;
+            assert!(game.damage_stack(&stick, 0, true).1.is_none());
+            let mut undamageable = stick.clone();
+            undamageable.data_mut().set_other(
+                "!minecraft:max_damage",
+                Some(horizon_world::nbt::Tag::Byte(1)),
+            );
+            assert!(
+                game.damage_stack(&undamageable, max as i32, true)
+                    .1
+                    .is_none()
+            );
             game.inventory[game.selected] = Some(stick);
             assert!(game.use_steering_stick("minecraft:carrot_on_a_stick"));
-            assert_eq!(
-                &*game.inventory[game.selected].as_ref().unwrap().item,
-                "minecraft:fishing_rod"
-            );
+            let rod = game.inventory[game.selected].as_ref().unwrap();
+            assert_eq!(&*rod.item, "minecraft:fishing_rod");
+            assert_eq!(rod.count, 1);
+            assert_eq!(rod.damage, 0, "the rod starts whole");
+            assert_eq!(rod.custom_name().as_deref(), Some("Old Nag"));
         });
     }
 

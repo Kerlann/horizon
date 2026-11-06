@@ -365,11 +365,9 @@ impl Game<'_> {
         })
     }
 
-    /// Gameplay's cached face support in the current or a parked level. Returns
-    /// None for clients, stale or closed levels, unloaded or out-of-height blocks,
-    /// dynamic-shape states (including moving pistons and shulker boxes), or an
-    /// exporter error. Dynamic support is a follow-up on #29. False means not
-    /// sturdy.
+    /// Gameplay's face support in the current or a parked server level, including
+    /// live block entities for dynamic shapes. None for stale or closed levels,
+    /// unloaded blocks, unsupported states or a shape query error.
     pub(super) fn native_level_block_face_sturdy(
         &self,
         level: LevelRef,
@@ -390,7 +388,25 @@ impl Game<'_> {
         };
         let b = self.res.behaviours();
         if !b.has_cached_support(state) {
-            return None;
+            use horizon_client::collisions::SceneCollisions;
+            use horizon_world::{block_support::SupportType, dynamic_support::DynamicSupport};
+            let binding = self.res.collision();
+            let dynamic = DynamicSupport::from_state(binding.registry().state(state)?).ok()??;
+            let world = self.native_level_world(level)?;
+            let mut scene = SceneCollisions {
+                world,
+                binding,
+                subject: None,
+            };
+            let support = match support {
+                NativeSupportType::Full => SupportType::Full,
+                NativeSupportType::Center => SupportType::Center,
+                NativeSupportType::Rigid => SupportType::Rigid,
+                _ => unreachable!("NativeSupportType: unhandled variant"),
+            };
+            return dynamic
+                .is_face_sturdy(&mut scene, pos, direction, support)
+                .ok();
         }
         Some(match support {
             NativeSupportType::Full => b.is_face_sturdy(state, direction),
@@ -624,9 +640,28 @@ pub(super) mod tests {
         root: std::path::PathBuf,
         test: impl FnOnce(&mut super::Game<'_>),
     ) {
-        use super::super::{
-            Audio, Game, Options, Progress, Settings, execution_role::ExecutionRole, load_resources,
-        };
+        with_game_role(
+            root,
+            super::super::execution_role::ExecutionRole::IntegratedServer,
+            test,
+        );
+    }
+
+    pub(in crate::game) fn with_client_game(test: impl FnOnce(&mut super::Game<'_>)) {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        with_game_role(
+            root,
+            super::super::execution_role::ExecutionRole::Client,
+            test,
+        );
+    }
+
+    fn with_game_role(
+        root: std::path::PathBuf,
+        role: super::super::execution_role::ExecutionRole,
+        test: impl FnOnce(&mut super::Game<'_>),
+    ) {
+        use super::super::{Audio, Game, Options, Progress, Settings, load_resources};
         use mod_api::NativeAuthority;
 
         let settings = Settings::default();
@@ -637,14 +672,14 @@ pub(super) mod tests {
             &settings,
             std::time::Instant::now(),
             false,
-            ExecutionRole::IntegratedServer,
+            role,
             &Progress::new(),
             &mut |_, _| unreachable!(),
         )
         .unwrap();
         let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
         options.resources = root.clone();
-        options.execution_role = ExecutionRole::IntegratedServer;
+        options.execution_role = role;
         let mut game = Game::new(
             &loaded.resources,
             loaded.pack,
@@ -2121,7 +2156,7 @@ pub(super) mod tests {
             game.options.dedicated = None;
             let players = game.native_server_players();
             assert_eq!(players.len(), 1);
-            assert_eq!(players[0].uuid, 1);
+            assert_eq!(players[0].uuid(), 1);
             // A fake record in the Nether does not keep that level ticking.
             game.lan.as_mut().unwrap().hub.guests[1].dimension = "minecraft:the_nether".into();
             let ticking = game.levels_to_tick();
@@ -2516,9 +2551,140 @@ pub(super) mod tests {
                 .default_state("minecraft:shulker_box")
                 .unwrap();
             game.world.set(0, 64, 0, shulker).unwrap();
+            use horizon_client::block_entity_anim::{Shulker, ShulkerStatus};
+            // The early guest packet pass changes opener status before entity
+            // hooks run, and before tick_block_entities synchronizes animations.
+            // Exercise that producer with both an absent and a closed snapshot.
+            for had_snapshot in [false, true] {
+                game.be_anims.shulkers.remove(&[0, 64, 0]);
+                game.world.shulkers.remove(&[0, 64, 0]);
+                if had_snapshot {
+                    game.world.shulkers.insert([0, 64, 0], Shulker::default());
+                }
+                for support in [Support::Full, Support::Center, Support::Rigid] {
+                    assert_eq!(
+                        level.block_face_sturdy(game, [0, 64, 0], Face::Up, support),
+                        Some(true),
+                    );
+                }
+                assert!(game.container_openers_changed((0, 64, 0), true));
+                assert_eq!(
+                    game.be_anims.shulkers[&[0, 64, 0]].status,
+                    ShulkerStatus::Opening
+                );
+                for parked in [false, true] {
+                    if parked {
+                        assert!(
+                            game.enter_command_level(super::super::Dim::Nether)
+                                .is_some()
+                        );
+                    }
+                    for support in [Support::Full, Support::Center, Support::Rigid] {
+                        assert_eq!(
+                            level.block_face_sturdy(game, [0, 64, 0], Face::Up, support),
+                            Some(false),
+                        );
+                        assert_eq!(
+                            level.block_face_sturdy(game, [0, 64, 0], Face::Down, support),
+                            Some(true),
+                        );
+                    }
+                }
+                assert!(
+                    game.enter_command_level(super::super::Dim::Overworld)
+                        .is_some()
+                );
+                assert!(game.container_openers_changed((0, 64, 0), false));
+                assert_eq!(
+                    game.world.shulkers[&[0, 64, 0]].status,
+                    ShulkerStatus::Closing
+                );
+                for support in [Support::Full, Support::Center, Support::Rigid] {
+                    assert_eq!(
+                        level.block_face_sturdy(game, [0, 64, 0], Face::Up, support),
+                        Some(false),
+                    );
+                }
+            }
+            game.be_anims.shulkers.remove(&[0, 64, 0]);
+            for status in [
+                ShulkerStatus::Closed,
+                ShulkerStatus::Opening,
+                ShulkerStatus::Opened,
+                ShulkerStatus::Closing,
+            ] {
+                game.world.shulkers.insert(
+                    [0, 64, 0],
+                    Shulker {
+                        status,
+                        ..Default::default()
+                    },
+                );
+                for support in [Support::Full, Support::Center, Support::Rigid] {
+                    assert_eq!(
+                        level.block_face_sturdy(game, [0, 64, 0], Face::Up, support),
+                        Some(status == ShulkerStatus::Closed),
+                    );
+                    assert_eq!(
+                        level.block_face_sturdy(game, [0, 64, 0], Face::Down, support),
+                        Some(true),
+                    );
+                }
+            }
+            assert!(
+                game.enter_command_level(super::super::Dim::Nether)
+                    .is_some()
+            );
             assert_eq!(
                 level.block_face_sturdy(game, [0, 64, 0], Face::Up, Support::Full),
-                None
+                Some(false),
+            );
+            assert!(
+                game.enter_command_level(super::super::Dim::Overworld)
+                    .is_some()
+            );
+            game.world.shulkers.remove(&[0, 64, 0]);
+            assert_eq!(
+                level.block_face_sturdy(game, [0, 64, 0], Face::Up, Support::Full),
+                Some(true),
+            );
+            let moving = game
+                .pack
+                .assets
+                .registry
+                .default_state("minecraft:moving_piston")
+                .unwrap();
+            game.world.set(0, 64, 0, moving).unwrap();
+            assert_eq!(
+                level.block_face_sturdy(game, [0, 64, 0], Face::Up, Support::Full),
+                Some(false),
+            );
+            let stone = game
+                .pack
+                .assets
+                .registry
+                .default_state("minecraft:stone")
+                .unwrap();
+            game.world.moving_pistons.push((
+                [0, 64, 0],
+                horizon_world::piston_shape::MovingPistonState {
+                    moved_state: stone,
+                    direction: horizon_core::geometry::Direction::East,
+                    extending: true,
+                    source: false,
+                    progress: 1.0,
+                    previous_progress: 1.0,
+                },
+            ));
+            assert_eq!(
+                level.block_face_sturdy(game, [0, 64, 0], Face::Up, Support::Full),
+                Some(true),
+            );
+            game.world.moving_pistons[0].1.progress = 0.5;
+            game.world.moving_pistons[0].1.previous_progress = 0.5;
+            assert_eq!(
+                level.block_face_sturdy(game, [0, 64, 0], Face::Up, Support::Full),
+                Some(false),
             );
             let stale = LevelRef::new(
                 NativeWorldEpoch::new(level.epoch().get() + 1),

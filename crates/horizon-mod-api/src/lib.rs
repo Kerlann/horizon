@@ -111,6 +111,8 @@ pub use config_files::{
 };
 mod tooltip_element;
 pub use tooltip_element::{TooltipElement, TooltipImage, TooltipPlace};
+mod screenshot;
+pub use screenshot::ScreenshotImage;
 mod file_to_id_converter;
 pub use file_to_id_converter::{FileToIdConverter, FileToIdConverterError};
 mod client_reload;
@@ -2620,6 +2622,30 @@ pub enum NativeRemovalReason {
     Discarded,
 }
 
+/// The category of an entity's type (`MobCategory`, `EntityType.getCategory`):
+/// what natural spawning counts it as. Every kind that isn't a mob is `Misc`,
+/// except the ender dragon, a `Monster`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum MobCategory {
+    /// `MONSTER`.
+    Monster,
+    /// `CREATURE`.
+    Creature,
+    /// `AMBIENT`.
+    Ambient,
+    /// `AXOLOTLS`.
+    Axolotls,
+    /// `UNDERGROUND_WATER_CREATURE`.
+    UndergroundWaterCreature,
+    /// `WATER_CREATURE`.
+    WaterCreature,
+    /// `WATER_AMBIENT`.
+    WaterAmbient,
+    /// `MISC`.
+    Misc,
+}
+
 /// Why a mob spawns (`EntitySpawnReason`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -3849,8 +3875,16 @@ pub(crate) fn backend_of(host: &dyn Host) -> Option<&dyn Backend> {
 ///
 /// Wrong-side services do not compile:
 /// ```compile_fail
+/// use mod_api::Host;
+/// fn wrong(host: &dyn Host) { host.messages().broadcast(todo!()); }
+/// ```
+/// ```compile_fail
+/// use mod_api::LevelHost;
+/// fn wrong(host: &dyn LevelHost) { host.players().server_players(); }
+/// ```
+/// ```compile_fail
 /// use mod_api::ClientHost;
-/// fn wrong(host: &mut dyn ClientHost) { host.action_bar(0, todo!()); }
+/// fn wrong(host: &mut dyn ClientHost) { host.commands().run_command("list"); }
 /// ```
 /// ```compile_fail
 /// use mod_api::ServerHost;
@@ -4072,7 +4106,8 @@ mod generated_host {
 #[doc(hidden)]
 pub use generated_host::{Backend, BackendMut, ClientBackendMut};
 pub use generated_host::{
-    BlockEntityDrawContext, ClientHost, DrawContext, Host, HostSide, LevelSide, ServerHost,
+    BlockEntityDrawContext, ClientHost, Commands, DrawContext, Host, HostSide, LevelSide, Messages,
+    Players, ServerHost,
 };
 
 /// Result of accessing or decoding an attachment.
@@ -4571,25 +4606,94 @@ mod tests {
     }
     impl ClientHost for Reader {}
     impl ServerHost for Reader {
-        fn acting_player(&self) -> Option<NativeServerPlayer> {
-            Some(NativeServerPlayer {
-                uuid: 7,
-                name: "Probe".to_string(),
-                permission: 0,
-                dimension: "minecraft:overworld".to_string(),
-                position: [0.0; 3],
-                game_mode: 0,
-                health: 20.0,
-                yaw: 0.0,
-                pitch: 0.0,
-                entity_id: 0,
-                address: String::new(),
-            })
+        fn players(&self) -> &dyn Players {
+            self
         }
-        fn action_bar(&mut self, _uuid: u128, line: Text) -> bool {
+        fn commands(&mut self) -> &mut dyn Commands {
+            self
+        }
+        fn backend_mut(&mut self) -> Option<BackendMutRef<'_>> {
+            Some(BackendMutRef::of(self))
+        }
+    }
+    impl Commands for Reader {}
+    impl Players for Reader {
+        fn acting_player(&self) -> Option<PlayerRef> {
+            Some(crate::__private::game::player_ref(
+                EntityRef::new(NativeWorldEpoch::new(1), 41),
+                7,
+            ))
+        }
+    }
+    impl BackendMut for Reader {
+        fn player_action_bar(&mut self, player: PlayerRef, line: Text) -> bool {
+            assert_eq!(player.uuid(), 7);
             self.lines.push(line);
             true
         }
+    }
+
+    #[test]
+    fn server_services_forward_commands_messages_and_player_identity() {
+        use std::cell::RefCell;
+        #[derive(Default)]
+        struct Server {
+            lines: RefCell<Vec<String>>,
+        }
+        impl Host for Server {}
+        impl ServerHost for Server {
+            fn commands(&mut self) -> &mut dyn Commands {
+                self
+            }
+            fn messages(&self) -> &dyn Messages {
+                self
+            }
+            fn players(&self) -> &dyn Players {
+                self
+            }
+        }
+        impl Commands for Server {
+            fn run_command(&mut self, line: &str) -> bool {
+                self.lines.get_mut().push(line.to_owned());
+                line == "list"
+            }
+            fn feedback(&mut self, line: Text) {
+                self.lines.get_mut().push(line.plain());
+            }
+        }
+        impl Messages for Server {
+            fn broadcast(&self, line: Text) {
+                self.lines.borrow_mut().push(line.plain());
+            }
+            fn text_allowed(&self, line: &str) -> Option<bool> {
+                Some(line != "blocked")
+            }
+        }
+        impl Players for Server {
+            fn acting_player(&self) -> Option<PlayerRef> {
+                Some(crate::__private::game::player_ref(
+                    EntityRef::new(NativeWorldEpoch::new(1), 42),
+                    7,
+                ))
+            }
+            fn server_players(&self) -> Vec<PlayerRef> {
+                vec![self.acting_player().unwrap()]
+            }
+        }
+        let mut server = Server::default();
+        let host: &mut dyn ServerHost = &mut server;
+        assert!(host.commands().run_command("list"));
+        assert!(!host.commands().run_command("missing"));
+        host.commands().feedback(Text::literal("answer"));
+        host.messages().broadcast(Text::literal("everyone"));
+        assert_eq!(host.messages().text_allowed("blocked"), Some(false));
+        let player = host.players().acting_player().unwrap();
+        assert_eq!(host.players().server_players(), [player]);
+        assert_eq!((player.uuid(), player.entity().id()), (7, 42));
+        assert_eq!(
+            *server.lines.borrow(),
+            ["list", "missing", "answer", "everyone"]
+        );
     }
 
     #[test]
@@ -4683,10 +4787,10 @@ mod tests {
     #[mod_api::horizon_part]
     impl ItemPart for Probe {
         fn use_on(&self, host: &mut dyn ServerHost, event: &mut UseOnEvent<'_>) -> Flow {
-            let player = host.acting_player().expect("a player acts");
-            let level = host.level(&player.dimension).expect("a loaded level");
+            let player = host.players().acting_player().expect("a player acts");
+            let level = host.level("minecraft:overworld").expect("a loaded level");
             let block = level.block(host, event.pos).expect("a loaded block");
-            host.action_bar(player.uuid, Text::literal(block.clone()));
+            player.action_bar(host, Text::literal(block.clone()));
             if block == "minecraft:stone" {
                 Flow::Cancel
             } else {
@@ -4808,7 +4912,7 @@ mod tests {
     #[mod_api::horizon_part]
     impl ItemPart for Chatty {
         fn use_on(&self, host: &mut dyn ServerHost, _event: &mut UseOnEvent<'_>) -> Flow {
-            host.tell(7, Text::literal("hello"));
+            host.commands().run_command("say hello");
             Flow::Continue
         }
     }
@@ -4953,7 +5057,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Host::tell")]
+    #[should_panic(expected = "Commands::run_command")]
     fn an_unexpected_host_call_names_the_method() {
         // Another test installs parts with tags: a dispatch must run on a game thread.
         mark_game_thread();

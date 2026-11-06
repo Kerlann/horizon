@@ -120,4 +120,16 @@ pub trait Helpers {
         target = "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_set_hopper_enabled"
     )]
     fn minecart_set_hopper_enabled();
+    #[helper(
+        side = "server",
+        receiver = "minecart",
+        target = "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_command"
+    )]
+    fn minecart_command();
+    #[helper(
+        side = "server",
+        receiver = "minecart",
+        target = "horizon_client::game::native_minecart_refs::Game<'_>::native_minecart_set_command"
+    )]
+    fn minecart_set_command();
 }

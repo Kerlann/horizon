@@ -43,8 +43,9 @@ extra_mod = { version = "^2", optional = true }
 ```
 
 Requirements use Cargo semver syntax and are checked against each installed mod's `horizon-mod.toml`
-`version`, not its Cargo package version. The dependent and every installed dependency need a code crate.
-Nonempty dependencies on content-only mods are not supported yet.
+`version`, not its Cargo package version. Content-only mods use these declarations to validate their
+requirements and load their layers after dependencies. Code dependencies additionally require API packages
+for the dependent and every installed dependency.
 Missing required dependencies, incompatible versions and cycles stop the build with the mods named.
 An absent optional dependency is permitted; an installed optional dependency must match its requirement.
 
@@ -705,7 +706,7 @@ assert_eq!(count.load(Ordering::Relaxed), 1);
 ```
 
 If a `Host` method returns a game value a test can't build, a double can return `None` instead, as with
-`acting_player() -> Option<NativeServerPlayer>`. If the dispatch function itself takes an unconstructible value,
+`Players::acting_player() -> Option<PlayerRef>`. If the dispatch function itself takes an unconstructible value,
 such as `dispatch_perform_command`'s `&NativeServerPlayer`, test the logic beneath the hook instead. The level
 hosts are small enough to implement whole. NeoForge's GameTest is the in-game counterpart.
 

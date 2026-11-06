@@ -3896,6 +3896,37 @@ pub(crate) mod tests {
         });
     }
 
+    #[test]
+    fn an_anvil_update_preserves_signed_xp_cost_without_allowing_a_refund() {
+        bare_env(|env| {
+            for creative in [false, true] {
+                for cost in [i32::MIN, -7, 0] {
+                    let mut menu = Menu::new(Kind::Anvil);
+                    menu.creative = creative;
+                    menu.levels = 30;
+                    menu.set_slot(env, 0, stack("iron_sword", 1));
+                    menu.set_slot(env, 1, stack("diamond", 5));
+                    let mut update = menu.anvil_update().unwrap();
+                    update.output = stack("netherite_sword", 1);
+                    update.xp_cost = cost;
+                    update.material_cost = -2;
+                    menu.anvil_updated(update.clone(), false);
+                    assert_eq!(menu.data[0], cost);
+                    assert_eq!(menu.anvil.repair_count, 0);
+                    assert_eq!(menu.slot(2), stack("netherite_sword", 1).as_ref());
+                    menu.click(env, 2, 0, Input::Pickup).unwrap();
+                    assert_eq!(menu.carried, None);
+                    assert_eq!(menu.slot(2), stack("netherite_sword", 1).as_ref());
+                    assert_eq!(menu.slot(0), stack("iron_sword", 1).as_ref());
+                    assert_eq!(menu.slot(1), stack("diamond", 5).as_ref());
+                    assert_eq!(menu.level_change, 0);
+                    menu.anvil_updated(update, true);
+                    assert_eq!((menu.slot(2), menu.data[0]), (None, 0));
+                }
+            }
+        });
+    }
+
     /// `AnvilUpdateEvent` on a rename with no right input: asked with the
     /// text and vanilla's renamed result, which the output and cost start
     /// at; a mod that only changes the cost keeps vanilla's result, and a
@@ -4918,6 +4949,7 @@ pub(crate) mod tests {
                     count: 4,
                     damage: 0,
                     extra: None,
+                    components: None,
                 },
             },
         ));
@@ -4969,6 +5001,7 @@ pub(crate) mod tests {
                     count: 4,
                     damage: 0,
                     extra: None,
+                    components: None,
                 },
             },
         ));
@@ -5021,6 +5054,7 @@ pub(crate) mod tests {
                     count: 4,
                     damage: 0,
                     extra: None,
+                    components: None,
                 },
             },
         ));
@@ -5077,6 +5111,7 @@ pub(crate) mod tests {
                     count: 1,
                     damage: 0,
                     extra: None,
+                    components: None,
                 },
             }),
         ));

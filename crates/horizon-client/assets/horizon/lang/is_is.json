@@ -459,5 +459,6 @@
   "horizon.pack.filter.realistic": "Raunhæft",
   "horizon.pack.filter.simplistic": "Einföld",
   "horizon.pack.filter.vanillaLike": "Vanillulíkt",
-  "horizon.pack.addFailed": "Ekki var hægt að bæta við pakkanum: %s"
+  "horizon.pack.addFailed": "Ekki var hægt að bæta við pakkanum: %s",
+  "Shader Packs...": "Shader pakkar..."
 }

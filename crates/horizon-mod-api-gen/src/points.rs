@@ -1,9 +1,10 @@
-//! Injection points (#589): every `Game` method [`point_shape::eligible`] admits is a point. The
-//! staging pass ([`stage`]) puts `#[point]` on each in a staged copy of the game's source, the copy
-//! the prebuilt game and the launcher's source builds compile; the generator lists the same points
-//! from any copy, staged or not, as `mod_points` (each point's record, the `Points` trait,
-//! `PointId`) and as `points.json`, the list the launcher routes injections by. All of them are
-//! build outputs, never committed.
+//! Injection points (#589): every function of the game module that [`point_shape::eligible`]
+//! admits is a point, and so is each function `points.txt` lists in the crates below it. The staging
+//! pass ([`stage`]) puts `#[point]` on each in a staged copy of the game's source, the copy the
+//! prebuilt game and the launcher's source builds compile, with each raw form's types beside it;
+//! the generator lists the same points from any copy, staged or not, as `mod_points` (each point's
+//! record, the `Points` trait, `PointId`) and as `points.json`, the list the launcher routes
+//! injections by. All of them are build outputs, never committed.
 
 use quote::{ToTokens, quote};
 use std::{
@@ -16,20 +17,29 @@ use syn::{ImplItem, Item, Type};
 #[derive(Debug, serde::Serialize)]
 pub struct GamePoint {
     pub name: String,
-    /// The function, as an injection's `target` (and a hook's) names it.
+    /// The function, as an injection's `target` names it.
     pub target: String,
+    /// The side of a `Game` method's point, which picks its API listeners' host; `none` off `Game`.
     pub side: &'static str,
-    /// The listener's host: `host` (`&self`), or the side's writing host (`&mut self`).
+    /// The API listener's host: `host` (`&self`), the side's writing host (`&mut self`), or `none`.
     pub host: &'static str,
-    /// The record its listeners get, in `mod_points`.
+    /// The record its API listeners get, in `mod_points`.
     pub record: String,
-    /// The parameters passed, with their types, in order.
+    /// The parameters passed to API listeners, with their types, in order.
     pub args: Vec<(String, String)>,
     /// What its listeners may do with the return: `cancel`, `result` (an API-typed value they
     /// may set at the head or change at the return) or `none`.
     pub returns: &'static str,
-    /// Whether it has a return place: not when the value returned borrows the game.
+    /// Whether its API listeners run at the return: not when the value returned borrows.
     pub at_return: bool,
+    /// Whether it has a raw form: listeners with the receiver and every parameter by its own type.
+    pub raw: bool,
+    /// Its raw listeners' function type, by path: a mod's raw listener has this type.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub listener: Option<String>,
+    /// Its raw return listeners' function type, by path: they get the value returned.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub return_listener: Option<String>,
     #[serde(skip)]
     record_item: String,
     /// Its `Points` methods, `PointId` variants, subscription consts and forwarding methods
@@ -42,11 +52,7 @@ pub struct GamePoint {
     wire_shape: String,
 }
 
-/// The attribute the staging pass writes: every point fires on both sides, its listeners
-/// matching on `HostSide` where it takes `&mut self`.
-const ATTRIBUTE: &str = "side = \"both\"";
-
-/// A source file of the game module, with its module path and the `cfg`s it is compiled under.
+/// A source file of the game's crates, with its module path and the `cfg`s it is compiled under.
 pub(crate) struct GameFile {
     pub(crate) module: String,
     pub(crate) path: PathBuf,
@@ -72,19 +78,22 @@ pub(crate) fn test_only(attrs: &[syn::Attribute]) -> bool {
     })
 }
 
-/// The files of `horizon_client::game`, following its `mod` declarations (and `#[path]`s, and
-/// inline modules that declare files) from `game.rs`. With `every_build`, a module behind a `cfg`
-/// is left out with everything under it (the points: functions every build compiles); without, it
-/// is kept with its conditions (the internals, listed with the builds they exist in). Test-only
-/// modules are always left out.
-pub(crate) fn game_files(src: &Path, every_build: bool) -> Result<Vec<GameFile>, String> {
+/// A module file still to read: its module path, file, children's folder and conditions.
+type Pending = (String, PathBuf, PathBuf, Vec<String>);
+
+/// The files of the module `module`, read from `path` (its children in `dir`), following `mod`
+/// declarations (and `#[path]`s, and inline modules that declare files). With `every_build`, a
+/// module behind a `cfg` is left out with everything under it (the points: functions every build
+/// compiles); without, it is kept with its conditions (the internals, listed with the builds they
+/// exist in). Test-only modules are always left out.
+pub(crate) fn module_files(
+    module: String,
+    path: PathBuf,
+    dir: PathBuf,
+    every_build: bool,
+) -> Result<Vec<GameFile>, String> {
     let mut files = Vec::new();
-    let mut pending = vec![(
-        "horizon_client::game".to_owned(),
-        src.join("game.rs"),
-        src.join("game"),
-        Vec::new(),
-    )];
+    let mut pending = vec![(module, path, dir, Vec::new())];
     while let Some((module, path, dir, cfg)) = pending.pop() {
         let source = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let file = syn::parse_file(&source).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -106,9 +115,6 @@ pub(crate) fn game_files(src: &Path, every_build: bool) -> Result<Vec<GameFile>,
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)
 }
-
-/// A module file still to read: its module path, file, children's folder and conditions.
-type Pending = (String, PathBuf, PathBuf, Vec<String>);
 
 /// Queues the module files `items` declare, looking inside inline modules too: a file module
 /// declared in `mod a { mod b; }` lives in `dir/a/b.rs`. A `#[path]` is relative to `here`.
@@ -172,12 +178,116 @@ fn children(
     }
 }
 
-/// The game module's files, for a build script to track.
-pub fn tracked(src: &Path) -> Result<Vec<PathBuf>, String> {
-    Ok(game_files(src, true)?
+/// The files of `horizon_client::game`; see [`module_files`] for `every_build`.
+pub(crate) fn game_files(src: &Path, every_build: bool) -> Result<Vec<GameFile>, String> {
+    module_files(
+        "horizon_client::game".to_owned(),
+        src.join("game.rs"),
+        src.join("game"),
+        every_build,
+    )
+}
+
+/// The crate `krate`'s package folder and library root, from its manifest.
+pub(crate) fn crate_root(root: &Path, krate: &str) -> Result<(PathBuf, PathBuf), String> {
+    let package = root.join("crates").join(krate.replace('_', "-"));
+    let manifest = package.join("Cargo.toml");
+    let text = fs::read_to_string(&manifest).map_err(|e| format!("{}: {e}", manifest.display()))?;
+    let manifest: toml::Value = toml::from_str(&text).map_err(|e| e.to_string())?;
+    let lib = manifest
+        .get("lib")
+        .and_then(|lib| lib.get("path"))
+        .and_then(toml::Value::as_str)
+        .unwrap_or("src/lib.rs");
+    let lib = package.join(lib);
+    Ok((package, lib))
+}
+
+/// The files of the crate `krate` that every build compiles.
+fn crate_files(root: &Path, krate: &str) -> Result<Vec<GameFile>, String> {
+    let (_, lib) = crate_root(root, krate)?;
+    let dir = lib.parent().expect("a source file has a folder").to_owned();
+    module_files(krate.to_owned(), lib, dir, true)
+}
+
+/// The crates the points' own crate is built on (`horizon-mod-points` and everything under it), by
+/// library name: their functions can't be points, since their slots would have to reach up to it.
+fn below_points(root: &Path) -> Result<std::collections::BTreeSet<String>, String> {
+    let mut seen = std::collections::BTreeSet::from(["horizon_mod_points".to_owned()]);
+    let mut pending = vec![root.join("crates/horizon-mod-points")];
+    while let Some(package) = pending.pop() {
+        let manifest = package.join("Cargo.toml");
+        let text =
+            fs::read_to_string(&manifest).map_err(|e| format!("{}: {e}", manifest.display()))?;
+        let manifest: toml::Value = toml::from_str(&text).map_err(|e| e.to_string())?;
+        // Build dependencies too: `horizon-mod-points` is generated by `horizon-mod-api-gen`.
+        for path in ["dependencies", "build-dependencies"]
+            .into_iter()
+            .filter_map(|kind| manifest.get(kind).and_then(toml::Value::as_table))
+            .flatten()
+            .filter_map(|(_, dep)| dep.get("path").and_then(toml::Value::as_str))
+        {
+            let dependency = package.join(path);
+            let name = dependency
+                .file_name()
+                .map(|name| name.to_string_lossy().replace('-', "_"))
+                .unwrap_or_default();
+            if seen.insert(name) {
+                pending.push(dependency);
+            }
+        }
+    }
+    Ok(seen)
+}
+
+/// The crates below the game whose listed functions are points, from `points.txt`: each line a
+/// function's path in its own crate (`horizon_client_render::mesher::Mesher::mesh`).
+fn listed(root: &Path) -> Result<Vec<(usize, String)>, String> {
+    let list = root.join(LIST);
+    let text = fs::read_to_string(&list).map_err(|e| format!("{}: {e}", list.display()))?;
+    Ok(text
+        .lines()
+        .enumerate()
+        .filter_map(|(line, text)| {
+            let path = text.split('#').next().unwrap_or_default().trim();
+            (!path.is_empty()).then(|| (line + 1, plain_path(path)))
+        })
+        .collect())
+}
+
+/// The list of lower-crate points, in the repository.
+const LIST: &str = "crates/horizon-mod-api-gen/points.txt";
+
+/// A path without generic arguments or spaces, as listed paths and found ones are compared.
+fn plain_path(path: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0;
+    for c in path.chars() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth -= 1,
+            c if depth == 0 && !c.is_whitespace() => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// The game module's files, `points.txt` and the listed crates' files, for a build script to track.
+pub fn tracked(root: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut files: Vec<_> = game_files(&root.join("crates/horizon-client/src"), true)?
         .into_iter()
         .map(|file| file.path)
-        .collect())
+        .collect();
+    files.push(root.join(LIST));
+    let crates: std::collections::BTreeSet<_> = listed(root)?
+        .into_iter()
+        .filter_map(|(_, path)| path.split("::").next().map(str::to_owned))
+        .collect();
+    for krate in crates {
+        files.extend(crate_files(root, &krate)?.into_iter().map(|file| file.path));
+    }
+    Ok(files)
 }
 
 /// Whether `attrs` hold a `cfg` (or `cfg_attr`): the item is compiled only in some builds.
@@ -187,31 +297,179 @@ fn gated(attrs: &[syn::Attribute]) -> bool {
         .any(|attr| attr.path().is_ident("cfg") || attr.path().is_ident("cfg_attr"))
 }
 
-/// The point methods of one parsed file: each with its module path, from the file's inherent
-/// `impl Game` blocks and the inline modules every build compiles.
-fn file_points<'a>(module: &str, items: &'a [Item], out: &mut Vec<(String, &'a syn::ImplItemFn)>) {
+/// A point's function, as found in a parsed file.
+struct Found<'a> {
+    module: String,
+    attrs: &'a [syn::Attribute],
+    vis: &'a syn::Visibility,
+    sig: &'a syn::Signature,
+    /// The `impl`'s type and generics; none for a free function.
+    owner: Option<(&'a Type, &'a syn::Generics)>,
+    /// Where the item that holds it ends: the `impl` block, or the function. Its raw types go there.
+    end: proc_macro2::LineColumn,
+}
+
+impl Found<'_> {
+    /// A method of `Game`, taking `self`: its point keeps the method's name and gets the game as
+    /// its host. `Game`'s associated functions without `self` are named and hosted like any other
+    /// type's.
+    fn on_game(&self) -> bool {
+        matches!(self.sig.inputs.first(), Some(syn::FnArg::Receiver(_)))
+            && self.owner.is_some_and(|(ty, _)| matches!(ty, Type::Path(path) if path.qself.is_none() && path.path.segments.len() == 1 && path.path.segments[0].ident == "Game"))
+    }
+
+    /// Its path in its crate, as an injection's `target` names it.
+    fn target(&self) -> String {
+        match self.owner {
+            Some((ty, _)) => format!("{}::{}::{}", self.module, owner(ty), self.sig.ident),
+            None => format!("{}::{}", self.module, self.sig.ident),
+        }
+    }
+
+    /// Its point's name: a `Game` method's own name; else its path from the game module (`game_…`),
+    /// or in a lower crate from its crate's name less `horizon_`, snake-cased.
+    fn name(&self) -> String {
+        if self.on_game() {
+            return unraw(&self.sig.ident);
+        }
+        let module = match self.module.strip_prefix("horizon_client::") {
+            Some(rest) => rest.to_owned(),
+            None => self
+                .module
+                .strip_prefix("horizon_")
+                .unwrap_or(&self.module)
+                .to_owned(),
+        };
+        let mut parts: Vec<String> = module
+            .split("::")
+            .filter(|part| !part.is_empty())
+            .map(str::to_owned)
+            .collect();
+        if let Some((Type::Path(path), _)) = self.owner
+            && let Some(last) = path.path.segments.last()
+        {
+            parts.push(snake(&unraw(&last.ident)));
+        }
+        parts.push(unraw(&self.sig.ident));
+        parts.join("_")
+    }
+
+    /// The attribute the pass writes on it.
+    fn attribute(&self) -> String {
+        let mut parts = Vec::new();
+        if self.on_game() {
+            parts.push("side = \"both\"".to_owned());
+        } else {
+            parts.push(format!("name = \"{}\"", self.name()));
+        }
+        if self.raw() {
+            parts.push("raw".into());
+        }
+        if self.owner.is_none() {
+            parts.push("free".into());
+        }
+        parts.join(", ")
+    }
+
+    fn raw(&self) -> bool {
+        point_shape::raw_able(self.sig, self.owner.map(|(_, generics)| generics))
+    }
+
+    fn shape(&self) -> Result<point_shape::Shape, String> {
+        point_shape::shape(self.attribute().parse().expect("the attribute"), self.sig)
+            .map_err(|e| format!("{}: {e}", self.target()))
+    }
+}
+
+/// `r#type` as `type`.
+fn unraw(ident: &syn::Ident) -> String {
+    ident.to_string().trim_start_matches("r#").to_owned()
+}
+
+/// `MapData` as `map_data`.
+fn snake(name: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in name.chars().enumerate() {
+        if c.is_ascii_uppercase() {
+            if i > 0 {
+                out.push('_');
+            }
+            out.push(c.to_ascii_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// A type as a target names it: lifetimes as `'_`, no spaces.
+fn owner(ty: &Type) -> String {
+    struct EraseLifetimes;
+    impl syn::visit_mut::VisitMut for EraseLifetimes {
+        fn visit_lifetime_mut(&mut self, lifetime: &mut syn::Lifetime) {
+            *lifetime = syn::Lifetime::new("'_", lifetime.span());
+        }
+    }
+    let mut ty = ty.clone();
+    syn::visit_mut::VisitMut::visit_type_mut(&mut EraseLifetimes, &mut ty);
+    ty.to_token_stream().to_string().replace(' ', "")
+}
+
+/// The point functions of one parsed file, with their module paths: in the game module, every
+/// eligible function of its inherent `impl`s (a `Game` method only with a `&self`/`&mut self`
+/// receiver) and its free functions; elsewhere, those `keep` admits. Inline modules every build
+/// compiles count too.
+fn file_points<'a>(
+    module: &str,
+    items: &'a [Item],
+    keep: &dyn Fn(&Found<'_>) -> bool,
+    out: &mut Vec<Found<'a>>,
+) {
     for item in items {
         match item {
             Item::Mod(inline) if !gated(&inline.attrs) => {
                 if let Some((_, inner)) = &inline.content {
-                    file_points(&format!("{module}::{}", inline.ident), inner, out);
+                    file_points(&format!("{module}::{}", inline.ident), inner, keep, out);
+                }
+            }
+            Item::Fn(function)
+                if !gated(&function.attrs)
+                    && point_shape::eligible(&function.attrs, &function.sig) =>
+            {
+                let found = Found {
+                    module: module.to_owned(),
+                    attrs: &function.attrs,
+                    vis: &function.vis,
+                    sig: &function.sig,
+                    owner: None,
+                    end: function.block.brace_token.span.close().end(),
+                };
+                if keep(&found) {
+                    out.push(found);
                 }
             }
             Item::Impl(block) if block.trait_.is_none() && !gated(&block.attrs) => {
                 let Type::Path(ty) = &*block.self_ty else {
                     continue;
                 };
-                if ty.qself.is_some()
-                    || ty.path.segments.len() != 1
-                    || ty.path.segments[0].ident != "Game"
-                {
+                if ty.qself.is_some() {
                     continue;
                 }
                 for member in &block.items {
                     if let ImplItem::Fn(method) = member
                         && point_shape::eligible(&method.attrs, &method.sig)
                     {
-                        out.push((module.to_owned(), method));
+                        let found = Found {
+                            module: module.to_owned(),
+                            attrs: &method.attrs,
+                            vis: &method.vis,
+                            sig: &method.sig,
+                            owner: Some((&block.self_ty, &block.generics)),
+                            end: block.brace_token.span.close().end(),
+                        };
+                        if keep(&found) {
+                            out.push(found);
+                        }
                     }
                 }
             }
@@ -220,56 +478,166 @@ fn file_points<'a>(module: &str, items: &'a [Item], out: &mut Vec<(String, &'a s
     }
 }
 
-/// The game's points, by name: every eligible inherent `Game` method of the game module, whose
-/// names Rust already keeps unique.
-pub fn game_points(root: &Path) -> Result<Vec<GamePoint>, String> {
-    let mut points = Vec::new();
+/// A parsed source file of the game's crates, with its points.
+struct Scanned {
+    path: PathBuf,
+    module: String,
+    source: String,
+    parsed: syn::File,
+    /// The crate's package, when it is a lower crate: the pass gives it the points' dependencies.
+    package: Option<PathBuf>,
+}
+
+/// Every file with points: the game module's, then each listed lower crate's. Fails on a listed
+/// path that names no point function, or a crate the points' own crate is built on.
+fn scan(root: &Path) -> Result<(Vec<Scanned>, Vec<(usize, String)>), String> {
+    let mut files = Vec::new();
     for file in game_files(&root.join("crates/horizon-client/src"), true)? {
+        files.push((file, None));
+    }
+    let list = listed(root)?;
+    let below = below_points(root)?;
+    let mut crates = std::collections::BTreeSet::new();
+    for (line, path) in &list {
+        let krate = path.split("::").next().unwrap_or_default();
+        if below.contains(krate) || krate == "horizon_client" {
+            return Err(format!(
+                "{LIST}:{line}: {path}: {krate} is built under the points' own crate (or is the game's): its functions can't be listed points"
+            ));
+        }
+        crates.insert(krate.to_owned());
+    }
+    for krate in &crates {
+        let (package, _) = crate_root(root, krate)?;
+        for file in crate_files(root, krate)? {
+            files.push((file, Some(package.clone())));
+        }
+    }
+    let mut scanned = Vec::new();
+    for (file, package) in files {
         let source = fs::read_to_string(&file.path).map_err(|e| e.to_string())?;
         let parsed =
             syn::parse_file(&source).map_err(|e| format!("{}: {e}", file.path.display()))?;
-        let mut methods = Vec::new();
-        file_points(&file.module, &parsed.items, &mut methods);
-        for (module, method) in methods {
-            let target = format!("{module}::Game<'_>::{}", method.sig.ident);
-            let shape = point_shape::shape(ATTRIBUTE.parse().expect("the attribute"), &method.sig)
-                .map_err(|e| format!("{target}: {e}"))?;
-            let api = shape.api_items(&target);
-            points.push(GamePoint {
-                record_item: shape.record_item(&target).to_string(),
-                api: [
-                    api.methods.to_string(),
-                    api.variants.to_string(),
-                    api.consts.to_string(),
-                    api.forwards.to_string(),
-                ],
-                wire_shape: shape.wire_shape(),
-                at_return: shape.has_return(),
-                target,
-                side: shape.side.name(),
-                host: match (shape.mutable, shape.side) {
-                    (false, _) => "host",
-                    (true, side) => side.name(),
-                },
-                args: shape
-                    .args
-                    .iter()
-                    .map(|arg| {
-                        (
-                            arg.name.to_string(),
-                            arg.ty.to_token_stream().to_string().replace("& ", "&"),
-                        )
-                    })
-                    .collect(),
-                record: shape.record().to_string(),
-                returns: match shape.returns {
-                    point_shape::Returns::Unit | point_shape::Returns::UnitResult => "cancel",
-                    point_shape::Returns::Value(_) => "result",
-                    point_shape::Returns::Opaque => "none",
-                },
-                name: shape.name,
-            });
+        scanned.push(Scanned {
+            path: file.path,
+            module: file.module,
+            source,
+            parsed,
+            package,
+        });
+    }
+    Ok((scanned, list))
+}
+
+impl Scanned {
+    /// This file's points: all of a game-module file's, or the listed ones of a lower crate's.
+    fn points<'a>(&'a self, list: &[(usize, String)], used: &mut Vec<bool>) -> Vec<Found<'a>> {
+        let mut out = Vec::new();
+        let used = std::cell::RefCell::new(used);
+        let keep = |found: &Found<'_>| {
+            if self.package.is_none() {
+                return true;
+            }
+            let target = plain_path(&found.target());
+            match list.iter().position(|(_, path)| *path == target) {
+                Some(index) => {
+                    used.borrow_mut()[index] = true;
+                    true
+                }
+                None => false,
+            }
+        };
+        file_points(&self.module, &self.parsed.items, &keep, &mut out);
+        out
+    }
+}
+
+/// Every point, scanned once: each with its file's index.
+fn all_points<'a>(
+    scanned: &'a [Scanned],
+    list: &[(usize, String)],
+) -> Result<Vec<(usize, Found<'a>)>, String> {
+    let mut used = vec![false; list.len()];
+    let mut points = Vec::new();
+    for (index, file) in scanned.iter().enumerate() {
+        points.extend(
+            file.points(list, &mut used)
+                .into_iter()
+                .map(|found| (index, found)),
+        );
+    }
+    if let Some(((line, path), _)) = list.iter().zip(&used).find(|(_, used)| !**used) {
+        return Err(format!(
+            "{LIST}:{line}: {path}: no function every build compiles that can be a point"
+        ));
+    }
+    let mut names = std::collections::BTreeMap::new();
+    for (_, found) in &points {
+        let shape = found.shape()?;
+        for variant in [shape.variant(), shape.return_variant()] {
+            if let Some(other) = names.insert(variant.to_string(), found.target()) {
+                return Err(format!(
+                    "the points of {other} and {} have one name, {}: rename one",
+                    found.target(),
+                    shape.name
+                ));
+            }
         }
+    }
+    Ok(points)
+}
+
+/// The game's points, by name: every point function of the game module, and the listed ones of
+/// the crates below it.
+pub fn game_points(root: &Path) -> Result<Vec<GamePoint>, String> {
+    let (scanned, list) = scan(root)?;
+    let mut points = Vec::new();
+    for (_, found) in all_points(&scanned, &list)? {
+        let target = found.target();
+        let shape = found.shape()?;
+        let api = shape.api_items(&target);
+        points.push(GamePoint {
+            record_item: shape.record_item(&target).to_string(),
+            api: [
+                api.methods.to_string(),
+                api.variants.to_string(),
+                api.consts.to_string(),
+                api.forwards.to_string(),
+            ],
+            wire_shape: shape.wire_shape(),
+            at_return: shape.has_return(),
+            raw: shape.raw,
+            listener: shape
+                .raw
+                .then(|| format!("{}::{}", found.module, shape.raw_listener())),
+            return_listener: shape
+                .raw
+                .then(|| format!("{}::{}", found.module, shape.raw_return_listener())),
+            target,
+            side: shape.side.map_or("none", point_shape::Side::name),
+            host: match (shape.receiver, shape.side) {
+                (_, None) => "none",
+                (point_shape::Receiver::Mut, Some(side)) => side.name(),
+                (_, Some(_)) => "host",
+            },
+            args: shape
+                .args
+                .iter()
+                .map(|arg| {
+                    (
+                        arg.name.to_string(),
+                        arg.ty.to_token_stream().to_string().replace("& ", "&"),
+                    )
+                })
+                .collect(),
+            record: shape.record().to_string(),
+            returns: match shape.returns {
+                point_shape::Returns::Unit | point_shape::Returns::UnitResult => "cancel",
+                point_shape::Returns::Value(_) => "result",
+                point_shape::Returns::Opaque => "none",
+            },
+            name: shape.name,
+        });
     }
     points.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(points)
@@ -280,76 +648,197 @@ pub fn game_points(root: &Path) -> Result<Vec<GamePoint>, String> {
 pub struct Staged {
     /// Points given a slot.
     pub points: usize,
-    /// Of those, the ones with a head only (their return value borrows the game).
+    /// Of those, the ones whose API listeners get no return place (their value borrows).
     pub head_only: usize,
+    /// Of those, the ones with a raw form.
+    pub raw: usize,
     /// Files rewritten.
     pub files: usize,
 }
 
-/// The staging pass: puts `#[point]` on every point method of the staged copy at `root`, in
-/// place. Run on a copy, never on a working tree: the source tree carries no `#[point]`.
+/// The byte offset of `at` in `source`, whose line starts are `lines`.
+fn offset(source: &str, lines: &[usize], at: proc_macro2::LineColumn) -> usize {
+    let line = lines[at.line - 1];
+    source[line..]
+        .char_indices()
+        .nth(at.column)
+        .map_or(source.len(), |(i, _)| line + i)
+}
+
+/// The staging pass: puts `#[point]` on every point function of the staged copy at `root`, in
+/// place, declares each raw form's record and listener types after the item that holds the
+/// function, and gives each lower crate with points the points' dependencies. Run on a copy, never
+/// on a working tree: the source tree carries no `#[point]`.
 pub fn stage(root: &Path) -> Result<Staged, String> {
+    let (scanned, list) = scan(root)?;
+    let points = all_points(&scanned, &list)?;
     let mut staged = Staged::default();
-    for file in game_files(&root.join("crates/horizon-client/src"), true)? {
-        let source = fs::read_to_string(&file.path).map_err(|e| e.to_string())?;
-        let parsed =
-            syn::parse_file(&source).map_err(|e| format!("{}: {e}", file.path.display()))?;
-        let mut methods = Vec::new();
-        file_points(&file.module, &parsed.items, &mut methods);
-        if methods.is_empty() {
+    let mut packages = std::collections::BTreeSet::new();
+    for (index, file) in scanned.iter().enumerate() {
+        let here: Vec<_> = points
+            .iter()
+            .filter(|(i, _)| *i == index)
+            .map(|(_, found)| found)
+            .collect();
+        if here.is_empty() {
             continue;
         }
+        let source = &file.source;
         let lines: Vec<usize> = std::iter::once(0)
             .chain(source.match_indices('\n').map(|(i, _)| i + 1))
             .collect();
-        let mut at: Vec<usize> = methods
-            .iter()
-            .map(|(_, method)| {
-                if let Some(attr) = method.attrs.iter().find(|attr| {
-                    attr.path()
-                        .segments
-                        .last()
-                        .is_some_and(|segment| segment.ident == "point")
-                }) {
-                    return Err(format!(
-                        "{}: {} already has {}: the source carries no #[point]",
-                        file.path.display(),
-                        method.sig.ident,
-                        attr.to_token_stream()
-                    ));
-                }
-                let start = match &method.vis {
-                    syn::Visibility::Inherited => method.sig.fn_token.span.start(),
-                    vis => syn::spanned::Spanned::span(vis).start(),
-                };
-                let line = lines[start.line - 1];
-                Ok(source[line..]
-                    .char_indices()
-                    .nth(start.column)
-                    .map_or(source.len(), |(i, _)| line + i))
-            })
-            .collect::<Result<_, String>>()?;
-        staged.points += methods.len();
-        staged.head_only += methods
-            .iter()
-            .filter(|(_, method)| {
-                point_shape::shape(ATTRIBUTE.parse().expect("the attribute"), &method.sig)
-                    .is_ok_and(|shape| !shape.has_return())
-            })
-            .count();
-        at.sort_unstable();
-        let mut out = String::with_capacity(source.len() + at.len() * 48);
+        // Insertions at byte offsets, in order; at one offset, in the order pushed.
+        let mut edits: Vec<(usize, String)> = Vec::new();
+        for found in &here {
+            if let Some(attr) = found.attrs.iter().find(|attr| {
+                attr.path()
+                    .segments
+                    .last()
+                    .is_some_and(|segment| segment.ident == "point")
+            }) {
+                return Err(format!(
+                    "{}: {} already has {}: the source carries no #[point]",
+                    file.path.display(),
+                    found.sig.ident,
+                    attr.to_token_stream()
+                ));
+            }
+            let start = match found.vis {
+                syn::Visibility::Inherited => found
+                    .sig
+                    .constness
+                    .map(|token| token.span)
+                    .unwrap_or(found.sig.fn_token.span)
+                    .start(),
+                vis => syn::spanned::Spanned::span(vis).start(),
+            };
+            edits.push((
+                offset(source, &lines, start),
+                format!("#[horizon_mod_api_macros::point({})] ", found.attribute()),
+            ));
+            let shape = found.shape()?;
+            staged.points += 1;
+            staged.head_only += usize::from(!shape.has_return());
+            if shape.raw {
+                staged.raw += 1;
+                let items = shape.raw_items(
+                    found.sig,
+                    found.owner.map(|(ty, _)| ty),
+                    found.owner.map(|(_, generics)| generics),
+                );
+                edits.push((offset(source, &lines, found.end), format!("\n{items}\n")));
+            }
+        }
+        edits.sort_by_key(|(at, _)| *at);
+        let mut out = String::with_capacity(
+            source.len() + edits.iter().map(|(_, text)| text.len()).sum::<usize>(),
+        );
         let mut from = 0;
-        for offset in at {
-            out.push_str(&source[from..offset]);
-            out.push_str(&format!("#[horizon_mod_api_macros::point({ATTRIBUTE})] "));
-            from = offset;
+        for (at, text) in edits {
+            out.push_str(&source[from..at]);
+            out.push_str(&text);
+            from = at;
         }
         out.push_str(&source[from..]);
         fs::write(&file.path, out).map_err(|e| format!("{}: {e}", file.path.display()))?;
         staged.files += 1;
+        if let Some(package) = &file.package {
+            packages.insert(package.clone());
+        }
     }
+    // The two dependencies each lower crate gets, also written into the lock file's entry for
+    // it, so a `--locked` build of the staged copy accepts them.
+    const ADDED: [&str; 2] = ["horizon-mod-points", "horizon-mod-api-macros"];
+    if packages.is_empty() {
+        return Ok(staged);
+    }
+    let lock_path = root.join("Cargo.lock");
+    // A Windows checkout has CRLF line endings; Cargo reads either, and the entries match on LF.
+    let mut lock = fs::read_to_string(&lock_path)
+        .map_err(|e| format!("{}: {e}", lock_path.display()))?
+        .replace("\r\n", "\n");
+    for package in packages {
+        let manifest = package.join("Cargo.toml");
+        let text =
+            fs::read_to_string(&manifest).map_err(|e| format!("{}: {e}", manifest.display()))?;
+        let mut cargo: toml::Table = toml::from_str(&text).map_err(|e| e.to_string())?;
+        let dependencies = cargo
+            .entry("dependencies")
+            .or_insert_with(|| toml::Value::Table(toml::Table::new()))
+            .as_table_mut()
+            .ok_or("[dependencies] is not a table")?;
+        // Every package with points sits in `crates/`, beside these two.
+        for name in ADDED {
+            dependencies.entry(name).or_insert_with(|| {
+                toml::Value::Table(toml::Table::from_iter([(
+                    "path".to_owned(),
+                    format!("../{name}").into(),
+                )]))
+            });
+        }
+        let name = cargo
+            .get("package")
+            .and_then(|package| package.get("name"))
+            .and_then(toml::Value::as_str)
+            .ok_or_else(|| format!("{}: no package name", manifest.display()))?
+            .to_owned();
+        lock = locked_with(&lock, &name, &ADDED)
+            .ok_or_else(|| format!("Cargo.lock has no entry for {name}"))?;
+        fs::write(
+            &manifest,
+            toml::to_string(&cargo).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| format!("{}: {e}", manifest.display()))?;
+    }
+    fs::write(&lock_path, lock).map_err(|e| format!("{}: {e}", lock_path.display()))?;
     Ok(staged)
+}
+
+/// `lock` with `added` in the dependency list of the package `name`, kept in the lock file's
+/// sorted order; none when the lock file has no entry for it.
+fn locked_with(lock: &str, name: &str, added: &[&str]) -> Option<String> {
+    let header = format!("[[package]]\nname = \"{name}\"\n");
+    let start = lock.find(&header)?;
+    let end = lock[start + header.len()..]
+        .find("\n\n")
+        .map_or(lock.len(), |at| start + header.len() + at);
+    let entry = &lock[start..end];
+    let mut lines: Vec<String> = entry.lines().map(str::to_owned).collect();
+    let mut dependencies: Vec<String> = Vec::new();
+    let open = lines.iter().position(|line| line == "dependencies = [");
+    if let Some(open) = open {
+        let close = open + lines[open..].iter().position(|line| line == "]")?;
+        dependencies = lines.drain(open + 1..close).collect();
+    }
+    for name in added {
+        let quoted = format!(" \"{name}\",");
+        if !dependencies.contains(&quoted) {
+            dependencies.push(quoted);
+        }
+    }
+    dependencies.sort();
+    let open = match open {
+        Some(open) => open,
+        None => {
+            // `dependencies` follows `version` and `source`, before `checksum`.
+            let at = lines
+                .iter()
+                .position(|line| line.starts_with("checksum"))
+                .unwrap_or(lines.len());
+            lines.insert(at, "dependencies = [".to_owned());
+            lines.insert(at + 1, "]".to_owned());
+            at
+        }
+    };
+    for (offset, dependency) in dependencies.into_iter().enumerate() {
+        lines.insert(open + 1 + offset, dependency);
+    }
+    Some(format!(
+        "{}{}{}",
+        &lock[..start],
+        lines.join("\n"),
+        &lock[end..]
+    ))
 }
 
 /// `mod_points`: each point's record, the type its listeners take, and the `Points` trait a
@@ -375,7 +864,8 @@ pub(crate) fn records(points: &[GamePoint]) -> String {
                 &*point.target,
                 &*point.wire_shape,
             );
-            std::iter::once(head).chain(point.at_return.then_some(back))
+            // A raw-only return has a place too, which no wasm listener names.
+            std::iter::once(head).chain((point.at_return || point.raw).then_some(back))
         })
         .collect();
     let names = places.iter().map(|place| &place.0);
@@ -518,9 +1008,10 @@ mod tests {
         assert!(eligible("fn tick(&mut self) -> Result<()> {}"));
         assert!(eligible("pub(super) fn reach(&self) -> f64 { 0.0 }"));
         assert!(eligible("fn get<T: Copy>(&self) -> T { todo!() }"));
+        // An associated or free function is a point too; off `Game`, with no host.
+        assert!(eligible("fn new() -> Self {}"));
         for left_out in [
             "fn native_server_tick(&mut self) {}",
-            "fn new() -> Self {}",
             "fn take(self) {}",
             "const fn size(&self) -> usize { 0 }",
             "async fn wait(&self) {}",
@@ -536,79 +1027,206 @@ mod tests {
     }
 
     #[test]
-    fn the_pass_marks_the_methods_the_generator_lists() {
+    fn the_pass_marks_the_functions_the_generator_lists() {
         let root = std::env::temp_dir().join(format!("horizon-points-{}", std::process::id()));
-        let src = root.join("crates/horizon-client/src");
-        std::fs::create_dir_all(src.join("game/remote")).unwrap();
-        std::fs::write(
-            src.join("game.rs"),
-            "mod remote;\nmod nested { mod leaf; }\n#[path = \"elsewhere\"]\nmod moved { mod deep; }\n#[cfg(test)]\nmod probes;\nimpl Game<'_> {\n    fn tick(&mut self) {}\n    pub(super) fn slot(&mut self) -> &mut u8 { todo!() }\n    fn native_tick(&mut self) {}\n}\n",
-        )
-        .unwrap();
-        std::fs::write(
-            src.join("game/remote.rs"),
-            "mod lan;\nimpl Game<'_> { fn send(&self, id: u32) {} }\nimpl Other { fn send(&self) {} }\n",
-        )
-        .unwrap();
-        std::fs::write(
-            src.join("game/remote/lan.rs"),
+        let put = |path: &str, text: &str| {
+            let path = root.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        };
+        put(
+            "crates/horizon-client/src/game.rs",
+            "mod remote;\nmod nested { mod leaf; }\n#[path = \"elsewhere\"]\nmod moved { mod deep; }\n#[cfg(test)]\nmod probes;\nimpl Game<'_> {\n    fn tick(&mut self) {}\n    pub(super) fn slot(&mut self) -> &mut u8 { todo!() }\n    fn native_tick(&mut self) {}\n    fn new() -> Self { todo!() }\n}\n",
+        );
+        put(
+            "crates/horizon-client/src/game/remote.rs",
+            "mod lan;\nimpl Game<'_> { fn send(&self, id: u32) {} }\nimpl Other { fn send(&self) {} }\nfn decode<T>(bytes: &[u8]) -> T { todo!() }\n",
+        );
+        put(
+            "crates/horizon-client/src/game/remote/lan.rs",
             "impl Game<'_> { fn join(&mut self) {} }",
-        )
-        .unwrap();
-        std::fs::create_dir_all(src.join("game/elsewhere")).unwrap();
-        std::fs::write(
-            src.join("game/elsewhere/deep.rs"),
+        );
+        put(
+            "crates/horizon-client/src/game/elsewhere/deep.rs",
             "impl Game<'_> { fn dive(&mut self) {} }",
-        )
-        .unwrap();
-        std::fs::create_dir_all(src.join("game/nested")).unwrap();
-        std::fs::write(
-            src.join("game/nested/leaf.rs"),
+        );
+        put(
+            "crates/horizon-client/src/game/nested/leaf.rs",
             "impl Game<'_> { fn fall(&mut self) {} }",
-        )
-        .unwrap();
-        std::fs::write(
-            src.join("game/probes.rs"),
+        );
+        put(
+            "crates/horizon-client/src/game/probes.rs",
             "impl Game<'_> { fn probe(&self) {} }",
-        )
-        .unwrap();
+        );
+        put(
+            "crates/horizon-mod-points/Cargo.toml",
+            "[package]\nname = 'horizon-mod-points'\n[dependencies]\nhorizon-world = { path = '../horizon-world' }\n[build-dependencies]\nhorizon-mod-api-gen = { path = '../horizon-mod-api-gen' }\n",
+        );
+        put(
+            "crates/horizon-world/Cargo.toml",
+            "[package]\nname = 'horizon-world'\n",
+        );
+        put(
+            "crates/horizon-mod-api-gen/Cargo.toml",
+            "[package]\nname = 'horizon-mod-api-gen'\n",
+        );
+        put(
+            "crates/horizon-client-render/Cargo.toml",
+            "[package]\nname = 'horizon-client-render'\n[dependencies]\nlog = '0.4'\n",
+        );
+        put(
+            "Cargo.lock",
+            // CRLF, as a Windows checkout writes it.
+            &"version = 4\n\n[[package]]\nname = \"horizon-client-render\"\nversion = \"0.1.0\"\ndependencies = [\n \"log\",\n]\n\n[[package]]\nname = \"log\"\nversion = \"0.4.0\"\n"
+                .replace('\n', "\r\n"),
+        );
+        put(
+            "crates/horizon-client-render/src/lib.rs",
+            "pub mod mesher;\n",
+        );
+        put(
+            "crates/horizon-client-render/src/mesher.rs",
+            "pub struct Mesher<'a>(&'a u8);\nimpl Mesher<'_> { pub fn mesh(&mut self, chunk: &Chunk) -> usize { 0 } fn face(&self) {} }\n",
+        );
+        put(
+            "crates/horizon-mod-api-gen/points.txt",
+            "# lower points\nhorizon_client_render::mesher::Mesher<'_>::mesh\n",
+        );
         let points = game_points(&root).unwrap();
-        let targets: Vec<_> = points.iter().map(|p| p.target.as_str()).collect();
+        let named: Vec<_> = points
+            .iter()
+            .map(|p| (p.name.as_str(), p.target.as_str(), p.side, p.raw))
+            .collect();
         assert_eq!(
-            targets,
+            named,
             [
-                "horizon_client::game::moved::deep::Game<'_>::dive",
-                "horizon_client::game::nested::leaf::Game<'_>::fall",
-                "horizon_client::game::remote::lan::Game<'_>::join",
-                "horizon_client::game::remote::Game<'_>::send",
-                "horizon_client::game::Game<'_>::slot",
-                "horizon_client::game::Game<'_>::tick",
+                (
+                    "client_render_mesher_mesher_mesh",
+                    "horizon_client_render::mesher::Mesher<'_>::mesh",
+                    "none",
+                    true
+                ),
+                (
+                    "dive",
+                    "horizon_client::game::moved::deep::Game<'_>::dive",
+                    "both",
+                    true
+                ),
+                (
+                    "fall",
+                    "horizon_client::game::nested::leaf::Game<'_>::fall",
+                    "both",
+                    true
+                ),
+                (
+                    "game_game_new",
+                    "horizon_client::game::Game<'_>::new",
+                    "none",
+                    true
+                ),
+                (
+                    "game_remote_decode",
+                    "horizon_client::game::remote::decode",
+                    "none",
+                    false
+                ),
+                (
+                    "game_remote_other_send",
+                    "horizon_client::game::remote::Other::send",
+                    "none",
+                    true
+                ),
+                (
+                    "join",
+                    "horizon_client::game::remote::lan::Game<'_>::join",
+                    "both",
+                    true
+                ),
+                (
+                    "send",
+                    "horizon_client::game::remote::Game<'_>::send",
+                    "both",
+                    true
+                ),
+                ("slot", "horizon_client::game::Game<'_>::slot", "both", true),
+                ("tick", "horizon_client::game::Game<'_>::tick", "both", true),
             ]
         );
         let api = records(&points);
         assert!(
-            api.contains("fn tick_return") && !api.contains("fn slot_return"),
+            api.contains("fn tick_return")
+                && !api.contains("fn slot_return")
+                && api.contains("SlotReturn")
+                && api.contains("fn game_remote_other_send (& self , args"),
             "{api}"
         );
         assert_eq!(
             stage(&root).unwrap(),
             Staged {
-                points: 6,
+                points: 10,
                 head_only: 1,
-                files: 5
+                raw: 9,
+                files: 6
             }
         );
-        let game = std::fs::read_to_string(src.join("game.rs")).unwrap();
+        let game = std::fs::read_to_string(root.join("crates/horizon-client/src/game.rs")).unwrap();
         assert!(
-            game.contains("    #[horizon_mod_api_macros::point(side = \"both\")] fn tick(")
+            game.contains("    #[horizon_mod_api_macros::point(side = \"both\", raw)] fn tick(")
                 && game.contains(
-                    "#[horizon_mod_api_macros::point(side = \"both\")] pub(super) fn slot("
+                    "#[horizon_mod_api_macros::point(side = \"both\", raw)] pub(super) fn slot("
                 )
-                && !game.contains("point(side = \"both\")] fn native_tick"),
+                && !game.contains("raw)] fn native_tick")
+                // `Game`'s associated functions are named and hosted like any other type's.
+                && game.contains("point(name = \"game_game_new\"")
+                && game.contains("pub type __TickListener")
+                && game.contains("pub type __SlotReturnListener"),
             "{game}"
+        );
+        let remote =
+            std::fs::read_to_string(root.join("crates/horizon-client/src/game/remote.rs")).unwrap();
+        assert!(
+            remote.contains("point(name = \"game_remote_decode\", free)] fn decode")
+                && remote.contains("pub type __GameRemoteOtherSendListener"),
+            "{remote}"
+        );
+        let render = root.join("crates/horizon-client-render");
+        let mesher = std::fs::read_to_string(render.join("src/mesher.rs")).unwrap();
+        assert!(
+            mesher.contains("point(name = \"client_render_mesher_mesher_mesh\", raw)] pub fn mesh")
+                && !mesher.contains("client_render_mesher_mesher_face")
+                && mesher.contains("& 'r mut Mesher < '__self0 >"),
+            "{mesher}"
+        );
+        let manifest = std::fs::read_to_string(render.join("Cargo.toml")).unwrap();
+        assert!(
+            manifest.contains("horizon-mod-points") && manifest.contains("../horizon-mod-points"),
+            "{manifest}"
+        );
+        // The lock file lists them too, in order, so a `--locked` build accepts the manifest.
+        let lock = std::fs::read_to_string(root.join("Cargo.lock")).unwrap();
+        assert!(
+            lock.contains("name = \"horizon-client-render\"\nversion = \"0.1.0\"\ndependencies = [\n \"horizon-mod-api-macros\",\n \"horizon-mod-points\",\n \"log\",\n]\n\n[[package]]\nname = \"log\""),
+            "{lock}"
         );
         // A second pass finds the attribute and refuses: the source tree never carries one.
         assert!(stage(&root).unwrap_err().contains("already has"));
+        // A crate the points' own crate is built on can't be listed.
+        put(
+            "crates/horizon-mod-api-gen/points.txt",
+            "horizon_world::level::tick\n",
+        );
+        assert!(game_points(&root).unwrap_err().contains("built under"));
+        // Nor one it builds with (the generator), nor the points' own crate.
+        for listed in [
+            "horizon_mod_api_gen::points::stage\n",
+            "horizon_mod_points::register\n",
+        ] {
+            put("crates/horizon-mod-api-gen/points.txt", listed);
+            assert!(
+                game_points(&root).unwrap_err().contains("built under"),
+                "{listed}"
+            );
+        }
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

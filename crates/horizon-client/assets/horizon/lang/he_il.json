@@ -460,5 +460,6 @@
   "horizon.pack.filter.realistic": "מציאותי",
   "horizon.pack.filter.simplistic": "פשטני",
   "horizon.pack.filter.vanillaLike": "דמוי וניל",
-  "horizon.pack.addFailed": "לא ניתן להוסיף את החבילה: %s"
+  "horizon.pack.addFailed": "לא ניתן להוסיף את החבילה: %s",
+  "Shader Packs...": "חבילות Shader..."
 }

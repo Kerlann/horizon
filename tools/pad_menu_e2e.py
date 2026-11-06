@@ -30,6 +30,9 @@ Cases:
 - glyph_on_field: A on a focused text field and B on Cancel; A opens one keyboard, which hides them; B closes it.
 - settings_apply: X presses World Options' Apply once something changed.
 - long_label: a label too wide for its button slides, beside its glyph.
+- every_screen_has_targets: the title's submenus and every options page give the focus something to land on.
+- pause_icon: the pause menu's icons are targets, and A presses one.
+- erase_checkbox: the D-pad reaches Optimize World's Erase Cached Data box, and A ticks it.
 Needs built fast binaries (`cargo build --profile fast -p horizon-client -p horizon-client-lib --bins`)
 and prepared resources in .local/horizon-client/26.3. Exit status 0 when every case passes.
 """
@@ -362,6 +365,17 @@ def lock_question(args, name):
     return check.failures
 
 
+def open_optimize_confirm(game):
+    """From the title, with one saved world, to the screen with the Erase Cached Data box."""
+    game.pad('south')
+    game.pad('south')
+    game.wait_targets()
+    game.pad('down')
+    click_widget(game, game.rows()[0])
+    click_widget(game, next(w for w in game.widgets() if w.get('label') == 'Edit'))
+    click_widget(game, next(w for w in game.widgets() if w.get('label') == 'Optimize World'))
+
+
 def optimize_world(args, name):
     game = Game(args, name, world=True)
     check = Check()
@@ -375,13 +389,7 @@ def optimize_world(args, name):
         source = max((game.game_home / 'saves' / 'Menus').rglob('region/*.mca'), key=lambda f: f.stat().st_size)
         for i in range(400):
             shutil.copy(source, source.parent / f'r.{100 + i}.100.mca')
-        game.pad('south')
-        game.pad('south')
-        game.wait_targets()
-        game.pad('down')
-        click_widget(game, game.rows()[0])
-        click_widget(game, next(w for w in game.widgets() if w.get('label') == 'Edit'))
-        click_widget(game, next(w for w in game.widgets() if w.get('label') == 'Optimize World'))
+        open_optimize_confirm(game)
         click_widget(game, next(w for w in game.widgets() if w.get('label') == "I Know What I'm Doing!"))
         check(game.widgets()[0].get('label') == 'Cancel', f'not on Optimize World: {labels(game)}')
         game.pad('down')
@@ -1096,7 +1104,7 @@ def stick_keeps_option(game, check):
     check(game.focus()[1] < y, 'the list did not scroll')
 
 
-@options_case('video-settings')
+@options_case('controls')
 def stick_under_keyboard(game, check):
     game.pad('south')
     check(game.menu()['keyboard'], 'A on the search field did not open the on-screen keyboard')
@@ -1107,7 +1115,7 @@ def stick_under_keyboard(game, check):
 
 @options_case('video-settings')
 def stick_leaves_sidebar(game, check):
-    game.ctl('click', 'horizon-graphics')
+    # Video Settings... is the graphics screen.
     game.pad('down')
     game.wait_targets()
     game.focus_on('advanced')
@@ -1237,7 +1245,7 @@ def stick_steps_once(args, name):
 
 @options_case('video-settings')
 def gui_scale_keeps_focus(game, check):
-    # In the right column, beside Reduce fps.
+    # The graphics screen's General page.
     game.focus_on('gui-scale')
     label = game.focused_label() or ''
     check(label.startswith('GUI Scale'), f'never reached GUI Scale: on {label}')
@@ -1282,6 +1290,292 @@ def held_dpad_stops_at_slots(args, name):
 
 
 
+def shot(game, name):
+    """A screenshot, kept when PAD_E2E_SHOTS names a folder."""
+    folder = Path(game.args.shots or os.environ.get('PAD_E2E_SHOTS') or game.home)
+    folder.mkdir(parents=True, exist_ok=True)
+    time.sleep(0.3)
+    game.ctl('screenshot', folder / f'{name}.png', timeout=120)
+
+
+def has_label(game, text):
+    return any(text in label for label in labels(game))
+
+
+def open_controller(game, page=None):
+    """Options by X, Controls by a click, then the pad alone to the controller settings."""
+    game.press_through('west', click='controls')
+    game.focus_on('controller-settings')
+    game.pad('south')
+    game.wait_targets()
+    if page:
+        for _ in range(page):
+            game.pad('rb')
+
+
+def controller_saved(game):
+    path = game.game_home / 'horizon-controller.txt'
+    return path.read_text() if path.exists() else ''
+
+
+def controller_settings_pad(args, name):
+    game = Game(args, name)
+    check = Check()
+    try:
+        open_controller(game)
+        for page in ('General', 'Bindings', 'Device'):
+            check(has_label(game, page), f'no page {page} in {labels(game)}')
+        check(has_label(game, 'Editing:'), 'the screen does not say whose profile it edits')
+        # Exactly: the General page has its Navigation Repeat rows.
+        check('Navigation' not in labels(game), 'a navigation page contradicts menus always focusing')
+        shot(game, 'controller-general')
+        # The D-pad walks the whole list, scrolling it.
+        game.pad('right')
+        reached = {game.focused_label()}
+        for _ in range(24):
+            game.pad('down')
+            reached.add(game.focused_label())
+        for want in ('Controller', 'Look Sensitivity', 'Move Deadzone', 'Repeat Interval',
+                     'On-Screen Keyboard'):
+            check(any(want.lower() in (r or '').lower() for r in reached), f'the D-pad never reached {want}: {reached}')
+        # The bumpers change pages.
+        game.pad('rb')
+        check(has_label(game, 'key.') or has_label(game, 'Jump'), f'the bumper did not open Bindings: {labels(game)}')
+        shot(game, 'controller-bindings')
+        # Through every row of Bindings and its reset at the end.
+        game.pad('right')
+        reached = set()
+        # Up to the row that leads the page, then down all of it.
+        for _ in range(6):
+            reached.add(game.focused_label())
+            # Past it the focus leaves the list for the search box and the pages.
+            if 'jump' in (game.focused_label() or '').lower():
+                break
+            game.pad('up')
+        for _ in range(60):
+            reached.add(game.focused_label())
+            game.pad('down')
+        for want in ('Sneak', 'Reset'):
+            check(any(want.lower() in (r or '').lower() for r in reached), f'the D-pad never reached {want}: {reached}')
+        shot(game, 'controller-bindings-end')
+        game.pad('rb')
+        game.pad('right')
+        check(has_label(game, 'Player profile'), f'the bumper did not open Device: {labels(game)}')
+        check(has_label(game, 'Detected glyphs'), 'no detected glyphs on Device')
+        check(has_label(game, 'Button Glyphs'), 'no glyph override on Device')
+        shot(game, 'controller-device')
+        # Vibration changes and saves; Undo appears, X takes it back and it goes.
+        check(not has_label(game, 'Undo'), 'Undo with nothing to undo')
+        for _ in range(16):
+            if 'vibration' in (game.focused_label() or '').lower():
+                break
+            game.pad('down')
+        check('vibration' in (game.focused_label() or '').lower(), f'never reached Vibration: {game.focused_label()}')
+        game.pad('south')
+        check(has_label(game, 'Undo'), 'no Undo after a change')
+        check('vibration:false' in controller_saved(game), f'not saved: {controller_saved(game)}')
+        shot(game, 'controller-pending')
+        game.pad('west')
+        check(not has_label(game, 'Undo'), 'Undo stayed after undoing')
+        check('vibration:false' not in controller_saved(game), 'the undo was not saved')
+        game.pad('east')
+        game.wait_targets()
+        check(not has_label(game, 'Editing:'), 'B did not leave the screen')
+    finally:
+        game.quit()
+    return check.failures
+
+
+def controller_bind(args, name):
+    game = Game(args, name)
+    check = Check()
+    try:
+        open_controller(game, 1)
+        # Right of the page's tab is the row level with it, the second.
+        game.pad('right')
+        for _ in range(8):
+            if 'jump' in (game.focused_label() or '').lower():
+                break
+            game.pad('up')
+        check('jump' in (game.focused_label() or '').lower(), f'never reached Jump: {game.focused_label()}')
+        game.pad('south')
+        check(has_label(game, '> '), f'A did not start the wait: {labels(game)}')
+        game.pad('start')
+        check(not has_label(game, '> '), 'Start did not cancel the wait')
+        check(has_label(game, 'Editing:'), 'Start left the screen instead of cancelling')
+        game.pad('south')
+        game.pad('rs')
+        check('key.jump' in controller_saved(game), f'the binding was not saved: {controller_saved(game)}')
+        shot(game, 'controller-bound')
+        game.pad('right')
+        game.pad('south')
+        check('key.jump' not in controller_saved(game), f'reset did not clear it: {controller_saved(game)}')
+        check((game.menu()['focus'] or {}).get('kind') != 'field', f'reset sent the focus to the search: {game.menu()["focus"]}')
+    finally:
+        game.quit()
+    return check.failures
+
+
+def controller_settings_keys(args, name):
+    # Keys go through `key`, which needs a world open.
+    game = Game(args, name, world=True)
+    check = Check()
+    try:
+        game.ctl('options', 'controller')
+        game.wait_targets()
+        game.ctl('click', 'device')
+        time.sleep(SETTLE)
+        check(has_label(game, 'Player profile'), f'a click did not open Device: {labels(game)}')
+        # Opened afresh, nothing has the focus: the first Tab lands on the search.
+        game.ctl('key', 'esc', 'tap')
+        time.sleep(SETTLE)
+        game.ctl('options', 'controller')
+        game.wait_targets()
+        game.ctl('key', 'tab', 'tap')
+        game.ctl('type', 'rumble')
+        time.sleep(SETTLE)
+        check(has_label(game, 'Vibration'), f'the search did not find Vibration by what it does: {labels(game)}')
+        check(not has_label(game, 'Look Sensitivity'), 'the search kept other rows')
+        # The focus off the field and back: a click at the field's end must not clear it.
+        game.ctl('key', 'down', 'tap')
+        game.ctl('key', 'up', 'tap')
+        time.sleep(SETTLE)
+        check(not has_label(game, 'Look Sensitivity'), 'coming back to the search cleared it')
+        game.ctl('key', 'esc', 'tap')
+        time.sleep(SETTLE)
+        check(not has_label(game, 'Editing:'), 'Escape did not leave the screen')
+    finally:
+        game.quit()
+    return check.failures
+
+
+OPTIONS_PAGES = ('main', 'video', 'sound', 'controls', 'keybinds', 'controller', 'controller-binds', 'mouse', 'chat',
+                 'accessibility', 'language', 'font', 'packs', 'mods', 'shader-packs', 'graphics', 'graphics-advanced',
+                 'graphics-hdr', 'extras', 'pvp', 'credits', 'horizon', 'agent')
+# Screens allowed to draw no target, and why. The pad falls back to the crosshair on these.
+NO_TARGETS = {'studio': 'its buttons and rows only paint, nothing registers them yet'}
+TARGETS_WAIT = 5
+
+
+def check_has_targets(game, check, screen):
+    """A focus-mode screen draws a target soon after it opens; pointer screens (packs) use the crosshair by design."""
+    if screen in NO_TARGETS:
+        return
+    end = time.time() + TARGETS_WAIT
+    while True:
+        menu = game.menu()
+        if menu['mode'] != 'focus' or menu['targets']:
+            return
+        if time.time() > end:
+            check(False, f'{screen} has no targets: a controller is left with the crosshair')
+            return
+        time.sleep(0.2)
+
+
+@title_case
+def every_screen_has_targets(game, check, single, options, quit_game):
+    for screen, steps in (('create world', ['singleplayer']), ('multiplayer warning', ['multiplayer']),
+                          ('multiplayer', ['multiplayer', 'proceed']), ('realms', ['realms'])):
+        for step in steps:
+            click_widget(game, widget(game, step))
+        check(quit_game not in game.rects(), f'{screen} did not open')
+        check_has_targets(game, check, screen)
+        for _ in range(4):
+            if quit_game in game.rects():
+                break
+            # Not the Escape key: horizon-ctl's needs a world open.
+            game.pad('east')
+            time.sleep(SETTLE)
+        else:
+            raise RuntimeError(f'B did not come back to the title from {screen}')
+    game.pad('west')
+    for page in OPTIONS_PAGES:
+        game.ctl('options', page)
+        time.sleep(SETTLE)
+        check_has_targets(game, check, page)
+    game.ctl('options', 'horizon')
+    time.sleep(SETTLE)
+    click_widget(game, widget(game, 'studio'))
+    check_has_targets(game, check, 'studio')
+
+
+def pause_icon(args, name):
+    game = Game(args, name, world=True)
+    check = Check()
+    try:
+        game.ctl('key', 'escape', 'tap')
+        game.wait_targets()
+        # Report Bugs, Feedback and Player Reporting, and Friends when it is live.
+        icons = sorted(r for r in game.rects() if r[2:] == (20, 20))
+        check(len(icons) >= 3, f'pause icons with targets: {icons}')
+        game.focus_on(next(w['id'] for w in game.widgets() if tuple(w['bounds']) == icons[-1]))
+        before = game.rects()
+        game.pad('south')
+        check(game.rects() != before, 'A did not press Player Reporting')
+    finally:
+        game.quit()
+    return check.failures
+
+
+def controller_notices(args, name):
+    game = Game(args, name, world=True)
+    check = Check()
+    notice = lambda: game.ctl('pad', 'status').get('notice')
+    try:
+        for _ in range(10):
+            game.ctl('pad', 'connection', 'disconnected')
+            game.ctl('pad', 'connection', 'connected')
+        game.ctl('pad', 'connection', 'disconnected')
+        time.sleep(1)
+        check(notice() and 'disconnected' in notice()['title'], f'not the latest event: {notice()}')
+        shot(game, 'notice-disconnected')
+        game.ctl('pad', 'connection', 'connected')
+        time.sleep(1)
+        check(notice() and notice()['title'] == 'Controller connected', f'the reconnect did not replace it: {notice()}')
+        shot(game, 'notice-connected')
+        time.sleep(6.5)
+        check(notice() is None, f'the notice outstayed its time: {notice()}')
+    finally:
+        game.quit()
+    return check.failures
+
+
+def erase_checkbox(args, name):
+    game = Game(args, name, world=True)
+    check = Check()
+    try:
+        game.ctl('key', 'escape', 'tap')
+        game.wait_targets()
+        click_widget(game, next(w for w in game.widgets() if w.get('label') == 'Save and Quit to Title'))
+        game.wait_targets()
+        game.title_buttons()
+        open_optimize_confirm(game)
+        box = next(w for w in game.widgets() if 'label' not in w)
+        # The box is the screen's topmost target.
+        for _ in range(4):
+            if game.focus() == tuple(box['bounds']):
+                break
+            game.pad('up')
+        check(game.focus() == tuple(box['bounds']), f"the D-pad stopped on {game.focus()}, not {box['bounds']}")
+        path = game.home / 'box.png'
+
+        def shot():
+            game.ctl('screenshot', path)
+            rows, width, channels = png_rows(path)
+            scale = width / game.ctl('ui')['gui_size'][0]
+            x, y, h = (int(box['bounds'][i] * scale) for i in (0, 1, 3))
+            return [row[x * channels:(x + h) * channels] for row in rows[y:y + h]]
+
+        # Ticked, its sprite changes under the same hover.
+        unticked = shot()
+        game.pad('south')
+        check(shot() != unticked, 'A did not tick Erase Cached Data')
+    finally:
+        game.quit()
+    return check.failures
+
+
+
 CASES = {'idle_a': idle_a, 'idle_b': idle_b, 'idle_x': idle_x, 'release': release, 'move_cancels': move_cancels,
          'pad_release': pad_release, 'pause_y': pause_y, 'settings': settings, 'create_world': create_world,
          'world_options': world_options, 'key_row_b': key_row_b, 'lock_question': lock_question,
@@ -1308,7 +1602,14 @@ CASES = {'idle_a': idle_a, 'idle_b': idle_b, 'idle_x': idle_x, 'release': releas
          'stick_steps_once': stick_steps_once,
          'gui_scale_keeps_focus': gui_scale_keeps_focus,
          'held_dpad_stops_at_slots': held_dpad_stops_at_slots,
-         'flat_rows_select': flat_rows_select}
+         'flat_rows_select': flat_rows_select,
+         'controller_settings_pad': controller_settings_pad,
+         'controller_bind': controller_bind,
+         'controller_settings_keys': controller_settings_keys,
+         'controller_notices': controller_notices,
+         'every_screen_has_targets': every_screen_has_targets,
+         'pause_icon': pause_icon,
+         'erase_checkbox': erase_checkbox}
 
 
 def main():
@@ -1317,6 +1618,7 @@ def main():
     parser.add_argument('--ctl', type=Path, default=lab.cargo_target() / f'fast/horizon-ctl{EXE}')
     parser.add_argument('--resources', type=Path, default=ROOT / '.local/horizon-client/26.3')
     parser.add_argument('--only', nargs='*', choices=sorted(CASES), help='run only these cases')
+    parser.add_argument('--shots', type=Path, help='keep screenshots in this folder')
     args = parser.parse_args()
     args.game, args.ctl, args.resources = args.game.resolve(), args.ctl.resolve(), args.resources.resolve()
     failed = []

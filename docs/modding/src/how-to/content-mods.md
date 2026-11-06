@@ -51,8 +51,8 @@ namespaces = []              # optional: more namespaces the mod's files use (be
 Unknown keys are refused, so a typo is an error, not a silently ignored permission. The shared manifest
 uses exactly `api = "0.2"` and `capabilities = ["registries"]`, with `side = "client"` (the default) or `"both"`.
 Code mods add `[native]` for exact build pins and optional raw injections ([Injections](../injections.md)); their id and version still come only
-from this manifest, not Cargo metadata ([Native mods](native-mods.md#a-bundle)). Nonempty `[dependencies]`
-is supported only for code mods. Both kinds may include a fixed-name `icon.png` at the top level, with no
+from this manifest, not Cargo metadata ([Native mods](native-mods.md#a-bundle)). Both content and code mods support `[dependencies]`: use `base = "^1.2"` for a required dependency or
+`extra = { version = "^2", optional = true }` for an optional one. Missing required dependencies, incompatible installed versions and cycles refuse startup. Content layers load after their dependencies; an absent optional dependency is ignored. Both kinds may include a fixed-name `icon.png` at the top level, with no
 manifest key: a valid square PNG, at most 512 × 512 pixels and 256 KiB encoded ([Mod files](../reference/manifest.md)).
 Executable `mod.wasm` files are unsupported: a folder or archive containing one is refused, including when
 installed through a modpack. Code is never silently skipped.
@@ -150,8 +150,8 @@ covers stay hidden unless it also sets `occludes`.
 `occludes: false` makes a block occlude nothing whatever its template does, as vanilla's `noOcclusion()`: the faces
 of the blocks beside it are drawn, so a thin panel or a block drawn by its block entity on a full-cube template
 doesn't leave a hole in the floor under it. It is no longer a solid render either, so light passes it as it passes
-leaves: dampened by 1, or not at all if its template lets skylight down. Unset or `true`, it occludes as its template
-does.
+leaves: dampened by 1, or not at all if skylight passes down; special template light rules remain inherited.
+Unset or `true` preserves the template's ability to occlude, using the declared outline when one is supplied.
 
 `destroy_overlay: false` hides the breaking crack (`destroy_stage_0` to `9`) on the block, for one broken by use
 (a feast or a cake taken apart bite by bite). It is read once at load into the block's facts, and only the overlay
@@ -218,8 +218,19 @@ dark board whose black text would not read. They apply to the front and back tex
 dye and glow ink work on it as usual; a saved sign loads as vanilla's does. A sign and its `wall_block` declare the
 same values, so a sign does not change colour when it is hung on a wall.
 
-A block can override its targeting outline with `shapes` and independently override movement
-collision with `collision_shapes`. Both take the same table format. Boxes are
+A block can override its targeting outline with `shapes`. The declared outline also controls render
+solidity, face occlusion and default lighting: an occluding full cube is solid and blocks light; a partial
+shape uses its covered faces to stop light directionally. An empty or partial outline is not a solid
+render. Fluid-bearing states, including intrinsic water in bubble-column and kelp templates, retain their
+fluid attenuation and downward-skylight behavior when the declared geometry is unchanged. Special
+skylight and light-dampening rules remain inherited from the template: fluid-dependent skylight rules
+(such as vegetation) use the resolved state's fluid, including declared waterlogging, while glass keeps
+its unconditional skylight rule and leaves keep their dampening. For example, a partial poppy-template
+outline passes skylight without attenuation when dry, but attenuates it by 1 when waterlogged.
+`occludes: false` still disables face occlusion.
+
+Movement collision is independently selectable with `collision_shapes`; it does not change the outline,
+render solidity, occlusion or lighting. Both take the same table format. Boxes are
 `[minX,minY,minZ,maxX,maxY,maxZ]` in block units (one block is 1), at most 16 per shape.
 Coordinates must be finite and each minimum must not exceed its maximum. `[]` is an empty shape.
 

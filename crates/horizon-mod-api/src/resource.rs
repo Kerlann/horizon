@@ -259,10 +259,12 @@ pub trait ResourceHandler<R> {
     fn resource(&self, host: &mut dyn ServerHost, index: usize) -> Option<R>;
     /// How much of it.
     fn amount(&self, host: &mut dyn ServerHost, index: usize) -> u32;
-    /// How much of `resource` index `index` holds when it holds that, whatever it holds now: none
-    /// where `resource` may not go (`getCapacityAsLong`).
+    /// How much of `resource` index `index` holds when it holds that, whatever it holds now
+    /// (`getCapacityAsLong`). Capacity is not free space or permission to insert: validity,
+    /// current contents and access rules can still refuse it.
     fn capacity(&self, host: &mut dyn ServerHost, index: usize, resource: &R) -> u32;
-    /// Whether `resource` may go in index `index` at all (`isValid`).
+    /// Whether `resource` may go in index `index` at all (`isValid`). The default uses capacity;
+    /// a handler with separate acceptance rules overrides this and enforces them in `insert`.
     fn is_valid(&self, host: &mut dyn ServerHost, index: usize, resource: &R) -> bool {
         self.capacity(host, index, resource) > 0
     }

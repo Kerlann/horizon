@@ -78,9 +78,9 @@ A wasm mod adds `[wasm]` instead, written by `cargo horizon-mod build --wasm`
 At load `mod.wasm` must start with `\0asm`, be at most 64 MiB and match `sha512`; each failure refuses the
 package with its reason.
 
-Top-level `[dependencies]` declares other code mods by id: a semver requirement string, or
+Top-level `[dependencies]` declares other mods by id: a semver requirement string, or
 `{ version = "^1", optional = true }`. These versions refer to `horizon-mod.toml`, not Cargo metadata.
-Content-only mods cannot declare nonempty dependencies yet
+Content layers load in dependency order. A missing required dependency, incompatible installed version or dependency cycle refuses startup; an absent optional dependency is ignored. Native code dependencies additionally require API packages
 ([Dependencies between trait mods](../concepts/trait-mods.md#dependencies-between-trait-mods)).
 
 ## Original Java jar layers

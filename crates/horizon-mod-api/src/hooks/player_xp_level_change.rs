@@ -5,7 +5,7 @@ pub trait Hooks {
     /// `Player.giveExperienceLevels`: once per level gained or lost by points,
     /// and for the anvil, `/experience add ... levels` and `PlayerRef::give_levels`.
     /// Change `levels`, or set `cancel` to leave the level unchanged. The
-    /// player's state is swapped in, so `native_acting_player`, `native_tell`
+    /// player's state is swapped in, so `host.players().acting_player()`, `PlayerRef::tell`
     /// and the item helpers reach them. Server-side.
     #[hook(
         side = "server",

@@ -2,26 +2,17 @@ name: mixins-check
 # A native mod with a point injection and a helper injection, built through the launcher's source
 # route and horizon-mixins at this commit (tools/ci/mixins_check.sh), so a change that breaks
 # native mods' staging fails here and not on a player's machine (#1102). Compile-only: no game
-# runs and no vanilla data is read. A property of each commit, so independent changes never
-# make it fail together.
+# runs and no vanilla data is read. Checked on main pushes and dispatches, not on pull requests.
 on:
   push:
     branches: [main]
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - 'crates/horizon-mod-*/**'
-      - 'launcher/src/native_mods.rs'
-      - 'launcher/src/native_mods/**'
-      - 'tools/prebuilt_game.py'
-      - 'tools/ci/mixins_check.sh'
-      - 'tools/ci/mixins-check/**'
-      - '.github/workflows/mixins-check.yml'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: mixins-check-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # One run per ref: a newer main push supersedes an older one's run.
+  group: mixins-check-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   mixins-check:
     runs-on: ubuntu-latest

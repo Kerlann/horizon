@@ -37,6 +37,7 @@ pub(super) struct ModRow {
     pub(super) icon: Option<Arc<gpui::Image>>,
     pub(super) error: Option<String>,
     pub(super) native: Option<native_status::Installed>,
+    pub(super) internals: Vec<String>,
     /// What the package is and its mod id, for a Horizon mod; None for a Java jar.
     pub(super) kind: Option<(ModKind, String)>,
 }
@@ -137,6 +138,7 @@ fn read(home: &Path, java_instance: bool) -> Vec<ModRow> {
                         icon,
                         error: None,
                         native: None,
+                        internals: Vec::new(),
                         kind: None,
                     }
                 })
@@ -157,6 +159,10 @@ fn read(home: &Path, java_instance: bool) -> Vec<ModRow> {
                     icon: icon.image,
                     error: icon.error,
                     native: None,
+                    internals: package
+                        .as_ref()
+                        .map(|p| native_status::declared_internals(&p.manifest))
+                        .unwrap_or_default(),
                     kind: package
                         .as_ref()
                         .ok()
@@ -177,6 +183,7 @@ fn read(home: &Path, java_instance: bool) -> Vec<ModRow> {
                 icon: icon.image,
                 error: icon.error,
                 kind: Some((ModKind::Native, native.id.clone())),
+                internals: native.internals.clone(),
                 native: Some(native),
             }
         }));
@@ -585,6 +592,7 @@ impl Launcher {
             )
             .children(row.kind.as_ref().map(|(kind, _)| self.kind_badge(*kind)))
             .children(chip)
+            .children(self.internals_chip(&row.file, &row.internals))
             .children(update)
             .child(controls)
     }
@@ -657,6 +665,12 @@ mod tests {
             if code {
                 manifest +=
                     &format!("[native]\ngame = '26.3'\nhorizon = '{pin}'\nmixins = '{pin}'\n");
+                if id == "tracked_code" || id == "local_code" {
+                    manifest += &format!(
+                        "internals = [{{path = 'horizon_client::game::Game', hash = '{}'}}]\n",
+                        "b".repeat(64)
+                    );
+                }
             }
             let mut zip = zip::ZipWriter::new(std::fs::File::create(home.join(&file)).unwrap());
             let options = zip::write::SimpleFileOptions::default();
@@ -685,6 +699,12 @@ mod tests {
             let row = rows.iter().find(|r| r.name == id).unwrap();
             assert!(row.icon.is_some(), "{id} must show its package icon");
             assert!(row.error.is_none(), "{id}: {:?}", row.error);
+            let expected: &[&str] = if id == "content" {
+                &[]
+            } else {
+                &["horizon_client::game::Game"]
+            };
+            assert_eq!(row.internals, expected);
         }
         let no_icon = rows.iter().find(|r| r.name == "no_icon").unwrap();
         assert!(no_icon.icon.is_none() && no_icon.error.is_none());

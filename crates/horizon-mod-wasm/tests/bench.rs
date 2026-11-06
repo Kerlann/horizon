@@ -302,7 +302,7 @@ fn tick_at_point(listener: &dyn mod_points::Points) -> bool {
 #[test]
 #[ignore = "needs tests/bench built to mod.wasm and a release build (CI's wasm-bench job)"]
 fn a_point_filled_by_a_wasm_mod() {
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::Ordering;
     // The bench mod, its manifest listing the tick point it listens at (its own lists none, so
     // the other tests here load it without registering a listener).
     let path = |var: &str| std::path::PathBuf::from(std::env::var(var).expect(var));
@@ -332,9 +332,7 @@ fn a_point_filled_by_a_wasm_mod() {
     }
     mod_points::__private::seal();
     // The game's slot table: a place nobody listens at costs this check.
-    let slots: Vec<AtomicBool> = (0..mod_points::POINT_COUNT)
-        .map(|place| AtomicBool::new(mod_points::__private::listened_at(place)))
-        .collect();
+    let slots = &mod_points::__private::POINTS;
     let quiet = mod_points::PointId::TickWorld as usize;
     assert!(!slots[quiet].load(Ordering::Relaxed));
     let empty = timed(1_000_000, || {

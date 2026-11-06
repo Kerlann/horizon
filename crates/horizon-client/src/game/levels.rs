@@ -363,8 +363,7 @@ impl Game<'_> {
         self.creaking.swap_level(&mut p.creaking);
         swap(&mut self.spawn_scratch, &mut p.spawn_scratch);
         // What only the client draws starts over.
-        self.particles.clear();
-        self.pickups.clear();
+        self.clear_client_particles();
     }
 
     /// Put `target`'s level in place, opening it first if it is not loaded.

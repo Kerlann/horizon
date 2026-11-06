@@ -231,6 +231,7 @@ impl Game<'_> {
         // The causing entity's aim, for what turns a blow by where it points
         // (`SulfurCube.knockback`).
         self.mobs[index].attacker_aim = aim;
+        self.mobs[index].dealt_absorbed = 0;
         let hurt = self.mobs[index].damage_with(
             crate::game::entity::damage_level_of!(self, &attack),
             amount,
@@ -238,6 +239,13 @@ impl Game<'_> {
             Some(&mut breach),
         );
         self.mobs[index].attacker_aim = None;
+        // LivingEntity.actuallyHurt: Stats.DAMAGE_DEALT_ABSORBED for the attacking player,
+        // awarded here, during that player's own attack (a server's guest has its own
+        // statistics only inside `as_guest`).
+        let absorbed = std::mem::take(&mut self.mobs[index].dealt_absorbed);
+        if absorbed > 0 {
+            self.award_custom_stat("damage_dealt_absorbed", absorbed);
+        }
         if hurt && self.mobs[index].health != old_health {
             self.mob_damage_event(self.mobs[index].id);
         }

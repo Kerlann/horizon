@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 
 #[derive(Debug)]
-pub(super) enum Error {
+pub enum Error {
     Manifest {
         owner: String,
         target: String,
@@ -42,7 +42,7 @@ impl fmt::Display for Error {
                 target,
                 reason,
             } => write!(f, "{owner}: dependency {target}: {reason}"),
-            Self::Duplicate(id) => write!(f, "Duplicate native mod id {id:?}"),
+            Self::Duplicate(id) => write!(f, "Duplicate mod id {id:?}"),
             Self::Missing { owner, target } => write!(f, "{owner} requires missing mod {target}"),
             Self::NoApi { owner, target } => {
                 write!(f, "{owner} depends on {target}, which has no [api] package")
@@ -68,16 +68,14 @@ impl fmt::Display for Error {
 }
 
 #[derive(Debug)]
-pub(super) struct Dependency {
+pub struct Dependency {
     pub id: String,
     pub requirement: VersionReq,
     pub optional: bool,
 }
 
-pub(super) fn from_manifest(
-    values: &BTreeMap<String, horizon_mods::manifest::Dependency>,
-) -> Vec<Dependency> {
-    use horizon_mods::manifest::Dependency as Declared;
+pub fn from_manifest(values: &BTreeMap<String, crate::manifest::Dependency>) -> Vec<Dependency> {
+    use crate::manifest::Dependency as Declared;
     values
         .iter()
         .map(|(id, value)| {
@@ -110,7 +108,7 @@ fn parse(owner: &str, value: Option<&toml::Value>) -> Result<Vec<Dependency>, Er
         "b".repeat(40)
     );
     let manifest =
-        horizon_mods::manifest::Manifest::parse(&manifest).map_err(|reason| Error::Manifest {
+        crate::manifest::Manifest::parse(&manifest).map_err(|reason| Error::Manifest {
             owner: owner.into(),
             target: "[dependencies]".into(),
             reason,
@@ -118,19 +116,29 @@ fn parse(owner: &str, value: Option<&toml::Value>) -> Result<Vec<Dependency>, Er
     Ok(from_manifest(&manifest.dependencies))
 }
 
-pub(super) struct Mod<'a> {
+#[derive(Clone)]
+pub struct Mod<'a> {
     pub id: &'a str,
     pub version: &'a str,
     pub has_api: bool,
     pub dependencies: &'a [Dependency],
 }
 
-pub(super) struct Resolution {
+pub struct Resolution {
     /// Original bundle indices, in dispatch order.
     pub order: Vec<usize>,
 }
 
-pub(super) fn resolve(mods: &[Mod<'_>]) -> Result<Resolution, Error> {
+pub fn resolve(mods: &[Mod<'_>]) -> Result<Resolution, Error> {
+    resolve_with_api(mods, true)
+}
+
+/// Resolve content layers without requiring native API packages.
+pub fn resolve_content(mods: &[Mod<'_>]) -> Result<Resolution, Error> {
+    resolve_with_api(mods, false)
+}
+
+fn resolve_with_api(mods: &[Mod<'_>], require_api: bool) -> Result<Resolution, Error> {
     let mut ids = HashMap::new();
     for (index, item) in mods.iter().enumerate() {
         if ids.insert(item.id, index).is_some() {
@@ -150,7 +158,7 @@ pub(super) fn resolve(mods: &[Mod<'_>]) -> Result<Resolution, Error> {
                 });
             };
             let other = &mods[target];
-            if !item.has_api || !other.has_api {
+            if require_api && (!item.has_api || !other.has_api) {
                 return Err(Error::NoApi {
                     owner: item.id.into(),
                     target: dep.id.clone(),
@@ -212,13 +220,13 @@ pub(super) fn resolve(mods: &[Mod<'_>]) -> Result<Resolution, Error> {
 }
 
 /// A target's staged Cargo package, or none for an absent optional mod.
-pub(super) struct Package<'a> {
+pub struct Package<'a> {
     pub dependency: &'a Dependency,
     pub package: Option<&'a str>,
 }
 
 /// Add bundle edges to the dependent package. Returns features to enable on the game edge.
-pub(super) fn rewrite(
+pub fn rewrite(
     owner: &str,
     manifest: &mut toml::Table,
     packages: &[Package<'_>],
@@ -308,6 +316,65 @@ mod tests {
         }
     }
     #[test]
+    fn content_dependencies_validate_and_order_without_native_api_packages() {
+        let manifest = |id: &str, version: &str, dependencies: &str| {
+            crate::Manifest::parse(&format!(
+                "id='{id}'\nname='{id}'\nversion='{version}'\napi='0.2'\ncapabilities=['registries']\n{dependencies}"
+            )).unwrap()
+        };
+        let addon = manifest(
+            "addon",
+            "1",
+            "[dependencies]\nbase='^1'\nextra={version='^2', optional=true}",
+        );
+        let base = manifest("base", "1.2", "");
+        let dependencies = from_manifest(&addon.dependencies);
+        let mods = [
+            Mod {
+                id: &addon.id,
+                version: &addon.version,
+                has_api: false,
+                dependencies: &dependencies,
+            },
+            Mod {
+                id: &base.id,
+                version: &base.version,
+                has_api: false,
+                dependencies: &[],
+            },
+        ];
+        assert_eq!(resolve_content(&mods).unwrap().order, [1, 0]);
+        assert!(matches!(resolve(&mods), Err(Error::NoApi { .. })));
+        assert!(matches!(
+            resolve_content(&mods[..1]),
+            Err(Error::Missing { .. })
+        ));
+        let incompatible = Mod {
+            id: "base",
+            version: "2",
+            has_api: false,
+            dependencies: &[],
+        };
+        assert!(matches!(
+            resolve_content(&[mods[0].clone(), incompatible]),
+            Err(Error::Version { .. })
+        ));
+        let back = from_manifest(&manifest("base", "1", "[dependencies]\naddon='^1'").dependencies);
+        assert!(matches!(
+            resolve_content(&[
+                mods[0].clone(),
+                Mod {
+                    id: "base",
+                    version: "1",
+                    has_api: false,
+                    dependencies: &back
+                }
+            ]),
+            Err(Error::Cycle { .. })
+        ));
+    }
+
+    #[test]
     fn order_and_ties_include_present_optional() {
         let user = deps("[dependencies]\nbase = '^1'\nextra = { version = '^2', optional = true }");
         let mods = [
@@ -386,16 +453,18 @@ mod tests {
         );
         assert_eq!(manifest["features"]["extra"][0].as_str(), Some("dep:extra"));
         let mut absent = toml::Table::new();
-        assert!(rewrite(
-            "user",
-            &mut absent,
-            &[Package {
-                dependency: &deps[1],
-                package: None
-            }]
-        )
-        .unwrap()
-        .is_empty());
+        assert!(
+            rewrite(
+                "user",
+                &mut absent,
+                &[Package {
+                    dependency: &deps[1],
+                    package: None
+                }]
+            )
+            .unwrap()
+            .is_empty()
+        );
         assert!(absent["features"]["extra"].as_array().unwrap().is_empty());
         assert!(absent["dependencies"].get("extra").is_none());
     }
@@ -409,15 +478,17 @@ mod tests {
         ] {
             let mut manifest: toml::Table = text.parse().unwrap();
             let original = manifest.clone();
-            assert!(rewrite(
-                "user",
-                &mut manifest,
-                &[Package {
-                    dependency: &deps[0],
-                    package: Some("extra-package")
-                }]
-            )
-            .is_err());
+            assert!(
+                rewrite(
+                    "user",
+                    &mut manifest,
+                    &[Package {
+                        dependency: &deps[0],
+                        package: Some("extra-package")
+                    }]
+                )
+                .is_err()
+            );
             assert_eq!(manifest, original);
         }
     }

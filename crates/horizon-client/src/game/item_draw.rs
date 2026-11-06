@@ -19,6 +19,13 @@ use horizon_core::geometry::{Aabb, Vec3};
 use serde_json::Value;
 use std::{cell::RefCell, collections::HashMap};
 
+struct ItemEntityDraw<'a> {
+    item: &'a horizon_client::entities::ItemEntity,
+    at: [f64; 3],
+    partial: f32,
+    entity: bool,
+}
+
 /// The game's answers to what the resolver cannot read from the stack.
 pub(super) struct Env<'a, 'g> {
     game: &'a Game<'g>,
@@ -561,15 +568,41 @@ impl Game<'_> {
                 p.y + (q.y - p.y) * alpha,
                 p.z + (q.z - p.z) * alpha,
             ];
-            (item, at, alpha as f32, true)
+            ItemEntityDraw {
+                item,
+                at,
+                partial: alpha as f32,
+                entity: true,
+            }
         });
+        self.item_entity_geometry(camera, live, out);
+    }
+
+    pub(super) fn pickup_item_geometry(
+        &self,
+        camera: glam::DVec3,
+        alpha: f64,
+        out: &mut Vec<Vertex>,
+    ) {
         // ItemPickupParticle: the render state extracted at partial tick 1.
         let taken = self.pickups.live.iter().filter_map(|p| match &p.taken {
-            super::pickups::Taken::Item(item) => {
-                Some((&**item, super::pickups::position(p, alpha), 1.0, false))
-            }
+            super::pickups::Taken::Item(item) => Some(ItemEntityDraw {
+                item,
+                at: super::pickups::position(p, alpha),
+                partial: 1.0,
+                entity: false,
+            }),
             _ => None,
         });
+        self.item_entity_geometry(camera, taken, out);
+    }
+
+    fn item_entity_geometry<'a>(
+        &self,
+        camera: glam::DVec3,
+        items: impl Iterator<Item = ItemEntityDraw<'a>>,
+        out: &mut Vec<Vertex>,
+    ) {
         // Entity.shouldRenderAtSqrDistance for the item's 0.25 box: 16 blocks
         // times the view scale (32 at render distance 16), from its current
         // position. A pickup particle is not an entity and keeps 64 blocks.
@@ -577,7 +610,13 @@ impl Game<'_> {
             super::entity_culling::default_range(glam::DVec3::splat(0.25), self.view_scale());
         let skinning = self.skinning();
         let lights = diffuse_lights(self.dim == Dim::Nether);
-        for (item, at, partial, entity) in live.chain(taken) {
+        for ItemEntityDraw {
+            item,
+            at,
+            partial,
+            entity,
+        } in items
+        {
             let entity_start = out.len();
             self.mark_motion(entity_start, (2 << 32) | u64::from(item.id));
             let q = item.position;

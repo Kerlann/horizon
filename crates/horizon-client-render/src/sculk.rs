@@ -2,7 +2,7 @@
 //! `VibrationSelector`) shared by sculk sensors, shriekers and wardens, the
 //! sculk block entities and the per-player warden spawn tracker.
 pub use crate::chunk::block_entity::{Data, Info, SculkEntity, SculkKind, Selector};
-use horizon_client_core::who::Who;
+use horizon_client_core::who::{EventSource, Who};
 use horizon_core::{
     geometry::{Direction, Vec3, traverse_blocks},
     position::BlockPos,
@@ -152,7 +152,7 @@ pub fn resonance_pitch(frequency: i32) -> f32 {
 /// posted (`GameEvent.Context` plus the entity facts listeners ask for).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Context {
-    pub source: Option<Who>,
+    pub source: Option<EventSource>,
     /// The projectile's owner, when the source is a projectile.
     pub owner: Option<Who>,
     /// `GameEvent.Context.affectedState`, the block state the event touched.
@@ -770,7 +770,7 @@ mod tests {
     #[test]
     fn sneaking_ignores_footsteps_but_not_damage() {
         let sneaking = Context {
-            source: Some(Who::Player),
+            source: Some(Who::Player.into()),
             stepping_carefully: true,
             ..Context::default()
         };
@@ -778,7 +778,7 @@ mod tests {
         assert!(!valid_vibration(true, "minecraft:hit_ground", &sneaking));
         assert!(valid_vibration(true, "minecraft:entity_damage", &sneaking));
         let wardenish = Context {
-            source: Some(Who::Mob(1)),
+            source: Some(Who::Mob(1).into()),
             dampens: true,
             ..Context::default()
         };

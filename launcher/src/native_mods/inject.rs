@@ -22,6 +22,19 @@ pub(super) struct PointInjection {
 pub(super) struct ListedPoint {
     pub(super) name: String,
     pub(super) target: String,
+    pub(super) raw: bool,
+    pub(super) listener: Option<String>,
+    pub(super) return_listener: Option<String>,
+}
+
+impl ListedPoint {
+    pub(super) fn place(&self, at_return: bool) -> String {
+        if at_return {
+            format!("{}_return", self.name)
+        } else {
+            self.name.clone()
+        }
+    }
 }
 
 /// The `points.json` the game's build script writes, beside the prebuilt game or in the
@@ -71,6 +84,14 @@ impl std::fmt::Display for PointError {
 /// A mod's point injections, in manifest order. The manifest's own check has already refused any
 /// that isn't a plain HEAD or RETURN on a `target`.
 pub(super) fn of(manifest: &horizon_mods::Manifest) -> Vec<PointInjection> {
+    injections(manifest, false)
+}
+
+pub(super) fn raw_of(manifest: &horizon_mods::Manifest) -> Vec<PointInjection> {
+    injections(manifest, true)
+}
+
+fn injections(manifest: &horizon_mods::Manifest, raw: bool) -> Vec<PointInjection> {
     manifest
         .native
         .iter()
@@ -80,7 +101,11 @@ pub(super) fn of(manifest: &horizon_mods::Manifest) -> Vec<PointInjection> {
                 mod_id: manifest.id.clone(),
                 id: injection.id.clone(),
                 target: injection.target.clone()?,
-                method: injection.trait_method.clone()?,
+                method: if raw {
+                    injection.raw.clone()?
+                } else {
+                    injection.trait_method.clone()?
+                },
                 at_return: matches!(injection.kind, InjectionKind::Return),
             })
         })
@@ -99,10 +124,7 @@ pub(super) fn check(
                 injection: Box::new(injection.clone()),
             });
         };
-        let expected = match injection.at_return {
-            true => format!("{}_return", point.name),
-            false => point.name.clone(),
-        };
+        let expected = point.place(injection.at_return);
         if injection.method != expected {
             return Err(PointError::WrongMethod {
                 injection: Box::new(injection.clone()),
@@ -250,6 +272,7 @@ mod tests {
             "mixins",
             super::super::Profile::Balanced,
             super::super::Target::Client,
+            None,
             &[first.clone(), second.clone()],
         )
         .unwrap();
@@ -258,6 +281,7 @@ mod tests {
             "mixins",
             super::super::Profile::Balanced,
             super::super::Target::Client,
+            None,
             &[second, first],
         )
         .unwrap();
@@ -279,6 +303,9 @@ mod tests {
     fn a_point_injection_names_the_points_head_or_return_method() {
         let tick = "horizon_client::game::Game<'_>::tick";
         let points = [ListedPoint {
+            raw: false,
+            listener: None,
+            return_listener: None,
             name: "tick".into(),
             target: tick.into(),
         }];
