@@ -88,6 +88,7 @@ mod client_player_clone;
 mod client_player_logging_in;
 mod client_player_logging_out;
 mod client_services;
+mod client_session;
 mod client_setup;
 mod client_stopped;
 mod client_stopping;

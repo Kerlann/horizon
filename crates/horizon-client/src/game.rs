@@ -241,6 +241,7 @@ mod native_boss_bar_refs;
 mod native_chunk_save;
 mod native_claimed_items;
 pub mod native_client_services;
+mod native_client_session;
 mod native_components;
 mod native_config_files;
 mod native_configs;
@@ -1025,6 +1026,11 @@ struct Mining {
     pos: [i32; 3],
     progress: f32,
     ticks: u32,
+}
+impl Mining {
+    fn stage(&self) -> Option<u8> {
+        (self.progress > 0.0).then(|| ((self.progress * 10.0) as u8).min(9))
+    }
 }
 #[derive(Clone, Copy)]
 struct Hit {
@@ -12826,9 +12832,9 @@ impl Game<'_> {
             None => stages.push((pos, stage)),
         };
         if let Some(m) = &self.mining
-            && m.progress > 0.0
+            && let Some(stage) = m.stage()
         {
-            add(m.pos, ((m.progress * 10.0) as u32).min(9));
+            add(m.pos, u32::from(stage));
         }
         let now = self.world.game_time;
         for (pos, stage, at) in self.destroying.values() {

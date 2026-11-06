@@ -118,6 +118,8 @@ pub use screenshot::ScreenshotImage;
 mod file_to_id_converter;
 pub use file_to_id_converter::{FileToIdConverter, FileToIdConverterError};
 mod client_reload;
+mod client_session;
+pub use client_session::{BlockBreakingState, ClientFrameStats, ClientServer};
 pub(crate) mod reload;
 mod reload_order;
 pub(crate) mod server_reload;
@@ -4107,8 +4109,8 @@ mod generated_host {
 #[doc(hidden)]
 pub use generated_host::{Backend, BackendMut, ClientBackendMut};
 pub use generated_host::{
-    BlockEntityDrawContext, ClientHost, Commands, DrawContext, Host, HostSide, LevelSide, Levels,
-    Messages, Players, ServerHost,
+    BlockEntityDrawContext, ClientHost, ClientSession, Commands, DrawContext, Host, HostSide,
+    LevelSide, Levels, Messages, Players, ServerHost,
 };
 
 /// Result of accessing or decoding an attachment.

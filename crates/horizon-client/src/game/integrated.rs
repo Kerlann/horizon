@@ -1331,6 +1331,40 @@ pub(super) mod tests {
     }
 
     #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn client_session_identifies_only_its_own_integrated_server() {
+        use mod_api::ClientHost;
+        super::super::native_entity_refs::tests::with_client_game(|game| {
+            let _pipe = super::super::native_client_session::tests::logged_client(game);
+            let (tasks, _waiting_server) = channel();
+            game.integrated = Some(Integrated {
+                flags: Arc::new(Flags::default()),
+                thread: None,
+                tasks,
+                world_name: "First world".into(),
+            });
+            let local = game.client_session().client_server().unwrap();
+            assert!(local.integrated_local);
+            assert_eq!(local.name.as_deref(), Some("First world"));
+            assert_eq!(local.address, None);
+            game.integrated.as_mut().unwrap().world_name = "Renamed world".into();
+            assert_eq!(
+                game.client_session()
+                    .client_server()
+                    .unwrap()
+                    .name
+                    .as_deref(),
+                Some("Renamed world")
+            );
+            game.integrated.take();
+            let guest = game.client_session().client_server().unwrap();
+            assert!(!guest.integrated_local);
+            assert_eq!(guest.name, None);
+            assert_eq!(guest.address, None);
+        });
+    }
+
+    #[test]
     fn pregen_toggle_back_is_queued_while_server_is_busy() {
         let (tasks, waiting_server) = channel();
         let server = Integrated {

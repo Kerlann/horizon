@@ -145,12 +145,15 @@ pub(super) fn generate(
             Side::Client => (&mut client_traits, &mut client_impl),
         };
         traits.push_str(&format!(
-            "/// The server's {name} service.\n/// Not on wasm: a frame resource; its methods are the imports.\nfn {name}({borrow} self) -> {borrow} dyn {trait_name} {{ unimplemented!(\"{trait_name} service\") }}\n"
+            "/// The {name} service.\n/// Not on wasm: a frame resource; its methods are the imports.\nfn {name}({borrow} self) -> {borrow} dyn {trait_name} {{ unimplemented!(\"{trait_name} service\") }}\n"
         ));
         implementation.push_str(&format!(
             "fn {name}({borrow} self) -> {borrow} dyn {trait_name} {{ self }}\n"
         ));
-        service_traits.push_str(&format!("/// The server's {name}, reached through its host.\npub trait {trait_name} {{\n{} }}\n", service.declarations));
+        service_traits.push_str(&format!(
+            "/// The {name} service, reached through its host.\npub trait {trait_name} {{\n{} }}\n",
+            service.declarations
+        ));
         service_impls.push_str(&format!(
             "impl {trait_name} for super::Game<'_> {{\n{} }}\n",
             service.implementations

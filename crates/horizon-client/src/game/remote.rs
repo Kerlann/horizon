@@ -2306,7 +2306,8 @@ impl Game<'_> {
         // startWaitingForNewLevel: `LevelLoadTracker.startClientLoad` and the
         // `LevelLoadingScreen`.
         r.level_load.start_client_load(client_millis(), reason);
-        // A replacement LocalPlayer has a fresh sendPosition baseline.
+        // A replacement LocalPlayer has a fresh ambient mood and sendPosition baseline.
+        self.ambience.moodiness = 0.0;
         r.position_sender = Default::default();
         r.predictions.clear();
         self.set_mode_id(spawn.game_type);
@@ -12597,13 +12598,18 @@ mod tests {
             }))
             .unwrap();
 
-            // Same-level respawn keeps the epoch and the connection's clocks.
-            game.handle_packet(C::Respawn(play::Respawn {
-                spawn: spawn.clone(),
-                keep: 0,
-            }))
-            .unwrap();
-            assert_eq!(end.day_time(game), Some(60_004));
+            // Same-level respawn keeps the epoch and clocks, but replaces the
+            // local player and its mood handler, with or without entity data.
+            for keep in [0, 2] {
+                game.ambience.moodiness = 0.375;
+                game.handle_packet(C::Respawn(play::Respawn {
+                    spawn: spawn.clone(),
+                    keep,
+                }))
+                .unwrap();
+                assert_eq!(game.ambience.moodiness, 0.0);
+                assert_eq!(end.day_time(game), Some(60_004));
+            }
             spawn.dimension_type = 0;
             spawn.dimension = "minecraft:overworld".into();
             game.handle_packet(C::Respawn(play::Respawn {

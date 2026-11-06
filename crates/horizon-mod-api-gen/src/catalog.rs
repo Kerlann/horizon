@@ -369,7 +369,7 @@ impl Helper {
         if let Some(service) = &helper.service {
             let error = if !matches!(
                 service.as_str(),
-                "commands" | "levels" | "messages" | "players"
+                "commands" | "levels" | "messages" | "players" | "client_session"
             ) {
                 Some("unknown service")
             } else if helper.receiver.is_some() || helper.backend {

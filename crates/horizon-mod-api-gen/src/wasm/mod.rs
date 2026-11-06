@@ -31,6 +31,7 @@ pub(super) const IMPORTS: &[&str] = &[
     "Levels",
     "Messages",
     "Players",
+    "ClientSession",
     "menu::SlotView",
     "Registrar",
     "CapabilityProviders",
@@ -54,6 +55,7 @@ pub(super) const REACHED: &[(&str, &str, &str)] = &[
     ("Levels", "server_host", "Ok(h.levels())"),
     ("Messages", "server_host", "Ok(h.messages())"),
     ("Players", "server_host", "Ok(h.players())"),
+    ("ClientSession", "client_host", "Ok(h.client_session())"),
     // A level hook's host first: inside a level write it is the one the call hands over.
     (
         "AttachmentStore",
@@ -747,7 +749,7 @@ fn hidden(attrs: &[syn::Attribute]) -> bool {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn server_services_use_native_forwards_and_frame_resources() {
+    fn services_use_native_forwards_and_frame_resources() {
         std::thread::Builder::new()
             .stack_size(64 << 20)
             .spawn(|| {
@@ -780,6 +782,17 @@ mod tests {
                     for method in methods {
                         assert!(!host.functions.contains_key(*method));
                     }
+                }
+                let client = &resolve.interfaces[package.interfaces["client-host"]];
+                let session = &resolve.interfaces[package.interfaces["client-session"]];
+                assert!(!client.functions.contains_key("client-session"));
+                for method in ["client-server", "client-language", "client-frame-stats"] {
+                    assert!(session.functions.contains_key(method), "missing {method}");
+                    assert!(!client.functions.contains_key(method));
+                }
+                let reads = &resolve.interfaces[package.interfaces["backend"]];
+                for method in ["player-block-breaking", "player-ambient-mood"] {
+                    assert!(reads.functions.contains_key(method), "missing {method}");
                 }
                 let backend = &resolve.interfaces[package.interfaces["backend-mut"]];
                 for method in [
@@ -824,7 +837,8 @@ mod tests {
                     ("Commands", &["run_command", "feedback"][..]),
                     ("Messages", &["broadcast", "text_allowed"][..]),
                     ("Players", &["acting_player", "server_players"][..]),
-                    ("Backend", &["player_address", "player_permission_level"][..]),
+                    ("ClientSession", &["client_server", "client_language", "client_frame_stats"][..]),
+                    ("Backend", &["player_address", "player_permission_level", "player_block_breaking", "player_ambient_mood"][..]),
                 ] {
                     let item = implementation
                         .items
@@ -861,6 +875,7 @@ mod tests {
                 assert!(wasm.host.contains("Ok(h.commands())"));
                 assert!(wasm.host.contains("Ok(h.messages())"));
                 assert!(wasm.host.contains("Ok(h.players())"));
+                assert!(wasm.host.contains("Ok(h.client_session())"));
                 assert!(
                     !wasm
                         .unbound
