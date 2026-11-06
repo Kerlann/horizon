@@ -11508,7 +11508,8 @@ mod tests {
         #[mod_api::__subscriptions]
         impl Hooks for Mod {
             fn register(&self, r: &mut dyn Registrar, _: &mod_api::RegistrationContext) {
-                r.item_part("minecraft:bow", Part(self.0.clone()));
+                let item = r.item_key("minecraft:bow");
+                r.item_part(item, Part(self.0.clone()));
             }
         }
         let calls = Arc::new(AtomicUsize::new(0));

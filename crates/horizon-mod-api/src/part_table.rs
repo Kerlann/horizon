@@ -487,6 +487,24 @@ pub fn mark_game_thread() {
     GAME_THREAD.set(true);
 }
 
+/// An item registration request that the loaded item registry cannot resolve.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ItemKeyError {
+    /// The requesting mod.
+    pub mod_id: &'static str,
+    /// The canonical requested item id.
+    pub id: String,
+}
+
+/// Refusals at the Parts load boundary.
+#[derive(Debug)]
+pub enum ResolvePartsError {
+    /// An item key names no loaded item.
+    ItemKeys(Vec<ItemKeyError>),
+    /// Legacy block or item Part registration refusals.
+    Parts(Vec<String>),
+}
+
 /// The ids a game knows, which a part's key must name.
 // exhaustive: the game builds it with a literal; mods only read it
 pub struct KnownIds<'a> {
@@ -508,16 +526,20 @@ pub fn resolve_parts(
     block_tags: &HashMap<String, HashSet<String>>,
     item_tags: &HashMap<String, HashSet<String>>,
     known: KnownIds<'_>,
-) -> Result<(), Vec<String>> {
+) -> Result<(), ResolvePartsError> {
     let Some(installed) = installed() else {
         return Ok(());
     };
+    let item_errors = installed.registry_keys.items.unknown_items(known.item);
+    if !item_errors.is_empty() {
+        return Err(ResolvePartsError::ItemKeys(item_errors));
+    }
     let mut unknown: Vec<String> = unknown_keys(&installed.keys.blocks, known.block, "block")
         .chain(unknown_keys(&installed.keys.items, known.item, "item"))
         .collect();
     if !unknown.is_empty() {
         unknown.sort();
-        return Err(unknown);
+        return Err(ResolvePartsError::Parts(unknown));
     }
     let mut parts = installed.keys.clone();
     add_tagged(
@@ -877,13 +899,15 @@ fn attached<'a, 'k, P: ?Sized>(
 /// declares its block entity types and ticket controllers on. A thing takes one part of each
 /// kind: the same kind twice on one thing refuses the mods at startup, naming both.
 ///
-/// Mods call the generic methods on `dyn Registrar` (`r.item_part("mymod:wrench", Wrench)`);
+/// Mods call the generic methods on `dyn Registrar` after requesting registry keys;
 /// they reach the trait's own methods, one implementation for native and wasm mods.
 pub trait Registrar {
     /// Look up a vanilla or another mod's type. The final registry validates it at load.
     fn block_entity_type_key(&mut self, id: &str) -> super::BlockEntityTypeKey;
     /// Request a block by canonical registry id. All mods' declarations are checked at load.
     fn block_key(&mut self, id: &str) -> super::BlockKey;
+    /// Request an item by registry id, validated after all declarations.
+    fn item_key(&mut self, id: &str) -> super::ItemKey;
     /// Request an effect by canonical registry id. All mods' declarations are checked at load.
     fn effect_key(&mut self, id: &str) -> super::EffectKey;
     /// Declare block entity type `path` in this mod's namespace, held by `blocks`; mods usually
@@ -917,7 +941,12 @@ pub trait Registrar {
         part: Arc<dyn BlockEntityPart>,
     ) -> Result<(), super::BlockEntityPartError>;
     /// Attach `part`, of kind `kind`, to item `item`.
-    fn attach_item_part(&mut self, item: &str, kind: &'static str, part: Arc<dyn ItemPart>);
+    fn attach_item_part(
+        &mut self,
+        item: super::ItemKey,
+        kind: &'static str,
+        part: Arc<dyn ItemPart>,
+    );
     /// Attach `part`, of kind `kind`, to the mod menu type `menu`.
     fn attach_menu_part(&mut self, menu: &str, kind: &'static str, part: Arc<dyn MenuPart>);
     /// Attach `part`, of kind `kind`, to every block in tag `tag`.
@@ -1003,7 +1032,7 @@ impl dyn Registrar + '_ {
         self.attach_item_part_tag(tag, type_name::<P>(), Arc::new(part));
     }
     /// Attach `part` to item `item` (`mymod:wrench`).
-    pub fn item_part<P: ItemPart>(&mut self, item: &str, part: P) {
+    pub fn item_part<P: ItemPart>(&mut self, item: super::ItemKey, part: P) {
         self.attach_item_part(item, type_name::<P>(), Arc::new(part));
     }
     /// Attach `part` to the mod menu type `menu`.
@@ -1377,6 +1406,21 @@ impl Registrar for PartRegistrar {
         }
     }
 
+    fn item_key(&mut self, id: &str) -> super::ItemKey {
+        match self
+            .registry_keys
+            .borrow_mut()
+            .items
+            .request(self.mod_id, id)
+        {
+            Ok(slot) => super::ItemKey(slot),
+            Err(error) => {
+                self.refused.push(error);
+                super::ItemKey(u32::MAX)
+            }
+        }
+    }
+
     fn effect_key(&mut self, id: &str) -> super::EffectKey {
         match self
             .registry_keys
@@ -1461,8 +1505,26 @@ impl Registrar for PartRegistrar {
         }
     }
 
-    fn attach_item_part(&mut self, item: &str, kind: &'static str, part: Arc<dyn ItemPart>) {
-        self.attach(|p| &mut p.items, kind, item, part);
+    fn attach_item_part(
+        &mut self,
+        item: super::ItemKey,
+        kind: &'static str,
+        part: Arc<dyn ItemPart>,
+    ) {
+        let id = self
+            .registry_keys
+            .borrow()
+            .items
+            .id(item.0)
+            .map(str::to_owned);
+        let Some(id) = id else {
+            self.refused.push(format!(
+                "mod {}: invalid item key slot {}",
+                self.mod_id, item.0
+            ));
+            return;
+        };
+        self.attach(|p| &mut p.items, kind, &id, part);
     }
 
     fn attach_menu_part(&mut self, menu: &str, kind: &'static str, part: Arc<dyn MenuPart>) {
@@ -1728,6 +1790,57 @@ pub mod tests {
         }
         #[cfg_attr(test, cfg(any()))]
         fn should_check_weak_power(&self, _: &dyn LevelHost, _: &mut ShouldCheckWeakPowerEvent) {}
+    }
+
+    #[test]
+    fn item_keys_validate_forward_references_and_reused_slots() {
+        struct Keys(Arc<std::sync::Mutex<Vec<crate::ItemKey>>>);
+        #[mod_api::__subscriptions]
+        impl Hooks for Keys {
+            fn register(&self, r: &mut dyn Registrar, _: &RegistrationContext) {
+                let vanilla = r.item_key("stick");
+                assert_eq!(vanilla, r.item_key("minecraft:stick"));
+                let later = r.item_key("later:widget");
+                assert_eq!(crate::ItemKey::from_slot(vanilla.0), Ok(vanilla));
+                assert!(crate::ItemKey::from_slot(later.0 + 1).is_err());
+                *self.0.lock().unwrap() = vec![vanilla, later];
+            }
+        }
+        let keys = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mods: Mods = vec![ModEntry::new("requester", Box::new(Keys(keys.clone())))].into();
+        super::super::install(mods.clone());
+        install_parts(&mods).unwrap();
+        let check = |known: &dyn Fn(&str) -> bool| {
+            resolve_parts(
+                &HashMap::new(),
+                &HashMap::new(),
+                KnownIds {
+                    block: &|_| false,
+                    item: known,
+                    state_count: 0,
+                    state_block: &|_| unreachable!(),
+                },
+            )
+        };
+        check(&|id| ["minecraft:stick", "later:widget"].contains(&id)).unwrap();
+        let keys = keys.lock().unwrap();
+        assert_eq!(
+            crate::registry_keys::item_id(keys[0]),
+            Some("minecraft:stick")
+        );
+        assert_eq!(crate::registry_keys::item_id(keys[1]), Some("later:widget"));
+        let super::ResolvePartsError::ItemKeys(errors) =
+            check(&|id| id == "minecraft:stick").unwrap_err()
+        else {
+            panic!("wrong refusal")
+        };
+        assert_eq!(
+            errors,
+            [super::ItemKeyError {
+                mod_id: "requester",
+                id: "later:widget".into()
+            }]
+        );
     }
 
     #[test]
@@ -3748,7 +3861,7 @@ pub mod tests {
 
     #[cfg(test)]
     /// Resolve this thread's parts with tag `test:gauged` holding `members`.
-    fn resolve(members: &[&str]) -> Result<(), Vec<String>> {
+    fn resolve(members: &[&str]) -> Result<(), super::ResolvePartsError> {
         let tags = HashMap::from([(
             "test:gauged".to_owned(),
             members.iter().map(|m| m.to_string()).collect(),
@@ -3929,6 +4042,9 @@ pub mod tests {
             },
         )
         .unwrap_err();
+        let super::ResolvePartsError::Parts(refused) = refused else {
+            panic!("wrong refusal")
+        };
         assert_eq!(refused.len(), 1, "{refused:?}");
         assert!(refused[0].starts_with("doubler attached "));
         assert!(refused[0].contains("Gauge to block test:gauge, which this game does not have"));

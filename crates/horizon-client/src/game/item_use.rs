@@ -437,7 +437,8 @@ mod tests {
                     "minecraft:wooden_spear",
                     "minecraft:stick",
                 ] {
-                    r.item_part(id, Part(self.0.clone()));
+                    let item = r.item_key(id);
+                    r.item_part(item, Part(self.0.clone()));
                 }
             }
         }

@@ -353,6 +353,13 @@ Lookup keys may answer capabilities for vanilla and native types. `block_entity_
 native types and returns `BlockEntityPartError::VanillaType` immediately for a vanilla key. Native
 Parts are expanded after every mod has registered, so a Part can target a type declared later.
 
+For an item-specific Part, request its canonical registry key once in `register`:
+`let stick = r.item_key("minecraft:stick"); r.item_part(stick, Sharp);`. Bare names use the
+`minecraft:` namespace. Requests may refer to content declared later; the final item registry refuses
+unknown IDs with the requesting mod. `ItemKey` equality uses its load-owned slot, and `key.id(host)`
+reads its canonical diagnostic name. Item capability registration and item helpers still use strings;
+their migration is a separate change.
+
 `r.block_part_tag("minecraft:logs", Rotates)` and `r.item_part_tag("minecraft:axes", Sharp)` attach a part to
 every member of a tag (its name without `#`). Each game resolves them against its own tags when its world
 opens, again on `/reload`, and when a client joins a server, so the window's game and its server thread each

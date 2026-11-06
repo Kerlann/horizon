@@ -1,10 +1,11 @@
 //! Load-owned declarations and resolved mappings for registration-slot keys.
-use crate::{BlockEntityTypeKey, BlockKey, BlockStateId, BlockStateRange, EffectKey};
+use crate::{BlockEntityTypeKey, BlockKey, BlockStateId, BlockStateRange, EffectKey, ItemKey};
 use std::collections::HashMap;
 
 #[derive(Clone, Default)]
 pub(crate) struct Requests {
     pub(crate) blocks: Names,
+    pub(crate) items: Names,
     pub(crate) effects: Names,
     pub(crate) block_entity_types: Names,
 }
@@ -53,6 +54,25 @@ impl Names {
             .map(|entry| entry.id.as_str())
     }
 
+    pub(crate) fn unknown_items(
+        &self,
+        known: &dyn Fn(&str) -> bool,
+    ) -> Vec<super::part_table::ItemKeyError> {
+        self.entries
+            .iter()
+            .filter(|entry| !known(&entry.id))
+            .flat_map(|entry| {
+                entry
+                    .mods
+                    .iter()
+                    .map(|mod_id| super::part_table::ItemKeyError {
+                        mod_id,
+                        id: entry.id.clone(),
+                    })
+            })
+            .collect()
+    }
+
     fn resolve<T>(
         &self,
         kind: &str,
@@ -87,6 +107,19 @@ impl BlockKey {
                 .blocks
                 .id(slot)
                 .ok_or("unknown BlockKey slot")?;
+            Ok(Self(slot))
+        })
+    }
+}
+
+impl ItemKey {
+    pub(crate) fn from_slot(slot: u32) -> Result<Self, &'static str> {
+        crate::part_table::with_registering_keys(|registering| {
+            registering
+                .unwrap_or(crate::part_table::requested_keys())
+                .items
+                .id(slot)
+                .ok_or("unknown ItemKey slot")?;
             Ok(Self(slot))
         })
     }
@@ -271,6 +304,11 @@ pub fn effect_id(key: EffectKey) -> Option<&'static str> {
 /// Canonical diagnostic name of a trusted, load-owned slot, independent of world resolution.
 pub fn block_id(key: BlockKey) -> Option<&'static str> {
     Some(&crate::part_table::requested_keys().blocks.entries[key.0 as usize].id)
+}
+
+/// Canonical diagnostic name retained by an item registration slot.
+pub fn item_id(key: ItemKey) -> Option<&'static str> {
+    crate::part_table::requested_keys().items.id(key.0)
 }
 
 /// The API key for an engine registry index, also for entries not explicitly requested by mods.

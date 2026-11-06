@@ -30,7 +30,8 @@ impl ItemPart for Stick {
 #[mod_api::horizon_mod]
 impl Hooks for Mod {
     fn register(&self, registrar: &mut dyn Registrar, _cx: &RegistrationContext) {
-        registrar.item_part("minecraft:stick", Stick);
+        let item = registrar.item_key("minecraft:stick");
+        registrar.item_part(item, Stick);
         let _ = self.stone.set(registrar.block_key("minecraft:stone"));
         let _ = self.speed.set(registrar.effect_key("minecraft:speed"));
     }

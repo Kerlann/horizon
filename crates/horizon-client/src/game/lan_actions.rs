@@ -7368,9 +7368,12 @@ mod tests {
                 r.block_part(block_key, self.user.clone());
                 let block_key = r.block_key("minecraft:cake");
                 r.block_part(block_key, self.user.clone());
-                r.item_part("minecraft:stick", self.user.clone());
-                r.item_part("minecraft:water_bucket", self.user.clone());
-                r.item_part("minecraft:stone", self.user.clone());
+                let item = r.item_key("minecraft:stick");
+                r.item_part(item, self.user.clone());
+                let item = r.item_key("minecraft:water_bucket");
+                r.item_part(item, self.user.clone());
+                let item = r.item_key("minecraft:stone");
+                r.item_part(item, self.user.clone());
             }
         }
         let seen = Arc::new(Mutex::new(Vec::new()));

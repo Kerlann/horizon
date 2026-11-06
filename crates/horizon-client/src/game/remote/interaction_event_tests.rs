@@ -70,6 +70,7 @@ impl Hooks for Observer {
             r.block_part(block_key, self.clone());
         }
         for item in ["minecraft:stick", "minecraft:shield"] {
+            let item = r.item_key(item);
             r.item_part(item, self.clone());
         }
     }
