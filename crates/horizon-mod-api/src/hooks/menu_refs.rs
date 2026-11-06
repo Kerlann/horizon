@@ -48,4 +48,16 @@ pub trait Helpers {
         target = "horizon_client::game::native_menu_refs::Game<'_>::native_menu_carried"
     )]
     fn menu_carried();
+    #[helper(
+        side = "client",
+        receiver = "menu",
+        target = "horizon_client::game::native_menu_refs::Game<'_>::native_menu_close"
+    )]
+    fn menu_close();
+    #[helper(
+        side = "client",
+        receiver = "menu",
+        target = "horizon_client::game::native_menu_refs::Game<'_>::native_menu_click_button"
+    )]
+    fn menu_click_button();
 }

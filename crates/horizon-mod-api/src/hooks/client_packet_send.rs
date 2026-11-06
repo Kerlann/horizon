@@ -11,6 +11,11 @@ pub trait Hooks {
     /// player's own included. Every packet exposes its protocol type id; custom payloads also
     /// expose their channel and raw bytes, as `client_packet` does for the packets that arrive.
     /// Beyond NeoForge: there is no counterpart. Diverges from upstream: new hook.
-    #[hook(side = "client", contract = "cancel", out = "canceled", cancellable = false)]
+    #[hook(
+        side = "client",
+        contract = "cancel",
+        out = "canceled",
+        cancellable = false
+    )]
     fn client_packet_send();
 }

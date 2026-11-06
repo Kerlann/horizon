@@ -12,7 +12,7 @@ pub trait Hooks {
         out = "cancel",
         neoforge = "BlockEvent.PortalSpawnEvent",
         cancellable = true,
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_portal_spawn"
+        target = "horizon_client::game::native_hooks::portal_spawn::GameLevel<'_>::native_portal_spawn"
     )]
     fn portal_spawn();
 }

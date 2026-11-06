@@ -124,11 +124,22 @@ impl StartupMenu {
     }
 
     pub(super) fn handoff(&mut self, game: &mut Game<'_>) {
+        let registry = Arc::new(mod_api::__private::game_rule_registry());
+        if let Some(PendingWorldEntry::Local {
+            create: Some(options),
+            ..
+        }) = &mut self.pending
+        {
+            options.rules.rebind_registry(registry.clone());
+        }
+        if let Some(title) = &mut self.title {
+            title.set_rule_registry(registry);
+        }
         // The startup menu's title is the game's from here: its hooks fire now.
         match self.title.take() {
             Some(title) => {
                 let title = title.with_user(|| game.options.player_name());
-                game.show_title(title);
+                game.show_title_with_registry(title);
             }
             None => game.title = None,
         }
@@ -1115,6 +1126,7 @@ impl Loading {
             }
             WindowEvent::MouseInput { state, button, .. } if self.menu.options_open => {
                 if state == ElementState::Pressed && self.menu.options.selected_key.is_some() {
+                    self.menu.options.modifiers = glfw_modifiers(self.menu.modifiers);
                     let events = self.menu.options.bind_mouse(&mut self.settings, button);
                     self.menu_option_events(events);
                 } else if matches!(button, MouseButton::Left | MouseButton::Right) {
@@ -1200,6 +1212,15 @@ impl Loading {
                     title.scroll_worlds(amount, self.menu.cursor, (batch.width, batch.height));
                 }
             }
+            WindowEvent::KeyboardInput { event, .. }
+                if event.state == ElementState::Released && self.menu.options_open =>
+            {
+                if let PhysicalKey::Code(key) = event.physical_key {
+                    self.menu.options.modifiers = glfw_modifiers(self.menu.modifiers);
+                    let events = self.menu.options.key_released(&mut self.settings, key);
+                    self.menu_option_events(events);
+                }
+            }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 if event.physical_key == PhysicalKey::Code(KeyCode::F11) {
                     self.settings.fullscreen = !self.settings.fullscreen;
@@ -1214,6 +1235,7 @@ impl Loading {
                             .shortcut(atlas, s, &mut self.menu.clipboard)
                     });
                     if !handled && let PhysicalKey::Code(key) = event.physical_key {
+                        self.menu.options.modifiers = glfw_modifiers(self.menu.modifiers);
                         let events = self.menu.options.key(
                             &mut self.settings,
                             atlas,
@@ -1389,6 +1411,74 @@ mod tests {
             menu: StartupMenu::default(),
             error: None,
         }
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn queued_creation_is_reconciled_at_handoff() {
+        use horizon_client::gamerules::Value;
+        use mod_api::{Hooks, Registrar, RegistrationContext};
+        struct Mod;
+        #[mod_api::__subscriptions]
+        impl Hooks for Mod {
+            fn register(&self, registrar: &mut dyn Registrar, _: &RegistrationContext) {
+                registrar.game_rule_category("machines").unwrap();
+                registrar
+                    .game_rule_bool("enabled", "example:machines", true)
+                    .unwrap();
+            }
+        }
+        let mods: mod_api::Mods = vec![mod_api::ModEntry::new("example", Box::new(Mod))].into();
+        mod_api::testing::with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_client_game(|game| {
+                let saves = std::env::temp_dir()
+                    .join(format!("horizon-startup-rules-{}", std::process::id()));
+                let _ = std::fs::remove_dir_all(&saves);
+                let mut title = Title::new(saves, &game.options.resources);
+                title.enter_singleplayer();
+                let Action::Create { mut options, .. } = title.create_action() else {
+                    panic!("creation")
+                };
+                options.rules.set("keep_inventory", Value::Bool(true));
+                let mut menu = StartupMenu {
+                    title: Some(title),
+                    pending: Some(PendingWorldEntry::Local {
+                        folder: "test".into(),
+                        name: None,
+                        seed: Some(1),
+                        creative: true,
+                        create: Some(Box::new(options)),
+                    }),
+                    ..Default::default()
+                };
+                menu.handoff(game);
+                let Some(PendingWorldEntry::Local {
+                    create: Some(options),
+                    ..
+                }) = &game.pending_entry
+                else {
+                    panic!("pending")
+                };
+                assert_eq!(
+                    options.rules.get("example:enabled"),
+                    Some(Value::Bool(true))
+                );
+                assert_eq!(options.rules.get("keep_inventory"), Some(Value::Bool(true)));
+                let request = super::super::world_loading::WorldRequest::new(
+                    "test",
+                    None,
+                    None,
+                    true,
+                    Some(options),
+                    options.rules.registry().clone(),
+                )
+                .unwrap();
+                assert!(Arc::ptr_eq(
+                    &request.rule_registry,
+                    options.rules.registry()
+                ));
+            })
+        });
     }
 
     #[test]

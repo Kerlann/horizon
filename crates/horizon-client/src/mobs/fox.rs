@@ -66,7 +66,7 @@ pub fn awake_ambient(m: &mut Mob, w: &MobWorld) -> &'static str {
 }
 /// `SoundEvents.FOX_SCREECH`.
 pub const SCREECH: &str = "entity.fox.screech";
-fn set_flag(m: &mut Mob, f: i32, on: bool) {
+pub(super) fn set_flag(m: &mut Mob, f: i32, on: bool) {
     if on {
         m.extra.ints[0] |= f;
     } else {

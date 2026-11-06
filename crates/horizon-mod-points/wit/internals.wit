@@ -19,6 +19,10 @@ interface view {
   }
   variant reached { node(node), value(list<cell>) }
   variant arg { value(list<cell>), node(borrow<node>) }
+  /// At most twelve entries; larger batches trap. Results keep node.get semantics.
+  get-many: func(reads: list<tuple<borrow<node>, u32>>) -> list<result<list<cell>, refusal>>;
+  /// At most twelve journaled writes; larger batches trap. Refusals are per entry.
+  set-many: func(writes: list<tuple<borrow<node>, u32, list<cell>>>) -> list<result<_, refusal>>;
   root: func(n: u32) -> result<node, refusal>;
   /// Final mutable copy arguments are returned in parameter order, separate from node results.
   record call-reply { %result: reached, updates: list<list<cell>> }

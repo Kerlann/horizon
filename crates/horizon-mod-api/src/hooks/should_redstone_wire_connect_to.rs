@@ -15,7 +15,7 @@ pub trait Hooks {
         out = "connected",
         scope = "block",
         key = "state",
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_should_redstone_wire_connect_to"
+        target = "horizon_client::game::native_hooks::should_redstone_wire_connect_to::GameLevel<'_>::native_should_redstone_wire_connect_to"
     )]
     fn should_redstone_wire_connect_to();
 }

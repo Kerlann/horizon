@@ -4938,13 +4938,11 @@ pub fn bucket_data(m: &Mob) -> Tag {
     data
 }
 pub fn bucket_components(m: &Mob) -> crate::item_data::StackData {
-    let mut data = crate::item_data::StackData {
-        custom_name: m
-            .custom_name
-            .as_ref()
-            .map(|name| Tag::String(name.as_str().into())),
-        ..Default::default()
-    };
+    let mut data = crate::item_data::StackData::default();
+    data.custom_name = m
+        .custom_name
+        .as_ref()
+        .map(|name| Tag::String(name.as_str().into()));
     data.set_other("minecraft:bucket_entity_data", Some(bucket_data(m)));
     if m.species() == crate::mobs::Species::Axolotl {
         let variant = AXOLOTL_VARIANTS
@@ -5347,10 +5345,9 @@ mod axolotl_nbt_tests {
         );
         for (id, name) in AXOLOTL_VARIANTS.iter().enumerate() {
             let mut vanilla = crate::items::ItemStack::new("minecraft:axolotl_bucket", 1);
-            vanilla.extra = Some(Box::new(crate::item_data::StackData {
-                other: vec![("minecraft:axolotl/variant".into(), string(name))],
-                ..Default::default()
-            }));
+            vanilla
+                .data_mut()
+                .set_other("minecraft:axolotl/variant", Some(string(name)));
             apply_item_components(&mut restored, &vanilla);
             assert_eq!(
                 usize::from(restored.extra.variant),
@@ -5359,13 +5356,10 @@ mod axolotl_nbt_tests {
             );
         }
         let mut legacy = crate::items::ItemStack::new("minecraft:axolotl_bucket", 1);
-        legacy.extra = Some(Box::new(crate::item_data::StackData {
-            other: vec![(
-                "minecraft:bucket_entity_data".into(),
-                Tag::compound([("Variant", Tag::Int(3))]),
-            )],
-            ..Default::default()
-        }));
+        legacy.data_mut().set_other(
+            "minecraft:bucket_entity_data",
+            Some(Tag::compound([("Variant", Tag::Int(3))])),
+        );
         apply_item_components(&mut restored, &legacy);
         assert_eq!(restored.extra.variant, 3);
         legacy

@@ -7,6 +7,7 @@ use mod_points::internals::{
 struct Game {
     copy: i64,
     child: Child,
+    fields: [i64; 12],
 }
 #[derive(Debug, PartialEq)]
 struct Child {
@@ -21,6 +22,7 @@ struct Record {
 fn world() -> Game {
     Game {
         copy: 7,
+        fields: [7; 12],
         child: Child {
             value: 11,
             padding: Vec::new(),
@@ -38,6 +40,12 @@ unsafe fn game(ptr: *mut (), writable: bool, op: Op<'_>) -> Result<Reply, Refusa
             Ok(Reply::Done)
         }
         Op::Field(1) => Ok(Reply::Node((&raw mut game.child).cast(), 1, writable)),
+        Op::Check(2..=13, Value::S(_)) => Ok(Reply::Done),
+        Op::Get(n @ 2..=13) => Ok(Reply::Value(Value::S(game.fields[n as usize - 2]))),
+        Op::Set(n @ 2..=13, Value::S(v)) if writable => {
+            game.fields[n as usize - 2] = v;
+            Ok(Reply::Done)
+        }
         _ => Err(I::not_here("not a benchmark game field")),
     }
 }
@@ -121,20 +129,34 @@ fn table() -> &'static Table {
                 raw_index: false,
             },
         ])),
-        members: Box::leak(Box::new([
-            Member {
-                path: "horizon_client::game::Game::copy",
-                hash: hash("horizon_client::game::Game::copy"),
-                owner: 0,
-                field: 0,
-            },
-            Member {
-                path: "horizon_client::game::Game::child",
-                hash: hash("horizon_client::game::Game::child"),
-                owner: 0,
-                field: 1,
-            },
-        ])),
+        members: Box::leak(
+            vec![
+                Member {
+                    path: "horizon_client::game::Game::copy",
+                    hash: hash("horizon_client::game::Game::copy"),
+                    owner: 0,
+                    field: 0,
+                },
+                Member {
+                    path: "horizon_client::game::Game::child",
+                    hash: hash("horizon_client::game::Game::child"),
+                    owner: 0,
+                    field: 1,
+                },
+            ]
+            .into_iter()
+            .chain((0..12).map(|i| {
+                let path = Box::leak(format!("horizon_client::game::Game::f{i}").into_boxed_str());
+                Member {
+                    path,
+                    hash: hash(path),
+                    owner: 0,
+                    field: i + 2,
+                }
+            }))
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+        ),
         thunks: Box::leak(Box::new([Thunk {
             path: "horizon_client::game::Game::add",
             hash: hash("horizon_client::game::Game::add"),
@@ -190,6 +212,14 @@ fn native(mode: &str, count: i64) -> (Game, String) {
             "handle" => total += game.child.value,
             "set" => game.copy = i,
             "call" => total += native_add(game, 1),
+            "get10-single" | "get10-batch" | "get12-single" | "get12-batch" => {
+                total += game.fields[..if mode.starts_with("get10") { 10 } else { 12 }]
+                    .iter()
+                    .sum::<i64>()
+            }
+            "set10-single" | "set10-batch" | "set12-single" | "set12-batch" => {
+                game.fields[..if mode.starts_with("set10") { 10 } else { 12 }].fill(i)
+            }
             _ => unreachable!(),
         }
     }
@@ -240,6 +270,27 @@ fn internals_accesses_against_native() {
             measure(wasm, count, calls),
             measure(native, 256, 100)
         ));
+    }
+    report.push_str("\n### Batched fields\n\nOne listener reads or journals writes to 10 or 12 distinct i64 fields; includes one apply for sets. Baseline zero-work listener subtracted. Median of 9 batches; ns per field.\n\n| Access | Fields | Single ns/field | Batch ns/field |\n| --- | ---: | ---: | ---: |\n");
+    for fields in [10, 12] {
+        for access in ["get", "set"] {
+            let mut ns = Vec::new();
+            for route in ["single", "batch"] {
+                let mode = format!("{access}{fields}-{route}");
+                assert_eq!(wasm(&mode, 1), native(&mode, 1));
+                let base = super::timed(5_000, || {
+                    std::hint::black_box(wasm(&mode, 0));
+                });
+                let work = super::timed(5_000, || {
+                    std::hint::black_box(wasm(&mode, 1));
+                });
+                ns.push((work.as_secs_f64() - base.as_secs_f64()).max(0.0) * 1e9 / fields as f64);
+            }
+            report.push_str(&format!(
+                "| {access} | {fields} | {:.2} | {:.2} |\n",
+                ns[0], ns[1]
+            ));
+        }
     }
     assert_eq!(
         wasm("trap", 1),

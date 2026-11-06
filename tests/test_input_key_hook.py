@@ -5,6 +5,8 @@ import subprocess
 import tempfile
 import unittest
 
+from native_hook_sources import native_hook_sources
+
 from test_world_input_capture import method
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class InputKeyHookTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("rustc"), "requires Rust")
     def test_panel_receives_named_nonrepeat_presses(self):
-        source = (ROOT / "crates/horizon-client/src/game/native_hooks.rs").read_text(encoding="utf-8")
+        source = native_hook_sources()
         actual = method(source.replace("    pub(super) fn native_panel_key_event(", "    fn native_panel_key_event("), "native_panel_key_event")
         fixture = r"""
 type KeyCode = i32;

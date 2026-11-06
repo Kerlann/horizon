@@ -7232,13 +7232,15 @@ mod tests {
                                 .map_or(0, |s| s.count)
                         );
                     }
-                    for (item, existing, carried, expected) in [
-                        ("minecraft:granite", 0, 8, (4, 4, 0)),
-                        ("minecraft:andesite", 8, 8, (3, 4, 9)),
+                    for (item, existing, second, carried, creative, expected) in [
+                        ("minecraft:granite", 0, 0, 8, false, (4, 4, 0)),
+                        ("minecraft:andesite", 8, 0, 8, false, (3, 4, 9)),
+                        ("minecraft:stone", 2, 0, 64, true, (3, 64, 0)),
+                        ("minecraft:stone", 2, 63, 64, true, (3, 64, 62)),
                     ] {
                         let slots = game.world.block_entities.get_mut(&pos).unwrap().slots_mut();
                         slots[0] = (existing > 0).then(|| ItemStack::new(item, existing));
-                        slots[1] = None;
+                        slots[1] = (second > 0).then(|| ItemStack::new(item, second));
                         let mut prediction = Menu::new(if is_mod {
                             Kind::Mod(menu_type)
                         } else {
@@ -7250,11 +7252,21 @@ mod tests {
                             "minecraft:generic_9x3"
                         }));
                         prediction.load_slot(0, slots[0].clone());
+                        prediction.load_slot(1, slots[1].clone());
                         prediction.carried = Some(ItemStack::new(item, carried));
+                        prediction.creative = creative;
                         game.lan.as_mut().unwrap().hub.guests.update(0, |guest| {
-                            guest.carried = Some(ItemStack::new(item, carried))
+                            guest.carried = Some(ItemStack::new(item, carried));
+                            guest.game_mode = if creative {
+                                horizon_client::lan::guest::CREATIVE
+                            } else {
+                                0
+                            };
                         });
-                        for (slot, button) in [(-999, 0), (0, 1), (1, 1), (-999, 2)] {
+                        let kind = if creative { 2 << 2 } else { 0 };
+                        for (slot, button) in
+                            [(-999, kind), (0, kind | 1), (1, kind | 1), (-999, kind | 2)]
+                        {
                             prediction
                                 .click(&game.menu_env(), slot, button, Input::QuickCraft)
                                 .unwrap();
@@ -7287,8 +7299,16 @@ mod tests {
                         );
                         assert_eq!(result, expected, "{item} mod={is_mod}");
                         assert_eq!(predicted, expected, "{item} mod={is_mod}");
-                        assert_eq!(result.0 + result.1 + result.2, existing + carried);
+                        if !creative {
+                            assert_eq!(result.0 + result.1 + result.2, existing + carried);
+                        }
                     }
+                    game.lan
+                        .as_mut()
+                        .unwrap()
+                        .hub
+                        .guests
+                        .update(0, |guest| guest.game_mode = 0);
                     game.world.block_entities.get_mut(&pos).unwrap().slots_mut()[0] =
                         Some(ItemStack::new("minecraft:dirt", 2));
                     let mut prediction = Menu::new(if is_mod {

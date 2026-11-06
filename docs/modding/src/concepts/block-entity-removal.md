@@ -8,7 +8,7 @@ contract can be offered.
 ## What the existing paths do
 
 `Game::native_level_set_block` in `game/native_entity_refs.rs` checks the level and position, then
-calls `Game::native_set_block` in `game/native_hooks.rs`. The latter calls
+calls `Game::native_set_block` in `game/native_hooks/`. The latter calls
 `GameLevel::native_set_block` through `with_level`, then processes level events. The level method
 calls `behaviours.set_block` and creates a new block entity when the landed block needs one. This
 is the normal block lifecycle path; it is **not** currently made transactional by

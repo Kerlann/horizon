@@ -115,9 +115,9 @@ pub(crate) struct ValueSize {
 
 /// Validates value size at the boundary, before retaining or returning it.
 pub(crate) fn value_size(value: &Value) -> Result<ValueSize, Refusal> {
-    let mut pending = vec![value];
+    let (mut first, mut pending) = (Some(value), Vec::new());
     let mut size = ValueSize { cells: 0, bytes: 0 };
-    while let Some(value) = pending.pop() {
+    while let Some(value) = first.take().or_else(|| pending.pop()) {
         size.cells += 1;
         match value {
             Value::Str(s) => size.bytes += s.capacity(),

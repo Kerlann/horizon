@@ -927,31 +927,40 @@ impl<'a> Game<'a> {
     /// `level_players` one at a time, without collecting them.
     fn level_players_iter(&self) -> impl Iterator<Item = LevelPlayer> + '_ {
         let local = self.player_view().map(|p| LevelPlayer {
-            uuid: self
-                .level
-                .player_uuid
-                .map_or(0, horizon_client::lan::playerdata::ints_uuid),
+            uuid: horizon_client::lan::playerdata::ints_uuid(p.uuid),
             position: p.position,
             bounds: p.bounds,
             alive: p.alive,
             creative: p.creative,
             spectator: p.spectator,
         });
-        let guests = self.lan.iter().flat_map(|h| {
+        let guests = self.level_guests().map(|g| LevelPlayer {
+            uuid: g.uuid,
+            position: Vec3::new(g.position[0], g.position[1], g.position[2]),
+            bounds: super::lan_mobs::guest_bounds(g),
+            alive: !g.dead,
+            creative: g.creative(),
+            spectator: g.spectator(),
+        });
+        local.into_iter().chain(guests)
+    }
+    /// The UUIDs of `level_players`, in its order, for a query that only names
+    /// them: no `PlayerView`, so nothing is allocated per player.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(super) fn level_player_uuids(&self) -> impl Iterator<Item = u128> + '_ {
+        let local = (self.player.is_some() && !self.lan_acting_fake)
+            .then(|| horizon_client::lan::playerdata::ints_uuid(self.acting_uuid()));
+        local.into_iter().chain(self.level_guests().map(|g| g.uuid))
+    }
+    /// The guests in the level in place, past the acting one: `player_view`
+    /// already reads that guest's live body, and its record lags behind it.
+    fn level_guests(&self) -> impl Iterator<Item = &horizon_client::lan::guest::Guest> + '_ {
+        self.lan.iter().flat_map(|h| {
             h.hub
                 .guests
                 .iter()
-                .filter(|g| h.hub.here(g))
-                .map(|g| LevelPlayer {
-                    uuid: g.uuid,
-                    position: Vec3::new(g.position[0], g.position[1], g.position[2]),
-                    bounds: super::lan_mobs::guest_bounds(g),
-                    alive: !g.dead,
-                    creative: g.creative(),
-                    spectator: g.spectator(),
-                })
-        });
-        local.into_iter().chain(guests)
+                .filter(|g| h.hub.here(g) && self.lan_acting != Some(g.conn))
+        })
     }
     /// `Level.hasNearbyAlivePlayer` before a level is built for the spawn
     /// code: what a spawner asks first, every tick.

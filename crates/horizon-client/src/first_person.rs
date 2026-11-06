@@ -38,7 +38,7 @@ pub enum ItemPose {
     /// A spear being charged (`ItemUseAnimation.SPEAR`): the time held and
     /// the ticks since its last hit's feedback.
     Spear {
-        kinetic: crate::spear::Kinetic,
+        timing: crate::spear::UseTiming,
         time_held: f32,
         ticks_since_hit: f32,
     },
@@ -90,13 +90,13 @@ pub fn item_pose(left: bool, inverse_height: f32, attack: f32, pose: ItemPose) -
     }
     // The spear's own place in the hand, without the equip height.
     if let ItemPose::Spear {
-        kinetic,
+        timing,
         time_held,
         ticks_since_hit,
     } = pose
     {
         return Mat4::from_translation(Vec3::new(invert * 0.56, -0.52, -0.72))
-            * crate::spear::first_person_use(&kinetic, ticks_since_hit, time_held, !left);
+            * crate::spear::first_person_use(&timing, ticks_since_hit, time_held, !left);
     }
     if matches!(pose, ItemPose::Stab) {
         return m * crate::spear::first_person_attack(attack, !left);

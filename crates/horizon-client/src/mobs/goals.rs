@@ -841,17 +841,37 @@ impl Mob {
             }
         }
     }
-    /// The setter's own refusals (#1175), one rule both the write handle and
+    /// The setter's own refusal (#1175), one rule both the write handle and
     /// a goal tick's `set_target` ask: a brain-backed species' target is its
-    /// brain's to write (`getTarget` overrides it), and the three whose
-    /// setter side effects are not modeled. The read path does not ask this
-    /// — it reads a brain's own target back.
+    /// brain's to write (`getTarget` overrides it, #934). The read path does
+    /// not ask this — it reads a brain's own target back.
     pub fn refuses_set_target(&self) -> bool {
         super::ai::brain_target(self).is_some()
-            || matches!(
-                self.species(),
-                Species::Fox | Species::Enderman | Species::ZombifiedPiglin
-            )
+    }
+    /// `Mob.setTarget` with the species overrides' side effects (#933), for an
+    /// already validated target — what the write handle and a goal tick's
+    /// `set_target` store:
+    /// - `Fox.setTarget`: clearing the target ends its defending.
+    /// - `Enderman.setTarget`: a target opens the mouth (`DATA_CREEPY`) and
+    ///   stamps `targetChangeTime` (the daylight teleport waits 600 ticks from
+    ///   it); none closes the mouth and zeroes it. Its attack speed modifier
+    ///   follows the target itself ([`super::enderman::attacking_speed`]).
+    /// - `ZombifiedPiglin.setTarget`: a first target samples the first-anger
+    ///   sound delay and the alert interval; the AI step samples them, with
+    ///   the anger, on the tick it first sees the target, as for every other
+    ///   way the piglin gains one.
+    pub fn set_target(&mut self, target: Option<Who>) {
+        match self.species() {
+            Species::Fox if target.is_none() => {
+                super::fox::set_flag(self, super::fox::DEFENDING, false);
+            }
+            Species::Enderman => {
+                self.extra.flag = target.is_some();
+                self.extra.counter = if target.is_some() { self.age as i32 } else { 0 };
+            }
+            _ => {}
+        }
+        self.ai.target = target;
     }
     /// `Mob.asValidTarget` and the modeled `canAttack` overrides over the
     /// target's facts (#1175): one rule set both the write handle and a goal

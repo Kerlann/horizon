@@ -398,6 +398,7 @@ pub enum Action {
     },
 }
 pub struct Title {
+    rule_registry: std::sync::Arc<crate::gamerules::RuleRegistry>,
     /// The screen shown. Code here changes it through `set_mode`.
     pub mode: Mode,
     /// Set by the game while a mod listens to the screen hooks: `set_mode` then leaves
@@ -772,6 +773,28 @@ impl Title {
     pub fn take_requested(&mut self) -> Option<Mode> {
         self.requested.take()
     }
+    /// Supply the installed definitions for world creation.
+    pub fn set_rule_registry(&mut self, registry: std::sync::Arc<crate::gamerules::RuleRegistry>) {
+        fn rebind(mode: &mut Mode, registry: &std::sync::Arc<crate::gamerules::RuleRegistry>) {
+            match mode {
+                Mode::Create { options, .. }
+                | Mode::CreateFlat { options, .. }
+                | Mode::CreateBuffet { options, .. } => {
+                    options.rules.rebind_registry(registry.clone())
+                }
+                Mode::Error { return_to, .. } => rebind(return_to, registry),
+                _ => {}
+            }
+        }
+        rebind(&mut self.mode, &registry);
+        if let Some(mode) = &mut self.requested {
+            rebind(mode, &registry);
+        }
+        if let Some(screen) = self.rules.get_mut() {
+            screen.rebind_registry(registry.clone());
+        }
+        self.rule_registry = registry;
+    }
     /// Names the player for the `<NAME> IS YOU` splash; `name` is only asked for when that splash was rolled.
     pub fn with_user(mut self, name: impl FnOnce() -> String) -> Self {
         if self.splash_you {
@@ -797,6 +820,7 @@ impl Title {
         let mode = Mode::Main;
         let now = std::time::Instant::now();
         Self {
+            rule_registry: crate::gamerules::rule_registry(),
             mode,
             gated: false,
             requested: None,
@@ -859,7 +883,7 @@ impl Title {
         let worlds = list_worlds(&self.saves);
         self.create_return_to_main = worlds.is_empty();
         self.set_mode(if worlds.is_empty() {
-            Self::new_world()
+            self.new_world()
         } else {
             Mode::Select {
                 worlds,
@@ -867,13 +891,16 @@ impl Title {
             }
         });
     }
-    pub(crate) fn new_world() -> Mode {
+    pub(crate) fn new_world(&self) -> Mode {
         Mode::Create {
             name: lang::get_or("selectWorld.newWorld", "New World"),
             seed: String::new(),
             creative: false,
             focus: 0,
-            options: WorldOptions::default(),
+            options: WorldOptions {
+                rules: crate::gamerules::GameRules::with_registry(self.rule_registry.clone(), &[]),
+                ..WorldOptions::default()
+            },
         }
     }
     /// WorldSelectionList.handleNewLevels: a singleplayer list that comes
@@ -884,7 +911,7 @@ impl Title {
         *self.recent.borrow_mut() = None;
         if worlds.is_empty() {
             self.create_return_to_main = true;
-            self.set_mode(Self::new_world());
+            self.set_mode(self.new_world());
             return;
         }
         let selected = folder.and_then(|folder| {
@@ -1046,7 +1073,7 @@ impl Title {
     pub fn finish_preparing(&mut self) {
         self.preparing = false;
         if !matches!(self.mode, Mode::Create { .. }) {
-            self.set_mode(Self::new_world());
+            self.set_mode(self.new_world());
         }
     }
     /// `PackSelectionScreen.onFilesDrop`: a pack dropped on the window joins
@@ -3745,6 +3772,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                             &level,
                             world.commands,
                             &self.saves.join(&world.folder),
+                            self.rule_registry.clone(),
                         );
                         options.set_additional_data_packs(self.additional_data_packs.clone());
                         options.restore_feature_packs(&self.resources, &level);

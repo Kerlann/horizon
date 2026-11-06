@@ -160,7 +160,6 @@ mod tests {
         pub(super) struct NativeBlockRim;
         pub(super) struct NativeColoredLight;
         pub(super) struct NativeMinimap;
-        pub(super) struct NativeMod;
         pub(super) struct NativePanelEvent;
         pub(super) struct NativeScreen;
         #[derive(Default)]
@@ -387,6 +386,8 @@ mod tests {
             pub struct NativeArmorHurt;
             #[derive(Clone, Copy)]
             pub struct ArmPose;
+            #[derive(Clone, Copy)]
+            pub enum BlockScreenEffect {}
             #[derive(Clone, Copy, Debug, PartialEq, Eq)]
             pub enum EffectApplicable {
                 Allow,

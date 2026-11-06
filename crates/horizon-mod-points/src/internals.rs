@@ -253,9 +253,9 @@ pub use wit_bindgen::rt;
 /// A plain value as pre-order cells. Compound counts count children, not all descendants.
 #[cfg(any(target_arch = "wasm32", feature = "wasm-host"))]
 pub fn flatten(value: Value) -> Vec<Cell> {
-    let mut pending = vec![value];
+    let (mut first, mut pending) = (Some(value), Vec::new());
     let mut cells = Vec::new();
-    while let Some(value) = pending.pop() {
+    while let Some(value) = first.take().or_else(|| pending.pop()) {
         cells.push(match value {
             Value::None => Cell::None,
             Value::B(v) => Cell::B(v),

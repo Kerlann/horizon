@@ -437,7 +437,7 @@ impl Game<'_> {
             riding: self.riding.is_some(),
             hero: self.potions.effects.get("hero_of_the_village").is_some(),
             effects: self.potions.effects.list.iter().map(|e| e.id).collect(),
-            uuid: self.level.player_uuid.unwrap_or_default(),
+            uuid: self.acting_uuid(),
             allies: std::sync::Arc::new(self.player_allies()),
             remote: false,
             sleeping: self.sleeping.is_some(),
@@ -7030,10 +7030,7 @@ impl Game<'_> {
                 extra: None,
             };
             if let Some(effects) = give_stew {
-                stack.extra = Some(Box::new(horizon_client::item_data::StackData {
-                    stew_effects: effects,
-                    ..Default::default()
-                }));
+                stack.data_mut().stew_effects = effects;
             }
             if self.stack_in(selected).is_none() {
                 *self.stack_in_mut(selected) = Some(stack);

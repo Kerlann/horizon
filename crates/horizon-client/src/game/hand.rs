@@ -986,10 +986,7 @@ mod tests {
         assert!(shows_held_stack(&sword, &worn, true));
         // Another component (an anvil's repair cost) differs.
         let mut named = worn.clone();
-        named.1.as_mut().unwrap().extra = Some(Box::new(horizon_client::item_data::StackData {
-            repair_cost: 1,
-            ..Default::default()
-        }));
+        named.1.as_mut().unwrap().data_mut().repair_cost = 1;
         assert!(!shows_held_stack(&sword, &named, true));
         // The main hand changing hotbar slot to an equal stack: instant; to
         // a different count: animation.

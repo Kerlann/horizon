@@ -41,7 +41,7 @@ AREAS = [
     ("launcher", "Changes the launcher", r"^launcher/"),
     ("mods", "Area: mods, mod SDK, modpack porting",
      r"^crates/(?:horizon-mod|cargo-horizon-mod|horizon-port-pack)|" + _GAME
-     + r"(?:mods|mod_content|mod_list|native_\w+)\.rs$|^docs/(?:mods|native-mods|modpacks)"),
+     + r"(?:native_hooks/|(?:mods|mod_content|mod_list|native_\w+)\.rs$)|^docs/(?:mods|native-mods|modpacks)"),
     ("worldgen", "Area: world generation", r"^crates/horizon-world/src/worldgen/|/vanillagen\.rs$"),
     ("mobs", "Area: mobs, their AI, spawning and models",
      r"/mobs/|/mobs\.rs$|" + _GAME + r"(?:creatures|natural_spawning|spawners?|dragon|wither|villagers|piglins|golems"

@@ -594,12 +594,13 @@ mod tests {
     fn a_cauldron_takes_water_and_lava_whatever_their_components_and_a_mod_tank_none_with_them() {
         use super::{CauldronFluids, FluidAt, FluidStack, game_holds};
         mod_api::__private::part_tests::game_thread();
-        let potion = |fluid| FluidStack {
-            components: Some(Box::new(horizon_client::item_data::StackData {
-                potion: Some(Arc::from("minecraft:healing")),
-                ..Default::default()
-            })),
-            ..FluidStack::new(mod_api::__private::fluid_key(fluid).unwrap(), 1000)
+        let potion = |fluid| {
+            let mut components = horizon_client::item_data::StackData::default();
+            components.potion = Some(Arc::from("minecraft:healing"));
+            FluidStack {
+                components: Some(Box::new(components)),
+                ..FluidStack::new(mod_api::__private::fluid_key(fluid).unwrap(), 1000)
+            }
         };
         let cauldron = FluidAt::Cauldron(CauldronFluids::Empty);
         let tank = FluidAt::Mod(Arc::default());

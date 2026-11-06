@@ -121,11 +121,20 @@ fn build_mod_resources(
 fn install_mod_resources(
     game: &mut crate::game::Game<'_>,
     root: &horizon_assets::resource_source::ResourceRoot,
+    package: &Path,
 ) {
+    // The real loader publishes admission and resource views together. An
+    // inventory reload must see the package that supplied this fixture root.
+    game.mods.selected = vec![horizon_mods::selection::SelectedPackage {
+        path: package.to_owned(),
+        package: horizon_mods::Package::read(package).unwrap(),
+    }]
+    .into();
     game.options.resources = root.prepared().to_owned();
     game.pack.source = root.source().clone();
     game.pack.data_source = root.data().clone();
     game.pack.data_changes = root.data_changes().clone();
+    assert!(game.stage_enabled_inventory().unwrap().is_none());
 }
 
 fn request(root: &Path) -> WorldRequest {
@@ -220,7 +229,7 @@ fn missing_original_at_reload_preserves_the_published_data_and_reports_its_owner
         r#"{"enabled":["file/test"],"disabled":[]}"#,
     );
     with_game(|game| {
-        install_mod_resources(game, &resources);
+        install_mod_resources(game, &resources, &package);
         game.load_world(request(&world)).unwrap();
         let previous = game.fns.store.functions["reload_test:keep"].clone();
         let enabled = game.fns.enabled().to_vec();
@@ -314,7 +323,7 @@ fn server_reload_delivers_mod_files_overrides_and_preserves_all_data_on_failure(
     .into();
     mod_api::testing::with_mods(mods, || {
         with_game(|game| {
-            install_mod_resources(game, &resources);
+            install_mod_resources(game, &resources, &package);
             game.load_world(request(&world)).unwrap();
             assert_eq!(
                 *live.lock().unwrap(),
@@ -487,7 +496,7 @@ fn server_reload_skips_unparsable_files_and_delivers_the_rest() {
         .into(),
         || {
             with_game(|game| {
-                install_mod_resources(game, &resources);
+                install_mod_resources(game, &resources, &package);
                 game.load_world(request(&world)).unwrap();
                 assert_eq!(
                     *live.lock().unwrap(),
@@ -689,7 +698,7 @@ fn server_reload_retains_listeners_for_other_hooks() {
     mod_api::testing::with_mods(mods, || {
         with_game(|game| {
             assert!(game.native_reload_resources().listener(&key).is_none());
-            install_mod_resources(game, &resources);
+            install_mod_resources(game, &resources, &package);
             game.load_world(request(&world)).unwrap();
             let kept = game.native_reload_resources().listener(&key).unwrap();
             assert_eq!(*kept.live.lock().unwrap(), 2);

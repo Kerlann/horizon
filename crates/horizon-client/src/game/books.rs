@@ -914,7 +914,7 @@ impl Game<'_> {
     /// with the player's inventory, and the screen follows the block entity.
     fn lectern_button(&mut self, key: (i32, i32, i32), id: i32) {
         if self.remote.is_some() {
-            let _ = self.native_click_menu_button(id);
+            let _ = self.remote_button_click(id);
             return;
         }
         let Some(mut menu) = self.lectern_menu(key) else {

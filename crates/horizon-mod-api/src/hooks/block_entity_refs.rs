@@ -85,6 +85,18 @@ pub trait Helpers {
         target = "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_set_name"
     )]
     fn block_entity_set_name();
+    /// Read the players with this block's menu open (for a chest or barrel, the openers
+    /// `ContainerOpenersCounter` counts; for a furnace, hopper or other block menu, its viewers):
+    /// connected players in its level, not spectators, whose menu holds it; a double
+    /// chest's menu holds both halves. Fake players are left out, as the opener count
+    /// behind lids and `mod_container_viewers` leaves them out. Scans only when called.
+    /// None for a stale or unloaded entity, or on a client, which sees no menus.
+    #[helper(
+        side = "server",
+        receiver = "block_entity",
+        target = "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_viewers"
+    )]
+    fn block_entity_viewers();
     /// Read a snapshot of a mod block entity's menu data slots, not its item storage.
     /// Reads the server's entity or the client's own copy; None for vanilla/missing,
     /// stale or unloaded entities. Use item_slot for internal items, ITEMS for automation.

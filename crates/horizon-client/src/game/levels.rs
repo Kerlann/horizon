@@ -794,6 +794,7 @@ impl Game<'_> {
         {
             return;
         }
+        self.bind_level_attachments(dim);
         self.levels.heard_open.push(dim);
         self.native_level_load(dim.id());
         self.validate_mod_chunk_tickets(dim);
@@ -803,11 +804,11 @@ impl Game<'_> {
     /// each open they heard.
     fn native_level_closed(&mut self, dim: Dim) {
         self.remove_level_fake_players(dim.id());
-        let Some(i) = self.levels.heard_open.iter().position(|d| *d == dim) else {
-            return;
-        };
-        self.levels.heard_open.remove(i);
-        self.native_level_unload(dim.id());
+        if let Some(i) = self.levels.heard_open.iter().position(|d| *d == dim) {
+            self.levels.heard_open.remove(i);
+            self.native_level_unload(dim.id());
+        }
+        self.attachment_indexes.remove(&dim);
     }
 
     /// Every level still open closes with the server, however it ends

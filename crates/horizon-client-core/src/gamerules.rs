@@ -444,6 +444,25 @@ impl GameRules {
             minecart_improvements: features.iter().any(|f| f == MINECART_IMPROVEMENTS),
         }
     }
+    /// Reconcile values with installed definitions, retaining matching selections.
+    pub fn rebind_registry(&mut self, registry: Arc<RuleRegistry>) {
+        if Arc::ptr_eq(&self.registry, &registry) {
+            return;
+        }
+        let mut next = Self::with_registry(registry, &[]);
+        next.minecart_improvements = self.minecart_improvements;
+        for rule in self.available_rules() {
+            if let Some(value) = self.get(&rule.name) {
+                next.set(&rule.name, value);
+            }
+        }
+        self.unknown.clone_into(&mut next.unknown);
+        *self = next;
+    }
+    /// The immutable definitions used by these values.
+    pub fn registry(&self) -> &Arc<RuleRegistry> {
+        &self.registry
+    }
     /// GameRules.copy(enabledFeatures): keep available values, add defaults for
     /// newly enabled rules and discard rules absent from the target feature set.
     pub fn copy_with_features(&self, features: &[String]) -> Self {

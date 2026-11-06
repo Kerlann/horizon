@@ -87,6 +87,23 @@ pub enum Shape {
     Opaque(Option<String>),
 }
 
+impl Shape {
+    /// Whether a value may contain a borrow that a call-site result cannot respell safely.
+    /// Lifetime-bearing names include omitted lifetimes; opaque layouts are conservatively refused.
+    pub fn may_borrow(&self) -> bool {
+        match self {
+            Self::Ref { .. } | Self::Opaque(_) | Self::Wrapped(Wrapper::Cow, _) => true,
+            Self::Named(_, lifetimes) => *lifetimes != 0,
+            Self::Tuple(parts) | Self::Collection(_, parts) => parts.iter().any(Self::may_borrow),
+            Self::Array(inner, _)
+            | Self::Slice(inner)
+            | Self::Option(inner)
+            | Self::Wrapped(_, inner) => inner.may_borrow(),
+            Self::Scalar(_) | Self::Unit => false,
+        }
+    }
+}
+
 /// Scalars by name.
 const SCALARS: &[(&str, Scalar)] = &[
     ("bool", Scalar::Bool),
@@ -163,6 +180,7 @@ pub struct Field<'r> {
 /// The rule over one game's internals.
 pub struct Rule {
     named: HashMap<String, Named>,
+    symbols: std::collections::HashSet<String>,
     /// Import facts in each lexical module. Conflicting conditional imports stay unresolved.
     refs: HashMap<String, BTreeMap<String, Option<String>>>,
     memo: std::cell::RefCell<HashMap<String, Crossing>>,
@@ -276,6 +294,11 @@ impl Rule {
         }
         Self {
             named,
+            symbols: internals
+                .iter()
+                .filter(|e| e.cfg.is_empty())
+                .map(|e| bare(&e.path))
+                .collect(),
             refs,
             memo: Default::default(),
         }
@@ -312,7 +335,7 @@ impl Rule {
 
     /// Resolve import facts first, then explicit paths and declarations in the current module.
     /// A name that happens to be unique elsewhere is not proof of an import.
-    fn resolve(&self, module: &str, written: &syn::Path) -> Option<String> {
+    pub(crate) fn resolve(&self, module: &str, written: &syn::Path) -> Option<String> {
         let spelled = written
             .segments
             .iter()
@@ -337,7 +360,7 @@ impl Rule {
         let mut scope = module;
         let resolved = if let Some(rest) = rest.strip_prefix("crate::") {
             format!("{}::{rest}", module.split("::").next()?)
-        } else if self.named.contains_key(rest) {
+        } else if self.symbols.contains(rest) {
             rest.to_owned()
         } else {
             if let Some(tail) = rest.strip_prefix("self::") {
@@ -349,7 +372,7 @@ impl Rule {
             }
             format!("{scope}::{rest}")
         };
-        self.named.contains_key(&resolved).then_some(resolved)
+        self.symbols.contains(&resolved).then_some(resolved)
     }
 
     /// What `ty`, written in module `module` (where `Self` is `this`), is.

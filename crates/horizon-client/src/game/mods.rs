@@ -240,6 +240,13 @@ fn collect_standalone_models(role: ExecutionRole) -> Option<Vec<String>> {
     Game::native_standalone_models(&RegistrationContext::new(), &mut names);
     Some(names)
 }
+pub(super) fn collect_key_mappings<'declared>(
+    role: ExecutionRole,
+    declared: &'declared [(&'static str, mod_api::NativeKeyRegistration)],
+) -> &'declared [(&'static str, mod_api::NativeKeyRegistration)] {
+    if role.is_client() { declared } else { &[] }
+}
+
 /// The native mods' entity model layers (`native_layer_definitions`), kept
 /// once at start for `native_bake_layer`.
 pub(super) fn register_layer_definitions(role: ExecutionRole) {
@@ -972,6 +979,20 @@ pub(super) fn living_mod_types()
 mod tests {
     use super::*;
     use horizon_mods::runtime::{BuiltMod, Runtime};
+
+    #[test]
+    fn only_clients_collect_registered_keys() {
+        let declared = [(
+            "sample",
+            mod_api::NativeKeyRegistration::new("zoom", "key.keyboard.z"),
+        )];
+        assert_eq!(
+            collect_key_mappings(ExecutionRole::Client, &declared).len(),
+            1
+        );
+        assert!(collect_key_mappings(ExecutionRole::IntegratedServer, &declared).is_empty());
+        assert!(collect_key_mappings(ExecutionRole::DedicatedServer, &declared).is_empty());
+    }
 
     mod inventory {
         include!(concat!(

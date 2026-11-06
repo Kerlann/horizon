@@ -74,7 +74,7 @@ class AreaTests(unittest.TestCase):
             "crates/horizon-client/src/game/remote_vehicles.rs": "multiplayer",
             "crates/horizon-protocol/src/packets/play.rs": "multiplayer",
             "crates/horizon-mods/src/lib.rs": "mods",
-            "crates/horizon-client/src/game/native_hooks.rs": "mods",
+            "crates/horizon-client/src/game/native_hooks/mod.rs": "mods",
             "crates/horizon-world/src/datafix/v3.rs": "saves",
             "crates/horizon-client/src/game/commands/admin.rs": "commands",
             "crates/horizon-command/src/args.rs": "commands",

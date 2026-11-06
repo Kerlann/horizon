@@ -7,17 +7,29 @@ pub trait Helpers {
     )]
     fn living();
     #[helper(
-        side = "server",
+        side = "both",
         receiver = "living",
         target = "horizon_client::game::native_living_refs::Game<'_>::native_living_attribute_value"
     )]
     fn living_attribute_value();
     #[helper(
-        side = "server",
+        side = "both",
         receiver = "living",
         target = "horizon_client::game::native_living_refs::Game<'_>::native_living_attribute_base"
     )]
     fn living_attribute_base();
+    #[helper(
+        side = "both",
+        receiver = "living",
+        target = "horizon_client::game::native_living_refs::Game<'_>::native_living_attributes"
+    )]
+    fn living_attributes();
+    #[helper(
+        side = "both",
+        receiver = "living",
+        target = "horizon_client::game::native_living_refs::Game<'_>::native_living_attribute_modifiers"
+    )]
+    fn living_attribute_modifiers();
     #[helper(
         side = "server",
         receiver = "living",

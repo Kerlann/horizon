@@ -755,6 +755,94 @@ fn canonical_permissions_preserve_owner_and_fake_player_reads() {
     });
 }
 
+/// The UUIDs of the players in the level, checked against the full reader.
+fn level_uuids(game: &super::Game<'_>) -> Vec<u128> {
+    let uuids: Vec<u128> = game.level_player_uuids().collect();
+    let players: Vec<u128> = game.level_players().iter().map(|p| p.uuid).collect();
+    assert_eq!(uuids, players, "both enumerations select the same players");
+    uuids
+}
+
+/// The host in place, with a body and UUID 99.
+fn place_host(game: &mut super::Game<'_>) {
+    let mut body =
+        horizon_client::motion::PlayerMotion::new(game.motion, Vec3::new(0.0, 64.0, 0.0)).unwrap();
+    body.entity_id = 99;
+    game.player = Some(body);
+    game.level.player_uuid = Some([0, 0, 0, 99]);
+}
+
+/// A turn lists the acting player once, under their own UUID and with their
+/// live body. The host's body is displaced for the turn, so it is not listed.
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn level_players_name_each_body_once_during_turns() {
+    with_guests(|game| {
+        place_host(game);
+        assert_eq!(level_uuids(game), [99, 12, 13]);
+        game.as_guest(12, |game| {
+            assert_eq!(level_uuids(game), [12, 13]);
+            assert_eq!(game.player_view().unwrap().uuid, [0, 0, 0, 12]);
+            game.player.as_mut().unwrap().position.x = 40.0;
+            assert_eq!(game.level_players()[0].position.x, 40.0);
+            game.as_guest(13, |game| {
+                assert_eq!(level_uuids(game), [13, 12]);
+                assert!(game.as_guest(12, |_| ()).is_none());
+            })
+            .unwrap();
+            assert_eq!(level_uuids(game), [12, 13]);
+        })
+        .unwrap();
+        assert_eq!(level_uuids(game), [99, 12, 13]);
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn level_players_exclude_guests_in_other_levels() {
+    with_guests(|game| {
+        place_host(game);
+        let host = game.lan.as_mut().unwrap();
+        let elsewhere = host.hub.guests.connection_index(13).unwrap();
+        host.hub.guests.update(elsewhere, |guest| {
+            guest.dimension = "minecraft:the_nether".to_owned();
+        });
+        assert_eq!(level_uuids(game), [99, 12]);
+        game.as_guest(12, |game| assert_eq!(level_uuids(game), [12]))
+            .unwrap();
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn level_players_exclude_fake_players() {
+    with_guests(|game| {
+        let _serving = super::integrated::tests::install_serving(game, false);
+        place_host(game);
+        game.next_entity = 100;
+        let level = game.native_level(game.dim.id()).unwrap();
+        let fake = game.native_fake_player(level, 1234, "machine").unwrap();
+        let conn = game
+            .lan
+            .as_ref()
+            .unwrap()
+            .hub
+            .guests
+            .iter()
+            .find(|g| g.uuid == fake.uuid())
+            .unwrap()
+            .conn;
+        assert_eq!(level_uuids(game), [99, 12, 13]);
+        game.as_guest(conn, |game| {
+            assert_eq!(level_uuids(game), [12, 13]);
+            game.as_guest(12, |game| assert_eq!(level_uuids(game), [12, 13]))
+                .unwrap();
+        })
+        .unwrap();
+        assert_eq!(level_uuids(game), [99, 12, 13]);
+    });
+}
+
 /// A listener sees the newly granted criterion before its recipe reward on
 /// both a player's first tick and a resource reload.
 #[test]

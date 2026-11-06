@@ -182,6 +182,10 @@ registered twice is logged and left out. A property no mod registers reads 0, de
 
 `native_render_item_in_frame(entity_id, pos, stack, canceled)` runs before a visible item frame draws its item or map, including glow and invisible frames. Set `canceled` to hide the item without hiding the frame.
 
+## Block screen effects
+
+`native_extract_block_screen_effect(effect, state, pos, canceled)` is NeoForge's `ExtractBlockScreenEffectEvent`: once a frame for each of the first-person view's block overlays that is shown, before its quads are built. `Block` is the view-blocking block the camera is inside, `Water` the block at the eye while it is under water, and `Fire` fire's default state at the player's block while they burn (first person only). None of them fire for a spectator. Set `canceled` to leave that one overlay out; the other overlays and the HUD's camera overlays (vignette, pumpkin, portal, freezing) stay. With no listener the frame pays one `listened` check.
+
 ## Villager farming
 
 Farmers recognize mod blocks made from farmland and `CropBlock` templates, including declarations from
@@ -326,11 +330,11 @@ requires a farmer at work and `mob_griefing` enabled.
   (a button press on the server, on the mod block entity) and the helpers `native_item`, `native_screen_title`, `LevelRef::block`,
   `LevelRef::block_property` and `native_cursor`. A mod inserts items through the block's item capability,
   `level.capability(host, &ITEMS, pos, side)`.
-- `click_menu_button(button)`, a client helper, presses button `button` of the open menu as a click on one of its buttons does
+- `menu.click_button(host, button)`, on a client `MenuRef`, presses button `button` of the open menu as a click on one of its buttons does
   (`MultiPlayerGameMode.handleInventoryButtonClick`, `ServerboundContainerButtonClickPacket`); the server's menu decides what it does
   (`clickMenuButton`, and `menu_button` for a mod's menu). It is for a client mod's own input on a menu's screen where `screen_click`
-  doesn't come, such as a key or the wheel (`screen_key_pressed_pre`, `screen_mouse_scrolled_pre`). It is refused while no menu the
-  server opened is open.
+  doesn't come, such as a key or the wheel (`screen_key_pressed_pre`, `screen_mouse_scrolled_pre`). It returns `false` for a stale
+  handle and for the inventory menu, which no server opened.
 
 - What a server mod needs to guard land and move players. `native_right_click_block` hears a player's right
   click on a block before the block's own use (a chest, a door, a lever) and the item's, and may cancel it
@@ -444,6 +448,16 @@ requires a farmer at work and `mob_griefing` enabled.
   its own tick as it is now, if it is still the tick's block.
 
 - The commands a mod owns on the client, as NeoForge's `RegisterClientCommandsEvent`: `register_client_commands` is asked for a `NativeCommand` per usage (`x <mode:word>`, the same usage form as `register_commands`), so the chat box colours, completes and lists them, arguments included, like the game's own, and `command` runs them. A name the game already has keeps that command; a nonzero `level` has no meaning on the client and the command is left out with a log line. It replaces `commands`, which gave bare names: a mod that implemented it pushes `NativeCommand::new("name <args:text>")` instead. Asked at connect, never per frame.
+- The keys a mod registers on Options > Controls, as NeoForge's `RegisterKeyMappingsEvent`: call
+  `Registrar::register_key_mapping(NativeKeyRegistration::new("zoom", "key.keyboard.z").label("key.mymod.zoom"))`
+  from `Hooks::register`. Ownership comes from the registrar; invalid or duplicate local ids refuse startup.
+  `.category(...)` takes a translation key, `.modifiers(...)` sets shift/control/alt, and `.context(...)` takes
+  `KeyConflictContext::{Universal, InGame, Gui}`. Only client startup collects the retained declarations for Controls;
+  dedicated and integrated servers do not. One editor persists keys and modifiers in `horizon-mods.txt`.
+  Conflicts compare vanilla and mod bindings, context and modifiers, excluding unbound and both-default pairs.
+  `host.mod_key(mod_id, id)` returns the saved or declared `(key, ClientModifiers)`, or `None` for an unregistered id.
+  This registration does not listen for presses. Diverges from upstream: the old `mods` hook, `NativeMod.keys`
+  and the Options > Mods key editor are removed, with no compatibility route.
 - The `command` hook runs a client command: the local player's typed or clicked chat command, without its slash, before the server and the game's own commands see it; set `ran` when the mod ran it. Client-side, with the `ClientHost`. Contract version `2`: a mod written for `1` was given the side-typed host, and was also asked on a server for commands run there (command blocks, LAN guests, the console, the integrated server thread); now only the client asks, and only for its own player's commands.
 
 - Recipes of any type (`RecipeManager.getAllRecipesFor`), vanilla's (`minecraft:smelting`, `minecraft:campfire_cooking`) and a mod's own (`mymod:crusher`, for a machine or an altar) through one read: `host.recipes_of_type("minecraft:smelting")` gives each recipe in force, in file order, as a `Recipe`: its `id`, `kind`, `group`, typed `ingredients` and `results` (for shaped, shapeless and cooking recipes, as the game parsed them; a recipe the game cannot parse is not in force and not listed), `cooking_time` and `experience` for the cooking types, and its file's `json`, which is all a mod's own type has. The recipes are those of `data/<namespace>/recipe/` in vanilla, content mods (`.hmod`) and the world's data packs, with data packs merged and load conditions held, so a pack's override or removal shows; a type nobody uses gives nothing. `native_recipe_ingredient` and `native_recipe_result` read the usual fields, tags included (a bare id is read as `minecraft:`; items the game doesn't know are left out, and the helper gives nothing if none is left). The recipes are the server's table: on the server thread, a dedicated server or a LAN host; a client, the single-player window included, sees vanilla's and the content mods' recipes, not the world's data packs', unless a mod had the server send it the type (`native_datapack_sync`). All three give nothing outside a world. The game crafts the recipes of its own types itself, and shows none of a mod's own in the recipe book; `/reload` reads a data pack's again, so look them up again when you need them. The lookup borrows the table, with no copy.
@@ -2611,14 +2625,23 @@ handle, an entity the client doesn't track and a level it doesn't show:
   player swap an outer player's displaced record is unavailable, and during a player's turn the other
   players' handles read `None` until the hub is back.
 - `living.attribute_value(host, id)` is `AttributeMap.getValue` and `attribute_base` is `getBaseValue`, for a
-  player, a guest, a mob, an armor stand and the dragon (`None` for an attribute the entity type lacks, a stale
-  handle, or on a client). A mob, a stand and the dragon answer from a live attribute map built from the type's
+  player, a guest, a mob, an armor stand and the dragon (`None` for an attribute the entity type lacks or a stale
+  handle). A mob, a stand and the dragon answer from a live attribute map built from the type's
   defaults, the saved `attributes` list (bases and permanent modifiers, with their ids), and the attribute modifiers
   of the items they hold and wear, put on and taken off slot by slot in `EquipmentSlot` order as
   `LivingEntity.collectEquipmentChanges` does (transient: never saved). The map is built when first needed. Mob
   behavior still reads the type's defaults, so a modifier does not yet change how a mob moves or hits. An item's
   modifiers are the stack's own `attribute_modifiers` component or its item type's, as `item_attribute_modifier`
-  leaves them.
+  leaves them. On a client the reads answer for the local player only, from the client's own copy of the synced
+  instances (`ClientboundUpdateAttributes`, the type's defaults before the server sends any); every other entity
+  reads `None` there, the client keeping no attribute map of another entity's, only the few fields it draws
+  (`handleUpdateAttributes` for a mob extracts its maximum health and scale for the renderer).
+- `living.attributes(host)` lists the ids of the attributes the entity's type has (the holder's attribute set the
+  value and base reads answer from), in registry order. `living.attribute_modifiers(host, id)` is
+  `AttributeInstance.getModifiers`: the attribute's modifiers in the order they were added — a mod's transient and
+  permanent ones, the saved list's, and what the worn and held items grant. An attribute no modifier is on answers
+  an empty list; `None` for an attribute the entity type lacks, a stale handle, or on a client for any entity but
+  the local player. Diverges from upstream: new helpers.
 - The writes take players, guests (in their own turn), mobs and armor stands, and answer false for an attribute the
   type lacks, the dragon (`/attribute` refuses it, and nothing reads its attributes yet), a stale handle, or on a
   client. `living.add_attribute_modifier(host, id, modifier, lifetime)` is `AttributeInstance.addTransientModifier`
@@ -2688,6 +2711,9 @@ handle, an entity the client doesn't track and a level it doesn't show:
 - `player.open_menu(host, block_entity)` opens its menu on the server and returns true only when opened. It returns
   false for stale or wrong-level handles, non-providers, cancelled opens, and players without a connection (including
   fake players), since no connection can receive the menu.
+- `block_entity.viewers(host)` lists the players with its container open on the server, read from their open menus
+  when called: players in its level, not spectators or fake players, a double chest's menu on both halves. `None` for
+  a stale handle or a client.
 - `level.block_shape(host, pos, kind)` reads block-local outline or collision boxes with an empty context. It returns
   `None` for a client, a stale handle, or a closed level; parked levels can be read.
 - `level.entities_in(host, min, max)` lists resolvable entities whose boxes intersect the given box in the level in place; see its method documentation for the kinds and tick-time visibility not yet covered.
@@ -2718,8 +2744,12 @@ to a complete gesture. All actions are validated before the first is predicted o
 normal `ContainerClick` path. A stale handle, invalid slot/hotbar index, creative-only action in survival,
 spectator, non-client host or creative inventory screen returns `false` without side effects.
 `true` is submission, not server acceptance; authoritative slot/cursor corrections still win.
+`menu.close(host)` closes the menu's open screen as Escape does (`AbstractContainerScreen.onClose`,
+`LocalPlayer.closeContainer`, which sends `ServerboundContainerClosePacket`), and `menu.click_button(host, button)`
+sends `ServerboundContainerButtonClickPacket`. Both return `false` for a stale handle or a non-client host; `close` also
+while the menu's screen is not open, and `click_button` for the inventory menu.
 See [A menu's slots](../concepts/trait-mods.md#a-menus-slots) for actions and an example.
-Diverges from upstream: new helper.
+Diverges from upstream: new helpers.
 
 ### Mob AI goals
 

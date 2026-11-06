@@ -924,6 +924,59 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn creation_rule_selection_reaches_the_saved_world() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::gamerules::{GameRules, Rule, RuleRegistry, Value};
+        let rule = Rule {
+            name: "example:enabled".into(),
+            category: "example:machines".into(),
+            default: Value::Bool(true),
+            min: 0,
+            max: 0,
+        };
+        let registry =
+            Arc::new(RuleRegistry::with_bool_rules(&["example:machines".into()], &[rule]).unwrap());
+        let mut create = horizon_client::title::WorldOptions {
+            rules: GameRules::with_registry(registry.clone(), &[]),
+            ..Default::default()
+        };
+        assert!(create.rules.set("example:enabled", Value::Bool(false)));
+        let dir = std::env::current_dir()
+            .unwrap()
+            .join("target")
+            .join(format!("creation-rules-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        with_game(|game| {
+            let request = WorldRequest {
+                save_root: dir.clone(),
+                folder: "test".into(),
+                name: Some("test".into()),
+                seed: Some(1),
+                creative: true,
+                create: Some(create.clone()),
+                rule_registry: registry.clone(),
+            };
+            assert!(Arc::ptr_eq(
+                request.create.as_ref().unwrap().rules.registry(),
+                &request.rule_registry
+            ));
+            game.load_world(request).unwrap();
+            assert_eq!(
+                game.ui.rules.get("example:enabled"),
+                Some(Value::Bool(false))
+            );
+            assert!(Arc::ptr_eq(&game.level.rule_registry, &registry));
+            game.save_game_with(true).unwrap();
+        });
+        assert_eq!(
+            GameRules::load_with_registry(&dir, &[], registry).get("example:enabled"),
+            Some(Value::Bool(false))
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn worker_panics_reach_the_client() {
         let loader = WorldLoader {
             handle: std::thread::spawn(|| panic!("broken world initialization")),

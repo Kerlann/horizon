@@ -14,7 +14,7 @@ pub trait Hooks {
         contract = "listen",
         host = "level",
         neoforge = "LivingDamageEvent.Post",
-        target = "horizon_client::game::native_hooks::HitLevel<'_>::native_living_damage_post"
+        target = "horizon_client::game::native_hooks::living_damage_post::HitLevel<'_>::native_living_damage_post"
     )]
     fn living_damage_post();
 }

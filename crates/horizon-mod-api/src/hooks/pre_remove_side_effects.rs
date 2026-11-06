@@ -15,7 +15,7 @@ pub trait Hooks {
         out = "drops",
         scope = "block_entity",
         key = "entity",
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_pre_remove_side_effects"
+        target = "horizon_client::game::native_hooks::pre_remove_side_effects::GameLevel<'_>::native_pre_remove_side_effects"
     )]
     fn pre_remove_side_effects();
 }

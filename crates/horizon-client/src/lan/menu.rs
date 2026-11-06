@@ -1151,9 +1151,7 @@ fn quick_craft(
                     max,
                     item_max,
                 );
-                if kind != 2 || !view.guest.creative() {
-                    remaining -= i64::from(new_count) - i64::from(existing);
-                }
+                remaining -= i64::from(new_count) - i64::from(existing);
                 view.set(
                     i,
                     Some(ItemStack {
@@ -1689,7 +1687,7 @@ mod tests {
     /// `AbstractContainerMenu.isValidQuickcraftType`: quick-craft type 2 (a
     /// clone drag) is for players with infinite materials only, and type 3 is
     /// no type at all. A survival guest that sends either moves nothing; a
-    /// creative guest's clone drag fills the slots and keeps its stack.
+    /// creative guest's clone drag fills the slots and consumes its cursor.
     #[test]
     fn a_clone_drag_needs_infinite_materials() {
         let rules = SwapRules;
@@ -1753,8 +1751,8 @@ mod tests {
         assert_eq!(view.get(0).map(|s| s.count), Some(32));
         assert_eq!(view.get(1).map(|s| s.count), Some(32));
         assert_eq!(view.guest.carried, None);
-        // With infinite materials a clone drag goes through: both slots take
-        // the whole stack and the cursor keeps it.
+        // With infinite materials a clone drag goes through: both slots fill
+        // and vanilla subtracts the placed counts from the cursor.
         view.guest.game_mode = crate::lan::guest::CREATIVE;
         view.guest.carried = Some(ItemStack::new("minecraft:stone", 64));
         click(&mut view, &mut drag, 0, 2 << 2, input::QUICK_CRAFT, &rules);
@@ -1784,7 +1782,7 @@ mod tests {
         );
         assert_eq!(view.get(0).map(|s| s.count), Some(64));
         assert_eq!(view.get(2).map(|s| s.count), Some(64));
-        assert_eq!(view.guest.carried.as_ref().map(|s| s.count), Some(64));
+        assert_eq!(view.guest.carried, None);
     }
 
     struct SwapRules;

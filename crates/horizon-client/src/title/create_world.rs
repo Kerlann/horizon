@@ -98,6 +98,7 @@ impl WorldOptions {
         level: &crate::save::Level,
         commands: bool,
         dir: &std::path::Path,
+        registry: std::sync::Arc<crate::gamerules::RuleRegistry>,
     ) -> Self {
         let generation = crate::save::WorldGen::read(dir).unwrap_or_default();
         let (pack_dir, data_packs) = crate::datapack::for_recreate(dir);
@@ -115,7 +116,11 @@ impl WorldOptions {
                 .flatten(),
             structures: generation.structures,
             bonus_chest: generation.bonus_chest,
-            rules: crate::gamerules::GameRules::load_with_features(dir, &level.enabled_features),
+            rules: crate::gamerules::GameRules::load_with_registry(
+                dir,
+                &level.enabled_features,
+                registry,
+            ),
             data_packs,
             pack_dir,
             ..Self::default()

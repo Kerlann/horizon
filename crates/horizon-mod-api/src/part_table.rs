@@ -94,6 +94,7 @@ fn insert_part<P: ?Sized>(
 #[derive(Clone, Default)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct Parts {
+    key_mappings: Vec<(&'static str, super::NativeKeyRegistration)>,
     /// Block parts, and block entity parts as the block parts they also are.
     blocks: HashMap<Box<str>, Vec<Attached<dyn BlockPart>>>,
     /// Block entity parts by block, for the hooks asked by block (`block_entity`, `screen`).
@@ -362,6 +363,11 @@ struct Installed {
     controllers: Vec<ControllerInfo>,
     structure_types: Vec<super::structure_type::StructureTypeInfo>,
     hook_bits: Vec<bool>,
+}
+
+/// Owner-bound declarations retained for client mod-list rebuilds.
+pub fn key_mappings() -> &'static [(&'static str, super::NativeKeyRegistration)] {
+    installed().map_or(&[], |installed| &installed.keys.key_mappings)
 }
 
 /// The block entity types mods registered.
@@ -1013,6 +1019,9 @@ pub trait Registrar {
     /// `LoadingValidationCallback`). A world's tickets of a controller no loaded mod registers are
     /// dropped when it loads.
     fn register_ticket_controller(&mut self, name: &str, validates: bool) -> TicketController;
+    /// Register a Controls binding owned by the calling mod (`RegisterKeyMappingsEvent`).
+    /// Called from `Hooks::register`; invalid or duplicate local ids refuse startup.
+    fn register_key_mapping(&mut self, mapping: super::NativeKeyRegistration);
     /// Attach `part`, of kind `kind` (its type's name), to block `block`.
     fn attach_block_part(
         &mut self,
@@ -1469,6 +1478,27 @@ impl PartRegistrar {
 }
 
 impl Registrar for PartRegistrar {
+    fn register_key_mapping(&mut self, mapping: super::NativeKeyRegistration) {
+        if mapping.id.is_empty()
+            || !mapping
+                .id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"_.-".contains(&byte))
+            || self
+                .parts
+                .key_mappings
+                .iter()
+                .any(|(owner, prior)| *owner == self.mod_id && prior.id == mapping.id)
+        {
+            self.refused.push(format!(
+                "mod {}: duplicate or invalid key mapping {:?}",
+                self.mod_id, mapping.id
+            ));
+            return;
+        }
+        self.parts.key_mappings.push((self.mod_id, mapping));
+    }
+
     fn game_rule_category(&mut self, id: &str) -> Result<(), super::GameRuleError> {
         let result = (|| {
             let id = self.game_rule_id(id)?;
@@ -5588,6 +5618,25 @@ pub mod tests {
     }
 
     #[test]
+    fn key_mappings_are_owned_and_duplicates_refuse_startup() {
+        let mut registrar = super::PartRegistrar::new("first");
+        registrar.register_key_mapping(NativeKeyRegistration::new("zoom", "key.keyboard.z"));
+        registrar.register_key_mapping(NativeKeyRegistration::new("zoom", "key.keyboard.r"));
+        registrar.register_key_mapping(NativeKeyRegistration::new("second:zoom", "key.keyboard.z"));
+        registrar.mod_id = "second";
+        registrar.register_key_mapping(NativeKeyRegistration::new("zoom", "key.keyboard.z"));
+        assert_eq!(registrar.refused.len(), 2);
+        let owners: Vec<_> = registrar
+            .parts
+            .key_mappings
+            .iter()
+            .map(|(owner, _)| *owner)
+            .collect();
+        assert_eq!(owners, ["first", "second"]);
+        assert_eq!(registrar.parts.key_mappings[0].1.key, "key.keyboard.z");
+    }
+
+    #[test]
     fn a_ticket_controller_registered_twice_refuses_the_mods_naming_mod_and_id() {
         let mut r = super::PartRegistrar::new("first");
         r.register_ticket_controller("quarry", true);
@@ -6313,10 +6362,8 @@ pub mod tests {
 
     #[cfg(test)]
     fn potion(amount: u32, potion: &str) -> FluidStack {
-        let components = horizon_items::item_data::StackData {
-            potion: Some(Arc::from(potion)),
-            ..Default::default()
-        };
+        let mut components = horizon_items::item_data::StackData::default();
+        components.potion = Some(Arc::from(potion));
         FluidStack {
             components: Some(Box::new(components)),
             ..FluidStack::new(

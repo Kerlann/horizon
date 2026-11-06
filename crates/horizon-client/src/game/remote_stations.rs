@@ -165,7 +165,7 @@ impl Game<'_> {
         if let Some((container, _)) = self.remote.as_ref().and_then(|r| r.menu.as_ref())
             && self.remote_station_open(*container)
         {
-            let _ = self.native_click_menu_button(button);
+            let _ = self.remote_button_click(button);
         }
     }
 }

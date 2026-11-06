@@ -199,6 +199,7 @@ impl Game<'_> {
     }
 
     pub(super) fn native_lifecycle_open_started(&mut self) {
+        self.attachment_indexes.clear();
         self.native_lifecycle
             .begin_open(self.native_lifecycle_authority());
     }
@@ -218,6 +219,7 @@ impl Game<'_> {
         if let Some(context) = self.native_lifecycle.world_open_failed() {
             self.native_world_lifecycle(&context, WorldPhase::WorldOpenFailed, error_text);
         }
+        self.attachment_indexes.clear();
     }
 
     /// Report a server-loop or shutdown failure once and retire its epoch.
@@ -228,6 +230,7 @@ impl Game<'_> {
         if let Some(context) = self.native_lifecycle.world_close_failed() {
             self.native_world_lifecycle(&context, WorldPhase::WorldCloseFailed, error_text);
         }
+        self.attachment_indexes.clear();
     }
 
     /// After the final save, before the lock release. Client epochs retire
@@ -240,6 +243,7 @@ impl Game<'_> {
         if let Some(context) = self.native_lifecycle.world_close_final() {
             self.native_world_lifecycle(&context, WorldPhase::WorldCloseFinal, "");
         }
+        self.attachment_indexes.clear();
     }
 
     pub(super) fn native_lifecycle_server_tick_start(&mut self, world_running: bool) {

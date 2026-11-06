@@ -14,7 +14,7 @@ pub trait Hooks {
         side = "server",
         contract = "listen",
         neoforge = "CropGrowEvent.Pre",
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_crop_grow_pre"
+        target = "horizon_client::game::native_hooks::crop_grow::GameLevel<'_>::native_crop_grow_pre"
     )]
     fn crop_grow_pre();
     /// A crop-like block grew (NeoForge's `CropGrowEvent.Post`).
@@ -25,7 +25,7 @@ pub trait Hooks {
         side = "server",
         contract = "listen",
         neoforge = "CropGrowEvent.Post",
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_crop_grow_post"
+        target = "horizon_client::game::native_hooks::crop_grow::GameLevel<'_>::native_crop_grow_post"
     )]
     fn crop_grow_post();
 }

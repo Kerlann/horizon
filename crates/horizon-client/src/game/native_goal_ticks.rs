@@ -366,7 +366,7 @@ impl GoalCxBackend for GoalCx<'_, '_> {
                 Some(Resolved::Dragon(_)) | None => return false,
             },
         };
-        self.m.ai.target = who;
+        self.m.set_target(who);
         true
     }
 

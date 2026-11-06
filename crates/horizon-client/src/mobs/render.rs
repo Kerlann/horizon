@@ -3306,10 +3306,7 @@ mod tests {
         // Undyed leather: the colour the leather layer has when undyed.
         assert_eq!(armor_tint(Some(0xA06540), Some(&stack)), abgr(0xA06540));
         // Dyed: the stack's own colour.
-        stack.extra = Some(Box::new(crate::item_data::StackData {
-            dyed_color: Some(0x0000FF),
-            ..Default::default()
-        }));
+        stack.data_mut().dyed_color = Some(0x0000FF);
         assert_eq!(armor_tint(Some(0xA06540), Some(&stack)), abgr(0x0000FF));
         // A layer that is not dyeable is not tinted.
         assert_eq!(armor_tint(None, Some(&stack)), 0xFFFF_FFFF);
