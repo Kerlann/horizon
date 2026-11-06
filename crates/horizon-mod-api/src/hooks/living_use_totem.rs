@@ -17,7 +17,7 @@ pub trait Hooks {
         neoforge = "LivingUseTotemEvent",
         cancellable = true,
         version = 2,
-        target = "horizon_client::game::native_hooks::HitLevel<'_>::native_living_use_totem"
+        target = "horizon_client::game::native_hooks::living_use_totem::HitLevel<'_>::native_living_use_totem"
     )]
     fn living_use_totem();
 }

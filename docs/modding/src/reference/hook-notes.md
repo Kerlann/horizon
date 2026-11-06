@@ -182,6 +182,10 @@ registered twice is logged and left out. A property no mod registers reads 0, de
 
 `native_render_item_in_frame(entity_id, pos, stack, canceled)` runs before a visible item frame draws its item or map, including glow and invisible frames. Set `canceled` to hide the item without hiding the frame.
 
+## Block screen effects
+
+`native_extract_block_screen_effect(effect, state, pos, canceled)` is NeoForge's `ExtractBlockScreenEffectEvent`: once a frame for each of the first-person view's block overlays that is shown, before its quads are built. `Block` is the view-blocking block the camera is inside, `Water` the block at the eye while it is under water, and `Fire` fire's default state at the player's block while they burn (first person only). None of them fire for a spectator. Set `canceled` to leave that one overlay out; the other overlays and the HUD's camera overlays (vignette, pumpkin, portal, freezing) stay. With no listener the frame pays one `listened` check.
+
 ## Villager farming
 
 Farmers recognize mod blocks made from farmland and `CropBlock` templates, including declarations from
@@ -2707,6 +2711,9 @@ handle, an entity the client doesn't track and a level it doesn't show:
 - `player.open_menu(host, block_entity)` opens its menu on the server and returns true only when opened. It returns
   false for stale or wrong-level handles, non-providers, cancelled opens, and players without a connection (including
   fake players), since no connection can receive the menu.
+- `block_entity.viewers(host)` lists the players with its container open on the server, read from their open menus
+  when called: players in its level, not spectators or fake players, a double chest's menu on both halves. `None` for
+  a stale handle or a client.
 - `level.block_shape(host, pos, kind)` reads block-local outline or collision boxes with an empty context. It returns
   `None` for a client, a stale handle, or a closed level; parked levels can be read.
 - `level.entities_in(host, min, max)` lists resolvable entities whose boxes intersect the given box in the level in place; see its method documentation for the kinds and tick-time visibility not yet covered.

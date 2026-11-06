@@ -60,6 +60,7 @@ pub(super) fn generate(
     let contexts = catalog.draw_contexts.as_slice();
     let api_source = fs::read_to_string(root.join("crates/horizon-mod-api/src/lib.rs"))
         .map_err(|e| e.to_string())?;
+    let api_source = super::exports::expand(root, &api_source)?;
     let types = api_types(&api_source, code)?;
     let mut game = Vec::new();
     game_methods(

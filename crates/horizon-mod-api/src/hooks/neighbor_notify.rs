@@ -16,7 +16,7 @@ pub trait Hooks {
         out = "cancel",
         neoforge = "BlockEvent.NeighborNotifyEvent",
         cancellable = true,
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_neighbor_notify"
+        target = "horizon_client::game::native_hooks::neighbor_notify::GameLevel<'_>::native_neighbor_notify"
     )]
     fn neighbor_notify();
 }

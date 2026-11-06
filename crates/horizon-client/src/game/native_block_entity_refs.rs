@@ -5,6 +5,7 @@ use super::{Game, transactions::After};
 use horizon_client::{
     block_entity_nbt,
     containers::{BlockEntity, ModBlockEntity},
+    lan::menu::{Menu, Slots},
     save,
     world::World,
 };
@@ -428,6 +429,61 @@ impl Game<'_> {
         }
     }
 
+    /// The players whose open menu holds this block entity's container (for openers'
+    /// containers, `ContainerOpenersCounter.getEntitiesWithContainerOpen`'s players), from the menus the opener counts read
+    /// (`tick_mod_container_viewers`, `ChestBlockEntity$1.isOwnContainer`). Guests in
+    /// its level, not spectators nor fake players, then the acting player for a menu
+    /// their action opened, which the hub records when the action ends. None for a
+    /// stale handle or a client.
+    pub(super) fn native_block_entity_viewers(
+        &self,
+        entity: BlockEntityRef,
+    ) -> Option<Vec<PlayerRef>> {
+        if !self.is_logical_server() {
+            return None;
+        }
+        self.native_block_entity_target(entity)?;
+        let epoch = self.native_lifecycle.epoch()?;
+        let level = entity.fields().level;
+        let [x, y, z] = entity.fields().position;
+        let key = (x, y, z);
+        let mut viewers: Vec<PlayerRef> = self
+            .lan
+            .iter()
+            .flat_map(|host| host.hub.guests.simulation_iter())
+            .filter(|g| {
+                // The acting guest's mode is live in `Game` during its turn; the hub
+                // hears of a change only in `leave_guest`.
+                let spectator = if self.lan_acting_uuid == Some(g.uuid) {
+                    self.spectator()
+                } else {
+                    g.spectator()
+                };
+                g.participates_online()
+                    && g.placed
+                    && !spectator
+                    && g.dimension == level.dimension()
+                    && g.menu.as_ref().is_some_and(|m| menu_holds(m, key))
+            })
+            .filter_map(|g| {
+                let id = u32::try_from(g.entity_id).ok()?;
+                Some(player_ref(mod_api::EntityRef::new(epoch, id), g.uuid))
+            })
+            .collect();
+        if self.native_level_in_place(level)
+            && !self.lan_acting_fake
+            && !self.spectator()
+            && self
+                .container
+                .is_some_and(|open| open == key || self.chest_other_half(open) == Some(key))
+            && let Some(player) = self.native_acting_player()
+            && !viewers.contains(&player)
+        {
+            viewers.push(player);
+        }
+        Some(viewers)
+    }
+
     /// Sets the custom name, or clears it with None, as an anvil-renamed item placed with
     /// `components` sets `CustomName`. Plain text only. Clients get a block entity update.
     /// False for a block entity that isn't nameable, a stale handle, a client or another
@@ -531,6 +587,17 @@ fn loaded_block_entity(world: &World, [x, y, z]: [i32; 3]) -> Option<&BlockEntit
         .block_entities
         .get(&(x, y, z))
         .filter(|entity| !save::block_entity_placeholder(entity))
+}
+
+/// Whether an open menu holds the container at `key` (`isOwnContainer`): a double
+/// chest's holds both halves, an ender chest's the block it was opened from.
+fn menu_holds(menu: &Menu, key: (i32, i32, i32)) -> bool {
+    match menu.slots {
+        Slots::Block(at) => at == key,
+        Slots::Double(first, second) => first == key || second == key,
+        Slots::Ender => menu.pos == Some(key),
+        Slots::Native => false,
+    }
 }
 
 #[cfg(test)]
@@ -714,6 +781,122 @@ mod tests {
             }
             game.world.block_entities.remove(&(2, 64, 0));
             assert!(!player.open_menu(game, furnace));
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn viewers_follow_open_menus_per_level_and_leave_out_fake_players() {
+        use super::super::Dim;
+        use horizon_world::chunk::BlockState;
+        use mod_api::{EntityRef, Host, NativeBlockUpdateFlags};
+        super::super::native_guest_turn_tests::with_guests(|game| {
+            game.options.dedicated = Some(Vec::new());
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let level = game.native_level("minecraft:overworld").unwrap();
+            let chest = |game: &mut Game<'_>, level, x: i32, kind: &str| {
+                let state = game
+                    .pack
+                    .assets
+                    .registry
+                    .resolve(&BlockState {
+                        name: "minecraft:chest".into(),
+                        properties: [
+                            ("facing".into(), "north".into()),
+                            ("type".into(), kind.into()),
+                            ("waterlogged".into(), "false".into()),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    })
+                    .unwrap();
+                assert!(game.native_level_set_block(
+                    level,
+                    [x, 64, 0],
+                    state,
+                    NativeBlockUpdateFlags::NEIGHBORS
+                ));
+                game.native_block_entity_ref(level, [x, 64, 0]).unwrap()
+            };
+            let single = chest(game, level, 0, "single");
+            let left = chest(game, level, 6, "left");
+            let right = chest(game, level, 7, "right");
+            let epoch = game.native_lifecycle.epoch().unwrap();
+            // with_guests: uuids and entity ids 12 and 13.
+            let guest12 = player_ref(EntityRef::new(epoch, 12), 12);
+            let guest13 = player_ref(EntityRef::new(epoch, 13), 13);
+            let host: &dyn Host = game;
+            assert_eq!(single.viewers(host), Some(vec![]));
+
+            // Two players open the chest, then close it one by one.
+            assert!(guest12.open_menu(game, single));
+            assert!(guest13.open_menu(game, single));
+            assert_eq!(single.viewers(game), Some(vec![guest12, guest13]));
+            game.guest_close_all(12);
+            assert_eq!(single.viewers(game), Some(vec![guest13]));
+            game.guest_close_all(13);
+            assert_eq!(single.viewers(game), Some(vec![]));
+
+            // A menu the acting player's action opened counts before the hub records it,
+            // and only once when the hub already has it.
+            game.as_guest(13, |game| {
+                game.container = Some((0, 64, 0));
+                assert_eq!(single.viewers(game), Some(vec![guest13]));
+                game.container = None;
+            })
+            .unwrap();
+            assert!(guest12.open_menu(game, single));
+            game.as_guest(12, |game| {
+                game.container = Some((0, 64, 0));
+                assert_eq!(single.viewers(game), Some(vec![guest12]));
+                game.container = None;
+            })
+            .unwrap();
+            game.guest_close_all(12);
+
+            // A guest that turns spectator during its own turn stops being a viewer then,
+            // though the hub still has the old mode until the turn ends.
+            assert!(guest12.open_menu(game, single));
+            game.as_guest(12, |game| {
+                assert!(game.set_game_mode(horizon_client::command::args::GameMode::Spectator));
+                assert_eq!(single.viewers(game), Some(vec![]));
+            })
+            .unwrap();
+            game.guest_close_all(12);
+            game.as_guest(12, |game| {
+                assert!(game.set_game_mode(horizon_client::command::args::GameMode::Survival));
+            })
+            .unwrap();
+
+            // A double chest's menu holds both halves, whichever was opened.
+            assert!(guest12.open_menu(game, right));
+            assert_eq!(left.viewers(game), Some(vec![guest12]));
+            assert_eq!(right.viewers(game), Some(vec![guest12]));
+            assert_eq!(single.viewers(game), Some(vec![]));
+
+            // A fake player holding the same menu is not a viewer.
+            assert!(guest13.open_menu(game, left));
+            let mut fake = game.lan.as_mut().unwrap().hub.guests.remove(1);
+            fake.kind = horizon_client::lan::guest::GuestKind::Fake;
+            game.lan.as_mut().unwrap().hub.guests.insert(1, fake);
+            assert_eq!(left.viewers(game), Some(vec![guest12]));
+
+            // The same position in another level has none of these viewers.
+            let nether = LevelRef::new(epoch, "minecraft:the_nether");
+            game.enter_level(Dim::Nether).unwrap();
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let nether_right = chest(game, nether, 7, "single");
+            assert_eq!(nether_right.viewers(game), Some(vec![]));
+            assert_eq!(right.viewers(game), Some(vec![guest12]), "parked level");
+            game.enter_level(Dim::Overworld).unwrap();
+
+            // A stale handle reads None.
+            game.world.block_entities.remove(&(7, 64, 0));
+            assert_eq!(right.viewers(game), None);
         });
     }
 

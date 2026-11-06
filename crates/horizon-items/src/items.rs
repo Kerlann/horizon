@@ -155,6 +155,8 @@ pub struct ItemInfo {
     pub can_always_eat: bool,
     /// `consumable`: its timing, sound, particles and `on_consume_effects`.
     pub consumable: Option<horizon_world::consumable::Consumable<String, ConsumeEffect>>,
+    /// Kinetic pose timing decoded once from the shared item prototype.
+    pub kinetic_timing: Option<crate::kinetic_weapon::UseTiming>,
     /// `use_remainder`: what a finished use leaves (`UseRemainder`).
     pub use_remainder: Option<String>,
     /// `use_cooldown`: the cooldown a use starts (`UseCooldown`).
@@ -905,6 +907,9 @@ impl Items {
                             .unwrap_or(true),
                     food,
                     can_always_eat,
+                    kinetic_timing: c
+                        .get("minecraft:kinetic_weapon")
+                        .and_then(crate::kinetic_weapon::UseTiming::from_json),
                     // Consumable.CODEC's defaults.
                     consumable: c.get("minecraft:consumable").map(|cons| {
                         horizon_world::consumable::Consumable {

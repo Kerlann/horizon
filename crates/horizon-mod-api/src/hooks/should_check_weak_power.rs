@@ -12,7 +12,7 @@ pub trait Hooks {
         scope = "block",
         key = "state",
         neoforge = "IBlockExtension.shouldCheckWeakPower",
-        target = "horizon_client::game::native_hooks::GameLevel<'_>::native_should_check_weak_power"
+        target = "horizon_client::game::native_hooks::should_check_weak_power::GameLevel<'_>::native_should_check_weak_power"
     )]
     fn should_check_weak_power();
 }

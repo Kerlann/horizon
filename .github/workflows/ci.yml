@@ -95,7 +95,8 @@ jobs:
         if: steps.rust.outputs.required != 'false'
         run: |
           cargo +stable fmt --all -- --check
-          rustup run stable rustfmt --edition 2024 --check crates/horizon-mod-api/src/hooks/*.rs
+          find crates/horizon-mod-api/src -name '*.rs' -print0 | xargs -0 rustup run stable rustfmt --edition 2024 --check --config skip_children=true
+          rustup run stable rustfmt --edition 2024 --check crates/horizon-client/src/game/native_hooks/*.rs
           cargo +stable clippy --workspace --all-targets -- -D warnings
           # The server build (released as horizon-engine): the game without sound or controllers.
           cargo +stable clippy -p horizon-client --all-targets --no-default-features -- -D warnings
