@@ -1073,6 +1073,70 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES and software Vulkan"]
+    fn prepared_model_entity_pixels() {
+        use mod_api::{__private::game::Fields, ClientHost};
+        horizon_client::models::register_standalone(vec!["minecraft:block/grass_block".into()]);
+        super::super::native_entity_refs::tests::with_client_game(|game| {
+            let model = game
+                .render_assets()
+                .model(&Identifier::parse("minecraft:block/grass_block").unwrap())
+                .unwrap();
+            let source = game.pack.render.resolve_model(model).unwrap();
+            let face_index = source
+                .faces
+                .iter()
+                .position(|face| face.quad.facing == Direction::South && face.quad.tint_index >= 0)
+                .unwrap();
+            let mut surface = draw();
+            surface.poses = vec![Mat4::from_rotation_z(0.25)];
+            surface.light = 0x7030;
+            game.native_draw_model(&mut surface, model, 0x80c040)
+                .unwrap();
+            let vertices = &surface.vertices[face_index * 4..face_index * 4 + 4];
+            assert!(vertices.iter().all(|v| v.light == 0x7030));
+            let atlas = &game.gui.atlas;
+            let mut pixels = vec![255; (atlas.width * atlas.height * 4) as usize];
+            let sprite = game.standalone_sprites.slots[model.fields().slot as usize]
+                .as_ref()
+                .unwrap()[face_index]
+                .unwrap();
+            let x0 = (sprite.u0 * atlas.width as f32).round() as u32;
+            let x1 = (sprite.u1 * atlas.width as f32).round() as u32;
+            let y0 = (sprite.v0 * atlas.height as f32).round() as u32;
+            let y1 = (sprite.v1 * atlas.height as f32).round() as u32;
+            for y in y0..y1 {
+                for x in x0..(x0 + x1) / 2 {
+                    pixels[((y * atlas.width + x) * 4 + 3) as usize] = 0;
+                }
+            }
+            let view = Mat4::from_scale_rotation_translation(
+                Vec3::new(1.4, 1.4, 0.2),
+                Quat::IDENTITY,
+                Vec3::new(-0.55, -0.85, 0.5),
+            );
+            let Some(rendered) = horizon_client::gfx::entity_pixel_test::render(
+                vertices,
+                [atlas.width, atlas.height],
+                &pixels,
+                view,
+            ) else {
+                return;
+            };
+            let coverage = rendered
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .filter(|p| p[0] != 0 || p[1] != 0 || p[2] != 0)
+                .count();
+            let pixel = |x: usize, y: usize| &rendered[(y * 64 + x) * 4..(y * 64 + x + 1) * 4];
+            assert_eq!(pixel(32, 32), [48, 107, 47, 255]);
+            assert_eq!(pixel(0, 0), [0, 0, 0, 255]);
+            assert!((950..1050).contains(&coverage), "coverage was {coverage}");
+        });
+    }
+
+    #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn resolved_model_draws_and_resource_replacement_invalidates_it() {
         use super::super::mod_api_host::generated::GameBlockEntityDrawContext;
