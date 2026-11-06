@@ -5,7 +5,7 @@
 //! only the native mods whose line is `true`.
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
+    fs, io,
     path::Path,
 };
 
@@ -59,6 +59,13 @@ pub struct NativePage {
 
 impl ModList {
     pub fn load(dir: &Path) -> Self {
+        let _lock = match crate::install_lock::lock_home(dir) {
+            Ok(lock) => lock,
+            Err(e) => {
+                log::warn!("Cannot read mod switches in {}: {e}", dir.display());
+                return Self::default();
+            }
+        };
         fs::read_to_string(dir.join(FILE))
             .map(|t| Self::parse(&t))
             .unwrap_or_default()
@@ -107,16 +114,39 @@ impl ModList {
             k.iter().map(|(n, k)| (n.as_str(), k.as_str())).collect()
         })
     }
-    pub fn save(&self, dir: &Path) {
+    /// Merge only this player's changes since `previous` into a fresh on-disk
+    /// list, then apply an explicit action (for example, an install completion).
+    /// Read, merge, edit and publish use the installer's one home lock. Unchanged
+    /// switches/keys and unknown lines belong to the latest writer, not a stale
+    /// settings snapshot. On success both the live list and its baseline advance.
+    pub fn save(
+        &mut self,
+        dir: &Path,
+        previous: &mut String,
+        edit: impl FnOnce(&mut Self),
+    ) -> io::Result<()> {
+        let _lock = crate::install_lock::lock_home(dir)?;
         let path = dir.join(FILE);
-        if self.enabled.is_empty()
-            && self.disabled.is_empty()
-            && self.keys.is_empty()
-            && !path.exists()
-        {
-            return;
+        let text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),
+            Err(e) => return Err(e),
+        };
+        let merged_text = apply_changes(&text, previous, &self.serialize());
+        let mut merged = Self::parse(&merged_text);
+        let before_edit = merged.serialize();
+        edit(&mut merged);
+        let output = apply_changes(&merged_text, &before_edit, &merged.serialize());
+        if output != text {
+            fs::create_dir_all(dir)?;
+            let part = dir.join(format!(".{FILE}.part"));
+            fs::write(&part, output)?;
+            fs::rename(&part, path)?;
         }
-        let _ = fs::write(path, self.serialize());
+        merged.installed = std::mem::take(&mut self.installed);
+        *self = merged;
+        *previous = self.serialize();
+        Ok(())
     }
     pub fn is_on(&self, i: usize) -> bool {
         self.installed.get(i).is_some_and(|m| {
@@ -159,6 +189,39 @@ impl ModList {
     }
 }
 
+/// Apply a delta of supported settings without rewriting other writers' lines.
+fn apply_changes(text: &str, before: &str, after: &str) -> String {
+    let before: BTreeMap<_, _> = before.lines().filter_map(|l| l.split_once(':')).collect();
+    let after: BTreeMap<_, _> = after.lines().filter_map(|l| l.split_once(':')).collect();
+    let changed: BTreeSet<_> = before
+        .keys()
+        .chain(after.keys())
+        .copied()
+        .filter(|key| before.get(key) != after.get(key))
+        .collect();
+    if changed.is_empty() {
+        return text.to_owned();
+    }
+    let mut lines: Vec<_> = text
+        .lines()
+        .filter(|line| {
+            line.split_once(':')
+                .is_none_or(|(key, _)| !changed.contains(key.trim()))
+        })
+        .map(str::to_owned)
+        .collect();
+    lines.extend(
+        changed
+            .iter()
+            .filter_map(|key| after.get(key).map(|value| format!("{key}:{value}"))),
+    );
+    let mut output = lines.join("\n");
+    if !output.is_empty() {
+        output.push('\n');
+    }
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,6 +244,77 @@ mod tests {
         );
         assert!(list.keys_of("other").is_empty());
         assert_eq!(ModList::parse(&list.serialize()), list);
+    }
+
+    #[test]
+    fn stale_saves_merge_only_local_switch_and_key_edits() {
+        let dir = std::env::temp_dir().join(format!("horizon-mod-delta-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let mut previous = "mod.zoom:true\nmod.ruby:false\nkey.zoom.in:key.keyboard.z\n".to_owned();
+        let mut list = ModList::parse(&previous);
+        // A launcher write happened after the game loaded its snapshot.
+        let latest = "mod.zoom:false\nmod.ruby:false\nmod.launcher:true\nkey.zoom.in:key.keyboard.x\nfuture.setting:keep\n";
+        fs::write(dir.join(FILE), latest).unwrap();
+        list.enabled.insert("ruby".into());
+        list.disabled.remove("ruby");
+        list.keys
+            .entry("ruby".into())
+            .or_default()
+            .insert("open".into(), "key.keyboard.r".into());
+        list.save(&dir, &mut previous, |_| {}).unwrap();
+        assert!(!list.enabled.contains("zoom"));
+        assert!(list.disabled.contains("zoom"));
+        assert!(list.enabled.contains("launcher"));
+        assert!(list.enabled.contains("ruby"));
+        assert_eq!(list.keys["zoom"]["in"], "key.keyboard.x");
+        assert_eq!(list.keys["ruby"]["open"], "key.keyboard.r");
+        assert!(
+            fs::read_to_string(dir.join(FILE))
+                .unwrap()
+                .contains("future.setting:keep\n")
+        );
+        // An unrelated save must not replay the old player's changes either.
+        fs::write(dir.join(FILE), "mod.ruby:false\nmod.zoom:true\n").unwrap();
+        list.save(&dir, &mut previous, |_| {}).unwrap();
+        assert!(list.disabled.contains("ruby"));
+        assert!(list.enabled.contains("zoom"));
+        assert!(list.keys.is_empty());
+        // An explicit completion is an action on the fresh list, even when its
+        // requested value matched the player's earlier snapshot.
+        fs::write(dir.join(FILE), "mod.zoom:false\nmod.launcher:true\n").unwrap();
+        list.save(&dir, &mut previous, |fresh| {
+            assert!(fresh.disabled.contains("zoom"));
+            fresh.disabled.remove("zoom");
+            fresh.enabled.insert("zoom".into());
+        })
+        .unwrap();
+        assert!(list.enabled.contains("zoom") && list.enabled.contains("launcher"));
+        assert!(!list.disabled.contains("zoom"));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_failed_save_keeps_the_local_delta_for_retry() {
+        let dir =
+            std::env::temp_dir().join(format!("horizon-mod-delta-error-{}", std::process::id()));
+        fs::create_dir_all(dir.join(FILE)).unwrap();
+        let mut list = ModList::parse("mod.ruby:true\n");
+        let mut previous = String::new();
+        assert!(
+            list.save(&dir, &mut previous, |_| panic!(
+                "unreadable settings refuse the action"
+            ))
+            .is_err()
+        );
+        assert!(previous.is_empty());
+        assert!(list.enabled.contains("ruby"));
+        fs::remove_dir(dir.join(FILE)).unwrap();
+        list.save(&dir, &mut previous, |_| {}).unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.join(FILE)).unwrap(),
+            "mod.ruby:true\n"
+        );
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

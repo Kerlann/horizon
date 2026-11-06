@@ -54,10 +54,14 @@ fn different_homes_do_not_block_each_other() {
 #[test]
 fn filesystem_errors_refuse_mutation_and_release_the_reservation() {
     let home = scratch("error");
-    fs::create_dir(home.join(".mod-browser.lock")).unwrap();
+    let lock = lock_path(&normalize_home(&home).unwrap());
+    // This isolated test home has no participants yet; a previous test process
+    // may have left its persistent lock file behind if the OS reused its PID.
+    let _ = fs::remove_file(&lock);
+    fs::create_dir_all(&lock).unwrap();
     assert!(lock_home(&home).is_err());
     assert!(try_lock_home(&home).is_none());
-    fs::remove_dir(home.join(".mod-browser.lock")).unwrap();
+    fs::remove_dir(lock).unwrap();
     drop(lock_home(&home).unwrap());
     fs::remove_dir_all(home).unwrap();
 }
@@ -133,6 +137,53 @@ fn processes_serialize_the_entire_manifest_transaction() {
     fs::remove_dir_all(home).unwrap();
 }
 
+/// Run only as a subprocess, after the parent deleted the whole profile.
+#[test]
+fn deleted_profile_probe() {
+    let Some(home) = std::env::var_os("HORIZON_DELETED_PROFILE_TEST_HOME") else {
+        return;
+    };
+    assert!(try_lock_home(Path::new(&home)).is_none());
+}
+
+#[test]
+fn deleting_and_recreating_a_profile_does_not_replace_its_lock() {
+    let root = scratch("delete-profile");
+    let work = root.join("pack");
+    let home = work.join("home");
+    fs::create_dir_all(&home).unwrap();
+    let guard = lock_home(&home).unwrap();
+    let lock = lock_path(&normalize_home(&home).unwrap());
+    fs::remove_dir_all(&work).unwrap();
+    assert!(
+        lock.is_file(),
+        "profile removal must not unlink the OS lock"
+    );
+    for recreate in [false, true] {
+        if recreate {
+            fs::create_dir_all(&home).unwrap();
+        }
+        let status = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "install_lock::tests::deleted_profile_probe"])
+            .env("HORIZON_DELETED_PROFILE_TEST_HOME", &home)
+            .stdin(Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success());
+        assert_eq!(
+            home.exists(),
+            recreate,
+            "locking must not recreate a deleted home"
+        );
+    }
+    drop(guard);
+    let target = home.clone();
+    std::thread::spawn(move || drop(try_lock_home(&target).unwrap()))
+        .join()
+        .unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[cfg(unix)]
 #[test]
 fn symlinked_homes_share_the_reentrant_lock() {
@@ -143,6 +194,19 @@ fn symlinked_homes_share_the_reentrant_lock() {
     std::os::unix::fs::symlink(&home, &alias).unwrap();
     let first = lock_home(&home).unwrap();
     let second = try_lock_home(&alias).unwrap();
+    fs::remove_dir(&home).unwrap();
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                assert!(
+                    try_lock_home(&alias).is_none(),
+                    "a dangling alias must keep the same lock identity"
+                );
+            })
+            .join()
+            .unwrap();
+    });
+    assert!(!home.exists());
     drop(first);
     drop(second);
     fs::remove_dir_all(root).unwrap();

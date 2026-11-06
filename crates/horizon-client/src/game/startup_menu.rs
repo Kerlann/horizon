@@ -431,13 +431,12 @@ impl Loading {
     /// The startup menu's Browse mods, as `Game::drive_mod_browser`.
     fn drive_menu_mod_browser(&mut self) {
         let menu = &mut self.menu;
-        if menu.mod_jobs.poll(
+        menu.mod_jobs.poll(
             &mut menu.options.mod_browser,
-            &mut self.settings.mods,
+            &mut self.settings,
+            &Game::options_path(),
             false,
-        ) {
-            self.settings.save(&Game::options_path());
-        }
+        );
     }
     pub(super) fn apply_menu_settings(&mut self) {
         if let Some(renderer) = &mut self.renderer {

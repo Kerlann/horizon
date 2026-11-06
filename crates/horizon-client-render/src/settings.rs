@@ -199,6 +199,9 @@ pub struct Settings {
     pub extras: crate::extras::Extras,
     /// The Horizon mods turned on (`horizon-mods.txt`), all off by default.
     pub mods: crate::mod_list::ModList,
+    /// Last loaded/saved mod switches and keys, for merging this player's edits
+    /// with launcher writes rather than overwriting them with an old snapshot.
+    pub saved_mods: String,
     /// The packs in `shaderpacks/`, listed when the Shader Packs page opens; the pick is
     /// `horizon.shader_pack`.
     pub shader_packs: Vec<crate::shader_pack_list::Entry>,
@@ -286,6 +289,7 @@ impl Default for Settings {
             controller: Default::default(),
             extras: Default::default(),
             mods: Default::default(),
+            saved_mods: String::new(),
             shader_packs: Vec::new(),
             shader_options: None,
         }
@@ -355,6 +359,7 @@ impl Settings {
                     horizon,
                     controller,
                     extras,
+                    saved_mods: mods.serialize(),
                     mods,
                     ..Self::parse(&text)
                 }
@@ -363,6 +368,7 @@ impl Settings {
                 horizon,
                 controller,
                 extras,
+                saved_mods: mods.serialize(),
                 mods,
                 ..Self::default()
             },
@@ -476,6 +482,7 @@ impl Settings {
             controller: Default::default(),
             extras: Default::default(),
             mods: Default::default(),
+            saved_mods: String::new(),
             shader_packs: Vec::new(),
             shader_options: None,
             auto_jump: f.bool("autoJump"),
@@ -641,6 +648,7 @@ impl Settings {
             controller: self.controller.clone(),
             extras: self.extras.clone(),
             mods: self.mods.clone(),
+            saved_mods: self.saved_mods.clone(),
             video_modes: self.video_modes.clone(),
             ..Self::from_file(file)
         })
@@ -649,7 +657,22 @@ impl Settings {
     pub fn serialize(&self) -> String {
         self.to_file().serialize()
     }
-    pub fn save(&self, path: &Path) {
+    pub fn save(&mut self, path: &Path) {
+        if let Err(e) = self.save_with_mods(path, |_| {}) {
+            log::warn!("Horizon: settings are not saved: {e}");
+        }
+    }
+    /// Save settings and an explicit mod action in one installer transaction.
+    /// The action sees the latest switches, including concurrent launcher edits.
+    pub fn save_with_mods(
+        &mut self,
+        path: &Path,
+        edit: impl FnOnce(&mut crate::mod_list::ModList),
+    ) -> std::io::Result<()> {
+        let dir = path.parent().unwrap_or_else(|| Path::new("."));
+        let home = crate::logging::shared_dir(dir);
+        let _lock = horizon_mods::install_lock::lock_home(&home)?;
+        self.mods.save(&home, &mut self.saved_mods, edit)?;
         self.describe_for_crashes();
         if let Err(e) = fs::write(path, self.serialize()) {
             log::warn!("Horizon: options.txt is not saved: {e}");
@@ -658,8 +681,8 @@ impl Settings {
             self.horizon.save(dir);
             self.controller.save(dir);
             self.extras.save(dir);
-            self.mods.save(&crate::logging::shared_dir(dir));
         }
+        Ok(())
     }
     /// Volume of a sound source (master excluded).
     pub fn volume(&self, source: &str) -> f32 {
@@ -896,6 +919,51 @@ mod tests {
         assert_eq!(set.controller, s.controller);
         assert!(s.with_option("fov", "200").is_err());
     }
+    #[test]
+    fn an_unrelated_option_save_waits_for_and_keeps_launcher_switches_and_pins() {
+        let dir = std::env::temp_dir().join(format!(
+            "horizon-settings-transaction-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("options.txt");
+        fs::write(dir.join(crate::mod_list::FILE), "mod.zoom:true\n").unwrap();
+        let settings = Settings::load(&path);
+        // with_option must carry the baseline as well as the live mod list.
+        let mut settings = settings.with_option("fov", "90").unwrap();
+        std::thread::scope(|scope| {
+            let guard = horizon_mods::install_lock::lock_home(&dir).unwrap();
+            let (send, receive) = std::sync::mpsc::channel();
+            let pending = &mut settings;
+            let options = &path;
+            let worker = scope.spawn(move || {
+                send.send(()).unwrap();
+                pending.save(options);
+            });
+            receive.recv().unwrap();
+            fs::write(
+                dir.join(crate::mod_list::FILE),
+                "mod.zoom:false\nmod.launcher:true\nkey.zoom.in:key.keyboard.x\n",
+            )
+            .unwrap();
+            fs::write(dir.join("mod-browser.json"), r#"{"entries":[{"project":"zoom","pin":"exact-build","file":"horizon-native-mods/zoom.hmod"}]}"#).unwrap();
+            drop(guard);
+            worker.join().unwrap();
+        });
+        assert!(settings.mods.disabled.contains("zoom"));
+        assert!(settings.mods.enabled.contains("launcher"));
+        assert_eq!(settings.mods.keys["zoom"]["in"], "key.keyboard.x");
+        assert_eq!(
+            Settings::parse(&fs::read_to_string(path).unwrap()).fov,
+            90.0
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join("mod-browser.json")).unwrap(),
+            r#"{"entries":[{"project":"zoom","pin":"exact-build","file":"horizon-native-mods/zoom.hmod"}]}"#
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn gui_scale_survives_temporary_small_framebuffer() {
         for requested in [0, 1, 2, 6] {
