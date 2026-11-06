@@ -1,23 +1,50 @@
 //! Raid handles for native server mods (`Raid`, `Raids`). Horizon keeps the
-//! raids of the level in place only, so a `RaidRef` of a parked level, of an
-//! earlier open, or on a client reads as `None` or `false`.
+//! raids of current and parked server levels. Earlier opens, closed levels
+//! and client reads return `None` or `false`.
 use super::{Game, commands::Target};
 use horizon_client::{
     lan::playerdata::ints_uuid,
-    raid::{Raid, Status},
+    mobs::Mob,
+    raid::{Raid, Raids, Status},
 };
 use mod_api::{EntityRef, LevelRef, MobRef, NativeRaidStatus, RaidRef};
 
 impl Game<'_> {
+    // Diverges from upstream: handles resolve the requested server level without
+    // swapping it into place, including during hooks for another level.
+    fn native_level_raid_collections(&self, level: LevelRef) -> Option<(&Raids, &[Mob])> {
+        self.native_level_world(level)?;
+        if level.dimension() == self.dim.id() {
+            Some((self.raids_in_place()?, &self.mobs))
+        } else {
+            let parked = self.levels.parked_of(level.dimension())?;
+            Some((parked.raiding.raids(level.dimension())?, &parked.mobs))
+        }
+    }
+    fn native_level_raids_mut(&mut self, level: LevelRef) -> Option<&mut Raids> {
+        self.native_level_world(level)?;
+        if level.dimension() == self.dim.id() {
+            self.raiding.raids_mut(level.dimension())
+        } else {
+            self.levels
+                .parked_mut_of(level.dimension())?
+                .raiding
+                .raids_mut(level.dimension())
+        }
+    }
+    fn native_raid_members(&self, raid: RaidRef) -> Option<impl Iterator<Item = &Mob>> {
+        let (raids, mobs) = self.native_level_raid_collections(raid.level())?;
+        raids.get(raid.id())?;
+        Some(super::raids::members(mobs, raid.id()))
+    }
     /// The raid a handle names now, or None for a stale or foreign one.
     fn native_raid_data(&self, raid: RaidRef) -> Option<&Raid> {
-        if !self.native_level_in_place(raid.level()) {
-            return None;
-        }
-        self.raids_in_place()?.get(raid.id())
+        self.native_level_raid_collections(raid.level())?
+            .0
+            .get(raid.id())
     }
 
-    /// `Raids.get(id)`: the raid saved under `id` in the level in place, if
+    /// `Raids.get(id)`: the raid saved under `id` in the requested level, if
     /// `Raids` still holds it (a stopped raid goes at its next tick).
     pub(super) fn native_level_raid(&self, level: LevelRef, id: i32) -> Option<RaidRef> {
         let raid = RaidRef::new(level, id);
@@ -27,21 +54,16 @@ impl Game<'_> {
     /// `ServerLevel.getRaidAt(pos)`: the closest active raid whose centre is
     /// less than 96 blocks away (`Raids.getNearbyRaid`, 9216 squared).
     pub(super) fn native_level_raid_at(&self, level: LevelRef, pos: [i32; 3]) -> Option<RaidRef> {
-        if !self.native_level_in_place(level) {
-            return None;
-        }
-        let (id, _) = self.raids_in_place()?.nearby(pos)?;
+        let (id, _) = self.native_level_raid_collections(level)?.0.nearby(pos)?;
         Some(RaidRef::new(level, id))
     }
 
     /// Every raid `Raids` holds, in its iteration order, stopped ones
-    /// included until their next tick. None for a level that is not in place.
+    /// included until their next tick. None for a closed or stale level.
     pub(super) fn native_level_raids(&self, level: LevelRef) -> Option<Vec<RaidRef>> {
-        if !self.native_level_in_place(level) {
-            return None;
-        }
         Some(
-            self.raids_in_place()?
+            self.native_level_raid_collections(level)?
+                .0
                 .ids()
                 .into_iter()
                 .map(|id| RaidRef::new(level, id))
@@ -74,11 +96,9 @@ impl Game<'_> {
     /// `Raid.setRaidOmenLevel`: any value, as vanilla assigns it (only
     /// `absorbRaidOmen` clamps, to 0 to 5). The raid is saved with it.
     pub(super) fn native_raid_set_omen_level(&mut self, raid: RaidRef, level: i32) -> bool {
-        if self.native_raid_data(raid).is_none() {
-            return false;
-        }
-        self.raid_set_omen(raid.id(), level);
-        true
+        self.native_level_raids_mut(raid.level())
+            .and_then(|raids| raids.set_omen_level(raid.id(), level))
+            .is_some()
     }
 
     /// `Raid.getGroupsSpawned`: the waves spawned so far.
@@ -127,8 +147,10 @@ impl Game<'_> {
 
     /// `Raid.getHealthOfLivingRaiders`.
     pub(super) fn native_raid_living_health(&self, raid: RaidRef) -> Option<f32> {
-        self.native_raid_data(raid)?;
-        Some(self.raid_members(raid.id()).fold(0.0, |a, m| a + m.health))
+        Some(
+            self.native_raid_members(raid)?
+                .fold(0.0, |a, m| a + m.health),
+        )
     }
 
     /// The boss bar's progress, 0 to 1 (`Raid.raidEvent.getProgress`).
@@ -139,10 +161,9 @@ impl Game<'_> {
     /// `Raid.getAllRaiders`: the living raiders that joined, in mob-list
     /// order, as entity handles.
     pub(super) fn native_raid_raiders(&self, raid: RaidRef) -> Option<Vec<EntityRef>> {
-        self.native_raid_data(raid)?;
         Some(
-            self.raid_members(raid.id())
-                .filter_map(|m| self.native_entity(m.id))
+            self.native_raid_members(raid)?
+                .map(|m| EntityRef::new(raid.level().epoch(), m.id))
                 .collect(),
         )
     }
@@ -153,11 +174,10 @@ impl Game<'_> {
         raid: RaidRef,
         wave: i32,
     ) -> Option<Vec<EntityRef>> {
-        self.native_raid_data(raid)?;
         Some(
-            self.raid_members(raid.id())
+            self.native_raid_members(raid)?
                 .filter(|m| horizon_client::mobs::raider::state(m).is_some_and(|s| s.wave == wave))
-                .filter_map(|m| self.native_entity(m.id))
+                .map(|m| EntityRef::new(raid.level().epoch(), m.id))
                 .collect(),
         )
     }
@@ -181,7 +201,13 @@ impl Game<'_> {
         if self.native_raid_data(raid).is_none_or(|r| r.is_stopped()) {
             return false;
         }
-        self.raid_command_stop(raid.id());
+        let Some(center) = self
+            .native_level_raids_mut(raid.level())
+            .and_then(|raids| raids.stop(raid.id()))
+        else {
+            return false;
+        };
+        self.native_raid_state_change(raid.id(), center, "stopped");
         true
     }
 }
@@ -304,7 +330,102 @@ mod tests {
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
-    fn stale_parked_and_client_raid_handles_read_nothing() {
+    fn parked_raid_handles_read_and_write_their_own_level() {
+        with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            let level = game.native_level(game.dim.id()).unwrap();
+            assert!(game.raid_command_create([10, 70, 10], 3));
+            let raid = level.raid_at(game, [10, 70, 10]).unwrap();
+            raider_mob(game, 42, raid.id(), 2, 12.0);
+            raider_mob(game, 43, raid.id(), 1, 0.0);
+            raider_mob(game, 44, raid.id() + 7, 2, 18.0);
+            let member = game.native_entity(42).unwrap();
+            let total = raid.total_health(game);
+            let groups = raid.num_groups(game);
+            let progress = raid.bar_progress(game);
+            let started = raid.is_started(game);
+
+            assert!(
+                game.enter_command_level(super::super::Dim::Nether)
+                    .is_some()
+            );
+            game.read_raids();
+            let current = game.native_level(game.dim.id()).unwrap();
+            let (other_id, _) = game
+                .raiding
+                .raids_mut(current.dimension())
+                .unwrap()
+                .create_or_extend([100, 70, 100], 2, None, 7);
+            assert_eq!(other_id, raid.id()); // Raid ids are local to a level.
+            raider_mob(game, 60, other_id, 2, 19.0);
+            let other = current.raid(game, other_id).unwrap();
+            let other_omen = other.omen_level(game);
+
+            assert_eq!(level.raid(game, raid.id()), Some(raid));
+            assert_eq!(level.raid_at(game, [10, 70, 10]), Some(raid));
+            assert_eq!(level.raids(game), Some(vec![raid]));
+            assert_eq!(raid.center(game), Some([10, 70, 10]));
+            assert_eq!(raid.omen_level(game), Some(3));
+            assert_eq!(raid.groups_spawned(game), Some(0));
+            assert_eq!(raid.num_groups(game), groups);
+            assert_eq!(raid.has_bonus_wave(game), Some(true));
+            assert_eq!(raid.is_started(game), started);
+            assert!(raid.is_active(game));
+            assert_eq!(raid.status(game), Some(NativeRaidStatus::Ongoing));
+            assert_eq!(raid.total_health(game), total);
+            assert_eq!(raid.living_health(game), Some(12.0));
+            assert_eq!(raid.bar_progress(game), progress);
+            assert_eq!(raid.raiders(game), Some(vec![member]));
+            assert_eq!(raid.wave_raiders(game, 2), Some(vec![member]));
+            assert_eq!(raid.wave_raiders(game, 1), Some(vec![]));
+            assert_eq!(raid.heroes(game), Some(vec![]));
+            game.native_level_raids_mut(level).unwrap().dirty = false;
+            assert!(raid.set_omen_level(game, i32::MAX));
+            assert!(game.native_level_raids_mut(level).unwrap().dirty);
+            assert_eq!(raid.omen_level(game), Some(i32::MAX));
+            assert_eq!(other.omen_level(game), other_omen);
+            assert_eq!(other.living_health(game), Some(19.0));
+            game.native_level_raids_mut(level).unwrap().dirty = false;
+            assert!(raid.stop(game));
+            assert!(!raid.stop(game));
+            assert_eq!(raid.status(game), Some(NativeRaidStatus::Stopped));
+            assert!(!raid.is_active(game));
+            assert!(other.is_active(game));
+            assert_eq!(game.dim, super::super::Dim::Nether);
+            assert_eq!(level.raid_at(game, [10, 70, 10]), None);
+            assert_eq!(level.raid(game, raid.id()), Some(raid));
+            assert!(
+                game.levels
+                    .parked_of(level.dimension())
+                    .unwrap()
+                    .raiding
+                    .raids(level.dimension())
+                    .unwrap()
+                    .dirty
+            );
+
+            assert!(
+                game.enter_command_level(super::super::Dim::Overworld)
+                    .is_some()
+            );
+            assert_eq!(raid.omen_level(game), Some(i32::MAX));
+            assert_eq!(raid.status(game), Some(NativeRaidStatus::Stopped));
+            assert_eq!(raid.raiders(game), Some(vec![member]));
+            assert!(
+                game.enter_command_level(super::super::Dim::Nether)
+                    .is_some()
+            );
+            game.levels.clear();
+            assert_eq!(raid.center(game), None);
+            assert_eq!(raid.raiders(game), None);
+            assert!(!raid.set_omen_level(game, 1));
+            assert!(!raid.stop(game));
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn stale_closed_and_client_raid_handles_read_nothing() {
         with_game(|game| {
             game.options.dedicated = Some(Vec::new());
             let level = game.native_level(game.dim.id()).unwrap();

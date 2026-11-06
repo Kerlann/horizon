@@ -4,7 +4,7 @@ Two kinds of mod run in Horizon:
 
 | Kind | File | What it is | Where it runs |
 |---|---|---|---|
-| **Content mod** | `.hmod` | Data and assets: blocks, items, recipes, loot, tags, models, textures, structures. No code. | Read when the game starts |
+| **Content mod** | `.hmod` | Data and assets: blocks, items, recipes, loot, tags, models, textures, structures. No code. | Loaded at startup; assets-and-data-only switches can reload live |
 | **Native mod** | `.hmod` | A flat Rust project using the typed hook API, with optional raw injections. | In a game the launcher builds for the player ([native mods](../how-to/native-mods.md)) |
 
 Fabric and NeoForge jars do **not** run as they are: their code calls and patches Minecraft's Java classes, and
@@ -14,14 +14,19 @@ Mods are **off by default**. A fresh install has no `horizon-mods` folder and pl
 
 ## Playing with mods
 
-1. Install a mod from the launcher's Mods page ([mod-browser.md](../../../mod-browser.md)), or put its files by hand in the
+1. Install a mod from the launcher's Mods page ([mod-browser.md](../../../mod-browser.md)) or the game's Options > Mods >
+   **Browse Mods** (content-only packages, checked against the same registry), or put its files by hand in the
    game folder (the one holding `options.txt`): a content mod's `.hmod` (or a folder holding `horizon-mod.toml`) in
    `horizon-mods/`. Native mods go in `horizon-native-mods/`, and the launcher builds them
    ([native mods](../how-to/native-mods.md)).
 2. Options > **Mods** lists them with what each may do ("May add blocks, items, mob effects and entity types to your
    worlds") and a switch. They start off. The choice is kept in `horizon-mods.txt` (`mod.<id>:true`).
-3. A content mod's blocks, items, mob effects and entity types load once, when the game starts: restart the game after
-   a switch.
+3. A content mod with only assets and reloadable data (textures, models, sounds, languages, recipes, tags, loot,
+   advancements and functions) switches live: the game reloads its resources, then its world's data as `/reload`
+   does, including for LAN guests. Content that adds registry entries or changes world generation still needs a
+   restart, and its switch is frozen while a world is open. Packages with jar layers also wait for a restart,
+   because those layers may contain world generation. On another server all content switches wait: the server
+   owns its data. Code mods keep their startup content; pausing their dispatch is not a content unload.
 4. A mod that can't load shows why, in red, on its row.
 
 Two turned-on content mods never own the same namespace: the first by file name loads, and the other stays out with

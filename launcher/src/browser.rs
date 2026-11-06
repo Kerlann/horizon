@@ -16,6 +16,8 @@ pub mod java;
 pub mod java_instance;
 pub mod modrinth;
 
+pub use horizon_mods::install_lock::{lock_home, try_lock_home, HomeLockGuard};
+
 use serde::{Deserialize, Serialize};
 
 /// The Minecraft version Horizon plays: the pinned version, so a port's regenerated

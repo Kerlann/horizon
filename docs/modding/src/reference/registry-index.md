@@ -184,7 +184,9 @@ Unknown keys in an entry are refused. Its CI runs `cargo-horizon-mod` (`crates/c
 
 | Command | What it does |
 | --- | --- |
+| `cargo horizon-mod internals sync` | Explicitly checks a native mod's library through the launcher against an isolated copy of its pinned game source, then replaces `[native].internals` with compiler-discovered paths, kinds and hashes. Handles globs and macros, removes unused declarations, preserves retained entries and prints additions/removals. Requires a trusted mod and `horizon-launcher` on `PATH` (or `HORIZON_LAUNCHER` set to its executable). Never runs automatically on build. |
 | `cargo horizon-mod internals add <path>…` | Adds each declared internal and its tool-written hash to `[native].internals` in the current mod's `horizon-mod.toml`. Reads the pinned prebuilt game's `internals.json` for native mods, or the newest prebuilt catalog for wasm mods (`HORIZON_MOD_INTERNALS_CATALOG` selects an absolute staged catalog path); unknown paths, shape-only entries and paths available only under a `cfg` are refused before the manifest is changed. Existing declarations are refreshed, not duplicated. |
+
 | `cargo horizon-mod update [--horizon <commit>]` | Moves the native game's pin and its mod API and internals dependencies' `rev` to the newest prebuilt release (or the exact commit given). For every declared internal, prints `missing`, `changed` (old signature → new signature), or `unchanged`, then refreshes the hashes still available. Missing or now-gated declarations keep their old hash and must be removed or replaced before building. |
 | `cargo horizon-mod check <file> [--json]` | A submission's checks: its kind's (above) and its signature with `--key` and `--signature`. It runs no mod's code: a native mod's source is read by the reviewers when it is listed. |
 | `cargo horizon-mod registry check <base> <head> --files <dir>` | `check` on each hosted file `head` lists and `base` doesn't: a pull request's new files. |
@@ -194,8 +196,17 @@ Unknown keys in an entry are refused. Its CI runs `cargo-horizon-mod` (`crates/c
 | `cargo horizon-mod registry page <checkout> <id> <horizon-registry.toml>` | The repository's page file, checked against its entry (JSON). |
 | `cargo horizon-mod registry review <base> <head> --author <login>` | A pull request's changes: a published file never changes and is never removed (take it down in `revoked.toml`), a kind never changes; changes by a non-owner and to owners, keys or the repository are pointed out for the reviewers. |
 
-The two native-mod commands run in the mod's project folder and preserve the manifest's comments and
-layout. They download the same prebuilt archive layout as the launcher, check its `SHA256SUMS`, and
+The native-mod commands run in the mod's project folder and preserve the manifest's comments and
+layout. `sync` performs a metadata-only `cargo check` on the current host, using default features;
+Rust build scripts and procedural macros run with your rights, but the game does not run. It keeps
+a separate per-pin source and check cache in the launcher's `native/internals-sync/<commit>/` folder,
+never in the normal game or prebuilt target directories. The pin's source must be cached or
+downloadable; an unavailable source is `E_INTERNAL_SOURCE_UNAVAILABLE`, not a fallback to another
+pin. Compiler or catalog errors leave the manifest untouched. Raw listeners retain their generated
+typed constructors; source-spliced helper/module injections are explicitly refused, so their
+manually declared internals cannot be accidentally removed. Use `internals add` for those mods.
+
+`internals add` and `update` download the same prebuilt archive layout as the launcher, check its `SHA256SUMS`, and
 read only `internals.json`; no game or mod code is run. Catalogs are kept by commit in
 `target/horizon-mod/prebuilt/`, so `update` can still show the old signatures after that release expires.
 If a needed catalog is neither cached nor downloadable, the command fails without changing the pin
@@ -204,6 +215,7 @@ Rust lifetimes or other shell metacharacters, for example:
 
 ```sh
 cargo horizon-mod internals add 'horizon_client::game::Game' "horizon_client::game::maps::Game<'_>::dimension_id"
+cargo horizon-mod internals sync
 cargo horizon-mod update
 ```
 

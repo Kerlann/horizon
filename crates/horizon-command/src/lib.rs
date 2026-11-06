@@ -285,6 +285,8 @@ pub struct Node {
     pub redirect: Option<usize>,
     /// Required permission level (0 everyone, 2 game masters, 4 owners).
     pub permission: u8,
+    /// The level needed to execute this node, independently of walking through it.
+    pub execution_permission: u8,
     /// A custom suggestion provider (`.suggests(...)`), used instead of the
     /// argument type's own suggestions.
     pub suggests: Option<Suggests>,
@@ -757,6 +759,7 @@ impl Dispatcher {
                 command: None,
                 redirect: None,
                 permission: 0,
+                execution_permission: 0,
                 suggests: None,
                 restricted: false,
             }],
@@ -792,6 +795,7 @@ impl Dispatcher {
             command: None,
             redirect: None,
             permission,
+            execution_permission: 0,
             suggests: None,
             restricted: false,
         });
@@ -825,6 +829,11 @@ impl Dispatcher {
     }
     pub fn requires(&mut self, node: usize, level: u8) -> usize {
         self.nodes[node].permission = level;
+        node
+    }
+    /// Require a level to run this node without restricting access to its children.
+    pub fn requires_execution(&mut self, node: usize, level: u8) -> usize {
+        self.nodes[node].execution_permission = level;
         node
     }
     /// This tree plus the commands mods own (`docs/modding/src/how-to/content-mods.md`), so the chat
@@ -959,7 +968,9 @@ impl Dispatcher {
                 errors.push((child, e));
                 continue;
             }
-            context.command = self.nodes[child].command;
+            context.command = self.nodes[child]
+                .command
+                .filter(|_| self.nodes[child].execution_permission <= level);
             let redirect = self.nodes[child].redirect;
             if reader.can_read_n(if redirect.is_none() { 2 } else { 1 }) {
                 reader.skip();

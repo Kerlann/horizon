@@ -70,35 +70,24 @@ fn stage_table(
 fn main() {
     let args: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
     let usage = || {
-        eprintln!(
-            "usage: horizon-stage ROOT POINTS_JSON INTERNALS_JSON [--wasm-internals DIRECTORY | --no-wasm-internals]"
-        );
+        eprintln!("usage: horizon-stage ROOT POINTS_JSON INTERNALS_JSON [--wasm-internals DIRECTORY | --no-wasm-internals | --sync-internals]");
         std::process::exit(2)
     };
-    let [root, list, internals, options @ ..] = &args[..] else {
-        usage()
-    };
-    let directory = match options {
-        [] => Some(root.join("crates/horizon-mod-api-gen/wasm-internals")),
-        [flag] if flag == "--no-wasm-internals" => None,
-        [flag, directory] if flag == "--wasm-internals" => Some(directory.clone()),
+    let [root, list, internals, options @ ..] = &args[..] else { usage() };
+    let (directory, mode) = match options {
+        [] => (Some(root.join("crates/horizon-mod-api-gen/wasm-internals")), horizon_mod_api_gen::staging::Mode::Build),
+        [flag] if flag == "--no-wasm-internals" => (None, horizon_mod_api_gen::staging::Mode::Build),
+        [flag] if flag == "--sync-internals" => (None, horizon_mod_api_gen::staging::Mode::Discovery),
+        [flag, directory] if flag == "--wasm-internals" => (Some(directory.clone()), horizon_mod_api_gen::staging::Mode::Build),
         _ => usage(),
     };
-    // Internals first, so the manifest lists the game's own items and not the points' raw types.
-    let staged = horizon_mod_api_gen::internals::widen(root).and_then(|widened| {
-        let text = serde_json::to_string_pretty(&widened.entries).map_err(|e| e.to_string())?;
-        std::fs::write(internals, text + "\n")
-            .map_err(|e| format!("{}: {e}", internals.display()))?;
-        // The table a wasm mod reaches the internals through, at the game crate's root.
+    let staged = horizon_mod_api_gen::staging::stage(root, list, internals, mode).and_then(|staged| {
         let points = horizon_mod_api_gen::points::game_points(root)?;
-        stage_table(root, &widened.entries, &points, directory.as_deref())?;
-        let staged = horizon_mod_api_gen::points::stage(root)?;
-        let text = serde_json::to_string_pretty(&points).map_err(|e| e.to_string())?;
-        std::fs::write(list, text + "\n").map_err(|e| format!("{}: {e}", list.display()))?;
-        Ok((staged, widened))
+        stage_table(root, &staged.internals.entries, &points, directory.as_deref())?;
+        Ok(staged)
     });
     match staged {
-        Ok((staged, widened)) => {
+        Ok(horizon_mod_api_gen::staging::Staged { points: staged, internals: widened }) => {
             println!(
                 "staged {} points ({} with a head only, {} with a raw form) in {} files",
                 staged.points, staged.head_only, staged.raw, staged.files

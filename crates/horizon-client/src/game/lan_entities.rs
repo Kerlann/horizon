@@ -168,6 +168,24 @@ impl Game<'_> {
                 riding.add(vehicle as i32, m.id as i32);
             }
         }
+        for (&vehicle, pass) in &mut riding.passengers {
+            // Players occupy the leading seats, as in `position_riders`.
+            // `extra.rider` orders mob passengers, not a player's driver seat.
+            if guests.iter().any(|&(id, _)| id as i32 == vehicle) {
+                continue;
+            }
+            if let Some(driver) = self
+                .mobs
+                .iter()
+                .find(|m| m.id as i32 == vehicle)
+                .and_then(|m| m.extra.rider)
+                && let Some(pos) = pass.iter().position(|&p| p == driver as i32)
+                && pos != 0
+            {
+                let d = pass.remove(pos);
+                pass.insert(0, d);
+            }
+        }
     }
 
     /// Boats, minecarts, armor stands, item frames, paintings and the

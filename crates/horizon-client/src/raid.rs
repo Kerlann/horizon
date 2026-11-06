@@ -809,6 +809,20 @@ impl Raids {
     pub fn get_mut(&mut self, id: i32) -> Option<&mut Raid> {
         self.map.get_mut(&id)
     }
+    /// `Raid.stop`, marking its owning level's saved raids dirty.
+    pub fn stop(&mut self, id: i32) -> Option<[i32; 3]> {
+        let raid = self.get_mut(id)?;
+        raid.stop();
+        let center = raid.center;
+        self.dirty = true;
+        Some(center)
+    }
+    /// `Raid.setRaidOmenLevel`: assign without clamping and persist the change.
+    pub fn set_omen_level(&mut self, id: i32, level: i32) -> Option<i32> {
+        let before = std::mem::replace(&mut self.get_mut(id)?.omen_level, level);
+        self.dirty = true;
+        Some(before)
+    }
     /// The raid ids in iteration order.
     pub fn ids(&self) -> Vec<i32> {
         self.order.iter()

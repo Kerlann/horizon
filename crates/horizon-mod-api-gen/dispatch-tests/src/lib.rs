@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use horizon_core::game_mode::GameMode;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
@@ -204,6 +205,9 @@ mod tests {
         pub(super) struct NativeMapInfo<'a>(pub &'a ());
         pub(super) struct NativePlayerRender<'a>(pub &'a ());
         pub(super) struct NativeCommand;
+        pub(super) struct AdvancementProgress {
+            pub done: bool,
+        }
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub(super) enum NativeProgressType {
             Grant,
@@ -745,6 +749,10 @@ mod tests {
                 assert_eq!(event.name, "Alex");
                 assert_eq!(event.advancement, "example:advancement");
                 assert_eq!(event.criterion, "criterion");
+                assert_eq!(
+                    event.progress.done,
+                    event.progress_type == NativeProgressType::Grant
+                );
                 self.0.lock().unwrap().push(event.progress_type);
             }
         }
@@ -758,12 +766,17 @@ mod tests {
         for progress_type in [NativeProgressType::Grant, NativeProgressType::Revoke] {
             dispatch_player_advancement_progress(
                 &mut TestHost,
-                123,
-                42,
-                "Alex",
-                "example:advancement",
-                "criterion",
-                progress_type,
+                calls::PlayerAdvancementProgressCall {
+                    player: 123,
+                    player_entity_id: 42,
+                    name: "Alex",
+                    advancement: "example:advancement",
+                    criterion: "criterion",
+                    progress_type,
+                    progress: &AdvancementProgress {
+                        done: progress_type == NativeProgressType::Grant,
+                    },
+                },
             );
         }
         assert_eq!(

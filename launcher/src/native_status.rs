@@ -73,6 +73,8 @@ pub struct Build {
     /// It compiled another commit than its Nightly's, with no record of why: built before the
     /// launcher kept which mods pinned it ([`pinning`] reads them from the instance's mods).
     pub pinned_unknown: bool,
+    /// The mods turned on that it was built without, and why.
+    pub left_out: Vec<native_mods::LeftOut>,
 }
 
 impl Build {
@@ -90,6 +92,7 @@ impl Build {
             base: about.base,
             horizon: about.horizon,
             pinned_by: Vec::new(),
+            left_out: about.left_out,
         }
     }
 
@@ -255,9 +258,15 @@ pub fn in_mode(
     }
 }
 
+/// The mods a build tried: both those it holds and those it left out.
 fn parse_built(about: &serde_json::Value) -> Vec<Mod> {
     let mods = about["mods"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+    let left_out = about["left_out"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
     mods.iter()
+        .chain(left_out)
         .filter_map(|m| {
             Some((
                 m["id"].as_str()?.into(),
@@ -504,6 +513,17 @@ mod tests {
         });
         assert_eq!(parse_built(&about), [m("zoom", "2.1"), d("y", "1", "ab")]);
         assert!(parse_built(&serde_json::json!({})).is_empty());
+        let about = serde_json::json!({
+            "mods": [{"id": "zoom", "version": "2.1"}],
+            "left_out": [{"id": "hitbox_plus", "version": "1.3.0", "sha256": "aa", "why": "other-version"}],
+        });
+        let build = parse_built(&about);
+        let on = [m("zoom", "2.1"), d("hitbox_plus", "1.3.0", "aa")];
+        assert_eq!(state(&on, Some(build.as_slice())), State::UpToDate);
+        let on = [m("zoom", "2.1"), m("hitbox_plus", "1.3.1")];
+        assert_eq!(state(&on, Some(build.as_slice())), State::Outdated);
+        let on = [m("zoom", "2.1"), d("hitbox_plus", "1.3.0", "bb")];
+        assert_eq!(state(&on, Some(build.as_slice())), State::Outdated);
         assert_eq!(built("v0.1.0"), None, "not a native build");
     }
 

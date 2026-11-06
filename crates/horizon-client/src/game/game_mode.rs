@@ -4,21 +4,8 @@ use super::{Game, Screen};
 use horizon_client::{collisions::SceneCollisions, command::args::GameMode};
 use horizon_world::world_movement::in_range_of_ground;
 
-pub(super) fn mode_id_of(mode: GameMode) -> i32 {
-    match mode {
-        GameMode::Survival => 0,
-        GameMode::Creative => 1,
-        GameMode::Adventure => 2,
-        GameMode::Spectator => 3,
-    }
-}
 pub(super) fn mode_from_id(id: i32) -> GameMode {
-    match id {
-        1 => GameMode::Creative,
-        2 => GameMode::Adventure,
-        3 => GameMode::Spectator,
-        _ => GameMode::Survival,
-    }
+    GameMode::from_id(id).unwrap_or(GameMode::Survival)
 }
 /// `ChunkMap.skipPlayer`: a player is skipped when `player.isSpectator() &&
 /// !level.getGameRules().getBoolean(SPECTATORS_GENERATE_CHUNKS)`. A skipped
@@ -45,7 +32,7 @@ impl Game<'_> {
             .map_or(self.creative, |a| a.instabuild)
     }
     pub(super) fn mode_id(&self) -> i32 {
-        mode_id_of(self.mode)
+        self.mode.id()
     }
     pub(super) fn set_mode_id(&mut self, id: i32) {
         self.set_mode(mode_from_id(id));
@@ -62,7 +49,7 @@ impl Game<'_> {
         self.creative = mode == GameMode::Creative;
         // GameType.updatePlayerAbilities applies at once.
         if let Some(a) = self.acting_abilities.as_mut() {
-            a.update_for_mode(mode_id_of(mode));
+            a.update_for_mode(mode.id());
         }
         if let Some(p) = self.player.as_mut() {
             p.invulnerable = mode == GameMode::Creative || mode == GameMode::Spectator;

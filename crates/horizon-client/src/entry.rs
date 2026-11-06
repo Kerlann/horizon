@@ -146,7 +146,13 @@ pub fn main_with(
     }
     let renderers = mod_api::__private::mods()
         .iter()
-        .filter_map(|m| m.fields().hooks.render())
+        .enumerate()
+        .filter_map(|(index, m)| {
+            m.fields()
+                .hooks
+                .render()
+                .map(|hooks| mod_api::render::RenderEntry::new(index, hooks))
+        })
         .collect();
     if crate::gfx::native_render::install(renderers).is_err() {
         log::warn!("Trait renderers already installed; keeping the first list");

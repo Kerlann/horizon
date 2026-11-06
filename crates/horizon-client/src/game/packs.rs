@@ -279,10 +279,38 @@ impl Game<'_> {
         if self.ui.vanilla_root.as_os_str().is_empty() {
             self.ui.vanilla_root = vanilla.clone();
         }
-        let (selected, server, mod_sources) = (
+        let enabled = self.applied_mods();
+        // Only content-only packages are selectable on reload. Keep code packages' validated
+        // startup manifests: changing their content must not install code or registries live.
+        let content =
+            horizon_mods::selection::content_packages(&Self::game_dir(), &enabled, &self.mods.dev)
+                .filter(|p| {
+                    p.package.manifest.wasm.is_none()
+                        && !self
+                            .mods
+                            .native
+                            .built()
+                            .iter()
+                            .any(|built| built.id == p.package.manifest.id)
+                });
+        let code = self
+            .mods
+            .selected
+            .iter()
+            .filter(|p| p.package.manifest.wasm.is_some())
+            .map(|p| horizon_mods::selection::SelectedPackage {
+                path: p.path.clone(),
+                package: horizon_mods::Package {
+                    manifest: p.package.manifest.clone(),
+                    icon: p.package.icon.clone(),
+                },
+            });
+        self.mods.selected = content.chain(code).collect();
+        self.mods.refused = Default::default();
+        let mod_sources = self.mods.clone();
+        let (selected, server) = (
             self.settings.resource_packs.clone(),
             self.server_packs.active.clone(),
-            self.mods.clone(),
         );
         let (assets, res, context) = (
             self.pack.assets.clone(),
@@ -324,6 +352,7 @@ impl Game<'_> {
             staged.and_then(|staged| self.apply_staged_pack(staged).map_err(|e| e.to_string()));
         match kind {
             ReloadKind::Selection => {
+                self.mods_reloaded(result.is_ok());
                 if let Err(e) = result {
                     self.selection_reload_failed(&e);
                 }

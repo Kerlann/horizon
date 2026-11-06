@@ -7,14 +7,14 @@ use horizon_mods::{
 };
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
 };
 use toml_edit::{DocumentMut, Item, Value};
 
-const USAGE: &str = "usage: cargo horizon-mod internals add <path>… [--kind <kind>]";
+const USAGE: &str = "usage: cargo horizon-mod internals sync [--repo <path>] | add <path>… [--kind <kind>]";
 const CATALOG: &str = "internals.json";
 const CATALOG_LIMIT: u64 = 64 << 20;
 const ARCHIVE_LIMIT: u64 = 4 << 30;
@@ -23,6 +23,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let Some((command, args)) = args.split_first() else {
         return Err(USAGE.into());
     };
+    if command == "sync" {
+        let repo = match args {
+            [] => None,
+            [flag, path] if flag == "--repo" && !path.starts_with('-') => Some(Path::new(path)),
+            _ => return Err(USAGE.into()),
+        };
+        return sync(Path::new("."), repo);
+    }
     let mut paths = Vec::new();
     let mut kind = None;
     let mut args = args.iter();
@@ -67,6 +75,18 @@ fn add(dir: &Path, paths: &[&str], kind: Option<&str>) -> Result<(), String> {
     let mut doc: DocumentMut = text
         .parse()
         .map_err(|e| format!("{}: {e}", path.display()))?;
+    upsert(&mut doc, declared, &entries)?;
+    for entry in entries {
+        println!("Added internal {}", entry.path);
+    }
+    fs::write(&path, doc.to_string()).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+fn upsert(
+    doc: &mut DocumentMut,
+    declared: &[horizon_mods::manifest::Internal],
+    entries: &[&ListedInternal],
+) -> Result<(), String> {
     let mut listed: BTreeMap<_, _> = declared
         .iter()
         .enumerate()
@@ -79,7 +99,7 @@ fn add(dir: &Path, paths: &[&str], kind: Option<&str>) -> Result<(), String> {
             .or_else(|| listed.get(&(entry.path.as_str(), None)))
             .copied();
         if let Some(index) = existing {
-            set_fingerprint(&mut doc, index, &entry.hash, Some(&entry.kind))?;
+            set_fingerprint(doc, index, &entry.hash, Some(&entry.kind))?;
             if listed.get(&(entry.path.as_str(), None)) == Some(&index) {
                 listed.remove(&(entry.path.as_str(), None));
             }
@@ -108,10 +128,147 @@ fn add(dir: &Path, paths: &[&str], kind: Option<&str>) -> Result<(), String> {
             }
             listed.insert(key, listed.len());
         }
-        println!("Added internal {}", entry.path);
     }
-    let candidate = doc.to_string();
-    fs::write(&path, candidate).map_err(|e| format!("{}: {e}", path.display()))
+    Ok(())
+}
+
+/// The launcher owns source staging and compiler diagnostics; this tool owns manifest edits.
+fn sync(dir: &Path, repo: Option<&Path>) -> Result<(), String> {
+    let path = dir.join(MANIFEST);
+    let original = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let manifest = Manifest::parse(&original)?;
+    if let Some(wasm) = &manifest.wasm {
+        let repo = match repo {
+            Some(repo) => repo.to_path_buf(),
+            None => dir.canonicalize().map_err(|e| e.to_string())?.ancestors()
+                .find(|path| path.join("Cargo.toml").is_file() && path.join("crates/horizon-mod-api-gen").is_dir())
+                .ok_or("Could not find a Horizon workspace; pass --repo <path>")?.to_path_buf(),
+        };
+        let directory = repo.join("crates/horizon-mod-api-gen/wasm-internals");
+        if !repo.join("Cargo.toml").is_file() || !directory.is_dir() {
+            return Err(format!("{}: not a Horizon workspace", repo.display()));
+        }
+        let output = directory.join(format!("{}.txt", manifest.id));
+        let paths: BTreeSet<&str> = wasm.internals().iter().map(|entry| entry.path.as_str())
+            .chain(wasm.points().iter().filter_map(|entry| entry.target.as_deref())).collect();
+        let mut contents = format!("# {}: written by cargo horizon-mod internals sync from horizon-mod.toml\n", manifest.id);
+        for path in paths { contents.push_str(path); contents.push('\n'); }
+        let changed = match fs::read(&output) {
+            Ok(old) => old != contents.as_bytes(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+            Err(error) => return Err(format!("{}: {error}", output.display())),
+        };
+        if changed { atomic_write(&output, contents)?; }
+        println!("{}: {}", output.display(), if changed { "changed" } else { "unchanged" });
+        return Ok(());
+    }
+    if repo.is_some() { return Err(USAGE.into()); }
+    manifest.native.as_ref().ok_or("internals sync needs a [native] or [wasm] mod")?;
+    let launcher =
+        std::env::var_os("HORIZON_LAUNCHER").unwrap_or_else(|| "horizon-launcher".into());
+    let output = std::process::Command::new(launcher)
+        .args(["native-build", "--sync-internals", "--trust-native-code"])
+        .arg(dir.canonicalize().map_err(|e| e.to_string())?)
+        .stderr(std::process::Stdio::inherit())
+        .output().map_err(|e| format!("Could not run horizon-launcher: {e}. Install it on PATH or set HORIZON_LAUNCHER to its executable."))?;
+    if !output.status.success() {
+        return Err("Internals discovery failed; the manifest was not changed.".into());
+    }
+    let entries: Vec<ListedInternal> = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Invalid internals discovery result: {e}"))?;
+    let (candidate, report) = replace(&original, &entries)?;
+    // The explicit check may take time. Do not overwrite edits made while it was running.
+    if fs::read_to_string(&path).map_err(|e| e.to_string())? != original {
+        return Err("horizon-mod.toml changed during discovery; run cargo horizon-mod internals sync again.".into());
+    }
+    atomic_write(&path, candidate)?;
+    print!("{report}");
+    Ok(())
+}
+
+fn atomic_write(path: &Path, contents: String) -> Result<(), String> {
+    let temporary = path.with_extension("toml.sync");
+    fs::write(&temporary, contents)
+        .and_then(|()| fs::rename(&temporary, path))
+        .map_err(|e| {
+            let _ = fs::remove_file(&temporary);
+            format!("{}: {e}", path.display())
+        })
+}
+
+fn replace(text: &str, entries: &[ListedInternal]) -> Result<(String, String), String> {
+    let manifest = Manifest::parse(text)?;
+    let native = manifest
+        .native
+        .as_ref()
+        .ok_or("internals sync needs a [native] mod")?;
+    let mut doc: DocumentMut = text.parse().map_err(|e| format!("{MANIFEST}: {e}"))?;
+    // Each used access keeps at most one old row: an exact typed row first, then an untyped
+    // row for its path. Every other row is dropped, so no stale duplicate survives the sync.
+    let mut unclaimed: BTreeSet<_> = entries
+        .iter()
+        .map(|entry| (entry.path.as_str(), entry.kind.as_str()))
+        .collect();
+    let mut keep = vec![false; native.internals.len()];
+    for typed in [true, false] {
+        for (index, old) in native.internals.iter().enumerate() {
+            if old.kind.is_some() != typed {
+                continue;
+            }
+            let claim = unclaimed
+                .iter()
+                .find(|(path, kind)| {
+                    *path == old.path && old.kind.as_deref().is_none_or(|k| k == *kind)
+                })
+                .copied();
+            if let Some(claim) = claim {
+                unclaimed.remove(&claim);
+                keep[index] = true;
+            }
+        }
+    }
+    let mut report = String::new();
+    for (index, old) in native.internals.iter().enumerate().rev() {
+        if !keep[index] {
+            let item = &mut doc["native"]["internals"];
+            if let Some(array) = item.as_array_mut() {
+                // TOML stores a trailing comment after the previous comma as this
+                // value's prefix. Keep it when dropping the declaration that follows it.
+                let removed = array.remove(index);
+                let prefix = removed
+                    .decor()
+                    .prefix()
+                    .and_then(|raw| raw.as_str())
+                    .unwrap_or("");
+                if let Some(next) = array.get_mut(index) {
+                    let next_prefix = next
+                        .decor()
+                        .prefix()
+                        .and_then(|raw| raw.as_str())
+                        .unwrap_or("");
+                    let combined = format!("{prefix}{next_prefix}");
+                    next.decor_mut().set_prefix(combined);
+                } else {
+                    let trailing = array.trailing().as_str().unwrap_or("");
+                    array.set_trailing(format!("{prefix}{trailing}"));
+                }
+            } else if let Some(array) = item.as_array_of_tables_mut() {
+                array.remove(index);
+            }
+            report.push_str(&format!("removed: {}\n", old.path));
+        }
+    }
+    let retained = Manifest::parse(&doc.to_string())?;
+    for (path, kind) in &unclaimed {
+        report.push_str(&format!("added: {path} ({kind})\n"));
+    }
+    let entries: Vec<_> = entries.iter().collect();
+    upsert(
+        &mut doc,
+        retained.native.as_ref().expect("native manifest"),
+        &entries,
+    )?;
+    Ok((doc.to_string(), report))
 }
 
 /// Report all declarations, leaving unavailable ones declared so a build still refuses them.
@@ -344,6 +501,51 @@ mod tests {
             .append_data(&mut header, path, contents.as_bytes())
             .unwrap();
         archive.into_inner().unwrap().finish().unwrap()
+    }
+
+    #[test]
+    fn sync_replaces_declarations_and_preserves_retained_formatting_for_both_array_forms() {
+        let header = format!(
+            "# Mod\nid='example'\nname='Example'\nversion='0.1.0'\napi='0.2'\ncapabilities=['registries']\n[native] # settings\ngame='26.3'\nhorizon='{}'\nmixins='{}'\n",
+            "a".repeat(40),
+            "b".repeat(40)
+        );
+        let entries: Vec<ListedInternal> = serde_json::from_str(r#"[{"path":"Used","kind":"struct","signature":"struct Used","hash":"new"},{"path":"New","kind":"fn","signature":"fn new()","hash":"added"}]"#).unwrap();
+        for body in [
+            "internals = [\n  { path = 'Used', hash = 'old' }, # keep\n  { path = 'Unused', hash = 'gone' },\n]\n",
+            "[[native.internals]] # keep\npath = 'Used'\nhash = 'old' # hash\n[[native.internals]]\npath = 'Unused'\nhash = 'gone'\n",
+        ] {
+            let (candidate, report) = replace(&(header.clone() + body), &entries).unwrap();
+            let native = Manifest::parse(&candidate).unwrap().native.unwrap();
+            assert_eq!(native.internals.len(), 2);
+            assert_eq!(native.internals[0].hash, "new");
+            assert_eq!(native.internals[0].kind.as_deref(), Some("struct"));
+            assert!(candidate.contains("# keep"));
+            assert!(candidate.starts_with(&header));
+            assert!(report.contains("removed: Unused"));
+            assert!(report.contains("added: New (fn)"));
+            assert!(!report.contains("added: Used"));
+            let (unchanged, report) = replace(&candidate, &entries).unwrap();
+            assert_eq!(unchanged, candidate);
+            assert!(report.is_empty());
+            let (empty, report) = replace(&candidate, &[]).unwrap();
+            assert!(
+                Manifest::parse(&empty)
+                    .unwrap()
+                    .native
+                    .unwrap()
+                    .internals
+                    .is_empty()
+            );
+            assert!(report.contains("removed: Used"));
+        }
+        // An untyped and a typed row for one access leave one current declaration.
+        let body = "internals = [{ path = 'Used', hash = 'stale' }, { path = 'Used', kind = 'struct', hash = 'stale' }]\n";
+        let (candidate, _) = replace(&(header.clone() + body), &entries[..1]).unwrap();
+        let native = Manifest::parse(&candidate).unwrap().native.unwrap();
+        assert_eq!(native.internals.len(), 1);
+        assert_eq!(native.internals[0].hash, "new");
+        assert_eq!(native.internals[0].kind.as_deref(), Some("struct"));
     }
 
     #[test]

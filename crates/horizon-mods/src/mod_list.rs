@@ -133,9 +133,7 @@ impl ModList {
         let Some(m) = self.installed.iter().find(|m| m.id == id && !m.dev) else {
             return;
         };
-        if m.native.is_some() {
-            self.disabled.remove(&m.id);
-        }
+        self.disabled.remove(&m.id);
         self.enabled.insert(m.id.clone());
     }
     /// Turns installed mod `i` on or off (a dev mod stays on). A native mod's
@@ -153,6 +151,9 @@ impl ModList {
                 self.disabled.insert(m.id.clone());
             }
         } else if !self.enabled.remove(&m.id) {
+            // A wasm mod paused in the previous process is not loaded yet; selecting its
+            // package again must clear the same code-dispatch switch used while it ran.
+            self.disabled.remove(&m.id);
             self.enabled.insert(m.id.clone());
         }
     }
@@ -180,6 +181,27 @@ mod tests {
         );
         assert!(list.keys_of("other").is_empty());
         assert_eq!(ModList::parse(&list.serialize()), list);
+    }
+
+    #[test]
+    fn selecting_a_paused_package_clears_its_previous_code_switch() {
+        let mut list = ModList::parse("mod.wasm_mod:false\n");
+        list.installed.push(Installed {
+            id: "wasm_mod".into(),
+            title: "wasm_mod".into(),
+            description: String::new(),
+            problem: None,
+            dev: false,
+            native: None,
+        });
+        list.toggle(0);
+        assert!(list.enabled.contains("wasm_mod"));
+        assert!(!list.disabled.contains("wasm_mod"));
+        list.enabled.clear();
+        list.disabled.insert("wasm_mod".into());
+        list.turn_on("wasm_mod");
+        assert!(list.enabled.contains("wasm_mod"));
+        assert!(!list.disabled.contains("wasm_mod"));
     }
 
     #[test]

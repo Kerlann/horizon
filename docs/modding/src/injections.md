@@ -284,8 +284,32 @@ kind = "HEAD"
 raw = "count"
 ```
 
-`cargo horizon-mod internals add <path>` writes the path and hash from the pinned game's
-`internals.json`; don't invent hashes. When several member kinds share a path (such as a field
+Run `cargo horizon-mod internals sync` in the mod's folder after editing its Rust code. It
+checks the mod against a discovery-only copy of the pinned game's source, uses compiler
+warnings to find actual internal uses (including glob imports and macros), and replaces
+`[native].internals` with their exact paths, kinds and hashes. Unused declarations are removed;
+retained declarations keep their formatting. The command prints added and removed entries.
+It is explicit: a normal build never changes the declarations reviewers and players read.
+
+Install `horizon-launcher` on `PATH`, or set `HORIZON_LAUNCHER` to its executable. The command
+invokes `horizon-launcher native-build --sync-internals <mod folder> --trust-native-code`, whose
+stdout is a JSON list of discovered catalog entries for the tool. This runs `cargo check`, not
+the game, but Rust build scripts and procedural macros execute with your rights: run it only
+on code you trust. No installed game or instance is needed. The launcher caches the isolated
+source and metadata build per pin under `native/internals-sync/<commit>/`; the second check
+reuses those compiler outputs. Neither that cache nor its temporary diagnostic attributes is
+used by normal builds or published prebuilt games. The source must be cached or downloadable;
+`E_INTERNAL_SOURCE_UNAVAILABLE` explains when it cannot be obtained, without changing the
+manifest or falling back to a different pin. Any compiler or catalog error also leaves the
+manifest alone. Discovery checks the mod's library on the current host with default features;
+configuration-gated catalog entries are still refused. Mods with source-spliced helper files
+or module injections are refused with `E_INTERNAL_SOURCE_INJECTION`: declare their internals
+explicitly with `internals add` instead. This invocation stages one mod project; required mod
+dependencies that are not in that project are refused by the dependency resolver, not silently
+omitted.
+
+`cargo horizon-mod internals add <path>` remains useful for those explicit declarations and
+writes the path and hash from the pinned game's `internals.json`; don't invent hashes. When several member kinds share a path (such as a field
 and a method named `listening`), pass `--kind <kind>` to select the catalog entry, for example
 `cargo horizon-mod internals add horizon_client::game::native_ticks::TickRound::listening --kind method`.
 The tool reports the available kinds if the choice is missing and writes the resolved `kind`
@@ -311,7 +335,8 @@ a mod that declares internals with `horizon-launcher native-build <mod folder>`,
 against the pinned game the same way the launcher does on install, and report its errors.
 
 A raw injection also exposes the point's listener and raw record in `internals::raw`, for
-example `__TickListener` and `__TickRaw`. Implement `pub fn count` with the exact listener type
+example `__TickListener` and `__TickRaw`. Discovery keeps those same typed exports and does
+not change `[[native.injection]]`; raw listeners need no special sync step. Implement `pub fn count` with the exact listener type
 from `points.json` (including the receiver and argument-record lifetime). The facade's safe,
 typed `raw::tick` constructor registers it in the generated executable; a mismatched function
 fails at that registration line, naming the injection. `RETURN` uses the point's return
@@ -321,7 +346,8 @@ well as source builds; only source-spliced helpers and modules require a game re
 Both routes check the actual game's metadata before compiling mods:
 
 - `E_INTERNAL_MISSING`: the declared path is absent (type shapes not exposed as internals
-  cannot be declared).
+  cannot be declared). Run `cargo horizon-mod internals sync` to discover this pin's used
+  internals. Undeclared-item compiler errors also point to this command.
 - `E_INTERNAL_CHANGED`: the hash changed; the error names the new signature and asks for
   `cargo horizon-mod update`.
 - `E_INTERNAL_AMBIGUOUS`: several member kinds share the path; choose one of the listed kinds

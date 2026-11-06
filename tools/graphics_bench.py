@@ -60,7 +60,6 @@ def vscreen_env():
             env[k] = v
     env.pop("DISPLAY", None)
     # lab.game_env: no sound on the machine's speakers, and scratch folders instead of the player's.
-    # Benchmark games do not reach the telemetry server (docs/telemetry.md).
     return env
 
 

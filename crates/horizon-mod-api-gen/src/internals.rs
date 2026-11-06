@@ -46,6 +46,7 @@ struct Source {
     lines: Vec<usize>,
     parsed: syn::File,
     edits: BTreeMap<usize, (usize, &'static str)>,
+    annotations: BTreeMap<usize, (usize, String)>,
 }
 
 impl Source {
@@ -55,6 +56,26 @@ impl Source {
             .char_indices()
             .nth(position.column)
             .map_or(self.text.len(), |(i, _)| line + i)
+    }
+
+    fn annotate(&mut self, attrs: &[syn::Attribute], start: Span, kind: &str, path: &str) {
+        let note = format!("horizon-internal:{kind}:{path}");
+        let attr = format!("#[deprecated(note = {note:?})]\n");
+        // Replace an existing deprecation rather than creating a duplicate attribute.
+        let existing = attrs.iter().find(|attr| attr.path().is_ident("deprecated"));
+        let (start, end) = existing.map_or_else(
+            || {
+                let offset = self.offset(start.start());
+                (offset, offset)
+            },
+            |attr| {
+                (
+                    self.offset(attr.span().start()),
+                    self.offset(attr.span().end()),
+                )
+            },
+        );
+        self.annotations.insert(start, (end, attr));
     }
 
     fn public(&mut self, vis: &Visibility, start: Span, kind: &'static str) {
@@ -129,6 +150,7 @@ struct Pass {
     /// Widening only: the items and fields visited are made public and listed nowhere, for a
     /// lower-crate shape the wasm internals table walks (#589 W).
     reaching: bool,
+    discovery: bool,
 }
 
 /// Crates whose types are the mod API's own: their fields stay private in every build.
@@ -538,6 +560,7 @@ impl Pass {
             parsed,
             lines,
             edits: BTreeMap::new(),
+            annotations: BTreeMap::new(),
         });
         Ok(index)
     }
@@ -602,6 +625,14 @@ impl Pass {
                     .map_or_else(|| field.ty.span(), |ident| ident.span());
                 self.sources[file].public(&field.vis, start, "field");
             }
+            if self.discovery {
+                self.sources[file].annotate(
+                    &field.attrs,
+                    field.span(),
+                    "field",
+                    &format!("{path}::{name}"),
+                );
+            }
             let mut uses = TypeUses::default();
             uses.parameters
                 .extend(generics.type_params().map(|param| param.ident.to_string()));
@@ -635,6 +666,14 @@ impl Pass {
         uses.visit_impl_item(item);
         match item {
             ImplItem::Fn(method) if !test_only(&method.attrs) => {
+                if self.discovery {
+                    self.sources[file].annotate(
+                        &method.attrs,
+                        method.span(),
+                        "method",
+                        &format!("{path}::{}", method.sig.ident),
+                    );
+                }
                 self.sources[file].public(&method.vis, method.sig.span(), "method");
                 let sig = &method.sig;
                 self.entry(
@@ -647,6 +686,14 @@ impl Pass {
                 );
             }
             ImplItem::Const(value) if !test_only(&value.attrs) => {
+                if self.discovery {
+                    self.sources[file].annotate(
+                        &value.attrs,
+                        value.span(),
+                        "const",
+                        &format!("{path}::{}", value.ident),
+                    );
+                }
                 self.sources[file].public(&value.vis, value.const_token.span(), "const");
                 let (ident, generics, ty) = (&value.ident, &value.generics, &value.ty);
                 self.entry(
@@ -659,6 +706,14 @@ impl Pass {
                 );
             }
             ImplItem::Type(value) if !test_only(&value.attrs) => {
+                if self.discovery {
+                    self.sources[file].annotate(
+                        &value.attrs,
+                        value.span(),
+                        "type",
+                        &format!("{path}::{}", value.ident),
+                    );
+                }
                 self.sources[file].public(&value.vis, value.type_token.span(), "type");
                 let (ident, generics, ty) = (&value.ident, &value.generics, &value.ty);
                 self.entry(
@@ -689,6 +744,9 @@ impl Pass {
                     return;
                 }
                 let path = format!("{module}::{}", value.ident);
+                if self.discovery {
+                    self.sources[file].annotate(&value.attrs, value.span(), $kind, &path);
+                }
                 self.sources[file].public(&value.vis, $start, $kind);
                 self.entry(
                     module,
@@ -703,6 +761,14 @@ impl Pass {
         }
         match item {
             Item::Fn(value) if !test_only(&value.attrs) => {
+                if self.discovery {
+                    self.sources[file].annotate(
+                        &value.attrs,
+                        value.span(),
+                        "fn",
+                        &format!("{module}::{}", value.sig.ident),
+                    );
+                }
                 self.sources[file].public(&value.vis, value.sig.span(), "fn");
                 self.entry(
                     module,
@@ -1091,14 +1157,25 @@ impl Pass {
             ..Widened::default()
         };
         for mut source in self.sources {
-            if source.edits.is_empty() {
+            if source.edits.is_empty() && source.annotations.is_empty() {
                 continue;
             }
-            for (start, (end, kind)) in source.edits.into_iter().rev() {
-                source
-                    .text
-                    .replace_range(start..end, if start == end { "pub " } else { "pub" });
+            let mut edits = Vec::new();
+            for (start, (end, kind)) in source.edits {
+                edits.push((
+                    start,
+                    1,
+                    end,
+                    if start == end { "pub " } else { "pub" }.to_owned(),
+                ));
                 *widened.changed.entry(kind).or_default() += 1;
+            }
+            for (start, (end, text)) in source.annotations {
+                edits.push((start, 0, end, text));
+            }
+            edits.sort_by_key(|(start, order, _, _)| (*start, *order));
+            for (start, _, end, text) in edits.into_iter().rev() {
+                source.text.replace_range(start..end, &text);
             }
             fs::write(&source.path, source.text)
                 .map_err(|e| format!("{}: {e}", source.path.display()))?;
@@ -1112,6 +1189,17 @@ impl Pass {
 /// Fails before writing anything if a declaration in `internals.txt` cannot be resolved.
 /// A listed lower-crate point is an internal too: its raw listener names the function's types.
 pub fn widen(root: &Path) -> Result<Widened, String> {
+    stage(root, false)
+}
+
+/// Instrument a discovery-only source copy. Its catalog is identical to [`widen`]'s, but
+/// compiler deprecation diagnostics identify each use by kind and catalog path.
+/// Never use this copy for a normal build or a published prebuilt.
+pub fn discover(root: &Path) -> Result<Widened, String> {
+    stage(root, true)
+}
+
+fn stage(root: &Path, discovery: bool) -> Result<Widened, String> {
     let mut lists = Vec::new();
     for name in ["internals.txt", "points.txt"] {
         let path = root.join("crates/horizon-mod-api-gen").join(name);
@@ -1120,12 +1208,20 @@ pub fn widen(root: &Path) -> Result<Widened, String> {
             fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?,
         ));
     }
-    widen_with(root, &lists)
+    widen_mode(root, &lists, discovery)
 }
 
 /// [`widen`] with each list's file name and text, so an error names the file and line it came from.
+#[cfg(test)]
 fn widen_with(root: &Path, lists: &[(&str, String)]) -> Result<Widened, String> {
-    let mut pass = Pass::default();
+    widen_mode(root, lists, false)
+}
+
+fn widen_mode(root: &Path, lists: &[(&str, String)], discovery: bool) -> Result<Widened, String> {
+    let mut pass = Pass {
+        discovery,
+        ..Pass::default()
+    };
     let src = root.join("crates/horizon-client/src");
     for source in crate::points::game_files(&src, false)?
         .into_iter()
@@ -1154,6 +1250,29 @@ fn widen_with(root: &Path, lists: &[(&str, String)]) -> Result<Widened, String> 
         }
     }
     pass.shapes(root)?;
+    if discovery {
+        let crates: BTreeSet<_> = pass
+            .entries
+            .values()
+            .filter(|entry| !entry.shape_only)
+            .filter_map(|entry| entry.path.split("::").next())
+            .map(str::to_owned)
+            .collect();
+        for krate in crates {
+            let (_, lib) = crate::points::crate_root(root, &krate)?;
+            let file = pass.load(&lib)?;
+            let start = pass.sources[file]
+                .parsed
+                .shebang
+                .as_ref()
+                .map_or(0, |s| s.len() + 1);
+            pass.sources[file]
+                .annotations
+                .entry(start)
+                .and_modify(|(_, text)| text.insert_str(0, "#![allow(deprecated)]\n"))
+                .or_insert_with(|| (start, "#![allow(deprecated)]\n".into()));
+        }
+    }
     pass.finish()
 }
 
@@ -1238,6 +1357,121 @@ pub(crate) struct ItemStack { #[allow(dead_code)] kind: StackKind }
             "#[cfg(feature = \"extra\")]\nenum Kind { Empty, Count(#[allow(dead_code)] u32) }\n",
         );
         fixture
+    }
+
+    #[test]
+    fn discovery_keeps_the_catalog_and_normal_output_and_reports_compiler_uses() {
+        let game = "struct Thing { field: u32 }\nimpl Thing { fn method(&self) -> u32 { self.field } }\nfn free() {}\n";
+        let normal = Fixture::new(game);
+        let repeat = Fixture::new(game);
+        let discovery = Fixture::new(game);
+        for fixture in [&normal, &repeat, &discovery] {
+            fixture.put(
+                "crates/horizon-client/src/lib.rs",
+                "pub mod game; mod entry;\n",
+            );
+            fixture.put(
+                "crates/lower/Cargo.toml",
+                "[package]\nname='lower'\nversion='0.1.0'\n",
+            );
+            fixture.put("crates/lower/src/lib.rs", "pub fn direct() {}\n");
+        }
+        let lists = [("internals.txt", "lower::direct".into())];
+        let expected = widen_with(&normal.0, &lists).unwrap();
+        let ordinary = widen_mode(&repeat.0, &lists, false).unwrap();
+        let marked = widen_mode(&discovery.0, &lists, true).unwrap();
+        assert_eq!(expected.entries, marked.entries);
+        assert_eq!(
+            serde_json::to_vec(&expected.entries).unwrap(),
+            serde_json::to_vec(&ordinary.entries).unwrap()
+        );
+        assert_eq!(normal.game(), repeat.game());
+        assert!(!normal.game().contains("horizon-internal:"));
+        assert!(
+            discovery
+                .game()
+                .contains("horizon-internal:field:horizon_client::game::Thing::field")
+        );
+        let out = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/isync-rustc-fixture")
+            .join(std::process::id().to_string());
+        fs::create_dir_all(&out).unwrap();
+        let library = out.join("libhorizon_client.rlib");
+        let compiled = std::process::Command::new("rustc")
+            .args([
+                "--edition=2024",
+                "--crate-type=lib",
+                "--crate-name=horizon_client",
+                "--error-format=json",
+            ])
+            .arg(discovery.0.join("crates/horizon-client/src/lib.rs"))
+            .arg("-o")
+            .arg(&library)
+            .output()
+            .unwrap();
+        assert!(
+            compiled.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiled.stderr)
+        );
+        assert!(
+            !String::from_utf8_lossy(&compiled.stderr)
+                .lines()
+                .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+                .any(|message| message["code"]["code"] == "deprecated"),
+            "game must suppress its own deprecations"
+        );
+        let lower = out.join("liblower.rlib");
+        let compiled = std::process::Command::new("rustc")
+            .args(["--edition=2024", "--crate-type=lib", "--crate-name=lower"])
+            .arg(discovery.0.join("crates/lower/src/lib.rs"))
+            .arg("-o")
+            .arg(&lower)
+            .output()
+            .unwrap();
+        assert!(
+            compiled.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiled.stderr)
+        );
+        let mod_source = out.join("mod.rs");
+        fs::write(&mod_source, "use horizon_client::game::*; macro_rules! run { ($t:expr) => { $t.method() } } pub fn uses(t: &Thing) -> u32 { free(); lower::direct(); run!(t) + t.field }").unwrap();
+        let checked = std::process::Command::new("rustc")
+            .args([
+                "--edition=2024",
+                "--crate-type=lib",
+                "--crate-name=example",
+                "--emit=metadata",
+                "--error-format=json",
+                "--extern",
+            ])
+            .arg(format!("horizon_client={}", library.display()))
+            .arg("--extern")
+            .arg(format!("lower={}", lower.display()))
+            .arg(&mod_source)
+            .arg("-o")
+            .arg(out.join("mod.rmeta"))
+            .output()
+            .unwrap();
+        assert!(
+            checked.status.success(),
+            "{}",
+            String::from_utf8_lossy(&checked.stderr)
+        );
+        let messages = String::from_utf8(checked.stderr).unwrap();
+        for note in [
+            "struct:horizon_client::game::Thing",
+            "field:horizon_client::game::Thing::field",
+            "method:horizon_client::game::Thing::method",
+            "fn:horizon_client::game::free",
+            "fn:lower::direct",
+        ] {
+            assert!(
+                messages.contains(&format!("horizon-internal:{note}")),
+                "{note}: {messages}"
+            );
+        }
+        fs::remove_dir_all(out).unwrap();
     }
 
     #[test]

@@ -270,7 +270,8 @@ page `servers.json` (the list), `servers/<name>/` (the servers created there) an
   game starts. `horizon-launcher game-args "<line>"` sets them too, and `play --arg <ARG>` passes
   one for a single run.
 - **Proxy**: when the internet here needs one (a school's, an office's, a country where a host is
-  unreachable), Settings' Proxy takes the `http://host:port` address your proxy app listens on, and
+  unreachable), Settings' Proxy takes the `http://host:port` or `socks5://host:port` address your
+  proxy app listens on, and
   every download goes through it: Horizon's releases and the launcher's own update, Minecraft's
   files and Java from Mojang, Modrinth, CurseForge, Horizon's mod registry, pictures, Microsoft
   sign-in, and the jars a modpack import fetches. It is kept as `proxy` in `settings.json`, and
@@ -455,7 +456,7 @@ same name and arguments, generated from the CLI's definition (`src/cli_tools.rs`
 `install`, `remove`, `prepare`, `settings`, `mods_search`, `mods_install`, `modpack_import`,
 `servers_create`, `bug_report`... A call runs that command with `--json` and returns its
 output. Tools that delete something (`remove`, `mods_remove`, `modpack_remove`,
-`servers_forget`, `account_sign_out`, `data_delete`) need `confirm: true`. The session runs a few
+`servers_forget`, `account_sign_out`) need `confirm: true`. The session runs a few
 itself, under the CLI's names: `play`, `server` with `server_command`, `server_log` and
 `server_stop`, `account_list` and `account_sign_in` (returns the link and code for the player;
 the sign-in finishes in the background). A server started through MCP stops (cleanly, with

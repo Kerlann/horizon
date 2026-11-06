@@ -65,6 +65,11 @@ impl ServerAdvancements {
         }
     }
 
+    /// The loaded definition whose criteria and requirements the player's progress uses.
+    pub fn definition(&self, id: &str) -> Option<&crate::advancements::Advancement> {
+        self.tree.get(id)
+    }
+
     /// The unconditional tick criteria in tree order. A caller grants these one
     /// at a time so it can notify mods before applying each completion's rewards.
     pub fn tick_candidates(&self, progress: &Progress) -> Vec<CriterionGrant> {

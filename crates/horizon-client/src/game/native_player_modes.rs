@@ -45,12 +45,11 @@ impl Game<'_> {
         &self,
         player: PlayerRef,
     ) -> Option<Option<GameMode>> {
-        let id = match self.player_handle_read(player)? {
+        Some(match self.player_handle_read(player)? {
             // The acting player's own: a guest's turn swaps theirs in.
-            PlayerRead::Acting { .. } => self.previous_mode.map(super::game_mode::mode_id_of),
-            PlayerRead::Guest(guest) => guest.previous_game_mode,
-        };
-        Some(id.and_then(GameMode::from_id))
+            PlayerRead::Acting { .. } => self.previous_mode,
+            PlayerRead::Guest(guest) => guest.previous_game_mode.and_then(GameMode::from_id),
+        })
     }
     /// `Player.isSecondaryUseActive`: whether the player uses items and
     /// blocks as with sneak held, as vanilla reads it from the shift-key

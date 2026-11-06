@@ -47,6 +47,8 @@ pub(super) struct StartupMenu {
     key_screen: u64,
     pub pending: Option<PendingWorldEntry>,
     pub reload_packs: bool,
+    /// Browse mods' worker (`mod_browser`).
+    mod_jobs: super::mod_browser::Jobs,
 }
 
 impl StartupMenu {
@@ -115,6 +117,7 @@ impl StartupMenu {
             None => game.title = None,
         }
         game.pending_entry = self.pending.take();
+        game.mod_jobs = std::mem::take(&mut self.mod_jobs);
         game.cursor = self.cursor;
         game.modifiers = self.modifiers;
         game.physical_keys = std::mem::take(&mut self.physical_keys);
@@ -422,7 +425,19 @@ impl Loading {
                 }
             }
         }
+        self.drive_menu_mod_browser();
         self.restart_menu_resources()
+    }
+    /// The startup menu's Browse mods, as `Game::drive_mod_browser`.
+    fn drive_menu_mod_browser(&mut self) {
+        let menu = &mut self.menu;
+        if menu.mod_jobs.poll(
+            &mut menu.options.mod_browser,
+            &mut self.settings.mods,
+            false,
+        ) {
+            self.settings.save(&Game::options_path());
+        }
     }
     pub(super) fn apply_menu_settings(&mut self) {
         if let Some(renderer) = &mut self.renderer {
@@ -564,6 +579,15 @@ impl Loading {
                     let _ = std::fs::create_dir_all(&dir);
                     packs::open_folder(&dir);
                 }
+                Event::BrowseMods => {
+                    let ui = &mut self.menu.options.mod_browser;
+                    self.menu.mod_jobs.browse(ui, Game::game_dir());
+                }
+                Event::InstallMod(id) => {
+                    let ui = &mut self.menu.options.mod_browser;
+                    self.menu.mod_jobs.install(ui, Game::game_dir(), id);
+                }
+                Event::OpenModPage(url) => packs::open_uri(&url),
                 Event::ListShaderPacks => {
                     self.settings.shader_packs =
                         horizon_client::shader_pack_list::scan(&Game::shader_packs_dir());
@@ -617,7 +641,8 @@ impl Loading {
                     super::packs::open_uri(super::options::ACCESSIBILITY_HELP_LINK)
                 }
                 // Mods' settings pages open only in a running game.
-                Event::NativeSettings(_) | Event::NativeButton(..) => {}
+                // The HUD editor needs a world: its button is inactive here.
+                Event::NativeSettings(_) | Event::NativeButton(..) | Event::HudEditor => {}
                 // The startup menu runs before the game opens a control socket,
                 // and before its sound engine (no clicks, no volume previews,
                 // and no music tracks to list or play).

@@ -782,9 +782,12 @@ mod tests {
         };
         let served = serve(Connection::local(b), probe, Duration::from_secs(30));
         served.send(vec![body(3, 10)], None);
-        assert_eq!(client.recv().unwrap(), packet(&body(3, 10)));
-        // What the session sends of its own accord.
-        assert_eq!(client.recv().unwrap(), packet(&body(0x21, 2)));
+        // The first worker sweep may send the session's unsolicited packet
+        // before the test queues its packet. Both must arrive before the kick,
+        // but these independent producers have no ordering between them.
+        let mut received = [client.recv().unwrap(), client.recv().unwrap()];
+        received.sort();
+        assert_eq!(received, [packet(&body(3, 10)), packet(&body(0x21, 2))]);
         client.send(&body(9, 1)).unwrap();
         client.send(&body(10, 1)).unwrap();
         assert_eq!(client.recv().unwrap(), packet(&body(0x7f, 3)));

@@ -106,7 +106,8 @@ fn fixture(window: Arc<Window>) -> Result<(), Box<dyn std::error::Error>> {
     let out = std::env::args().nth(1).ok_or("output directory required")?;
     let out = Path::new(&out);
     std::fs::create_dir_all(out)?;
-    native_render::install(Box::new([&Observer])).map_err(|_| "observer already installed")?;
+    native_render::install(Box::new([native_render::RenderEntry::new(0, &Observer)]))
+        .map_err(|_| "observer already installed")?;
     let white = [255; 16 * 16 * 4];
     let zero = [0; 4];
     let mut renderer = pollster::block_on(Renderer::new(
