@@ -499,29 +499,25 @@ jobs:
             curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal
           fi
           rustup toolchain install stable --profile minimal
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
       # Not every dyna-large runner has the data yet. Dispatches skip the tests there; main pushes fail.
-      - name: Link prepared vanilla data
+      - name: Prepare checkout-keyed vanilla data
         id: data
         env:
           EVENT: ${{ github.event_name }}
         run: |
           for dir in minecraft datagen horizon-client tools; do
             if [ ! -d "/cache/horizon-local/$dir" ]; then
-              echo "no prepared data on this runner ($RUNNER_NAME): /cache/horizon-local/$dir is missing"
+              echo "prepared data unavailable on this runner"
               if [ "$EVENT" = push ]; then exit 1; fi
               echo "present=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
           done
-          mkdir -p .local
-          for dir in minecraft datagen horizon-client tools; do
-            ln -sfn "/cache/horizon-local/$dir" ".local/$dir"
-          done
-      - uses: actions/setup-java@v4
-        if: steps.data.outputs.present != 'false' && matrix.shard == 'horizon-client'
-        with:
-          distribution: temurin
-          java-version: '25'
+          HORIZON_DYNA_CACHE=true HORIZON_PREPARED_CACHE="$DYNA_CI_BUILD/vanilla" HORIZON_SHARED_SOURCE=/cache/horizon-local bash tools/ci/vanilla-data.sh
       - name: Generate the fishing test's vanilla reference inputs
         if: steps.data.outputs.present != 'false' && matrix.shard == 'horizon-client'
         run: |
@@ -627,20 +623,17 @@ jobs:
             curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal
           fi
           rustup toolchain install stable --profile minimal
-      - name: Set up disk-backed parity scratch and link prepared vanilla data
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Set up disk-backed parity scratch and prepared vanilla data
         run: |
           rm -rf "$DYNA_CI_BUILD/parity-out" "$DYNA_CI_BUILD/parity-tmp"
           mkdir -p "$DYNA_CI_BUILD/parity-out" "$DYNA_CI_BUILD/parity-tmp"
           ln -s "$DYNA_CI_BUILD/parity-out" .local
           echo "TMPDIR=$DYNA_CI_BUILD/parity-tmp" >> "$GITHUB_ENV"
-          for dir in minecraft datagen horizon-client tools; do
-            test -d "/cache/horizon-local/$dir"
-            ln -s "/cache/horizon-local/$dir" ".local/$dir"
-          done
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
+          HORIZON_DYNA_CACHE=true HORIZON_PREPARED_CACHE="$DYNA_CI_BUILD/vanilla" HORIZON_SHARED_SOURCE=/cache/horizon-local bash tools/ci/vanilla-data.sh
       # Harness subprocess timeouts can be shorter than a cold release build. Match their build commands and target dir.
       - name: Build parity probes
         env:
