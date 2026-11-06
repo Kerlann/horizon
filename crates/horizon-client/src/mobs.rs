@@ -5198,6 +5198,126 @@ pub(crate) mod sensor_scan_tests {
         }
     }
 
+    /// Prototype for world-lead's read spec (not for merge): what the
+    /// alternatives to a narrow `Unavailable` cost.
+    #[test]
+    #[ignore]
+    fn world_view_proto_alternatives() {
+        use std::time::Instant;
+        let kind = kind();
+        /// 88 B: everything a mod's hot reads need that changes.
+        #[derive(Clone, Copy, Default)]
+        struct WideRow {
+            pos: [f64; 3],
+            vel: [f64; 3],
+            rot: [f32; 3],
+            health: f32,
+            vehicle: u32,
+            tick: u32,
+            flags: u32,
+            size: [f32; 2],
+            air: i32,
+            fire: i32,
+        }
+        /// A mob's extended row: wide row plus mob-only reads.
+        #[derive(Clone, Default)]
+        struct MobExt {
+            wide: WideRow,
+            max_health: f32,
+            target: u32,
+            leash: u32,
+            persist: u8,
+            no_ai: bool,
+            effects: [(u16, u8, u32); 4],
+            held: [u16; 6],
+            attrs: [f32; 8],
+        }
+        fn wide(m: &Mob) -> WideRow {
+            WideRow {
+                pos: [m.position.x, m.position.y, m.position.z],
+                vel: [m.velocity.x, m.velocity.y, m.velocity.z],
+                rot: [m.yaw, m.head_yaw, m.head_pitch],
+                health: m.health,
+                vehicle: 0,
+                tick: m.age,
+                flags: u32::from(m.on_ground),
+                size: [0.9, 1.4],
+                air: 300,
+                fire: 0,
+            }
+        }
+        println!(
+            "WideRow {} B, MobExt {} B, Mob {} B",
+            std::mem::size_of::<WideRow>(),
+            std::mem::size_of::<MobExt>(),
+            std::mem::size_of::<Mob>()
+        );
+        for n in [1000u32, 5000, 20000] {
+            let mut mobs: Vec<Mob> = (0..n)
+                .map(|id| Mob::new(id + 1, kind.clone(), Vec3::new(id as f64, 64.0, 0.0), 0.0))
+                .collect();
+            let reps = 20;
+            let per = |t: Instant| t.elapsed().as_secs_f64() * 1e6 / reps as f64;
+
+            // Wide row, refreshed for every mob once.
+            let mut rows = vec![WideRow::default(); mobs.len()];
+            let t = Instant::now();
+            for _ in 0..reps {
+                for (r, m) in rows.iter_mut().zip(&mobs) {
+                    *r = wide(m);
+                }
+            }
+            let wide_us = per(t);
+            // Mob extended row.
+            let mut ext = vec![MobExt::default(); mobs.len()];
+            let t = Instant::now();
+            for _ in 0..reps {
+                for (r, m) in ext.iter_mut().zip(&mobs) {
+                    r.wide = wide(m);
+                    r.max_health = m.health;
+                    r.target = m.id;
+                    r.persist = 1;
+                }
+            }
+            let ext_us = per(t);
+            // Lazy copy: a whole Mob clone, once per mob (the worst case: every
+            // lifted mob is read by a mod).
+            let t = Instant::now();
+            let mut sink = 0usize;
+            for _ in 0..reps {
+                for m in &mobs {
+                    let c = m.clone();
+                    sink += c.id as usize;
+                    std::hint::black_box(&c);
+                }
+            }
+            let clone_us = per(t);
+            // Split view: per tick, the mob in hand and the shared rest.
+            let cell = std::cell::Cell::new((std::ptr::null::<Mob>(), 0usize, std::ptr::null::<Mob>(), 0usize));
+            let t = Instant::now();
+            for _ in 0..reps {
+                for i in 0..mobs.len() {
+                    let (before, rest) = mobs.split_at_mut(i);
+                    let (m, after) = rest.split_first_mut().unwrap();
+                    cell.set((before.as_ptr(), before.len(), after.as_ptr(), after.len()));
+                    std::hint::black_box((&cell, &mut *m));
+                }
+            }
+            let split_us = per(t);
+            let (acc, read_ns) = (0f64, 0f64);
+            std::hint::black_box((acc, sink, &rows, &ext));
+            println!(
+                "n={n}: wide row refresh-all {wide_us:.0} us ({:.1} ns/mob, {} KB) | mob ext {ext_us:.0} us ({:.1} ns/mob, {} KB) | clone every mob {clone_us:.0} us ({:.0} ns/mob) | split view per tick {split_us:.0} us ({:.2} ns/mob) | live read via table+split {read_ns:.1} ns",
+                wide_us * 1e3 / n as f64,
+                n as usize * std::mem::size_of::<WideRow>() / 1024,
+                ext_us * 1e3 / n as f64,
+                n as usize * std::mem::size_of::<MobExt>() / 1024,
+                clone_us * 1e3 / n as f64,
+                split_us * 1e3 / n as f64,
+            );
+        }
+    }
+
     /// Prototype for world-lead's design (not for merge): what a stable read
     /// view of the whole world costs next to what the tick already pays.
     #[test]
