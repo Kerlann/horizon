@@ -50,27 +50,32 @@ impl Buffers {
         store: &mut StoreContextMut<'_, State>,
         cells: WasmList<wire::Cell>,
         index: usize,
-    ) -> wasmtime::Result<Option<usize>> {
+    ) -> wasmtime::Result<bool> {
         while self.inputs.len() <= index {
             self.inputs.push(Vec::new());
         }
         if cells.len() > 65_536 {
-            return Ok(None);
+            return Ok(false);
         }
         let input = &mut self.inputs[index];
         input.clear();
         let mut bytes = 0usize;
-        for cell in cells.iter(store.as_context_mut())? {
-            let cell = cell?;
+        for index in 0..cells.len() {
+            let cell = cells.get(store.as_context_mut(), index).unwrap()?;
             if let wire::Cell::Str(value) = &cell {
-                bytes = bytes.saturating_add(value.len());
+                let next = bytes.saturating_add(value.len());
+                charge(
+                    store.as_context_mut(),
+                    next.div_ceil(64) - bytes.div_ceil(64),
+                )?;
+                bytes = next;
                 if bytes > 1_048_576 {
-                    return Ok(None);
+                    return Ok(false);
                 }
             }
             input.push(cell);
         }
-        Ok(Some(bytes.div_ceil(64)))
+        Ok(true)
     }
 }
 
@@ -115,14 +120,15 @@ fn set_many(
     bounded_batch(writes.len())?;
     State::with_buffer::<Buffers, _>(store, |buffers, mut store| {
         let result = contain(|| {
+            #[cfg(test)]
+            let fuel_before = store.get_fuel().ok();
             buffers.begin();
             charge(&mut store, writes.len().max(1))?;
             for index in 0..writes.len() {
                 let (node, field, cells) = writes.get(store.as_context_mut(), index).unwrap()?;
                 charge(&mut store, node_cost(&node).saturating_add(cells.len()))?;
-                let bytes = buffers.input(&mut store, cells, index)?;
-                charge(&mut store, bytes.unwrap_or(0))?;
-                buffers.refused.push(bytes.is_none());
+                let accepted = buffers.input(&mut store, cells, index)?;
+                buffers.refused.push(!accepted);
                 buffers.requests.push((node, field));
             }
             for (index, (node, field)) in buffers.requests.drain(..).enumerate() {
@@ -132,6 +138,11 @@ fn set_many(
                     View.set_buffer(&node, field, &mut buffers.inputs[index])
                 };
                 Arc::get_mut(&mut buffers.sets).unwrap().push(value);
+            }
+            #[cfg(test)]
+            if let Some(before) = fuel_before {
+                tests::FUEL_DEBITS
+                    .with_borrow_mut(|debits| debits.push(before - store.get_fuel().unwrap()));
             }
             Ok(buffers.sets.clone())
         });

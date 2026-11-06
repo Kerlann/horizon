@@ -58,6 +58,25 @@ fn call(raw: HandleChatInputRaw, game: Option<Game>) {
             }
         }
     }
+    if matches!(message.as_str(), "strings_batch" | "strings_single") {
+        use mod_internals::runtime::{AsNode, bindings::horizon::mod_internals::view};
+        let node = game.node();
+        let cells = || {
+            vec![
+                view::Cell::Str("x".repeat(524_289)),
+                view::Cell::Str("x".repeat(524_289)),
+            ]
+        };
+        if message.as_str() == "strings_batch" {
+            let writes = (0..12).map(|_| (node, 0, cells())).collect::<Vec<_>>();
+            assert!(view::set_many(&writes).iter().all(Result::is_err));
+        } else {
+            for _ in 0..12 {
+                assert!(node.set(0, &cells()).is_err());
+            }
+        }
+        return;
+    }
     if message.as_str() == "oversize_cells" {
         use mod_internals::runtime::{AsNode, bindings::horizon::mod_internals::view};
         let node = game.node();

@@ -1069,6 +1069,22 @@ mod tests {
 
     #[test]
     #[ignore = "needs the internals guest fixture"]
+    fn guest_refused_strings_pay_the_same_fuel_as_single_calls() {
+        let batch = fixture_group_with_fuel(true);
+        let single = fixture_group_with_fuel(true);
+        take_debits();
+        fixture_result(&batch, &mut fixture_game(), "strings_batch").unwrap();
+        let batch_debits = take_debits();
+        fixture_result(&single, &mut fixture_game(), "strings_single").unwrap();
+        let single_debits = take_debits();
+        assert_eq!(
+            batch_debits.iter().sum::<u64>(),
+            single_debits.iter().sum::<u64>()
+        );
+    }
+
+    #[test]
+    #[ignore = "needs the internals guest fixture"]
     fn guest_oversized_cell_lists_leave_no_large_scratch() {
         let group = fixture_group();
         let mut game = fixture_game();
