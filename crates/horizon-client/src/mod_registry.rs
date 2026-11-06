@@ -252,6 +252,33 @@ pub fn install(
     })
 }
 
+/// Refuse a worker completion if another installer has since removed or
+/// replaced its content package. The caller holds the same home lock through
+/// activation and settings publication; native pins are never changed here.
+pub fn check_current_install(home: &Path, done: &Done) -> Result<(), String> {
+    let _lock = horizon_mods::install_lock::lock_home(home).map_err(|e| e.to_string())?;
+    let list = Installed::load(home)?;
+    let relative = format!("{}/{}.hmod", crate::mod_list::DIR, done.id);
+    let current = list.position(&done.id).map(|i| &list.entries[i]);
+    if current.is_none_or(|entry| entry["file"] != relative || entry["version"] != done.version)
+        || home
+            .join(crate::mod_list::NATIVE_DIR)
+            .join(format!("{}.hmod", done.id))
+            .exists()
+    {
+        return Err("the installed package changed before it could be enabled".into());
+    }
+    let package = horizon_mods::Package::read(&home.join(relative))?;
+    if package.manifest.id != done.id
+        || package.manifest.version != done.version
+        || package.manifest.native.is_some()
+        || package.manifest.wasm.is_some()
+    {
+        return Err("the installed package changed before it could be enabled".into());
+    }
+    Ok(())
+}
+
 /// Downloads `url` (at most `max` bytes): `https://` only, or a `file://` path
 /// when the index itself is a local test registry.
 pub fn download(url: &str, max: u64) -> Result<Vec<u8>, String> {

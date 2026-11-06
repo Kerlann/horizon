@@ -1,9 +1,11 @@
 //! Exclusive browser mutations per game home, shared by the game and launcher.
 //!
 //! Hold a guard across the entire load/modify/save transaction, including package
-//! replacement. The persistent `.mod-browser.lock` file must never be removed:
-//! locking the manifest itself would stop protecting it when it is replaced.
+//! replacement. Lock files live outside game homes, in a path-keyed directory
+//! in the system temporary folder, and must never be removed while participants
+//! can run. Deleting/recreating a pack profile must not replace its lock inode.
 //! Nested operations on the owning thread reuse the same OS lock.
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io;
@@ -29,10 +31,49 @@ fn registry() -> &'static Registry {
     REGISTRY.get_or_init(Registry::default)
 }
 
-/// Normalize existing homes, including aliases of the same directory.
+/// Resolve aliases without creating a home before acquiring its lock. A profile
+/// may be absent (or being deleted); resolve its nearest existing ancestor.
 fn normalize_home(home: &Path) -> io::Result<PathBuf> {
-    fs::create_dir_all(home)?;
-    let path = home.canonicalize()?;
+    let absolute = std::path::absolute(home)?;
+    let mut ancestor = absolute.as_path();
+    let mut missing = Vec::new();
+    let mut path = loop {
+        match ancestor.canonicalize() {
+            Ok(path) => {
+                if !path.is_dir() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::NotADirectory,
+                        "game home ancestor is not a directory",
+                    ));
+                }
+                break path;
+            }
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                // canonicalize cannot follow a dangling alias while a profile
+                // is absent. Resolve that link before appending missing parts.
+                if let Ok(target) = fs::read_link(ancestor) {
+                    let mut target = if target.is_absolute() {
+                        target
+                    } else {
+                        ancestor.parent().ok_or(e)?.join(target)
+                    };
+                    for name in missing.into_iter().rev() {
+                        target.push(name);
+                    }
+                    return normalize_home(&target);
+                }
+                let Some(name) = ancestor.file_name() else {
+                    return Err(e);
+                };
+                missing.push(name);
+                ancestor = ancestor.parent().ok_or(e)?;
+            }
+            Err(e) => return Err(e),
+        }
+    };
+    for name in missing.into_iter().rev() {
+        path.push(name);
+    }
     #[cfg(windows)]
     {
         let s = path.to_string_lossy();
@@ -47,6 +88,13 @@ fn normalize_home(home: &Path) -> io::Result<PathBuf> {
     {
         Ok(path)
     }
+}
+
+fn lock_path(home: &Path) -> PathBuf {
+    let key = Sha256::digest(home.as_os_str().as_encoded_bytes());
+    std::env::temp_dir()
+        .join("horizon-mod-browser-locks")
+        .join(format!("{key:x}.lock"))
 }
 
 /// Exclusive mutation access to one game home. Releases the OS lock when the
@@ -109,12 +157,14 @@ fn acquire(home: &Path, blocking: bool) -> io::Result<Option<HomeLockGuard>> {
         path,
         _not_send: std::marker::PhantomData,
     };
+    let lock = lock_path(&guard.path);
+    fs::create_dir_all(lock.parent().expect("lock directory"))?;
     let file = File::options()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open(guard.path.join(".mod-browser.lock"))?;
+        .open(lock)?;
     if blocking {
         file.lock()?;
     } else {
@@ -134,7 +184,9 @@ fn acquire(home: &Path, blocking: bool) -> io::Result<Option<HomeLockGuard>> {
 }
 
 /// Acquires exclusive mutation access, waiting for other threads or processes.
-/// Re-entrant on the owning thread. Filesystem errors refuse the operation.
+/// Re-entrant on the owning thread. Does not create the game home. Filesystem
+/// errors refuse the operation. All participants must use the same system
+/// temporary directory; lock files there are independent of profile lifetimes.
 pub fn lock_home(home: &Path) -> io::Result<HomeLockGuard> {
     acquire(home, true).map(|guard| guard.expect("blocking acquisition returns a guard"))
 }

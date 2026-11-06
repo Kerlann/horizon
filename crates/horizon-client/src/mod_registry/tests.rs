@@ -189,14 +189,40 @@ fn a_lock_error_never_downloads_or_changes_installed_files() {
     let bytes = ruby("1.0");
     let index = registry("1.0", &bytes, "file:///ruby.hmod");
     let home = scratch("lock-error");
-    fs::create_dir(home.join(".mod-browser.lock")).unwrap();
-    let error = install(&index, &home, "ruby", &|_, _| {
+    let blocked = home.join("not-a-directory");
+    fs::write(&blocked, b"file").unwrap();
+    let error = install(&index, &blocked.join("home"), "ruby", &|_, _| {
         panic!("lock errors must refuse the operation before downloading")
     })
     .unwrap_err();
     assert!(error.contains("cannot lock mod browser"), "{error}");
     assert!(!home.join(MANIFEST).exists());
     assert!(!home.join("horizon-mods").exists());
+    fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn completion_refuses_removed_updated_and_code_replacements() {
+    let bytes = ruby("1.0");
+    let index = registry("1.0", &bytes, "file:///ruby.hmod");
+    let home = scratch("completion");
+    let done = install(&index, &home, "ruby", &serve(bytes.clone())).unwrap();
+    check_current_install(&home, &done).unwrap();
+    let path = home.join("horizon-mods/ruby.hmod");
+    fs::remove_file(&path).unwrap();
+    assert!(check_current_install(&home, &done).is_err());
+    fs::write(&path, ruby("1.1")).unwrap();
+    assert!(check_current_install(&home, &done).is_err());
+    fs::write(&path, bytes).unwrap();
+    fs::create_dir_all(home.join(crate::mod_list::NATIVE_DIR)).unwrap();
+    fs::write(
+        home.join(crate::mod_list::NATIVE_DIR).join("ruby.hmod"),
+        b"native pin",
+    )
+    .unwrap();
+    let manifest = fs::read(home.join(MANIFEST)).unwrap();
+    assert!(check_current_install(&home, &done).is_err());
+    assert_eq!(fs::read(home.join(MANIFEST)).unwrap(), manifest);
     fs::remove_dir_all(home).unwrap();
 }
 

@@ -87,6 +87,9 @@ fn install_in(
     }
     let v = newest(index, p)?;
     let work = dir.join(&p.id);
+    // Also cover the existence check and failed-first-install cleanup. Inner
+    // installers re-enter this same home lock on the current thread.
+    let _lock = crate::browser::lock_home(&home(&work)).map_err(|e| e.to_string())?;
     let fresh = !work.exists();
     let result = install_version_in(index, local, p, v, &work, progress);
     if result.is_err() && fresh {
@@ -103,6 +106,8 @@ fn install_version_in(
     work: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Installed, String> {
+    let home = home(work);
+    let _lock = crate::browser::lock_home(&home).map_err(|e| e.to_string())?;
     let line = format!("{} {}", p.name, v.version);
     let file = FileRef {
         url: v.file.url.clone(),
@@ -120,7 +125,6 @@ fn install_version_in(
         let _ = fs::remove_file(&path);
     })?;
     let pack = Modpack::read(&path)?;
-    let home = home(work);
     fs::create_dir_all(&home).map_err(|e| format!("{}: {e}", home.display()))?;
     let mut mods = Vec::new();
     for m in &pack.manifest.mods {
@@ -160,6 +164,7 @@ fn install_version_in(
 /// Turns the game's command into the pack's profile: its own game folder (the player's
 /// options.txt copied in when the pack brings none), its taken-down mods turned off first.
 pub fn apply(cmd: &mut Command, work: &Path) -> Result<(), String> {
+    let _lock = crate::browser::lock_home(&home(work)).map_err(|e| e.to_string())?;
     if !is_pack(work) {
         return Err(format!("{} is not an installed modpack.", work.display()));
     }
@@ -177,7 +182,15 @@ pub fn apply(cmd: &mut Command, work: &Path) -> Result<(), String> {
 
 /// Removes an installed pack: its mods and the profile's saves.
 pub fn remove(work: &Path) -> Result<(), String> {
-    if work.parent() != Some(packs_dir().as_path()) || !is_pack(work) {
+    remove_in(work, &packs_dir())
+}
+
+fn remove_in(work: &Path, dir: &Path) -> Result<(), String> {
+    if work.parent() != Some(dir) {
+        return Err(format!("{} is not an installed modpack.", work.display()));
+    }
+    let _lock = crate::browser::lock_home(&home(work)).map_err(|e| e.to_string())?;
+    if !is_pack(work) {
         return Err(format!("{} is not an installed modpack.", work.display()));
     }
     fs::remove_dir_all(work).map_err(|e| format!("{}: {e}", work.display()))
@@ -286,6 +299,64 @@ mod tests {
             .contains("not a modpack"));
         assert!(install_in(&index, true, "nope", &packs, &|_, _| {}).is_err());
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn pack_download_and_constituent_installs_share_one_home_transaction() {
+        let dir = scratch("whole-transaction");
+        let index = registry(&dir, false, "");
+        let packs = dir.join("horizon-packs");
+        let target = home(&packs.join("cozy"));
+        let saw_pack = std::cell::Cell::new(false);
+        let saw_mod = std::cell::Cell::new(false);
+        install_in(&index, true, "cozy", &packs, &|line, _| {
+            if line.starts_with("Cozy ") {
+                saw_pack.set(true);
+            } else {
+                saw_mod.set(true);
+            }
+            std::thread::scope(|scope| {
+                scope
+                    .spawn(|| {
+                        assert!(crate::browser::try_lock_home(&target).is_none());
+                    })
+                    .join()
+                    .unwrap();
+            });
+        })
+        .unwrap();
+        assert!(saw_pack.get() && saw_mod.get());
+        assert!(!java::is_enabled(&target, "coords_hud"));
+        let record = read(&packs.join("cozy")).unwrap();
+        assert_eq!(record.mods, ["coords_hud 0.1.0"]);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn pack_removal_waits_for_its_home_transaction() {
+        let dir = scratch("remove-transaction");
+        let index = registry(&dir, false, "");
+        let packs = dir.join("horizon-packs");
+        let installed = install_in(&index, true, "cozy", &packs, &|_, _| {}).unwrap();
+        let target = home(&installed.work);
+        std::thread::scope(|scope| {
+            let guard = crate::browser::lock_home(&target).unwrap();
+            let (send, receive) = std::sync::mpsc::channel();
+            let work = &installed.work;
+            let parent = &packs;
+            let worker = scope.spawn(move || {
+                send.send(()).unwrap();
+                remove_in(work, parent).unwrap();
+            });
+            receive.recv().unwrap();
+            assert!(installed.work.join(RECORD).is_file());
+            // This nested helper uses the same lock, not a second mutex.
+            java::set_enabled(&target, "coords_hud", true).unwrap();
+            drop(guard);
+            worker.join().unwrap();
+        });
+        assert!(!installed.work.exists());
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

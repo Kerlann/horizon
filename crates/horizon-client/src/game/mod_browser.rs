@@ -7,11 +7,11 @@ use super::Game;
 use horizon_client::{
     lang,
     mod_browser::{Listing, ModBrowser, Status},
-    mod_list::ModList,
     mod_registry::{self, Done},
+    settings::Settings,
 };
 use horizon_mods::index::Index;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{
     Arc,
     mpsc::{Receiver, TryRecvError, channel},
@@ -28,6 +28,7 @@ enum Finished {
 #[derive(Default)]
 pub(super) struct Jobs {
     running: Option<Receiver<Finished>>,
+    pending: Option<Finished>,
     index: Option<Arc<Index>>,
 }
 
@@ -35,7 +36,7 @@ impl Jobs {
     /// Browse mods opened: the index, read again from the registry (the
     /// launcher's copy when it can't be reached).
     pub(super) fn browse(&mut self, ui: &mut ModBrowser, home: PathBuf) {
-        if self.running.is_some() {
+        if self.running.is_some() || self.pending.is_some() {
             return;
         }
         if ui.status != Status::Ready {
@@ -57,7 +58,7 @@ impl Jobs {
         let Some(index) = self.index.clone() else {
             return;
         };
-        if self.running.is_some() {
+        if self.running.is_some() || self.pending.is_some() {
             return;
         }
         ui.installing = Some(id.clone());
@@ -71,26 +72,37 @@ impl Jobs {
         });
     }
 
-    /// What finished since the last frame, into `ui`. An installed mod is
-    /// turned on in `mods`; the caller saves the settings and lists the mods
-    /// again when this returns true. Completion waits while a world owns its frozen registry set.
-    pub(super) fn poll(&mut self, ui: &mut ModBrowser, mods: &mut ModList, in_world: bool) -> bool {
+    /// What finished since the last frame, into `ui`. Activate and save against
+    /// fresh settings in the installer's transaction; callers list mods again
+    /// when this returns true. A world keeps its frozen registry set, and a busy
+    /// launcher leaves the completion queued rather than blocking the window.
+    pub(super) fn poll(
+        &mut self,
+        ui: &mut ModBrowser,
+        settings: &mut Settings,
+        options: &Path,
+        in_world: bool,
+    ) -> bool {
         if in_world {
             return false;
         }
-        let Some(running) = &self.running else {
-            return false;
-        };
-        let finished = match running.try_recv() {
-            Ok(finished) => finished,
-            Err(TryRecvError::Empty) => return false,
-            Err(TryRecvError::Disconnected) => {
-                self.running = None;
-                ui.installing = None;
-                if ui.status == Status::Loading {
-                    ui.status = Status::Failed("the worker stopped".into());
-                }
+        let finished = if let Some(finished) = self.pending.take() {
+            finished
+        } else {
+            let Some(running) = &self.running else {
                 return false;
+            };
+            match running.try_recv() {
+                Ok(finished) => finished,
+                Err(TryRecvError::Empty) => return false,
+                Err(TryRecvError::Disconnected) => {
+                    self.running = None;
+                    ui.installing = None;
+                    if ui.status == Status::Loading {
+                        ui.status = Status::Failed("the worker stopped".into());
+                    }
+                    return false;
+                }
             }
         };
         self.running = None;
@@ -109,8 +121,27 @@ impl Jobs {
                 false
             }
             Finished::Installed(done, listings) => {
+                let home = horizon_client::logging::shared_dir(
+                    options.parent().unwrap_or_else(|| Path::new(".")),
+                );
+                let Some(_lock) = horizon_mods::install_lock::try_lock_home(&home) else {
+                    self.pending = Some(Finished::Installed(done, listings));
+                    return false;
+                };
                 ui.installing = None;
                 ui.listings = listings;
+                let done = done.and_then(|done| {
+                    // The launcher may have removed or replaced this package
+                    // since the worker finished. Never activate a stale result.
+                    mod_registry::check_current_install(&home, &done)?;
+                    settings
+                        .save_with_mods(options, |mods| {
+                            mods.enabled.insert(done.id.clone());
+                            mods.disabled.remove(&done.id);
+                        })
+                        .map_err(|e| e.to_string())?;
+                    Ok(done)
+                });
                 match done {
                     Ok(done) => {
                         log::info!(
@@ -119,8 +150,6 @@ impl Jobs {
                             done.version,
                             if done.verified { "signed" } else { "unsigned" }
                         );
-                        mods.enabled.insert(done.id.clone());
-                        mods.disabled.remove(&done.id);
                         let name = ui
                             .listing(&done.id)
                             .map_or(done.id.clone(), |l| l.name.clone());
@@ -151,11 +180,11 @@ impl Game<'_> {
     pub(super) fn drive_mod_browser(&mut self) {
         let installed = self.mod_jobs.poll(
             &mut self.ui.options.mod_browser,
-            &mut self.settings.mods,
+            &mut self.settings,
+            &Self::options_path(),
             self.player.is_some(),
         );
         if installed {
-            self.settings.save(&Self::options_path());
             self.start_mods();
         }
     }
@@ -164,17 +193,23 @@ impl Game<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
-    #[test]
-    fn an_install_finishing_after_world_open_waits_to_enable_its_content() {
+    fn completed_install(name: &str) -> (PathBuf, Settings, Jobs, ModBrowser) {
+        let home = std::env::temp_dir().join(format!(
+            "horizon-browser-completion-{name}-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(home.join("horizon-mods")).unwrap();
+        let package = horizon_mods::Package::write_files(
+            "id = \"ruby\"\nname = \"Ruby\"\nversion = \"1.0\"\napi = \"0.2\"\nside = \"both\"\ncapabilities = [\"registries\"]\n",
+            &[],
+        ).unwrap();
+        fs::write(home.join("horizon-mods/ruby.hmod"), package).unwrap();
+        fs::write(home.join(mod_registry::MANIFEST), r#"{"entries":[{"source":"horizon","project":"ruby","version":"1.0","file":"horizon-mods/ruby.hmod"},{"source":"horizon","project":"zoom","version":"1","file":"horizon-native-mods/zoom.hmod","pin":"exact-build"}]}"#).unwrap();
+        fs::write(home.join(horizon_mods::mod_list::FILE), "mod.ruby:false\n").unwrap();
+        let settings = Settings::load(&home.join("options.txt"));
         let (send, receive) = channel();
-        let mut jobs = Jobs {
-            running: Some(receive),
-            index: None,
-        };
-        let mut ui = ModBrowser::default();
-        let mut mods = ModList::default();
-        mods.disabled.insert("ruby".into());
         send.send(Finished::Installed(
             Ok(Done {
                 id: "ruby".into(),
@@ -184,13 +219,90 @@ mod tests {
             Vec::new(),
         ))
         .unwrap();
-        assert!(!jobs.poll(&mut ui, &mut mods, true));
-        assert!(mods.enabled.is_empty());
-        assert!(mods.disabled.contains("ruby"));
+        (
+            home,
+            settings,
+            Jobs {
+                running: Some(receive),
+                ..Jobs::default()
+            },
+            ModBrowser::default(),
+        )
+    }
+
+    #[test]
+    fn an_install_finishing_after_world_open_waits_to_enable_its_content() {
+        let (home, mut settings, mut jobs, mut ui) = completed_install("world");
+        let options = home.join("options.txt");
+        assert!(!jobs.poll(&mut ui, &mut settings, &options, true));
+        assert!(settings.mods.enabled.is_empty());
+        assert!(settings.mods.disabled.contains("ruby"));
         assert!(jobs.running.is_some());
-        assert!(jobs.poll(&mut ui, &mut mods, false));
-        assert!(mods.enabled.contains("ruby"));
-        assert!(!mods.disabled.contains("ruby"));
+        let pins = fs::read(home.join(mod_registry::MANIFEST)).unwrap();
+        // The launcher writes while completion is deferred by the open world.
+        fs::write(
+            home.join(horizon_mods::mod_list::FILE),
+            "mod.ruby:false\nmod.launcher:true\nkey.launcher.open:key.keyboard.x\n",
+        )
+        .unwrap();
+        assert!(jobs.poll(&mut ui, &mut settings, &options, false));
+        assert!(settings.mods.enabled.contains("ruby"));
+        assert!(settings.mods.enabled.contains("launcher"));
+        assert_eq!(settings.mods.keys["launcher"]["open"], "key.keyboard.x");
+        assert!(!settings.mods.disabled.contains("ruby"));
         assert!(jobs.running.is_none());
+        assert_eq!(fs::read(home.join(mod_registry::MANIFEST)).unwrap(), pins);
+        assert_eq!(
+            horizon_mods::mod_list::ModList::load(&home).enabled,
+            settings.mods.enabled
+        );
+        fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn a_busy_launcher_keeps_the_completion_queued() {
+        let (home, mut settings, mut jobs, mut ui) = completed_install("busy");
+        std::thread::scope(|scope| {
+            let (ready, wait) = channel();
+            let (release, released) = channel();
+            let target = &home;
+            let worker = scope.spawn(move || {
+                let _guard = horizon_mods::install_lock::lock_home(target).unwrap();
+                ready.send(()).unwrap();
+                released.recv().unwrap();
+                fs::write(
+                    target.join(horizon_mods::mod_list::FILE),
+                    "mod.launcher:true\n",
+                )
+                .unwrap();
+            });
+            wait.recv().unwrap();
+            assert!(!jobs.poll(&mut ui, &mut settings, &home.join("options.txt"), false));
+            assert!(jobs.pending.is_some());
+            release.send(()).unwrap();
+            worker.join().unwrap();
+        });
+        assert!(jobs.poll(&mut ui, &mut settings, &home.join("options.txt"), false));
+        assert!(settings.mods.enabled.contains("launcher"));
+        assert!(settings.mods.enabled.contains("ruby"));
+        fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn a_stale_completion_does_not_enable_a_replacement_native_pin() {
+        let (home, mut settings, mut jobs, mut ui) = completed_install("replaced");
+        let pins = r#"{"entries":[{"source":"horizon","project":"ruby","version":"1.0","file":"horizon-native-mods/ruby.hmod","pin":"exact-build"}]}"#;
+        fs::write(home.join(mod_registry::MANIFEST), pins).unwrap();
+        assert!(!jobs.poll(&mut ui, &mut settings, &home.join("options.txt"), false));
+        assert_eq!(
+            fs::read_to_string(home.join(horizon_mods::mod_list::FILE)).unwrap(),
+            "mod.ruby:false\n"
+        );
+        assert_eq!(
+            fs::read_to_string(home.join(mod_registry::MANIFEST)).unwrap(),
+            pins
+        );
+        assert!(matches!(ui.message, Some((_, false))));
+        fs::remove_dir_all(home).unwrap();
     }
 }
