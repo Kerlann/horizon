@@ -54,9 +54,7 @@ its current container; this is distinct from an identity-strict automatic restor
 
 ## Retaining a handle
 
-A `BlockEntityRef` names one live entity, not every entity later placed at its position.
-Removal, replacement and chunk reload invalidate it; acquire another with
-`host.block_entity(level, position)`. In-place saved-data edits and temporary tick
-storage preserve identity. Option reads return `None` for a stale handle; item and
-menu-data Result methods return their error's `Stale` variant. No stale write
-reaches the replacement.
+A `BlockEntityRef` names one live entity, not every entity later placed at its position. Removal,
+replacement and chunk reload invalidate it; reacquire with `host.block_entity(level, position)`.
+In-place data edits and temporary tick storage preserve identity. Option reads return `None` for
+stale handles; item and menu-data Result methods return `Stale`, never writing to a replacement.

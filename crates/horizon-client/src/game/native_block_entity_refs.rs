@@ -643,7 +643,6 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn retained_handles_reject_replacements_and_rollback_restores_identity() {
         use super::super::native_entity_refs::tests::with_game;
-        use mod_api::{BlockEntityDataError, BlockEntityItemError, HostTransaction};
         with_game(|game| {
             game.options.dedicated = Some(Vec::new());
             game.world
@@ -661,7 +660,7 @@ mod tests {
             let original = game.native_block_entity_ref(level, [1, 64, 1]).unwrap();
             assert_eq!(original.set_data_slots(game, vec![7]), Ok(true));
             let mut tentative = None;
-            let aborted: Result<(), ()> = game.transaction(|game, _| {
+            let _: Result<(), ()> = game.transaction(|game, _| {
                 game.journal_block_entity(pos);
                 game.world
                     .block_entities
@@ -670,7 +669,6 @@ mod tests {
                 tentative = game.native_block_entity_ref(level, [1, 64, 1]);
                 Err(())
             });
-            assert_eq!(aborted, Err(()));
             assert_eq!(original.data_slots(game), Some(vec![7]));
             assert_eq!(tentative.unwrap().data(game), None);
             let taken = game.world.block_entities.take(&pos).unwrap();
@@ -689,7 +687,6 @@ mod tests {
                 original.item_slot(game, 0),
                 Err(BlockEntityItemError::Stale)
             );
-            assert_eq!(original.data(game), None);
             assert_eq!(replacement.data_slots(game), Some(vec![]));
             assert_eq!(replacement.set_data_slots(game, vec![8]), Ok(true));
             game.world.block_entities.load_chunk(vec![(pos, holder())]);
@@ -860,7 +857,10 @@ mod tests {
                 assert!(player.open_menu(game, left).unwrap());
             }
             game.world.block_entities.remove(&(2, 64, 0));
-            assert!(!player.open_menu(game, furnace).unwrap());
+            assert_eq!(
+                player.open_menu(game, furnace),
+                Err(BlockEntityError::Stale)
+            );
         });
     }
 

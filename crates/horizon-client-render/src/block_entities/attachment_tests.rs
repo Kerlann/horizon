@@ -1,6 +1,6 @@
 use super::*;
 use horizon_world::attachments::{
-    AttachmentType, index::AttachmentIndex, observer::IndexedAttachmentObserver,
+    AttachmentType, Holder, index::AttachmentIndex, observer::IndexedAttachmentObserver,
 };
 use std::sync::{Mutex, Weak};
 
