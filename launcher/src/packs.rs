@@ -217,6 +217,7 @@ fn set_line(path: &Path, key: &str, value: &str) -> Result<(), String> {
 /// Turns a pack on or off. A resource pack turned on goes on top; a shader pack turned on
 /// replaces the one that was.
 pub fn set_enabled(home: &Path, pack: &Pack, on: bool) -> Result<(), String> {
+    let _lock = crate::browser::lock_home(home).map_err(|e| e.to_string())?;
     match pack.kind {
         Kind::Resource => {
             let options = home.join(OPTIONS);
@@ -306,6 +307,7 @@ pub fn kind_of(file: &Path) -> Result<Kind, String> {
 /// Copies a pack file into the right folder of `home`, under a name not taken yet. Returns it,
 /// turned off.
 pub fn add(home: &Path, file: &Path) -> Result<Pack, String> {
+    let _lock = crate::browser::lock_home(home).map_err(|e| e.to_string())?;
     let kind = kind_of(file)?;
     let dir = home.join(kind.folder());
     fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -332,7 +334,13 @@ pub fn add(home: &Path, file: &Path) -> Result<Pack, String> {
 
 /// Turns the pack off and moves it to the system's trash.
 pub fn remove(home: &Path, pack: &Pack) -> Result<(), String> {
-    if pack.enabled {
+    let _lock = crate::browser::lock_home(home).map_err(|e| e.to_string())?;
+    // The row may predate a concurrent enable; clear the fresh selection even
+    // when the displayed snapshot said this pack was off.
+    if list(home, pack.kind)
+        .iter()
+        .any(|current| current.file == pack.file && current.enabled)
+    {
         set_enabled(home, pack, false)?;
     }
     crate::desktop_seams::to_trash(&pack.path)

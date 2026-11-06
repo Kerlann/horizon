@@ -429,6 +429,13 @@ fn download_pack(versions: &str, dir: &Path) -> Message {
             ));
         }
     }
+    // The pack folder belongs to its parent game home. Reserve a free name
+    // through publication in the same transaction as launcher pack installs.
+    let home = dir.parent().unwrap_or_else(|| Path::new("."));
+    let _lock = match horizon_mods::install_lock::lock_home(home) {
+        Ok(lock) => lock,
+        Err(e) => return Message::Failed(e.to_string()),
+    };
     let name = safe_file_name(&name);
     if let Err(e) = std::fs::create_dir_all(dir) {
         return Message::Failed(e.to_string());
