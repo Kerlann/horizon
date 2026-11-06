@@ -17,9 +17,10 @@ class PreparedCacheTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=ROOT / "target") as directory:
             root = Path(directory)
             source, cache, work, tmp = [root / x for x in ("source", "cache", "work", "temp")]
-            for path in (source / "minecraft/26.3", source / "tools", cache, work, tmp):
+            for path in (source / "minecraft/26.3", source / "horizon-client/26.3", source / "tools", cache, work, tmp):
                 path.mkdir(parents=True)
             (source / "minecraft/26.3/prepared.json").write_text("{}")
+            (source / "horizon-client/26.3/extra").write_text("shared")
             (work / "research-lock.json").write_text('{"version": "26.3"}')
             target = work / "target/release"
             target.mkdir(parents=True)
@@ -38,6 +39,7 @@ class PreparedCacheTest(unittest.TestCase):
                 return subprocess.run(["bash", SCRIPT], cwd=work, env=env, text=True,
                                       capture_output=True, check=True).stdout
             self.assertIn("prepared key fixture stale", run())
+            self.assertEqual((work / ".local/horizon-client/26.3/extra").read_text(), "shared")
             self.assertEqual(run(), "prepared key fixture fresh\n")
             lock = cache / "prepared/.lock-file"
             holder = subprocess.Popen(["bash", "-c", 'exec 9>"$1"; flock 9; exec sleep 60', "holder", str(lock)])
@@ -51,6 +53,25 @@ class PreparedCacheTest(unittest.TestCase):
             out, err = waiter.communicate(timeout=5)
             self.assertEqual(waiter.returncode, 0, err)
             self.assertEqual(out, "prepared key fixture fresh\n")
+            # A job dying during seed leaves no completion marker; the next job rebuilds.
+            other = dict(env, HORIZON_PREPARE_KEY="interrupted", SEED_STARTED=str(root / "seed-started"))
+            cp = binary / "cp"
+            cp.write_text('#!/bin/sh\ntouch "$SEED_STARTED"\nexec sleep 60\n')
+            cp.chmod(0o755)
+            process = subprocess.Popen(["bash", SCRIPT], cwd=work, env=other, start_new_session=True,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            for _ in range(100):
+                if (root / "seed-started").exists(): break
+                time.sleep(0.05)
+            self.assertTrue((root / "seed-started").exists())
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=5)
+            self.assertFalse((cache / "prepared/interrupted/.entries").exists())
+            cp.unlink()
+            retry = subprocess.run(["bash", SCRIPT], cwd=work, env=other, text=True,
+                                   capture_output=True, check=True)
+            self.assertIn("prepared key interrupted stale", retry.stdout)
+            self.assertTrue((cache / "prepared/interrupted/.entries").exists())
 
 
 if __name__ == "__main__":

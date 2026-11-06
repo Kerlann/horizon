@@ -99,6 +99,10 @@ if [ ! -f "$prepared/.entries" ]; then
   fi
   LC_ALL=C comm -13 <(echo "$before") <(ls -1A .local | LC_ALL=C sort) > "$RUNNER_TEMP/prepared-entries"
   while read -r name; do mv ".local/$name" "$prepared/$name"; done < "$RUNNER_TEMP/prepared-entries"
+  if [ "$dyna" = true ]; then
+    # Preserve launcher-provided extras without overwriting this checkout's generated files.
+    cp -Rn --reflink=auto "$source/horizon-client/$version/." "$prepared/horizon-client/$version/"
+  fi
   mv "$RUNNER_TEMP/prepared-entries" "$prepared/.entries"
   if [ "$dyna" != true ]; then echo "Prepared in $((SECONDS - started)) s: $(tr '\n' ' ' < "$prepared/.entries")"; fi
 fi
