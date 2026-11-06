@@ -342,6 +342,11 @@ template block uses its declared type; undeclared template blocks retain their v
 The hooks about the entity (`block_entity_tick`, `block_entity_update_tag`, `pre_remove_side_effects`,
 `menu_button`, `menu_quick_move`) find it by that declared type; the others (`block_entity`, `screen`, the
 block hooks) by block. The factory is a `BlockEntityPart` method, not a global `Hooks` method.
+The server tick receives a live `BlockEntityRef`, not a mutable payload. Its self-reads and transactional
+item/data writes reach the same storage the engine uses; an outer abort restores committed child edits.
+Removal uses current contents and attachments, and the tick never puts an old payload back. Initialize
+menu data through `set_data_slots` after creation/loading; use `item_slot`/`set_item_slot` for internal
+recipe slots, and `ITEMS` for external automation policy.
 
 `r.block_entity_type_key("other:press")` looks up another mod's type, and
 `r.block_entity_type_key("minecraft:chest")` looks up a vanilla type. Both return the same opaque

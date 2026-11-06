@@ -582,8 +582,8 @@ impl GameLevel<'_> {
         }
         // A mod's block entity answers its parts in place (its slot, so its
         // attachments, stay until `put`), as vanilla's override runs on `this`.
-        // One out for its own tick or menu button, which an empty id stands in
-        // for, isn't here to answer: its part isn't asked.
+        // A detached menu callback leaves an empty-id marker, not the entity;
+        // that marker has no Part to ask. A ticking entity remains in place.
         let mut part_drops = Vec::new();
         if side_effects
             && matches!(

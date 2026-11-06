@@ -255,6 +255,14 @@ pub(super) fn emit(
                     }
                     "& ItemStack" => format!("{table}(|| Some(&*{key}.item))"),
                     "& str" => format!("{table}(|| Some({key}))"),
+                    "BlockEntityRef" => {
+                        let Some((host, _)) = &host else {
+                            return Err(format!("{name} needs a Host to resolve {key}"));
+                        };
+                        format!(
+                            "block_entity_kind(|| {key}.kind(&*{host}).and_then(block_entity_type_name))"
+                        )
+                    }
                     // An entity's type id need not be its block's: its own table.
                     "& ModBlockEntity" | "& mut ModBlockEntity" => {
                         format!("block_entity_kind(|| Some({key}.id()))")

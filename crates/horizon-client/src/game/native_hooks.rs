@@ -1028,7 +1028,7 @@ use mod_api::{
     NativeInteractionResult, NativeItemClick, NativeTriState, NeighbourUpdate, Suggestion,
     TooltipElement, UsePhase,
 };
-use mod_api::{BlockKey, EffectKey};
+use mod_api::{BlockEntityRef, BlockKey, EffectKey};
 pub(crate) use mod_api::{
     ClientPacket, ClientPayload, NativeBlockRim, NativeColoredLight, NativeExplosionStart,
     NativeItemFished, NativeLootDrops, NativeMinimap, NativeMod, NativePanelEvent,
@@ -3831,17 +3831,10 @@ impl Game<'_> {
     pub(super) fn native_item_container(&self, item: &str, slots: &mut Option<u32>) {
         self.fire_item_container(item, slots);
     }
-    /// A server tick of the block entity at `pos`, in vanilla's order among
-    /// the others (`Level.tickBlockEntities`), when its `id` is yours: read
-    /// and change its saved compound `nbt`, its item slots `items` (keep
-    /// their count: as many as its container has, none without one) and the
-    /// data slots its menu shows (`data`). It is out of the world during the
-    /// call (the block entity at `pos` reads as a `Mod` with an empty id, and
-    /// a save leaves it out); if the call removes or replaces it, `entity` is
-    /// dropped. Clients, the window's own in single player included, get
-    /// what `native_block_entity_update_tag` gives when its chunk is sent or
-    /// its block changes.
-    pub(super) fn native_block_entity_tick(&mut self, pos: [i32; 3], entity: &mut ModBlockEntity) {
+    /// A server tick of the live block entity at `pos` (`Level.tickBlockEntities`).
+    /// Reads and transactional handle writes reach its authoritative storage during the call;
+    /// removal drops its current contents and there is no detached payload to put back.
+    pub(super) fn native_block_entity_tick(&mut self, pos: [i32; 3], entity: BlockEntityRef) {
         self.fire_block_entity_tick(pos, entity);
     }
     /// A consumable's effect of a mod's own kind: the item's `on_consume_effects`
@@ -11896,29 +11889,42 @@ impl Game<'_> {
     }
     /// The tick of the mod block entity at `pos`.
     pub(super) fn tick_mod_block_entity(&mut self, pos: Pos) {
-        let Some(BlockEntity::Mod(m)) = self.world.block_entities.get_mut(&pos) else {
+        let Some(BlockEntity::Mod(holder)) = self.world.block_entities.get(&pos) else {
             return;
         };
-        // An empty id marks its place while the mod has it.
-        let mut taken = std::mem::take(&mut **m);
-        let items = taken.items.clone();
+        if holder.id().is_empty() {
+            return;
+        }
         let state = self.world.block(pos.0, pos.1, pos.2).0;
         let slots = self
             .world
             .block_entities
             .mod_container(state)
             .map_or(0, |c| c.slots);
-        // Grown only: items a container no longer has room for stay saved.
-        if taken.items.len() < slots {
-            taken.items.resize(slots, None);
+        let grow = holder.items.len() < slots;
+        let encode = slots == 0 && !holder.items.is_empty();
+        if grow || encode {
+            // Normalize storage only: the saved contents and logical inventory are unchanged.
+            self.journal_block_entity(pos);
+            let BlockEntity::Mod(holder) = self.world.block_entities.get_mut(&pos).unwrap() else {
+                unreachable!("journal capture cannot replace a holder")
+            };
+            if grow {
+                holder.items.resize(slots, None);
+            }
+            if encode {
+                let items = horizon_client::save::encode_items(&std::mem::take(&mut holder.items));
+                holder.nbt.insert("Items".into(), items);
+            }
         }
-        // Without a container, an `Items` item list is the mod's own field.
-        if slots == 0 && !taken.items.is_empty() {
-            let items = horizon_client::save::encode_items(&std::mem::take(&mut taken.items));
-            taken.nbt.insert("Items".into(), items);
+        if !mod_api::__private::has_part_hook(mod_api::HookId::BlockEntityTick) {
+            return;
         }
-        self.native_block_entity_tick([pos.0, pos.1, pos.2], &mut taken);
-        self.put_back_mod_block_entity(pos, taken, &items);
+        let Some(level) = self.native_level(self.dim.id()) else {
+            return;
+        };
+        let entity = mod_api::__private::game::block_entity_ref(level, [pos.0, pos.1, pos.2]);
+        self.native_block_entity_tick([pos.0, pos.1, pos.2], entity);
     }
     /// Puts back a mod block entity taken out for a call, unless the call
     /// removed or replaced it, with what its `setChanged` does.
@@ -12487,13 +12493,17 @@ mod tests {
             }
             fn block_entity_tick(
                 &self,
-                _: &mut dyn ServerHost,
-                event: &mut BlockEntityTickEvent<'_>,
+                host: &mut dyn ServerHost,
+                event: &mut BlockEntityTickEvent,
             ) {
-                let Some(Tag::Long(energy)) = event.entity.nbt.get_mut(&"energy".into()) else {
+                let data = event.entity.data(host).unwrap();
+                let Some(Tag::Long(energy)) = data.get(&"energy".into()) else {
                     panic!("factory payload missing");
                 };
-                *energy += 1;
+                assert!(event.entity.merge_data(
+                    host,
+                    Compound::from([("energy".into(), Tag::Long(energy + 1))])
+                ));
             }
         }
         struct User {
@@ -12763,15 +12773,11 @@ mod tests {
                 .insert(pos, BlockEntity::Mod(Box::new(machine)));
             assert_eq!(
                 game.native_with_mod_block_entity([1, 64, 1], |entity| {
-                    let mut event = mod_api::BlockEntityTickEvent {
-                        pos: [1, 64, 1],
-                        entity: mod_api::ModBlockEntityView::new(entity),
-                    };
-                    *event.entity = ModBlockEntityFields {
+                    **entity = ModBlockEntityFields {
                         data: vec![7],
                         ..Default::default()
                     };
-                    assert_eq!(event.entity.id(), "test:machine");
+                    assert_eq!(entity.id(), "test:machine");
                 }),
                 Some(())
             );

@@ -19,6 +19,16 @@ mod tests {
         #[derive(Clone, Copy)]
         pub(super) struct LevelRef;
         #[derive(Clone, Copy)]
+        pub(super) struct BlockEntityRef;
+        impl BlockEntityRef {
+            pub(super) fn kind(self, _: &dyn super::Host) -> Option<u32> {
+                Some(0)
+            }
+        }
+        pub(super) fn block_entity_type_name(_: u32) -> Option<&'static str> {
+            Some("machine")
+        }
+        #[derive(Clone, Copy)]
         pub(super) struct FluidState;
         pub(super) struct PlacementContext;
         #[derive(Clone, Copy)]

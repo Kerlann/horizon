@@ -2355,8 +2355,10 @@ pub mod tests {
         fn block_entity_ticks(&self, _: &dyn Host, event: &mut BlockEntityTicksEvent<'_>) {
             event.ticks = true;
         }
-        fn block_entity_tick(&self, _: &mut dyn ServerHost, event: &mut BlockEntityTickEvent<'_>) {
-            event.entity.data.push(1);
+        fn block_entity_tick(&self, host: &mut dyn ServerHost, event: &mut BlockEntityTickEvent) {
+            let mut data = event.entity.data_slots(host).unwrap();
+            data.push(1);
+            assert_eq!(event.entity.set_data_slots(host, data), Ok(true));
         }
         fn block_entity_view_distance(
             &self,
@@ -2385,12 +2387,8 @@ pub mod tests {
     #[mod_api::horizon_part]
     impl BlockEntityPart for Hoard {
         /// With data `[1]`, it replaces its own block with granite.
-        fn block_entity_tick(
-            &self,
-            host: &mut dyn ServerHost,
-            event: &mut BlockEntityTickEvent<'_>,
-        ) {
-            if event.entity.data == [1] {
+        fn block_entity_tick(&self, host: &mut dyn ServerHost, event: &mut BlockEntityTickEvent) {
+            if event.entity.data_slots(host).as_deref() == Some(&[1]) {
                 let level = host.level("minecraft:overworld").unwrap();
                 let state = host.block_state_default(self.0).unwrap();
                 assert!(level.set_block(
@@ -6321,10 +6319,54 @@ pub mod tests {
         // The ticker is asked by block: the type id is not a block.
         assert!(ticks("test:press"));
         assert!(!ticks("doubler:press_entity"));
+        struct TickHost {
+            kind: Option<BlockEntityTypeKey>,
+            data: Vec<i32>,
+        }
+        impl Backend for TickHost {
+            fn block_entity_kind(&self, _: BlockEntityRef) -> Option<BlockEntityTypeKey> {
+                self.kind
+            }
+            fn block_entity_data_slots(&self, _: BlockEntityRef) -> Option<Vec<i32>> {
+                Some(self.data.clone())
+            }
+        }
+        impl BackendMut for TickHost {
+            fn block_entity_set_data_slots(
+                &mut self,
+                _: BlockEntityRef,
+                data: Vec<i32>,
+            ) -> Result<bool, BlockEntityDataError> {
+                self.data = data;
+                Ok(true)
+            }
+        }
+        impl Host for TickHost {
+            fn backend(&self) -> Option<BackendRef<'_>> {
+                Some(BackendRef::of(self))
+            }
+        }
+        impl ServerHost for TickHost {
+            fn backend_mut(&mut self) -> Option<BackendMutRef<'_>> {
+                Some(BackendMutRef::of(self))
+            }
+        }
         let tick = |kind: &str| {
-            let mut entity = ModBlockEntity::new(kind.into(), Default::default());
-            dispatch_block_entity_tick(&mut NoHost, [0, 64, 0], &mut entity);
-            entity.data.len()
+            let mut host = TickHost {
+                kind: super::requested_keys()
+                    .block_entity_types
+                    .slots
+                    .get(kind)
+                    .copied()
+                    .map(BlockEntityTypeKey),
+                data: vec![],
+            };
+            let entity = BlockEntityRef {
+                level: here(),
+                position: [0, 64, 0],
+            };
+            dispatch_block_entity_tick(&mut host, [0, 64, 0], entity);
+            host.data.len()
         };
         // The tick is asked by the entity's type, which differs from its block's id.
         assert_eq!(tick("doubler:press_entity"), 1);

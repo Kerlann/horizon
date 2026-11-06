@@ -242,14 +242,16 @@ requires a farmer at work and `mob_griefing` enabled.
 
 - Block entities for a mod's blocks (`native_block_entity`, `native_block_entity_ticks`,
   `native_block_entity_tick`): made when the block is placed, ticked on the server and saved with the chunk.
-  `entity.id()` reads its type identity, fixed at construction; mutable events give a `ModBlockEntityView` whose
-  payload contains `nbt`, `items` and `data`. A mod cannot replace the view or access its private entity handle.
+  The factory returns initial `Compound` data; the tick receives a live `BlockEntityRef` and its server Host.
+  Its own saved data, internal item slots and menu data are available through handle methods throughout the call.
+  Writes join the ordinary journal. Menu callbacks still carry their separate `ModBlockEntityView` payload.
 
 - Item slots for those block entities (`native_block_entity_container`): hoppers, comparators and breaking the
   block use them as they use vanilla's containers, and `native_block_entity_tick` also gets the slots.
 
 - Menus for mod containers: the container names one of vanilla's slot-grid or furnace menus, which opens when the block is used,
-  and `native_block_entity_tick` takes the whole block entity, with the data slots the menu shows.
+  and `native_block_entity_tick` reaches its menu data through `BlockEntityRef::data_slots`.
+  Initialize the vector with `set_data_slots` after creation/loading, then use scalar `set_data_slot` updates.
 
 - A machine reaches neighbouring storage through the block's Parts and capabilities, not a raw mutable
   block-entity callback. `block_entity.data_slots(host)` reads a mod entity's menu data on the server or
@@ -458,8 +460,9 @@ requires a farmer at work and `mob_griefing` enabled.
   scatter as `Containers.dropItemStack` scatters them, after the block entity's own container slots. It runs inside
   the level's write with the level host, like `neighbor_changed`; the block entity is still in place, so the part
   reads its attachments with `TYPE.get(host, Holder::BlockEntity(pos))`, the level host being their store. A part that returns nothing draws nothing.
-  A block entity that removes its own block during its `block_entity_tick` or `menu_button` is out of the level for
-  that call, so its part isn't asked: its attachments go with it, and only its container slots come back out.
+  During `block_entity_tick` the entity stays in the level: self-removal runs this Part with its attachments and
+  drops current committed contents, with no payload put back afterwards. A detached menu callback still leaves an
+  empty marker, so its removal Part is not asked until that distinct callback is converted to live storage.
 
 - `native_visuals`: a world-frame hook that appends block-rim and
   colored-light requests (`NativeBlockRim::new(pos, argb, width)`,

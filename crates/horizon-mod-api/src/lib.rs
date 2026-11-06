@@ -6,6 +6,7 @@
 #![deny(missing_docs)]
 extern crate self as mod_api;
 mod registry_keys;
+use registry_keys::block_entity_type_name;
 mod unresolved_fluid;
 pub use unresolved_fluid::FluidIdentity;
 
@@ -339,26 +340,26 @@ pub use horizon_world::{
 };
 pub use serde_json;
 
-/// A hook's mutable block entity payload, with a read-only type identity.
+/// A menu callback's mutable block entity payload, with a read-only type identity.
 /// The private handle cannot be constructed or taken out by a mod.
 ///
 /// ```compile_fail
-/// use mod_api::{BlockEntityTickEvent, ModBlockEntity};
-/// fn replace(event: &mut BlockEntityTickEvent<'_>) {
+/// use mod_api::{MenuButtonEvent, ModBlockEntity};
+/// fn replace(event: &mut MenuButtonEvent<'_>) {
 ///     *event.entity = ModBlockEntity::default();
 /// }
 /// ```
 ///
 /// ```compile_fail
-/// use mod_api::BlockEntityTickEvent;
-/// fn take(event: &mut BlockEntityTickEvent<'_>) {
+/// use mod_api::MenuButtonEvent;
+/// fn take(event: &mut MenuButtonEvent<'_>) {
 ///     let _ = std::mem::take(&mut event.entity);
 /// }
 /// ```
 ///
 /// ```compile_fail
-/// use mod_api::{BlockEntityTickEvent, ModBlockEntity};
-/// fn access(event: &mut BlockEntityTickEvent<'_>) {
+/// use mod_api::{MenuButtonEvent, ModBlockEntity};
+/// fn access(event: &mut MenuButtonEvent<'_>) {
 ///     let _: &mut ModBlockEntity = event.entity.entity;
 /// }
 /// ```

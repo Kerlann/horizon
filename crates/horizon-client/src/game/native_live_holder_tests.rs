@@ -14,7 +14,7 @@ struct Ticker(bool);
 impl BlockPart for Ticker {}
 #[mod_api::horizon_part]
 impl BlockEntityPart for Ticker {
-    fn block_entity_tick(&self, host: &mut dyn ServerHost, event: &mut BlockEntityTickEvent<'_>) {
+    fn block_entity_tick(&self, host: &mut dyn ServerHost, event: &mut BlockEntityTickEvent) {
         if self.0 {
             let level = host.level("minecraft:overworld").unwrap();
             let sink = host.block_entity(level, [0, 63, 0]).unwrap();
@@ -108,11 +108,11 @@ fn thousand_live_block_entity_ticks() {
 }
 
 pub(super) fn with_mod_parts(test: impl FnOnce(std::path::PathBuf)) {
-    let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
-        "live_bench",
-        Box::new(BenchMod("none")),
-    )]
-    .into();
+    with_parts(Box::new(BenchMod("none")), test);
+}
+
+pub(super) fn with_parts(hooks: Box<dyn Hooks>, test: impl FnOnce(std::path::PathBuf)) {
+    let mods: mod_api::Mods = vec![mod_api::ModEntry::new("live_bench", hooks)].into();
     mod_api::testing::with_mods(mods.clone(), || {
         mod_api::__private::install_parts(&mods).unwrap();
         mod_api::__private::mark_game_thread();

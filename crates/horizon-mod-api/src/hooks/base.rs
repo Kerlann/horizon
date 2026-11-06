@@ -270,16 +270,14 @@ pub trait Hooks {
         host = "read"
     )]
     fn block_entity_ticks();
-    /// A server tick of the block entity at `pos`, in vanilla's order among
-    /// the others (`Level.tickBlockEntities`), when its `id` is yours: read
-    /// and change its saved compound `nbt`, its item slots `items` (keep
-    /// their count: as many as its container has, none without one) and the
-    /// data slots its menu shows (`data`). It is out of the world during the
-    /// call (the block entity at `pos` reads as a `Mod` with an empty id, and
-    /// a save leaves it out); if the call removes or replaces it, `entity` is
-    /// dropped. Clients, the window's own in single player included, get
-    /// what `native_block_entity_update_tag` gives when its chunk is sent or
-    /// its block changes.
+    /// A server tick of the live block entity at `pos`, in vanilla's order among
+    /// the others (`Level.tickBlockEntities`), for Parts attached to its type.
+    /// The BlockEntityRef reads authoritative storage throughout the call. Use
+    /// its saved-data, data-slot and internal item-slot methods with this Host;
+    /// writes join the ordinary transaction and abort restores the before-image.
+    /// Creation/loading leave menu data empty: initialize it with set_data_slots.
+    /// Removal drops current contents; nothing is put back after the callback.
+    /// Clients receive the normal update tag and menu broadcasts, not this tick.
     #[hook(
         side = "server",
         contract = "listen",

@@ -22,7 +22,8 @@ impl Game<'_> {
     }
 
     /// Find a block entity in a loaded chunk of an open level, or on a client in
-    /// the level it shows. An entity taken out for its tick cannot be read in that tick.
+    /// the level it shows, including its own live tick. A detached menu callback's
+    /// holder is unavailable until that callback returns.
     pub(super) fn native_block_entity_ref(
         &self,
         level: LevelRef,
