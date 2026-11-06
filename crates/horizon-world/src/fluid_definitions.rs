@@ -90,12 +90,14 @@ pub fn load(
         let defaults = default
             .get("properties")
             .and_then(serde_json::Value::as_object);
-        if parsed.iter().any(|(name, values)| {
-            !defaults
-                .and_then(|d| d.get(name))
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|v| values.iter().any(|x| x == v))
-        }) {
+        if defaults.map_or(0, |d| d.len()) != parsed.len()
+            || parsed.iter().any(|(name, values)| {
+                !defaults
+                    .and_then(|d| d.get(name))
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|v| values.iter().any(|x| x == v))
+            })
+        {
             return Err(fail(FluidDefinitionLoadError::Invalid));
         }
         result.insert(
@@ -107,4 +109,25 @@ pub fn load(
         );
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn missing_schema_is_typed_and_defaults_are_checked() {
+        let error = load(&serde_json::json!({}), &["minecraft:water"]).unwrap_err();
+        assert!(matches!(
+            error
+                .get_ref()
+                .and_then(|e| e.downcast_ref::<FluidDefinitionLoadError>()),
+            Some(FluidDefinitionLoadError::Missing)
+        ));
+        let mut value = serde_json::json!({"fluid_state_definitions":{"minecraft:water":{"properties":{"falling":["true","false"]},"default":{"id":"minecraft:water","properties":{"falling":"true"}}}}});
+        let definitions = load(&value, &["minecraft:water"]).unwrap();
+        assert_eq!(definitions["minecraft:water"].properties[0].0, "falling");
+        value["fluid_state_definitions"]["minecraft:water"]["default"]["properties"]["falling"] =
+            "bad".into();
+        assert!(load(&value, &["minecraft:water"]).is_err());
+    }
 }

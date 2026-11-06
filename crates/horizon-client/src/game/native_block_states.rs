@@ -6,12 +6,60 @@ use horizon_client::items::ItemStack;
 use horizon_world::chunk::BlockState;
 use horizon_world::registry::{BlockRegistry, BlockStateId};
 use mod_api::{
-    BlockEntityTypeKey, BlockKey, BlockSoundType, BlockStateRange, EffectKey, FluidKey, ItemKey,
-    StateConstraint, StateMatchError, StateProperty,
+    BlockEntityTypeKey, BlockKey, BlockSoundType, BlockStateRange, EffectKey, FluidDefinition,
+    FluidKey, FluidStateError, ItemKey, StateConstraint, StateMatchError, StateProperty,
 };
 use std::sync::{Arc, Mutex};
 
 impl Game<'_> {
+    /// The exported definition of a world fluid, or a tank-only identity.
+    pub(super) fn native_fluid_state_definition(&self, fluid: FluidKey) -> Option<FluidDefinition> {
+        let id = mod_api::__private::fluid_id(fluid)?;
+        let Some(definition) = self.res.behaviours().fluid_definitions().get(id) else {
+            return Some(FluidDefinition::TankOnly);
+        };
+        let state =
+            horizon_world::fluid::FluidState::from_json(&definition.default.to_string()).ok()?;
+        let default = super::native_world_read::api_fluid_state(state)?;
+        let properties = definition
+            .properties
+            .iter()
+            .map(|(name, values)| StateProperty::new(name.clone(), values.clone()))
+            .collect();
+        Some(FluidDefinition::World {
+            default,
+            properties,
+        })
+    }
+
+    /// Validate fluid constraints against the exported property definition.
+    pub(super) fn native_fluid_state_validate(
+        &self,
+        fluid: FluidKey,
+        constraints: &[StateConstraint],
+    ) -> Option<Result<(), FluidStateError>> {
+        let id = mod_api::__private::fluid_id(fluid)?;
+        let definition = self.res.behaviours().fluid_definitions().get(id)?;
+        for (index, constraint) in constraints.iter().enumerate() {
+            if constraints[..index]
+                .iter()
+                .any(|previous| previous.name == constraint.name)
+            {
+                return Some(Err(FluidStateError::Duplicate(index as u32)));
+            }
+        }
+        Some(
+            match_state_properties(&definition.properties, true, |_, _| true, constraints)
+                .map(|_| ())
+                .map_err(|error| match error {
+                    StateMatchError::UnknownProperty(index) => {
+                        FluidStateError::UnknownProperty(index)
+                    }
+                    StateMatchError::InvalidValue(index) => FluidStateError::InvalidValue(index),
+                    _ => unreachable!("known local matcher errors"),
+                }),
+        )
+    }
     /// Resolve a registered fluid identifier.
     pub(super) fn native_fluid_key(&self, id: &str) -> Option<FluidKey> {
         mod_api::__private::fluid_key(id)
@@ -293,6 +341,56 @@ mod tests {
                     .as_deref(),
                 Some("minecraft:air")
             );
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn fluid_definitions_and_constraints_use_the_loaded_registry() {
+        use mod_api::{Host, HostFluidStates};
+        super::super::native_entity_refs::tests::with_game(|game| {
+            let host: &dyn Host = game;
+            let water = host.fluid_key("minecraft:water").unwrap();
+            let flowing = host.fluid_key("minecraft:flowing_water").unwrap();
+            let service = host.fluid_states();
+            let FluidDefinition::World {
+                default,
+                properties,
+            } = service.definition(water).unwrap()
+            else {
+                panic!("world fluid")
+            };
+            assert!(default.is_source());
+            assert!(properties.iter().any(|p| p.name == "falling"));
+            assert_eq!(
+                service.validate(water, &[StateConstraint::new("level", "8")]),
+                Some(Err(FluidStateError::UnknownProperty(0)))
+            );
+            assert_eq!(
+                service.validate(flowing, &[StateConstraint::new("level", "9")]),
+                Some(Err(FluidStateError::InvalidValue(0)))
+            );
+            assert_eq!(
+                service.validate(
+                    flowing,
+                    &[
+                        StateConstraint::new("level", "8"),
+                        StateConstraint::new("level", "8")
+                    ]
+                ),
+                Some(Err(FluidStateError::Duplicate(1)))
+            );
+            assert!(default.matches(&[StateConstraint::new("falling", "true")]));
+            assert!(!default.matches(&[StateConstraint::new("unknown", "true")]));
+            let FluidDefinition::World {
+                default: flowing_default,
+                ..
+            } = service.definition(flowing).unwrap()
+            else {
+                panic!("flowing fluid")
+            };
+            assert!(flowing_default.matches(&[StateConstraint::new("level", "1")]));
+            assert!(!flowing_default.matches(&[StateConstraint::new("level", "8")]));
         });
     }
 

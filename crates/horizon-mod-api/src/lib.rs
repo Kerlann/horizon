@@ -382,6 +382,19 @@ impl FluidState {
     pub fn is_source(self) -> bool {
         self.source
     }
+    /// Match properties carried by this state. Unknown properties do not match; validate
+    /// constraints against the definition separately to distinguish errors.
+    pub fn matches(self, constraints: &[StateConstraint]) -> bool {
+        constraints.iter().all(|c| match c.name.as_str() {
+            "falling" if !self.is_empty() => {
+                (c.value == "true" && self.falling) || (c.value == "false" && !self.falling)
+            }
+            "level" if !self.is_empty() && !self.source => {
+                c.value.parse::<u8>().ok() == Some(self.amount)
+            }
+            _ => false,
+        })
+    }
 }
 #[horizon_mod_api_macros::wasm(via = Tag)]
 pub use horizon_world::nbt::Compound;
@@ -4677,6 +4690,8 @@ mod entity_capability;
 pub use entity_capability::{
     ENTITY_AUTOMATION, ENTITY_ENERGY, ENTITY_FLUIDS, ENTITY_ITEMS, EntityCapabilityKey,
 };
+mod fluid_states;
+pub use fluid_states::{FluidDefinition, FluidStateError, FluidStates, HostFluidStates};
 mod block_states;
 pub use block_states::{
     BlockStates, HostBlockStates, StateConstraint, StateMatchError, StateProperty,
