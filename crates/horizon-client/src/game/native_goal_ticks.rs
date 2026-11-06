@@ -2,8 +2,8 @@
 //! goal makes through `GoalContext::host` answer the ticking mob itself, the
 //! player the tick sees and the tick's snapshot of the other entities — the
 //! entity lookups and snapshot-backed reads are the view's own (generated
-//! below), every other backend read is refused its typed refusal, and the
-//! level's own reads (blocks, tags, recipes, settings) forward to the game
+//! below), unavailable entity fields answer their typed refusal, and intact
+//! non-entity reads (levels, block entities, tags, recipes, settings) forward to the game
 //! host the view carries. The writes a goal makes apply to the mob in hand
 //! through the engine's own paths (`nav_move_to`, `ai.target`), and the write
 //! handles a `ServerHost` takes do not exist here.
@@ -39,9 +39,8 @@ enum Resolved<'a> {
 
 impl GoalCx<'_, '_> {
     /// Resolve `entity` in the tick's view, or None for a stale or foreign
-    /// handle, an entity the snapshot does not carry, or a player the tick
-    /// does not stand in (a guest's view: its id lives in the hub, out of the
-    /// tick's reach).
+    /// handle or an entity the snapshot does not carry. The selected real
+    /// player's identity travels with its view, including guest turns.
     fn resolve(&self, entity: EntityRef) -> Option<Resolved<'_>> {
         let host = self.w.goal_host?;
         if host.epoch() != Some(entity.epoch()) {
@@ -397,11 +396,15 @@ impl mobs::part_goals::GoalHost for Game<'_> {
 
 pub(super) mod generated {
     // The mob tick's read view (#1077), as the game generates it: the
-    // snapshot-backed reads forward to the context's own methods, every other
-    // backend read answers its typed refusal.
+    // Entity reads use the snapshot or refuse unavailable fields; intact
+    // non-entity reads forward to the game backend.
     include!(concat!(env!("OUT_DIR"), "/mod_api_goal_view_generated.rs"));
 }
 
 #[cfg(test)]
 #[path = "native_goal_ticks_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "native_goal_ticks_regressions.rs"]
+mod regressions;

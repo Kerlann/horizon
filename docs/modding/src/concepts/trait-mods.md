@@ -563,7 +563,8 @@ namespace. Both checks run once, when the mods register.
 
 `r.entity_part("minecraft:zombie", ZombieGoals)` attaches an `EntityPart` to one entity type, a mod's
 own or vanilla's. Its single method `register_goals` runs at every `Mob` construction of that type —
-spawned or loaded, the moment vanilla's `registerGoals` fan-out ends — and the goals it adds join the
+spawned or loaded on the authoritative server, never for a client packet copy, at the moment vanilla's
+`registerGoals` fan-out ends — and the goals it adds join the
 mob's two selectors beside the species' own, with the same priorities, flag locks and interruption:
 
 ```rust
@@ -590,12 +591,18 @@ A `Goal` reads and writes through its `GoalContext`: `mob()` is a fresh handle o
 keep the mob's stream in shape). The read view answers the ticking mob itself directly, the player the
 tick sees, and every other entity from the tick's snapshot — a `getEntities` of the moment the mob
 list was taken out — so a read the snapshot does not carry (a mob's gear or effects, its species id)
-answers `None`, and the handle docs mark the reads that carry the snapshot rule. Writes apply to the
+answers its typed refusal (`None`, or `false` for a predicate), and the handle docs mark the reads that
+carry the snapshot rule. The selected connected player's UUID and entity ID travel with its view; fake
+players are not targetable, and a player cannot narrow to `MobRef`. Intact level and block-entity reads
+forward to the real game backend. Writes apply to the
 mob itself through the engine's own paths: `move_to(pos, speed)` and `stop_navigation()`
 (`PathNavigation`), `look_at(pos)` (`LookControl`), `jump()`, and `set_target(Option<LivingRef>)`
 (`Mob.setTarget`, with the write handle's rules: a brain-backed species refuses, as do foxes,
 endermen and zombified piglins, whose setter side effects are not modeled). Writes to other entities
-are not part of a goal; the write handles a `ServerHost` takes do not exist in a goal tick.
+are not part of a goal; the write handles a `ServerHost` takes do not exist in a goal tick. Navigation
+and look requests reject non-finite or unsafe coordinates without changing the current controls;
+navigation also rejects non-finite speed. `jump()` requests JumpControl input, so the normal control
+and travel steps consume it in the same AI tick.
 
 Entity parts are a native mod's for now: the goal surface does not cross to wasm (see the
 `attach_entity_part` note), so `r.entity_part` is absent from a wasm build.
