@@ -33,6 +33,7 @@ pub(super) fn generate(
     struct Service {
         side: Side,
         mutable: bool,
+        resource_reads_only: bool,
         declarations: String,
         implementations: String,
     }
@@ -131,12 +132,14 @@ pub(super) fn generate(
             let group = services.entry(service).or_insert_with(|| Service {
                 side,
                 mutable: false,
+                resource_reads_only: true,
                 declarations: String::new(),
                 implementations: String::new(),
             });
             if group.side != side {
                 return Err(format!("{name}: all {service} methods must share a side"));
             }
+            group.resource_reads_only &= helper.resource_read;
             group.mutable |= matches!(method.sig.inputs.first(), Some(FnArg::Receiver(r)) if r.mutability.is_some());
             group.declarations.push_str(side_doc);
             group.declarations.push_str(&declaration);
@@ -175,16 +178,21 @@ pub(super) fn generate(
     for (name, service) in services {
         let trait_name = name.to_upper_camel_case();
         let borrow = if service.mutable { "&mut" } else { "&" };
+        let access = if service.resource_reads_only {
+            "PublishedResources"
+        } else {
+            "WorldOnly"
+        };
         let (traits, implementation) = match service.side {
             Side::Both => (&mut host_traits, &mut host_impl),
             Side::Server => (&mut server_traits, &mut server_impl),
             Side::Client => (&mut client_traits, &mut client_impl),
         };
         traits.push_str(&format!(
-            "/// The {name} service.\n/// Not on wasm: a frame resource; its methods are the imports.\nfn {name}({borrow} self) -> {borrow} dyn {trait_name} {{ mod_api::__private::check_access(\"{name}\", mod_api::__private::LoadAccess::WorldOnly); unimplemented!(\"{trait_name} service\") }}\n"
+            "/// The {name} service.\n/// Not on wasm: a frame resource; its methods are the imports.\nfn {name}({borrow} self) -> {borrow} dyn {trait_name} {{ mod_api::__private::check_access(\"{name}\", mod_api::__private::LoadAccess::{access}); unimplemented!(\"{trait_name} service\") }}\n"
         ));
         implementation.push_str(&format!(
-            "fn {name}({borrow} self) -> {borrow} dyn {trait_name} {{ mod_api::__private::check_access(\"{name}\", mod_api::__private::LoadAccess::WorldOnly); self }}\n"
+            "fn {name}({borrow} self) -> {borrow} dyn {trait_name} {{ mod_api::__private::check_access(\"{name}\", mod_api::__private::LoadAccess::{access}); self }}\n"
         ));
         service_traits.push_str(&format!(
             "/// The {name} service, reached through its host.\npub trait {trait_name} {{\n{} }}\n",

@@ -414,8 +414,15 @@ impl StateModels {
     }
     /// A model baked by [`Self::bake_standalone`], by id (`mymod:block/shaft_half`).
     pub fn standalone(&self, name: &str) -> Option<&BakedModel> {
-        let &i = self.standalone.get(name)?;
-        Some(&self.baked[i as usize].1)
+        self.model_by_slot(self.standalone_slot(name)?)
+    }
+    /// Resolve a standalone name once, without copying its baked geometry.
+    pub fn standalone_slot(&self, name: &str) -> Option<u32> {
+        self.standalone.get(name).copied()
+    }
+    /// Geometry in this catalog's existing baked store.
+    pub fn model_by_slot(&self, slot: u32) -> Option<&BakedModel> {
+        self.baked.get(slot as usize).map(|(_, model)| model)
     }
     pub fn collect(
         &self,

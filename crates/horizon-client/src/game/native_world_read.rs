@@ -6,12 +6,12 @@ use horizon_client::{
 };
 use horizon_world::{
     chunk::BlockState,
-    fluid::{FluidKind, FluidState},
+    fluid::{FluidKind, FluidState as EngineFluidState},
     level::Behaviours,
     registry::{BlockRegistry, BlockStateId},
 };
 use mod_api::BlockKey;
-use mod_api::{LevelRef, NativeLifecycleContext, TagRegistry, UnresolvedFluid};
+use mod_api::{FluidState, LevelRef, NativeLifecycleContext, TagRegistry, UnresolvedFluid};
 
 /// Why a server block cannot be read.
 #[allow(dead_code)]
@@ -82,7 +82,16 @@ pub(super) fn state_fluid(
     registry: &BlockRegistry,
     state: BlockStateId,
 ) -> Option<FluidState> {
-    registry.state(state).map(|_| behaviours.fluid(state))
+    registry.state(state)?;
+    api_fluid_state(behaviours.fluid(state))
+}
+
+/// Convert the engine's state using the load-owned kind-to-key mapping.
+pub(super) fn api_fluid_state(state: EngineFluidState) -> Option<FluidState> {
+    Some(mod_api::__private::engine_fluid_state(
+        mod_api::__private::world_fluid_key(state.kind())?,
+        state,
+    ))
 }
 
 /// `FluidState.is(TagKey)` over the merged fluid tags. The empty fluid is in none.
@@ -249,6 +258,26 @@ mod tests {
     use horizon_client::chunk::Chunk;
     use mod_api::LevelHost;
     use std::sync::Arc;
+
+    #[test]
+    fn fluid_state_conversion_preserves_source_and_empty_invariants() {
+        mod_api::__private::install(Default::default());
+        mod_api::__private::part_tests::register_game_keys([]);
+        for kind in FluidKind::ALL {
+            let engine =
+                EngineFluidState::new(kind, if kind == FluidKind::Empty { 0 } else { 8 }, true);
+            let api = api_fluid_state(engine).unwrap();
+            assert_eq!(api.is_empty(), kind == FluidKind::Empty);
+            assert_eq!(api.is_source(), engine.is_source());
+            assert_eq!(mod_api::__private::fluid_id(api.fluid), Some(kind.name()));
+        }
+        let source = api_fluid_state(EngineFluidState::new(FluidKind::Water, 8, true)).unwrap();
+        let flowing =
+            api_fluid_state(EngineFluidState::new(FluidKind::FlowingWater, 8, false)).unwrap();
+        assert!(source.falling && source.is_source());
+        assert_eq!(flowing.amount, 8);
+        assert!(!flowing.is_source());
+    }
 
     #[test]
     fn numeric_block_tags_rebind_the_merged_snapshot_without_changing_keys() {
@@ -481,7 +510,7 @@ mod tests {
 
             assert_eq!(
                 game.native_state_fluid_state(water),
-                Some(FluidState::WATER)
+                api_fluid_state(EngineFluidState::WATER)
             );
             assert_eq!(
                 game.native_fluid_in_tag("minecraft:water", "minecraft:water"),
@@ -493,7 +522,8 @@ mod tests {
                 Some(false)
             );
             assert_eq!(
-                game.native_state_fluid_state(lava).unwrap().kind().name(),
+                mod_api::__private::fluid_id(game.native_state_fluid_state(lava).unwrap().fluid)
+                    .unwrap(),
                 "minecraft:lava"
             );
             assert_eq!(
@@ -508,14 +538,17 @@ mod tests {
                 game.native_fluid_in_tag("minecraft:empty", "minecraft:water"),
                 Some(false)
             );
-            assert_eq!(game.native_state_fluid_state(slab), Some(FluidState::WATER));
+            assert_eq!(
+                game.native_state_fluid_state(slab),
+                api_fluid_state(EngineFluidState::WATER)
+            );
             assert_eq!(
                 game.native_state_fluid_state(dry_slab),
-                Some(FluidState::EMPTY)
+                api_fluid_state(EngineFluidState::EMPTY)
             );
             assert_eq!(
                 game.native_state_fluid_state(stone),
-                Some(FluidState::EMPTY)
+                api_fluid_state(EngineFluidState::EMPTY)
             );
             assert_eq!(game.native_state_fluid_state(BlockStateId(u32::MAX)), None);
 
@@ -527,11 +560,11 @@ mod tests {
             let chunks = game.world.chunks.len();
             assert_eq!(
                 game.native_level_fluid_state(level, [1, 64, 1]),
-                Some(FluidState::WATER)
+                api_fluid_state(EngineFluidState::WATER)
             );
             assert_eq!(
                 game.native_level_fluid_state(level, [2, 64, 1]),
-                Some(FluidState::EMPTY)
+                api_fluid_state(EngineFluidState::EMPTY)
             );
             assert_eq!(game.native_level_fluid_state(level, [16, 64, 1]), None);
             assert_eq!(game.native_level_fluid_state(level, [1, 4000, 1]), None);
@@ -548,7 +581,10 @@ mod tests {
                     host.fluid_in_tag("minecraft:water", "minecraft:water"),
                     None
                 );
-                assert_eq!(host.fluid_state([1, 64, 1]), Some(FluidState::WATER));
+                assert_eq!(
+                    host.fluid_state([1, 64, 1]),
+                    api_fluid_state(EngineFluidState::WATER)
+                );
             });
             game.options.dedicated = Some(Vec::new());
             let bounds = game.native_level_height(level).unwrap();
@@ -607,9 +643,15 @@ mod tests {
                     ),
                     Some(false)
                 );
-                assert_eq!(host.fluid_state([1, 64, 1]), Some(FluidState::WATER));
+                assert_eq!(
+                    host.fluid_state([1, 64, 1]),
+                    api_fluid_state(EngineFluidState::WATER)
+                );
                 assert_eq!(host.fluid_state([16, 64, 1]), None);
-                assert_eq!(host.state_fluid_state(slab), Some(FluidState::WATER));
+                assert_eq!(
+                    host.state_fluid_state(slab),
+                    api_fluid_state(EngineFluidState::WATER)
+                );
                 assert_eq!(
                     host.fluid_in_tag("minecraft:water", "minecraft:water"),
                     Some(true)

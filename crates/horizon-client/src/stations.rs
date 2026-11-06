@@ -1144,7 +1144,8 @@ mod tests {
             origin: [0.0; 3],
             maps: None,
         };
-        for p in crate::mobs::villager::PROFESSIONS
+        for p in crate::mobs::villager::profession_table()
+            .entries()
             .iter()
             .filter_map(|p| p.trade_set)
         {

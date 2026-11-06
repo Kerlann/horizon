@@ -392,7 +392,10 @@ impl KeyBinds {
     /// (`KeyboardHandler.handleDebugKeys`, `debug_keys.rs` reads the physical
     /// key and the binding itself); their defaults (A, S, D, T, L, 1 to 4...)
     /// would otherwise turn the key back into its old gameplay meaning.
-    fn translated_mappings<'a>(&'a self, key: &'a str) -> impl Iterator<Item = &'static str> + 'a {
+    pub fn translated_mappings<'a>(
+        &'a self,
+        key: &'a str,
+    ) -> impl Iterator<Item = &'static str> + 'a {
         MAPPINGS
             .iter()
             .filter(|m| m.2 != "debug")

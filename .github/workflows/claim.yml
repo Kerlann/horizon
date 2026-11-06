@@ -15,7 +15,8 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            const body = context.payload.comment.body.trim();
+            // Agents prefix their comments with the disclosure line `🤖 Agent:`; the command follows it.
+            const body = context.payload.comment.body.trim().replace(/^🤖\s*Agent:\s*/u, '');
             const who = context.payload.comment.user.login;
             const issue = context.payload.issue;
             const ref = { owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number };

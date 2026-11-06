@@ -60,7 +60,7 @@ fn types(id: &str, species: Species) -> HashMap<String, Arc<MobType>> {
 /// Loads `tag` as a mob and saves it back over itself, as a chunk save does.
 fn round_trip(tag: &Tag, id: &str, species: Species) -> Tag {
     let m = mob_from_nbt(tag, &types(id, species), 1, None).unwrap();
-    mob_to_nbt(&m, UUID, Some(tag), None)
+    mob_to_nbt(&m, UUID, Some(tag), None, |_| None)
 }
 
 fn bytes(tag: &Tag) -> Vec<u8> {

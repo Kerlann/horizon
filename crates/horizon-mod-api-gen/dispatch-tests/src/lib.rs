@@ -138,6 +138,7 @@ mod tests {
         pub(super) struct NativeInteractionResult;
         pub(super) struct NativeMobRender<'a>(pub &'a ());
         pub(super) struct LayerDefinition;
+        pub(super) struct DebugEntry;
         pub(super) struct ModelPart;
         pub(super) struct NativeShake;
         pub(super) struct ShieldBlock;
@@ -357,6 +358,16 @@ mod tests {
                 pub struct FovPlayer;
             }
             pub struct NativeClientInfo;
+            #[derive(Clone, Copy)]
+            pub struct FluidKey;
+            #[derive(Clone, Copy)]
+            #[non_exhaustive]
+            pub struct FluidState {
+                pub fluid: FluidKey,
+                pub amount: u8,
+                pub falling: bool,
+                pub source: bool,
+            }
             #[derive(Clone, Copy)]
             pub struct RaidRef;
             #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1162,7 +1173,12 @@ mod tests {
             LevelDimension,
             BlockStateId,
             &PlacementContext,
-            FluidState,
+            generated::mod_api::FluidState {
+                fluid: generated::mod_api::FluidKey,
+                amount: 0,
+                falling: false,
+                source: false,
+            },
             &mut answer,
         );
         assert_eq!(answer, Some(None));
@@ -1172,7 +1188,12 @@ mod tests {
             LevelDimension,
             BlockStateId,
             &PlacementContext,
-            FluidState,
+            generated::mod_api::FluidState {
+                fluid: generated::mod_api::FluidKey,
+                amount: 0,
+                falling: false,
+                source: false,
+            },
             &mut answer,
         );
         assert_eq!(*calls.lock().unwrap(), vec![1]);

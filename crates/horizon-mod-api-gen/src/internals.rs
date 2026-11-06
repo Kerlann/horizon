@@ -1904,6 +1904,8 @@ impl Trait for Game<'_> { fn call(&self) {} }
 macro_rules! untouched { () => { struct MacroItem; } }
 #[cfg(test)] mod tests { struct Private; }
 #[cfg(test)] struct TestItem;
+#[test] fn test_function() {}
+#[bench] fn bench_function() {}
 mod inline { struct Inner; }
 // café: span columns after non-ASCII text are character-based.
 const LABEL: &str = "é"; struct AfterUnicode;
@@ -1940,6 +1942,8 @@ const LABEL: &str = "é"; struct AfterUnicode;
             "macro_rules! untouched { () => { struct MacroItem; } }",
             "#[cfg(test)] mod tests { struct Private; }",
             "#[cfg(test)] struct TestItem;",
+            "#[test] fn test_function() {}",
+            "#[bench] fn bench_function() {}",
         ] {
             assert!(source.contains(unchanged), "changed {unchanged:?}");
         }
@@ -1961,7 +1965,10 @@ const LABEL: &str = "é"; struct AfterUnicode;
             !result
                 .entries
                 .iter()
-                .any(|entry| entry.path.contains("TestItem") || entry.path.contains("Local"))
+                .any(|entry| entry.path.contains("TestItem")
+                    || entry.path.contains("Local")
+                    || entry.path.ends_with("test_function")
+                    || entry.path.ends_with("bench_function"))
         );
     }
 

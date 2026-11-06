@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "다운로드, 로그인 및 업데이트는 지정된 프록시(http://host:port, socks5://host:port)를 거칩니다. 비워두면 프록시를 사용하지 않으며, 런처가 시작될 때 설정된 경우 HTTPS_PROXY가 대신 사용됩니다.",
   "{name} was left out: made for another Horizon version": "{name}이(가) 제외되었습니다: 다른 Horizon 버전용입니다",
   "{name} was left out: clashes with {other}": "{name}이(가) 제외되었습니다: {other}와(과) 충돌합니다",
-  "{name} was left out: it needs {other}, which was left out": "{name}이(가) 제외되었습니다: 제외된 {other}이(가) 필요합니다"
+  "{name} was left out: it needs {other}, which was left out": "{name}이(가) 제외되었습니다: 제외된 {other}이(가) 필요합니다",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

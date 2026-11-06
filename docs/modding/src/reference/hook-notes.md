@@ -19,6 +19,23 @@ receive `&dyn ClientHost`. They do not grant server writes.
 not for a dimension change. Initialization and final shutdown still use the
 existing `client_setup` and `client_stopping` hooks, with no parallel aliases.
 
+## Transparent screen backgrounds and landing changes
+
+`Hooks::screen_transparent_background` runs immediately before an in-game screen's
+translucent gradient. Returning `Flow::Cancel` suppresses that gradient, not the
+screen's contents. Its `batch` is a `DrawContext`: custom drawing survives
+cancellation. `ClientHost::apply_screen_blur()` requests the normal menu blur
+at most once per frame; `menu_blur_radius()` reads the configured radius.
+`DrawContext::draw_menu_background` and `tiled_sprite` draw menu textures through
+the same atlas. The whole-screen `screen_render_pre` remains a separate moment.
+
+`Hooks::entity_change_block_pre` can cancel a player's landing block change before
+its neighbour notifications and level events. The resident write is restored
+before those consumers run, so a crop above cancelled farmland stays untouched.
+The event identifies the player, position and old/new block names. This veto is
+separate from `entity_change_block`, the existing post-change mob notification,
+and from `farmland_trample`, the farmland-specific in-write event.
+
 ## Client window and screen state
 
 `ClientHost::window_focused()` reports the last focus state from the window
@@ -1228,6 +1245,8 @@ registration path.
 
 - `native_interaction_key_mapping_triggered(key, hand, swing_hand, canceled)` fires while playing when an interaction key is about to act on the crosshair (NeoForge's `InputEvent.InteractionKeyMappingTriggered`): `key` is `InteractionKey::Attack` (when an attack is allowed, and each tick a held key keeps digging a block), `Use` (once for each hand tried, main first, before the hand's target and item) or `PickBlock` (only with a block or entity aimed at). Set `canceled` to skip the action; a cancelled use ends the click, so the other hand gets no turn. A cancelled attack or use still swings `hand` unless the mod clears `swing_hand` (true on entry). A single player's window and a server's player (any window that plays on a server).
 
+- `native_key_mapping_pre(mapping, pressed, canceled)` is asked while playing, before the game acts on a physical key or mouse button bound to a gameplay mapping (`key.jump`, `key.attack`...), once for each mapping bound to it. `pressed` is true for a press (a key's repeats too) and false for its release. Set `canceled` on a press to drop it for every mapping bound to that input: the mapping is not held, nothing acts on it, and a mouse press is not counted as a click. A cancel on a release is ignored, so what the game holds is always let go. A release is asked too, while playing: a screen that opens lets go of what it holds without asking. A key bound to two mappings (forward and sprint) is canceled as one. It is asked for the window's keys and mouse buttons, agent control's included, after the window's own shortcuts (fullscreen, screenshot, debug keys) and with no screen open. A controller's presses are not asked.
+
 - `native_gui_layer_pre(layer, batch, canceled)` and `native_gui_layer_post(layer, batch)` fire around each vanilla HUD layer Horizon draws, in its paint order, so a mod places its own drawing below a layer (in `pre`) or above it (in `post`), NeoForge's `RegisterGuiLayersEvent` registerBelow/registerAbove, and hides a layer by setting `canceled` in `pre` (`RenderGuiLayerEvent.Pre`). Layer ids: `minecraft:crosshair`, `hotbar`, `effects`, `boss_overlay`, `vehicle_health` (riding a mount), `contextual_info_bar` (the jump bar, locator bar or experience bar with the level number), `player_health` (health, armor, food and air rows, one pass), `selected_item_name`, `sleep_overlay`, `overlay_message` (action bar), `title`, `scoreboard_sidebar`, `subtitle_overlay`, `chat` (the unfocused lines) and `tab_list`. F1 hides the layers it hides in vanilla, and then nothing fires for them. The camera overlays (drawn by the screen-effects pass) and the debug screen are not layers. A hidden layer still runs its game logic (the health rows' blink, the bubble pop sound) and `post` still fires.
 
 - `native_map_decorations(map, decorations)` is asked each time a map is drawn (held, in an item frame, or on the cartography table's screen) with `NativeMapInfo` (id, centre block, scale, dimension, locked, whether it is in a frame); push `NativeMapDecoration { sprite, x, y, rot, shown_on_frame }` (an atlas sprite, a position in half map pixels from -128 to 127, a rotation 0 to 15, and whether it shows in frames and on the screen like vanilla's markers) and it is drawn after the vanilla decorations with the same pose; a sprite the atlas lacks is left out. Nothing is saved in the map and vanilla's decorations are not passed in. This is the client half of NeoForge's `MapDecorationType`; types registered on the server and saved in map data need code-side registration.
@@ -1258,7 +1277,7 @@ registration path.
 
 - A player finishing a sign: `native_sign_changed(player, name, dimension, pos, front, lines, cancel)` is heard when a player sends the text they wrote on a sign they were editing, right before it goes on the sign, once the checks have passed, on a server, with the player's state swapped in (`PlayerRef::tell` reaches them). A mod may rewrite `lines` (four lines of plain text) or set `cancel` so the sign keeps its old text; a waxed sign is not told.
 
-- Models no blockstate names, as NeoForge's `ModelEvent.RegisterStandalone`: `native_standalone_models(context, models)`, asked once at client startup (not on integrated or dedicated servers), takes the ids of models a block entity or a mob draws as parts (`mymod:block/shaft_half`, from `assets/mymod/models/block/shaft_half.json`), and every resource load, a pack reload included, bakes them beside the block models. `BlockEntityDrawContext::model(model, tint)` draws one under `draw`'s pose in `native_block_entity_submit` or `native_mob_submit`, as `native_draw_block` draws a block's model, with `tint` (0xRRGGBB) on its tinted faces. A model that doesn't read is logged and left out, and drawing it gives false; no block has to be registered just to bake a part's model.
+- Models no blockstate names, as NeoForge's `ModelEvent.RegisterStandalone`: `native_standalone_models(context, models)`, asked once at client startup (not on integrated or dedicated servers), takes the ids of models a block entity or a mob draws as parts (`mymod:block/shaft_half`, from `assets/mymod/models/block/shaft_half.json`), and every resource load, a pack reload included, bakes them beside the block models. Resolve its `Identifier` once through `host.render_assets().model(&id)` in `client_setup` and again in `client_resources_reloaded`, retaining the opaque `ModelRef` between frames. `BlockEntityDrawContext::model(model, tint)` consumes that handle under `draw`'s pose in `native_block_entity_submit` or `native_mob_submit`, as `native_draw_block` draws a block's model, with `tint` (0xRRGGBB) on its tinted faces. Missing or unbaked names return `ModelError::UnknownModel`. Every successful resource replacement, including model-only edits, invalidates old handles with `ModelError::StaleModel`; failed reloads keep them usable. A drawing error appends no geometry. Models use the shared pack stack, including overrides and other namespaces; lookup never reads files or bakes. No block has to be registered just to bake a part's model.
 
 - A player opening and closing any menu on a server, on the single player server thread and on a dedicated server: `native_player_container_open(player, name, dimension, menu, pos)` and `native_player_container_close(...)` (NeoForge's `PlayerContainerEvent.Open` and `.Close`), with the menu type's name and, for a block's menu, its position. They run with the player's state swapped in. Unlike the viewer count of a mod container (`native_mod_container_viewers`) they name the player and cover every menu: chests, furnaces, crafting tables, trades, a mod's own. A menu is heard once a tick, so one opened and closed inside a tick is not; each open has one close, also when the player leaves.
 
@@ -3179,3 +3198,20 @@ or block entity submit hook received. There is no separate Host drawing helper. 
 are texels, +y down and the front towards -z; convert the mob's frame with scale
 `[1.0, -1.0, -1.0]` then translation `[0.0, -1.501, 0.0]`, as `LivingEntityRenderer` does.
 The sprite is the entity texture ID and the tint is `0xRRGGBB`.
+
+## Debug screen entries
+
+`Hooks::register_debug_entries` is the client registration-phase counterpart of NeoForge
+26.3's `RegisterDebugEntriesEvent`. It receives a `RegistrationContext`, once at client
+startup, and collects a `DebugEntry` per entry: an id `<mod id>:<path>` and the `DebugGroup`
+whose vanilla group its lines join (`Position`, `Light`, `Memory`, `LookingAtBlock`,
+`LookingAtEntity`, `LookingAtFluid` or `ChunkGeneration`). An id in vanilla's namespace, not
+of that form, or registered already is logged and left out.
+
+An entry is listed in the debug options' text section, sorted by its id with vanilla's, and
+is switched like them (`alwaysOn`, `inOverlay`, `never`), saved in `debug-profile.json` under
+its full id. On the overlay, its group comes after vanilla's groups.
+Its lines are asked for each frame the overlay draws it, and only while it is on:
+`Hooks::debug_entry_lines` receives the entry's id and a `&mut Vec<String>` to push lines to,
+with legacy colour codes (§) working. A disabled entry, or one with no lines, costs nothing.
+Nothing is uploaded or recorded: the lines are drawn on the local screen only.

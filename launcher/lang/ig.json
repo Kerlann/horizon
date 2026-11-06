@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Nbudata, nbanye na mmelite na-aga site na proxy a (http://host:port, socks5://host:port). Ihe efu pụtara enweghị nke ọ bụla: HTTPS_PROXY na-eji kama mgbe ejiri otu malite onye nrụpụta.",
   "{name} was left out: made for another Horizon version": "A hapụrụ {name}: e mere ya maka ụdị Horizon ọzọ",
   "{name} was left out: clashes with {other}": "A hapụrụ {name}: ọ na-emegide {other}",
-  "{name} was left out: it needs {other}, which was left out": "A hapụrụ {name}: ọ chọrọ {other}, nke a hapụrụ"
+  "{name} was left out: it needs {other}, which was left out": "A hapụrụ {name}: ọ chọrọ {other}, nke a hapụrụ",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

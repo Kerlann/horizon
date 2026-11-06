@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Ang mga pag-download, pag-sign-in at pag-update ay dumadaan sa proxy na ito (http://host:port, socks5://host:port). Ang walang laman ay nangangahulugang wala: HTTPS_PROXY ang ginagamit sa halip kapag sinimulan ang launcher gamit ang isa.",
   "{name} was left out: made for another Horizon version": "Hindi isinama ang {name}: ginawa para sa ibang bersyon ng Horizon",
   "{name} was left out: clashes with {other}": "Hindi isinama ang {name}: sumasalungat sa {other}",
-  "{name} was left out: it needs {other}, which was left out": "Hindi isinama ang {name}: kailangan nito ang {other}, na hindi isinama"
+  "{name} was left out: it needs {other}, which was left out": "Hindi isinama ang {name}: kailangan nito ang {other}, na hindi isinama",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

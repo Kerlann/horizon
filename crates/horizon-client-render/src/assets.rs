@@ -103,10 +103,39 @@ pub struct RenderAssets {
     pub connected: crate::connected::ConnectedTextures,
     /// Fusion connected textures (empty without Fusion's connecting textures and models).
     pub fusion: crate::fusion::FusionTextures,
-    /// Counts up each time resources load, from 1: a native mod asks again where blocks'
-    /// sprites are when it changes (`native_block_sprites_version`).
+    /// Counts up on every successful resource load, including model-only changes.
+    /// Only publishing this store invalidates the previous store's model handles and sprites.
     pub generation: u64,
 }
+impl RenderAssets {
+    /// Resolve a registered standalone model in this published store.
+    pub fn model(
+        &self,
+        id: &mod_api::Identifier,
+    ) -> std::result::Result<mod_api::ModelRef, mod_api::ModelError> {
+        let slot = self
+            .model_catalog
+            .standalone_slot(&id.to_string())
+            .ok_or(mod_api::ModelError::UnknownModel)?;
+        Ok(mod_api::__private::built::model_ref(self.generation, slot))
+    }
+
+    /// Validate a handle once at consumption, before appending any geometry.
+    pub fn resolve_model(
+        &self,
+        model: mod_api::ModelRef,
+    ) -> std::result::Result<&crate::models::catalog::BakedModel, mod_api::ModelError> {
+        use mod_api::__private::game::Fields;
+        let fields = model.fields();
+        if fields.generation != self.generation {
+            return Err(mod_api::ModelError::StaleModel);
+        }
+        self.model_catalog
+            .model_by_slot(fields.slot)
+            .ok_or(mod_api::ModelError::UnknownModel)
+    }
+}
+
 /// The block sprites' pixels for a renderer to upload. Once a renderer has
 /// them ([`Self::pack`]) they are kept lz4-compressed: the GPU holds the
 /// texture array, and the copy only serves a renderer made again (another

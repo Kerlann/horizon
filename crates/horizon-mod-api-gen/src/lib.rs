@@ -970,6 +970,12 @@ pub mod internals;
 pub mod internals_table;
 pub mod internals_view;
 pub mod points;
+// Inactive until the dispatch/activation step of I4.
+#[expect(
+    dead_code,
+    reason = "site consumers arrive in the following stacked PRs"
+)]
+pub(crate) mod sites;
 pub mod staging;
 mod wasm;
 pub use build::{generate, generate_points};

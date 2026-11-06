@@ -19,6 +19,7 @@ pub(crate) struct Names {
     entries: Vec<Request>,
     pub(crate) slots: HashMap<String, u32>,
     utf16_slots: HashMap<Vec<u16>, u32>,
+    world_fluids: Vec<Option<FluidKey>>,
 }
 
 #[derive(Clone)]
@@ -202,8 +203,22 @@ pub fn resolve_fluids(ids: &[&str]) -> Result<(), Vec<UnknownFluid>> {
                 .insert(path.encode_utf16().collect(), slot as u32);
         }
     }
+    names.world_fluids = horizon_world::fluid::FluidKind::ALL
+        .iter()
+        .map(|kind| names.slots.get(kind.name()).copied().map(FluidKey))
+        .collect();
     let _ = crate::part_table::resolved_fluids().set(names);
     Ok(())
+}
+
+/// Resolve an engine fluid kind through the load-owned mapping.
+pub fn world_fluid_key(kind: horizon_world::fluid::FluidKind) -> Option<FluidKey> {
+    crate::part_table::resolved_fluids()
+        .get()?
+        .world_fluids
+        .get(kind as usize)
+        .copied()
+        .flatten()
 }
 
 /// Find a fluid key at a data-loading boundary.

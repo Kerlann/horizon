@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Việc tải xuống, đăng nhập và cập nhật đều thông qua proxy này (http://host:port, socks5://host:port). Trống có nghĩa là không có: HTTPS_PROXY được sử dụng thay thế khi trình khởi chạy được khởi động bằng một.",
   "{name} was left out: made for another Horizon version": "Đã bỏ qua {name}: được làm cho phiên bản Horizon khác",
   "{name} was left out: clashes with {other}": "Đã bỏ qua {name}: xung đột với {other}",
-  "{name} was left out: it needs {other}, which was left out": "Đã bỏ qua {name}: cần {other}, mà {other} đã bị bỏ qua"
+  "{name} was left out: it needs {other}, which was left out": "Đã bỏ qua {name}: cần {other}, mà {other} đã bị bỏ qua",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

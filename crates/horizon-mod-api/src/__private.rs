@@ -90,6 +90,10 @@ pub mod reload {
 
 /// The structs the game fills for its hooks, each turned into the API's own with `From`.
 pub mod built {
+    /// Wrap a slot in the model store's published generation.
+    pub fn model_ref(generation: u64, slot: u32) -> crate::ModelRef {
+        crate::ModelRef(generation, slot)
+    }
     pub use crate::built::{
         ChannelRef, NativeActiveEffect, NativeBlockClick, NativeExplosionStart, NativeItemClick,
         NativeItemFished, NativeLifecycleContext, NativeLootDrops, NativePlayerAbilities,
@@ -184,6 +188,20 @@ pub mod game {
         enchantments: ItemEnchantments,
     ) -> (Vec<(Identifier, u32)>, bool) {
         (enchantments.entries, enchantments.changed)
+    }
+
+    pub struct ModelRefFields {
+        pub generation: u64,
+        pub slot: u32,
+    }
+    impl Fields for ModelRef {
+        type Fields<'a> = ModelRefFields;
+        fn fields(&self) -> ModelRefFields {
+            ModelRefFields {
+                generation: self.0,
+                slot: self.1,
+            }
+        }
     }
 
     pub struct BlockEntityRefFields {
@@ -438,7 +456,26 @@ pub use crate::registry_keys::{
     block_entity_type_key, block_entity_type_name, block_id as block_key_id,
     effect_id as effect_key_id, item_id as item_key_id,
 };
-pub use crate::registry_keys::{effect_key, fluid_id, fluid_key, fluid_key_utf16, resolve_fluids};
+pub use crate::registry_keys::{
+    effect_key, fluid_id, fluid_key, fluid_key_utf16, resolve_fluids, world_fluid_key,
+};
+
+/// Construct a fluid state from an engine-owned state and its load-resolved key.
+pub fn engine_fluid_state(
+    fluid: crate::FluidKey,
+    state: horizon_world::fluid::FluidState,
+) -> crate::FluidState {
+    debug_assert_eq!(
+        state.amount() == 0,
+        state.kind() == horizon_world::fluid::FluidKind::Empty
+    );
+    crate::FluidState {
+        fluid,
+        amount: state.amount(),
+        falling: state.falling(),
+        source: state.is_source(),
+    }
+}
 pub use crate::unresolved_fluid::{
     identity_name as fluid_identity_name, intern as intern_unresolved_fluid,
     lookup as lookup_unresolved_fluid, lookup_utf16 as lookup_unresolved_fluid_utf16,

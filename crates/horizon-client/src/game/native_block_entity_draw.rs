@@ -23,7 +23,7 @@ use horizon_client::{
     text::Text,
 };
 use horizon_world::registry::BlockStateId;
-use mod_api::ModelPart;
+use mod_api::{Identifier, ModelError, ModelPart, ModelRef};
 
 /// `BlockEntityRenderer.getViewDistance`'s default, in blocks.
 const VIEW_DISTANCE: f64 = 64.0;
@@ -813,27 +813,29 @@ impl Game<'_> {
         true
     }
 
-    /// Draws standalone model `model` (`mymod:block/shaft_half`, one a mod
-    /// named in `native_standalone_models`) under `draw`'s pose, as
-    /// `native_draw_block` draws a block's: unturned, from the block's lower
-    /// north-west corner, lit by `draw.light`. Its faces with a tint index
-    /// are multiplied by the 0xRRGGBB `tint` (0xFFFFFF for none), the
-    /// others drawn as they are. False when the model isn't baked: not
-    /// named, missing from the resources, or on a side that draws nothing.
+    /// Resolve a registered standalone model once in `client_setup` and again in
+    /// `client_resources_reloaded`, not each frame. Resource-pack overrides and other
+    /// namespaces use the normal shared model store; no resource is read or baked here.
+    pub(super) fn native_model(&self, id: &Identifier) -> Result<ModelRef, ModelError> {
+        self.pack.render.model(id)
+    }
+
+    /// Draws the resolved standalone model under `draw`'s pose: unturned, from
+    /// the block's lower north-west corner, lit by `draw.light`. Faces with a tint
+    /// index are multiplied by 0xRRGGBB `tint` (0xFFFFFF for none), others unchanged.
+    /// A stale generation or absent slot returns an error without appending geometry.
     pub(super) fn native_draw_model(
         &self,
         draw: &mut BlockEntityDraw,
-        model: &str,
+        model: ModelRef,
         tint: u32,
-    ) -> bool {
-        let Some(baked) = self.pack.render.model_catalog.standalone(model) else {
-            return false;
-        };
+    ) -> Result<(), ModelError> {
+        let baked = self.pack.render.resolve_model(model)?;
         let pose = draw.pose();
         let light = draw.light;
         let tint = |index: i32| (index >= 0).then_some(tint & 0xFF_FFFF);
         self.baked_model_vertices([baked], pose, |_| light, true, tint, &mut draw.vertices);
-        true
+        Ok(())
     }
 
     /// Draws model part `part` and the parts under it under `draw`'s pose, as
@@ -1012,19 +1014,85 @@ mod tests {
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
-    fn a_trait_mod_draws_only_the_standalone_models_it_named() {
+    fn resolved_model_draws_and_resource_replacement_invalidates_it() {
         use super::super::mod_api_host::generated::GameBlockEntityDrawContext;
-        use mod_api::BlockEntityDrawContext;
+        use mod_api::{BlockEntityDrawContext, ClientHost};
 
-        super::super::native_entity_refs::tests::with_game(|game| {
+        horizon_client::models::register_standalone(vec!["minecraft:block/grass_block".into()]);
+        super::super::native_entity_refs::tests::with_client_game(|game| {
+            let id = Identifier::parse("minecraft:block/grass_block").unwrap();
+            let model = game.render_assets().model(&id).unwrap();
+            for phase in [
+                mod_api::__private::ModPhase::Setup,
+                mod_api::__private::ModPhase::Reloading,
+            ] {
+                let _scope = mod_api::__private::PhaseOwner::scope(phase);
+                assert_eq!(game.render_assets().model(&id), Ok(model));
+            }
+            assert_eq!(
+                game.render_assets()
+                    .model(&Identifier::parse("mymod:block/absent").unwrap()),
+                Err(ModelError::UnknownModel)
+            );
             let mut surface = draw();
+            surface.light = 0x7030;
+            // Compare the consumer with the existing shared emitter, under the same pose,
+            // tint, atlas and light: handle resolution must not change any vertex bytes.
+            let mut expected = Vec::new();
+            game.baked_model_vertices(
+                [game
+                    .pack
+                    .render
+                    .model_catalog
+                    .standalone("minecraft:block/grass_block")
+                    .unwrap()],
+                surface.pose(),
+                |_| surface.light,
+                true,
+                |index| (index >= 0).then_some(0x123456),
+                &mut expected,
+            );
+            assert!(!expected.is_empty());
             let mut drawn = GameBlockEntityDrawContext {
                 game,
                 surface: &mut surface,
             };
-            // No mod named it in `standalone_models`, so nothing baked it.
-            assert!(!drawn.model("mymod:block/shaft_half", 0xFFFFFF));
-            assert!(surface.vertices.is_empty());
+            assert_eq!(drawn.model(model, 0x123456), Ok(()));
+            let bytes = |vertices: &[Vertex]| bytemuck::cast_slice::<_, u8>(vertices).to_vec();
+            assert_eq!(bytes(&surface.vertices), bytes(&expected));
+            assert!(surface.vertices.iter().all(|v| v.light == 0x7030));
+            let before = bytes(&surface.vertices);
+            let invalid =
+                mod_api::__private::built::model_ref(game.pack.render.generation, u32::MAX);
+            assert_eq!(
+                game.native_draw_model(&mut surface, invalid, 0xFFFFFF),
+                Err(ModelError::UnknownModel)
+            );
+            assert_eq!(bytes(&surface.vertices), before);
+
+            // A failed resource build never publishes a replacement, so the handle remains valid.
+            let missing = game.options.resources.join("absent-model-test-root");
+            assert!(game.pack.assets.reload(&missing).is_err());
+            assert_eq!(
+                game.native_draw_model(&mut surface, model, 0x123456),
+                Ok(())
+            );
+            let before = bytes(&surface.vertices);
+            // Identical texture bytes still produce a new model generation.
+            let replacement = game.pack.assets.reload(&game.options.resources).unwrap();
+            assert_ne!(replacement.generation, game.pack.render.generation);
+            game.pack.render = std::sync::Arc::new(replacement);
+            assert_eq!(
+                game.native_draw_model(&mut surface, model, 0x123456),
+                Err(ModelError::StaleModel)
+            );
+            assert_eq!(bytes(&surface.vertices), before);
+            let fresh = game.render_assets().model(&id).unwrap();
+            assert_ne!(fresh, model);
+            assert_eq!(
+                game.native_draw_model(&mut surface, fresh, 0x123456),
+                Ok(())
+            );
         });
     }
 

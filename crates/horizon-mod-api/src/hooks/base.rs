@@ -1153,7 +1153,8 @@ pub trait Hooks {
     /// dispenser's `DirectionalPlaceContext`), and the answer still takes its
     /// survival and entity obstruction checks. A trait mod returns
     /// `Some(Some(state))` to choose a state, `Some(None)` to refuse, or
-    /// `None` to leave the answer to the next mod or vanilla.
+    /// `None` to leave the answer to the next mod or vanilla. Changes to the event's fluid
+    /// copy are mod-provided data forwarded to later Parts, never consumed by the engine.
     /// Authoritative servers only.
     #[hook(
         side = "server",

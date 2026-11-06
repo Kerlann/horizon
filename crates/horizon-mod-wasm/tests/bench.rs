@@ -1,16 +1,17 @@
-//! What a wasm mod costs against the same mod built native: `tests/bench/` runs one chat hook
+//! What a wasm mod costs against the same mod built native: `tests/bench/hook/` runs one chat hook
 //! doing a chosen amount of work, compiled into this test and loaded as `mod.wasm`. Each case
 //! reports the median time per call over batches, and the test checks both builds answered
 //! alike. CI builds the mod first, points `HORIZON_WASM_BENCH` at its `.hmod` and
 //! `HORIZON_WASM_STD` at the std member, runs this in release and adds the table to the job
-//! summary; the test is ignored elsewhere.
+//! summary; the test is ignored elsewhere. Guest projects are siblings under `bench/` so
+//! packaging one never traverses the host tests or the other project.
 use std::time::{Duration, Instant};
 
 use mod_api::__private::game::Fields;
 use mod_api::__private::wasm_host::{Budgets, Fuel};
 use mod_api::{Hooks, Host, LevelRef, NativeWorldEpoch, ServerChatEvent, ServerHost, Text};
 
-#[path = "bench/src/lib.rs"]
+#[path = "bench/hook/src/lib.rs"]
 mod bench_mod;
 #[path = "bench/internals.rs"]
 mod internals_bench;
@@ -126,7 +127,7 @@ fn load(budgets: Budgets) -> horizon_mod_wasm::Loaded {
 }
 
 #[test]
-#[ignore = "needs tests/bench built to mod.wasm (CI's wasm-bench job)"]
+#[ignore = "needs tests/bench/hook built to mod.wasm (CI's wasm-bench job)"]
 fn a_call_past_its_time_stops_its_group() {
     let mut budgets = Budgets::default();
     budgets.call = Duration::from_millis(20);
@@ -144,7 +145,7 @@ fn a_call_past_its_time_stops_its_group() {
 }
 
 #[test]
-#[ignore = "needs tests/bench built to mod.wasm (CI's wasm-bench job)"]
+#[ignore = "needs tests/bench/hook built to mod.wasm (CI's wasm-bench job)"]
 fn a_call_past_its_fuel_stops_its_group() {
     let mut budgets = Budgets::default();
     budgets.fuel = Some(Fuel::default());
@@ -205,7 +206,7 @@ impl horizon_world::worldgen::structure::start::StartContext for Flat {
 }
 
 #[test]
-#[ignore = "needs tests/bench built to mod.wasm (CI's wasm-bench job)"]
+#[ignore = "needs tests/bench/hook built to mod.wasm (CI's wasm-bench job)"]
 fn worldgen_workers_sharing_a_wasm_structure_each_get_their_structure() {
     use horizon_core::random::{LegacyRandom, WorldgenRandom};
     // A hook call would be refused after 1 ms of waiting for the group; worldgen calls queue.
@@ -238,7 +239,7 @@ fn worldgen_workers_sharing_a_wasm_structure_each_get_their_structure() {
 }
 
 #[test]
-#[ignore = "needs tests/bench built to mod.wasm and a release build (CI's wasm-bench job)"]
+#[ignore = "needs tests/bench/hook built to mod.wasm and a release build (CI's wasm-bench job)"]
 fn a_wasm_mod_against_the_same_mod_native() {
     let loaded = load(Budgets::default());
     let wasm = loaded.mods[0].fields().hooks;
@@ -302,7 +303,7 @@ fn tick_at_point(listener: &dyn mod_points::Points) -> bool {
 }
 
 #[test]
-#[ignore = "needs tests/bench built to mod.wasm and a release build (CI's wasm-bench job)"]
+#[ignore = "needs tests/bench/hook built to mod.wasm and a release build (CI's wasm-bench job)"]
 fn a_point_filled_by_a_wasm_mod() {
     use std::sync::atomic::Ordering;
     // The bench mod, its manifest listing the tick point it listens at (its own lists none, so

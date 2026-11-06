@@ -861,6 +861,7 @@ mod tests {
                 [0; 4],
                 None,
                 Some(game.pack.assets.registry),
+                |_| None,
             );
             game.apply_entity_nbt(super::super::commands::Target::Mob(40), tag)
                 .unwrap();
@@ -871,6 +872,7 @@ mod tests {
                 [0; 4],
                 None,
                 Some(game.pack.assets.registry),
+                |_| None,
             );
             if let Tag::Compound(data) = &mut tag {
                 data.insert(

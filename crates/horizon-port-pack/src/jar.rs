@@ -3,7 +3,7 @@
 //! census of its data, assets and classes. Legacy metadata contributes identity
 //! only; license and dependency fields are not interpreted.
 use serde::{Deserialize, Serialize};
-use std::{fs, io::Read, path::Path};
+use std::{fs, path::Path};
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct JarInfo {
@@ -96,19 +96,17 @@ fn read_inner(path: &Path, strict: bool) -> Result<(JarInfo, Option<JarLoader>),
                 Err(_) => return Ok(None),
             };
             const MAX_METADATA_BYTES: u64 = 1024 * 1024;
-            let limit = if strict {
-                MAX_METADATA_BYTES + 1
+            let declared = entry.size();
+            let cap = if strict {
+                MAX_METADATA_BYTES
             } else {
-                u64::MAX
+                crate::entry::MAX_TEXT
             };
-            let mut s = String::new();
-            match entry.take(limit).read_to_string(&mut s) {
-                Ok(_) if strict && s.len() as u64 > MAX_METADATA_BYTES => Err(format!(
-                    "{}: {name}: metadata exceeds {MAX_METADATA_BYTES} bytes",
-                    path.display()
-                )),
-                Ok(_) => Ok(Some(s)),
-                Err(e) if strict => Err(format!("{}: {name}: {e}", path.display())),
+            match crate::entry::read_text(entry, declared, cap) {
+                Ok(s) => Ok(Some(s)),
+                Err(e) if strict || crate::entry::is_too_big(&e) => {
+                    Err(format!("{}: {name}: {e}", path.display()))
+                }
                 Err(_) => Ok(None),
             }
         };
@@ -819,7 +817,7 @@ mandatory = true
             } else {
                 let error = identity.unwrap_err();
                 assert!(
-                    error.contains("fabric.mod.json: metadata exceeds 1048576 bytes"),
+                    error.contains("fabric.mod.json: an entry unpacks to more than 1 MiB"),
                     "{error}"
                 );
             }

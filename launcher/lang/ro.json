@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Descărcările, conectările și actualizările trec prin acest proxy (http://host:port, socks5://host:port). Golit înseamnă că nu există: HTTPS_PROXY este folosit atunci când lansatorul a fost pornit cu unul.",
   "{name} was left out: made for another Horizon version": "{name} a fost omis: făcut pentru altă versiune de Horizon",
   "{name} was left out: clashes with {other}": "{name} a fost omis: intră în conflict cu {other}",
-  "{name} was left out: it needs {other}, which was left out": "{name} a fost omis: are nevoie de {other}, care a fost omis"
+  "{name} was left out: it needs {other}, which was left out": "{name} a fost omis: are nevoie de {other}, care a fost omis",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

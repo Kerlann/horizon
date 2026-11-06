@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "下载、登录和更新均通过此代理（http://host:port, socks5://host:port）。留空表示不使用：若启动器启动时设置了 HTTPS_PROXY 则会优先使用。",
   "{name} was left out: made for another Horizon version": "已略过 {name}：它是为其他版本的 Horizon 制作的",
   "{name} was left out: clashes with {other}": "已略过 {name}：与 {other} 冲突",
-  "{name} was left out: it needs {other}, which was left out": "已略过 {name}：它需要 {other}，而后者已被略过"
+  "{name} was left out: it needs {other}, which was left out": "已略过 {name}：它需要 {other}，而后者已被略过",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

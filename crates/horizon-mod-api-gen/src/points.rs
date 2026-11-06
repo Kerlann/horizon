@@ -70,11 +70,13 @@ pub(crate) fn conditions(attrs: &[syn::Attribute]) -> Vec<String> {
         .collect()
 }
 
-/// Whether `attrs` hold `#[cfg(test)]`: compiled only into tests.
+/// Whether an item is compiled only into tests, explicitly or by `#[test]`/`#[bench]`.
 pub(crate) fn test_only(attrs: &[syn::Attribute]) -> bool {
     attrs.iter().any(|attr| {
-        attr.path().is_ident("cfg")
-            && matches!(attr.parse_args::<syn::Meta>(), Ok(syn::Meta::Path(path)) if path.is_ident("test"))
+        attr.path().is_ident("test")
+            || attr.path().is_ident("bench")
+            || (attr.path().is_ident("cfg")
+                && matches!(attr.parse_args::<syn::Meta>(), Ok(syn::Meta::Path(path)) if path.is_ident("test")))
     })
 }
 
@@ -259,7 +261,7 @@ fn listed(root: &Path) -> Result<Vec<(usize, String)>, String> {
 const LIST: &str = "crates/horizon-mod-api-gen/points.txt";
 
 /// A path without generic arguments or spaces, as listed paths and found ones are compared.
-fn plain_path(path: &str) -> String {
+pub(crate) fn plain_path(path: &str) -> String {
     let mut out = String::new();
     let mut depth = 0;
     for c in path.chars() {

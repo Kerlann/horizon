@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Les baixades, els inicis de sessió i les actualitzacions passen per aquest servidor intermediari (http://host:port, socks5://host:port). Buit significa cap: HTTPS_PROXY s'utilitza en el seu lloc quan el llançador es va iniciar amb un.",
   "{name} was left out: made for another Horizon version": "S'ha deixat fora {name}: fet per a una altra versió d'Horizon",
   "{name} was left out: clashes with {other}": "S'ha deixat fora {name}: entra en conflicte amb {other}",
-  "{name} was left out: it needs {other}, which was left out": "S'ha deixat fora {name}: necessita {other}, que s'ha deixat fora"
+  "{name} was left out: it needs {other}, which was left out": "S'ha deixat fora {name}: necessita {other}, que s'ha deixat fora",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

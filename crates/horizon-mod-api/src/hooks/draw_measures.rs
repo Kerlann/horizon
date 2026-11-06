@@ -1,6 +1,19 @@
 //! The `draw_measures` hooks and helpers: declarations the mod API generator reads (see `hooks/mod.rs`).
 
 pub trait Helpers {
+    /// Resolve a registered standalone model once after assets publish, in `client_setup`
+    /// or `client_resources_reloaded`. Retain the handle between frames. An unknown or
+    /// unbaked name returns `ModelError::UnknownModel`; lookup never loads resources.
+    #[helper(
+        side = "client",
+        service = "render_assets",
+        resource_read = true,
+        target = "horizon_client::game::native_block_entity_draw::Game<'_>::native_model"
+    )]
+    fn model();
+    /// Draw a resolved standalone model under the current pose and light, tinting indexed
+    /// faces by 0xRRGGBB. `ModelError::StaleModel` means assets were successfully replaced;
+    /// reacquire in `client_resources_reloaded`. An error appends no geometry.
     #[helper(
         side = "client",
         target = "horizon_client::game::native_block_entity_draw::Game<'_>::native_draw_model"

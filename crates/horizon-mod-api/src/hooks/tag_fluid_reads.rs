@@ -25,6 +25,7 @@ pub trait Helpers {
         target = "horizon_client::game::native_world_read::Game<'_>::native_state_outline"
     )]
     fn state_outline();
+    /// The registered fluid state held by a block state, or none for an unknown state or unavailable mapping.
     #[helper(
         side = "both",
         target = "horizon_client::game::native_world_read::Game<'_>::native_state_fluid_state"
@@ -35,6 +36,7 @@ pub trait Helpers {
         target = "horizon_client::game::native_world_read::Game<'_>::native_fluid_in_tag"
     )]
     fn fluid_in_tag();
+    /// The registered fluid state at a loaded position, or none when the level or position is unavailable.
     #[helper(
         side = "server",
         receiver = "level",

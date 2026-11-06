@@ -1154,5 +1154,6 @@
   "Downloads, sign-ins and updates go through this proxy (http://host:port, socks5://host:port). Empty means none: HTTPS_PROXY is used instead when the launcher was started with one.": "Soo dejinta, gelista iyo cusboonaysiinta waxay maraan wakiilkan (http://host:port, socks5://host:port). Madhan macneheedu waa maya: HTTPS_PROXY waxa la istcmaalaa bedelkii markii wax soo saaruhu lagu bilaabay mid.",
   "{name} was left out: made for another Horizon version": "{name} waa laga reebay: waxaa loo sameeyay nooc kale oo Horizon ah",
   "{name} was left out: clashes with {other}": "{name} waa laga reebay: wuxuu ku dhacaa {other}",
-  "{name} was left out: it needs {other}, which was left out": "{name} waa laga reebay: wuxuu u baahan yahay {other}, oo laga reebay"
+  "{name} was left out: it needs {other}, which was left out": "{name} waa laga reebay: wuxuu u baahan yahay {other}, oo laga reebay",
+  "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later.": "Made for Minecraft 1.20 or older: Horizon ports mods made for 1.21 and later."
 }

@@ -2942,7 +2942,7 @@ mod tests {
             let kind = std::sync::Arc::new(types.types[kind].clone());
             for baby in [false, true] {
                 for t in 0..VILLAGER_TYPES.len() {
-                    for p in 0..crate::mobs::villager::PROFESSIONS.len() {
+                    for p in 0..crate::mobs::villager::profession_table().entries().len() {
                         let mut m =
                             Mob::new(1, kind.clone(), horizon_core::geometry::Vec3::ZERO, 0.0);
                         m.extra.age = if baby { -24000 } else { 0 };

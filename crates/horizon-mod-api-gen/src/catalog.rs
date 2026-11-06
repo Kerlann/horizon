@@ -119,7 +119,7 @@ pub struct Helper {
     #[serde(default)]
     pub backend: bool,
     /// A published asset/data query, not live world/player state. Cache updates
-    /// are permitted; handle and service methods have their own access boundary.
+    /// are permitted; handle methods have their own access boundary.
     #[serde(default)]
     pub resource_read: bool,
     /// The small service that owns this global helper, instead of the flat host.
@@ -370,18 +370,16 @@ impl Helper {
         if helper.client_target.is_some() && helper.side != Side::Both {
             return Err(CatalogError::ClientTargetNeedsBoth(name));
         }
-        if helper.resource_read
-            && (helper.receiver.is_some() || helper.backend || helper.service.is_some())
-        {
+        if helper.resource_read && (helper.receiver.is_some() || helper.backend) {
             return Err(CatalogError::InvalidHelper {
                 helper: name,
-                error: "a published resource query has no receiver, backend or service".into(),
+                error: "a published resource query has no receiver or backend".into(),
             });
         }
         if let Some(service) = &helper.service {
             let error = if !matches!(
                 service.as_str(),
-                "commands" | "levels" | "messages" | "players" | "client_session"
+                "commands" | "levels" | "messages" | "players" | "client_session" | "render_assets"
             ) {
                 Some("unknown service")
             } else if helper.receiver.is_some() || helper.backend {
@@ -1069,14 +1067,13 @@ mod tests {
     }
 
     #[test]
-    fn resource_reads_cannot_label_object_or_service_operations() {
+    fn resource_reads_can_label_services_but_not_object_operations() {
         let base = json!({"name": "facts", "target": "t", "side": "both", "resource_read": true});
         assert!(Helper::parse(base.clone()).unwrap().resource_read);
-        for extra in [
-            json!({"receiver": "level"}),
-            json!({"backend": true}),
-            json!({"service": "players"}),
-        ] {
+        let mut service = base.clone();
+        service["service"] = json!("render_assets");
+        assert!(Helper::parse(service).unwrap().resource_read);
+        for extra in [json!({"receiver": "level"}), json!({"backend": true})] {
             let mut value = base.clone();
             value
                 .as_object_mut()

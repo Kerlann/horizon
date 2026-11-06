@@ -196,7 +196,8 @@ impl Game<'_> {
             }
             "trade" => {
                 let profession = arg(1)?.trim_start_matches("minecraft:").to_owned();
-                if !horizon_client::mobs::villager::PROFESSIONS
+                if !horizon_client::mobs::villager::profession_table()
+                    .entries()
                     .iter()
                     .any(|p| p.trade_set == Some(profession.as_str()))
                 {
