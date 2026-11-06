@@ -47,8 +47,9 @@ pub trait Helpers {
         target = "horizon_client::game::native_block_entity_refs::Game<'_>::native_block_entity_lock"
     )]
     fn block_entity_lock();
-    /// Set the vanilla lock's item predicate, or clear it with None. Returns false for
-    /// an unavailable entity or no change. The write joins the current transaction.
+    /// Set the vanilla lock's item predicate, or clear it with None. Returns Ok(false)
+    /// for no change and BlockEntityError::Stale for an invalidated or unwritable handle.
+    /// The write joins the current transaction.
     #[helper(
         side = "server",
         receiver = "block_entity",
@@ -64,6 +65,7 @@ pub trait Helpers {
     /// Replace the saved payload, not the block entity's type or position. Ignores
     /// identity fields, joins the transaction and restores the original data on abort.
     /// Changing type goes through the owning block's lifecycle, not this method.
+    /// Returns Ok(false) for unsupported data or no change; Stale for an invalidated handle.
     #[helper(
         side = "server",
         receiver = "block_entity",
@@ -111,8 +113,9 @@ pub trait Helpers {
     fn block_entity_data_slots();
     /// Set a declared mod block-entity data slot on the server, without resizing it.
     /// Joins the current transaction, rolls back on abort, and calls setChanged at
-    /// commit. False for an invalid/stale/client/parked entity, a missing slot, or
-    /// no change. The normal menu broadcast carries changed values to its viewers.
+    /// commit. Returns Ok(false) for a vanilla entity, missing slot or no change,
+    /// and BlockEntityError::Stale for an invalidated or unwritable handle.
+    /// The normal menu broadcast carries changed values to its viewers.
     #[helper(
         side = "server",
         receiver = "block_entity",

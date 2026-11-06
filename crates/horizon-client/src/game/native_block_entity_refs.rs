@@ -128,14 +128,14 @@ impl Game<'_> {
         &mut self,
         entity: BlockEntityRef,
         lock: Option<Compound>,
-    ) -> bool {
-        let Some((key, block)) = self.native_block_entity_write_target(entity) else {
-            return false;
-        };
+    ) -> Result<bool, BlockEntityError> {
+        let (key, block) = self
+            .native_block_entity_write_target(entity)
+            .ok_or(BlockEntityError::Stale)?;
         if matches!((self.world.block_lock(key), &lock), (None, None))
             || matches!((self.world.block_lock(key), &lock), (Some(Tag::Compound(old)), Some(new)) if old == new)
         {
-            return false;
+            return Ok(false);
         }
         let Some(mut tag) = self
             .world
@@ -143,7 +143,7 @@ impl Game<'_> {
             .get(&key)
             .and_then(|current| save_with_metadata(&self.world, key, current, &block))
         else {
-            return false;
+            return Ok(false);
         };
         match lock {
             Some(lock) => {
@@ -157,7 +157,7 @@ impl Game<'_> {
         self.world.set_block_lock(key, &Tag::Compound(tag));
         self.after_commit(After::Updated(key));
         self.after_commit(After::Changed(key));
-        true
+        Ok(true)
     }
 
     /// A loaded block entity of the server level in place, when a write may change it.
@@ -199,19 +199,19 @@ impl Game<'_> {
     }
 
     /// Set a mod block entity's menu data slot in place, joining the current transaction
-    /// and its setChanged notice. False for a stale/client/parked/vanilla entity, an
-    /// invalid slot or no change. Does not resize the mod's declared data slots.
+    /// and its setChanged notice. Ok(false) for a vanilla entity, an invalid slot or
+    /// no change; Stale for an invalidated or unwritable handle. Does not resize slots.
     pub(super) fn native_block_entity_set_data_slot(
         &mut self,
         entity: BlockEntityRef,
         slot: u32,
         value: i32,
-    ) -> bool {
-        let Some(key) = self.native_block_entity_write_key(entity) else {
-            return false;
-        };
+    ) -> Result<bool, BlockEntityError> {
+        let key = self
+            .native_block_entity_write_key(entity)
+            .ok_or(BlockEntityError::Stale)?;
         let Some(block_entity) = self.mod_block_entity_write_target(key) else {
-            return false;
+            return Ok(false);
         };
         let index = slot as usize;
         if block_entity
@@ -219,10 +219,10 @@ impl Game<'_> {
             .get(index)
             .is_none_or(|current| *current == value)
         {
-            return false;
+            return Ok(false);
         }
         self.write_mod_block_entity(key, |block_entity| block_entity.data[index] = value);
-        true
+        Ok(true)
     }
 
     /// Sizes a mod block entity's menu data explicitly, using the same write
@@ -339,26 +339,26 @@ impl Game<'_> {
     /// Merges `data` into the block entity's saved data and loads it, as `/data merge block`
     /// does (`BlockDataAccessor.setData`: `loadWithComponents`, `setChanged`, then
     /// `sendBlockUpdated`, so comparators re-read it and clients get the update). `id`, `x`,
-    /// `y` and `z` in `data` are ignored. True when the data changed; false for a stale
-    /// handle, a client, another level than the one in place, data nested too deep or that
-    /// changes nothing, or a result the block entity can't load. Inside a transaction an
+    /// `y` and `z` in `data` are ignored. Ok(true) when data changed; Ok(false) for data
+    /// nested too deep, no change, or data the entity cannot load. Stale or unwritable
+    /// handles return BlockEntityError::Stale. Inside a transaction an
     /// abort puts the block entity, its name, `lock`, loot table roll and attachments back.
     pub(super) fn native_block_entity_merge_data(
         &mut self,
         entity: BlockEntityRef,
         data: Compound,
-    ) -> bool {
+    ) -> Result<bool, BlockEntityError> {
         self.write_block_entity_data(entity, data, false)
     }
 
     /// Replaces the saved payload, retaining identity and position metadata.
     /// Uses the same transactional load and client update path as `merge_data`.
-    /// False for a missing or stale block entity, unsupported data, or no change.
+    /// Ok(false) for unsupported data or no change; Stale for an invalidated handle.
     pub(super) fn native_block_entity_replace_data(
         &mut self,
         entity: BlockEntityRef,
         data: Compound,
-    ) -> bool {
+    ) -> Result<bool, BlockEntityError> {
         self.write_block_entity_data(entity, data, true)
     }
 
@@ -367,17 +367,17 @@ impl Game<'_> {
         entity: BlockEntityRef,
         data: Compound,
         replace: bool,
-    ) -> bool {
-        let Some((key, block)) = self.native_block_entity_write_target(entity) else {
-            return false;
-        };
+    ) -> Result<bool, BlockEntityError> {
+        let (key, block) = self
+            .native_block_entity_write_target(entity)
+            .ok_or(BlockEntityError::Stale)?;
         let mut nbt = data;
         for field in ["id", "x", "y", "z"] {
             nbt.remove(&field.into());
         }
         let nbt = Tag::Compound(nbt);
         if horizon_client::nbt_path::too_deep(&nbt, 0) {
-            return false;
+            return Ok(false);
         }
         let Some(old) = self
             .world
@@ -386,7 +386,7 @@ impl Game<'_> {
             .and_then(|current| save_with_metadata(&self.world, key, current, &block))
             .map(Tag::Compound)
         else {
-            return false;
+            return Ok(false);
         };
         let base = if replace {
             let mut metadata = Compound::new();
@@ -403,11 +403,11 @@ impl Game<'_> {
         };
         let merged = horizon_client::data_cmd::merged(&base, &nbt);
         if merged == old {
-            return false;
+            return Ok(false);
         }
         self.journal_block_entity(key);
         if !self.load_block_entity_data(key, &merged) {
-            return false;
+            return Ok(false);
         }
         let kept = self.world.block_entities.get(&key);
         if kept.is_some_and(|kept| {
@@ -421,18 +421,21 @@ impl Game<'_> {
         }
         self.after_commit(After::Updated(key));
         self.after_commit(After::Changed(key));
-        true
+        Ok(true)
     }
 
     /// `BlockEntity.setChanged`: the chunk is saved again and comparators re-read the
     /// container (`updateNeighbourForOutputSignal`). Inside a transaction it runs once at the
-    /// root commit. False for a stale handle, a client or another level than the one in place.
-    pub(super) fn native_block_entity_set_changed(&mut self, entity: BlockEntityRef) -> bool {
-        let Some((key, _)) = self.native_block_entity_write_target(entity) else {
-            return false;
-        };
+    /// root commit. Returns Stale for an invalidated handle or a level not writable here.
+    pub(super) fn native_block_entity_set_changed(
+        &mut self,
+        entity: BlockEntityRef,
+    ) -> Result<bool, BlockEntityError> {
+        let (key, _) = self
+            .native_block_entity_write_target(entity)
+            .ok_or(BlockEntityError::Stale)?;
         self.after_commit(After::Changed(key));
-        true
+        Ok(true)
     }
 
     /// The custom name (`Nameable.getCustomName`) as plain text. None when the block entity
@@ -505,23 +508,23 @@ impl Game<'_> {
 
     /// Sets the custom name, or clears it with None, as an anvil-renamed item placed with
     /// `components` sets `CustomName`. Plain text only. Clients get a block entity update.
-    /// False for a block entity that isn't nameable, a stale handle, a client or another
-    /// level than the one in place. Inside a transaction an abort puts the name back.
+    /// Ok(false) for an entity that is not nameable; Stale for an invalidated or
+    /// unwritable handle. Inside a transaction an abort puts the name back.
     pub(super) fn native_block_entity_set_name(
         &mut self,
         entity: BlockEntityRef,
         name: Option<&str>,
-    ) -> bool {
-        let Some((key, block)) = self.native_block_entity_write_target(entity) else {
-            return false;
-        };
+    ) -> Result<bool, BlockEntityError> {
+        let (key, block) = self
+            .native_block_entity_write_target(entity)
+            .ok_or(BlockEntityError::Stale)?;
         let nameable = self
             .world
             .block_entities
             .get(&key)
             .is_some_and(|current| nameable(key, current, &block));
         if !nameable {
-            return false;
+            return Ok(false);
         }
         self.journal_block_entity(key);
         match self.world.block_entities.get_mut(&key) {
@@ -534,7 +537,7 @@ impl Game<'_> {
             }
         }
         self.after_commit(After::Updated(key));
-        true
+        Ok(true)
     }
 }
 
@@ -679,6 +682,24 @@ mod tests {
             game.world.block_entities.insert(pos, holder());
             let replacement = game.native_block_entity_ref(level, [1, 64, 1]).unwrap();
             assert_ne!(original, replacement);
+            assert_eq!(original.set_lock(game, None), Err(BlockEntityError::Stale));
+            assert_eq!(
+                original.set_name(game, Some("stale")),
+                Err(BlockEntityError::Stale)
+            );
+            assert_eq!(
+                original.merge_data(game, Compound::new()),
+                Err(BlockEntityError::Stale)
+            );
+            assert_eq!(
+                original.replace_data(game, Compound::new()),
+                Err(BlockEntityError::Stale)
+            );
+            assert_eq!(original.set_changed(game), Err(BlockEntityError::Stale));
+            assert_eq!(
+                original.set_data_slot(game, 0, 99),
+                Err(BlockEntityError::Stale)
+            );
             assert_eq!(
                 original.set_data_slots(game, vec![99]),
                 Err(BlockEntityDataError::Stale)
@@ -795,7 +816,7 @@ mod tests {
             game.lan.as_mut().unwrap().hub.guests.insert(0, guest);
             assert!(player.open_menu(game, chest).unwrap());
             let stick_lock = compound("{items:\"minecraft:stick\"}");
-            assert!(chest.set_lock(game, Some(stick_lock.clone())));
+            assert!(chest.set_lock(game, Some(stick_lock.clone())).unwrap());
             assert_eq!(chest.lock(game), Some(stick_lock));
             assert!(!player.open_menu(game, chest).unwrap());
             {
@@ -817,7 +838,7 @@ mod tests {
                     .guests
                     .update(0, |g| g.inventory[0] = value);
             }
-            assert!(chest.set_lock(game, None));
+            assert!(chest.set_lock(game, None).unwrap());
             assert!(player.open_menu(game, chest).unwrap());
             assert!(player.open_menu(game, furnace).unwrap());
 
@@ -850,10 +871,13 @@ mod tests {
             let right = game.native_block_entity_ref(level, [7, 64, 0]).unwrap();
             assert!(game.chest_partner((6, 64, 0)).is_some());
             for half in [left, right] {
-                assert!(half.set_lock(game, Some(compound("{items:\"minecraft:stick\"}"))));
+                assert!(
+                    half.set_lock(game, Some(compound("{items:\"minecraft:stick\"}")))
+                        .unwrap()
+                );
                 assert!(!player.open_menu(game, left).unwrap());
                 assert!(!player.open_menu(game, right).unwrap());
-                assert!(half.set_lock(game, None));
+                assert!(half.set_lock(game, None).unwrap());
                 assert!(player.open_menu(game, left).unwrap());
             }
             game.world.block_entities.remove(&(2, 64, 0));
@@ -1018,40 +1042,47 @@ mod tests {
             };
 
             // A merge loads the data, ignores the identity keys and keeps the rest.
-            assert!(chest.merge_data(
-                game,
-                compound(&format!("{{id:\"minecraft:furnace\",x:9,{}", &stick[1..]))
-            ));
+            assert!(
+                chest
+                    .merge_data(
+                        game,
+                        compound(&format!("{{id:\"minecraft:furnace\",x:9,{}", &stick[1..]))
+                    )
+                    .unwrap()
+            );
             assert_eq!(slot3(game), Some(3));
             assert_eq!(
                 chest.kind(game).map(|kind| kind.id(game)),
                 Some("minecraft:chest".to_owned())
             );
             assert_eq!(chest.position(game), Some([0, 64, 0]));
-            assert!(!chest.merge_data(game, compound(stick)), "no change");
-            assert!(chest.merge_data(game, compound("{Items:[]}")));
+            assert!(
+                !chest.merge_data(game, compound(stick)).unwrap(),
+                "no change"
+            );
+            assert!(chest.merge_data(game, compound("{Items:[]}")).unwrap());
             assert_eq!(slot3(game), None);
 
             // Names: a chest has one, a daylight detector does not.
             assert_eq!(chest.name(game), None);
-            assert!(chest.set_name(game, Some("Loot")));
+            assert!(chest.set_name(game, Some("Loot")).unwrap());
             assert_eq!(chest.name(game), Some("Loot".to_owned()));
             let data = chest.data(game).unwrap();
             assert_eq!(
                 data.get(&"CustomName".into()),
                 Some(&Tag::String("Loot".into()))
             );
-            assert!(!sensor.set_name(game, Some("Nope")));
+            assert!(!sensor.set_name(game, Some("Nope")).unwrap());
             assert_eq!(sensor.name(game), None);
-            assert!(chest.set_name(game, None));
+            assert!(chest.set_name(game, None).unwrap());
             assert_eq!(chest.name(game), None);
 
             // An abort puts back data and name; a commit keeps them.
             let host: &mut dyn ServerHost = game;
             let aborted: Result<(), ()> = host.transaction(|host, _| {
-                assert!(chest.merge_data(host, compound(stick)));
-                assert!(chest.set_name(host, Some("Gone")));
-                assert!(chest.set_changed(host));
+                assert!(chest.merge_data(host, compound(stick)).unwrap());
+                assert!(chest.set_name(host, Some("Gone")).unwrap());
+                assert!(chest.set_changed(host).unwrap());
                 Err(())
             });
             assert_eq!(aborted, Err(()));
@@ -1059,8 +1090,8 @@ mod tests {
             assert!(game.transactions.is_empty());
             let host: &mut dyn ServerHost = game;
             let committed: Result<(), ()> = host.transaction(|host, _| {
-                assert!(chest.merge_data(host, compound(stick)));
-                assert!(chest.set_name(host, Some("Kept")));
+                assert!(chest.merge_data(host, compound(stick)).unwrap());
+                assert!(chest.set_name(host, Some("Kept")).unwrap());
                 Ok(())
             });
             assert_eq!(committed, Ok(()));
@@ -1071,7 +1102,7 @@ mod tests {
 
             // Replacement uses the same journal and restores the original payload on abort.
             let aborted: Result<(), ()> = (game as &mut dyn ServerHost).transaction(|host, _| {
-                assert!(chest.replace_data(host, compound("{}")));
+                assert!(chest.replace_data(host, compound("{}")).unwrap());
                 Err(())
             });
             assert_eq!(aborted, Err(()));
@@ -1081,30 +1112,43 @@ mod tests {
             );
 
             // Merge preserves omitted data; replacement clears the name and items.
-            assert!(chest.merge_data(game, compound("{CustomName:\"Changed\"}")));
+            assert!(
+                chest
+                    .merge_data(game, compound("{CustomName:\"Changed\"}"))
+                    .unwrap()
+            );
             assert_eq!(slot3(game), Some(3));
             assert_eq!(chest.name(game), Some("Changed".to_owned()));
             game.world.block_log = Some(Vec::new());
-            assert!(chest.replace_data(game, compound("{}")));
+            assert!(chest.replace_data(game, compound("{}")).unwrap());
             assert_eq!((slot3(game), chest.name(game)), (None, None));
             assert_eq!(game.world.block_log, Some(vec![(0, 64, 0)]));
 
             // Clients are told: the block log names the position, and the chunk is dirty.
             game.world.block_log = Some(Vec::new());
             game.world.modified.clear();
-            assert!(chest.set_name(game, Some("Told")));
+            assert!(chest.set_name(game, Some("Told")).unwrap());
             assert_eq!(game.world.block_log, Some(vec![(0, 64, 0)]));
             assert!(game.world.modified.contains(&(0, 0)));
             game.world.modified.clear();
-            assert!(chest.set_changed(game));
+            assert!(chest.set_changed(game).unwrap());
             assert!(game.world.modified.contains(&(0, 0)));
 
             // A removed block entity is a stale handle.
             game.world.block_entities.remove(&(0, 64, 0));
-            assert!(!chest.replace_data(game, compound("{}")));
-            assert!(!chest.set_changed(game));
-            assert!(!chest.merge_data(game, compound(stick)));
-            assert!(!chest.set_name(game, Some("x")));
+            assert_eq!(
+                chest.replace_data(game, compound("{}")),
+                Err(BlockEntityError::Stale)
+            );
+            assert_eq!(chest.set_changed(game), Err(BlockEntityError::Stale));
+            assert_eq!(
+                chest.merge_data(game, compound(stick)),
+                Err(BlockEntityError::Stale)
+            );
+            assert_eq!(
+                chest.set_name(game, Some("x")),
+                Err(BlockEntityError::Stale)
+            );
             assert_eq!(chest.name(game), None);
         });
     }
@@ -1131,8 +1175,12 @@ mod tests {
 
             let host: &mut dyn ServerHost = game;
             let aborted: Result<(), ()> = host.transaction(|host, _| {
-                assert!(chest.set_lock(host, Some(compound("{items:\"minecraft:stick\"}"))));
-                assert!(chest.merge_data(host, table.clone()));
+                assert!(
+                    chest
+                        .set_lock(host, Some(compound("{items:\"minecraft:stick\"}")))
+                        .unwrap()
+                );
+                assert!(chest.merge_data(host, table.clone()).unwrap());
                 Err(())
             });
             assert_eq!(aborted, Err(()));
@@ -1141,8 +1189,8 @@ mod tests {
 
             let host: &mut dyn ServerHost = game;
             let committed: Result<(), ()> = host.transaction(|host, _| {
-                assert!(chest.merge_data(host, lock.clone()));
-                assert!(chest.merge_data(host, table.clone()));
+                assert!(chest.merge_data(host, lock.clone()).unwrap());
+                assert!(chest.merge_data(host, table.clone()).unwrap());
                 Ok(())
             });
             assert_eq!(committed, Ok(()));

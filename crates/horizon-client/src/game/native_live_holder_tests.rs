@@ -20,7 +20,7 @@ impl BlockEntityPart for Ticker {
             let sink = host.block_entity(level, [0, 63, 0]).unwrap();
             let value = sink.data_slots(host).unwrap()[0];
             let result: Result<(), ()> = host.transaction(|host, _| {
-                assert!(sink.set_data_slot(host, 0, value + 1));
+                assert!(sink.set_data_slot(host, 0, value + 1).unwrap());
                 Ok(())
             });
             result.unwrap();
@@ -156,7 +156,7 @@ fn data_slot_sizing_after_creation_and_load_joins_the_existing_journal() {
             let pos = (1, 64, 1);
             assert_eq!(entity.data_slots(game), Some(vec![]));
             assert!(
-                !entity.set_data_slot(game, 0, 1),
+                !entity.set_data_slot(game, 0, 1).unwrap(),
                 "scalar writes cannot declare slots"
             );
             assert_eq!(entity.set_data_slots(game, vec![0]), Ok(true));
@@ -168,8 +168,8 @@ fn data_slot_sizing_after_creation_and_load_joins_the_existing_journal() {
             };
             let before_revision = revision(game);
             game.world.modified.clear();
-            assert!(!entity.set_data_slot(game, 0, 0));
-            assert!(!entity.set_data_slot(game, 1, 1));
+            assert!(!entity.set_data_slot(game, 0, 0).unwrap());
+            assert!(!entity.set_data_slot(game, 1, 1).unwrap());
             assert_eq!(entity.set_data_slots(game, vec![0]), Ok(false));
             assert_eq!(revision(game), before_revision);
             assert!(
@@ -180,7 +180,7 @@ fn data_slot_sizing_after_creation_and_load_joins_the_existing_journal() {
             let aborted: Result<(), ()> = (game as &mut dyn ServerHost).transaction(|host, _| {
                 assert_eq!(entity.set_data_slots(host, vec![30, 40]), Ok(true));
                 host.transaction(|host, _| {
-                    assert!(entity.set_data_slot(host, 0, 50));
+                    assert!(entity.set_data_slot(host, 0, 50).unwrap());
                     Ok(())
                 })?;
                 Err(())
@@ -189,7 +189,7 @@ fn data_slot_sizing_after_creation_and_load_joins_the_existing_journal() {
             assert_eq!(entity.data_slots(game), Some(vec![0]));
             assert!(game.transactions.is_empty());
             assert_eq!(entity.set_data_slots(game, vec![0; 256]), Ok(true));
-            assert!(entity.set_data_slot(game, 255, 7));
+            assert!(entity.set_data_slot(game, 255, 7).unwrap());
             let before = entity.data_slots(game).unwrap();
             let before_revision = revision(game);
             game.world.modified.clear();
@@ -236,7 +236,7 @@ fn data_slot_sizing_after_creation_and_load_joins_the_existing_journal() {
                 "menu data is transient, not saved NBT"
             );
             assert_eq!(entity.set_data_slots(game, vec![0]), Ok(true));
-            assert!(entity.set_data_slot(game, 0, 1));
+            assert!(entity.set_data_slot(game, 0, 1).unwrap());
             assert_eq!(entity.data_slots(game), Some(vec![1]));
         });
     });

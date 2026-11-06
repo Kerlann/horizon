@@ -249,7 +249,7 @@ pub mod tests {
             let mut data = Compound::new();
             data.insert("chemical".into(), Tag::String(chemical.0.as_str().into()));
             data.insert("amount".into(), Tag::Int(amount as i32));
-            entity.merge_data(host, data);
+            let _ = entity.merge_data(host, data);
         }
     }
     impl ResourceHandler<Chemical> for ChemTank {

@@ -646,7 +646,7 @@ mod tests {
         fn write(&self, host: &mut dyn ServerHost, state: &[Tank]) -> bool {
             let mut nbt = Compound::new();
             write_tanks(&mut nbt, state);
-            self.entity.merge_data(host, nbt)
+            self.entity.merge_data(host, nbt).unwrap()
         }
     }
 

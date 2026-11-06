@@ -57,4 +57,8 @@ its current container; this is distinct from an identity-strict automatic restor
 A `BlockEntityRef` names one live entity, not every entity later placed at its position. Removal,
 replacement and chunk reload invalidate it; reacquire with `host.block_entity(level, position)`.
 In-place data edits and temporary tick storage preserve identity. Option reads return `None` for
-stale handles; item and menu-data Result methods return `Stale`, never writing to a replacement.
+stale handles; writes return their error's `Stale` variant, never writing to a replacement.
+`set_lock`, `set_name`, `merge_data`, `replace_data`, `set_changed` and `set_data_slot`
+return `Result<bool, BlockEntityError>`: handle `Err(BlockEntityError::Stale)` by dropping
+or reacquiring the handle. `Ok(false)` means unchanged data or an unsupported operation,
+not a stale identity. Existing item and data-vector methods retain their specialized errors.
