@@ -405,7 +405,7 @@ impl<'a> Types<'a> {
                 writeback: None,
                 rust,
                 wit,
-                lifetimes: 0,
+                lifetimes: generics(&item).lifetimes().count(),
                 kind: Kind::Opaque("recursive".into()),
             });
             self.by_item.insert(id, def);

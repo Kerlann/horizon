@@ -716,19 +716,25 @@ pub fn wasm(attribute: TokenStream, input: TokenStream) -> TokenStream {
                 .into();
         }
     };
+    let generics = match &item {
+        syn::Item::Struct(item) => item.generics.clone(),
+        syn::Item::Enum(item) => item.generics.clone(),
+        _ => syn::Generics::default(),
+    };
+    let (impl_generics, ty_generics, _) = generics.split_for_impl();
     let writer = writeback.map(|method| {
         quote! {
-            fn writes_its_form(value: &mut #ty, form: #via) { value.#method(form); }
+            fn writes_its_form #impl_generics(value: &mut #ty #ty_generics, form: #via) { value.#method(form); }
         }
     });
     quote! {
         #item
         const _: () = {
             #writer
-            fn crosses_as_its_form()
+            fn crosses_as_its_form #impl_generics()
             where
-                #via: for<'a> ::core::convert::TryFrom<&'a #ty>,
-                #ty: ::core::convert::TryFrom<#via>,
+                #via: for<'__wasm_ref> ::core::convert::TryFrom<&'__wasm_ref #ty #ty_generics>,
+                #ty #ty_generics: ::core::convert::TryFrom<#via>,
             {
             }
         };
