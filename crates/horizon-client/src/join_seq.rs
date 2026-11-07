@@ -327,9 +327,7 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
         let entity = self.0.remove(index);
         self.1.remove(&entity.join_seq());
         for slot in self.1.values_mut() {
-            if *slot > index {
-                *slot -= 1;
-            }
+            *slot -= usize::from(*slot > index);
         }
         entity
     }
