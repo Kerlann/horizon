@@ -312,6 +312,7 @@ impl Game<'_> {
                         m.extra.passenger = true;
                         m.ai.nav.stop();
                         count += 1;
+                        self.seat_mob(mob);
                         // Mob.startRiding drops its lead.
                         self.break_leash(mob, true, false);
                         self.note_started_riding(id);

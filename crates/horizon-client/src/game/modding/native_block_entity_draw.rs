@@ -791,7 +791,7 @@ impl Game<'_> {
             let id = BlockStateId(state);
             let block = &*self.res.facts().get(id).name;
             let mut bounds = DEFAULT_BOUNDS;
-            self.native_block_entity_render_bounding_box(pos, block, id, entity, &mut bounds);
+            self.api_block_entity_render_bounding_box(pos, block, id, entity, &mut bounds);
             if !in_frustum(self.view_frustum.as_ref(), origin, bounds) {
                 continue;
             }
@@ -806,7 +806,7 @@ impl Game<'_> {
             draw.kept = false;
             draw.spins.clear();
             draw.records.clear();
-            self.native_block_entity_submit(pos, block, id, entity, &mut draw);
+            self.api_block_entity_submit(pos, block, id, entity, &mut draw);
             self.finish_prepared_draw(&mut draw, corner, camera);
             // The turning parts, from the start of this block's vertices.
             let spins: Vec<(usize, Option<Spin>)> = draw
@@ -2077,6 +2077,7 @@ mod tests {
             game.prepared_model_draws.borrow_mut().clear();
             game.finish_prepared_draw(&mut deferred, origin, camera);
             let deferred_instance = game.prepared_model_draws.borrow()[0].instance;
+            game.prepared_model_draws.borrow_mut().clear();
             let mut batch = crate::world_geometry::WorldGeometry::default();
             batch.reset(camera.to_array(), Mat4::IDENTITY, [0.0, 0.0]);
             let copy = ModelInstance::new(
@@ -2093,7 +2094,6 @@ mod tests {
                 };
                 ctx.draw_model_instances(model, &[copy]).unwrap();
             }
-            game.prepared_model_draws.borrow_mut().clear();
             let mut entities = Vec::new();
             game.commit_model_instances(&mut batch, camera, &mut entities);
             let batch_instance = game.prepared_model_draws.borrow()[0].instance;

@@ -833,14 +833,14 @@ impl Game<'_> {
             .iter_mut()
             .filter(|t| only.is_none() && (!t.in_ground || t.previous != t.position))
         {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut t.id);
+            super::entity::assign_stored_id(&mut self.next_entity, &mut t.id, None);
         }
         for r in self
             .rockets
             .iter_mut()
             .filter(|r| only.is_none() && r.attached_to.is_none() && !r.attached)
         {
-            super::lan_entities::assign_entity_id(&mut self.next_entity, &mut r.id);
+            super::entity::assign_stored_id(&mut self.next_entity, &mut r.id, None);
         }
         let mut inside: Vec<(u32, BlockPos)> = Vec::new();
         let mut portal_sections = std::mem::take(&mut self.portals.sections);
@@ -977,10 +977,11 @@ impl Game<'_> {
                 return;
             }
             let uuid = self.uuid_for(id);
-            let tag = horizon_client::entity_nbt::item_entity_to_nbt(
+            let tag = horizon_client::entity_nbt::item_entity_to_nbt_with_items(
                 &self.dropped[i],
                 uuid,
                 self.persist_raw(id),
+                self.items(),
             );
             self.remove_dropped(i);
             self.detach_entity(id);

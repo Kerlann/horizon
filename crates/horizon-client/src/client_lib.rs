@@ -25,8 +25,8 @@ pub use horizon_client_render::{
     pvp_hud, resource_source, screen_draw, screen_effects, sculk, section_mask, server_terrain,
     settings, shader_options, shader_pack_list, signs, skins, sound_engine, sound_events,
     sound_preview, spans, split_layout, split_map, split_profiles, sprites, streaming,
-    structure_block, tab_list, test_block, test_instance_block, testgen, title_edition, trims, ui,
-    vault, weather, widgets, world, worldborder, zip,
+    structure_block, tab_list, terrain_model, test_block, test_instance_block, testgen,
+    title_edition, trims, ui, vault, weather, widgets, world, worldborder, zip,
 };
 pub mod attack_strength;
 pub mod attribute_updates;
@@ -96,10 +96,12 @@ pub mod merchant;
 pub mod mobs;
 pub mod mod_content;
 pub mod mod_registry;
+pub mod modgen;
 pub mod motion;
 pub mod multiplayer;
 pub mod music;
 pub mod native_client_hooks;
+pub mod native_stack_hooks;
 pub mod net;
 pub mod nether_portal;
 pub mod no_resources;

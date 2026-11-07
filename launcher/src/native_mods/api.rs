@@ -46,7 +46,7 @@ pub(super) fn main_rs(
         m.id, m.version, m.side,
     )).collect::<String>();
     let raw = mods.iter().enumerate().flat_map(|(i, manifest)| {
-        super::inject::raw_of(manifest).into_iter().map(move |injection| {
+        super::inject::raw_of(listed, manifest).into_iter().map(move |injection| {
             let point = listed.iter().find(|point| internals::plain_path(&point.target) == internals::plain_path(&injection.target)).expect("raw target checked");
             let place = point.place(injection.at_return);
             let order = manifest.inject.iter().find(|entry| entry.id == injection.id)

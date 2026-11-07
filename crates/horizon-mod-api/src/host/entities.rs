@@ -233,14 +233,59 @@ pub trait EntitiesBackend {
     #[access(WorldOnly)]
     fn entity_root_vehicle(&self, entity: EntityRef) -> Option<EntityRef>;
     /// Side: server.
-    /// The entities riding this one (`Entity.getPassengers`): its players
-    /// in the order they got in, then its mobs.
+    /// The entities riding this one (`Entity.getPassengers`), in `addPassenger`'s order: each
+    /// behind those aboard, except that a player goes first when the first is no player.
     #[access(WorldOnly)]
     fn entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>>;
     /// Side: server.
     /// Whether anything rides the entity (`Entity.isVehicle`).
     #[access(WorldOnly)]
     fn entity_is_vehicle(&self, entity: EntityRef) -> Option<bool>;
+    /// Side: server.
+    /// Every entity riding this one, at any depth (`Entity.getIndirectPassengers`): each
+    /// passenger in `passengers` order, followed by those riding it.
+    #[access(WorldOnly)]
+    fn entity_indirect_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>>;
+    /// Side: server.
+    /// The first passenger, when it steers the entity (`Entity.getControllingPassenger`): a
+    /// player in a boat, a player on a mount that is ready for one, or a mob on a mob with AI
+    /// unless `#non_controlling_rider` names it. `None` when nothing steers it, or for a stale
+    /// handle.
+    #[access(WorldOnly)]
+    fn entity_controlling_passenger(&self, entity: EntityRef) -> Option<LivingRef>;
+    /// Side: server.
+    /// Whether both entities share a root vehicle (`Entity.isPassengerOfSameVehicle`): true for
+    /// an entity and itself, false for two entities riding nothing. `None` for a stale handle.
+    #[access(WorldOnly)]
+    fn entity_is_passenger_of_same_vehicle(
+        &self,
+        entity: EntityRef,
+        other: EntityRef,
+    ) -> Option<bool>;
+    /// Side: server.
+    /// Where getting off this vehicle puts `passenger` as it stands now, riding it or not. This
+    /// is the game's own placement, from the code `stop_riding` runs, so it can differ from
+    /// `Entity.getDismountLocationForPassenger`. A player leaves a boat ahead of them or on top
+    /// of it, a cart beside or on top of it, a strider by vanilla's search, a happy ghast on
+    /// top, and any other mob beside or on top of it. A mob leaves a boat as a player does, a
+    /// cart by vanilla's search, a horse, camel or llama at its side or feet, and any other mob
+    /// on top: vanilla's searches for `Animal` and the strider don't reach mobs yet, and those
+    /// for horses, `Animal` and the cart don't reach players. Nothing rides anything else, so
+    /// there it is the top of the box. Reads only: no `mob_ride` or dismount veto is asked and
+    /// the passenger's pose stays. `None` for a stale handle, a passenger other than a player
+    /// or a mob, a player with no motion state, or a vehicle whose box Horizon does not keep.
+    #[access(WorldOnly)]
+    fn entity_dismount_location(
+        &self,
+        vehicle: EntityRef,
+        passenger: LivingRef,
+    ) -> Option<[f64; 3]>;
+    /// Side: server.
+    /// The live holder of a mob's or boat's lead (`Leashable.getLeashHolder`), or `Unleashed`
+    /// when no lead exists. `None` means an entity that takes no lead, or that the entity,
+    /// holder or saved holder is unavailable, stale or in a parked level. Does not load a level.
+    #[access(WorldOnly)]
+    fn entity_leash_holder(&self, entity: EntityRef) -> Option<LeashHolder>;
     /// Side: server.
     /// `Entity.getSoundSource`: the group an entity's sounds play under.
     /// Players are `Players`; `Monster`s, the dragon, hoglins, ghasts,
@@ -475,7 +520,7 @@ pub trait EntitiesBackendMut {
         entity: EntityRef,
         stack: ItemStack,
         y_offset: f32,
-    ) -> Option<EntityRef>;
+    ) -> Result<Option<EntityRef>, StackWriteError>;
     /// Side: server.
     /// Attempts to board a vehicle through the shared server mount path.
     ///
@@ -500,6 +545,27 @@ pub trait EntitiesBackendMut {
     /// order. False when nothing rode it, or for a stale handle.
     #[access(WorldOnly)]
     fn entity_eject_passengers(&mut self, entity: EntityRef) -> bool;
+    /// Side: server.
+    /// Gives the holder the mob's or boat's lead (`Leashable.setLeashedTo`): the entity lets go
+    /// of any other holder and gets off its vehicle, where a mod's `mob_ride` lets it. As
+    /// there, neither `canBeLeashed` nor the distance is asked: a holder too far away snaps
+    /// the lead on the next tick. False for a stale handle, the entity itself, a holder other
+    /// than a player, mob or boat, or an entity that takes no lead.
+    #[access(WorldOnly)]
+    fn entity_leash_to(&mut self, entity: EntityRef, holder: EntityRef) -> bool;
+    /// Side: server.
+    /// Ties the mob's or boat's lead to the fence at `pos`, as `entity_leash_to` does to
+    /// an entity; the knot is there while a lead hangs on it. False for a stale handle, an
+    /// entity that takes no lead, or no fence at `pos`.
+    #[access(WorldOnly)]
+    fn entity_leash_to_knot(&mut self, entity: EntityRef, pos: [i32; 3]) -> bool;
+    /// Side: server.
+    /// Takes the lead off a mob or boat: the lead falls as an item with `drop_lead`
+    /// (`Leashable.dropLeash`), and is gone without it (`removeLeash`). A mob's removal is heard
+    /// by `entity_unleash`. False when no holder has the lead, for a stale handle, or for an
+    /// entity that takes no lead. A holder still unresolved from a save is left alone.
+    #[access(WorldOnly)]
+    fn entity_detach_leash(&mut self, entity: EntityRef, drop_lead: bool) -> bool;
     /// Side: server.
     /// `Entity.playSound(sound, volume, pitch)`: plays sound event `sound` at
     /// the entity under its sound source, for the players within range. A

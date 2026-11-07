@@ -1,10 +1,25 @@
-#[cfg(test)]
-use super::*;
 /// Fixtures that tests of other crates use to install Parts.
 #[cfg(any(test, feature = "testing"))]
 pub mod tests {
     #[cfg(test)]
-    use super::*;
+    use crate::testing::{FakeBattery, FakeHost};
+    #[cfg(test)]
+    /// What the batteries at `at` hold.
+    pub(crate) fn energy(host: &FakeHost, at: &[[i32; 3]]) -> Vec<u32> {
+        let held = |pos| host.level.block_entity_at(pos)?.energy.as_ref();
+        at.iter().map(|&pos| held(pos).unwrap().amount).collect()
+    }
+
+    #[cfg(test)]
+    /// Puts a battery of capacity 1000 at `pos`, as the game answers it, holding `amount`, of
+    /// which one insert moves at most `limit`.
+    pub(crate) fn battery(host: &mut FakeHost, pos: [i32; 3], amount: u32, limit: u32) {
+        host.level.block_entity(pos).energy = Some(FakeBattery {
+            max_insert: limit,
+            ..FakeBattery::new(amount, 1000)
+        });
+    }
+
     use crate::parts::tests::*;
     use crate::*;
 
@@ -41,118 +56,13 @@ pub mod tests {
         }
     }
 
-    #[cfg(test)]
-    /// Batteries as the game answers them, by position: what each holds, and the most one
-    /// insert moves, of a capacity of 1000; and the mod block entity types standing at some.
-    #[derive(Clone, Default)]
-    pub(crate) struct EnergyWorld {
-        pub(crate) batteries: HashMap<[i32; 3], (u32, u32)>,
-        pub(crate) types: HashMap<[i32; 3], &'static str>,
-        pub(crate) kept: Vec<Self>,
-    }
-    #[cfg(test)]
-    impl EnergyWorld {
-        #[cfg(test)]
-        fn amounts(&self, at: &[[i32; 3]]) -> Vec<u32> {
-            at.iter().map(|pos| self.batteries[pos].0).collect()
-        }
-    }
-    #[cfg(test)]
-    impl Journal for EnergyWorld {
-        fn kept(&mut self) -> &mut Vec<Self> {
-            &mut self.kept
-        }
-    }
-    #[cfg(test)]
-    impl mod_api::prelude::BlockEntitiesHost for EnergyWorld {
-        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(crate::__private::game::block_entity_ref(level, position, 1))
-        }
-    }
-    #[cfg(test)]
-    impl Host for EnergyWorld {
-        fn backend(&self) -> Option<BackendRef<'_>> {
-            Some(BackendRef::of(self))
-        }
-    }
-    #[cfg(test)]
-    mod_api::impl_host_areas!(EnergyWorld, except(block_entities));
-    #[cfg(test)]
-    impl mod_api::prelude::ModStateServerHost for EnergyWorld {
-        fn transaction_open(&mut self, _: TransactionSeal) {
-            open(self);
-        }
-        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
-            close(self, commit);
-        }
-    }
-    #[cfg(test)]
-    impl ServerHost for EnergyWorld {
-        fn backend_mut(&mut self) -> Option<BackendMutRef<'_>> {
-            Some(BackendMutRef::of(self))
-        }
-    }
-    #[cfg(test)]
-    mod_api::impl_server_host_areas!(EnergyWorld, except(mod_state));
-    #[cfg(test)]
-    impl mod_api::prelude::LevelsBackend for EnergyWorld {
-        fn level_in_place(&self, level: LevelRef) -> bool {
-            level == here()
-        }
-    }
-    #[cfg(test)]
-    impl mod_api::prelude::BlockEntitiesBackend for EnergyWorld {
-        fn block_entity_kind(
-            &self,
-            BlockEntityRef { position: pos, .. }: BlockEntityRef,
-        ) -> Option<BlockEntityTypeKey> {
-            self.types.get(&pos).map(|id| type_key(id))
-        }
-    }
-    #[cfg(test)]
-    impl mod_api::prelude::FluidsEnergyBackend for EnergyWorld {
-        fn energy_amount(&self, BlockSide { pos, .. }: BlockSide) -> Option<u32> {
-            Some(self.batteries.get(&pos)?.0)
-        }
-        fn energy_capacity(&self, _: BlockSide) -> u32 {
-            1000
-        }
-    }
-    #[cfg(test)]
-    impl Backend for EnergyWorld {}
-    #[cfg(test)]
-    mod_api::impl_backend_areas!(EnergyWorld, except(block_entities, fluids_energy, levels));
-    #[cfg(test)]
-    impl mod_api::prelude::FluidsEnergyBackendMut for EnergyWorld {
-        fn energy_insert(&mut self, at: BlockSide, amount: u32, _: &Transaction) -> u32 {
-            let Some((held, limit)) = self.batteries.get_mut(&at.pos) else {
-                return 0;
-            };
-            let went = amount.min(*limit).min(1000 - *held);
-            *held += went;
-            went
-        }
-        fn energy_extract(&mut self, at: BlockSide, amount: u32, _: &Transaction) -> u32 {
-            let Some((held, _)) = self.batteries.get_mut(&at.pos) else {
-                return 0;
-            };
-            let came = amount.min(*held);
-            *held -= came;
-            came
-        }
-    }
-    #[cfg(test)]
-    impl BackendMut for EnergyWorld {}
-    #[cfg(test)]
-    mod_api::impl_backend_mut_areas!(EnergyWorld, except(fluids_energy));
-
     #[test]
     pub(crate) fn an_energy_move_takes_what_the_targets_room_and_limit_let_in_and_loses_none() {
         game_thread();
-        let mut world = EnergyWorld::default();
-        world.batteries.insert(SOURCE, (900, 1000));
-        world.batteries.insert(TANK, (700, 1000));
-        world.batteries.insert(OTHER, (0, 250));
+        let mut world = FakeHost::new();
+        battery(&mut world, SOURCE, 900, 1000);
+        battery(&mut world, TANK, 700, 1000);
+        battery(&mut world, OTHER, 0, 250);
         let mut moved = |from, to, max| {
             let host: &mut dyn ServerHost = &mut world;
             let source = here().capability(host, &ENERGY, from, None).unwrap();
@@ -164,7 +74,7 @@ pub mod tests {
         assert_eq!(moved(SOURCE, TANK, 1000), Ok(300));
         assert_eq!(moved(SOURCE, OTHER, 1000), Ok(250));
         assert_eq!(moved(OTHER, SOURCE, 1000), Ok(250));
-        assert_eq!(world.amounts(&[SOURCE, TANK, OTHER]), [600, 1000, 0]);
+        assert_eq!(energy(&world, &[SOURCE, TANK, OTHER]), [600, 1000, 0]);
     }
 
     #[test]
@@ -175,11 +85,11 @@ pub mod tests {
             ("test:battery_gives_more", SOURCE),
             ("test:battery_takes_more", TANK),
         ] {
-            let mut world = EnergyWorld::default();
-            world.batteries.insert(SOURCE, (500, 1000));
-            world.batteries.insert(OTHER, (500, 1000));
-            world.batteries.insert(TANK, (0, 1000));
-            world.types.insert(at, liar);
+            let mut world = FakeHost::new();
+            battery(&mut world, SOURCE, 500, 1000);
+            battery(&mut world, OTHER, 500, 1000);
+            battery(&mut world, TANK, 0, 1000);
+            world.level.block_entity(at).of_type(liar);
             let host: &mut dyn ServerHost = &mut world;
             let ends = |host: &mut dyn ServerHost, pos| here().capability(host, &ENERGY, pos, None);
             let (source, other, tank) = (
@@ -197,7 +107,7 @@ pub mod tests {
             let owner = "doubler".to_owned();
             assert_eq!(moved, Err(Overanswered { owner }), "{liar}");
             assert_eq!(
-                world.amounts(&[SOURCE, OTHER, TANK]),
+                energy(&world, &[SOURCE, OTHER, TANK]),
                 [500, 500, 0],
                 "{liar}"
             );

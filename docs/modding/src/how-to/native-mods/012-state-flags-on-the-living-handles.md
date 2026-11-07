@@ -33,10 +33,15 @@ others), a client, or a stale, parked or otherwise unavailable handle. The read 
 
 `MobRef::can_use_portal` reads the existing server portal decision for a mob in the current level, including mounts and player riders. It takes `&dyn Host`: `Some(false)` means the mob is ineligible, while `None` means a client, stale or unavailable handle, parked mob, or the separately modelled dragon. It does not load a level.
 
-`MobRef::leash_holder` takes `&dyn ServerHost` and reads the live mob leash. `MobLeashHolder::Unleashed`
+`EntityRef::leash_holder` takes `&dyn Host` and reads the live lead of a mob or boat. `LeashHolder::Unleashed`
 is a definite absence; `Entity` holds an existing entity handle for a player, mob or boat, and `Knot` holds
-fence coordinates. `None` means the mob or holder is unavailable, the level is parked, or a saved holder has
-not resolved; this read neither loads a level nor changes the leash.
+fence coordinates. `None` means an entity that takes no lead, that the entity or holder is unavailable, that the
+level is parked, or that a saved holder has not resolved; this read neither loads a level nor changes the lead.
+
+`EntityRef::leash_to` and `leash_to_knot` take `&mut dyn ServerHost` and hand the lead to a player, mob, boat or
+fence as `Leashable.setLeashedTo` does: the entity lets go of any other holder and gets off its vehicle, and neither
+`canBeLeashed` nor the distance is asked, so a holder too far away snaps the lead on the next tick. `detach_leash`
+drops the lead as an item or removes it; a mob's removal fires `entity_unleash`.
 
 Through `MobRef`: `no_ai`/`set_no_ai` (`Mob.isNoAi` and `setNoAi`: the mob stands, saved as `NoAI`) and
 `set_baby` (`Mob.setBaby` through the canonical species-specific setup). Ageable mobs start at their species'

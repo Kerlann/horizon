@@ -1371,6 +1371,54 @@ mod tests {
     }
 
     #[test]
+    fn file_inner_conditions_filter_points_and_internals() {
+        let fixture = Fixture::new("mod test_only; mod optional; mod runtime;");
+        fixture.put(
+            "crates/horizon-client/src/game/test_only.rs",
+            "#![cfg(test)]\nmod missing; struct Hidden(u32); fn test_helper() {}",
+        );
+        fixture.put(
+            "crates/horizon-client/src/game/optional.rs",
+            "#![cfg(feature = \"extra\")]\nfn optional_helper() {}",
+        );
+        fixture.put("crates/horizon-client/src/game/runtime.rs", "fn live() {}");
+        let src = fixture.0.join("crates/horizon-client/src");
+        for every_build in [false, true] {
+            let files = crate::points::game_files(&src, every_build).unwrap();
+            assert!(
+                !files
+                    .iter()
+                    .any(|file| file.module.ends_with("::test_only"))
+            );
+            assert!(files.iter().any(|file| file.module.ends_with("::runtime")));
+            let optional = files
+                .iter()
+                .find(|file| file.module.ends_with("::optional"));
+            if every_build {
+                assert!(optional.is_none());
+            } else {
+                assert_eq!(optional.unwrap().cfg, ["feature = \"extra\""]);
+            }
+        }
+        let entries = widen_with(&fixture.0, &[]).unwrap().entries;
+        assert!(
+            !entries
+                .iter()
+                .any(|entry| entry.path.contains("::test_only::"))
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.path.ends_with("::runtime::live"))
+        );
+        let optional = entries
+            .iter()
+            .find(|entry| entry.path.ends_with("::optional::optional_helper"))
+            .unwrap();
+        assert_eq!(optional.cfg, "feature = \"extra\"");
+    }
+
+    #[test]
     fn game_area_moves_preserve_internals_and_points() {
         let source = "struct Game; mod feature;";
         let module = "use super::Game; impl Game { fn action(&self) -> u8 { 7 } }";

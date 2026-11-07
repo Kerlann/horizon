@@ -3,7 +3,6 @@
 use super::Game;
 pub use mod_api::game::{NativeBlockEdit, NativeBlockRun, NativeHeightmap};
 
-#[allow(dead_code)]
 impl Game<'_> {
     /// For a server mod: the runs made at once, straight into the chunks of the authoritative level `dimension`
     /// (the one being ticked, as for `native_set_block`), with what `fill ... strict` does for block entities (a

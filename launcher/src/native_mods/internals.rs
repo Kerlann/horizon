@@ -134,9 +134,23 @@ impl Catalog {
     pub(super) fn read(dir: &Path) -> Result<Self, String> {
         let path = dir.join(INTERNALS);
         let listed = inject::catalog(&dir.join(inject::POINTS))?;
+        let mut points = listed.points;
+        for point in horizon_mod_api_gen::points::source::read(dir)? {
+            let name = point_shape::camel(&point.name);
+            points.push(inject::ListedPoint {
+                name: point.name,
+                target: point.target,
+                raw: true,
+                at_return: true,
+                listener: Some(format!("{}::__{name}Listener", point.module)),
+                return_listener: Some(format!("{}::__{name}ReturnListener", point.module)),
+                private: true,
+                record_name: Some(point.record_export),
+            });
+        }
         Ok(Self {
             internals: internals::read(&path)?,
-            points: listed.points,
+            points,
             sites: listed.sites,
             discovery: false,
         })
@@ -153,7 +167,7 @@ impl Catalog {
         for injection in sites::of(manifest) {
             sites::check(&self.sites, manifest, injection)?;
         }
-        for injection in inject::raw_of(manifest) {
+        for injection in inject::raw_of(&self.points, manifest) {
             if !self.points.iter().any(|point| {
                 plain_path(&point.target) == plain_path(&injection.target)
                     && point.raw
@@ -187,10 +201,10 @@ impl Catalog {
     }
 
     pub(super) fn log_raw(&self, manifest: &horizon_mod_package::Manifest) -> Result<(), String> {
-        for decision in super::slots::report(manifest) {
+        for decision in super::slots::report(self, manifest) {
             super::append_log(&decision)?;
         }
-        for injection in inject::raw_of(manifest) {
+        for injection in inject::raw_of(&self.points, manifest) {
             let point = self
                 .points
                 .iter()
@@ -263,7 +277,7 @@ impl Catalog {
         text.push_str("pub mod raw {\n");
         let mut constructors = BTreeSet::new();
         let mut exports = BTreeSet::new();
-        for injection in inject::raw_of(manifest) {
+        for injection in inject::raw_of(&self.points, manifest) {
             let point = self
                 .points
                 .iter()
@@ -291,7 +305,11 @@ impl Catalog {
                 .expect("generated listener suffix")
                 .to_owned()
                 + "Raw";
-            exports.insert(format!("    pub use {raw};\n"));
+            if let Some(name) = &point.record_name {
+                exports.insert(format!("    pub use {raw} as {name};\n"));
+            } else {
+                exports.insert(format!("    pub use {raw};\n"));
+            }
             let constructor = point.place(injection.at_return);
             let variant = name
                 .strip_prefix("__")

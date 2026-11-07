@@ -17,6 +17,10 @@ pub(super) struct PointInjection {
 #[derive(Clone, Debug, serde::Deserialize)]
 pub(super) struct ListedPoint {
     pub(super) name: String,
+    #[serde(default)]
+    pub(super) private: bool,
+    #[serde(default)]
+    pub(super) record_name: Option<String>,
     pub(super) target: String,
     pub(super) raw: bool,
     pub(super) at_return: bool,
@@ -38,7 +42,10 @@ impl ListedPoint {
 /// staged game's build output.
 pub(super) const POINTS: &str = "points.json";
 
-pub(super) fn raw_of(manifest: &horizon_mod_package::Manifest) -> Vec<PointInjection> {
+pub(super) fn raw_of(
+    listed: &[ListedPoint],
+    manifest: &horizon_mod_package::Manifest,
+) -> Vec<PointInjection> {
     manifest
         .native
         .iter()
@@ -53,7 +60,7 @@ pub(super) fn raw_of(manifest: &horizon_mod_package::Manifest) -> Vec<PointInjec
                 at_return: matches!(injection.kind, InjectionKind::Return),
             })
         })
-        .chain(super::slots::points(manifest))
+        .chain(super::slots::points(listed, manifest))
         .collect()
 }
 

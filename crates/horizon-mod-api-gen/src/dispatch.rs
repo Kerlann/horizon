@@ -3,7 +3,6 @@ use super::*;
 pub(super) struct HookSources {
     pub traits: String,
     pub dispatch: String,
-    pub render_traits: String,
     pub render_dispatch: String,
     pub part_traits: BTreeMap<&'static str, String>,
     pub fills: Vec<Fill>,
@@ -11,9 +10,6 @@ pub(super) struct HookSources {
     pub hook_ids: String,
     pub hook_constants: String,
     pub hook_count: usize,
-    pub render_hook_ids: String,
-    pub render_hook_constants: String,
-    pub render_hook_count: usize,
 }
 
 /// The most parameters a `native_*` target takes, receiver included (clippy's limit): a hook
@@ -30,21 +26,31 @@ fn target_parameters(name: &str, native: &str, count: usize, carrier: &str) -> R
     Ok(())
 }
 
-pub(super) fn emit(
+pub(super) fn is_render(hook: &Hook) -> bool {
+    hook.target.starts_with("mod_render::render::")
+}
+
+/// Render emission reads only the catalog and its native raw target signatures.
+pub(super) fn render(root: &Path, catalog: &Catalog) -> Result<HookSources, String> {
+    emit(
+        root,
+        catalog.hooks.iter().filter(|hook| is_render(hook)),
+        &[],
+        &catalog.draw_contexts,
+    )
+}
+
+pub(super) fn emit<'a>(
     root: &Path,
-    hooks: &[Hook],
+    hooks: impl Iterator<Item = &'a Hook>,
     methods: &[syn::ItemFn],
     contexts: &[DrawContext],
 ) -> Result<HookSources, String> {
     let mut hook_ids = String::new();
     let mut hook_constants = String::new();
     let mut hook_count = 0;
-    let mut render_hook_ids = String::new();
-    let mut render_hook_constants = String::new();
-    let mut render_hook_count = 0;
     let mut traits = String::new();
     let mut dispatch = String::new();
-    let mut render_traits = String::new();
     let mut render_dispatch = String::new();
     let mut part_traits: BTreeMap<&str, String> = BTreeMap::new();
     let mut fills = Vec::new();
@@ -54,14 +60,14 @@ pub(super) fn emit(
         let name = hook.name.as_str();
         let native = format!("native_{name}");
         let target = hook.target.as_str();
-        let is_render = target.starts_with("mod_api::render::");
+        let is_render = is_render(hook);
         let external = free_function_source(target);
         let in_game = external.is_none();
         let (method, call) = if let Some((krate, path)) = external {
             let Some((module, function)) = path.rsplit_once("::") else {
                 return Err(format!("wrong target for {name}"));
             };
-            if function != native {
+            if function != if is_render { name } else { &native } {
                 return Err(format!("wrong target for {name}"));
             }
             let path = root
@@ -81,7 +87,7 @@ pub(super) fn emit(
                 })
                 .collect();
             (
-                one_function(functions.iter(), &native)?.clone(),
+                one_function(functions.iter(), function)?.clone(),
                 // A hook in the mod API crate, or in a crate above it, calls its dispatch
                 // directly; one below it calls the callback the game installs.
                 if matches!(krate, "horizon-mod-api" | "horizon-client-render") {
@@ -101,7 +107,7 @@ pub(super) fn emit(
                 format!("dispatch_{name}"),
             )
         };
-        let fill = needs_fill(&method, &call, in_game)?;
+        let fill = !is_render && needs_fill(&method, &call, in_game)?;
         let sig = &method.sig;
         let mut native_args = Vec::new();
         let mut receiver_mut = None;
@@ -239,7 +245,8 @@ pub(super) fn emit(
                     .iter()
                     .find(|(arg, _)| arg == key)
                     .ok_or_else(|| format!("key {key} is not an argument of {name}"))?;
-                let lookup = match ty.to_token_stream().to_string().as_str() {
+                let key_type = ty.to_token_stream().to_string().replace("mod_api :: ", "");
+                let lookup = match key_type.as_str() {
                     "BlockStateId" if table == "block" => format!("block_state({key})"),
                     "BlockStateId" => {
                         let Some((level, _)) = host.as_ref().filter(|_| is_level) else {
@@ -253,7 +260,9 @@ pub(super) fn emit(
                             format!("{table}(|| {level}.state_block({key}))")
                         }
                     }
-                    "& ItemStack" => format!("{table}(|| Some(&*{key}.item))"),
+                    "& ItemStack" => {
+                        format!("{table}(|| super::registry_keys::item_id({key}.item()))")
+                    }
                     "& str" => format!("{table}(|| Some({key}))"),
                     // An entity's type id need not be its block's: its own table.
                     "& ModBlockEntity" | "& mut ModBlockEntity" => {
@@ -267,13 +276,7 @@ pub(super) fn emit(
         let event = fresh_name("event", &mut used);
         let event_type = format!("{}Event", hook_id(name));
         let hook_id = event_type.strip_suffix("Event").unwrap();
-        if is_render {
-            render_hook_ids.push_str(&format!("{hook_id},\n"));
-            render_hook_constants.push_str(&format!(
-                "pub const {name}: Option<super::RenderHookId> = Some(super::RenderHookId::{hook_id});\n"
-            ));
-            render_hook_count += 1;
-        } else {
+        if !is_render {
             hook_ids.push_str(&format!("{hook_id},\n"));
             hook_constants.push_str(&format!(
                 "pub const {name}: Option<super::HookId> = Some(super::HookId::{hook_id});\n"
@@ -374,6 +377,12 @@ pub(super) fn emit(
             (true, false) => ("<'a>", "<'_>"),
             (false, false) => ("", ""),
         };
+        if is_render {
+            render_dispatch.push_str(&format!(
+                "#[allow(missing_docs)]\npub struct {event_type}{generics} {{\n{fields}}}\n"
+            ));
+            continue;
+        }
         trait_params.push(format!("{event}: &mut {event_type}{elided}"));
         call_args.push(format!("&mut {event}"));
         let unused = trait_params[1..]
@@ -417,7 +426,47 @@ pub(super) fn emit(
             let target_path: syn::Path = syn::parse_str(target)
                 .map_err(|error| format!("invalid target for {name}: {error}"))?;
             let receiver = &target_path.segments[target_path.segments.len() - 2].ident;
-            fire.push_str(&format!("impl {receiver}<'_> {{ #[inline] pub(super) {signature} {{ mod_api::{call}({passed}); }} }}\n", signature = signature.to_token_stream()));
+            let crossing = if declared.is_empty() {
+                stack_crossing(
+                    &args,
+                    output.as_ref(),
+                    hook_id,
+                    scoped.is_some(),
+                    &surface_calls,
+                )
+            } else {
+                None
+            };
+            let body = if let Some(crossing) = crossing {
+                let passed = host
+                    .as_ref()
+                    .map(|(_, param)| {
+                        if param.call == "&*self" && receiver_mut == Some(false) {
+                            "self".to_owned()
+                        } else {
+                            param.call.to_owned()
+                        }
+                    })
+                    .into_iter()
+                    .chain(crossing.arguments.into_iter().map(|argument| {
+                        surface_calls
+                            .get(argument.as_str())
+                            .cloned()
+                            .unwrap_or(argument)
+                    }))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "{} mod_api::{call}({passed}); {}",
+                    crossing.before, crossing.after
+                )
+            } else {
+                format!("mod_api::{call}({passed});")
+            };
+            fire.push_str(&format!(
+                "impl {receiver}<'_> {{ #[inline] pub(super) {signature} {{ {body} }} }}\n",
+                signature = signature.to_token_stream()
+            ));
             if fill {
                 let passed = sig
                     .inputs
@@ -437,17 +486,7 @@ pub(super) fn emit(
         let invoke = call_args.join(", ");
         let trait_params = trait_params.join(", ");
         let dispatch_params = dispatch_params.join(", ");
-        let trait_name = if is_render { "RenderHooks" } else { "Hooks" };
-        let traits = if is_render {
-            &mut render_traits
-        } else {
-            &mut traits
-        };
-        let dispatch = if is_render {
-            &mut render_dispatch
-        } else {
-            &mut dispatch
-        };
+        let trait_name = "Hooks";
         let mut method_source = String::new();
         for line in hook.doc.trim().lines() {
             method_source.push_str(&format!(
@@ -492,10 +531,8 @@ pub(super) fn emit(
             "/// What [`{trait_name}::{name}`] is told. Each field is that hook's argument of the same name, described in the hook's doc.\n#[allow(missing_docs)]\npub struct {event_type}{generics} {{\n{fields}}}\n"
         ));
         let build = format!("let mut {event} = {event_type} {{ {} }};", inits.join(", "));
-        // A trait mod's call is marked with the mod for a panic to name; render hooks are called bare.
-        let each = if is_render {
-            format!("super::entered_render(RenderHookId::{hook_id})")
-        } else if answered {
+        // A trait mod's call is marked with the mod for a panic to name.
+        let each = if answered {
             format!("super::entered_with_id(HookId::{hook_id}, \"{name}\")")
         } else {
             format!("super::entered(HookId::{hook_id}, \"{name}\")")
@@ -550,8 +587,6 @@ pub(super) fn emit(
         };
         let early_return = if scoped.is_some() {
             String::new()
-        } else if is_render {
-            format!("if !super::render_listened(RenderHookId::{hook_id}) {{ return; }}")
         } else {
             format!("if !super::listened(HookId::{hook_id}) {{ return; }}")
         };
@@ -573,7 +608,6 @@ pub(super) fn emit(
     Ok(HookSources {
         traits,
         dispatch,
-        render_traits,
         render_dispatch,
         part_traits,
         fills,
@@ -581,13 +615,279 @@ pub(super) fn emit(
         hook_ids,
         hook_constants,
         hook_count,
-        render_hook_ids,
-        render_hook_constants,
-        render_hook_count,
     })
 }
 
 /// A carrier's fields, each type with its elided lifetimes named `'a`, and its generics.
+struct StackCrossing {
+    before: String,
+    arguments: Vec<String>,
+    after: String,
+}
+
+/// Only stack-bearing declared argument types select this seam. Event records
+/// are built explicitly at their game call sites, not inferred from game bodies.
+fn stack_crossing(
+    args: &[(String, &Type)],
+    output: Option<&(String, &Type)>,
+    hook_id: &str,
+    scoped: bool,
+    surfaces: &std::collections::HashMap<&str, String>,
+) -> Option<StackCrossing> {
+    fn contains_stack(ty: &Type) -> bool {
+        use syn::visit::Visit;
+        struct Stack(bool);
+        impl<'ast> Visit<'ast> for Stack {
+            fn visit_type_path(&mut self, path: &'ast syn::TypePath) {
+                // Bare names resolve to the owned records in the emitted API module.
+                // Qualified names do not acquire that provenance from their last segment.
+                self.0 |= path.path.segments.len() == 1
+                    && path.path.segments.last().is_some_and(|s| {
+                        matches!(
+                            s.ident.to_string().as_str(),
+                            "ItemStack" | "ItemCost" | "MerchantOffer"
+                        )
+                    });
+                syn::visit::visit_type_path(self, path);
+            }
+        }
+        let mut stack = Stack(false);
+        stack.visit_type(ty);
+        stack.0
+    }
+    let parameters = args.iter().chain(output).collect::<Vec<_>>();
+    if !parameters.iter().any(|(_, ty)| contains_stack(ty)) {
+        return None;
+    }
+    let guard = if scoped { "has_part_hook" } else { "listened" };
+    let mut before = format!(
+        "if !mod_api::__private::{guard}(mod_api::HookId::{hook_id}) {{ return; }} use crate::game::api_values::TryIntoApi; "
+    );
+    if parameters.iter().any(|(_, ty)| {
+        contains_stack(ty) && matches!(ty, Type::Reference(r) if r.mutability.is_some())
+    }) {
+        before.push_str("use crate::game::api_values::{TryIntoEngine, ItemBoundary}; ");
+    }
+    let mut arguments = Vec::new();
+    let mut validations = String::new();
+    let mut writes = String::new();
+    for (name, ty) in parameters {
+        let stack = contains_stack(ty);
+        let mutable = matches!(ty, Type::Reference(r) if r.mutability.is_some());
+        if surfaces.contains_key(name.as_str()) || (!stack && !mutable) {
+            arguments.push(name.clone());
+            continue;
+        }
+        let local = format!("__api_{name}");
+        let value = if stack {
+            format!("match {name}.try_into_api() {{ Ok(value) => value, Err(_) => return }}")
+        } else {
+            format!("(*{name}).to_owned()")
+        };
+        before.push_str(&format!(
+            "let {mutability}{local} = {value}; ",
+            mutability = if mutable { "mut " } else { "" }
+        ));
+        arguments.push(match ty {
+            Type::Reference(_) => format!("&{}{local}", if mutable { "mut " } else { "" }),
+            Type::Path(_)
+                if generic_of(ty, "Option").is_some_and(|ty| matches!(ty, Type::Reference(_))) =>
+            {
+                format!("{local}.as_ref()")
+            }
+            _ => local.clone(),
+        });
+        if mutable {
+            let converted = format!("__engine_{name}");
+            let value = if stack {
+                let result = format!("__checked_{name}");
+                validations.push_str(&format!("let {result}: Result<_, mod_api::StackWriteError> = self.boundary_items().ok_or(mod_api::StackWriteError::Unavailable).and_then(|items| {local}.try_into_engine(items)); "));
+                format!("match {result} {{ Ok(value) => value, Err(_) => return }}")
+            } else {
+                local
+            };
+            validations.push_str(&format!("let {converted} = {value}; "));
+            writes.push_str(&format!("*{name} = {converted}; "));
+        }
+    }
+    Some(StackCrossing {
+        before,
+        arguments,
+        after: format!("{validations}{writes}"),
+    })
+}
+
+#[cfg(test)]
+mod stack_crossing_tests {
+    use super::*;
+    #[test]
+    fn stack_hook_gates_before_conversion_and_stages_every_write() {
+        let stack: Type = syn::parse_quote!(&mut ItemStack);
+        let power: Type = syn::parse_quote!(&mut u32);
+        let args = [("stack".to_owned(), &stack), ("power".to_owned(), &power)];
+        let crossing =
+            stack_crossing(&args, None, "ItemDamage", true, &Default::default()).unwrap();
+        assert!(
+            crossing
+                .before
+                .starts_with("if !mod_api::__private::has_part_hook")
+        );
+        assert!(crossing.before.contains("stack.try_into_api()"));
+        assert_eq!(crossing.arguments, ["&mut __api_stack", "&mut __api_power"]);
+        assert!(
+            crossing
+                .after
+                .contains("Result<_, mod_api::StackWriteError>")
+        );
+        let validation = crossing.after.find("try_into_engine").unwrap();
+        let first_write = crossing.after.find("*stack =").unwrap();
+        assert!(validation < first_write);
+        assert!(crossing.after.find("let __engine_power").unwrap() < first_write);
+        let body = format!(
+            "{{ {} {}; {} }}",
+            crossing.before, "dispatch(&mut __api_stack, &mut __api_power)", crossing.after
+        );
+        syn::parse_str::<syn::Block>(&body).unwrap();
+    }
+    #[test]
+    fn unsubscribed_item_use_never_converts() {
+        let stack: Type = syn::parse_quote!(&ItemStack);
+        let claimed: Type = syn::parse_quote!(&mut bool);
+        let args = [
+            ("stack".to_owned(), &stack),
+            ("claimed".to_owned(), &claimed),
+        ];
+        let crossing = stack_crossing(&args, None, "UseItem", true, &Default::default()).unwrap();
+        let body = format!(
+            "{} mod_api::dispatch_use_item(self, {}); {}",
+            crossing.before,
+            crossing.arguments.join(", "),
+            crossing.after
+        );
+        let source = r#"
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+static SUBSCRIBED: AtomicBool = AtomicBool::new(false);
+static CONVERSIONS: AtomicUsize = AtomicUsize::new(0);
+static DISPATCHES: AtomicUsize = AtomicUsize::new(0);
+pub struct ItemStack;
+pub struct ApiStack;
+pub struct Game;
+mod game { pub mod api_values {
+    pub trait TryIntoApi { fn try_into_api(&self) -> Result<crate::ApiStack, ()>; }
+    impl TryIntoApi for crate::ItemStack {
+        fn try_into_api(&self) -> Result<crate::ApiStack, ()> {
+            crate::CONVERSIONS.fetch_add(1, crate::Ordering::Relaxed);
+            Ok(crate::ApiStack)
+        }
+    }
+} }
+mod mod_api {
+    pub enum HookId { UseItem }
+    pub mod __private {
+        pub fn has_part_hook(_: super::HookId) -> bool {
+            crate::SUBSCRIBED.load(crate::Ordering::Relaxed)
+        }
+    }
+    pub fn dispatch_use_item(_: &mut crate::Game, _: &crate::ApiStack, claimed: &mut bool) {
+        crate::DISPATCHES.fetch_add(1, crate::Ordering::Relaxed);
+        *claimed = true;
+    }
+}
+impl Game {
+    fn fire_use_item(&mut self, stack: &ItemStack, claimed: &mut bool) { FIRE_BODY }
+}
+fn main() {
+    let mut game = Game;
+    let mut claimed = false;
+    for _ in 0..1_000 { game.fire_use_item(&ItemStack, &mut claimed); }
+    assert_eq!(CONVERSIONS.load(Ordering::Relaxed), 0);
+    assert_eq!(DISPATCHES.load(Ordering::Relaxed), 0);
+    assert!(!claimed);
+    SUBSCRIBED.store(true, Ordering::Relaxed);
+    game.fire_use_item(&ItemStack, &mut claimed);
+    assert_eq!(CONVERSIONS.load(Ordering::Relaxed), 1);
+    assert_eq!(DISPATCHES.load(Ordering::Relaxed), 1);
+    assert!(claimed);
+}
+"#
+        .replace("FIRE_BODY", &body);
+        let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = target.join(format!("item-fire-{}-{unique}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let input = directory.join("fire.rs");
+        let output = directory.join(format!("fire{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(&input, source).unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args(["--edition=2024", "--crate-name=item_fire_counter"])
+            .arg(&input)
+            .arg("-o")
+            .arg(&output)
+            .output()
+            .unwrap();
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(
+            std::process::Command::new(output)
+                .status()
+                .unwrap()
+                .success()
+        );
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn qualified_names_do_not_select_a_root_record_crossing() {
+        for ty in [
+            syn::parse_quote!(&foreign::ItemStack),
+            syn::parse_quote!(&mod_api::ItemStack),
+            syn::parse_quote!(&mut Vec<foreign::MerchantOffer>),
+        ] {
+            assert!(
+                stack_crossing(
+                    &[("value".to_owned(), &ty)],
+                    None,
+                    "AnyName",
+                    false,
+                    &Default::default()
+                )
+                .is_none()
+            );
+        }
+        let ty = syn::parse_quote!(&mut Option<ItemStack>);
+        assert!(
+            stack_crossing(
+                &[("value".to_owned(), &ty)],
+                None,
+                "AnyName",
+                false,
+                &Default::default()
+            )
+            .is_some()
+        );
+    }
+    #[test]
+    fn plain_hook_has_no_stack_seam() {
+        let scalar: Type = syn::parse_quote!(&mut u32);
+        assert!(
+            stack_crossing(
+                &[("power".to_owned(), &scalar)],
+                None,
+                "Plain",
+                false,
+                &Default::default()
+            )
+            .is_none()
+        );
+    }
+}
+
 fn carrier_fields(args: &[(String, &Type)]) -> (String, &'static str) {
     let mut lifetimes = CarrierLifetimes::default();
     let fields = args

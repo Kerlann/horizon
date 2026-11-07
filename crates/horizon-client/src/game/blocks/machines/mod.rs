@@ -344,10 +344,7 @@ impl Containers<'_> {
                 .is_some_and(|m| m.contains(&*stack.item)),
             // BrewingStandBlockEntity.canPlaceItem
             Kind::Brewing => match slot {
-                4 => self
-                    .items
-                    .get(&stack.item)
-                    .is_some_and(|i| i.brewing_fuel.is_some()),
+                4 => horizon_client::brewing::brewing_fuel(self.items, stack).is_some(),
                 3 => self.brewing.is_some_and(|b| b.is_reagent(stack)),
                 _ => {
                     self.brewing.is_some_and(|b| b.is_bottle(stack))
@@ -982,7 +979,11 @@ impl Game<'_> {
         stack: &ItemStack,
         take: impl FnOnce(&mut Self, u32) -> Option<()>,
     ) -> u32 {
-        let resource = ItemResource::of(stack);
+        use super::api_values::TryIntoApi;
+        let Ok(snapshot) = stack.try_into_api() else {
+            return 0;
+        };
+        let resource = ItemResource::of(&snapshot);
         mod_api::run_transaction(self, |game, tx| {
             let host: &mut dyn mod_api::ServerHost = game;
             let went = part.insert_any(host, tx, &resource, stack.count);
@@ -1047,7 +1048,10 @@ impl Game<'_> {
             let Some(resource) = part.resource(self, slot) else {
                 continue;
             };
-            let one = resource.to_stack(1);
+            use super::api_values::TryIntoEngine;
+            let Ok(one) = resource.as_stack().try_into_engine(self.items()) else {
+                continue;
+            };
             let c = self.containers();
             if !(0..hopper.len()).any(|s| c.fits(hopper, s, &one) > 0)
                 || self.part_move_canceled(at, into, &one.item)
@@ -1826,6 +1830,76 @@ impl Game<'_> {
         let inventory = self.translate_with_fallback("container.inventory", "Inventory");
         batch.text(atlas, &inventory, ox + 8.0, oy + height - 94.0, grey, false);
         true
+    }
+}
+
+#[cfg(test)]
+mod brewing_fuel_transfer_tests {
+    use super::*;
+    use crate::game::native_entity_refs::tests::with_game;
+    use horizon_client::brewing::BrewingStand;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn hopper_brewing_fuel_transfer_respects_stack_components() {
+        with_game(|game| {
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
+            let hopper_pos = (8, 64, 8);
+            let stand_pos = (9, 64, 8);
+            for (pos, block) in [
+                (hopper_pos, "minecraft:hopper"),
+                (stand_pos, "minecraft:brewing_stand"),
+            ] {
+                let state = game.pack.assets.registry.default_state(block).unwrap();
+                game.world.set(pos.0, pos.1, pos.2, state).unwrap();
+            }
+            let default = ItemStack::new("minecraft:blaze_powder", 2);
+            let mut custom = ItemStack::new("minecraft:stone", 2);
+            custom.data_mut().set_loot_component(
+                "minecraft:brewing_fuel",
+                &serde_json::json!({"uses": 7, "speed_multiplier": 2.5}),
+            );
+            let mut removed = default.clone();
+            removed.data_mut().set_other(
+                "!minecraft:brewing_fuel",
+                Some(horizon_core::nbt::Tag::Compound(Default::default())),
+            );
+            for (stack, accepted) in [
+                (default, true),
+                (custom, true),
+                (removed, false),
+                (ItemStack::new("minecraft:stone", 2), false),
+            ] {
+                game.world
+                    .block_entities
+                    .insert(hopper_pos, BlockEntity::Chest(vec![Some(stack); 5]));
+                game.world.block_entities.insert(
+                    stand_pos,
+                    BlockEntity::Brewing(Box::new(BrewingStand::new())),
+                );
+                let containers = game.containers();
+                let hopper = containers.view(hopper_pos, false).unwrap();
+                let stand = containers.view(stand_pos, false).unwrap();
+                let fuel = containers.get(&hopper, 0).unwrap();
+                assert_eq!(containers.can_place(&stand, 4, fuel), accepted);
+                assert_eq!(
+                    game.eject_into(hopper_pos, &hopper, &stand, Direction::West),
+                    accepted
+                );
+                let containers = game.containers();
+                assert_eq!(
+                    containers.get(&hopper, 0).unwrap().count,
+                    if accepted { 1 } else { 2 }
+                );
+                assert_eq!(
+                    containers.get(&stand, 4).map(|s| s.count),
+                    accepted.then_some(1)
+                );
+            }
+        });
     }
 }
 

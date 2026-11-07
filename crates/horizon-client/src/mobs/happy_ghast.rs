@@ -78,7 +78,7 @@ fn setup(m: &mut Mob, baby: bool) {
     g.add(4, GhastTempt::default());
     g.add(5, FloatAround { blocks: 16 });
 }
-fn wearing_harness(m: &Mob) -> bool {
+pub fn wearing_harness(m: &Mob) -> bool {
     m.extra.body_id().is_some()
 }
 /// `getControllingPassenger`: a player on a harnessed adult.

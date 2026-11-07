@@ -6,11 +6,7 @@ use mod_points::PointId;
 use mod_points::places::{NAMES, SHAPES};
 use std::borrow::Cow;
 
-struct Host;
-impl mod_api::Host for Host {}
-mod_api::impl_host_areas!(Host);
-impl mod_api::ServerHost for Host {}
-mod_api::impl_server_host_areas!(Host);
+use mod_api::testing::FakeHost;
 
 struct Listener;
 impl Forward for Listener {
@@ -140,22 +136,28 @@ fn forward(index: u32, host: PointHost<'_>, record: &mut dyn Record) {
 fn a_record_crosses_and_takes_back_what_a_listener_changed() {
     install();
     let mut record = mod_points::HandleChatInputArgs::__new("hi");
-    mod_points::dispatch::handle_chat_input(mod_api::HostSide::Server(&mut Host), &mut record);
+    mod_points::dispatch::handle_chat_input(
+        mod_api::HostSide::Server(&mut FakeHost::new()),
+        &mut record,
+    );
     assert_eq!((&*record.message, record.cancel), ("hello", true));
 
     // Unchanged text stays the game's own borrow.
     let mut kept = mod_points::HandleChatInputArgs::__new("keep");
-    mod_points::dispatch::handle_chat_input(mod_api::HostSide::Server(&mut Host), &mut kept);
+    mod_points::dispatch::handle_chat_input(
+        mod_api::HostSide::Server(&mut FakeHost::new()),
+        &mut kept,
+    );
     assert!(matches!(kept.message, Cow::Borrowed("keep")));
 
     let mut reach = mod_points::ReachArgs::__new();
-    mod_points::dispatch::reach(&Host, &mut reach);
+    mod_points::dispatch::reach(&FakeHost::new(), &mut reach);
     assert_eq!(reach.result, Some(6.0));
-    mod_points::dispatch::reach_return(&Host, &mut reach);
+    mod_points::dispatch::reach_return(&FakeHost::new(), &mut reach);
     assert_eq!(reach.result, Some(7.0));
 
     let mut turn = mod_points::TurnPlayerArgs::__new(1.0, 2.0);
-    mod_points::dispatch::turn_player(mod_api::HostSide::Server(&mut Host), &mut turn);
+    mod_points::dispatch::turn_player(mod_api::HostSide::Server(&mut FakeHost::new()), &mut turn);
     assert_eq!((turn.xo, turn.yo, turn.cancel), (1.0, 2.0, false));
 }
 
@@ -170,6 +172,9 @@ fn a_native_width_sentinel_survives_a_listener_that_leaves_it() {
     assert!(shape.contains("limit:u64"), "{shape}");
     install();
     let mut record = mod_points::SlotCandidatesArgs::__new(usize::MAX);
-    mod_points::dispatch::slot_candidates(mod_api::HostSide::Server(&mut Host), &mut record);
+    mod_points::dispatch::slot_candidates(
+        mod_api::HostSide::Server(&mut FakeHost::new()),
+        &mut record,
+    );
     assert_eq!((record.limit, record.cancel), (u64::MAX, false));
 }

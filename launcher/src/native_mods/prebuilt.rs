@@ -26,7 +26,7 @@ const UNPACKED_LIMIT: u64 = 8 << 30;
 /// Why a build compiles the game from source instead of using the prebuilt game.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum SourceReason {
-    /// A mod has a helper `[[native.injection]]` or a module: they change the game's own code.
+    /// A mod has a checked private source point, legacy helper, or module changing game code.
     Injections { mod_id: String },
     /// A mod has a build script, which the prebuilt route doesn't run.
     BuildScript { mod_id: String },
@@ -94,6 +94,32 @@ pub(super) fn refusal(projects: &[api::Project<'_>], profile: Profile) -> Option
         });
     }
     projects.iter().find_map(project_refusal)
+}
+
+/// Checked private-source routes require an install-time game build, never a prebuilt retry.
+pub(super) fn source_refusal(
+    game: &Path,
+    projects: &[api::Project<'_>],
+) -> Result<Option<SourceReason>, String> {
+    let catalog = internals::Catalog::read(game)?;
+    for project in projects {
+        let manifest = &project.bundle.manifest;
+        if super::slots::routes(&catalog, manifest)
+            .map_err(|error| error.to_string())?
+            .iter()
+            .any(|route| {
+                matches!(
+                    route,
+                    horizon_mod_package::manifest::inject::Route::Source(_)
+                )
+            })
+        {
+            return Ok(Some(SourceReason::Injections {
+                mod_id: manifest.id.clone(),
+            }));
+        }
+    }
+    Ok(None)
 }
 
 /// Why `project` alone can't build against the prebuilt game, or `None` when it can.

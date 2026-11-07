@@ -1,7 +1,7 @@
 //! Mob handles for native server mods.
 use super::{Game, commands::Target};
 use horizon_client::mobs::{self, Mob, Species, Who, ai::brain_target};
-use mod_api::{EntityRef, LivingRef, MobLeashHolder, MobRef};
+use mod_api::{EntityRef, LivingRef, MobRef};
 
 /// What decides whether a player can be a mob's target.
 pub(super) struct PlayerFacts {
@@ -173,42 +173,6 @@ impl Game<'_> {
         };
         let mob = self.mobs.iter().find(|m| m.id == id)?;
         Some(self.mob_portal_eligible(mob))
-    }
-
-    /// The live leash holder, refusing unresolved saved and unavailable holders.
-    pub(super) fn mob_leash_holder(&self, mob: MobRef) -> Option<MobLeashHolder> {
-        use horizon_client::mobs::leash::Holder;
-
-        let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
-            return None;
-        };
-        let mob = self.mobs.iter().find(|m| m.id == id)?;
-        if mob.extra.leash_pending.is_some() {
-            return None;
-        }
-        Some(match mob.extra.leash {
-            None => MobLeashHolder::Unleashed,
-            Some(Holder::Knot(pos)) => MobLeashHolder::Knot(pos),
-            Some(Holder::Mob(id)) => {
-                let entity = self.entity(id)?;
-                if !matches!(self.native_entity_target(entity), Some(Target::Mob(_))) {
-                    return None;
-                }
-                MobLeashHolder::Entity(entity)
-            }
-            Some(Holder::Boat(id)) => {
-                let entity = self.entity(id)?;
-                if !matches!(self.native_entity_target(entity), Some(Target::Boat(_))) {
-                    return None;
-                }
-                MobLeashHolder::Entity(entity)
-            }
-            Some(Holder::Player) => {
-                let uuid = mob.extra.leash_player?;
-                let player = self.player(horizon_client::lan::playerdata::ints_uuid(uuid))?;
-                MobLeashHolder::Entity(player.entity())
-            }
-        })
     }
 
     /// `Mob.getTarget`. Brain-backed mobs read their attack memory; piglins
@@ -714,13 +678,14 @@ mod tests {
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
-    fn mob_leash_holder_reads_live_state() {
+    fn leash_holder_reads_live_state() {
         use super::super::{boats::Boat, lan::LanSettings};
         use horizon_client::lan::{
             Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig, playerdata::uuid_ints,
         };
         use horizon_protocol::packets::configuration::ClientInformation;
         use mobs::leash::{Holder, Pending};
+        use mod_api::LeashHolder;
         use std::sync::{
             Arc,
             atomic::{AtomicI32, AtomicUsize},
@@ -778,7 +743,10 @@ mod tests {
             game.boats
                 .push(Boat::new(14, "oak".into(), Vec3::ZERO, 0.0));
             let boat = game.entity(14).unwrap();
-            assert_eq!(cow.leash_holder(game), Some(MobLeashHolder::Unleashed));
+            assert_eq!(
+                cow.entity().leash_holder(game),
+                Some(LeashHolder::Unleashed)
+            );
             let motion =
                 horizon_client::motion::PlayerMotion::new(game.motion, Vec3::ZERO).unwrap();
             game.lan
@@ -790,31 +758,31 @@ mod tests {
             game.as_guest(20, |game| {
                 assert!(game.interact_leash(0, "minecraft:lead"));
                 assert_eq!(
-                    cow.leash_holder(game),
-                    Some(MobLeashHolder::Entity(game.entity(20).unwrap()))
+                    cow.entity().leash_holder(game),
+                    Some(LeashHolder::Entity(game.entity(20).unwrap()))
                 );
             })
             .unwrap();
             for (holder, expected) in [
-                (Holder::Mob(13), MobLeashHolder::Entity(other.entity())),
-                (Holder::Boat(14), MobLeashHolder::Entity(boat)),
-                (Holder::Knot([1, 2, 3]), MobLeashHolder::Knot([1, 2, 3])),
+                (Holder::Mob(13), LeashHolder::Entity(other.entity())),
+                (Holder::Boat(14), LeashHolder::Entity(boat)),
+                (Holder::Knot([1, 2, 3]), LeashHolder::Knot([1, 2, 3])),
             ] {
                 game.mobs[0].extra.leash = Some(Holder::Player);
                 game.mobs[0].extra.leash_player = Some(uuid_ints(20));
                 game.as_guest(20, |game| {
                     assert!(game.tie_player_leads(glam::DVec3::ZERO, holder, None));
-                    assert_eq!(cow.leash_holder(game), Some(expected));
+                    assert_eq!(cow.entity().leash_holder(game), Some(expected));
                 })
                 .unwrap();
             }
             game.mobs[0].extra.leash = None;
             game.mobs[0].extra.leash_pending = Some(Pending::Uuid([0, 0, 0, 99]));
-            assert_eq!(cow.leash_holder(game), None);
-            let stale = MobRef::new(EntityRef::new(NativeWorldEpoch::new(999), 12));
+            assert_eq!(cow.entity().leash_holder(game), None);
+            let stale = EntityRef::new(NativeWorldEpoch::new(999), 12);
             assert_eq!(stale.leash_holder(game), None);
             game.enter_level(super::super::Dim::Nether).unwrap();
-            assert_eq!(cow.leash_holder(game), None);
+            assert_eq!(cow.entity().leash_holder(game), None);
         });
     }
 

@@ -77,6 +77,7 @@ pub(in crate::game) struct KillRoll<'a> {
     /// `LootContextParams.LAST_DAMAGE_PLAYER` is set.
     pub(in crate::game) by_player: bool,
     pub(in crate::game) held: Option<&'a ItemStack>,
+    pub(in crate::game) keep_empty: bool,
 }
 
 impl Game<'_> {
@@ -104,6 +105,7 @@ impl Game<'_> {
             killer,
             by_player,
             held,
+            keep_empty,
         } = kill;
         // The listeners get the game, so the roll holds its own share of the items.
         let listened = self
@@ -116,9 +118,15 @@ impl Game<'_> {
             return match sequence {
                 Some(id) => {
                     let random = self.rand_sequences.get(&id, self.level.seed);
-                    items.entity_drops(kind, by_player, held, random)
+                    items.entity_drops_for_command(kind, by_player, held, random, keep_empty)
                 }
-                None => items.entity_drops(kind, by_player, held, &mut self.world.random),
+                None => items.entity_drops_for_command(
+                    kind,
+                    by_player,
+                    held,
+                    &mut self.world.random,
+                    keep_empty,
+                ),
             };
         };
         let epoch = entity.entity().epoch();
@@ -138,12 +146,16 @@ impl Game<'_> {
             Some(id) => roll_asked(
                 &mut rolls,
                 |r| r.sequences().get(&id, seed),
-                |random, ask| items.entity_drops_asked(kind, by_player, held, random, ask),
+                |random, ask| {
+                    items.entity_drops_asked(kind, by_player, held, random, ask, keep_empty)
+                },
             ),
             None => roll_asked(
                 &mut rolls,
                 |r| r.level_random(),
-                |random, ask| items.entity_drops_asked(kind, by_player, held, random, ask),
+                |random, ask| {
+                    items.entity_drops_asked(kind, by_player, held, random, ask, keep_empty)
+                },
             ),
         }
     }

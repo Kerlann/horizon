@@ -1492,11 +1492,11 @@ impl EntityRef {
     }
 }
 
-/// The resolved holder of a mob's leash, or its absence.
+/// The resolved holder of a mob's or a boat's leash, or its absence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum MobLeashHolder {
-    /// The mob is not leashed.
+pub enum LeashHolder {
+    /// The entity is not leashed.
     Unleashed,
     /// A player, mob or boat holds the leash.
     Entity(EntityRef),
@@ -3535,44 +3535,6 @@ fn installed() -> Option<&'static Installed> {
     MODS.get()
 }
 
-/// Scoped trait-mod installation for tests, enabled by the `testing` feature.
-#[cfg(any(test, feature = "testing"))]
-pub mod testing {
-    use super::ticket_controller::TEST_CONTROLLERS;
-    use super::{Installed, Mods, TEST_MODS, TicketController};
-
-    /// Run a closure with these owned mods on this thread, restoring the previous list on exit.
-    ///
-    /// The test allocation is leaked because dispatch exposes a static slice. Nested scopes and
-    /// panic unwinding restore the preceding list; other threads are unaffected.
-    pub fn with_mods<R>(mods: Mods, f: impl FnOnce() -> R) -> R {
-        struct Restore(Option<&'static Installed>);
-        impl Drop for Restore {
-            fn drop(&mut self) {
-                TEST_MODS.set(self.0);
-            }
-        }
-        let controllers: &'static [_] =
-            Box::leak(super::parts::registered_controllers(&mods).into_boxed_slice());
-        let installed = Box::leak(Box::new(Installed::new(mods)));
-        let _restore = Restore(TEST_MODS.replace(Some(installed)));
-        let _controllers = RestoreControllers(TEST_CONTROLLERS.replace(Some(controllers)));
-        f()
-    }
-
-    /// The ticket controller with this id that the mods of the enclosing `with_mods` registered.
-    pub fn ticket_controller(id: &str) -> Option<TicketController> {
-        TicketController::from_id(id)
-    }
-
-    struct RestoreControllers(Option<&'static [super::ticket_controller::ControllerInfo]>);
-    impl Drop for RestoreControllers {
-        fn drop(&mut self) {
-            TEST_CONTROLLERS.set(self.0);
-        }
-    }
-}
-
 /// Install the process-wide ordered list of mods.
 pub(crate) fn install(mods: Mods) -> &'static Installed {
     let installed = Installed::new(mods);
@@ -3847,8 +3809,8 @@ pub enum PlayerAction {
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct PlayerActionSetup {
-    /// The main-hand stack. A zero-count stack means an empty hand.
-    pub stack: ItemStack,
+    /// The main-hand stack, or `None` for an empty hand.
+    pub stack: Option<ItemStack>,
     /// Eye position in world coordinates, using the standing eye height (1.62).
     pub eye: [f64; 3],
     /// Vanilla yaw in degrees.
@@ -3860,7 +3822,13 @@ pub struct PlayerActionSetup {
 }
 impl PlayerActionSetup {
     /// A scoped survival setup with the supplied main-hand stack and viewpoint.
-    pub fn new(stack: ItemStack, eye: [f64; 3], yaw: f32, pitch: f32, secondary_use: bool) -> Self {
+    pub fn new(
+        stack: Option<ItemStack>,
+        eye: [f64; 3],
+        yaw: f32,
+        pitch: f32,
+        secondary_use: bool,
+    ) -> Self {
         Self {
             stack,
             eye,
@@ -3917,6 +3885,8 @@ pub enum ActionRefused {
     /// The action's target isn't an entity in the fake's level, or is the fake itself
     /// (`handleInteract`'s "Attempting to attack an invalid entity").
     InvalidTarget,
+    /// The setup's held stack was refused before swapping player state or running the action.
+    InvalidStack(StackWriteError),
 }
 
 /// An error a handle method answers when its host has no game behind it (a mod's test double):
@@ -4490,10 +4460,10 @@ pub trait LevelHost {
     fn block_in_tag(&self, _block: BlockKey, _tag: &str) -> Option<bool> {
         unimplemented!("LevelHost::block_in_tag")
     }
-    /// `ItemStack.is(TagKey)`: `stack` is in the item tag `tag`, as `block_in_tag` reads
-    /// a tag. An empty stack tests `minecraft:air`.
-    fn item_stack_in_tag(&self, _stack: &ItemStack, _tag: &str) -> Option<bool> {
-        unimplemented!("LevelHost::item_stack_in_tag")
+    /// The merged-tag service for this level's owning-thread context.
+    /// Not on wasm: a frame resource; its methods are the imports.
+    fn tags(&self) -> &dyn Tags {
+        unimplemented!("LevelHost::tags")
     }
     /// `BlockGetter.getFluidState`: the fluid at `pos`, the empty fluid where there is none.
     /// None where the position is not loaded or outside the build height; it never loads a chunk.
@@ -4694,6 +4664,7 @@ impl FallOnEvent<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::FakeHost;
     use std::sync::Mutex;
 
     #[test]
@@ -4804,18 +4775,15 @@ mod tests {
 
     #[test]
     fn an_optional_dependency_runs_only_when_built_with_and_installed() {
-        struct Installed(&'static str);
-        impl mod_api::prelude::LevelsHost for Installed {
-            fn is_loaded(&self, id: &str) -> bool {
-                id == self.0
-            }
-        }
-        impl Host for Installed {}
-        mod_api::impl_host_areas!(Installed, except(levels));
+        let installed = |id| {
+            let mut host = FakeHost::new();
+            host.registries.loaded(id);
+            host
+        };
         // The `testing` feature stands for a dependency's: without it the block isn't compiled,
         // with it the game is asked.
         let ran = std::cell::Cell::new(0);
-        for host in [Installed("testing"), Installed("other")] {
+        for host in [installed("testing"), installed("other")] {
             let host: &dyn Host = &host;
             if_installed!(host, testing, {
                 ran.set(ran.get() + 1);
@@ -4828,118 +4796,13 @@ mod tests {
     #[mod_api::__subscriptions]
     impl Hooks for Quiet {}
 
-    /// A double with the `Host` methods the probe calls.
-    struct Reader {
-        block: &'static str,
-        lines: Vec<Text>,
-    }
-
-    impl mod_api::prelude::LevelsBackend for Reader {
-        fn level_block(&self, _level: LevelRef, _pos: [i32; 3]) -> Option<String> {
-            Some(self.block.to_string())
-        }
-    }
-    impl Backend for Reader {}
-    mod_api::impl_backend_areas!(Reader, except(levels));
-
-    impl mod_api::prelude::EntitiesHost for Reader {
-        fn level(&self, dimension: &str) -> Option<LevelRef> {
-            (dimension == "minecraft:overworld")
-                .then(|| LevelRef::new(NativeWorldEpoch::new(1), crate::DimensionKey::OVERWORLD))
-        }
-    }
-    impl Host for Reader {
-        fn backend(&self) -> Option<BackendRef<'_>> {
-            Some(BackendRef::of(self))
-        }
-    }
-    mod_api::impl_host_areas!(Reader, except(entities));
-    impl ClientHost for Reader {}
-    mod_api::impl_client_host_areas!(Reader);
-    impl mod_api::prelude::ServicesServerHost for Reader {
-        fn players(&self) -> &dyn Players {
-            self
-        }
-        fn commands(&mut self) -> &mut dyn Commands {
-            self
-        }
-    }
-    impl ServerHost for Reader {
-        fn backend_mut(&mut self) -> Option<BackendMutRef<'_>> {
-            Some(BackendMutRef::of(self))
-        }
-    }
-    mod_api::impl_server_host_areas!(Reader, except(services));
-    impl Commands for Reader {}
-    impl Players for Reader {
-        fn acting_player(&self) -> Option<PlayerRef> {
-            Some(crate::__private::game::player_ref(
-                EntityRef::new(NativeWorldEpoch::new(1), 41),
-                7,
-            ))
-        }
-    }
-    impl mod_api::prelude::PlayersBackendMut for Reader {
-        fn player_action_bar(&mut self, player: PlayerRef, line: Text) -> bool {
-            assert_eq!(player.uuid(), 7);
-            self.lines.push(line);
-            true
-        }
-    }
-    impl BackendMut for Reader {}
-    mod_api::impl_backend_mut_areas!(Reader, except(players));
-
     #[test]
     fn server_services_forward_commands_messages_and_player_identity() {
-        use std::cell::RefCell;
-        #[derive(Default)]
-        struct Server {
-            lines: RefCell<Vec<String>>,
-        }
-        impl Host for Server {}
-        mod_api::impl_host_areas!(Server);
-        impl mod_api::prelude::ServicesServerHost for Server {
-            fn commands(&mut self) -> &mut dyn Commands {
-                self
-            }
-            fn messages(&self) -> &dyn Messages {
-                self
-            }
-            fn players(&self) -> &dyn Players {
-                self
-            }
-        }
-        impl ServerHost for Server {}
-        mod_api::impl_server_host_areas!(Server, except(services));
-        impl Commands for Server {
-            fn run_command(&mut self, line: &str) -> bool {
-                self.lines.get_mut().push(line.to_owned());
-                line == "list"
-            }
-            fn feedback(&mut self, line: Text) {
-                self.lines.get_mut().push(line.plain());
-            }
-        }
-        impl Messages for Server {
-            fn broadcast(&self, line: Text) {
-                self.lines.borrow_mut().push(line.plain());
-            }
-            fn text_allowed(&self, line: &str) -> Option<bool> {
-                Some(line != "blocked")
-            }
-        }
-        impl Players for Server {
-            fn acting_player(&self) -> Option<PlayerRef> {
-                Some(crate::__private::game::player_ref(
-                    EntityRef::new(NativeWorldEpoch::new(1), 42),
-                    7,
-                ))
-            }
-            fn server_players(&self) -> Vec<PlayerRef> {
-                vec![self.acting_player().unwrap()]
-            }
-        }
-        let mut server = Server::default();
+        let mut server = FakeHost::new();
+        server.commands.known("list");
+        server.messages.blocked("blocked");
+        server.join(7, 42);
+        server.players.acting = Some(7);
         let host: &mut dyn ServerHost = &mut server;
         assert!(host.commands().run_command("list"));
         assert!(!host.commands().run_command("missing"));
@@ -4949,9 +4812,11 @@ mod tests {
         let player = host.players().acting_player().unwrap();
         assert_eq!(host.players().server_players(), [player]);
         assert_eq!((player.uuid(), player.entity().id()), (7, 42));
+        assert_eq!(server.commands.ran, ["list", "missing"]);
+        assert_eq!(server.commands.feedback, [Text::literal("answer")]);
         assert_eq!(
-            *server.lines.borrow(),
-            ["list", "missing", "answer", "everyone"]
+            server.messages.broadcast_lines(),
+            [Text::literal("everyone")]
         );
     }
 
@@ -5001,10 +4866,7 @@ mod tests {
             ),
         ];
         install(mods.into());
-        let host = Reader {
-            block: "minecraft:air",
-            lines: Vec::new(),
-        };
+        let host = FakeHost::new();
         let mut render = NativeHandRender {
             player: 7,
             player_entity_id: 9,
@@ -5083,10 +4945,7 @@ mod tests {
             Box::new(Observer(observed.clone())),
         )];
         install(mods.into());
-        let mut host = Reader {
-            block: "minecraft:air",
-            lines: Vec::new(),
-        };
+        let mut host = FakeHost::new();
         dispatch_living_conversion_post(
             &mut host,
             12,
@@ -5125,10 +4984,7 @@ mod tests {
             }
         }
         install(vec![ModEntry::new("mode-veto", Box::new(VetoSpectator))].into());
-        let mut host = Reader {
-            block: "minecraft:air",
-            lines: Vec::new(),
-        };
+        let mut host = FakeHost::new();
         for (to, expected_cancel) in [(GameMode::Spectator, true), (GameMode::Survival, false)] {
             let mut cancel = false;
             dispatch_player_game_mode_changed(
@@ -5161,10 +5017,7 @@ mod tests {
                 if self.0 { Flow::Cancel } else { Flow::Continue }
             }
         }
-        let mut host = Reader {
-            block: "minecraft:air",
-            lines: Vec::new(),
-        };
+        let mut host = FakeHost::new();
         for cancelled in [false, true] {
             let mods = [ModEntry::new("xp-hook", Box::new(XpHook(cancelled)))];
             install(mods.into());
@@ -5192,10 +5045,7 @@ mod tests {
     fn phantom_listener_can_increase_the_default_count() {
         let mods = [ModEntry::new("phantoms", Box::new(MorePhantoms))];
         install(mods.into());
-        let mut host = Reader {
-            block: "minecraft:air",
-            lines: Vec::new(),
-        };
+        let mut host = FakeHost::new();
         let mut count = Some(3);
         let mut result = None;
         dispatch_player_spawn_phantoms(&mut host, 7, "Probe", [0; 3], &mut count, &mut result);
@@ -5216,12 +5066,7 @@ mod tests {
     }
 
     fn stick() -> ItemStack {
-        ItemStack {
-            item: Arc::from("minecraft:stick"),
-            count: 1,
-            damage: 0,
-            extra: None,
-        }
+        crate::parts::tests::stack("minecraft:stick", 1, 0)
     }
 
     #[test]
@@ -5253,10 +5098,7 @@ mod tests {
                 event.cinematic_camera_enabled = !event.cinematic_camera_enabled;
             }
         }
-        let host = Reader {
-            block: "",
-            lines: Vec::new(),
-        };
+        let host = FakeHost::new();
         let mods: Vec<ModEntry> = vec![
             ModEntry::new("turn-1", Box::new(Turn)),
             ModEntry::new("turn-2", Box::new(Turn)),
@@ -5270,18 +5112,18 @@ mod tests {
     }
 
     #[test]
-    fn a_test_host_implements_only_what_its_hook_calls() {
+    fn a_part_reads_the_clicked_block_and_tells_the_acting_player() {
         // Another test installs parts with tags: a dispatch must run on a game thread.
         mark_game_thread();
         stick_part("probe", Probe);
         let stack = stick();
         for (block, expected) in [("minecraft:stone", true), ("minecraft:dirt", false)] {
-            let mut host = Reader {
-                block,
-                lines: Vec::new(),
-            };
-            let mut claimed = false;
             let (pos, face) = ([1, 2, 3], [0, 1, 0]);
+            let mut host = FakeHost::new();
+            host.level.set_block(pos, block);
+            host.join(7, 41);
+            host.players.acting = Some(7);
+            let mut claimed = false;
             let hit = top_hit();
             dispatch_use_on(
                 &mut host,
@@ -5297,7 +5139,8 @@ mod tests {
                 },
             );
             assert_eq!(claimed, expected, "{block}");
-            let told: Vec<String> = host.lines.iter().map(Text::plain).collect();
+            let player = host.players.get(7).unwrap();
+            let told: Vec<String> = player.action_bar.iter().map(Text::plain).collect();
             assert_eq!(told, [block], "{block}");
         }
     }
@@ -5331,10 +5174,7 @@ mod tests {
             Box::new(MiningProbe(seen.clone())),
         )];
         install(mods.into());
-        let mut host = Reader {
-            block: "minecraft:stone",
-            lines: Vec::new(),
-        };
+        let mut host = FakeHost::new();
         let mut harvest = true;
         let mut speed = 1.0;
         let mut canceled = false;
@@ -5357,13 +5197,22 @@ mod tests {
     #[test]
     #[should_panic(expected = "Commands::run_command")]
     fn an_unexpected_host_call_names_the_method() {
+        /// A mod's own double, with only the services the hook reaches.
+        struct Silent;
+        impl Host for Silent {}
+        crate::impl_host_areas!(Silent);
+        impl ServerHost for Silent {}
+        crate::impl_server_host_areas!(Silent, except(services));
+        impl crate::prelude::ServicesServerHost for Silent {
+            fn commands(&mut self) -> &mut dyn Commands {
+                self
+            }
+        }
+        impl Commands for Silent {}
         // Another test installs parts with tags: a dispatch must run on a game thread.
         mark_game_thread();
         stick_part("chatty", Chatty);
-        let mut host = Reader {
-            block: "minecraft:stone",
-            lines: Vec::new(),
-        };
+        let mut host = Silent;
         let mut claimed = false;
         let (pos, face) = ([0; 3], [0, 1, 0]);
         dispatch_use_on(
@@ -5441,10 +5290,7 @@ mod tests {
         let mods: Mods = vec![ModEntry::new("off-hand-top", Box::new(OffHandTop))].into();
         install(mods.clone());
         install_parts(&mods).unwrap();
-        let mut host = Reader {
-            block: "minecraft:stone",
-            lines: Vec::new(),
-        };
+        let mut host = FakeHost::new();
         let mut claimed = false;
         dispatch_use_on(
             &mut host,
@@ -5563,10 +5409,7 @@ mod tests {
             Box::new(ActorRecorder(seen.clone())),
         )];
         install(mods.into());
-        let mut host = Reader {
-            block: "minecraft:air",
-            lines: Vec::new(),
-        };
+        let mut host = FakeHost::new();
         let actor = GameRuleActor {
             uuid: 123,
             entity_id: 42,
@@ -5600,10 +5443,7 @@ mod tests {
             ModEntry::new("recorder-11", Box::new(Recorder(seen.clone()))),
         ];
         install(mods.into());
-        let mut host = Reader {
-            block: "minecraft:air",
-            lines: Vec::new(),
-        };
+        let mut host = FakeHost::new();
         let mut rules = horizon_client_core::gamerules::GameRules::default();
         // What `set_game_rule` and the other setters do.
         let mut set = |name: &str, value: GameRuleValue| {
@@ -5638,10 +5478,7 @@ mod tests {
             ModEntry::new("recorder-13", Box::new(Recorder(seen.clone()))),
         ];
         install(mods.into());
-        let mut host = Reader {
-            block: "minecraft:air",
-            lines: Vec::new(),
-        };
+        let mut host = FakeHost::new();
         for dimension in ["minecraft:the_nether", "minecraft:overworld"] {
             dispatch_level_save(&mut host, dimension);
         }
@@ -5668,7 +5505,7 @@ mod tests {
                 .fished
                 .drops
                 .iter()
-                .any(|s| &*s.item == "minecraft:cod");
+                .any(|s| s.item() == crate::parts::tests::fixture_item_key("minecraft:cod"));
             if cod { Flow::Cancel } else { Flow::Continue }
         }
     }
@@ -5691,17 +5528,14 @@ mod tests {
     /// which stays whether or not it cancels; a cancel stops later mods.
     #[test]
     fn a_fishing_catch_keeps_the_mods_rod_damage_and_its_cancel() {
-        let mut host = Reader {
-            block: "minecraft:water",
-            lines: Vec::new(),
-        };
+        let mut host = FakeHost::new();
         let mods: Vec<ModEntry> = vec![
             ModEntry::new("cod-keeper", Box::new(CodKeeper)),
             ModEntry::new("unreached", Box::new(Unreached)),
         ];
         install(mods.into());
-        let ask = |host: &mut Reader, item: &str| {
-            let drops = [ItemStack::new(item, 1)];
+        let ask = |host: &mut FakeHost, item: &str| {
+            let drops = [crate::parts::tests::stack(item, 1, 0)];
             let fished = NativeItemFished {
                 hook: 9,
                 position: [0.5, 62.0, 0.5],
@@ -5714,7 +5548,7 @@ mod tests {
         assert_eq!(ask(&mut host, "minecraft:cod"), (4, true));
         let mods: Vec<ModEntry> = vec![ModEntry::new("cod-keeper", Box::new(CodKeeper))];
         install(mods.into());
-        let drops = [ItemStack::new("minecraft:salmon", 1)];
+        let drops = [crate::parts::tests::stack("minecraft:salmon", 1, 0)];
         let fished = NativeItemFished {
             hook: 9,
             position: [0.5, 62.0, 0.5],
@@ -6190,3 +6024,13 @@ pub(crate) mod built {
 }
 
 include!(concat!(env!("OUT_DIR"), "/mod_api_exports_root.rs"));
+
+#[cfg(test)]
+mod brewing_dispatch_tests {
+    include!("brewing_dispatch_tests.rs");
+}
+
+#[cfg(test)]
+mod item_model_dispatch_tests {
+    include!("item_model_dispatch_tests.rs");
+}

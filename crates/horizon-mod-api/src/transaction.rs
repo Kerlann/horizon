@@ -98,47 +98,27 @@ pub fn run_transaction<H: ServerHost + ?Sized, T, E>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Host;
-
-    /// Records the transactions it is asked to open and close.
-    #[derive(Default)]
-    struct Journal {
-        depth: usize,
-        closed: Vec<(usize, bool)>,
-    }
-    impl Host for Journal {}
-    mod_api::impl_host_areas!(Journal);
-    impl mod_api::prelude::ModStateServerHost for Journal {
-        fn transaction_open(&mut self, _: TransactionSeal) {
-            self.depth += 1;
-        }
-        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
-            self.closed.push((self.depth, commit));
-            self.depth -= 1;
-        }
-    }
-    impl ServerHost for Journal {}
-    mod_api::impl_server_host_areas!(Journal, except(mod_state));
+    use crate::testing::FakeHost;
 
     #[test]
     fn a_transaction_commits_on_ok_and_aborts_on_err_and_nests() {
-        let mut journal = Journal::default();
-        let host: &mut dyn ServerHost = &mut journal;
+        let mut fake = FakeHost::new();
+        let host: &mut dyn ServerHost = &mut fake;
         let outer = host.transaction(|host, _| {
             let inner: Result<(), &str> = host.transaction(|_, _| Err("refused"));
             assert_eq!(inner, Err("refused"));
             host.transaction(|_, _| Ok::<_, ()>(7))
         });
         assert_eq!(outer, Ok(7));
-        assert_eq!(journal.closed, [(2, false), (2, true), (1, true)]);
-        assert_eq!(journal.depth, 0);
+        assert_eq!(fake.journal.closed(), [(2, false), (2, true), (1, true)]);
+        assert_eq!(fake.journal.depth(), 0);
     }
 
     #[test]
     fn a_panic_aborts_exactly_the_transaction_it_leaves() {
         use std::panic::{AssertUnwindSafe, catch_unwind};
-        let mut journal = Journal::default();
-        let host: &mut dyn ServerHost = &mut journal;
+        let mut fake = FakeHost::new();
+        let host: &mut dyn ServerHost = &mut fake;
         // A child's panic caught inside the root: the child aborts, the root still commits.
         let root = host.transaction(|host, _| {
             let child = catch_unwind(AssertUnwindSafe(|| {
@@ -149,12 +129,12 @@ mod tests {
         });
         assert_eq!(root, Ok(()));
         // A root's panic caught outside it: the root aborts before the catch sees anything.
-        let host: &mut dyn ServerHost = &mut journal;
+        let host: &mut dyn ServerHost = &mut fake;
         let caught = catch_unwind(AssertUnwindSafe(|| {
             host.transaction(|_, _| -> Result<(), ()> { panic!("a broken handler") })
         }));
         assert!(caught.is_err());
-        assert_eq!(journal.closed, [(2, false), (1, true), (1, false)]);
-        assert_eq!(journal.depth, 0);
+        assert_eq!(fake.journal.closed(), [(2, false), (1, true), (1, false)]);
+        assert_eq!(fake.journal.depth(), 0);
     }
 }

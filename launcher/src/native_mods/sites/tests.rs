@@ -86,7 +86,7 @@ fn site_routes_validate_freshness_and_execute_every_kind_adapter() {
         let kind = case.kind;
         let text = format!("{base}[[native.injection]]\nid='test'\ntarget=\"horizon_client::game::Game<'_>::run\"\nselector='self . step'\nkind='{kind}'\nraw='hook'\nfingerprint='0123456789abcdef'\n");
         let mut manifest = Manifest::parse(&text).unwrap();
-        assert!(super::super::inject::raw_of(&manifest).is_empty());
+        assert!(super::super::inject::raw_of(&[], &manifest).is_empty());
         let injection = of(&manifest).next().unwrap();
         site.output = case.output.into();
         check(std::slice::from_ref(&site), &manifest, injection).unwrap();

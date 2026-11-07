@@ -50,10 +50,10 @@ and `is_loaded(pos)` (`Level.isLoaded`: inside the build height and in a loaded 
 None of them loads a chunk. Light above the build height reads as full sky and below it as
 none, and a chunk that isn't loaded reads as the game's query does (full sky, no block light),
 so check `is_loaded` first. It also answers tag and fluid questions without a `Host`: `block_in_tag(block_key, tag)`,
-`item_stack_in_tag(&stack, tag)`, `fluid_state(pos)` (`getFluidState`, `None` where the block read is),
+`fluid_state(pos)` (`getFluidState`, `None` where the block read is),
 `state_fluid_state(state)` and `fluid_in_tag(fluid_name, tag)`. Fluid reads return `FluidState` with a
 `FluidKey`, amount, falling flag and engine-derived source flag; `is_empty()` and `is_source()` report
-those states without a registry lookup. `block_state_id(name)` parses a block and properties, and `block_state_default(block)` gives a block's default state, as on `Host`; both return `None` for invalid input or unavailable context. Tag reads are `None` when authoritative tags are unavailable, including on a client level. Shared `Host::tag_members` and `Host::item_stack_in_tag` likewise return `None` on clients until server-sent tags are synchronized; they never substitute local resource-pack tags.
+those states without a registry lookup. `block_state_id(name)` parses a block and properties, and `block_state_default(block)` gives a block's default state, as on `Host`; both return `None` for invalid input or unavailable context. Tag reads are `None` when authoritative tags are unavailable, including on a client level. For item membership and member lists, use `Host::tags()`: resolve a `TagKey` with `Tags::key`, then call `Tags::is_in_tag`, `Tags::items` or `Tags::fluids`. Membership reads return `None` on clients until server-sent tags are synchronized; they never substitute local resource-pack tags.
 `LevelHost` has no random, by design: a draw from a read-only hook inside a level write would shift the level's random sequence away from vanilla's order. A hook that may draw is given a `LevelRandomHost`.
 `LevelRandomHost` provides vanilla's `Level.random` so
 mod draws come in vanilla's order. `LevelTicksHost` adds scheduling through
@@ -68,8 +68,15 @@ it creates starts with the data the `block_entity` hook gives, which is fired in
 changed, and false off an authoritative server, for a position that is not loaded or outside the build height,
 an invalid state, or the state the block already has. It never loads a chunk. The game owns
 the tick queue; mods do not pass it back to these helpers.
-For frame hooks, implement `RenderHooks` and return it from `Hooks::render`. The ordered
-renderer list is installed once alongside the mod list. `render_needs` collects requests;
-`world_drawn` observes the world pass and can encode drawing before the hand and HUD. Both
-run on the render thread while the frame is built, before any deferred GPU submission.
-The renderer module re-exports the game's wgpu types.
+Frame drawing through `DrawContext`, `BlockEntityDrawContext` and `WorldDrawContext` stays
+in `mod_api`. Raw GPU access is native-only, unstable and outside that API, in
+`mod_render::render` (`horizon-mod-render`). Register its listed frame functions through
+`[[inject]]` with `access = "internals"` and `kind = "head"`; the ordinary listener registry
+owns ordering and disabling. `render_needs` collects requests; `world_drawn` runs before
+the hand and HUD, and `hand_drawn` runs after the hand, on the render thread.
+
+| Removed path or registration | Current route |
+| --- | --- |
+| `mod_api::render` raw GPU types | `mod_render::render` (native escape hatch) |
+| `RenderHooks` / `Hooks::render` | `[[inject]]` internals listeners on the three listed frame functions |
+| API draw contexts | Unchanged; use these for API-typed drawing |

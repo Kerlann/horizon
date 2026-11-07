@@ -115,7 +115,7 @@ fn every_native_kind_and_access_registers_or_refuses_by_name() {
             } else {
                 "pub const fn run"
             }));
-            let reports = report(&manifest).collect::<Vec<_>>();
+            let reports = report(&catalog, &manifest).collect::<Vec<_>>();
             assert_eq!(reports.len(), 1);
             assert!(reports[0].contains("example:test: game::run -> slot"));
         }
@@ -123,7 +123,7 @@ fn every_native_kind_and_access_registers_or_refuses_by_name() {
 }
 
 #[test]
-fn unified_route_refuses_changed_missing_unlisted_and_invalid_condition() {
+fn unified_route_checks_freshness_and_selects_native_function_source() {
     let (mut manifest, mut catalog) = fixture();
     manifest.inject.push(Inject {
         id: "test".into(),
@@ -151,6 +151,12 @@ fn unified_route_refuses_changed_missing_unlisted_and_invalid_condition() {
     manifest.inject[0].call = None;
     manifest.inject[0].kind = Kind::Head;
     catalog.points.clear();
+    check(&catalog, &manifest).unwrap();
+    assert!(report(&catalog, &manifest)
+        .next()
+        .unwrap()
+        .contains("source (private slot"));
+    manifest.inject[0].kind = Kind::ModifyArg;
     assert!(matches!(
         check(&catalog, &manifest),
         Err(InjectError::NoSlot {
@@ -158,6 +164,7 @@ fn unified_route_refuses_changed_missing_unlisted_and_invalid_condition() {
             ..
         })
     ));
+    manifest.inject[0].kind = Kind::Head;
     catalog.internals.clear();
     assert!(matches!(
         check(&catalog, &manifest),

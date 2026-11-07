@@ -8,11 +8,21 @@ use horizon_mod_package::{
     Manifest,
 };
 
-pub(super) fn points(manifest: &Manifest) -> impl Iterator<Item = PointInjection> + '_ {
+pub(super) fn points<'a>(
+    listed: &'a [super::inject::ListedPoint],
+    manifest: &'a Manifest,
+) -> impl Iterator<Item = PointInjection> + 'a {
     manifest
         .inject
         .iter()
-        .filter(|entry| entry.access == Access::Internals && entry.call.is_none())
+        .filter(|entry| {
+            entry.access == Access::Internals
+                && entry.call.is_none()
+                && listed.iter().any(|point| {
+                    super::internals::plain_path(&point.target)
+                        == super::internals::plain_path(&entry.at)
+                })
+        })
         .map(|entry| PointInjection {
             mod_id: manifest.id.clone(),
             id: entry.id.clone(),
@@ -47,6 +57,10 @@ pub(super) fn sites<'a>(
 }
 
 pub(super) fn check(catalog: &Catalog, manifest: &Manifest) -> Result<(), InjectError> {
+    routes(catalog, manifest).map(|_| ())
+}
+
+pub(super) fn routes(catalog: &Catalog, manifest: &Manifest) -> Result<Vec<Route>, InjectError> {
     let plain = super::internals::plain_path;
     let places = manifest
         .inject
@@ -60,7 +74,7 @@ pub(super) fn check(catalog: &Catalog, manifest: &Manifest) -> Result<(), Inject
             let point = catalog
                 .points
                 .iter()
-                .find(|point| plain(&point.target) == plain(&item.path));
+                .find(|point| !point.private && plain(&point.target) == plain(&item.path));
             Some(Place {
                 at: entry.at.clone(),
                 hash: item.hash.clone(),
@@ -95,6 +109,7 @@ pub(super) fn check(catalog: &Catalog, manifest: &Manifest) -> Result<(), Inject
             })
         })
         .collect::<Vec<_>>();
+    let mut decisions = Vec::new();
     for inject in &manifest.inject {
         let route = route(
             Entry {
@@ -106,6 +121,7 @@ pub(super) fn check(catalog: &Catalog, manifest: &Manifest) -> Result<(), Inject
             &places,
         )?;
         let pending = match (route, inject.kind, inject.access) {
+            (Route::Source(_), Kind::Head | Kind::Return, Access::Internals) => None,
             (Route::Source(_), _, _) => Some(NoSlotReason::SourcePending),
             (_, Kind::Replace, _) => Some(NoSlotReason::ReplacePending),
             (Route::Slot(SlotKind::Site), _, Access::Api) => Some(NoSlotReason::ApiSitesPending),
@@ -118,6 +134,7 @@ pub(super) fn check(catalog: &Catalog, manifest: &Manifest) -> Result<(), Inject
                 declaration: format!("slots/{}.txt: {} ({route:?})", manifest.id, inject.at),
             });
         }
+        decisions.push(route);
         if inject.kind == Kind::WrapIf
             && sites(&catalog.sites, manifest)
                 .find(|(entry, _)| entry.id == inject.id)
@@ -133,30 +150,43 @@ pub(super) fn check(catalog: &Catalog, manifest: &Manifest) -> Result<(), Inject
             });
         }
     }
-    Ok(())
+    Ok(decisions)
 }
 
-pub(super) fn report(manifest: &Manifest) -> impl Iterator<Item = String> + '_ {
-    manifest.inject.iter().map(|entry| {
-        let form = if entry.call.is_some() {
-            "site"
-        } else if entry.kind == Kind::Return {
-            "return"
-        } else {
-            "head"
-        };
-        format!(
-            "{}:{}: {} -> slot ({form}, {})",
-            manifest.id,
-            entry.id,
-            entry.at,
-            if entry.access == Access::Api {
-                "api"
-            } else {
-                "internals"
+pub(super) fn report<'a>(
+    catalog: &'a Catalog,
+    manifest: &'a Manifest,
+) -> impl Iterator<Item = String> + 'a {
+    manifest
+        .inject
+        .iter()
+        .zip(routes(catalog, manifest).expect("checked routes"))
+        .map(|(entry, route)| {
+            if let Route::Source(reason) = route {
+                return format!(
+                    "{}:{}: {} -> source (private slot, {reason})",
+                    manifest.id, entry.id, entry.at
+                );
             }
-        )
-    })
+            let form = if entry.call.is_some() {
+                "site"
+            } else if entry.kind == Kind::Return {
+                "return"
+            } else {
+                "head"
+            };
+            format!(
+                "{}:{}: {} -> slot ({form}, {})",
+                manifest.id,
+                entry.id,
+                entry.at,
+                if entry.access == Access::Api {
+                    "api"
+                } else {
+                    "internals"
+                }
+            )
+        })
 }
 
 #[cfg(test)]

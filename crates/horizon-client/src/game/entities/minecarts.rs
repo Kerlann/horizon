@@ -1762,6 +1762,7 @@ impl Game<'_> {
                     m.ai.nav.stop();
                     m.needs_sync = true;
                     occupied = true;
+                    self.seat_mob(mob);
                     self.break_leash(mob, true, false);
                     self.note_started_riding(id);
                 }
@@ -2047,6 +2048,14 @@ impl Game<'_> {
             return;
         }
         self.riding = None;
+        let target = self.cart_player_dismount_target(i);
+        if let Some(p) = self.player.as_mut() {
+            p.position = target;
+            p.velocity = Vec3::ZERO;
+        }
+    }
+    /// Where the cart at `i` lets a player off.
+    pub(super) fn cart_player_dismount_target(&self, i: usize) -> Vec3 {
         let c = &self.carts[i];
         let (bx, by, bz) = (
             c.position.x.floor() as i32,
@@ -2092,11 +2101,7 @@ impl Game<'_> {
             }
         }
         let top = c.bounds().max_position().y;
-        let target = target.unwrap_or(Vec3::new(c.position.x, top, c.position.z));
-        if let Some(p) = self.player.as_mut() {
-            p.position = target;
-            p.velocity = Vec3::ZERO;
-        }
+        target.unwrap_or(Vec3::new(c.position.x, top, c.position.z))
     }
     /// `MinecartItem.useOn`: a cart on the clicked rail.
     pub(super) fn place_minecart(&mut self, hit: &Hit, stack: &ItemStack) -> bool {
@@ -2479,6 +2484,11 @@ impl Game<'_> {
                 self.carts.insert(i, c);
             } else {
                 let at = [c.position.x, c.position.y, c.position.z];
+                // VehicleEntity.destroy: `kill` (the cart's own ENTITY_DIE),
+                // then the drops; a creative hit only discards it.
+                if !creative {
+                    self.entity_killed_event(at, false);
+                }
                 if self
                     .ui
                     .rules

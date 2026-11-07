@@ -16,6 +16,7 @@ def main():
     parser.add_argument('--binary', required=True, type=Path)
     parser.add_argument('--resources', required=True, type=Path)
     parser.add_argument('--scratch', required=True, type=Path)
+    parser.add_argument('--functions', action='store_true')
     args = parser.parse_args()
     scratch = Path(tempfile.mkdtemp(prefix='slot-order-', dir=args.scratch))
     env = os.environ.copy()
@@ -69,9 +70,12 @@ def main():
     expected = ['SLOT ORDER API HEAD', 'SLOT ORDER HEAD', 'SLOT ORDER MODIFY_VALUE: 300 -> 307',
                 'SLOT ORDER API RETURN: 307 -> 308', 'SLOT ORDER WRAP_CALL: 308 -> 319',
                 'SLOT ORDER HIGH ticks_until_autosave=319', 'SLOT ORDER LOW APPLIED ticks_until_autosave=319']
+    if args.functions:
+        expected = ['SLOT ORDER HEAD', 'SLOT ORDER SOURCE RETURN: 300 -> 319',
+                    'SLOT ORDER HIGH ticks_until_autosave=319', 'SLOT ORDER LOW APPLIED ticks_until_autosave=319']
     positions = [text.index(marker) for marker in expected]
     assert positions == sorted(positions), text[-4000:]
-    print('PASS: API before internals; 300 -> 307 -> 308 -> 319; high before low; exit 0', scratch)
+    print('PASS:', '; '.join(expected), '; exit 0', scratch)
 
 
 if __name__ == '__main__':

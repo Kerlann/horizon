@@ -1,14 +1,10 @@
 use super::*;
+use crate::testing::FakeHost;
 
 #[test]
 #[ignore = "optimized hot-hook microbenchmark"]
 fn subscriber_tick_benchmark() {
     use std::{hint::black_box, time::Instant};
-    struct TestHost;
-    impl Host for TestHost {}
-    mod_api::impl_host_areas!(TestHost);
-    impl ClientHost for TestHost {}
-    mod_api::impl_client_host_areas!(TestHost);
     struct Quiet;
     #[mod_api::__subscriptions]
     impl Hooks for Quiet {}
@@ -47,7 +43,7 @@ fn subscriber_tick_benchmark() {
         .collect();
     installed.push(ModEntry::new("listener", Box::new(Listener)));
     install(installed.into());
-    let mut host = TestHost;
+    let mut host = FakeHost::new();
     dispatch_client_tick_pre(&mut host); // Warm the dispatch outside the timed loop.
     let iterations = 1_000_000;
     let start = Instant::now();
@@ -134,11 +130,6 @@ fn scoped_mods_dispatch_and_restore_after_panic() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use testing::with_mods;
 
-    struct HostDouble;
-    impl Host for HostDouble {}
-    mod_api::impl_host_areas!(HostDouble);
-    impl ClientHost for HostDouble {}
-    mod_api::impl_client_host_areas!(HostDouble);
     struct Counter(Arc<AtomicUsize>);
     #[mod_api::__subscriptions]
     impl Hooks for Counter {
@@ -156,7 +147,7 @@ fn scoped_mods_dispatch_and_restore_after_panic() {
         )]
         .into(),
         || {
-            dispatch_client_tick_pre(&mut HostDouble);
+            dispatch_client_tick_pre(&mut FakeHost::new());
             let result = std::panic::catch_unwind(|| {
                 with_mods(
                     vec![ModEntry::new(
@@ -165,13 +156,13 @@ fn scoped_mods_dispatch_and_restore_after_panic() {
                     )]
                     .into(),
                     || {
-                        dispatch_client_tick_pre(&mut HostDouble);
+                        dispatch_client_tick_pre(&mut FakeHost::new());
                         panic!("test unwind");
                     },
                 );
             });
             assert!(result.is_err());
-            dispatch_client_tick_pre(&mut HostDouble);
+            dispatch_client_tick_pre(&mut FakeHost::new());
         },
     );
     assert_eq!(outer.load(Ordering::Relaxed), 2);
@@ -183,11 +174,6 @@ fn scoped_mods_dispatch_and_restore_after_panic() {
 fn native_switch_skips_and_resumes_subscribed_hooks() {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    struct HostDouble;
-    impl Host for HostDouble {}
-    mod_api::impl_host_areas!(HostDouble);
-    impl ClientHost for HostDouble {}
-    mod_api::impl_client_host_areas!(HostDouble);
     struct Counter(Arc<AtomicUsize>);
     #[mod_api::__subscriptions]
     impl Hooks for Counter {
@@ -200,11 +186,11 @@ fn native_switch_skips_and_resumes_subscribed_hooks() {
         vec![ModEntry::new("counter", Box::new(Counter(count.clone())))].into(),
         || {
             assert_eq!(__private::mod_index("counter"), Some(0));
-            dispatch_client_tick_pre(&mut HostDouble);
+            dispatch_client_tick_pre(&mut FakeHost::new());
             assert!(__private::set_mod_enabled("counter", false));
-            dispatch_client_tick_pre(&mut HostDouble);
+            dispatch_client_tick_pre(&mut FakeHost::new());
             assert!(__private::set_mod_enabled("counter", true));
-            dispatch_client_tick_pre(&mut HostDouble);
+            dispatch_client_tick_pre(&mut FakeHost::new());
             assert!(!__private::set_mod_enabled("missing", false));
         },
     );
@@ -213,13 +199,6 @@ fn native_switch_skips_and_resumes_subscribed_hooks() {
 
 #[test]
 fn movement_input_writes_back_all_fields() {
-    struct TestHost;
-    impl Host for TestHost {}
-    mod_api::impl_host_areas!(TestHost);
-    impl ServerHost for TestHost {}
-    mod_api::impl_server_host_areas!(TestHost);
-    impl ClientHost for TestHost {}
-    mod_api::impl_client_host_areas!(TestHost);
     struct Movement;
     #[mod_api::__subscriptions]
     impl Hooks for Movement {
@@ -233,18 +212,19 @@ fn movement_input_writes_back_all_fields() {
     let mods = [ModEntry::new("movement", Box::new(Movement))];
     install(mods.into());
     let (mut forward, mut strafe, mut jump, mut sneak) = (1.0, 0.0, false, false);
-    dispatch_movement_input(&TestHost, &mut forward, &mut strafe, &mut jump, &mut sneak);
+    dispatch_movement_input(
+        &FakeHost::new(),
+        &mut forward,
+        &mut strafe,
+        &mut jump,
+        &mut sneak,
+    );
     assert_eq!((forward, strafe, jump, sneak), (-0.5, 0.25, true, true));
 }
 
 #[test]
 fn recipe_book_categories_accept_mod_declarations() {
     use mod_api::{RecipeBookCategoriesEvent, RecipeBookCategory, dispatch_recipe_book_categories};
-    struct TestHost;
-    impl Host for TestHost {}
-    mod_api::impl_host_areas!(TestHost);
-    impl ServerHost for TestHost {}
-    mod_api::impl_server_host_areas!(TestHost);
     struct Categories;
     #[mod_api::__subscriptions]
     impl Hooks for Categories {
@@ -261,11 +241,11 @@ fn recipe_book_categories_accept_mod_declarations() {
         }
     }
     let mut declarations = Vec::new();
-    dispatch_recipe_book_categories(HostSide::Server(&mut TestHost), &mut declarations);
+    dispatch_recipe_book_categories(HostSide::Server(&mut FakeHost::new()), &mut declarations);
     assert!(declarations.is_empty());
     let mods = [ModEntry::new("categories", Box::new(Categories))];
     install(mods.into());
-    dispatch_recipe_book_categories(HostSide::Server(&mut TestHost), &mut declarations);
+    dispatch_recipe_book_categories(HostSide::Server(&mut FakeHost::new()), &mut declarations);
     assert_eq!(declarations.len(), 1);
     assert_eq!(declarations[0].id, "mymod:crushing");
     assert_eq!(declarations[0].recipe_type, "mymod:crusher");
@@ -275,11 +255,6 @@ fn recipe_book_categories_accept_mod_declarations() {
 #[test]
 fn client_tick_pre_and_post_hear_their_own_moment() {
     use std::sync::Mutex;
-    struct TestHost;
-    impl Host for TestHost {}
-    mod_api::impl_host_areas!(TestHost);
-    impl ClientHost for TestHost {}
-    mod_api::impl_client_host_areas!(TestHost);
     struct Ticks(Arc<Mutex<Vec<&'static str>>>);
     #[mod_api::__subscriptions]
     impl Hooks for Ticks {
@@ -294,8 +269,8 @@ fn client_tick_pre_and_post_hear_their_own_moment() {
     testing::with_mods(
         vec![ModEntry::new("ticks", Box::new(Ticks(heard.clone())))].into(),
         || {
-            dispatch_client_tick_pre(&mut TestHost);
-            dispatch_client_tick_post(&mut TestHost);
+            dispatch_client_tick_pre(&mut FakeHost::new());
+            dispatch_client_tick_post(&mut FakeHost::new());
         },
     );
     assert_eq!(*heard.lock().unwrap(), ["pre", "post"]);
@@ -304,11 +279,6 @@ fn client_tick_pre_and_post_hear_their_own_moment() {
 #[test]
 fn render_frame_pre_and_post_hear_their_own_moment_with_the_frames_time() {
     use std::{sync::Mutex, time::Duration};
-    struct TestHost;
-    impl Host for TestHost {}
-    mod_api::impl_host_areas!(TestHost);
-    impl ClientHost for TestHost {}
-    mod_api::impl_client_host_areas!(TestHost);
     struct Frames(Arc<Mutex<Vec<(&'static str, Duration)>>>);
     #[mod_api::__subscriptions]
     impl Hooks for Frames {
@@ -324,8 +294,8 @@ fn render_frame_pre_and_post_hear_their_own_moment_with_the_frames_time() {
         vec![ModEntry::new("frames", Box::new(Frames(heard.clone())))].into(),
         || {
             let frame = Duration::from_millis(16);
-            dispatch_render_frame_pre(&mut TestHost, frame);
-            dispatch_render_frame_post(&mut TestHost, frame);
+            dispatch_render_frame_pre(&mut FakeHost::new(), frame);
+            dispatch_render_frame_post(&mut FakeHost::new(), frame);
         },
     );
     let frame = Duration::from_millis(16);
@@ -335,11 +305,6 @@ fn render_frame_pre_and_post_hear_their_own_moment_with_the_frames_time() {
 #[test]
 fn render_gui_pre_cancel_reaches_the_game() {
     use std::sync::Mutex;
-    struct TestHost;
-    impl Host for TestHost {}
-    mod_api::impl_host_areas!(TestHost);
-    impl ClientHost for TestHost {}
-    mod_api::impl_client_host_areas!(TestHost);
     struct Gui(Arc<Mutex<Vec<&'static str>>>, bool);
     #[mod_api::__subscriptions]
     impl Hooks for Gui {
@@ -352,7 +317,7 @@ fn render_gui_pre_cancel_reaches_the_game() {
     let mut canceled = false;
     testing::with_mods(
         vec![ModEntry::new("gui", Box::new(Gui(heard.clone(), true)))].into(),
-        || dispatch_render_gui_pre(&TestHost, &mut canceled),
+        || dispatch_render_gui_pre(&FakeHost::new(), &mut canceled),
     );
     assert!(canceled, "a mod's cancel reaches the game");
     assert_eq!(*heard.lock().unwrap(), ["pre"]);
@@ -361,11 +326,6 @@ fn render_gui_pre_cancel_reaches_the_game() {
 #[test]
 fn window_resize_delivers_physical_and_gui_dimensions() {
     use std::sync::Mutex;
-    struct TestHost;
-    impl Host for TestHost {}
-    mod_api::impl_host_areas!(TestHost);
-    impl ClientHost for TestHost {}
-    mod_api::impl_client_host_areas!(TestHost);
     struct Listener(Arc<Mutex<Vec<(u32, u32, u32, u32)>>>);
     #[mod_api::__subscriptions]
     impl Hooks for Listener {
@@ -382,7 +342,7 @@ fn window_resize_delivers_physical_and_gui_dimensions() {
     testing::with_mods(
         vec![ModEntry::new("resize", Box::new(Listener(heard.clone())))].into(),
         || {
-            dispatch_window_resize(&mut TestHost, 1200, 900, 400, 300);
+            dispatch_window_resize(&mut FakeHost::new(), 1200, 900, 400, 300);
         },
     );
     assert_eq!(*heard.lock().unwrap(), [(1200, 900, 400, 300)]);

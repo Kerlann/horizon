@@ -37,14 +37,19 @@ hash = "<the function hash in internals.json>"
 ```
 
 The function takes the slot's exact receiver and raw record types from the generated internals
-facade. `head`, `return` and `modify_arg` use function slots. `before_call`, `after_call`,
-`modify_call_arg`, `modify_value`, `wrap_call` and `wrap_if` use listed call slots; specify `call`,
+facade. `head` and `return` use function slots. If no compiled slot exists, native internals
+listeners use a private source point and rebuild the game; the callback and its facade record path
+stay unchanged. The log says `source (private slot, reason)` and private rows are never published
+in `points.json`. Targets below `mod_points` are refused because dispatch would create a Cargo cycle.
+`before_call`, `after_call`, `modify_value`, `wrap_call` and `wrap_if` use listed call slots; specify `call`,
 `nth` and `ctx` from the pinned catalog (`ctx` is currently the site's hash). The build log prints
 `mod:inject: target -> slot (head/return/site, internals)` for each accepted declaration. A changed
 hash or missing target is refused, not silently redirected. Points order by descending priority,
 then registration (dependency) order; ties within a mod use inject id. Sites retain priority, mod id
-and inject id order. API call sites, source injects, `replace`, locals and extension fields are explicitly
-refused until their corresponding implementations land. API head/return functions also load from wasm;
+and inject id order. `modify_arg` and `modify_call_arg` remain typed refusals until their operand
+payload is specified. API call sites, API source injects, `replace`, locals and extension fields remain
+refused. The old `[[native.injection]]` table is never a fallback for `[[inject]]`.
+API head/return functions also load from wasm;
 its remaining routing and full hash checks follow separately.
 
 ## For agents

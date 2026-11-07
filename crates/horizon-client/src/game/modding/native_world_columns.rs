@@ -5,7 +5,6 @@ use super::block_edits::MAX_COLUMNS;
 use super::native_world_edit::NativeHeightmap;
 pub use mod_api::game::NativeColumnBlocks;
 
-#[allow(dead_code)]
 impl Game<'_> {
     /// For a server mod: each column's height by `heightmap` in the authoritative level `dimension` (the one being
     /// ticked), none for a column not loaded. `Err` says why nothing was read: another dimension or a client of a

@@ -193,6 +193,36 @@ impl PartRegistrar {
 #[cfg(any(test, feature = "testing"))]
 pub mod tests {
     #[cfg(test)]
+    use crate::testing::{FakeContainer, FakeHost};
+
+    #[cfg(test)]
+    /// `test:ordered` block entities from x = 7 to 10, where the game has slots of its own
+    /// from x = 8 on.
+    pub(crate) fn ordered_world() -> FakeHost {
+        let mut host = FakeHost::new();
+        for x in 7..=10 {
+            let ordered = host.level.block_entity([x, 64, 0]).of_type("test:ordered");
+            if x >= 8 {
+                ordered.with_items(27);
+            }
+        }
+        host
+    }
+
+    #[cfg(test)]
+    /// A pipe at (0, 64, 0), and east of it a vanilla chest of one slot that holds one item,
+    /// answered by the game.
+    pub(crate) fn pipe_world() -> FakeHost {
+        let mut host = FakeHost::new();
+        host.level.block_entity(PIPE).of_type("test:pipe");
+        host.level.block_entity(CHEST).items = Some(FakeContainer {
+            slots: vec![None],
+            limit: 1,
+        });
+        host
+    }
+
+    #[cfg(test)]
     use super::*;
     #[cfg(test)]
     use crate::parts::tests::*;
@@ -332,7 +362,7 @@ pub mod tests {
     #[test]
     pub(crate) fn a_level_not_in_place_asks_no_provider() {
         game_thread();
-        let mut world = PipeWorld::default();
+        let mut world = pipe_world();
         let host: &mut dyn ServerHost = &mut world;
         // The pipe's type has a provider, which answers in the level in place; parked while
         // the server ticks another, the same block entity's level gives none.
@@ -344,10 +374,9 @@ pub mod tests {
     #[test]
     pub(crate) fn a_mod_reads_a_vanilla_chests_items_from_the_game_with_no_provider_for_it() {
         game_thread();
-        let mut world = PipeWorld {
-            chest: Some(stick()),
-            ..PipeWorld::default()
-        };
+        let mut world = pipe_world();
+        let chest = world.level.block_entity(CHEST).items.as_mut().unwrap();
+        chest.slots[0] = Some(stick());
         let host: &mut dyn ServerHost = &mut world;
         // No mod registered an items provider for the chest's type: the game's hoppers have no
         // mod's handler to look for there, yet a mod reading it gets the game's own slots.
@@ -361,7 +390,7 @@ pub mod tests {
     #[test]
     pub(crate) fn a_capability_part_answers_by_side_and_forwards_to_its_neighbours_capability() {
         game_thread();
-        let mut world = PipeWorld::default();
+        let mut world = pipe_world();
         let host: &mut dyn ServerHost = &mut world;
         let up = here()
             .capability(host, &ITEMS, PIPE, Some(Direction::Up))
@@ -503,50 +532,6 @@ pub mod tests {
         }
     }
 
-    #[cfg(test)]
-    /// `test:ordered` block entities, where the game has slots of its own from x = 8 on.
-    pub(crate) struct Ordered;
-    #[cfg(test)]
-    impl ServerHost for Ordered {}
-    #[cfg(test)]
-    mod_api::impl_server_host_areas!(Ordered);
-    #[cfg(test)]
-    impl mod_api::prelude::LevelsBackend for Ordered {
-        fn level_in_place(&self, level: LevelRef) -> bool {
-            level == here()
-        }
-    }
-    #[cfg(test)]
-    impl mod_api::prelude::BlockEntitiesBackend for Ordered {
-        fn block_entity_kind(&self, _: BlockEntityRef) -> Option<BlockEntityTypeKey> {
-            Some(type_key("test:ordered"))
-        }
-    }
-    #[cfg(test)]
-    impl mod_api::prelude::ItemsBackend for Ordered {
-        fn container_size(&self, BlockSide { pos, .. }: BlockSide) -> Option<usize> {
-            (pos[0] >= 8).then_some(27)
-        }
-    }
-    #[cfg(test)]
-    impl Backend for Ordered {}
-    #[cfg(test)]
-    mod_api::impl_backend_areas!(Ordered, except(block_entities, items, levels));
-    #[cfg(test)]
-    impl mod_api::prelude::BlockEntitiesHost for Ordered {
-        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(crate::__private::game::block_entity_ref(level, position, 1))
-        }
-    }
-    #[cfg(test)]
-    impl Host for Ordered {
-        fn backend(&self) -> Option<BackendRef<'_>> {
-            Some(BackendRef::of(self))
-        }
-    }
-    #[cfg(test)]
-    mod_api::impl_host_areas!(Ordered, except(block_entities));
-
     #[test]
     pub(crate) fn disabled_capability_providers_are_skipped_and_resume() {
         struct Later;
@@ -578,15 +563,15 @@ pub mod tests {
             pos: [7, 64, 0],
             side: None,
         };
-        let direct_block = || block_entity_providers(&ITEMS, &Ordered, at).unwrap();
+        let direct_block = || block_entity_providers(&ITEMS, &ordered_world(), at).unwrap();
         let robot = EntityRef::new(NativeWorldEpoch::new(1), 3);
-        let mut player = Player::default();
+        let mut player = player_world(None);
         let direct_entity =
-            || entity_providers(&ENTITY_ITEMS, &Player::default(), robot, ()).unwrap();
+            || entity_providers(&ENTITY_ITEMS, &player_world(None), robot, ()).unwrap();
         let block_before_disable = direct_block();
         let entity_before_disable = direct_entity();
         let check = |without_game: Option<usize>, with_game: usize, robot_size: Option<usize>| {
-            let host: &mut dyn ServerHost = &mut Ordered;
+            let host: &mut dyn ServerHost = &mut ordered_world();
             let block = here().capability(host, &ITEMS, [7, 64, 0], None);
             assert_eq!(block.map(|found| found.size(host)), without_game);
             let block = here().capability(host, &ITEMS, [9, 64, 0], None).unwrap();
@@ -607,7 +592,7 @@ pub mod tests {
                 let item = HAND.capability(host, &ITEM_ITEMS);
                 assert_eq!(item.map(|found| found.size(host)), expected);
             }
-            let host: &mut dyn ServerHost = &mut Player::default();
+            let host: &mut dyn ServerHost = &mut player_world(None);
             let entity = robot.capability(host, &ENTITY_ITEMS, ());
             assert_eq!(entity.map(|found| found.size(host)), robot_size);
             assert_eq!(
@@ -621,18 +606,18 @@ pub mod tests {
         // uses the game's handler (27), so check that special block answer separately.
         assert_eq!(
             here()
-                .capability(&mut Ordered, &ITEMS, [9, 64, 0], None)
+                .capability(&mut ordered_world(), &ITEMS, [9, 64, 0], None)
                 .unwrap()
-                .size(&mut Ordered),
+                .size(&mut ordered_world()),
             3
         );
         assert!(crate::set_mod_enabled("doubler", false));
         check(Some(99), 27, Some(99));
         assert_eq!(
             block_before_disable
-                .ask(&mut Ordered, false)
+                .ask(&mut ordered_world(), false)
                 .unwrap()
-                .size(&mut Ordered),
+                .size(&mut ordered_world()),
             99
         );
         let entity = entity_before_disable.ask(&mut player, false).unwrap();
@@ -644,9 +629,9 @@ pub mod tests {
         assert!(crate::set_mod_enabled("doubler", true));
         assert_eq!(
             here()
-                .capability(&mut Ordered, &ITEMS, [7, 64, 0], None)
+                .capability(&mut ordered_world(), &ITEMS, [7, 64, 0], None)
                 .unwrap()
-                .size(&mut Ordered),
+                .size(&mut ordered_world()),
             1
         );
         assert_eq!(
@@ -693,10 +678,10 @@ pub mod tests {
         install_parts(&mods).unwrap();
         mark_game_thread();
         let found = here()
-            .capability(&mut Ordered, &ITEMS, [7, 64, 0], None)
+            .capability(&mut ordered_world(), &ITEMS, [7, 64, 0], None)
             .unwrap();
         assert_eq!(
-            (found.owner(), found.size(&mut Ordered)),
+            (found.owner(), found.size(&mut ordered_world())),
             ("later".into(), 99)
         );
     }
@@ -704,7 +689,7 @@ pub mod tests {
     #[test]
     pub(crate) fn providers_are_asked_ahead_of_the_game_then_the_game_then_the_mods_in_order() {
         game_thread();
-        let host: &mut dyn ServerHost = &mut Ordered;
+        let host: &mut dyn ServerHost = &mut ordered_world();
         let answer = |host: &mut dyn ServerHost, x| {
             let found = here().capability(host, &ITEMS, [x, 64, 0], None).unwrap();
             (found.owner.is_some(), found.size(host))
@@ -744,8 +729,15 @@ pub mod tests {
             pos: [8, 64, 0],
             side: None,
         };
-        assert!(block_entity_providers(&ITEMS, &TypeOf(None), at).is_none());
-        assert!(block_entity_providers(&ITEMS, &TypeOf(Some("test:tank")), at).is_none());
+        let mut vanilla = FakeHost::new();
+        vanilla.level.block_entity(at.pos);
+        assert!(block_entity_providers(&ITEMS, &vanilla, at).is_none());
+        let mut unregistered = FakeHost::new();
+        unregistered
+            .level
+            .block_entity(at.pos)
+            .of_type("test:unregistered");
+        assert!(block_entity_providers(&ITEMS, &unregistered, at).is_none());
 
         // Item providers in the same order, for the item in a player's hand: with no game slots
         // (damage 0), the first mod's that answers; with them (damage 1), the game's; for two

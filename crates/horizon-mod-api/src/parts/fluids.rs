@@ -8,6 +8,9 @@ pub(crate) fn resolved_fluids() -> &'static OnceLock<horizon_mod_runtime::regist
 #[cfg(any(test, feature = "testing"))]
 pub mod tests {
     #[cfg(test)]
+    use crate::testing::FakeJournal;
+
+    #[cfg(test)]
     use super::*;
     use crate::parts::tests::*;
     use crate::*;
@@ -173,9 +176,9 @@ pub mod tests {
     /// Game tanks by position, and the mod block entity types standing at some.
     #[derive(Clone, Default)]
     pub(crate) struct TankWorld {
-        pub(crate) tanks: HashMap<[i32; 3], GameTank>,
-        pub(crate) types: HashMap<[i32; 3], &'static str>,
-        pub(crate) kept: Vec<Self>,
+        tanks: HashMap<[i32; 3], GameTank>,
+        types: HashMap<[i32; 3], &'static str>,
+        journal: FakeJournal<HashMap<[i32; 3], GameTank>>,
     }
     #[cfg(test)]
     pub(crate) const SOURCE: [i32; 3] = [0, 64, 0];
@@ -221,12 +224,6 @@ pub mod tests {
             let source = here().capability(host, &FLUIDS, from, from_side).unwrap();
             let target = here().capability(host, &FLUIDS, to, to_side).unwrap();
             host.transaction(|host, tx| move_resources(host, &source, &target, |_| true, max, tx))
-        }
-    }
-    #[cfg(test)]
-    impl Journal for TankWorld {
-        fn kept(&mut self) -> &mut Vec<Self> {
-            &mut self.kept
         }
     }
     #[cfg(test)]
@@ -351,15 +348,6 @@ pub mod tests {
     #[cfg(test)]
     mod_api::impl_host_areas!(TankWorld, except(block_entities));
     #[cfg(test)]
-    impl mod_api::prelude::ModStateServerHost for TankWorld {
-        fn transaction_open(&mut self, _: TransactionSeal) {
-            open(self);
-        }
-        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
-            close(self, commit);
-        }
-    }
-    #[cfg(test)]
     impl ServerHost for TankWorld {
         fn backend_mut(&mut self) -> Option<BackendMutRef<'_>> {
             Some(BackendMutRef::of(self))
@@ -367,13 +355,26 @@ pub mod tests {
     }
     #[cfg(test)]
     mod_api::impl_server_host_areas!(TankWorld, except(mod_state));
+    #[cfg(test)]
+    impl crate::prelude::ModStateServerHost for TankWorld {
+        fn transaction_open(&mut self, _: TransactionSeal) {
+            self.journal.open(self.tanks.clone());
+        }
+        fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
+            if let Some(tanks) = self.journal.close(commit) {
+                self.tanks = tanks;
+            }
+        }
+    }
 
     #[cfg(test)]
     pub(crate) fn potion(amount: u32, potion: &str) -> FluidStack {
-        let mut components = horizon_items::item_data::StackData::default();
-        components.potion = Some(Arc::from(potion));
+        let components = crate::Compound::from([(
+            horizon_core::nbt::JavaString::from("minecraft:potion_contents"),
+            crate::Tag::compound([("potion", crate::Tag::String(potion.into()))]),
+        )]);
         FluidStack {
-            components: Some(Box::new(components)),
+            components: Some(Box::new(crate::Components::from(components))),
             ..FluidStack::new(
                 crate::registry_keys::fluid_key("test:potion").unwrap(),
                 amount,

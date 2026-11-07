@@ -2524,6 +2524,27 @@ mod hub_tests {
         assert_eq!(ids(&mine), Vec::<i32>::new());
     }
 
+    /// A record's level is compared as it is named: a pocket level is not the Overworld.
+    #[test]
+    fn a_record_from_a_mod_level_takes_its_position_only_into_that_level() {
+        let (mut source, i) = exported_guest();
+        source
+            .guests
+            .update(i, |g| g.dimension = "test:pocket".into());
+        let record = super::export_record(&mut source, i, true, Default::default()).unwrap();
+        let (_, mut hub, _seen, _mine) = held_in_a_second_hub();
+        let request = serde_json::json!({ "record": record, "parts": ["position"] });
+        // The held player is in the Overworld.
+        let error = import_player(&mut hub, UUID_N, &request).unwrap_err();
+        assert!(error.contains("position cannot be taken"), "{error}");
+        assert!(hub.guests[1].held);
+        // Held in the pocket itself, it takes the position.
+        hub.guests.update(1, |g| g.dimension = "test:pocket".into());
+        import_player(&mut hub, UUID_N, &request).unwrap();
+        assert_eq!(hub.guests[1].position, [10.5, 70.0, -3.25]);
+        assert_eq!(hub.guests[1].dimension, "test:pocket");
+    }
+
     #[test]
     fn a_position_in_another_dimension_is_refused_but_the_other_parts_can_come() {
         let (record, mut hub, _seen, _mine) = held_in_a_second_hub();

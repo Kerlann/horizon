@@ -175,10 +175,10 @@ fn manifest_value(manifest: &str, key: &str) -> Option<String> {
             }
         } else if value.is_some() {
             break;
-        } else if let Some((name, contents)) = line.split_once(':') {
-            if name.eq_ignore_ascii_case(key) {
-                value = Some(contents.strip_prefix(' ').unwrap_or(contents).to_owned());
-            }
+        } else if let Some((name, contents)) = line.split_once(':')
+            && name.eq_ignore_ascii_case(key)
+        {
+            value = Some(contents.strip_prefix(' ').unwrap_or(contents).to_owned());
         }
     }
     value.filter(|value| !value.is_empty())

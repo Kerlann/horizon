@@ -81,10 +81,6 @@ pub trait MobsBackend {
     #[access(WorldOnly)]
     fn mob_can_use_portal(&self, mob: MobRef) -> Option<bool>;
     /// Side: server.
-    /// The live leash holder, refusing unresolved saved and unavailable holders.
-    #[access(WorldOnly)]
-    fn mob_leash_holder(&self, mob: MobRef) -> Option<MobLeashHolder>;
-    /// Side: server.
     /// `Mob.getTarget`. Brain-backed mobs read their attack memory; piglins
     /// and hoglins use Horizon's `ai.target` stand-in. Invalid targets, an
     /// unavailable mob or player binding, or a target without a living handle

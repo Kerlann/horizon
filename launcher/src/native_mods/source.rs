@@ -1,8 +1,12 @@
-//! Checked native source adapter inputs. Production staging is wired in U5b.
+//! Checked native source inputs and private point staging.
 use horizon_mod_package::manifest::inject::{
-    route, Access, Entry, Inject, InjectError, Kind, NoSlotReason, Place, Route, SlotKind, Target,
+    Access, Entry, Inject, InjectError, Kind, NoSlotReason, Route, Target,
 };
-use horizon_mod_package::Manifest;
+#[cfg(test)]
+use horizon_mod_package::{
+    manifest::inject::{route, Place, SlotKind},
+    Manifest,
+};
 use point_shape::{raw_able, shape};
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -14,18 +18,17 @@ struct Adapter {
     identity: String,
     kind: &'static str,
     code: TokenStream,
-    listener: syn::Ident,
 }
 
 fn lower(
     entry: Entry<'_>,
-    places: &[Place],
+    decision: Route,
     signature: &syn::Signature,
-    receiver: Option<&syn::Type>,
+    receiver: Option<(&syn::Type, &syn::Generics)>,
 ) -> Result<Option<Adapter>, InjectError> {
     let inject = entry.inject;
     let owner = entry.mod_id;
-    let reason = match route(entry, places)? {
+    let reason = match decision {
         Route::Slot(_) => return Ok(None),
         Route::Source(reason) => reason,
     };
@@ -47,10 +50,16 @@ fn lower(
             ))
         }
     };
-    if !raw_able(signature, None) {
+    if !raw_able(signature, receiver.map(|(_, generics)| generics)) {
         return Err(invalid(
             "at",
             "source listeners require a non-generic signature",
+        ));
+    }
+    if !point_shape::eligible(&[], signature) {
+        return Err(invalid(
+            "at",
+            "source listeners require a plain, safe, synchronous Rust signature",
         ));
     }
     // Length-prefixed UTF-8, not another signature hasher. Encoding every byte also keeps
@@ -67,20 +76,103 @@ fn lower(
     }
     let point = shape(quote!(raw, name = #identity), signature)
         .map_err(|_| invalid("at", "the source signature cannot form a raw record"))?;
-    let items = point.raw_items(signature, receiver, None);
-    let listener = if inject.kind == Kind::Head {
-        point.raw_listener()
-    } else {
-        point.raw_return_listener()
-    };
+    let items = point.raw_items(
+        signature,
+        receiver.map(|(ty, _)| ty),
+        receiver.map(|(_, generics)| generics),
+    );
     Ok(Some(Adapter {
         inject: inject.clone(),
         reason,
         identity,
         kind,
         code: items,
-        listener,
     }))
+}
+
+pub(super) fn stage(
+    root: &std::path::Path,
+    catalog_dir: &std::path::Path,
+    mods: &[super::Bundle],
+) -> Result<(), String> {
+    use horizon_mod_api_gen::points::source::{self, Point};
+    use syn::parse::Parser;
+    let catalog = super::internals::Catalog::read(catalog_dir)?;
+    let mut points = std::collections::BTreeMap::new();
+    let mut bundles = mods.iter().collect::<Vec<_>>();
+    bundles.sort_by_key(|bundle| &bundle.manifest.id);
+    for bundle in bundles {
+        let manifest = &bundle.manifest;
+        for (inject, decision) in manifest
+            .inject
+            .iter()
+            .zip(super::slots::routes(&catalog, manifest).map_err(|error| error.to_string())?)
+        {
+            if !matches!(decision, Route::Source(_)) {
+                continue;
+            }
+            let item = catalog
+                .internals
+                .iter()
+                .find(|item| {
+                    super::internals::plain_path(&item.path)
+                        == super::internals::plain_path(&inject.at)
+                })
+                .expect("checked source target");
+            let parse = |input: syn::parse::ParseStream<'_>| -> syn::Result<_> {
+                if input.peek(syn::Token![impl]) {
+                    input.parse::<syn::Token![impl]>()?;
+                    let mut generics: syn::Generics = input.parse()?;
+                    let ty: syn::Type = input.parse()?;
+                    generics.where_clause = input.parse()?;
+                    let inner;
+                    syn::braced!(inner in input);
+                    Ok((inner.parse::<syn::Signature>()?, Some((ty, generics))))
+                } else {
+                    Ok((input.parse::<syn::Signature>()?, None))
+                }
+            };
+            let (signature, owner) = parse.parse_str(&item.signature).map_err(|_| {
+                InjectError::Invalid {
+                    id: inject.id.clone(),
+                    field: "at",
+                    fix: "source listeners require a function signature",
+                }
+                .to_string()
+            })?;
+            let adapter = lower(
+                Entry {
+                    inject,
+                    mod_id: &manifest.id,
+                    target: Target::Native,
+                    resolved_call: None,
+                },
+                decision,
+                &signature,
+                owner.as_ref().map(|(ty, generics)| (ty, generics)),
+            )
+            .map_err(|error| error.to_string())?
+            .expect("source route");
+            eprintln!(
+                "{}:{}: {} -> source (private slot, {}, {})",
+                manifest.id, adapter.inject.id, adapter.inject.at, adapter.kind, adapter.reason
+            );
+            points
+                .entry(super::internals::plain_path(&adapter.inject.at))
+                .or_insert(Point {
+                    name: adapter.identity,
+                    target: item.path.clone(),
+                    items: adapter.code.to_string(),
+                    module: String::new(),
+                    record_export: String::new(),
+                });
+        }
+    }
+    let mut points = points.into_values().collect::<Vec<_>>();
+    source::stage(root, &mut points)?;
+    std::fs::copy(root.join(source::FILE), catalog_dir.join(source::FILE))
+        .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 #[test]
@@ -121,20 +213,23 @@ fn checked_routes_and_identities_do_not_alias() {
     }
 }
 
+#[cfg(test)]
 fn declaration(owner: &str, id: &str, at: &str, kind: &str) -> Manifest {
     Manifest::parse(&format!(
         "id='{owner}'\nname='Source fixture'\nversion='0.1.0'\napi='0.2'\ncapabilities=['registries']\n[native]\ngame='26.3'\nhorizon='{}'\nmixins='{}'\n[[inject]]\nid='{id}'\nat='{at}'\nkind='{kind}'\nwith='callback'\naccess='internals'\nhash='fingerprint'\n", "0".repeat(40), "0".repeat(40)
     )).unwrap()
 }
 
+#[cfg(test)]
 fn adapt(m: &Manifest, slots: Vec<SlotKind>, sig: &str) -> Result<Option<Adapter>, InjectError> {
-    lower(
-        Entry {
-            inject: &m.inject[0],
-            target: Target::Native,
-            mod_id: &m.id,
-            resolved_call: None,
-        },
+    let entry = || Entry {
+        inject: &m.inject[0],
+        target: Target::Native,
+        mod_id: &m.id,
+        resolved_call: None,
+    };
+    let decision = route(
+        entry(),
         &[Place {
             at: m.inject[0].at.clone(),
             hash: "fingerprint".into(),
@@ -142,8 +237,12 @@ fn adapt(m: &Manifest, slots: Vec<SlotKind>, sig: &str) -> Result<Option<Adapter
             calls: vec![],
             native_only: false,
         }],
+    )?;
+    lower(
+        entry(),
+        decision,
         &syn::parse_str(sig).unwrap(),
-        Some(&syn::parse_quote!(Game)),
+        Some((&syn::parse_quote!(Game), &syn::Generics::default())),
     )
 }
 
@@ -157,7 +256,7 @@ fn source_adapter_inputs_compile_and_write_back() {
         let adapter = adapt(&declaration("one", "test", "game::target", kind), vec![], signature).unwrap().unwrap();
         assert_eq!(adapter.kind, kind.to_uppercase());
         let record = format!("__{}Raw", point_shape::camel(&adapter.identity));
-        let alias = adapter.listener;
+        let alias = format!("__{}{}Listener", point_shape::camel(&adapter.identity), if kind == "return" { "Return" } else { "" });
         let arg = if kind == "return" { "i32".into() } else { format!("{record}<'_, {fields}>") };
         let code = format!(r#"
             pub struct Game {{ bias: i32 }}
@@ -179,11 +278,75 @@ fn source_adapter_inputs_compile_and_write_back() {
 }
 
 #[test]
-fn generic_source_signatures_are_refused() {
+fn private_source_stage_exports_and_registers_priorities() {
+    use super::{api, internals::Catalog, Bundle};
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(format!("../target/source-wrapper-{}", std::process::id()));
+    let put = |path: &str, text: &str| {
+        let path = root.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    };
+    put(
+        "crates/horizon-mod-points/Cargo.toml",
+        "[package]\nname='horizon-mod-points'\n",
+    );
+    put(
+        "crates/horizon-client/src/game.rs",
+        "pub struct Game; impl Game { #[inline(always)] fn hidden(&mut self) {} }",
+    );
+    std::fs::create_dir_all(root.join("crates/horizon-mod-api-gen/slots")).unwrap();
+    let target = "horizon_client::game::Game::hidden";
+    put("catalog/points.json", r#"{"points":[],"sites":[]}"#);
+    put(
+        "catalog/internals.json",
+        &serde_json::json!([{
+            "path":target, "kind":"fn", "signature":"impl Game { fn hidden(&mut self) }",
+            "hash":"fingerprint", "cfg":"", "shape_only":false
+        }])
+        .to_string(),
+    );
+    let mut manifest = declaration("one", "high", target, "head");
+    manifest.inject[0].priority = 17;
+    let mut low = manifest.inject[0].clone();
+    low.id = "low".into();
+    low.priority = -3;
+    manifest.inject.push(low);
+    let bundle = Bundle {
+        manifest,
+        dir: root.clone(),
+        injections: vec![],
+    };
+    let catalog_dir = root.join("catalog");
+    stage(&root, &catalog_dir, std::slice::from_ref(&bundle)).unwrap();
+    let catalog = Catalog::read(&catalog_dir).unwrap();
+    assert_eq!(catalog.points.len(), 1);
+    assert!(catalog.points[0].private);
+    let facade = catalog.facade(&bundle.manifest).unwrap();
+    assert!(facade.source.contains("Raw as __HiddenRaw;"));
+    let main = api::main_rs(
+        "/* MOD_SLOTS */",
+        &[&bundle.manifest],
+        &catalog.points,
+        &catalog.sites,
+    );
+    assert_eq!(main.matches("mod_0::callback").count(), 2);
+    for registration in [".ordered(17, \"high\")", ".ordered(-3, \"low\")"] {
+        assert!(main.contains(registration), "{main}");
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn unsupported_source_signatures_are_refused() {
     for signature in [
         "fn target<T>(value: T)",
         "fn target(value: impl Copy)",
         "fn target<const N: usize>()",
+        "async fn target()",
+        "unsafe fn target()",
+        "const fn target()",
+        "extern \"C\" fn target()",
     ] {
         let manifest = declaration("one", "generic", "game::target", "head");
         assert!(matches!(

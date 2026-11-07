@@ -47,7 +47,7 @@ impl Game<'_> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(in crate::game) mod tests {
     use super::super::native_entity_refs::tests::with_game;
     use mod_api::__private::game::*;
 
@@ -64,7 +64,7 @@ mod tests {
     }
 
     /// A placed guest record.
-    fn new_guest(conn: u32, uuid: u128) -> horizon_client::lan::guest::Guest {
+    pub(in crate::game) fn new_guest(conn: u32, uuid: u128) -> horizon_client::lan::guest::Guest {
         use horizon_client::lan::{Joined, PlayerSender, guest::Guest};
         use horizon_protocol::packets::configuration::ClientInformation;
         use std::sync::{Arc, atomic::AtomicI32, mpsc};
@@ -92,7 +92,7 @@ mod tests {
     }
 
     /// Opens the game to a LAN host with one placed guest (UUID 123, conn 1).
-    fn add_guest(game: &mut Game<'_>) -> PlayerRef {
+    pub(in crate::game) fn add_guest(game: &mut Game<'_>) -> PlayerRef {
         use horizon_client::lan::{NetConfig, hub::HubConfig};
 
         let settings = super::super::lan::LanSettings {

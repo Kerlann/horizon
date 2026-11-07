@@ -201,7 +201,20 @@ impl Game<'_> {
             ("scale", floats(&t.scale)),
             ("right_rotation", floats(&t.right_rotation)),
         ]);
-        self.display_put(display, None, "transformation", tag)
+        if !self.display_put(display, None, "transformation", tag) {
+            return false;
+        }
+        let index = self
+            .others
+            .iter()
+            .position(|o| o.id == display.entity().id())
+            .unwrap();
+        self.others.update(index, |o| {
+            if o.kind == "minecraft:item_display" {
+                o.item_transformation = Some(t.into());
+            }
+        });
+        true
     }
 
     /// `Display.getBillboardConstraints`.
@@ -560,6 +573,7 @@ impl Game<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::api_values::TryIntoApi;
     use super::super::{commands::OtherEntity, native_entity_refs::tests::with_game};
     use super::*;
     use horizon_core::geometry::Vec3;
@@ -568,6 +582,7 @@ mod tests {
     fn push(game: &mut Game<'_>, id: u32, kind: &str) -> DisplayRef {
         game.options.dedicated = Some(Vec::new());
         game.others.push(OtherEntity {
+            item_transformation: None,
             id,
             kind: kind.into(),
             position: Vec3::new(1.0, 70.0, 1.0),
@@ -590,6 +605,7 @@ mod tests {
             assert_eq!(item.kind(game), Some(NativeDisplayKind::Item));
             assert_eq!(text.entity(), game.entity(21).unwrap());
             game.others.push(OtherEntity {
+                item_transformation: None,
                 id: 24,
                 kind: "minecraft:marker".into(),
                 position: Vec3::ZERO,
@@ -729,14 +745,15 @@ mod tests {
                 item.item_context(game),
                 Some(NativeItemDisplayContext::None)
             );
-            assert!(item.set_item(game, Some(sword.clone())));
+            let sword = sword.try_into_api().unwrap();
+            assert_eq!(item.set_item(game, Some(sword.clone())), Ok(true));
             assert!(item.set_item_context(game, NativeItemDisplayContext::Head));
             assert_eq!(item.item(game), Some(sword));
             assert_eq!(
                 item.item_context(game),
                 Some(NativeItemDisplayContext::Head)
             );
-            assert!(item.set_item(game, None));
+            assert_eq!(item.set_item(game, None), Ok(true));
             assert_eq!(item.item(game), None);
 
             // The wrong kind reads None and writes nothing.

@@ -3,15 +3,7 @@
 use mod_api::HostSide;
 use mod_points::HandleChatInputArgs;
 
-struct Server;
-
-impl mod_api::Host for Server {}
-
-mod_api::impl_host_areas!(Server);
-
-impl mod_api::ServerHost for Server {}
-
-mod_api::impl_server_host_areas!(Server);
+use mod_api::testing::FakeHost;
 
 fn native_tail<const T: char>(_: HostSide<'_>, args: &mut HandleChatInputArgs<'_>) {
     args.message = format!("{}{T}", args.message).into();
@@ -53,6 +45,6 @@ fn native_and_wasm_listeners_at_a_point_run_in_the_installed_order() {
     .unwrap();
     mod_points::__private::seal();
     let mut args = HandleChatInputArgs::__new("x");
-    mod_points::dispatch::handle_chat_input(HostSide::Server(&mut Server), &mut args);
+    mod_points::dispatch::handle_chat_input(HostSide::Server(&mut FakeHost::new()), &mut args);
     assert_eq!(args.message, "xVNWM");
 }

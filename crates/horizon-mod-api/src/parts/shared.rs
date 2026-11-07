@@ -145,9 +145,12 @@ pub(crate) struct Installed {
     pub(crate) effects: OnceLock<horizon_mod_runtime::registry_keys::Effects>,
     pub(crate) resolved_block_entity_types: OnceLock<horizon_mod_runtime::registry_keys::Names>,
     pub(crate) fluids: OnceLock<horizon_mod_runtime::registry_keys::Names>,
+    pub(crate) resolved_items: OnceLock<horizon_mod_runtime::registry_keys::Names>,
     /// The ticket controllers the mods registered; a [`TicketController`]'s slot indexes it.
     pub(crate) controllers: Vec<ControllerInfo>,
     pub(crate) structure_types: Vec<crate::structure_type::StructureTypeInfo>,
+    pub(crate) dimensions: Vec<crate::dimension::DimensionInfo>,
+    pub(crate) chunk_generators: Vec<crate::chunk_generator::ChunkGeneratorInfo>,
     pub(crate) hook_bits: Vec<bool>,
     pub(crate) tag_hook_bits: Vec<bool>,
 }
@@ -522,6 +525,8 @@ pub struct PartRegistrar {
     pub(crate) effects: OnceLock<horizon_mod_runtime::registry_keys::Effects>,
     pub(crate) controllers: Vec<ControllerInfo>,
     pub(crate) structure_types: Vec<crate::structure_type::StructureTypeInfo>,
+    pub(crate) dimensions: Vec<crate::dimension::DimensionInfo>,
+    pub(crate) chunk_generators: Vec<crate::chunk_generator::ChunkGeneratorInfo>,
     pub(crate) refused: Vec<String>,
 }
 
@@ -541,6 +546,8 @@ impl PartRegistrar {
             effects: OnceLock::new(),
             controllers: Vec::new(),
             structure_types: Vec::new(),
+            dimensions: Vec::new(),
+            chunk_generators: Vec::new(),
             refused: Vec::new(),
         }
     }
@@ -633,6 +640,7 @@ pub(crate) fn register_all(mods: &[ModEntry]) -> PartRegistrar {
         hooks.register(&mut registrar, &context);
     }
     registrar.expand_block_entity_parts();
+    registrar.refuse_unknown_dimension_generators();
     registrar
 }
 
@@ -689,8 +697,11 @@ pub(crate) fn install_registrar(mut registrar: PartRegistrar) -> Result<(), Vec<
             .into_inner(),
         effects: registrar.effects,
         fluids: OnceLock::new(),
+        resolved_items: OnceLock::new(),
         controllers: registrar.controllers,
         structure_types: registrar.structure_types,
+        dimensions: registrar.dimensions,
+        chunk_generators: registrar.chunk_generators,
         hook_bits: Vec::new(),
         tag_hook_bits: vec![false; HOOK_COUNT],
     };
@@ -990,30 +1001,6 @@ pub mod tests {
     }
 
     #[cfg(test)]
-    /// A test host's whole state, kept on each transaction it opens and put back on an abort, as
-    /// the game's journal keeps its storages.
-    pub(crate) trait Journal: Clone {
-        fn kept(&mut self) -> &mut Vec<Self>;
-    }
-    #[cfg(test)]
-    pub(crate) fn open<J: Journal>(host: &mut J) {
-        let mut now = host.clone();
-        now.kept().clear();
-        host.kept().push(now);
-    }
-    #[cfg(test)]
-    pub(crate) fn close<J: Journal>(host: &mut J, commit: bool) {
-        let Some(was) = host.kept().pop() else {
-            return;
-        };
-        if !commit {
-            let kept = std::mem::take(host.kept());
-            *host = was;
-            *host.kept() = kept;
-        }
-    }
-
-    #[cfg(test)]
     /// State 1 is a `test:gauge`, state 2 a `test:other`.
     pub(crate) struct Level;
     #[cfg(test)]
@@ -1077,34 +1064,6 @@ pub mod tests {
         mark_game_thread();
         mods
     }
-
-    #[cfg(test)]
-    /// Block entities of one type, or vanilla ones (none).
-    pub(crate) struct TypeOf(pub(crate) Option<&'static str>);
-    #[cfg(test)]
-    impl mod_api::prelude::BlockEntitiesBackend for TypeOf {
-        fn block_entity_kind(&self, _: BlockEntityRef) -> Option<BlockEntityTypeKey> {
-            self.0.map(type_key)
-        }
-    }
-    #[cfg(test)]
-    impl Backend for TypeOf {}
-    #[cfg(test)]
-    mod_api::impl_backend_areas!(TypeOf, except(block_entities));
-    #[cfg(test)]
-    impl mod_api::prelude::BlockEntitiesHost for TypeOf {
-        fn block_entity(&self, level: LevelRef, position: [i32; 3]) -> Option<BlockEntityRef> {
-            Some(crate::__private::game::block_entity_ref(level, position, 1))
-        }
-    }
-    #[cfg(test)]
-    impl Host for TypeOf {
-        fn backend(&self) -> Option<BackendRef<'_>> {
-            Some(BackendRef::of(self))
-        }
-    }
-    #[cfg(test)]
-    mod_api::impl_host_areas!(TypeOf, except(block_entities));
 
     /// How a mod tank misanswers: an extract takes and answers 100 mB more than asked
     /// (`GivesMore`), or an insert answers 100 mB more than went in (`TakesMore`).

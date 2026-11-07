@@ -75,10 +75,10 @@ pub fn resource_tags<T: Clone + Ord>(
     let mut tags = TagDefinitions::default();
     for (id, versions) in files {
         for bytes in versions {
-            if let Ok(value) = serde_json::from_slice::<Value>(&bytes) {
-                if !overlay.conditions.allows(&value) {
-                    continue;
-                }
+            if let Ok(value) = serde_json::from_slice::<Value>(&bytes)
+                && !overlay.conditions.allows(&value)
+            {
+                continue;
             }
             let result = std::str::from_utf8(&bytes)
                 .map_err(|e| e.to_string())
