@@ -92,6 +92,11 @@ libmimalloc-sys = { path = "third_party/libmimalloc-sys" }
 # example and test binary hundreds of megabytes and slow to link.
 [profile.dev]
 debug = "line-tables-only"
+# A/B arm: only the crate every PR changes builds incrementally (sccache cannot cache it anyway).
+incremental = false
+
+[profile.dev.package.horizon-client]
+incremental = true
 
 # The 512 MiB jar-boundary test still hashes every byte; run the hash kernel optimized.
 # Likewise, the API generator repeatedly parses the game's sources with syn.
