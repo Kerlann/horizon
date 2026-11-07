@@ -561,6 +561,8 @@ impl Loading {
     fn menu_option_events(&mut self, events: Vec<Event>) {
         for event in events {
             match event {
+                // No world debug list exists before Game construction.
+                Event::DebugEntriesChanged => {}
                 Event::Changed => {
                     self.save_menu_settings();
                     self.apply_menu_settings();

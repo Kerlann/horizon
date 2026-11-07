@@ -284,15 +284,6 @@ pub fn mod_lines(
     groups
 }
 
-/// `getCurrentlyEnabledVersion`: differs from an earlier one once the statuses were set or the
-/// overlay or reduced debug info changed, each a `rebuildCurrentList` in vanilla.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EnabledVersion {
-    statuses: u64,
-    overlay: bool,
-    reduced: bool,
-}
-
 /// `DebugScreenEntryList`: every entry's status (by full identifier, as the
 /// file keeps them) and the profile they came from if unchanged. Whether the
 /// F3 overlay is open (`isOverlayVisible`) is the game's `debug`.
@@ -301,7 +292,7 @@ pub struct DebugEntries {
     statuses: BTreeMap<String, Status>,
     profile: Option<Profile>,
     file: Option<PathBuf>,
-    /// How many times the statuses were set.
+    /// Monotonic `rebuildCurrentList` revision, including unchanged selections.
     version: u64,
 }
 
@@ -419,7 +410,7 @@ impl DebugEntries {
     /// `loadProfile` then `save` (the screen's profile buttons).
     pub fn load_profile(&mut self, profile: Profile) {
         self.reset_to_profile(profile);
-        self.version += 1;
+        self.invalidate();
         self.save();
     }
     pub fn is_using_profile(&self, profile: Profile) -> bool {
@@ -438,7 +429,7 @@ impl DebugEntries {
     pub fn set_status(&mut self, path: &str, status: Status) {
         self.profile = None;
         self.statuses.insert(identifier(path).into_owned(), status);
-        self.version += 1;
+        self.invalidate();
         self.save();
     }
     /// `toggleStatus` (F3+B, F3+G) with the overlay open or not: whether the
@@ -463,13 +454,13 @@ impl DebugEntries {
         };
         shown && entry(path).is_some_and(|e| e.reduced || !reduced)
     }
-    /// `getCurrentlyEnabledVersion` with the `overlay` and `reduced` debug info of now.
-    pub fn enabled_version(&self, overlay: bool, reduced: bool) -> EnabledVersion {
-        EnabledVersion {
-            statuses: self.version,
-            overlay,
-            reduced,
-        }
+    /// `DebugScreenEntryList.rebuildCurrentList`: invalidate even if the enabled set is unchanged.
+    pub fn invalidate(&mut self) {
+        self.version += 1;
+    }
+    /// `getCurrentlyEnabledVersion`: every rebuild, not a fingerprint of the final selection.
+    pub fn enabled_version(&self) -> u64 {
+        self.version
     }
     /// `DebugRenderer.refreshRendererList`'s new list: the ids of the `renderers` mods pushed
     /// whose renderer entry is on, in their order. An id with no entry a mod declared as a
@@ -741,19 +732,21 @@ mod tests {
     #[test]
     fn the_enabled_version_changes_with_every_rebuild_of_the_list() {
         let mut e = DebugEntries::default();
-        let first = e.enabled_version(false, false);
+        let first = e.enabled_version();
         assert_eq!(e.status("mymod:pipes"), Status::Never);
-        assert_eq!(e.enabled_version(false, false), first);
+        assert_eq!(e.enabled_version(), first);
 
-        assert_ne!(e.enabled_version(true, false), first);
-        assert_ne!(e.enabled_version(false, true), first);
+        e.invalidate();
+        assert_eq!(e.enabled_version(), first + 1);
+        e.invalidate();
+        assert_eq!(e.enabled_version(), first + 2);
 
         e.set_status("mymod:pipes", Status::AlwaysOn);
-        let set = e.enabled_version(false, false);
+        let set = e.enabled_version();
         assert_ne!(set, first);
 
         e.load_profile(Profile::Performance);
-        assert_ne!(e.enabled_version(false, false), set);
+        assert_ne!(e.enabled_version(), set);
     }
 
     #[test]

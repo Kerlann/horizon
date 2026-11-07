@@ -2759,7 +2759,7 @@ struct Game<'a> {
     /// `DebugRenderer.renderers`: the ids `debug_renderer_draw` is asked about.
     debug_renderers: Vec<String>,
     /// `DebugRenderer.lastDebugEntriesVersion`: none before the first view of a world.
-    debug_renderers_version: Option<horizon_client::debug_entries::EnabledVersion>,
+    debug_renderers_version: Option<u64>,
     /// The mod block entities' view distances, asked of the parts once (`native_block_entity_draw`).
     mod_view_distances: std::cell::OnceCell<native_block_entity_draw::ViewDistances>,
     /// `item_level` for one frame, game time, day time and dimension.

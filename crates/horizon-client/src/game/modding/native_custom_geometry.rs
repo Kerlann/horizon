@@ -1,7 +1,7 @@
 //! The typed submission surface; renderer storage is never exposed to mods.
 use super::Game;
-use glam::Mat4;
 use super::mods;
+use glam::Mat4;
 use horizon_client::world_geometry::WorldGeometry;
 use mod_api::{DrawError, WorldDrawUsage, WorldLine, WorldQuad};
 
@@ -17,8 +17,7 @@ impl Game<'_> {
     }
     /// `DebugRenderer.emitGizmos`'s first half: a selection the list has not seen refreshes it.
     fn follow_debug_selection(&mut self) {
-        let reduced = self.reduced_debug_info();
-        let version = self.debug_entries.enabled_version(self.debug, reduced);
+        let version = self.debug_entries.enabled_version();
         if self.debug_renderers_version != Some(version) {
             self.debug_renderers_version = Some(version);
             self.refresh_debug_renderers();

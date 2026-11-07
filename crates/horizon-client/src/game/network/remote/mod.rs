@@ -3496,6 +3496,8 @@ impl Game<'_> {
                     r.do_limited_crafting = p.limited_crafting;
                 }
                 self.refresh_debug_renderers();
+                // LocalPlayer.setReducedDebugInfo always rebuilds, also on a second login.
+                self.debug_entries.invalidate();
                 self.streaming.radius =
                     self.settings.render_distance.min(p.chunk_radius + 1).max(2);
                 // handleLogin: startWaitingForNewLevel(.., Reason.OTHER).
@@ -3513,6 +3515,8 @@ impl Game<'_> {
                 }
             }
             C::Respawn(p) => {
+                // The new LocalPlayer copies reduced debug info through its setter.
+                self.debug_entries.invalidate();
                 let old_player = self.remote.as_ref().map(|r| (r.entity_id, r.profile));
                 if let Some(r) = self.remote.as_ref() {
                     self.audio.remove_sound_entity(r.entity_id as u32);
@@ -4402,6 +4406,7 @@ impl Game<'_> {
                     && let Some(r) = self.remote.as_mut().filter(|r| r.entity_id == p.id)
                 {
                     r.reduced_debug_info = p.event == 22;
+                    self.debug_entries.invalidate();
                 }
                 // Ravager.handleEntityEvent 69: the roar's puff and push.
                 if p.event == 69 {

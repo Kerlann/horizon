@@ -131,10 +131,10 @@ fn the_renderer_list_refreshes_with_the_selection_and_leaves_nothing_behind() {
         game.debug_entries.set_status(SHOWN, Status::InOverlay);
         assert_eq!(frame(game, &mut draw), none);
         assert_eq!(refreshes(), 1);
-        game.debug = true;
+        toggle_overlay(game);
         assert_eq!(frame(game, &mut draw), shown);
         assert_eq!(refreshes(), 1);
-        game.debug = false;
+        toggle_overlay(game);
         assert_eq!(frame(game, &mut draw), none);
         assert_eq!(refreshes(), 1);
 
@@ -142,10 +142,18 @@ fn the_renderer_list_refreshes_with_the_selection_and_leaves_nothing_behind() {
         game.debug_entries.set_status(SHOWN, Status::AlwaysOn);
         assert_eq!(frame(game, &mut draw), shown);
         assert_eq!(refreshes(), 1);
-        game.settings.reduced_debug_info = true;
+        game.options_control(
+            &["options-set", "reducedDebugInfo", "true"],
+            "options-set reducedDebugInfo true",
+        )
+        .unwrap();
         assert_eq!(frame(game, &mut draw), none);
         assert_eq!(refreshes(), 1);
-        game.settings.reduced_debug_info = false;
+        game.options_control(
+            &["options-set", "reducedDebugInfo", "false"],
+            "options-set reducedDebugInfo false",
+        )
+        .unwrap();
         assert_eq!(frame(game, &mut draw), shown);
         assert_eq!(refreshes(), 1);
 
@@ -188,32 +196,143 @@ fn the_renderer_list_refreshes_with_the_selection_and_leaves_nothing_behind() {
         // `handleLogin` refreshes the list, with no change of selection.
         let (pipe, _server) = horizon_protocol::connection::Pipe::pair();
         game.connect_local(pipe, "Steve").unwrap();
-        game.handle_packet(C::Login(play::Login {
-            player_id: 7,
-            hardcore: false,
-            levels: vec!["minecraft:overworld".into()],
-            max_players: 20,
-            chunk_radius: 8,
-            simulation_distance: 8,
-            reduced_debug_info: false,
-            show_death_screen: true,
-            limited_crafting: false,
-            spawn: play::SpawnInfo {
-                dimension_type: 0,
-                dimension: "minecraft:overworld".into(),
-                seed: 1,
-                game_type: 0,
-                previous_game_type: None,
-                debug: false,
-                flat: false,
-                last_death: None,
-                portal_cooldown: 0,
-                sea_level: 63,
-            },
-            online_mode: false,
-            enforces_secure_chat: false,
+        game.handle_packet(login()).unwrap();
+        assert_eq!(refreshes(), 1);
+        game.fill_world_geometry(false, CAMERA, Mat4::IDENTITY, 0.0, &mut draw);
+        ASKED.lock().unwrap().clear();
+        assert_eq!(refreshes(), 1, "first world view after login");
+    });
+}
+
+fn login() -> C {
+    C::Login(play::Login {
+        player_id: 7,
+        hardcore: false,
+        levels: vec!["minecraft:overworld".into()],
+        max_players: 20,
+        chunk_radius: 8,
+        simulation_distance: 8,
+        reduced_debug_info: false,
+        show_death_screen: true,
+        limited_crafting: false,
+        spawn: play::SpawnInfo {
+            dimension_type: 0,
+            dimension: "minecraft:overworld".into(),
+            seed: 1,
+            game_type: 0,
+            previous_game_type: None,
+            debug: false,
+            flat: false,
+            last_death: None,
+            portal_cooldown: 0,
+            sea_level: 63,
+        },
+        online_mode: false,
+        enforces_secure_chat: false,
+    })
+}
+
+fn toggle_overlay(game: &mut super::Game<'_>) {
+    use horizon_client::debug_keys::KeyAction;
+    use winit::keyboard::KeyCode;
+    game.debug_key(KeyCode::F3, KeyAction::Press);
+    game.debug_key(KeyCode::F3, KeyAction::Release);
+}
+
+/// Prime a real world's view, change only the mod's renderer state, then invalidate through
+/// the real input/packet path. The next view must collect the new list exactly once.
+fn invalidation_refreshes(expected: &[&str], change: impl FnOnce(&mut super::Game<'_>)) {
+    with_client_game(|game| {
+        mod_api::__private::install(vec![ModEntry::new("marker", Box::new(Marker))].into());
+        mods::register_debug_entries(ExecutionRole::Client);
+        game.debug_entries = DebugEntries::default();
+        game.title = None;
+        let (pipe, _server) = horizon_protocol::connection::Pipe::pair();
+        game.connect_local(pipe, "Steve").unwrap();
+        game.handle_packet(login()).unwrap();
+        game.debug_entries.set_status(SHOWN, Status::AlwaysOn);
+        game.debug_entries.set_status(OTHER, Status::AlwaysOn);
+        let mut draw = WorldGeometry::default();
+        push(&[SHOWN]);
+        game.fill_world_geometry(false, CAMERA, Mat4::IDENTITY, 0.0, &mut draw);
+        ASKED.lock().unwrap().clear();
+        refreshes();
+        push(&[OTHER]);
+        change(game);
+        game.fill_world_geometry(false, CAMERA, Mat4::IDENTITY, 0.0, &mut draw);
+        assert_eq!(
+            (refreshes(), std::mem::take(&mut *ASKED.lock().unwrap())),
+            (1, expected.iter().map(|id| (*id).to_owned()).collect()),
+            "next world view must replace the stale renderer list"
+        );
+        game.fill_world_geometry(false, CAMERA, Mat4::IDENTITY, 0.0, &mut draw);
+        ASKED.lock().unwrap().clear();
+        assert_eq!(refreshes(), 0, "no work on an unchanged frame");
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn debug_renderer_respawn_invalidates_unchanged_selection() {
+    invalidation_refreshes(&[OTHER], |game| {
+        let C::Login(login) = login() else {
+            unreachable!()
+        };
+        game.handle_packet(C::Respawn(play::Respawn {
+            spawn: login.spawn,
+            keep: 3,
         }))
         .unwrap();
-        assert_eq!(refreshes(), 1);
+    });
+}
+
+fn same_value_event(event: i8, expected: &[&str]) {
+    invalidation_refreshes(expected, |game| {
+        push(&[SHOWN]);
+        game.handle_packet(C::EntityEvent(play::EntityEvent { id: 7, event }))
+            .unwrap();
+        let mut draw = WorldGeometry::default();
+        game.fill_world_geometry(false, CAMERA, Mat4::IDENTITY, 0.0, &mut draw);
+        ASKED.lock().unwrap().clear();
+        refreshes();
+        push(&[OTHER]);
+        game.handle_packet(C::EntityEvent(play::EntityEvent { id: 7, event }))
+            .unwrap();
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn debug_renderer_same_value_reduced_info_on_invalidates() {
+    same_value_event(22, &[]);
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn debug_renderer_same_value_reduced_info_off_invalidates() {
+    same_value_event(23, &[OTHER]);
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn debug_renderer_overlay_round_trip_invalidates() {
+    invalidation_refreshes(&[OTHER], |game| {
+        let before = game.debug;
+        toggle_overlay(game);
+        assert_ne!(game.debug, before);
+        toggle_overlay(game);
+        assert_eq!(game.debug, before);
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn debug_renderer_second_login_invalidates_first_world_view() {
+    invalidation_refreshes(&[OTHER], |game| {
+        push(&[SHOWN]);
+        game.handle_packet(login()).unwrap();
+        assert_eq!(refreshes(), 1, "immediate handleLogin refresh");
+        // A logging-in listener can update its state after the immediate refresh.
+        push(&[OTHER]);
     });
 }
