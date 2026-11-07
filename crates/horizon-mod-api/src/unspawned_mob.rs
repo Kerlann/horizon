@@ -19,6 +19,12 @@ pub enum UnspawnedMobError {
     Invalid,
 }
 
+impl From<crate::StackWriteError> for UnspawnedMobError {
+    fn from(_: crate::StackWriteError) -> Self {
+        Self::Invalid
+    }
+}
+
 impl crate::NoBackend for UnspawnedMobError {
     fn no_backend() -> Self {
         Self::Expired
