@@ -628,6 +628,7 @@ mod tests {
     }
 
     fn snapshot(list: &JoinList<Entity>) -> Vec<(u32, JoinSeq)> {
+        assert_slots(list);
         list.iter().map(|e| (e.value, e.join)).collect()
     }
 
