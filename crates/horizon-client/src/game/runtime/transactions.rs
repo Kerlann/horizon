@@ -160,6 +160,33 @@ impl Game<'_> {
         let _ = seal;
         self.close_storage_transaction(commit);
     }
+    /// Commit enrolled storage writes only with a callback's admitted outputs. Other host
+    /// effects are outside this journal. Client callbacks have no server storage to enroll.
+    pub(in crate::game) fn with_storage_journal(
+        &mut self,
+        edit: impl FnOnce(&mut Self) -> bool,
+    ) -> bool {
+        if !self.is_logical_server() {
+            return edit(self);
+        }
+        struct Journal<'a, 'g> {
+            game: &'a mut Game<'g>,
+            accepted: bool,
+        }
+        impl Drop for Journal<'_, '_> {
+            fn drop(&mut self) {
+                self.game.close_storage_transaction(self.accepted);
+            }
+        }
+        self.open_storage_transaction();
+        let mut journal = Journal {
+            game: self,
+            accepted: false,
+        };
+        journal.accepted = edit(&mut *journal.game);
+        journal.accepted
+    }
+
     fn open_storage_transaction(&mut self) {
         self.transactions.push(Level {
             dimension: Some(self.dim),

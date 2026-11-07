@@ -427,6 +427,10 @@ pub(super) fn emit(
                     hook_id,
                     scoped.is_some(),
                     &surface_calls,
+                    receiver == "Game"
+                        && host.as_ref().is_some_and(|(_, param)| {
+                            matches!(param.ty.as_str(), "&mut dyn ServerHost" | "HostSide")
+                        }),
                 )
             } else {
                 None
@@ -435,7 +439,9 @@ pub(super) fn emit(
                 let passed = host
                     .as_ref()
                     .map(|(_, param)| {
-                        if param.call == "&*self" && receiver_mut == Some(false) {
+                        if crossing.transactional {
+                            param.call.replace("self", "__game")
+                        } else if param.call == "&*self" && receiver_mut == Some(false) {
                             "self".to_owned()
                         } else {
                             param.call.to_owned()
@@ -450,10 +456,17 @@ pub(super) fn emit(
                     }))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!(
-                    "{} mod_api::{call}({passed}); {}",
-                    crossing.before, crossing.after
-                )
+                if crossing.transactional {
+                    format!(
+                        "{} self.with_storage_journal(|__game| {{ mod_api::{call}({passed}); {} true }});",
+                        crossing.before, crossing.after
+                    )
+                } else {
+                    format!(
+                        "{} mod_api::{call}({passed}); {}",
+                        crossing.before, crossing.after
+                    )
+                }
             } else {
                 format!("mod_api::{call}({passed});")
             };
@@ -632,6 +645,7 @@ pub(super) fn emit(
 
 /// A carrier's fields, each type with its elided lifetimes named `'a`, and its generics.
 struct StackCrossing {
+    transactional: bool,
     before: String,
     arguments: Vec<String>,
     after: String,
@@ -645,6 +659,7 @@ fn stack_crossing(
     hook_id: &str,
     scoped: bool,
     surfaces: &std::collections::HashMap<&str, String>,
+    journal_storage: bool,
 ) -> Option<StackCrossing> {
     fn contains_stack(ty: &Type) -> bool {
         use syn::visit::Visit;
@@ -675,9 +690,17 @@ fn stack_crossing(
     let mut before = format!(
         "if !mod_api::__private::{guard}(mod_api::HookId::{hook_id}) {{ return; }} use crate::game::api_values::TryIntoApi; "
     );
-    if parameters.iter().any(|(_, ty)| {
+    let writes_stack = parameters.iter().any(|(_, ty)| {
         contains_stack(ty) && matches!(ty, Type::Reference(r) if r.mutability.is_some())
-    }) {
+    });
+    let transactional = journal_storage && writes_stack;
+    let receiver = if transactional { "__game" } else { "self" };
+    let refusal = if transactional {
+        "return false"
+    } else {
+        "return"
+    };
+    if writes_stack {
         before.push_str("use crate::game::api_values::{TryIntoEngine, ItemBoundary}; ");
     }
     let mut arguments = Vec::new();
@@ -713,8 +736,8 @@ fn stack_crossing(
             let converted = format!("__engine_{name}");
             let value = if stack {
                 let result = format!("__checked_{name}");
-                validations.push_str(&format!("let {result}: Result<_, mod_api::StackWriteError> = self.boundary_items().ok_or(mod_api::StackWriteError::Unavailable).and_then(|items| {local}.try_into_engine(items)); "));
-                format!("match {result} {{ Ok(value) => value, Err(_) => return }}")
+                validations.push_str(&format!("let {result}: Result<_, mod_api::StackWriteError> = {receiver}.boundary_items().ok_or(mod_api::StackWriteError::Unavailable).and_then(|items| {local}.try_into_engine(items)); "));
+                format!("match {result} {{ Ok(value) => value, Err(_) => {refusal} }}")
             } else {
                 local
             };
@@ -723,6 +746,7 @@ fn stack_crossing(
         }
     }
     Some(StackCrossing {
+        transactional,
         before,
         arguments,
         after: format!("{validations}{writes}"),
@@ -738,7 +762,7 @@ mod stack_crossing_tests {
         let power: Type = syn::parse_quote!(&mut u32);
         let args = [("stack".to_owned(), &stack), ("power".to_owned(), &power)];
         let crossing =
-            stack_crossing(&args, None, "ItemDamage", true, &Default::default()).unwrap();
+            stack_crossing(&args, None, "ItemDamage", true, &Default::default(), false).unwrap();
         assert!(
             crossing
                 .before
@@ -769,7 +793,8 @@ mod stack_crossing_tests {
             ("stack".to_owned(), &stack),
             ("claimed".to_owned(), &claimed),
         ];
-        let crossing = stack_crossing(&args, None, "UseItem", true, &Default::default()).unwrap();
+        let crossing =
+            stack_crossing(&args, None, "UseItem", true, &Default::default(), false).unwrap();
         let body = format!(
             "{} mod_api::dispatch_use_item(self, {}); {}",
             crossing.before,
@@ -855,6 +880,40 @@ fn main() {
     }
 
     #[test]
+    fn stack_journals_follow_host_and_mutability_without_deferring_level_hosts() {
+        for (receiver, side, read_host, mutable_stack, journal) in [
+            ("Game", Side::Server, false, true, true),
+            ("Game", Side::Both, false, true, true),
+            ("Game", Side::Server, true, true, false),
+            ("Game", Side::Server, false, false, false),
+            ("GameLevel", Side::Server, false, true, false),
+        ] {
+            let mut hook = Hook::sample(
+                &format!("horizon_client::game::native_hooks::{receiver}<'_>::native_test"),
+                side,
+            );
+            if read_host {
+                hook.host = Some(HostAccess::Read);
+            }
+            let method = syn::parse_str(&format!(
+                "fn native_test(&mut self, stack: &{}ItemStack) {{ self.fire_test(stack); }}",
+                if mutable_stack { "mut " } else { "" }
+            ))
+            .unwrap();
+            let fire = emit(Path::new("."), &[hook], &[method], &[]).unwrap().fire;
+            assert_eq!(fire.contains("with_storage_journal"), journal, "{fire}");
+            if journal {
+                assert!(
+                    fire.find("listened").unwrap() < fire.find("with_storage_journal").unwrap()
+                );
+                assert!(fire.contains("__game.boundary_items()"));
+                assert!(fire.contains("Err(_) => return false"));
+            }
+            syn::parse_file(&fire).unwrap();
+        }
+    }
+
+    #[test]
     fn qualified_names_do_not_select_a_root_record_crossing() {
         for ty in [
             syn::parse_quote!(&foreign::ItemStack),
@@ -867,7 +926,8 @@ fn main() {
                     None,
                     "AnyName",
                     false,
-                    &Default::default()
+                    &Default::default(),
+                    false
                 )
                 .is_none()
             );
@@ -879,7 +939,8 @@ fn main() {
                 None,
                 "AnyName",
                 false,
-                &Default::default()
+                &Default::default(),
+                false
             )
             .is_some()
         );
@@ -893,7 +954,8 @@ fn main() {
                 None,
                 "Plain",
                 false,
-                &Default::default()
+                &Default::default(),
+                false
             )
             .is_none()
         );
