@@ -1,6 +1,16 @@
 //! Production-path storage lifecycle and lifted-pass test support.
 use crate::game::Game;
-use std::cell::Cell;
+use horizon_client::join_seq::JoinList;
+use horizon_mod_runtime::attachments::{
+    AttachmentRegistration, AttachmentType, Attachments, HasAttachmentLifetime, Holder,
+    index::AttachmentIndex,
+};
+use mod_api::{EntityRef, NativeWorldEpoch};
+use std::{
+    cell::Cell,
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 type Spawn = fn(&mut Game<'_>);
 thread_local! {
@@ -38,6 +48,60 @@ struct ScratchDirectory(std::path::PathBuf);
 impl Drop for ScratchDirectory {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+static LIFECYCLE_VALUE: AttachmentType<i32> = AttachmentType {
+    namespace: "test",
+    name: "lifecycle_owner",
+    default: || 0,
+    codec: None,
+    copy_on_death: false,
+    sync: false,
+};
+
+/// Registration memory shared by slot-bearing adapters to the lifecycle walk.
+#[derive(Default)]
+pub(in crate::game) struct SlotIdentities {
+    values: Attachments,
+    index: Arc<Mutex<AttachmentIndex<EntityRef>>>,
+    registrations: HashMap<u32, AttachmentRegistration>,
+}
+
+impl SlotIdentities {
+    pub fn observe<T: HasAttachmentLifetime, const DIRECT: bool>(
+        &mut self,
+        owners: &mut JoinList<T, DIRECT>,
+        epoch: NativeWorldEpoch,
+        id: fn(&T) -> u32,
+    ) {
+        use std::collections::hash_map::Entry;
+        owners.for_each_mut(|owner| {
+            let id = id(owner);
+            match self.registrations.entry(id) {
+                Entry::Occupied(original) => {
+                    let current = owner
+                        .attachment_lifetime()
+                        .registration()
+                        .expect("known owner lost its registration");
+                    assert!(
+                        original.get().same_registration(&current),
+                        "owner {id} changed registration"
+                    );
+                }
+                Entry::Vacant(entry) => {
+                    LIFECYCLE_VALUE
+                        .set(&mut self.values, Holder::Entity(id), id as i32)
+                        .unwrap();
+                    owner.attachment_lifetime().bind(
+                        &mut self.values,
+                        &self.index,
+                        EntityRef::new(epoch, id),
+                    );
+                    entry.insert(owner.attachment_lifetime().registration().unwrap());
+                }
+            }
+        });
     }
 }
 
