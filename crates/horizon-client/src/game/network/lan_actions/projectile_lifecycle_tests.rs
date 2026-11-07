@@ -28,7 +28,10 @@ fn arrow(id: u32, at: [f64; 3]) -> Projectile {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn projectile_lifecycle_commands_unload_park_and_remote() {
-    use crate::game::entity::taken_pass_tests::{LifecycleFixture, RemoteLifecycle};
+    use crate::game::entity::taken_pass_tests::{
+        LifecycleFixture, RemoteLifecycle, SlotIdentities,
+    };
+    let mut identities = SlotIdentities::default();
     LifecycleFixture {
         seed: |game, entries| {
             game.creatures.projectiles.clear();
@@ -44,7 +47,13 @@ fn projectile_lifecycle_commands_unload_park_and_remote() {
             apply: |game, remove, _| game.remove_remote_projectile(remove),
         }),
     }
-    .run();
+    .run_with(|game| {
+        identities.observe(
+            &mut game.creatures.projectiles,
+            game.native_lifecycle.epoch().unwrap(),
+            |p| p.id,
+        );
+    });
 }
 
 static VALUE: AttachmentType<i32> = AttachmentType {
