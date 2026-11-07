@@ -477,6 +477,48 @@ mod tests {
 
     #[test]
     #[ignore = "needs prepared resources"]
+    fn generated_text_crossings_refuse_too_deep_before_boss_bar_writes() {
+        with_game(|game| {
+            let bar = mod_api::prelude::BossBarsServerHost::create_boss_bar(
+                game,
+                "mod:kept",
+                mod_api::Text::literal("Kept"),
+            )
+            .unwrap()
+            .unwrap();
+            let before = game.boss_bars();
+            let name = bar.name(game).unwrap().unwrap();
+            let too_deep = || {
+                let mut text = mod_api::Text::literal("leaf");
+                for _ in 1..513 {
+                    text = mod_api::Text::literal("parent").append(text);
+                }
+                text
+            };
+
+            assert!(matches!(
+                mod_api::prelude::BossBarsServerHost::create_boss_bar(
+                    game,
+                    "mod:refused",
+                    too_deep(),
+                ),
+                Err(mod_api::text::TextFormError::TooDeep)
+            ));
+            assert_eq!(game.boss_bars(), before);
+            assert!(game.boss_bar("mod:refused").is_none());
+            assert_eq!(bar.name(game).unwrap().unwrap(), name);
+
+            assert!(matches!(
+                bar.set_name(game, too_deep()),
+                Err(mod_api::text::TextFormError::TooDeep)
+            ));
+            assert_eq!(game.boss_bars(), before);
+            assert_eq!(bar.name(game).unwrap().unwrap(), name);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
     fn saved_bars_are_found_before_any_tick() {
         with_game(|game| {
             let dir = std::env::temp_dir().join(format!("boss-early-{}", std::process::id()));
