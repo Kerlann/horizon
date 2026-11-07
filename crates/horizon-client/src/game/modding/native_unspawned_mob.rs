@@ -11,7 +11,7 @@
 //! copy and is refused with `Expired`.
 
 use super::Game;
-use super::api_values::{TryIntoApi, TryIntoEngine};
+use super::api_values::TryIntoEngine;
 use super::living_attributes::{AttributeWrite, collect_equipment, write_unspawned_attribute};
 use horizon_client::mobs::finalize::{Ageable, Group};
 use horizon_client::mobs::{Mob, equine, llama, render, tame};
@@ -160,12 +160,8 @@ impl Game<'_> {
         &self,
         mob: UnspawnedMobRef,
         slot: EquipmentSlot,
-    ) -> Result<Option<ItemStack>, UnspawnedMobError> {
-        self.with_lent_mob(mob, |m| {
-            m.equipment_stacks()[slot as usize]
-                .try_into_api()
-                .map_err(|_| UnspawnedMobError::Invalid)
-        })
+    ) -> Result<Option<horizon_client::items::ItemStack>, UnspawnedMobError> {
+        self.with_lent_mob(mob, |m| Ok(m.equipment_stacks()[slot as usize].clone()))
     }
 
     /// An attribute's base value, before modifiers (`AttributeMap.getBaseValue`).
@@ -602,7 +598,7 @@ mod tests {
         type Seen = (
             Result<Identifier, UnspawnedMobError>,
             Result<f64, UnspawnedMobError>,
-            Result<Option<(String, u32)>, UnspawnedMobError>,
+            Result<Option<ItemStack>, UnspawnedMobError>,
         );
         let seen: Arc<Mutex<Option<Seen>>> = Arc::new(Mutex::new(None));
         let saw = seen.clone();
@@ -636,8 +632,7 @@ mod tests {
                 *saw.lock().unwrap() = Some((
                     mob.kind(host),
                     mob.attribute_base(host, &max_health),
-                    mob.equipment(host, EquipmentSlot::Head)
-                        .map(|e| e.map(|item| (host.item_key_id(item.item()), item.count()))),
+                    mob.equipment(host, EquipmentSlot::Head),
                 ));
                 Flow::Continue
             },
@@ -659,7 +654,7 @@ mod tests {
         let (kind, base, head) = seen.lock().unwrap().take().expect("the hook ran");
         assert_eq!(kind, Ok(id("minecraft:pig")));
         assert_eq!(base, Ok(20.0));
-        assert_eq!(head, Ok(Some(("minecraft:carved_pumpkin".to_owned(), 1))));
+        assert_eq!(head, Ok(Some(pumpkin())));
     }
 
     /// A handle kept past its hook reads `Expired`, and the next call's
