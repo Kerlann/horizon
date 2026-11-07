@@ -15,7 +15,7 @@ faults = [
     ("repair", "self.1.clear();", "return;"),
     ("append", "(join, offset + i)", "(join, i)"),
     ("remove", "self.1.remove(&entity.join_seq());", ""),
-    ("remove", "= i;", "= i + 1;"),
+    ("remove", "*slot -= 1;", "*slot -= 0;"),
     ("extract_if", "slots.remove(&entity.join_seq());", ""),
     ("extract_if", "*slot -= 1;", "*slot -= 0;"),
     ("swap_remove", "self.1.remove(&entity.join_seq());", ""),
