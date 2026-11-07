@@ -634,30 +634,18 @@ impl Game<'_> {
                         &[&self.target_name(t).plain()],
                     ));
                 }
-                let by_player = matches!(
-                    self.command_source.map(|s| s.entity),
-                    None | Some(Some(Target::Player))
-                );
+                let source = self.command_source.map(|s| s.entity);
+                let by_player = matches!(source, None | Some(Some(Target::Player)));
                 let held = self.slot_get(&super::items::Slot::Inv(self.selected));
-                let drops = match world_items!(self).loot_sequence(&table) {
-                    Some(seq) => {
-                        let random = self.rand_sequences.get(&seq, self.level.seed);
-                        world_items!(self).entity_drops_for_command(
-                            &ty,
-                            by_player,
-                            held.as_ref(),
-                            random,
-                            keep_empty,
-                        )
-                    }
-                    None => world_items!(self).entity_drops_for_command(
-                        &ty,
-                        by_player,
-                        held.as_ref(),
-                        &mut self.world.random,
-                        keep_empty,
-                    ),
-                };
+                let drops = self.roll_kill_loot(crate::game::loot_rolls::KillRoll {
+                    kind: &ty,
+                    table: &table,
+                    target: t,
+                    killer: source.unwrap_or(Some(Target::Player)),
+                    by_player,
+                    held: held.as_ref(),
+                    keep_empty,
+                });
                 (drops, Some(table))
             }
             _ => {
