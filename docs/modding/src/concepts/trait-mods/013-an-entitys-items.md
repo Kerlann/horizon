@@ -25,10 +25,10 @@ host.transaction(|host, tx| {
         for (index, stack) in offer {
             let offered = ItemResource::of(stack);
             let still = from.resource(host, *index).as_ref() == Some(&offered)
-                && from.amount(host, *index) == stack.count;
+                && from.amount(host, *index) == stack.count();
             if !still
-                || from.extract(host, tx, *index, &offered, stack.count) != stack.count
-                || to.insert_any(host, tx, &offered, stack.count) != stack.count
+                || from.extract(host, tx, *index, &offered, stack.count()) != stack.count()
+                || to.insert_any(host, tx, &offered, stack.count()) != stack.count()
             {
                 return Err(());
             }

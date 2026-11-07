@@ -56,7 +56,11 @@ pub(crate) fn declarations(game: &Path) -> Result<String, String> {
                     file.display()
                 ));
             }
-            let cfg = if name.ends_with("_tests")
+            let cfg = if name == "friends" {
+                "#[cfg(feature = \"friends\")]\n"
+            } else if name == "friends_off" {
+                "#[cfg(not(feature = \"friends\"))]\n"
+            } else if name.ends_with("_tests")
                 && !source
                     .lines()
                     .any(|line| line == "// game-module-cfg: always")
@@ -66,8 +70,13 @@ pub(crate) fn declarations(game: &Path) -> Result<String, String> {
                 ""
             };
             let absolute = file.canonicalize().map_err(|e| e.to_string())?;
+            let declaration_name = if name == "friends_off" {
+                "friends".to_owned()
+            } else {
+                name.clone()
+            };
             let declaration = format!(
-                "{cfg}#[path = {:?}]\n{visibility} mod {name};\n",
+                "{cfg}#[path = {:?}]\n{visibility} mod {declaration_name};\n",
                 absolute.to_string_lossy()
             );
             if modules.insert(name.clone(), declaration).is_some() {

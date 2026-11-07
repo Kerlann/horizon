@@ -615,10 +615,11 @@ pub fn import_player(hub: &mut Hub, uuid: u128, request: &Value) -> Result<Impor
     })
 }
 
-/// The dimension a record names, the way `playerdata::apply` places it.
+/// The dimension a record names, the way `playerdata::apply` places it: any level, with the
+/// Overworld for a record that names none.
 fn playerdata_dimension(level: &Level) -> String {
     match level.dimension.as_str() {
-        d @ ("minecraft:the_nether" | "minecraft:the_end") => d.to_owned(),
-        _ => "minecraft:overworld".to_owned(),
+        "" => "minecraft:overworld".to_owned(),
+        d => d.to_owned(),
     }
 }

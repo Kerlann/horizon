@@ -3,13 +3,15 @@
 //! dropped items (`ItemEntityRenderer`) and items posed in the world (hands,
 //! frames, armour stands). This binds the resolver's host services
 //! (`ItemEnv`) and the special renderers' registries to the game.
-use super::{Dim, Game};
+use super::api_values::TryIntoApi;
+use super::{Dim, Game, entity_culling::EntityCullDecision};
 use horizon_assets::item_model::{
     Components, DisplayContext, GlobalPos, ItemEnv, LevelState, OwnerState, StackView,
 };
 use horizon_client::{
     block_entity_render::{diffuse_lights, vertex_light},
     cit::{Hand as CitHand, Kind as CitKind},
+    graphics::EntityCullingMode,
     hud::{HudBatch, Rect},
     item_render::{self, ItemRenderState, SpecialHost, WorldSink},
     items::ItemStack,
@@ -35,36 +37,65 @@ impl ItemEnv for Env<'_, '_> {
         if !mod_api::__private::listened(mod_api::HookId::ItemModelProperty) {
             return false;
         }
+        let Ok(snapshot) = stack.try_into_api() else {
+            return false;
+        };
         let mut value = false;
-        self.game
-            .native_item_model_property(property, stack, &mut value);
+        self.game.native_item_model_property(
+            property,
+            &snapshot,
+            stack.bundle_selected,
+            &mut value,
+        );
         value
     }
     fn item_model_range_property(&self, property: &str, stack: &StackView) -> f32 {
         if !mod_api::__private::listened(mod_api::HookId::ItemModelRangeProperty) {
             return 0.0;
         }
+        let Ok(snapshot) = stack.try_into_api() else {
+            return 0.0;
+        };
         let mut value = 0.0;
-        self.game
-            .native_item_model_range_property(property, stack, &mut value);
+        self.game.native_item_model_range_property(
+            property,
+            &snapshot,
+            stack.bundle_selected,
+            &mut value,
+        );
         value
     }
     fn item_model_select_property(&self, property: &str, stack: &StackView) -> Option<String> {
         if !mod_api::__private::listened(mod_api::HookId::ItemModelSelectProperty) {
             return None;
         }
+        let Ok(snapshot) = stack.try_into_api() else {
+            return None;
+        };
         let mut value = None;
-        self.game
-            .native_item_model_select_property(property, stack, &mut value);
+        self.game.native_item_model_select_property(
+            property,
+            &snapshot,
+            stack.bundle_selected,
+            &mut value,
+        );
         value
     }
     fn item_tint_source(&self, source: &str, config: &Value, stack: &StackView) -> i32 {
         if !mod_api::__private::listened(mod_api::HookId::ItemTintSource) {
             return -1;
         }
+        let Ok(snapshot) = stack.try_into_api() else {
+            return -1;
+        };
         let mut color = u32::MAX;
-        self.game
-            .native_item_tint_source(source, config, stack, &mut color);
+        self.game.native_item_tint_source(
+            source,
+            config,
+            &snapshot,
+            stack.bundle_selected,
+            &mut color,
+        );
         color as i32
     }
     fn enchantment_in_tag(&self, enchantment: &str, tag: &str) -> bool {
@@ -262,11 +293,7 @@ impl Game<'_> {
     /// The client level as item models read it: worked out once a frame (a
     /// screen of items read the same level, its sky sampled once).
     pub(super) fn item_level(&self) -> LevelState {
-        let dimension = match self.dim {
-            Dim::Overworld => "minecraft:overworld",
-            Dim::Nether => "minecraft:the_nether",
-            Dim::End => "minecraft:the_end",
-        };
+        let dimension = self.dim.id();
         let key = (
             self.frames,
             self.world.game_time,
@@ -676,7 +703,7 @@ impl Game<'_> {
                 continue;
             }
             let age = item.age as f32 + partial;
-            let (lo, _) = state.bounding_box();
+            let (lo, hi) = state.bounding_box();
             let min_offset_y = -lo.y + 0.0625;
             let bob = (age / 10.0 + item.bob_offset).sin() * 0.1 + 0.1;
             let spin = item_render::item_spin(age, item.bob_offset);
@@ -708,16 +735,21 @@ impl Game<'_> {
             };
             let seed = i64::from(self.pack.item_renderer.item_id(&item.stack.item))
                 + i64::from(item.stack.damage);
-            let copies = item_render::cluster_poses(
-                &state,
+            let copies = item_render::cluster_poses_with_depth(
                 pose,
                 item_render::rendered_amount(item.stack.count),
                 seed,
+                hi.z - lo.z,
             );
             // Use the same animated, spun, clustered transforms as the draw.
             // ItemEntity's collision box is only 0.25 blocks and cannot prove
             // that this larger rendered model stays behind an occluder.
             let culling = entity.then(|| {
+                // The posed envelope walks every model point in every copy;
+                // with culling off the decision is `Bypass` whatever it holds.
+                if self.settings.horizon.entity_culling == EntityCullingMode::Off {
+                    return EntityCullDecision::Bypass;
+                }
                 state
                     .posed_bounds(&copies)
                     .map(|(lo, hi)| {
@@ -865,7 +897,7 @@ mod tests {
             event: &mut mod_api::ItemModelRangePropertyEvent<'_>,
         ) {
             if event.property == "example:fill" {
-                event.value = event.stack.count as f32 / 64.0;
+                event.value = event.stack.count() as f32 / 64.0;
             }
         }
     }
@@ -923,7 +955,7 @@ mod tests {
         ) {
             if event.property == "example:mode" {
                 *event.value = Some(
-                    if event.stack.count > 1 {
+                    if event.stack.count() > 1 {
                         "build"
                     } else {
                         "dig"
@@ -1027,7 +1059,7 @@ mod tests {
             event: &mut mod_api::ItemTintSourceEvent<'_>,
         ) {
             if event.source == "example:charge" {
-                event.color = match event.stack.count {
+                event.color = match event.stack.count() {
                     1 => event.config["low"].as_i64().unwrap_or(0) as u32,
                     _ => 0xFF11_2233,
                 };

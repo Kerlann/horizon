@@ -132,12 +132,28 @@ fn compound_or_empty(tag: Option<Tag>) -> Tag {
     }
 }
 
-/// `dimensions/<namespace>/<path>` inside a world folder.
+/// `dimensions/<namespace>/<path>` inside a world folder. An id that is no safe folder name
+/// (`test:../minecraft/overworld`, an absolute path) never leaves the world: it gets a folder
+/// of its own under `dimensions/%invalid/`, named by its bytes, which no valid id can reach.
 pub fn dimension_dir(world: &Path, dimension: &str) -> PathBuf {
-    let (namespace, path) = dimension
-        .split_once(':')
-        .unwrap_or(("minecraft", dimension));
-    world.join("dimensions").join(namespace).join(path)
+    let id = if dimension.contains(':') {
+        dimension.to_owned()
+    } else {
+        format!("minecraft:{dimension}")
+    };
+    let dimensions = world.join("dimensions");
+    match id.split_once(':') {
+        Some((namespace, path))
+            if horizon_world::worldgen::overrides::valid_level_namespace(namespace)
+                && horizon_world::worldgen::overrides::valid_level_path(path) =>
+        {
+            dimensions.join(namespace).join(path)
+        }
+        _ => {
+            let hex: String = id.bytes().map(|b| format!("{b:02x}")).collect();
+            dimensions.join("%invalid").join(hex)
+        }
+    }
 }
 /// `DirectoryLock`: `session.lock` holds "\u{2603}" (UTF-16BE) under an exclusive
 /// file lock for as long as the world is open, so two instances cannot share it.
@@ -3828,11 +3844,11 @@ pub struct Level {
     pub previous_game_mode: Option<i32>,
     pub time: i64,
     pub day_time: i64,
-    /// Where the player respawns when it has no bed or anchor: its forced
-    /// Overworld point (`spawnpoint`), or the world spawn.
+    /// The world spawn or a legacy bare Overworld spawn column. Personal
+    /// points use `respawn_elsewhere` so their blocks are checked on death.
     pub spawn: Option<[f64; 3]>,
     /// A respawn point resolved through its block when the player respawns
-    /// (a bed, a respawn anchor, a forced point outside the Overworld):
+    /// (a bed, a respawn anchor, a forced point in any dimension):
     /// dimension, block, yaw and `forced`.
     pub respawn_elsewhere: Option<(String, [i32; 3], f32, bool)>,
     pub position: Option<[f64; 3]>,
@@ -4238,18 +4254,13 @@ impl Level {
             let dimension =
                 text(respawn.get("dimension")).unwrap_or_else(|| "minecraft:overworld".into());
             let forced = number(respawn.get("forced")).is_some_and(|v| v != 0);
-            // A forced point in the Overworld (`spawnpoint`) is where the
-            // player respawns; anything else (a bed, an anchor) is resolved
-            // through its block then.
-            if dimension == "minecraft:overworld" && forced {
-                self.spawn = Some([f64::from(pos[0]), f64::from(pos[1]), f64::from(pos[2])]);
-            } else {
-                let yaw = match respawn.get("yaw") {
-                    Some(Tag::Float(b)) => f32::from_bits(*b),
-                    _ => 0.0,
-                };
-                self.respawn_elsewhere = Some((dimension, [pos[0], pos[1], pos[2]], yaw, forced));
-            }
+            // Forced points, including Overworld ones, are validated through
+            // their blocks on death, just like beds and respawn anchors.
+            let yaw = match respawn.get("yaw") {
+                Some(Tag::Float(b)) => f32::from_bits(*b),
+                _ => 0.0,
+            };
+            self.respawn_elsewhere = Some((dimension, [pos[0], pos[1], pos[2]], yaw, forced));
         }
         let mut inventory = Vec::new();
         let mut inventory_components = HashMap::new();
@@ -7573,7 +7584,11 @@ mod tests {
         assert_eq!(back.dimension, "minecraft:the_nether");
         assert_eq!(back.world_spawn, Some([8, 64, 8]));
         assert_eq!(back.world_spawn_angle, [45.0, -10.0]);
-        assert_eq!(back.spawn, Some([20.0, 70.0, 20.0]));
+        assert_eq!(back.spawn, Some([8.0, 64.0, 8.0]));
+        assert_eq!(
+            back.respawn_elsewhere,
+            Some(("minecraft:overworld".into(), [20, 70, 20], 0.0, true))
+        );
         assert!(back.difficulty_locked);
         assert!(back.weather.raining);
         assert_eq!(back.weather.rain_time, 500);
@@ -7836,6 +7851,31 @@ mod tests {
         let mut loaded = Level::default();
         loaded.read_player(&tag);
         assert_eq!(loaded.active_effects, effects);
+    }
+
+    #[test]
+    fn forced_overworld_spawnpoint_reloads_as_a_configuration() {
+        // A personal point coinciding with the world spawn must still keep
+        // its forced flag and yaw, rather than turning into a world fallback.
+        for pos in [[5, 64, 5], [0, 80, 0]] {
+            let point = ("minecraft:overworld".to_owned(), pos, 37.0, true);
+            let level = Level {
+                respawn_elsewhere: Some(point.clone()),
+                ..Level::default()
+            };
+            let mut loaded = Level {
+                spawn: Some([0.0, 80.0, 0.0]),
+                world_spawn: Some([0, 80, 0]),
+                ..Level::default()
+            };
+            loaded.read_player(&level.player_tag());
+            assert_eq!(loaded.respawn_elsewhere, Some(point));
+            assert_eq!(loaded.spawn, Some([0.0, 80.0, 0.0]));
+            assert_eq!(
+                loaded.player_tag().get("respawn"),
+                level.player_tag().get("respawn")
+            );
+        }
     }
 
     #[test]
@@ -8366,6 +8406,41 @@ mod tests {
         );
         assert!(!file.exists());
         fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A level id never names a folder outside the world's `dimensions` folder, and no two ids
+    /// share a folder.
+    #[test]
+    fn a_level_folder_stays_inside_the_world() {
+        let world = Path::new("/w");
+        assert_eq!(
+            dimension_dir(world, "minecraft:the_nether"),
+            Path::new("/w/dimensions/minecraft/the_nether")
+        );
+        assert_eq!(
+            dimension_dir(world, "test:a/b"),
+            Path::new("/w/dimensions/test/a/b")
+        );
+        let mut seen = std::collections::HashSet::new();
+        for id in [
+            "test:../minecraft/overworld",
+            "test:a/../../b",
+            "test:/abs",
+            "..:x",
+            "test:a//b",
+            "test:Pocket",
+        ] {
+            let dir = dimension_dir(world, id);
+            assert!(
+                dir.starts_with("/w/dimensions/%invalid")
+                    && dir
+                        .components()
+                        .all(|c| !matches!(c, std::path::Component::ParentDir)),
+                "{id}: {}",
+                dir.display()
+            );
+            assert!(seen.insert(dir), "{id} shares a folder");
+        }
     }
 
     #[test]

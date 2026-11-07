@@ -13,6 +13,22 @@ pub struct FakeRegistries {
 }
 
 impl FakeRegistries {
+    /// Complete the current load's item table before creating stacks. Call once after part
+    /// registration, with every fake item id. Without registered parts, starts an empty load.
+    pub fn resolve_items(
+        &mut self,
+        ids: impl IntoIterator<Item = crate::Identifier>,
+    ) -> Result<(), Vec<super::ItemKeyError>> {
+        if crate::parts::installed().is_none() {
+            crate::parts::install_parts(&[]).expect("empty fake registration has no errors");
+        }
+        let ids: Vec<_> = ids.into_iter().map(|id| id.to_string()).collect();
+        crate::registry_keys::resolve_items(ids.iter().map(String::as_str))
+    }
+    pub(super) fn resolved_item_id(key: crate::ItemKey) -> Option<&'static str> {
+        crate::parts::installed()?.resolved_items.get()?.id(key.0)
+    }
+
     /// Gives item `item` the default `component` `value`, as its item report would.
     pub fn item_component(&mut self, item: &str, component: &str, value: Tag) -> &mut Self {
         self.components
@@ -50,10 +66,29 @@ impl FakeRegistries {
     /// The slots `stack` holds, when its item has any.
     pub(super) fn container_slots(&self, stack: &ItemStack) -> Option<Vec<Option<ItemStack>>> {
         self.containers
-            .get(&*stack.item)
+            .get(Self::resolved_item_id(stack.item())?)
             .map(|&slots| vec![None; slots])
     }
     pub(super) fn is_loaded(&self, id: &str) -> bool {
         self.loaded.contains(id)
+    }
+}
+
+// A fake has an authoritative empty tag registry; it never invents members.
+impl crate::Tags for FakeRegistries {
+    fn key(&self, id: &crate::Identifier) -> Option<crate::TagKey> {
+        crate::tags::tag_key(id)
+    }
+    fn is_in_tag(&self, item: crate::ItemKey, _: crate::TagKey) -> Option<bool> {
+        Self::resolved_item_id(item)?;
+        Some(false)
+    }
+    fn items(&self, _: crate::TagKey) -> Option<Vec<crate::ItemKey>> {
+        crate::parts::installed()?.resolved_items.get()?;
+        Some(Vec::new())
+    }
+    fn fluids(&self, _: crate::TagKey) -> Option<Vec<crate::FluidKey>> {
+        crate::parts::resolved_fluids().get()?;
+        Some(Vec::new())
     }
 }

@@ -17,6 +17,7 @@ winresource = "0.1"
 
 [dependencies]
 horizon-mod-runtime = { path = "../horizon-mod-runtime" }
+horizon-mod-render = { path = "../horizon-mod-render" }
 horizon-mod-api = { path = "../horizon-mod-api" }
 horizon-mod-points = { path = "../horizon-mod-points" }
 horizon-mod-api-macros = { path = "../horizon-mod-api-macros" }
@@ -46,7 +47,8 @@ horizon-chat-filter = { path = "../horizon-chat-filter" }
 horizon-shaders = { path = "../horizon-shaders" }
 # Horizon's own shader packs: the format, the stages and the check (docs/shaders.md).
 horizon-shader-api = { path = "../horizon-shader-api" }
-horizon-friends = { path = "../horizon-friends" }
+# Play with Friends: invite codes and their tunnel; the `friends` feature.
+horizon-friends = { path = "../horizon-friends", optional = true }
 # The narrator (GameNarrator): text-to-speech of chat, system messages and screens.
 horizon-narrator = { path = "../horizon-narrator" }
 # Horizon mods: sandboxed WebAssembly components, off unless installed and turned on (docs/modding/src/how-to/content-mods.md).
@@ -77,6 +79,7 @@ horizon-theme = { path = "../horizon-theme" }
 # Hardware probes for the benchmark report (nothing leaves the machine, docs/telemetry.md).
 horizon-system = { path = "../horizon-system" }
 horizon-bench = { path = "../horizon-bench" }
+crc32fast = "1"
 zip = { version = "9.1.3", default-features = false, features = ["deflate"] }
 # Controllers (evdev + libudev on Linux, IOKit on macOS, Windows.Gaming.Input); the `controllers` feature.
 gilrs = { version = "0.11", optional = true }
@@ -115,7 +118,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
 
 [features]
-default = ["audio", "controllers"]
+default = ["audio", "controllers", "friends"]
 # Scoped trait-mod installation for a mod's own tests.
 testing = []
 # Sound output. Without it (and `controllers`) the program links neither libasound nor libudev on
@@ -123,6 +126,8 @@ testing = []
 audio = ["horizon-client-render/audio", "horizon-client-lib/audio"]
 # Controllers: gilrs, and the DualSense's own output. Without it only `horizon-ctl pad`'s virtual pad.
 controllers = ["horizon-client-lib/controllers", "dep:gilrs", "dep:horizon-dualsense", "horizon-client-input/controllers"]
+# Play with Friends: sharing a world behind an invite code (game/friends.rs) and joining one.
+friends = ["horizon-client-lib/friends", "dep:horizon-friends"]
 # Records the call sites of mob random draws (`mob_ai_probe` traces).
 rng-trace = ["horizon-core/rng-trace", "horizon-client-lib/rng-trace"]
 # Rust's allocations go to the system heap instead of mimalloc, where heap profilers that replace
@@ -155,6 +160,10 @@ path = "tests/launch_api.rs"
 [[test]]
 name = "mod_api_hooks"
 path = "tests/mod_api_hooks.rs"
+
+[[example]]
+name = "wind_burst_hook_probe"
+path = "examples/wind_burst_hook_probe.rs"
 
 [lints]
 workspace = true

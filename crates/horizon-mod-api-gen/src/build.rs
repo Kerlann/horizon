@@ -41,7 +41,6 @@ pub fn generate(root: &Path, out_dir: &Path, target: Target) -> Result<(), Strin
                 (host::AREAS_OUTPUT, generated.areas.as_str()),
                 ("mod_api_generated.rs", hooks.as_str()),
                 ("mod_api_generated_host.rs", generated.host.as_str()),
-                ("native_render_generated.rs", generated.render.as_str()),
             ];
             // The resolver recurses through the API's types: give it a deep stack.
             let wasm = std::thread::scope(|scope| {
@@ -60,7 +59,6 @@ pub fn generate(root: &Path, out_dir: &Path, target: Target) -> Result<(), Strin
                 (host::AREAS_OUTPUT, generated.areas),
                 ("mod_api_generated.rs", hooks),
                 ("mod_api_generated_host.rs", generated.host),
-                ("native_render_generated.rs", generated.render),
                 ("capability_providers_generated.rs", wasm.providers),
                 ("wasm_guest_generated.rs", wasm.guest),
                 ("wasm_host_generated.rs", wasm.host),
@@ -104,6 +102,81 @@ pub(crate) fn game_host_modules(root: &Path) -> Result<String, String> {
         host::game_forwarders(root)?
     ));
     Ok(modules)
+}
+
+/// Generate the native-only raw render records, without trait dispatch or subscriptions.
+pub fn generate_render(root: &Path, out_dir: &Path) -> Result<(), String> {
+    let declarations = root.join(super::catalog::DECLARATIONS);
+    println!("cargo:rerun-if-changed={}", declarations.display());
+    for module in Catalog::modules(&declarations)? {
+        println!(
+            "cargo:rerun-if-changed={}",
+            declarations.join(format!("{module}.rs")).display()
+        );
+    }
+    println!(
+        "cargo:rerun-if-changed={}",
+        root.join("crates/horizon-mod-render/src/render.rs")
+            .display()
+    );
+    let source = super::dispatch::render(root, &Catalog::load(root)?)?.render_dispatch;
+    use syn::spanned::Spanned;
+    let file = syn::parse_file(&source).map_err(|error| error.to_string())?;
+    let lines: Vec<_> = std::iter::once(0)
+        .chain(source.match_indices('\n').map(|(index, _)| index + 1))
+        .collect();
+    let offset = |point: proc_macro2::LineColumn| lines[point.line - 1] + point.column;
+    let mut records = String::from("use super::*;\n");
+    for item in file.items {
+        let syn::Item::Struct(record) = item else {
+            continue;
+        };
+        let start = record
+            .attrs
+            .iter()
+            .find(|attr| !attr.path().is_ident("doc"))
+            .map_or_else(|| record.vis.span().start(), |attr| attr.span().start());
+        records.push_str(&source[offset(start)..offset(record.span().end())]);
+        records.push('\n');
+    }
+    syn::parse_file(&records).map_err(|error| error.to_string())?;
+    fs::write(out_dir.join("native_render_generated.rs"), records)
+        .map_err(|error| error.to_string())
+}
+
+#[test]
+fn render_records_need_no_game_sources() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = workspace.join(format!("target/render-records-only-{}", std::process::id()));
+    let declarations = root.join(super::catalog::DECLARATIONS);
+    fs::create_dir_all(&declarations).unwrap();
+    for entry in fs::read_dir(workspace.join(super::catalog::DECLARATIONS)).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_file() {
+            fs::copy(&path, declarations.join(path.file_name().unwrap())).unwrap();
+        }
+    }
+    let raw = "crates/horizon-mod-render/src/render.rs";
+    fs::create_dir_all(root.join(raw).parent().unwrap()).unwrap();
+    fs::copy(workspace.join(raw), root.join(raw)).unwrap();
+    assert!(!root.join("crates/horizon-client").exists());
+    generate_render(&root, &root).unwrap();
+    let generated = fs::read_to_string(root.join("native_render_generated.rs")).unwrap();
+    let file = syn::parse_file(&generated).unwrap();
+    assert_eq!(
+        file.items
+            .iter()
+            .filter(|item| matches!(item, syn::Item::Struct(_)))
+            .count(),
+        3
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn listed_render_slots_have_eligible_points() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    super::points::game_points(&root).unwrap();
 }
 
 /// `horizon-mod-points`' generated file: each point's record, `PointId` and typed function constructors,

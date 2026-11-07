@@ -7,6 +7,7 @@
 //! `Game` end. The walk allocates nothing and dispatch is static: hot paths pay
 //! no vtable. A new kind is one line in `entity_lists!` and one `impl Entity`.
 
+use super::api_values::{TryIntoApi, TryIntoEngine};
 use super::commands::Target;
 use super::persist::ChunkKey;
 use super::{FallingBlock, Game};
@@ -27,6 +28,17 @@ use horizon_core::position::BlockPos;
 use horizon_world::{level::data::PushReaction, piston_push};
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+
+/// Assign a stored owner's delayed id at its existing allocation point.
+/// Kinds without a lifetime slot pass None; a bound owner must keep its id.
+pub(super) fn assign_stored_id(
+    next: &mut u32,
+    id: &mut u32,
+    lifetime: Option<&horizon_mod_runtime::attachments::AttachmentLifetime>,
+) -> u32 {
+    debug_assert!(*id != 0 || lifetime.is_none_or(|slot| !slot.is_bound()));
+    super::lan_entities::assign_entity_id(next, id)
+}
 
 /// What `Entity.thunderHit` does to a kind: it sets the entity on fire and
 /// calls `hurtServer(lightning_bolt, 5)`, so a kind whose `hurtServer` does
@@ -616,18 +628,28 @@ impl Game<'_> {
             let state = self.world.block(pos.x, pos.y, pos.z);
             let position = item.position;
             let mut discarded = false;
-            self.native_item_after_vertical_collision(
-                mod_api::__private::ItemAfterVerticalCollisionCall {
-                    dimension: self.dim.id(),
-                    client,
-                    entity: item.id,
-                    state,
-                    block_pos: [pos.x, pos.y, pos.z],
-                    item_pos: [position.x, position.y, position.z],
-                    stack: &mut item.stack,
-                    discard: &mut discarded,
-                },
-            );
+            if mod_api::__private::has_part_hook(mod_api::HookId::ItemAfterVerticalCollision)
+                && let Ok(snapshot) = item.stack.try_into_api()
+            {
+                let mut stack = Some(snapshot);
+                self.native_item_after_vertical_collision(
+                    mod_api::__private::ItemAfterVerticalCollisionCall {
+                        dimension: self.dim.id(),
+                        client,
+                        entity: item.id,
+                        state,
+                        block_pos: [pos.x, pos.y, pos.z],
+                        item_pos: [position.x, position.y, position.z],
+                        stack: &mut stack,
+                        discard: &mut discarded,
+                    },
+                );
+                match stack.try_into_engine(self.items()) {
+                    Ok(Some(stack)) => item.stack = stack,
+                    Ok(None) => discarded = true,
+                    Err(_) => discarded = false,
+                }
+            }
             if discarded || item.stack.count == 0 {
                 return (false, true);
             }

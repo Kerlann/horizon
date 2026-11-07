@@ -355,7 +355,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                     if rules.spawn_mobs
                         && rules.spawn_monsters
                         && difficulty != 0
-                        && self.level.dimension() == horizon_core::dimension::Dimension::Overworld
+                        && self.level.dimension_type().nether_portal_spawns_piglin
                         && self.rand_int(2000) < difficulty
                     {
                         self.emit(LevelEvent::BlockEvent {
@@ -644,10 +644,10 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             self.remove_block(pos, false);
         }
         let below_state = self.below_state(pos);
-        let infiniburn = match self.level.dimension() {
-            horizon_core::dimension::Dimension::Overworld => &b.tags.infiniburn_overworld,
-            horizon_core::dimension::Dimension::Nether => &b.tags.infiniburn_nether,
-            horizon_core::dimension::Dimension::End => &b.tags.infiniburn_end,
+        let infiniburn = match self.level.dimension_type().infiniburn.as_str() {
+            "#minecraft:infiniburn_nether" => &b.tags.infiniburn_nether,
+            "#minecraft:infiniburn_end" => &b.tags.infiniburn_end,
+            _ => &b.tags.infiniburn_overworld,
         };
         let infini = b.in_set(below_state, infiniburn);
         let age = b.table.int(state, p.age);
@@ -786,7 +786,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             true
         };
         if self.rand_int(3) == 0 || fewer(self, pos, 4) {
-            let brightness = if self.level.dimension() == horizon_core::dimension::Dimension::End {
+            let brightness = if self.level.level_key() == super::LevelKey::END {
                 self.level.block_light(pos)
             } else {
                 self.max_local_raw_brightness(pos)

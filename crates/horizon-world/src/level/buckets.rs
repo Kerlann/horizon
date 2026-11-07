@@ -1,19 +1,16 @@
 //! Dispenser use of buckets: `BucketPickup.pickupBlock` for an empty bucket and
 //! `DispensibleContainerItem.emptyContents` for filled ones (`BucketItem`,
 //! `MobBucketItem`, `SolidBucketItem`), both without a player.
+use super::{
+    Behaviours, LevelAccess, Sim, Ticks,
+    classes::{Class, Interface},
+};
 use crate::{
     fluid::{FluidKind, FluidState},
     registry::BlockStateId,
 };
 use horizon_core::{position::BlockPos, random::RandomSource};
 use std::sync::Arc;
-use {
-    super::{
-        Behaviours, LevelAccess, Sim, Ticks,
-        classes::{Class, Interface},
-    },
-    horizon_core::dimension::Dimension,
-};
 
 /// What a filled bucket empties into the world.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,7 +136,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             });
         }
         let water = matches!(fluid, FluidKind::Water | FluidKind::FlowingWater);
-        if water && self.level.dimension() == Dimension::Nether {
+        if water && self.level.dimension_type().water_evaporates {
             // WATER_EVAPORATES: the water hisses away.
             let pitch = 2.6 + (self.random().next_float() - self.random().next_float()) * 0.8;
             self.emit(super::LevelEvent::Sound {
