@@ -92,10 +92,14 @@ libmimalloc-sys = { path = "third_party/libmimalloc-sys" }
 # example and test binary hundreds of megabytes and slow to link.
 [profile.dev]
 debug = "line-tables-only"
-# A/B arm: only the crate every PR changes builds incrementally (sccache cannot cache it anyway).
+
+# CI only (`--profile ci`): sccache cannot cache incremental compiles, so only the crate every PR changes builds
+# incrementally and the rest is cached; local dev builds keep the dev profile.
+[profile.ci]
+inherits = "dev"
 incremental = false
 
-[profile.dev.package.horizon-client]
+[profile.ci.package.horizon-client]
 incremental = true
 
 # The 512 MiB jar-boundary test still hashes every byte; run the hash kernel optimized.
