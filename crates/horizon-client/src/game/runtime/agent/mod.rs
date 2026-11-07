@@ -314,8 +314,7 @@ pub(super) enum Handled {
 
 impl Game<'_> {
     pub(super) fn state_string(&self, state: BlockStateId) -> String {
-        self.native_block_state_string(state)
-            .unwrap_or_else(|| "?".into())
+        self.block_state_string(state).unwrap_or_else(|| "?".into())
     }
     fn block_json(&self, pos: [i32; 3]) -> Value {
         let state = self.world.block(pos[0], pos[1], pos[2]);
@@ -370,7 +369,7 @@ impl Game<'_> {
         }
         Ok(())
     }
-    fn playing(&self) -> Result<()> {
+    fn require_playing_screen(&self) -> Result<()> {
         if self.title.is_some() {
             return Err("no world open (title screen); use: open WORLD [SEED] [creative]".into());
         }
@@ -1126,7 +1125,7 @@ impl Game<'_> {
                 ok(self.messages_value(n))
             }
             "move" => {
-                self.playing()?;
+                self.require_playing_screen()?;
                 let key = match a.get(0, "DIR")? {
                     "forward" | "w" => KeyCode::KeyW,
                     "back" | "backward" | "s" => KeyCode::KeyS,
@@ -1162,7 +1161,7 @@ impl Game<'_> {
                 )
             }
             "jump" => {
-                self.playing()?;
+                self.require_playing_screen()?;
                 self.keys.press(KeyCode::Space, Source::Agent);
                 let from_y = self.player.as_ref().map_or(0.0, |p| p.position.y);
                 let release_tick = self.ticks + 3;
@@ -1177,7 +1176,7 @@ impl Game<'_> {
                 )
             }
             "goto" => {
-                self.playing()?;
+                self.require_playing_screen()?;
                 let target = [a.f64(0, "X")?, a.f64(1, "Y")?, a.f64(2, "Z")?];
                 let near = a.num("near", 0.6)?.max(0.3);
                 let timeout = a.num("timeout", 60.0)?;
@@ -1282,7 +1281,7 @@ impl Game<'_> {
                 self.start_glide(motion, over, Some(aim), reply)
             }
             "attack" => {
-                self.playing()?;
+                self.require_playing_screen()?;
                 let id = a.pos.first().map(|i| i.parse::<u32>()).transpose()?;
                 if let Some(id) = id {
                     let m = self
@@ -1314,7 +1313,7 @@ impl Game<'_> {
                 )
             }
             "break" => {
-                self.playing()?;
+                self.require_playing_screen()?;
                 let pos = a.block_pos(0)?;
                 let before = self.world.block(pos[0], pos[1], pos[2]);
                 if self.res.facts().is_air(before) {
@@ -1336,7 +1335,7 @@ impl Game<'_> {
                 self.start_task("break", TaskKind::Break(Box::new(task)), reply, timeout)
             }
             "place" => {
-                self.playing()?;
+                self.require_playing_screen()?;
                 let pos = a.block_pos(0)?;
                 if let Some(Some(item)) = a.flags.get("item") {
                     self.select_item(&namespaced(item))?;
@@ -1400,7 +1399,7 @@ impl Game<'_> {
                 )
             }
             "interact" | "use-item" => {
-                self.playing()?;
+                self.require_playing_screen()?;
                 let hold = a.num("hold", 0.0)?;
                 let pos = if name == "interact" {
                     let pos = a.block_pos(0)?;
@@ -1451,7 +1450,7 @@ impl Game<'_> {
                 )
             }
             "drop" => {
-                self.playing()?;
+                self.require_playing_screen()?;
                 let all = a.pos.first() == Some(&"all");
                 let before = self.held().map(|s| self.stack_value(s));
                 if self.remote.is_some() {
@@ -1468,7 +1467,7 @@ impl Game<'_> {
                 )
             }
             "open-inventory" => {
-                self.playing()?;
+                self.require_playing_screen()?;
                 self.key_pressed(KeyCode::KeyE, KeyCode::KeyE)?;
                 ok(json!({ "ok": true, "screen": self.screen_label() }))
             }
@@ -1673,7 +1672,7 @@ impl Game<'_> {
                     return ok(json!({ "ok": true, "chat": chat }));
                 }
                 if self.remote.is_some() {
-                    self.send_chat(&command);
+                    self.send_signed_chat_input(&command);
                     return ok(json!({ "ok": true }));
                 }
                 self.as_console(|g| g.handle_chat_input(&command));
@@ -1706,7 +1705,7 @@ impl Game<'_> {
                 ok(json!({ "ok": true, "screen": self.screen_label() }))
             }
             "pause" => {
-                self.playing()?;
+                self.require_playing_screen()?;
                 self.key_pressed(KeyCode::Escape, KeyCode::Escape)?;
                 ok(json!({ "ok": true, "screen": self.screen_label() }))
             }
@@ -1758,7 +1757,7 @@ impl Game<'_> {
     /// Mouse motion turns the view only in the world with no screen open
     /// (`MouseHandler` turns the player while the mouse is grabbed).
     fn turning(&self) -> Result<()> {
-        self.playing()?;
+        self.require_playing_screen()?;
         if self.agent.glide.is_some() {
             return Err("already turning; wait for it or send stop".into());
         }
@@ -1812,7 +1811,7 @@ impl Game<'_> {
             }
             v
         };
-        if let Err(e) = self.playing() {
+        if let Err(e) = self.require_playing_screen() {
             let _ = g.reply.send(
                 json!({ "error": format!("stopped turning: {e}"), "yaw": self.yaw, "pitch": self.pitch })
                     .to_string(),

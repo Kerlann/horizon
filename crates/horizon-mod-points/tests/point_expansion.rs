@@ -96,20 +96,47 @@ mod mod_points {
         DoubleReturn,
     }
 
-    /// The listener the test installs: its own `Points`.
-    pub trait Points: Sync {
-        fn add(&self, _: &mut dyn ServerHost, _: &mut AddArgs) {}
-        fn add_return(&self, _: &mut dyn ServerHost, _: &mut AddArgs) {}
-        fn reset(&self, _: &mut dyn ServerHost, _: &mut ResetArgs) {}
-        fn reset_return(&self, _: &mut dyn ServerHost, _: &mut ResetArgs) {}
-        fn slot(&self, _: &mut dyn ServerHost, _: &mut SlotArgs) {}
-        fn pen_label(&self, _: &mut PenLabelArgs<'_>) {}
-        fn pen_label_return(&self, _: &mut PenLabelArgs<'_>) {}
-        fn double(&self, _: &mut DoubleArgs) {}
-        fn double_return(&self, _: &mut DoubleArgs) {}
+    pub mod dispatch {
+        use super::*;
+        fn heard(name: &'static str) {
+            HEARD.lock().unwrap().push(name);
+        }
+        pub fn add(_: &mut dyn ServerHost, args: &mut AddArgs) {
+            heard("add");
+            match args.step {
+                100 => args.result = Some(7),
+                _ => args.step *= 2,
+            }
+        }
+        pub fn add_return(_: &mut dyn ServerHost, args: &mut AddArgs) {
+            heard("add_return");
+            args.result = args.result.map(|value| value + 1000);
+        }
+        pub fn reset(_: &mut dyn ServerHost, args: &mut ResetArgs) {
+            heard("reset");
+            args.cancel = true;
+        }
+        pub fn reset_return(_: &mut dyn ServerHost, _: &mut ResetArgs) {
+            heard("reset_return");
+        }
+        pub fn slot(_: &mut dyn ServerHost, _: &mut SlotArgs) {
+            heard("slot");
+        }
+        pub fn pen_label(args: &mut PenLabelArgs<'_>) {
+            heard("pen_label");
+            args.name = format!("{}!", args.name).into();
+        }
+        pub fn pen_label_return(_: &mut PenLabelArgs<'_>) {
+            heard("pen_label_return");
+        }
+        pub fn double(_: &mut DoubleArgs) {
+            heard("double");
+        }
+        pub fn double_return(_: &mut DoubleArgs) {
+            heard("double_return");
+        }
     }
 
-    pub static LISTENER: Mutex<Option<&'static dyn Points>> = Mutex::new(None);
     pub static RAW: Mutex<Vec<(PointId, __private::RawKind)>> = Mutex::new(Vec::new());
     pub static HEARD: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
 
@@ -118,12 +145,6 @@ mod mod_points {
         pub use ::mod_points::__private::RawKind;
 
         pub static POINTS: [AtomicBool; 10] = [const { AtomicBool::new(false) }; 10];
-
-        pub fn fire(_: PointId, name: &'static str, call: &mut dyn FnMut(&'static dyn Points)) {
-            HEARD.lock().unwrap().push(name);
-            let listener = *LISTENER.lock().unwrap();
-            listener.into_iter().for_each(call);
-        }
 
         pub fn fire_raw(place: PointId, name: &'static str, call: &mut dyn FnMut(RawKind)) {
             let functions: Vec<_> = RAW
@@ -206,27 +227,6 @@ pub struct __DoubleRaw<'r, T0, R> {
 }
 pub type __DoubleListener = for<'r> fn(&'r mut __DoubleRaw<'r, i64, i64>);
 pub type __DoubleReturnListener = for<'r> fn(&'r mut i64);
-
-struct Listener;
-
-impl mod_points::Points for Listener {
-    // Doubles the step, or answers 7 for a step of 100.
-    fn add(&self, _: &mut dyn ServerHost, args: &mut mod_points::AddArgs) {
-        match args.step {
-            100 => args.result = Some(7),
-            _ => args.step *= 2,
-        }
-    }
-    fn add_return(&self, _: &mut dyn ServerHost, args: &mut mod_points::AddArgs) {
-        args.result = args.result.map(|value| value + 1000);
-    }
-    fn reset(&self, _: &mut dyn ServerHost, args: &mut mod_points::ResetArgs) {
-        args.cancel = true;
-    }
-    fn pen_label(&self, args: &mut mod_points::PenLabelArgs<'_>) {
-        args.name = format!("{}!", args.name).into();
-    }
-}
 
 /// A raw listener after the API one: it sees the API's change and reads the receiver.
 fn raw_add(counter: &mut Counter, raw: &mut __AddRaw<'_, usize, usize>) {
@@ -322,7 +322,7 @@ unsafe fn erased_double(place: usize, receiver: *mut (), raw: *mut ()) {
 #[test]
 fn slots_change_arguments_stop_the_function_and_change_its_value() {
     use mod_points::__private::{POINTS, RawKind};
-    use mod_points::{HEARD, LISTENER, PointId, RAW};
+    use mod_points::{HEARD, PointId, RAW};
     let mut counter = Counter { total: 0 };
     let pen = Pen {
         tags: vec!["own".into()],
@@ -336,7 +336,6 @@ fn slots_change_arguments_stop_the_function_and_change_its_value() {
     assert!(HEARD.lock().unwrap().is_empty());
 
     counter.total = 2;
-    *LISTENER.lock().unwrap() = Some(&Listener);
     // As the generated `main` registers raw listeners: a typed `let`, then erased.
     let add: __AddListener = raw_add;
     let add_return: __AddReturnListener = raw_add_return;

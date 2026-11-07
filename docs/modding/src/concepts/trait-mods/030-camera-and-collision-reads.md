@@ -22,7 +22,7 @@ is `false` with nothing copied, so no mod reaches the clipboard without the play
 `None` and `false` on a server, and take `&self`, so a screen hook can call them. Vanilla's `KeyboardHandler`
 has no such rule: Horizon adds it.
 
-The `native_camera()` helper returns the most recently extracted world frame's camera, or none before one exists. Its position, interpolated eye height, partial tick, angles, final FOV, near/far planes and dimension accompany column-major view and projection matrices. The view is camera-relative and includes bob and spin; projection uses reversed Z. Earlier callbacks in a frame can see the previous frame. `native_block_collision(pos)` returns block-local `[min_x, min_y, min_z, max_x, max_y, max_z]` boxes with an empty collision context; unloaded blocks and collision errors give no boxes.
+The `camera()` helper returns the most recently extracted world frame's camera, or none before one exists. Its position, interpolated eye height, partial tick, angles, final FOV, near/far planes and dimension accompany column-major view and projection matrices. The view is camera-relative and includes bob and spin; projection uses reversed Z. Earlier callbacks in a frame can see the previous frame. `block_collision(pos)` returns block-local `[min_x, min_y, min_z, max_x, max_y, max_z]` boxes with an empty collision context; unloaded blocks and collision errors give no boxes.
 
 `ClientHost::set_camera_type(type)` is a queued client-only effect and takes `&self`, so
 shared callbacks such as `camera_pose` can request a perspective. `camera_type()` reports

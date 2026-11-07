@@ -597,9 +597,9 @@ impl Game<'_> {
     fn trident_taken(&mut self, t: &ThrownTrident, by: &Catcher) -> bool {
         if !t.creative_only {
             let rest = match by.guest {
-                None => self.give(t.stack.clone()),
+                None => self.add_stack_to_inventory(t.stack.clone()),
                 Some(conn) => {
-                    let rest = self.as_guest(conn, |g| g.give(t.stack.clone()));
+                    let rest = self.as_guest(conn, |g| g.add_stack_to_inventory(t.stack.clone()));
                     let Some(rest) = rest else {
                         return false;
                     };

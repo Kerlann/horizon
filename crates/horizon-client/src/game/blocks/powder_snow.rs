@@ -132,7 +132,7 @@ impl cauldron::Player for HeldSlot<'_, '_> {
         if stack.count == 0 {
             return false;
         }
-        let rest = self.game.give(stack.clone());
+        let rest = self.game.add_stack_to_inventory(stack.clone());
         added(stack, rest, self.game.creative)
     }
     fn contains(&self, stack: &ItemStack) -> bool {

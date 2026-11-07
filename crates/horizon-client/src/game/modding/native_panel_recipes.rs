@@ -413,7 +413,7 @@ impl Game<'_> {
             .collect()
     }
     fn back_button(&self, layout: &Layout) -> ([f32; 4], String) {
-        let label = self.translate("gui.back", "Back");
+        let label = self.translate_with_fallback("gui.back", "Back");
         let w = HudBatch::text_width(&self.gui.atlas, &label) + 8.0;
         ([layout.grid.0, layout.grid.1, w, 14.0], label)
     }
@@ -509,8 +509,8 @@ impl Game<'_> {
         self.draw_recipe_tabs(batch, layout);
         if pages_n > 1 {
             let labels = [
-                self.translate("gui.recipebook.previous_page", "Previous Page"),
-                self.translate("gui.recipebook.next_page", "Next Page"),
+                self.translate_with_fallback("gui.recipebook.previous_page", "Previous Page"),
+                self.translate_with_fallback("gui.recipebook.next_page", "Next Page"),
             ];
             let visible = [page > 0, page + 1 < pages_n];
             let atlas = &self.gui.atlas;

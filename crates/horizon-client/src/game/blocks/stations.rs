@@ -545,7 +545,7 @@ impl Game<'_> {
     }
     /// `Component.translatable`: the selected language (which `lang` layers
     /// over `en_us`), the caller's English text last.
-    pub(super) fn translate(&self, key: &str, fallback: &str) -> String {
+    pub(super) fn translate_with_fallback(&self, key: &str, fallback: &str) -> String {
         horizon_client::lang::get_or(key, fallback)
     }
     fn brewing_open(&self) -> bool {
@@ -1036,7 +1036,7 @@ impl Game<'_> {
         self.audio.play(sound, Some(at), volume, pitch);
     }
     pub(super) fn give_or_drop(&mut self, stack: ItemStack) {
-        if let Some(rest) = self.give(stack)
+        if let Some(rest) = self.add_stack_to_inventory(stack)
             && let Some(eye) = self.eye_position()
         {
             // Inventory.placeItemBackInInventory: `player.drop(stack, false)`.
@@ -1245,7 +1245,7 @@ impl Game<'_> {
         } else {
             horizon_client::menu::Input::Pickup
         };
-        self.menu_click(Some(slot), i32::from(right), input);
+        self.click_open_inventory(Some(slot), i32::from(right), input);
         true
     }
     /// Recompute after slot changes; the anvil box follows its input item.
@@ -1585,7 +1585,7 @@ impl Game<'_> {
         {
             self.render_transparent_background("station", batch);
         }
-        let inventory_label = self.translate("container.inventory", "Inventory");
+        let inventory_label = self.translate_with_fallback("container.inventory", "Inventory");
         if brewing {
             let Some(BlockEntity::Brewing(b)) = self.container_kind() else {
                 return true;
@@ -1640,7 +1640,7 @@ impl Game<'_> {
                     );
                 }
             }
-            let default = self.translate("container.brewing", "Brewing Stand");
+            let default = self.translate_with_fallback("container.brewing", "Brewing Stand");
             let title = self.remote_menu_title().unwrap_or_else(|| {
                 let named = self
                     .station
@@ -1678,9 +1678,9 @@ impl Game<'_> {
             }
         } else if let Some(kind) = self.station.as_ref().map(|s| s.kind) {
             // A server's menu has the title it was given.
-            let title = self
-                .remote_menu_title()
-                .unwrap_or_else(|| Text::literal(self.translate(kind.title_key(), "")));
+            let title = self.remote_menu_title().unwrap_or_else(|| {
+                Text::literal(self.translate_with_fallback(kind.title_key(), ""))
+            });
             super::screen_info::name_container(|| title.plain());
             {
                 let atlas = &self.gui.atlas;
@@ -1832,10 +1832,10 @@ impl Game<'_> {
                         if inside(local, bx, by, bw, 17.0)
                             && let Some((id, l)) = &offers.clues[i]
                         {
-                            let e = self.enchantments();
+                            let e = self.active_enchantment_definitions();
                             let (name, _) = e.full_name(id, *l);
                             let clue = self
-                                .translate("container.enchant.clue", "%s . . . ?")
+                                .translate_with_fallback("container.enchant.clue", "%s . . . ?")
                                 .replace("%s", &name);
                             let mut lines =
                                 vec![(horizon_client::text::Text::literal(clue), u32::MAX)];
@@ -1844,7 +1844,7 @@ impl Game<'_> {
                                 if level < cost {
                                     lines.push((
                                         horizon_client::text::Text::literal(
-                                            self.translate(
+                                            self.translate_with_fallback(
                                                 "container.enchant.level.requirement",
                                                 "Level Requirement: %s",
                                             )
@@ -1855,12 +1855,12 @@ impl Game<'_> {
                                 } else {
                                     let n = i + 1;
                                     let lapis = if n == 1 {
-                                        self.translate(
+                                        self.translate_with_fallback(
                                             "container.enchant.lapis.one",
                                             "1 Lapis Lazuli",
                                         )
                                     } else {
-                                        self.translate(
+                                        self.translate_with_fallback(
                                             "container.enchant.lapis.many",
                                             "%s Lapis Lazuli",
                                         )
@@ -1875,12 +1875,12 @@ impl Game<'_> {
                                         },
                                     ));
                                     let levels = if n == 1 {
-                                        self.translate(
+                                        self.translate_with_fallback(
                                             "container.enchant.level.one",
                                             "1 Enchantment Level",
                                         )
                                     } else {
-                                        self.translate(
+                                        self.translate_with_fallback(
                                             "container.enchant.level.many",
                                             "%s Enchantment Levels",
                                         )
@@ -1928,7 +1928,10 @@ impl Game<'_> {
                         let mut color = argb(-8323296);
                         let line = if cost >= 40 && !self.creative {
                             color = argb(-40864);
-                            Some(self.translate("container.repair.expensive", "Too Expensive!"))
+                            Some(self.translate_with_fallback(
+                                "container.repair.expensive",
+                                "Too Expensive!",
+                            ))
                         } else if s.result.is_none() {
                             None
                         } else {
@@ -1936,8 +1939,11 @@ impl Game<'_> {
                                 color = argb(-40864);
                             }
                             Some(
-                                self.translate("container.repair.cost", "Enchantment Cost: %1$s")
-                                    .replace("%1$s", &cost.to_string()),
+                                self.translate_with_fallback(
+                                    "container.repair.cost",
+                                    "Enchantment Cost: %1$s",
+                                )
+                                .replace("%1$s", &cost.to_string()),
                             )
                         };
                         if let Some(line) = line {
@@ -2001,7 +2007,7 @@ impl Game<'_> {
                             oy + 46.0,
                         );
                         if inside(local, 65.0, 46.0, 28.0, 21.0) {
-                            onboarding = Some(self.translate(
+                            onboarding = Some(self.translate_with_fallback(
                                 "container.upgrade.error_tooltip",
                                 "Item can't be upgraded this way",
                             ));
@@ -2017,7 +2023,7 @@ impl Game<'_> {
                     });
                     match (hovered, &s.inputs[0]) {
                         (Some(0), None) => {
-                            onboarding = Some(self.translate(
+                            onboarding = Some(self.translate_with_fallback(
                                 "container.upgrade.missing_template_tooltip",
                                 "Add Smithing Template",
                             ));
@@ -2037,7 +2043,7 @@ impl Game<'_> {
                             let key = format!(
                                 "item.minecraft.smithing_template.{name}.{what}_slot_description"
                             );
-                            onboarding = Some(self.translate(&key, &key));
+                            onboarding = Some(self.translate_with_fallback(&key, &key));
                         }
                         _ => {}
                     }
@@ -2207,7 +2213,7 @@ impl Game<'_> {
         } else if let Some(n) = stack.item_name() {
             n
         } else if stack.data().is_some_and(|d| d.ominous_banner) {
-            self.translate("block.minecraft.ominous_banner", "Ominous Banner")
+            self.translate_with_fallback("block.minecraft.ominous_banner", "Ominous Banner")
         } else if stack.data().and_then(|d| d.potion.as_ref()).is_some()
             || stack.item.ends_with("potion")
             || &*stack.item == "minecraft:tipped_arrow"
@@ -2233,7 +2239,7 @@ impl Game<'_> {
         nested: bool,
         creative: bool,
     ) -> Vec<(horizon_client::text::Text, u32)> {
-        let e: &Enchantments = self.enchantments();
+        let e: &Enchantments = self.active_enchantment_definitions();
         let color = self.rarity_color(stack);
         let advanced = !nested && self.options_advanced_tooltips();
         let display = mod_api::item_tooltip::TooltipDisplay::for_stack(stack);
@@ -2341,7 +2347,7 @@ impl Game<'_> {
                 let key = self.stations().banners.layer_key(layer);
                 push(
                     &mut lines,
-                    self.translate(&key, &key),
+                    self.translate_with_fallback(&key, &key),
                     rgba(170, 170, 170, 255),
                 );
             }
@@ -2367,7 +2373,7 @@ impl Game<'_> {
                         shown = shown.italic();
                     }
                     horizon_client::text::format_translation(
-                        &self.translate(
+                        &self.translate_with_fallback(
                             "item.minecraft.crossbow.projectile.single",
                             "Projectile: %s",
                         ),
@@ -2375,7 +2381,7 @@ impl Game<'_> {
                     )
                 } else {
                     horizon_client::text::format_translation(
-                        &self.translate(
+                        &self.translate_with_fallback(
                             "item.minecraft.crossbow.projectile.multiple",
                             "Projectile: %s x %s",
                         ),
@@ -2593,14 +2599,17 @@ impl Game<'_> {
             match block_entity_item::spawner_entity(stack) {
                 Some(id) => {
                     let key = format!("entity.{}", id.replacen(':', ".", 1));
-                    push(&mut lines, self.translate(&key, &id), gray);
+                    push(&mut lines, self.translate_with_fallback(&key, &id), gray);
                 }
                 None => {
                     push(&mut lines, String::new(), u32::MAX);
-                    let desc1 =
-                        self.translate("block.minecraft.spawner.desc1", "Interact with Spawn Egg:");
+                    let desc1 = self.translate_with_fallback(
+                        "block.minecraft.spawner.desc1",
+                        "Interact with Spawn Egg:",
+                    );
                     push(&mut lines, desc1, gray);
-                    let desc2 = self.translate("block.minecraft.spawner.desc2", "Sets Mob Type");
+                    let desc2 = self
+                        .translate_with_fallback("block.minecraft.spawner.desc2", "Sets Mob Type");
                     push(&mut lines, format!(" {desc2}"), rgba(85, 85, 255, 255));
                 }
             }
@@ -2633,7 +2642,7 @@ impl Game<'_> {
             push(&mut lines, stack.item.to_string(), dark_gray);
             let count = horizon_client::item_tooltip::component_count(stack, item_info);
             if count > 0 {
-                let text = self.translate("item.components", "%s component(s)");
+                let text = self.translate_with_fallback("item.components", "%s component(s)");
                 push(
                     &mut lines,
                     text.replacen("%s", &count.to_string(), 1),
@@ -2664,7 +2673,9 @@ impl Game<'_> {
             .into_iter()
             .enumerate()
             {
-                let text = horizon_client::text::Text::legacy(&self.translate(key, fallback));
+                let text = horizon_client::text::Text::legacy(
+                    &self.translate_with_fallback(key, fallback),
+                );
                 lines.push((
                     if i == 0 { text.bold() } else { text },
                     rgba(255, 85, 85, 255),
@@ -2835,7 +2846,8 @@ impl Game<'_> {
         let (x, y) = tooltip_position((x, y), (width, height), (w, h));
         (x, y, w, h)
     }
-    /// The box and its frame sprites.
+    /// The box around a tooltip's contents at `x`, `y`, `w` × `h`: solid fills, or the
+    /// background and frame sprites of the tooltip style a mod names.
     pub(super) fn tooltip_box(
         &self,
         batch: &mut HudBatch,
@@ -2847,7 +2859,22 @@ impl Game<'_> {
     ) {
         let (mut background, mut border_top, mut border_bottom) =
             (0xf0100010, 0x505000ff, 0x5028007f);
-        self.native_tooltip_color(stack, &mut background, &mut border_top, &mut border_bottom);
+        let mut texture = None;
+        self.native_render_tooltip_texture(
+            stack,
+            &mut texture,
+            &mut background,
+            &mut border_top,
+            &mut border_bottom,
+        );
+        if let Some(style) = &texture {
+            let [background, frame] =
+                horizon_client::ui::tooltip_style_sprites(style.namespace(), style.path());
+            let sprites = [background.as_str(), frame.as_str()];
+            if horizon_client::ui::tooltip_sprites(batch, &self.gui.atlas, sprites, [x, y, w, h]) {
+                return;
+            }
+        }
         let convert = |color: u32| {
             let [a, r, g, b] = color.to_be_bytes();
             rgba(r, g, b, a)

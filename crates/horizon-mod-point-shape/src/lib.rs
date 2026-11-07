@@ -57,14 +57,12 @@ pub enum Receiver {
 /// then its return).
 #[derive(Default)]
 pub struct ApiItems {
-    /// Its `Points` methods.
-    pub methods: TokenStream,
+    /// Its typed function aliases and constructors.
+    pub listeners: TokenStream,
     /// Its `PointId` variants.
     pub variants: TokenStream,
-    /// The `Option<PointId>` consts `#[horizon_mod]` subscribes a mod by.
-    pub consts: TokenStream,
-    /// Its methods in the game's forwarding `Points` for wasm mods (`wire::Forwarded`).
-    pub forwards: TokenStream,
+    /// Its typed native and wasm dispatch functions.
+    pub dispatch: TokenStream,
 }
 
 /// A `#[point]` function's point.
@@ -432,9 +430,7 @@ impl Shape {
         }
     }
 
-    /// The `Points` methods for this point (its head, then its return when it has one), their
-    /// `PointId` variants, and the `Option<PointId>` consts `#[horizon_mod]` subscribes a mod by:
-    /// generated into `mod_points`.
+    /// Typed API function constructors, dispatchers and place ids for this point.
     pub fn api_items(&self, target: &str) -> ApiItems {
         let record = self.record();
         let record = if self.borrows() {
@@ -442,63 +438,68 @@ impl Shape {
         } else {
             quote!(#record)
         };
-        // The host the API listeners get, and how the wasm forwarding passes it on.
-        let (host, forwarded) = match (self.receiver, self.side) {
-            (_, None) => (quote!(), quote!(None)),
+        let (host, passed, forwarded, reborrow) = match (self.receiver, self.side) {
+            (_, None) => (quote!(), quote!(), quote!(None), quote!()),
             (Receiver::Mut, Some(Side::Server)) => (
                 quote!(host: &mut dyn ::mod_api::ServerHost,),
-                quote!(Server(host)),
+                quote!(&mut *host,),
+                quote!(Server(&mut *host)),
+                quote!(),
             ),
             (Receiver::Mut, Some(Side::Client)) => (
                 quote!(host: &mut dyn ::mod_api::ClientHost,),
-                quote!(Client(host)),
+                quote!(&mut *host,),
+                quote!(Client(&mut *host)),
+                quote!(),
             ),
-            (Receiver::Mut, Some(Side::Both)) => {
-                (quote!(host: ::mod_api::HostSide<'_>,), quote!(Side(host)))
-            }
-            (_, Some(_)) => (quote!(host: &dyn ::mod_api::Host,), quote!(Read(host))),
+            (Receiver::Mut, Some(Side::Both)) => (
+                quote!(host: ::mod_api::HostSide<'_>,),
+                quote!(host.reborrow(),),
+                quote!(Side(host.reborrow())),
+                quote!(let mut host = host;),
+            ),
+            (_, Some(_)) => (
+                quote!(host: &dyn ::mod_api::Host,),
+                quote!(host,),
+                quote!(Read(host)),
+                quote!(),
+            ),
         };
-        let unused = if self.side.is_some() {
-            quote!(let _ = (host, args);)
-        } else {
-            quote!(let _ = args;)
-        };
-        let mut places = vec![(
-            self.name.clone(),
-            "head: before its body runs, with the arguments it was called with",
-        )];
+        let mut places = vec![(self.name.clone(), "head")];
         if self.has_return() {
-            places.push((
-                format!("{}_return", self.name),
-                "return: after its body, with the value it returns",
-            ));
+            places.push((format!("{}_return", self.name), "return"));
         }
         let mut items = ApiItems::default();
         for (method, place) in places {
-            let method = syn::Ident::new(&method, Span::call_site());
-            let variant = syn::Ident::new(&camel(&method.to_string()), Span::call_site());
-            let doc = format!("`{target}`'s {place}.");
-            items.methods.extend(quote! {
+            let listener = format_ident!("{}Listener", camel(&method));
+            let variant = format_ident!("{}", camel(&method));
+            let method = format_ident!("{method}");
+            let doc = format!("`{target}`'s {place} function slot.");
+            items.listeners.extend(quote! {
                 #[doc = #doc]
-                fn #method(&self, #host args: &mut #record) {
-                    #unused
+                pub type #listener = fn(#host args: &mut #record);
+                #[doc = #doc]
+                pub const fn #method(id: &'static str, priority: i32, inject: &'static str, listener: #listener) -> crate::__private::SlotListener {
+                    // SAFETY: the alias checks this place's host and record before erasure.
+                    unsafe { crate::__private::SlotListener::api(id, PointId::#variant, listener as *const ()) }.ordered(priority, inject)
                 }
             });
-            items.forwards.extend(quote! {
-                fn #method(&self, #host args: &mut #record) {
-                    self.0.forward(
-                        PointId::#variant,
-                        crate::wire::PointHost::#forwarded,
-                        &mut crate::wire::RecordRef(args),
-                    )
+            items.dispatch.extend(quote! {
+                #[doc = #doc]
+                pub fn #method(#host args: &mut #record) {
+                    #reborrow
+                    crate::__private::fire_api(PointId::#variant, &mut |kind| match kind {
+                        crate::__private::ApiKind::Typed(function) => {
+                            // SAFETY: the typed constructor checked this place's exact function type.
+                            let function = unsafe { ::std::mem::transmute::<*const (), super::listeners::#listener>(function) };
+                            function(#passed args);
+                        }
+                        #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
+                        crate::__private::ApiKind::Forward(forward, index) => forward.forward(index, crate::wire::PointHost::#forwarded, &mut crate::wire::RecordRef(args)),
+                    });
                 }
             });
             items.variants.extend(quote!(#variant,));
-            items.consts.extend(quote! {
-                #[doc(hidden)]
-                #[allow(non_upper_case_globals)]
-                pub const #method: Option<PointId> = Some(PointId::#variant);
-            });
         }
         if self.raw && !self.has_return() {
             let variant = self.return_variant();

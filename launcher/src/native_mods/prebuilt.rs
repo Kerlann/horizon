@@ -4,7 +4,7 @@
 //! anything runs: a mod set the prebuilt game can't serve, or a revision with no prebuilt
 //! release, builds from source, and the build log says why. A prebuilt build that fails is an
 //! error like any other build's, never retried from source.
-use super::{api, dependencies, inject, internals, Profile, Target};
+use super::{api, dependencies, internals, Profile, Target};
 use crate::i18n::{tr, trf};
 use crate::rust_toolchain::{self, Toolchain};
 use horizon_mod_package::index::native;
@@ -145,20 +145,6 @@ pub(super) fn project_refusal(project: &api::Project<'_>) -> Option<SourceReason
         }
         None
     }
-}
-
-/// Checks `injections` against the prebuilt `game`'s points. A target that isn't a point is an
-/// error on any route, as is a method that isn't its point's: the source route stages the same
-/// points.
-pub(super) fn serves_points(
-    game: &Path,
-    injections: &[inject::PointInjection],
-) -> Result<(), String> {
-    if injections.is_empty() {
-        return Ok(());
-    }
-    let points = inject::listed(&game.join(inject::POINTS))?;
-    inject::check(injections, &points).map_err(|error| error.to_string())
 }
 
 /// The prebuilt game for `revision` and `target`, downloaded and checked once, then kept in the
@@ -515,6 +501,8 @@ pub(super) fn compile(
         .arg(format!("horizon_client={}", game_library.display()))
         .arg("--extern")
         .arg(format!("mod_api={}", api_library.display()))
+        .arg("--extern")
+        .arg(format!("mod_points={}", libraries["mod_points"].display()))
         .arg("--extern")
         .arg(format!(
             "horizon_mod_package={}",

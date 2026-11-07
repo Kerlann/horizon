@@ -127,7 +127,7 @@ impl Game<'_> {
         self.structure_templates.clear();
     }
     /// The retained server reload listeners of the last successful reload.
-    pub(super) fn native_reload_resources(&self) -> &dyn ServerReloadResources {
+    pub(super) fn reload_resources(&self) -> &dyn ServerReloadResources {
         &self.reload_resources
     }
 }

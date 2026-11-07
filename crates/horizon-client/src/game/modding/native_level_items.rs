@@ -44,13 +44,13 @@ impl Game<'_> {
     /// empty stack or an unknown item, with the `block_drops` rule off, on a
     /// client, for a stale handle, a level not in place, or an item a mod
     /// kept out (`native_entity_join_level`).
-    pub(super) fn native_level_pop_resource(
+    pub(super) fn level_pop_resource(
         &mut self,
         level: LevelRef,
         pos: [i32; 3],
         stack: ItemStack,
     ) -> Option<EntityRef> {
-        if !self.native_level_in_place(level) {
+        if !self.level_in_place(level) {
             return None;
         }
         let at = spill::pop_position(&mut self.world.random, pos);
@@ -74,7 +74,7 @@ impl Game<'_> {
     /// spawned, for an empty stack or an unknown item, a value that isn't
     /// finite, on a client, for a stale handle, a level not in place, or an
     /// item a mod kept out (`native_entity_join_level`).
-    pub(super) fn native_level_spawn_item(
+    pub(super) fn level_spawn_item(
         &mut self,
         level: LevelRef,
         x: f64,
@@ -90,7 +90,7 @@ impl Game<'_> {
     /// deltaX, deltaY, deltaZ)`, and the same `pickup_delay` ticks before it
     /// can be picked up (`ItemEntity.setPickupDelay`). None in the same
     /// cases, and for a motion that isn't finite.
-    pub(super) fn native_level_spawn_item_with_motion(
+    pub(super) fn level_spawn_item_with_motion(
         &mut self,
         level: LevelRef,
         x: f64,
@@ -116,7 +116,7 @@ impl Game<'_> {
             .into_iter()
             .chain(motion.into_iter().flatten())
             .all(f64::is_finite);
-        if !finite || !self.native_level_in_place(level) || !self.stack_spawns(&stack) {
+        if !finite || !self.level_in_place(level) || !self.stack_spawns(&stack) {
             return None;
         }
         let motion = motion.unwrap_or_else(dispenser::new_item_motion);
@@ -132,7 +132,7 @@ impl Game<'_> {
     /// one out (`native_entity_join_level`). False, with no orbs, for 0, a
     /// value that isn't finite, on a client, for a stale handle or a level
     /// not in place.
-    pub(super) fn native_level_award_experience(
+    pub(super) fn level_award_experience(
         &mut self,
         level: LevelRef,
         x: f64,
@@ -140,10 +140,7 @@ impl Game<'_> {
         z: f64,
         amount: u32,
     ) -> bool {
-        if amount == 0
-            || ![x, y, z].iter().all(|v| v.is_finite())
-            || !self.native_level_in_place(level)
-        {
+        if amount == 0 || ![x, y, z].iter().all(|v| v.is_finite()) || !self.level_in_place(level) {
             return false;
         }
         self.spawn_orbs([x, y, z], amount);
@@ -197,31 +194,28 @@ mod tests {
         .unwrap();
         game.native_lifecycle
             .begin_open(NativeAuthority::IntegratedServer);
-        let level = game.native_level(game.dim.id()).unwrap();
+        let level = game.level(game.dim.id()).unwrap();
         let stone = || ItemStack::new("minecraft:stone", 3);
 
         // Block.popResource: three level-random offsets, then the entity.
         let mut random = game.world.random.clone();
         let at = spill::pop_position(&mut random, [4, 64, -2]);
         let popped = game
-            .native_level_pop_resource(level, [4, 64, -2], stone())
+            .level_pop_resource(level, [4, 64, -2], stone())
             .unwrap();
-        assert_eq!(
-            game.native_entity_kind(popped).as_deref(),
-            Some("minecraft:item")
-        );
-        assert_eq!(game.native_entity_position(popped), Some(at));
+        assert_eq!(game.entity_kind(popped).as_deref(), Some("minecraft:item"));
+        assert_eq!(game.entity_position(popped), Some(at));
         let item = game.dropped.last().unwrap();
         assert_eq!((item.pickup_delay, item.stack.count), (10, 3));
         assert_eq!(item.velocity.y, 0.2);
         // The offsets are drawn even when nothing drops.
         assert!(
-            game.native_level_pop_resource(level, [0; 3], ItemStack::new("minecraft:air", 1))
+            game.level_pop_resource(level, [0; 3], ItemStack::new("minecraft:air", 1))
                 .is_none()
         );
         game.ui.rules.set("block_drops", RuleValue::Bool(false));
         assert!(
-            game.native_level_pop_resource(level, [4, 64, -2], stone())
+            game.level_pop_resource(level, [4, 64, -2], stone())
                 .is_none()
         );
         let _ = spill::pop_position(&mut random, [0; 3]);
@@ -231,26 +225,18 @@ mod tests {
         // new ItemEntity(level, x, y, z, stack, delta...): the pickup delay
         // is the caller's, as ItemEntity.setPickupDelay at construction.
         let spawned = game
-            .native_level_spawn_item_with_motion(
-                level,
-                1.5,
-                70.0,
-                2.5,
-                stone(),
-                [0.0, 0.3, 0.0],
-                40,
-            )
+            .level_spawn_item_with_motion(level, 1.5, 70.0, 2.5, stone(), [0.0, 0.3, 0.0], 40)
             .unwrap();
-        assert_eq!(game.native_entity_position(spawned), Some([1.5, 70.0, 2.5]));
+        assert_eq!(game.entity_position(spawned), Some([1.5, 70.0, 2.5]));
         let item = game.dropped.last().unwrap();
         assert_eq!((item.pickup_delay, item.velocity.y), (40, 0.3));
         assert!(
-            game.native_level_spawn_item(level, 1.5, 70.0, 2.5, stone(), 32767)
+            game.level_spawn_item(level, 1.5, 70.0, 2.5, stone(), 32767)
                 .is_some()
         );
         assert_eq!(game.dropped.last().unwrap().pickup_delay, 32767);
         assert!(
-            game.native_level_spawn_item(level, f64::NAN, 70.0, 2.5, stone(), 0)
+            game.level_spawn_item(level, f64::NAN, 70.0, 2.5, stone(), 0)
                 .is_none()
         );
         for empty in [
@@ -258,7 +244,7 @@ mod tests {
             ItemStack::new("minecraft:nothing", 1),
         ] {
             assert!(
-                game.native_level_spawn_item(level, 0.0, 0.0, 0.0, empty, 0)
+                game.level_spawn_item(level, 0.0, 0.0, 0.0, empty, 0)
                     .is_none()
             );
         }
@@ -275,7 +261,7 @@ mod tests {
         let before = joins(&game);
         let out = std::mem::take(&mut game.dropped);
         let hooked = game
-            .native_level_spawn_item(level, 1.5, 70.0, 2.5, stone(), 0)
+            .level_spawn_item(level, 1.5, 70.0, 2.5, stone(), 0)
             .unwrap();
         assert_eq!(joins(&game).len(), 1);
         game.put_back_dropped(out);
@@ -283,24 +269,21 @@ mod tests {
         assert_eq!(after[..before.len()], before[..]);
         assert_eq!(after[before.len()].0, hooked.id());
         assert!(after[before.len()].1 > before.iter().map(|j| j.1).max().unwrap());
-        assert!(game.native_entity_kind(hooked).is_some());
+        assert!(game.entity_kind(hooked).is_some());
 
         // ExperienceOrb.award: 100 is 73, 17, 7 and 3, far apart from other orbs.
-        assert!(game.native_level_award_experience(level, 100.5, 70.0, 0.5, 100));
+        assert!(game.level_award_experience(level, 100.5, 70.0, 0.5, 100));
         let values: Vec<u32> = game.orbs.iter().map(|o| o.value).collect();
         assert_eq!(values, [73, 17, 7, 3]);
-        assert!(!game.native_level_award_experience(level, 100.5, 70.0, 0.5, 0));
+        assert!(!game.level_award_experience(level, 100.5, 70.0, 0.5, 0));
 
         let stale = LevelRef::new(NativeWorldEpoch::new(0), game.dim.key());
         assert!(
-            game.native_level_spawn_item(stale, 0.0, 0.0, 0.0, stone(), 0)
+            game.level_spawn_item(stale, 0.0, 0.0, 0.0, stone(), 0)
                 .is_none()
         );
-        assert!(
-            game.native_level_pop_resource(stale, [0; 3], stone())
-                .is_none()
-        );
-        assert!(!game.native_level_award_experience(stale, 0.0, 0.0, 0.0, 5));
+        assert!(game.level_pop_resource(stale, [0; 3], stone()).is_none());
+        assert!(!game.level_award_experience(stale, 0.0, 0.0, 0.0, 5));
     }
 
     #[test]

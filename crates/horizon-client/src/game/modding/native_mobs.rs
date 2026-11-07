@@ -241,7 +241,7 @@ impl Game<'_> {
     }
     /// Kills mob `id` as `/kill` does: it falls and drops its loot. False for
     /// no such living mob or another dimension.
-    pub(super) fn native_kill_mob(&mut self, dimension: &str, id: u32) -> bool {
+    pub(super) fn kill_mob(&mut self, dimension: &str, id: u32) -> bool {
         if self.native_mob(dimension, id).is_none() {
             return false;
         }

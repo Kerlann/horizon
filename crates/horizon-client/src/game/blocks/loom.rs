@@ -262,7 +262,7 @@ impl Game<'_> {
                 } => self.draw_banner_result(batch, ox + *x0 as f32, oy + *y0 as f32, base, layers),
                 ScreenDraw::Tooltip { key } => {
                     tooltip = Some(vec![(
-                        horizon_client::text::Text::literal(self.translate(key, key)),
+                        horizon_client::text::Text::literal(self.translate_with_fallback(key, key)),
                         u32::MAX,
                     )]);
                 }

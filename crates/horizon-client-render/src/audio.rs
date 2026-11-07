@@ -1437,8 +1437,11 @@ impl Audio {
         *self.heard.entry(sound.identifier.clone()).or_default() += 1;
         let mut instance = SoundInstance::from_play(sound, LegacyRandom::new(seed));
         instance.identifier = crate::sound_events::normalize(&sound.identifier);
-        // Tickable, so the engine applies a fade's volume each tick it plays.
+        // Tickable, so the engine applies a fade's volume each tick it plays; and it may start
+        // silent (`canStartSilent`, as vanilla's tickable loops), so a play at volume 0 is
+        // still there when a fade raises it.
         instance.ticking = crate::sound_engine::Ticking::Mod { fade: None };
+        instance.can_start_silent = true;
         if after == 0 {
             self.play_instance(instance, false).0
         } else {
@@ -2507,6 +2510,50 @@ mod tests {
             audio.tick(false, &ctx);
         }
         assert_eq!(audio.mod_sound_state(other), Stopped);
+    }
+
+    /// A sound that repeats after a gap (`looping` with a delay) keeps its handle across the
+    /// gap: once its sample ends it waits for the repeat, plays again, and still stops.
+    #[test]
+    fn a_repeating_mod_sound_waits_between_its_repeats_and_plays_again() {
+        use mod_api::SoundState::*;
+        let mut audio = live_audio();
+        let ctx = TickContext::default();
+        let click = mod_api::SoundPlay::ui("minecraft:ui.button.click").looping(2);
+        let sound = audio.play_mod_sound(&click, 0);
+        assert_eq!(audio.mod_sound_state(sound), Playing);
+        // The sample ends on its own, as the mixer stops a channel that runs out.
+        for channel in audio.backend.mixer.lock().unwrap().channels.values_mut() {
+            channel.state = State::Stopped;
+        }
+        let mut states = Vec::new();
+        for _ in 0..30 {
+            audio.tick(false, &ctx);
+            states.push(audio.mod_sound_state(sound));
+        }
+        assert_eq!(states[0], Waiting, "{states:?}");
+        assert!(!states.contains(&Stopped), "{states:?}");
+        assert_eq!(states.last(), Some(&Playing), "repeated: {states:?}");
+        audio.stop_mod_sound(sound);
+        audio.tick(false, &ctx);
+        assert_eq!(audio.mod_sound_state(sound), Stopped);
+    }
+
+    /// A mod sound at volume 0 starts silent and keeps its handle, so a fade raises it.
+    #[test]
+    fn a_silent_mod_sound_starts_and_a_fade_raises_it() {
+        use mod_api::SoundState::*;
+        let mut audio = live_audio();
+        let ctx = TickContext::default();
+        let silent = mod_api::SoundPlay::ui("minecraft:ui.button.click").with_volume(0.0);
+        let sound = audio.play_mod_sound(&silent, 0);
+        assert_eq!(audio.mod_sound_state(sound), Playing, "started silently");
+        audio.fade_mod_sound(sound, 1.0, 2);
+        audio.tick(false, &ctx);
+        assert_eq!(volume_of(&audio, sound), Some(0.5));
+        audio.tick(false, &ctx);
+        assert_eq!(volume_of(&audio, sound), Some(1.0));
+        assert_eq!(audio.mod_sound_state(sound), Playing);
     }
 
     fn volume_of(audio: &Audio, id: InstanceId) -> Option<f32> {

@@ -5,7 +5,7 @@ use super::*;
 #[allow(dead_code)]
 impl Game<'_> {
     /// A snapshot of the current input preferences.
-    pub(in crate::game) fn native_input_options(&self) -> ClientInputOptions {
+    pub(in crate::game) fn input_options(&self) -> ClientInputOptions {
         let settings = &self.settings;
         ClientInputOptions {
             sensitivity: settings.sensitivity,

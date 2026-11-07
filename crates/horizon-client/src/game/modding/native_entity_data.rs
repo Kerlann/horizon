@@ -16,12 +16,12 @@ impl Game<'_> {
     /// The entity's data as `/data get entity` shows it
     /// (`Entity.saveWithoutId`): its compound without `id`. An entity with no
     /// UUID yet gets the one it will be saved with. API 386.
-    pub(super) fn native_entity_nbt(&mut self, entity: EntityRef) -> Option<Compound> {
+    pub(super) fn entity_nbt(&mut self, entity: EntityRef) -> Option<Compound> {
         if self.remote.is_some() {
             return None;
         }
         let t = self.native_entity_target(entity)?;
-        match self.entity_nbt(t)? {
+        match self.command_target_nbt(t)? {
             Tag::Compound(mut c) => {
                 c.remove(&"id".into());
                 Some(c)
@@ -35,14 +35,14 @@ impl Game<'_> {
     /// can't reload yet (only mobs, dropped items, armor stands and item
     /// frames), data nested too deep, or data that changes nothing. API
     /// 386.
-    pub(super) fn native_entity_merge_nbt(&mut self, entity: EntityRef, nbt: Compound) -> bool {
+    pub(super) fn entity_merge_nbt(&mut self, entity: EntityRef, nbt: Compound) -> bool {
         if self.remote.is_some() {
             return false;
         }
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };
-        let Some(old) = self.native_entity_nbt(entity).map(Tag::Compound) else {
+        let Some(old) = self.entity_nbt(entity).map(Tag::Compound) else {
             return false;
         };
         let nbt = Tag::Compound(nbt);
@@ -54,7 +54,7 @@ impl Game<'_> {
     }
     /// The entity's tags (`Entity.getTags`), as `/tag <entity> list` shows
     /// them. API 386.
-    pub(super) fn native_entity_tags(&self, entity: EntityRef) -> Option<Vec<String>> {
+    pub(super) fn entity_tags(&self, entity: EntityRef) -> Option<Vec<String>> {
         if self.remote.is_some() {
             return None;
         }
@@ -62,7 +62,7 @@ impl Game<'_> {
     }
     /// Adds tag `tag` (`Entity.addTag`): false when it has it already, holds
     /// 1024, its kind can't store tags yet, or the handle is stale. API 386.
-    pub(super) fn native_entity_add_tag(&mut self, entity: EntityRef, tag: &str) -> bool {
+    pub(super) fn entity_add_tag(&mut self, entity: EntityRef, tag: &str) -> bool {
         if self.remote.is_some() {
             return false;
         }
@@ -80,7 +80,7 @@ impl Game<'_> {
     }
     /// Removes tag `tag` (`Entity.removeTag`): false when it didn't have it.
     /// API 386.
-    pub(super) fn native_entity_remove_tag(&mut self, entity: EntityRef, tag: &str) -> bool {
+    pub(super) fn entity_remove_tag(&mut self, entity: EntityRef, tag: &str) -> bool {
         if self.remote.is_some() {
             return false;
         }
@@ -97,7 +97,7 @@ impl Game<'_> {
     /// @API:client_entity_refs@), from the custom name the server synced
     /// (`Entity.DATA_CUSTOM_NAME`) and a player's profile name. API
     /// 386.
-    pub(super) fn native_entity_name(&self, entity: EntityRef) -> Option<String> {
+    pub(super) fn entity_name(&self, entity: EntityRef) -> Option<String> {
         let t = self.native_entity_read_target(entity)?;
         if let Some(r) = &self.remote {
             let id = i32::try_from(entity.id()).ok()?;
@@ -122,11 +122,7 @@ impl Game<'_> {
     /// player, a kind whose name Horizon keeps nowhere yet (projectiles, the
     /// dragon and crystals, primed TNT, falling blocks, experience orbs,
     /// ominous item spawners), a stale handle or on a client.
-    pub(super) fn native_entity_set_custom_name(
-        &mut self,
-        entity: EntityRef,
-        name: Option<Text>,
-    ) -> bool {
+    pub(super) fn entity_set_custom_name(&mut self, entity: EntityRef, name: Option<Text>) -> bool {
         let Some(id) = self.name_holder(entity) else {
             return false;
         };
@@ -144,7 +140,7 @@ impl Game<'_> {
     }
     /// Whether the entity's name shows over it at any distance
     /// (`Entity.isCustomNameVisible`); false for the kinds that keep no name.
-    pub(super) fn native_entity_custom_name_visible(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_custom_name_visible(&self, entity: EntityRef) -> Option<bool> {
         let t = self.native_entity_target(entity)?;
         let Some(id) = named_id(t) else {
             return Some(false);
@@ -163,7 +159,7 @@ impl Game<'_> {
     /// Shows the entity's name at any distance, or only when looked at
     /// (`Entity.setCustomNameVisible`): saved, and sent to the players
     /// tracking a mob or an armor stand. False where `set_custom_name` is.
-    pub(super) fn native_entity_set_custom_name_visible(
+    pub(super) fn entity_set_custom_name_visible(
         &mut self,
         entity: EntityRef,
         visible: bool,
@@ -183,7 +179,7 @@ impl Game<'_> {
     }
     /// The category of the entity's type (`EntityType.getCategory`): a mob's
     /// from its type, `Monster` for the dragon, `Misc` for every other kind.
-    pub(super) fn native_entity_classification(&self, entity: EntityRef) -> Option<MobCategory> {
+    pub(super) fn entity_classification(&self, entity: EntityRef) -> Option<MobCategory> {
         Some(match self.native_entity_target(entity)? {
             Target::Mob(id) => match self.mobs.iter().find(|m| m.id == id)?.category() {
                 "monster" => MobCategory::Monster,
@@ -205,7 +201,7 @@ impl Game<'_> {
     /// tell (displays, markers, interactions, evoker fangs, area effect
     /// clouds, ominous item spawners), are in it while the handle names them.
     /// False for a stale handle or on a client.
-    pub(super) fn native_entity_added_to_level(&self, entity: EntityRef) -> bool {
+    pub(super) fn entity_added_to_level(&self, entity: EntityRef) -> bool {
         match self.native_entity_target(entity) {
             None => false,
             Some(
@@ -282,7 +278,7 @@ mod tests {
         let kind = game.res.mob_types().get(kind).unwrap().clone();
         game.mobs
             .push(Mob::new(id, kind, Vec3::new(0.5, 70.0, 0.5), 0.0));
-        game.native_entity(id).unwrap()
+        game.entity(id).unwrap()
     }
 
     #[test]
@@ -296,7 +292,7 @@ mod tests {
             assert!(mob.set_custom_name_visible(game, true));
             assert_eq!(mob.name(game).as_deref(), Some("Grumbles"));
             assert_eq!(mob.custom_name_visible(game), Some(true));
-            let saved = game.native_entity_nbt(mob).unwrap();
+            let saved = game.entity_nbt(mob).unwrap();
             assert_eq!(saved.get(&"CustomNameVisible".into()), Some(&Tag::Byte(1)));
 
             // Taken away: neither the name nor the flag is saved.
@@ -304,7 +300,7 @@ mod tests {
             assert!(mob.set_custom_name_visible(game, false));
             assert_ne!(mob.name(game).as_deref(), Some("Grumbles"));
             assert_eq!(mob.custom_name_visible(game), Some(false));
-            let cleared = game.native_entity_nbt(mob).unwrap();
+            let cleared = game.entity_nbt(mob).unwrap();
             assert!(!cleared.contains_key(&"CustomName".into()));
             assert!(!cleared.contains_key(&"CustomNameVisible".into()));
 
@@ -318,23 +314,23 @@ mod tests {
 
             // An armor stand keeps its name in its own field.
             game.armor_stands.push(ArmorStand::new(13, Vec3::ZERO, 0.0));
-            let stand = game.native_entity(13).unwrap();
+            let stand = game.entity(13).unwrap();
             assert!(stand.set_custom_name(game, Some(Text::literal("Sign"))));
             assert_eq!(stand.name(game).as_deref(), Some("Sign"));
-            let saved = game.native_entity_nbt(stand).unwrap();
+            let saved = game.entity_nbt(stand).unwrap();
             let loaded = saved
                 .get(&"CustomName".into())
                 .map(horizon_client::entity_nbt::name_text);
             assert_eq!(loaded, Some(Text::literal("Sign")));
             assert!(stand.set_custom_name(game, None));
-            let saved = game.native_entity_nbt(stand).unwrap();
+            let saved = game.entity_nbt(stand).unwrap();
             assert!(!saved.contains_key(&"CustomName".into()));
 
             // The dragon keeps no name: refused, and a stale handle too.
             let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
             dragon.id = 14;
             game.dragon = Some(dragon);
-            let dragon = game.native_entity(14).unwrap();
+            let dragon = game.entity(14).unwrap();
             assert!(!dragon.set_custom_name(game, Some(Text::literal("Puff"))));
             assert!(!dragon.set_custom_name_visible(game, true));
             assert!(mob.discard(game));
@@ -364,12 +360,12 @@ mod tests {
                 assert_eq!(mob.classification(game), Some(category), "{kind}");
             }
             game.armor_stands.push(ArmorStand::new(27, Vec3::ZERO, 0.0));
-            let stand = game.native_entity(27).unwrap();
+            let stand = game.entity(27).unwrap();
             assert_eq!(stand.classification(game), Some(MobCategory::Misc));
             let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
             dragon.id = 28;
             game.dragon = Some(dragon);
-            let dragon = game.native_entity(28).unwrap();
+            let dragon = game.entity(28).unwrap();
             assert_eq!(dragon.classification(game), Some(MobCategory::Monster));
         });
     }

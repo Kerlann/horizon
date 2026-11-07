@@ -5,7 +5,7 @@
 //! it), never while they are logging in, dead or swapped in. One stack moves
 //! at a time, checked against what the mod last showed, so a menu built on
 //! these never copies or loses an item. Server menus are in `native_menus.rs`;
-//! maps a mod draws in `native_send_map` below.
+//! maps a mod draws in `player_send_map` below.
 use super::{Game, commands::Target};
 use horizon_client::{
     items::ItemStack,
@@ -193,7 +193,7 @@ impl Game<'_> {
             } else if g.dead {
                 Err("the player is dead".into())
             } else if !matches!(
-                self.native_player_ref(uuid)
+                self.player(uuid)
                     .and_then(|player| self.native_entity_target(player.entity())),
                 Some(Target::Guest(_))
             ) {
@@ -319,14 +319,14 @@ impl Game<'_> {
     /// map is never sent again by the game), so send it again after the
     /// player joins. Use ids far from the world's own (they count up from 0).
     /// False for a player not here, or `colors` not 16384 long.
-    pub(super) fn native_send_map(
+    pub(super) fn player_send_map(
         &mut self,
         player: PlayerRef,
         map_id: i32,
         colors: &[u8],
     ) -> bool {
         use horizon_protocol::packets::play::{Clientbound, MapItemData, MapPatch};
-        if self.native_player_is_fake(player) != Some(false) || colors.len() != 128 * 128 {
+        if self.player_is_fake(player) != Some(false) || colors.len() != 128 * 128 {
             return false;
         }
         self.native_send(

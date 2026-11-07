@@ -576,7 +576,7 @@ impl Game<'_> {
     /// Replace both ID views; keep the existing registry tags intact.
     pub(super) fn sync_enchantment_registries(&mut self) {
         let mut ids: Vec<String> = self
-            .enchantments()
+            .active_enchantment_definitions()
             .list
             .iter()
             .map(|entry| entry.id.to_string())
@@ -758,10 +758,10 @@ impl Game<'_> {
             .as_ref()
             .filter(|d| !command || d.command)
             .map(|d| d.text.clone());
-        self.open_chat(draft.as_deref().unwrap_or(prefix));
+        self.begin_chat_screen(draft.as_deref().unwrap_or(prefix));
         self.ui.chat_draft_shown = draft.is_some() && self.ui.chat_screen.is_some();
     }
-    pub(super) fn open_chat(&mut self, initial: &str) {
+    pub(super) fn begin_chat_screen(&mut self, initial: &str) {
         if self.player.is_none() {
             return;
         }
@@ -874,11 +874,11 @@ impl Game<'_> {
                     .map_or_else(String::new, |s| s.value().to_owned());
                 self.close_chat(ChatExit::Interrupted);
                 if !text.is_empty() {
-                    self.open_chat(&text);
+                    self.begin_chat_screen(&text);
                 }
             }
         } else if self.sleeping.is_some() && self.screen == Screen::Playing {
-            self.open_chat("");
+            self.begin_chat_screen("");
             self.ui.in_bed_chat = self.screen == Screen::Chat;
         }
     }
@@ -1432,14 +1432,14 @@ impl Game<'_> {
             Text::translate("gui.entity_tooltip.type", &[kind]),
             u32::MAX,
         ));
-        if let Some(uuid) = entity.get("uuid").and_then(Self::entity_uuid) {
+        if let Some(uuid) = entity.get("uuid").and_then(Self::hover_event_entity_uuid) {
             lines.push((Text::literal(uuid), u32::MAX));
         }
         lines
     }
     /// The UUID of a ShowEntity event: its string, or the int array
     /// `UUIDUtil.CODEC` writes (most significant word first).
-    fn entity_uuid(v: &serde_json::Value) -> Option<String> {
+    fn hover_event_entity_uuid(v: &serde_json::Value) -> Option<String> {
         if let Some(s) = v.as_str() {
             return Some(s.to_owned());
         }
@@ -2403,8 +2403,8 @@ mod enchantment_snapshot_tests {
         .unwrap();
         game.build_registries();
 
-        let dir =
-            std::path::PathBuf::from(std::env::var_os("HORIZON_HOME").unwrap()).join("h024-model");
+        let dir = std::env::temp_dir().join(format!("horizon-h024-model-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
         let pack = dir.join("datapacks/model");
         let tags = pack.join("data/h024/tags/enchantment");
         std::fs::create_dir_all(&tags).unwrap();
@@ -2437,7 +2437,9 @@ mod enchantment_snapshot_tests {
         game.world_tables.as_mut().unwrap().stations.enchantments = synced.clone();
         game.world_tables.as_mut().unwrap().items.enchantments = synced;
         assert!(
-            game.enchantments().get("h024:audit").is_some(),
+            game.active_enchantment_definitions()
+                .get("h024:audit")
+                .is_some(),
             "actual authority adopts the definition first"
         );
         let tags = vec!["h024:retained_tag".to_owned()];
@@ -2478,7 +2480,11 @@ mod enchantment_snapshot_tests {
         }
         game.world_tables.as_mut().unwrap().stations.enchantments = base.clone();
         game.world_tables.as_mut().unwrap().items.enchantments = base;
-        assert!(game.enchantments().get("h024:audit").is_none());
+        assert!(
+            game.active_enchantment_definitions()
+                .get("h024:audit")
+                .is_none()
+        );
         game.sync_function_registries(&stack);
         assert!(
             !game

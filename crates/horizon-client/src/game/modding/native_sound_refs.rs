@@ -17,7 +17,7 @@ use mod_api::{EntityRef, PlayerRef, SoundSource};
 impl Game<'_> {
     /// Where `player` is reached now: the window's own player or a guest.
     fn native_player_sound_target(&self, player: PlayerRef) -> Option<Target> {
-        if self.native_player_ref(player.uuid()) != Some(player) {
+        if self.player(player.uuid()) != Some(player) {
             return None;
         }
         match self.native_entity_target(player.entity())? {
@@ -38,7 +38,7 @@ impl Game<'_> {
     /// `StopSoundCommand` for one player: their client stops the playing
     /// sounds that match `sound` (an event id) and `source`; `None` matches
     /// any. True means sent.
-    pub(super) fn native_player_stop_sound(
+    pub(super) fn player_stop_sound(
         &mut self,
         player: PlayerRef,
         sound: Option<&str>,
@@ -57,7 +57,7 @@ impl Game<'_> {
     /// player, for them only, under `source`'s volume slider. The seed is the
     /// level random's `nextLong`, drawn once per call. True means sent, not
     /// heard.
-    pub(super) fn native_player_play_sound(
+    pub(super) fn player_play_sound(
         &mut self,
         player: PlayerRef,
         sound: &str,
@@ -85,7 +85,7 @@ impl Game<'_> {
     /// the players within range (16 blocks, times the volume above 1) of
     /// where it is now, the entity's own player too. True means queued, not
     /// heard; false for an entity outside the level in place.
-    pub(super) fn native_entity_play_bound_sound(
+    pub(super) fn entity_play_bound_sound(
         &mut self,
         entity: EntityRef,
         sound: &str,
@@ -97,7 +97,7 @@ impl Game<'_> {
             return false;
         };
         let (Some(level), Some(at), Ok(id)) = (
-            self.native_entity_level(entity),
+            self.entity_level(entity),
             self.target_position(target),
             i32::try_from(entity.id()),
         ) else {
@@ -194,14 +194,14 @@ pub(super) mod tests {
             let (b, rx_b) = guest(22, 22, [3.0, 64.0, 2.0]);
             let (far, rx_far) = guest(23, 23, [900.0, 64.0, 2.0]);
             game.lan.as_mut().unwrap().hub.guests.extend([a, b, far]);
-            let pa = game.native_player_ref(21).unwrap();
-            let pb = game.native_player_ref(22).unwrap();
+            let pa = game.player(21).unwrap();
+            let pb = game.player(22).unwrap();
             let sound = "minecraft:entity.player.burp";
 
             // stop_sound: only the named player's connection.
-            assert!(game.native_player_stop_sound(pa, Some(sound), Some(SoundSource::Players)));
-            assert!(game.native_player_stop_sound(pa, None, None));
-            assert!(!game.native_player_stop_sound(pa, Some("bad id"), None));
+            assert!(game.player_stop_sound(pa, Some(sound), Some(SoundSource::Players)));
+            assert!(game.player_stop_sound(pa, None, None));
+            assert!(!game.player_stop_sound(pa, Some("bad id"), None));
             let got = packets(&rx_a);
             assert_eq!(got.len(), 2);
             let Clientbound::StopSound(first) = &got[0] else {
@@ -216,9 +216,9 @@ pub(super) mod tests {
             assert!(packets(&rx_b).is_empty());
 
             // play_sound: one packet for one player, at their position.
-            assert!(game.native_player_play_sound(pb, sound, SoundSource::Neutral, 0.5, 1.5));
-            assert!(!game.native_player_play_sound(pb, sound, SoundSource::Neutral, 1.0, f32::NAN));
-            assert!(!game.native_player_play_sound(
+            assert!(game.player_play_sound(pb, sound, SoundSource::Neutral, 0.5, 1.5));
+            assert!(!game.player_play_sound(pb, sound, SoundSource::Neutral, 1.0, f32::NAN));
+            assert!(!game.player_play_sound(
                 pb,
                 "minecraft:no.such.sound",
                 SoundSource::Neutral,
@@ -243,29 +243,17 @@ pub(super) mod tests {
                 ),
                 pa.fields().uuid,
             );
-            assert!(!game.native_player_stop_sound(stale, None, None));
-            assert!(!game.native_player_play_sound(stale, sound, SoundSource::Players, 1.0, 1.0));
-            assert!(game.native_player_ref(99).is_none());
+            assert!(!game.player_stop_sound(stale, None, None));
+            assert!(!game.player_play_sound(stale, sound, SoundSource::Players, 1.0, 1.0));
+            assert!(game.player(99).is_none());
 
             // play_bound_sound: players in range get a SoundEntity packet.
             let kind = game.res.mob_types().get("minecraft:cow").unwrap().clone();
             game.mobs
                 .push(Mob::new(40, kind, Vec3::new(2.0, 64.0, 2.0), 0.0));
-            let cow = game.native_entity(40).unwrap();
-            assert!(game.native_entity_play_bound_sound(
-                cow,
-                sound,
-                SoundSource::Neutral,
-                1.0,
-                1.0
-            ));
-            assert!(!game.native_entity_play_bound_sound(
-                cow,
-                sound,
-                SoundSource::Neutral,
-                -1.0,
-                1.0
-            ));
+            let cow = game.entity(40).unwrap();
+            assert!(game.entity_play_bound_sound(cow, sound, SoundSource::Neutral, 1.0, 1.0));
+            assert!(!game.entity_play_bound_sound(cow, sound, SoundSource::Neutral, -1.0, 1.0));
             game.flush_native_sounds();
             for rx in [&rx_a, &rx_b] {
                 let got = packets(rx);
@@ -320,7 +308,7 @@ pub(super) mod tests {
             let (edge, rx_edge) = guest(32, 32, [0.5, 64.0, 16.0]);
             game.lan.as_mut().unwrap().hub.guests.extend([near, edge]);
 
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let sound = "minecraft:entity.player.burp";
             // The sound source's draws bookend the queue's: each queued sound
             // takes one of its own, distinct from every neighbour's.

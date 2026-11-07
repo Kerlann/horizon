@@ -14,7 +14,7 @@ pub(super) fn team_color(team: Option<&sb::Team>) -> u32 {
 impl Game<'_> {
     /// `Entity.isCurrentlyGlowing` of an entity that is not living (an item, a projectile):
     /// its `Glowing` tag, or shared flag 6 as a server sent it.
-    pub(super) fn entity_glowing(&self, id: u32) -> bool {
+    pub(super) fn tracked_entity_glowing(&self, id: u32) -> bool {
         self.remote_glowing(id).unwrap_or_else(|| {
             self.persist_raw(id)
                 .and_then(|t| horizon_client::save::number(t.get("Glowing")))
@@ -33,7 +33,7 @@ impl Game<'_> {
     /// The outline of a dropped item or projectile: its `Glowing` flag, in its team's colour.
     pub(super) fn thing_outline(&self, id: u32, kind: &str) -> Option<u32> {
         let vanilla = self
-            .entity_glowing(id)
+            .tracked_entity_glowing(id)
             .then(|| team_color(self.mob_team(id)));
         self.entity_outline(id, kind, vanilla)
     }

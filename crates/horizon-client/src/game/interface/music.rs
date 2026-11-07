@@ -215,6 +215,8 @@ impl Game<'_> {
     pub(super) fn stop_sounds_for_new_level(&mut self) {
         self.ambience.clear(&mut self.audio);
         self.audio.stop_all();
+        // Mod plays still queued for the next audio update go too.
+        self.mod_sounds.clear();
     }
     /// `getSituationalMusic` and `getMusicVolume`.
     pub(super) fn situational_music(&self) -> (Option<Music>, f32) {

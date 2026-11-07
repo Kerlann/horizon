@@ -159,7 +159,7 @@ impl Game<'_> {
     /// The entity as a vanilla Mob: a mob or the ender dragon. Players, armor
     /// stands, stale handles and clients are rejected. Mobs taken out for
     /// ticking are unavailable (a #29 follow-up).
-    pub(super) fn native_mob_ref(&self, entity: EntityRef) -> Option<MobRef> {
+    pub(super) fn mob(&self, entity: EntityRef) -> Option<MobRef> {
         match self.native_entity_target(entity)? {
             Target::Mob(_) | Target::Dragon(_) => Some(MobRef::new(entity)),
             _ => None,
@@ -167,16 +167,16 @@ impl Game<'_> {
     }
 
     /// The existing portal decision for an available mob in the current level.
-    pub(super) fn native_mob_can_use_portal(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn mob_can_use_portal(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
         let mob = self.mobs.iter().find(|m| m.id == id)?;
-        Some(self.mob_can_use_portal(mob))
+        Some(self.mob_portal_eligible(mob))
     }
 
     /// The live leash holder, refusing unresolved saved and unavailable holders.
-    pub(super) fn native_mob_leash_holder(&self, mob: MobRef) -> Option<MobLeashHolder> {
+    pub(super) fn mob_leash_holder(&self, mob: MobRef) -> Option<MobLeashHolder> {
         use horizon_client::mobs::leash::Holder;
 
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
@@ -190,14 +190,14 @@ impl Game<'_> {
             None => MobLeashHolder::Unleashed,
             Some(Holder::Knot(pos)) => MobLeashHolder::Knot(pos),
             Some(Holder::Mob(id)) => {
-                let entity = self.native_entity(id)?;
+                let entity = self.entity(id)?;
                 if !matches!(self.native_entity_target(entity), Some(Target::Mob(_))) {
                     return None;
                 }
                 MobLeashHolder::Entity(entity)
             }
             Some(Holder::Boat(id)) => {
-                let entity = self.native_entity(id)?;
+                let entity = self.entity(id)?;
                 if !matches!(self.native_entity_target(entity), Some(Target::Boat(_))) {
                     return None;
                 }
@@ -205,8 +205,7 @@ impl Game<'_> {
             }
             Some(Holder::Player) => {
                 let uuid = mob.extra.leash_player?;
-                let player =
-                    self.native_player_ref(horizon_client::lan::playerdata::ints_uuid(uuid))?;
+                let player = self.player(horizon_client::lan::playerdata::ints_uuid(uuid))?;
                 MobLeashHolder::Entity(player.entity())
             }
         })
@@ -217,7 +216,7 @@ impl Game<'_> {
     /// unavailable mob or player binding, or a target without a living handle
     /// read as None. The dragon reads what a mod set, while it stays a valid
     /// target (`EnderDragon.canAttack`); its flight never sets one.
-    pub(super) fn native_mob_target(&self, mob: MobRef) -> Option<LivingRef> {
+    pub(super) fn mob_target(&self, mob: MobRef) -> Option<LivingRef> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return self.native_dragon_target(mob.entity());
         };
@@ -231,9 +230,9 @@ impl Game<'_> {
                 u32::try_from(host.hub.guest(*conn)?.entity_id).ok()?
             }
         };
-        let entity = self.native_entity(target_id)?;
+        let entity = self.entity(target_id)?;
         self.native_mob_valid_target(mob, self.native_entity_target(entity)?)
-            .then(|| self.native_living(entity))?
+            .then(|| self.living(entity))?
     }
 
     /// `Mob.setTarget`; None clears it. Only mobs and players whose binding
@@ -246,7 +245,7 @@ impl Game<'_> {
     /// Invalid targets are refused (false, mob unchanged); vanilla instead
     /// stores `asValidTarget(target)`, clearing the target when it is invalid.
     /// False also means a stale handle, client, or an unavailable mob/player.
-    pub(super) fn native_mob_set_target(&mut self, mob: MobRef, target: Option<LivingRef>) -> bool {
+    pub(super) fn mob_set_target(&mut self, mob: MobRef, target: Option<LivingRef>) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return self.native_dragon_set_target(mob.entity(), target);
         };
@@ -327,11 +326,7 @@ impl Game<'_> {
     /// False for a fake player, a player in another level, a mob without an
     /// attack-target brain (`MobRef::set_target` writes those), a stale or
     /// unavailable mob, the dragon, or on a client.
-    pub(super) fn native_mob_set_brain_target(
-        &mut self,
-        mob: MobRef,
-        target: Option<LivingRef>,
-    ) -> bool {
+    pub(super) fn mob_set_brain_target(&mut self, mob: MobRef, target: Option<LivingRef>) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -392,25 +387,25 @@ impl Game<'_> {
 
     /// `Mob.isAggressive`, the synced mob flag (the dragon's reaches its
     /// clients as `DATA_MOB_FLAGS_ID`).
-    pub(super) fn native_mob_is_aggressive(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn mob_is_aggressive(&self, mob: MobRef) -> Option<bool> {
         self.native_mob_flag(mob, MobFlag::Aggressive)
     }
 
     /// `Mob.setAggressive`. False for an unavailable mob.
-    pub(super) fn native_mob_set_aggressive(&mut self, mob: MobRef, value: bool) -> bool {
+    pub(super) fn mob_set_aggressive(&mut self, mob: MobRef, value: bool) -> bool {
         self.native_mob_set_flag(mob, MobFlag::Aggressive, value)
     }
 
     /// `Mob.isPersistenceRequired`. The dragon never despawns
     /// (`EnderDragon.checkDespawn` is empty), but keeps and saves the flag
     /// (`PersistenceRequired`).
-    pub(super) fn native_mob_persistence_required(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn mob_persistence_required(&self, mob: MobRef) -> Option<bool> {
         self.native_mob_flag(mob, MobFlag::Persistent)
     }
 
     /// `Mob.setPersistenceRequired`, which sets the flag and cannot clear it.
     /// False for an unavailable mob.
-    pub(super) fn native_mob_set_persistence_required(&mut self, mob: MobRef) -> bool {
+    pub(super) fn mob_set_persistence_required(&mut self, mob: MobRef) -> bool {
         self.native_mob_set_flag(mob, MobFlag::Persistent, true)
     }
 
@@ -418,7 +413,7 @@ impl Game<'_> {
     /// leashed mobs and species-specific reasons to stay, such as an enderman
     /// carrying a block. Independent of `PersistenceRequired` and `NoAI`.
     /// None for an unavailable mob or the separately modeled dragon.
-    pub(super) fn native_mob_requires_custom_persistence(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn mob_requires_custom_persistence(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -432,7 +427,7 @@ impl Game<'_> {
     /// while what NoAI keeps running in vanilla (the daylight burn of the
     /// undead, a horse's tail) still does. Saved with it as `NoAI`. None
     /// for anything but a mob.
-    pub(super) fn native_mob_no_ai(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn mob_no_ai(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -442,7 +437,7 @@ impl Game<'_> {
     /// `Mob.setNoAi`: whether the mob's own AI runs. With no AI the mob
     /// stands (what NoAI keeps in vanilla still runs), and the flag is
     /// saved with it as `NoAI`. False for anything but a mob.
-    pub(super) fn native_mob_set_no_ai(&mut self, mob: MobRef, no_ai: bool) -> bool {
+    pub(super) fn mob_set_no_ai(&mut self, mob: MobRef, no_ai: bool) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -457,7 +452,7 @@ impl Game<'_> {
     /// reason to stay (a player near, a hit). Despawning and a raid's
     /// recruiting read it. None for a stale or unavailable mob, the dragon,
     /// or on a client.
-    pub(super) fn native_mob_no_action_time(&self, mob: MobRef) -> Option<i32> {
+    pub(super) fn mob_no_action_time(&self, mob: MobRef) -> Option<i32> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -474,7 +469,7 @@ impl Game<'_> {
     /// on from (a far-away mob's despawn chance starts past 600). Not saved,
     /// as in vanilla. False for a stale or unavailable mob, the dragon, or
     /// on a client.
-    pub(super) fn native_mob_set_no_action_time(&mut self, mob: MobRef, ticks: i32) -> bool {
+    pub(super) fn mob_set_no_action_time(&mut self, mob: MobRef, ticks: i32) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -491,7 +486,7 @@ impl Game<'_> {
     /// babies, such as zombies, keep their non-growing baby state instead.
     /// Leaves `NoAI` and `PersistenceRequired` unchanged. False, with no
     /// changes, for an unavailable mob or a species with no baby form.
-    pub(super) fn native_mob_set_baby(&mut self, mob: MobRef, baby: bool) -> bool {
+    pub(super) fn mob_set_baby(&mut self, mob: MobRef, baby: bool) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -514,7 +509,7 @@ impl Game<'_> {
     /// hold their look control, as in vanilla: the wanted position waits
     /// until it runs again. False for non-finite coordinates, a stale or
     /// unavailable mob, a client, and the dragon.
-    pub(super) fn native_mob_look_at(&mut self, mob: MobRef, at: [f64; 3]) -> bool {
+    pub(super) fn mob_look_at(&mut self, mob: MobRef, at: [f64; 3]) -> bool {
         if at.iter().any(|v| !v.is_finite()) {
             return false;
         }
@@ -535,7 +530,7 @@ impl Game<'_> {
     /// species refuses. A creaking being looked at holds its jump control,
     /// as in vanilla: the wish waits until it runs again. False for a stale
     /// or unavailable mob, a client, and the dragon.
-    pub(super) fn native_mob_jump(&mut self, mob: MobRef) -> bool {
+    pub(super) fn mob_jump(&mut self, mob: MobRef) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -552,12 +547,7 @@ impl Game<'_> {
     /// while keeping `pos` as the center, `clear_restriction`'s shape. The
     /// area is saved with the mob (`home_pos`, `home_radius`). False for a
     /// stale or unavailable mob, a client, and the dragon.
-    pub(super) fn native_mob_restrict_to(
-        &mut self,
-        mob: MobRef,
-        at: [i32; 3],
-        radius: i32,
-    ) -> bool {
+    pub(super) fn mob_restrict_to(&mut self, mob: MobRef, at: [i32; 3], radius: i32) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -572,7 +562,7 @@ impl Game<'_> {
     /// after `clear_restriction` and after a load (`[0, 0, 0]` for a mob
     /// that never had one, vanilla's `ZERO`). None for a stale or
     /// unavailable mob, a client, and the dragon.
-    pub(super) fn native_mob_restrict_center(&self, mob: MobRef) -> Option<[i32; 3]> {
+    pub(super) fn mob_restrict_center(&self, mob: MobRef) -> Option<[i32; 3]> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -587,7 +577,7 @@ impl Game<'_> {
 
     /// `Mob.getRestrictRadius`: `-1` while the mob has no restriction.
     /// None for a stale or unavailable mob, a client, and the dragon.
-    pub(super) fn native_mob_restrict_radius(&self, mob: MobRef) -> Option<i32> {
+    pub(super) fn mob_restrict_radius(&self, mob: MobRef) -> Option<i32> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -603,7 +593,7 @@ impl Game<'_> {
 
     /// `Mob.hasRestriction`. None for a stale or unavailable mob, a client,
     /// and the dragon.
-    pub(super) fn native_mob_has_restriction(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn mob_has_restriction(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -620,7 +610,7 @@ impl Game<'_> {
     /// `Mob.clearRestriction`: the restriction goes, the center stays (its
     /// own goals read no restriction, as vanilla's `-1` radius). False for
     /// a stale or unavailable mob, a client, and the dragon.
-    pub(super) fn native_mob_clear_restriction(&mut self, mob: MobRef) -> bool {
+    pub(super) fn mob_clear_restriction(&mut self, mob: MobRef) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -635,11 +625,7 @@ impl Game<'_> {
     /// the home area; a mob without a restriction is within everywhere, as
     /// in vanilla. None for a stale or unavailable mob, a client, and the
     /// dragon.
-    pub(super) fn native_mob_is_within_restriction(
-        &self,
-        mob: MobRef,
-        at: [i32; 3],
-    ) -> Option<bool> {
+    pub(super) fn mob_is_within_restriction(&self, mob: MobRef, at: [i32; 3]) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -654,7 +640,7 @@ impl Game<'_> {
 
     /// `Mob.isLeftHanded`: whether the mob holds things in its left hand
     /// (the mob flags in its entity data). None for anything but a mob.
-    pub(super) fn native_mob_left_handed(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn mob_left_handed(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -670,7 +656,7 @@ impl Game<'_> {
     /// `Mob.setLeftHanded`: sets the mob flag the players around get with
     /// the mob's next entity data and see in its swing and held items.
     /// Saved with the mob as `LeftHanded`. False for anything but a mob.
-    pub(super) fn native_mob_set_left_handed(&mut self, mob: MobRef, left_handed: bool) -> bool {
+    pub(super) fn mob_set_left_handed(&mut self, mob: MobRef, left_handed: bool) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -684,7 +670,7 @@ impl Game<'_> {
     /// `Mob.canPickUpLoot`, with the overrides of an allay (holding
     /// something) and a sulfur cube (with no block). None for anything but
     /// a mob.
-    pub(super) fn native_mob_can_pick_up_loot(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn mob_can_pick_up_loot(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -700,11 +686,7 @@ impl Game<'_> {
     /// (saved with it as `CanPickUpLoot`; clients are not told, as in
     /// vanilla). An allay and a sulfur cube decide for themselves. False
     /// for anything but a mob.
-    pub(super) fn native_mob_set_can_pick_up_loot(
-        &mut self,
-        mob: MobRef,
-        can_pick_up: bool,
-    ) -> bool {
+    pub(super) fn mob_set_can_pick_up_loot(&mut self, mob: MobRef, can_pick_up: bool) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -727,8 +709,7 @@ mod tests {
     fn add_mob(game: &mut Game<'_>, id: u32, name: &str) -> MobRef {
         let kind = game.res.mob_types().get(name).unwrap().clone();
         game.mobs.push(Mob::new(id, kind, Vec3::ZERO, 0.0));
-        game.native_mob_ref(game.native_entity(id).unwrap())
-            .unwrap()
+        game.mob(game.entity(id).unwrap()).unwrap()
     }
 
     #[test]
@@ -796,7 +777,7 @@ mod tests {
             let other = add_mob(game, 13, "minecraft:cow");
             game.boats
                 .push(Boat::new(14, "oak".into(), Vec3::ZERO, 0.0));
-            let boat = game.native_entity(14).unwrap();
+            let boat = game.entity(14).unwrap();
             assert_eq!(cow.leash_holder(game), Some(MobLeashHolder::Unleashed));
             let motion =
                 horizon_client::motion::PlayerMotion::new(game.motion, Vec3::ZERO).unwrap();
@@ -810,7 +791,7 @@ mod tests {
                 assert!(game.interact_leash(0, "minecraft:lead"));
                 assert_eq!(
                     cow.leash_holder(game),
-                    Some(MobLeashHolder::Entity(game.native_entity(20).unwrap()))
+                    Some(MobLeashHolder::Entity(game.entity(20).unwrap()))
                 );
             })
             .unwrap();
@@ -849,7 +830,7 @@ mod tests {
                     .iter()
                     .find(|m| m.id == handle.entity().id())
                     .unwrap();
-                assert_eq!(game.mob_can_use_portal(mob), expected);
+                assert_eq!(game.mob_portal_eligible(mob), expected);
                 let host: &dyn mod_api::Host = game;
                 assert_eq!(handle.can_use_portal(host), Some(expected));
             };
@@ -1025,9 +1006,7 @@ mod tests {
             let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
             dragon.id = 15;
             game.dragon = Some(dragon);
-            let dragon = game
-                .native_mob_ref(game.native_entity(15).unwrap())
-                .unwrap();
+            let dragon = game.mob(game.entity(15).unwrap()).unwrap();
             assert_eq!(dragon.requires_custom_persistence(game), None);
             assert!(!dragon.set_baby(game, true));
         });
@@ -1092,10 +1071,8 @@ mod tests {
                 .unwrap()
                 .clone();
             game.mobs.push(Mob::new(12, zombie, Vec3::ZERO, 0.0));
-            let mob = game
-                .native_mob_ref(game.native_entity(12).unwrap())
-                .unwrap();
-            let player = game.native_living(game.native_entity(20).unwrap()).unwrap();
+            let mob = game.mob(game.entity(12).unwrap()).unwrap();
+            let player = game.living(game.entity(20).unwrap()).unwrap();
             assert!(mob.set_target(game, Some(player)));
             assert_eq!(mob.target(game), Some(player));
             assert_eq!(game.lan.as_ref().unwrap().mob_players.get(&12), Some(&1));
@@ -1150,12 +1127,9 @@ mod tests {
                 let kind = game.res.mob_types().get(name).unwrap().clone();
                 game.mobs.push(Mob::new(id, kind, Vec3::ZERO, 0.0));
             }
-            let handle = |game: &Game<'_>, id| {
-                game.native_mob_ref(game.native_entity(id).unwrap())
-                    .unwrap()
-            };
+            let handle = |game: &Game<'_>, id| game.mob(game.entity(id).unwrap()).unwrap();
             let (fox, enderman, piglin) = (handle(game, 12), handle(game, 13), handle(game, 14));
-            let other = game.native_living(game.native_entity(15).unwrap()).unwrap();
+            let other = game.living(game.entity(15).unwrap()).unwrap();
             let state =
                 |game: &Game<'_>, id| game.mobs.iter().find(|m| m.id == id).unwrap().clone();
 
@@ -1215,11 +1189,8 @@ mod tests {
                 let kind = game.res.mob_types().get(name).unwrap().clone();
                 game.mobs.push(Mob::new(id, kind, Vec3::ZERO, 0.0));
             }
-            let handle = |game: &Game<'_>, id| {
-                game.native_mob_ref(game.native_entity(id).unwrap())
-                    .unwrap()
-            };
-            let golem = game.native_living(game.native_entity(21).unwrap()).unwrap();
+            let handle = |game: &Game<'_>, id| game.mob(game.entity(id).unwrap()).unwrap();
+            let golem = game.living(game.entity(21).unwrap()).unwrap();
             // Each brain keeps the memory where its behaviours read it, and the
             // read handle answers it back; clearing erases it.
             for id in [12, 13, 14, 15, 16, 17, 18] {
@@ -1296,14 +1267,13 @@ mod tests {
             dragon.id = 15;
             game.dragon = Some(dragon);
             assert!(
-                game.native_mob_ref(game.native_entity(15).unwrap())
-                    .is_some(),
+                game.mob(game.entity(15).unwrap()).is_some(),
                 "the dragon is a Mob"
             );
-            let entity = game.native_entity(12).unwrap();
-            let mob = game.native_mob_ref(entity).unwrap();
-            let other = game.native_living(game.native_entity(13).unwrap()).unwrap();
-            let stand = game.native_living(game.native_entity(14).unwrap()).unwrap();
+            let entity = game.entity(12).unwrap();
+            let mob = game.mob(entity).unwrap();
+            let other = game.living(game.entity(13).unwrap()).unwrap();
+            let stand = game.living(game.entity(14).unwrap()).unwrap();
             for (id, name) in [
                 (16, "minecraft:creaking"),
                 (17, "minecraft:creeper"),
@@ -1314,9 +1284,7 @@ mod tests {
                 let kind = game.res.mob_types().get(name).unwrap().clone();
                 game.mobs.push(Mob::new(id, kind, Vec3::ZERO, 0.0));
             }
-            let brain = game
-                .native_mob_ref(game.native_entity(16).unwrap())
-                .unwrap();
+            let brain = game.mob(game.entity(16).unwrap()).unwrap();
             mobs::monster_brain::set_attack_target(
                 game.mobs.iter_mut().find(|m| m.id == 16).unwrap(),
                 Some(Who::Mob(13)),
@@ -1324,10 +1292,8 @@ mod tests {
             assert_eq!(brain.target(game), Some(other));
             assert!(!brain.set_target(game, None));
             assert_eq!(brain.target(game), Some(other));
-            let warden = game
-                .native_mob_ref(game.native_entity(19).unwrap())
-                .unwrap();
-            let ghast = game.native_living(game.native_entity(21).unwrap()).unwrap();
+            let warden = game.mob(game.entity(19).unwrap()).unwrap();
+            let ghast = game.living(game.entity(21).unwrap()).unwrap();
             let warden_mob = game.mobs.iter_mut().find(|m| m.id == 19).unwrap();
             warden_mob
                 .extra
@@ -1344,39 +1310,37 @@ mod tests {
                 "warden can target a ghast, unlike Mob.canAttack"
             );
             assert!(!warden.set_target(game, None));
-            let creeper = game
-                .native_mob_ref(game.native_entity(17).unwrap())
-                .unwrap();
-            let goat = game.native_living(game.native_entity(18).unwrap()).unwrap();
+            let creeper = game.mob(game.entity(17).unwrap()).unwrap();
+            let goat = game.living(game.entity(18).unwrap()).unwrap();
             assert!(creeper.set_target(game, Some(other)));
             assert!(!creeper.set_target(game, Some(goat)));
             assert_eq!(creeper.target(game), Some(other));
-            assert!(game.native_mob_ref(stand.entity()).is_none());
+            assert!(game.mob(stand.entity()).is_none());
             assert_eq!(mob.living().entity(), entity);
-            assert_eq!(game.native_mob_is_aggressive(mob), Some(false));
-            assert!(game.native_mob_set_aggressive(mob, true));
-            assert_eq!(game.native_mob_is_aggressive(mob), Some(true));
-            assert_eq!(game.native_mob_persistence_required(mob), Some(false));
-            assert!(game.native_mob_set_persistence_required(mob));
-            assert_eq!(game.native_mob_persistence_required(mob), Some(true));
+            assert_eq!(game.mob_is_aggressive(mob), Some(false));
+            assert!(game.mob_set_aggressive(mob, true));
+            assert_eq!(game.mob_is_aggressive(mob), Some(true));
+            assert_eq!(game.mob_persistence_required(mob), Some(false));
+            assert!(game.mob_set_persistence_required(mob));
+            assert_eq!(game.mob_persistence_required(mob), Some(true));
             assert!(mob.set_target(game, Some(other)));
             assert_eq!(mob.target(game), Some(other));
-            assert!(!game.native_mob_set_target(mob, Some(stand)));
-            assert_eq!(game.native_mob_target(mob), Some(other));
+            assert!(!game.mob_set_target(mob, Some(stand)));
+            assert_eq!(game.mob_target(mob), Some(other));
             let stale = MobRef::new(EntityRef::new(
                 NativeWorldEpoch::new(entity.epoch().get() + 1),
                 12,
             ));
-            assert!(game.native_mob_ref(stale.entity()).is_none());
-            assert!(!game.native_mob_set_target(stale, None));
-            assert_eq!(game.native_mob_is_aggressive(stale), None);
+            assert!(game.mob(stale.entity()).is_none());
+            assert!(!game.mob_set_target(stale, None));
+            assert_eq!(game.mob_is_aggressive(stale), None);
             let taken = std::mem::take(&mut game.mobs);
-            assert_eq!(game.native_mob_target(mob), None);
-            assert!(!game.native_mob_set_target(mob, None));
+            assert_eq!(game.mob_target(mob), None);
+            assert!(!game.mob_set_target(mob, None));
             assert_eq!(taken[0].ai.target, Some(Who::Mob(13)));
             game.mobs = taken;
-            assert!(game.native_mob_set_target(mob, None));
-            assert_eq!(game.native_mob_target(mob), None);
+            assert!(game.mob_set_target(mob, None));
+            assert_eq!(game.mob_target(mob), None);
         });
     }
 
@@ -1400,10 +1364,8 @@ mod tests {
                 .clone();
             game.mobs
                 .push(Mob::new(16, creaking, Vec3::new(9.5, 65.0, 9.5), 0.0));
-            let mob = game
-                .native_mob_ref(game.native_entity(12).unwrap())
-                .unwrap();
-            assert!(game.native_mob_look_at(mob, [10.5, 66.0, -2.5]));
+            let mob = game.mob(game.entity(12).unwrap()).unwrap();
+            assert!(game.mob_look_at(mob, [10.5, 66.0, -2.5]));
             let (wanted, cooldown, speed) = {
                 let control = &game.mobs[0].ai.look;
                 (control.wanted, control.cooldown, control.y_max_rot_speed)
@@ -1411,18 +1373,16 @@ mod tests {
             assert_eq!(wanted, [10.5, 66.0, -2.5]);
             assert_eq!(cooldown, 2);
             assert_eq!(speed, game.mobs[0].kind.head_rot_speed);
-            assert!(!game.native_mob_look_at(mob, [f64::NAN, 66.0, 0.0]));
+            assert!(!game.mob_look_at(mob, [f64::NAN, 66.0, 0.0]));
             assert_eq!(game.mobs[0].ai.look.wanted, [10.5, 66.0, -2.5]);
             // A brain species writes through the same look control, so its
             // handle takes the wish too.
-            let brain = game
-                .native_mob_ref(game.native_entity(16).unwrap())
-                .unwrap();
-            assert!(game.native_mob_look_at(brain, [0.0, 66.0, 0.0]));
+            let brain = game.mob(game.entity(16).unwrap()).unwrap();
+            assert!(game.mob_look_at(brain, [0.0, 66.0, 0.0]));
             assert_eq!(game.mobs[1].ai.look.wanted, [0.0, 66.0, 0.0]);
-            assert!(game.native_mob_jump(brain));
+            assert!(game.mob_jump(brain));
             assert!(game.mobs[1].ai.jump);
-            assert!(game.native_mob_jump(mob));
+            assert!(game.mob_jump(mob));
             assert!(game.mobs[0].ai.jump);
             // JumpControl.tick consumes the wish as the next tick's jump.
             game.mobs[0].jump_control_tick();
@@ -1444,27 +1404,25 @@ mod tests {
                 .clone();
             game.mobs
                 .push(Mob::new(12, zombie, Vec3::new(3.5, 65.0, 3.5), 0.0));
-            let mob = game
-                .native_mob_ref(game.native_entity(12).unwrap())
-                .unwrap();
-            assert_eq!(game.native_mob_restrict_center(mob), Some([0, 0, 0]));
-            assert_eq!(game.native_mob_restrict_radius(mob), Some(-1));
-            assert_eq!(game.native_mob_has_restriction(mob), Some(false));
+            let mob = game.mob(game.entity(12).unwrap()).unwrap();
+            assert_eq!(game.mob_restrict_center(mob), Some([0, 0, 0]));
+            assert_eq!(game.mob_restrict_radius(mob), Some(-1));
+            assert_eq!(game.mob_has_restriction(mob), Some(false));
             assert_eq!(
-                game.native_mob_is_within_restriction(mob, [900, 90, 900]),
+                game.mob_is_within_restriction(mob, [900, 90, 900]),
                 Some(true),
                 "an unrestricted mob is within everywhere"
             );
-            assert!(game.native_mob_restrict_to(mob, [10, 64, -5], 6));
-            assert_eq!(game.native_mob_has_restriction(mob), Some(true));
-            assert_eq!(game.native_mob_restrict_center(mob), Some([10, 64, -5]));
-            assert_eq!(game.native_mob_restrict_radius(mob), Some(6));
+            assert!(game.mob_restrict_to(mob, [10, 64, -5], 6));
+            assert_eq!(game.mob_has_restriction(mob), Some(true));
+            assert_eq!(game.mob_restrict_center(mob), Some([10, 64, -5]));
+            assert_eq!(game.mob_restrict_radius(mob), Some(6));
             assert_eq!(
-                game.native_mob_is_within_restriction(mob, [12, 64, -2]),
+                game.mob_is_within_restriction(mob, [12, 64, -2]),
                 Some(true)
             );
             assert_eq!(
-                game.native_mob_is_within_restriction(mob, [20, 64, 0]),
+                game.mob_is_within_restriction(mob, [20, 64, 0]),
                 Some(false)
             );
             // The home area is saved with the mob.
@@ -1477,22 +1435,19 @@ mod tests {
             assert_eq!(saved.get("home_radius"), Some(&Tag::Int(6)));
             // clearRestriction keeps the center; every position is within
             // again.
-            assert!(game.native_mob_clear_restriction(mob));
-            assert_eq!(game.native_mob_has_restriction(mob), Some(false));
-            assert_eq!(game.native_mob_restrict_center(mob), Some([10, 64, -5]));
-            assert_eq!(game.native_mob_restrict_radius(mob), Some(-1));
-            assert_eq!(
-                game.native_mob_is_within_restriction(mob, [20, 64, 0]),
-                Some(true)
-            );
+            assert!(game.mob_clear_restriction(mob));
+            assert_eq!(game.mob_has_restriction(mob), Some(false));
+            assert_eq!(game.mob_restrict_center(mob), Some([10, 64, -5]));
+            assert_eq!(game.mob_restrict_radius(mob), Some(-1));
+            assert_eq!(game.mob_is_within_restriction(mob, [20, 64, 0]), Some(true));
             let saved =
                 horizon_client::entity_nbt::mob_to_nbt(&game.mobs[0], [0; 4], None, None, |_| None);
             assert!(saved.get("home_pos").is_none());
             assert!(saved.get("home_radius").is_none());
             // restrictTo with radius -1 clears while keeping the new center.
-            assert!(game.native_mob_restrict_to(mob, [1, 2, 3], -1));
-            assert_eq!(game.native_mob_has_restriction(mob), Some(false));
-            assert_eq!(game.native_mob_restrict_center(mob), Some([1, 2, 3]));
+            assert!(game.mob_restrict_to(mob, [1, 2, 3], -1));
+            assert_eq!(game.mob_has_restriction(mob), Some(false));
+            assert_eq!(game.mob_restrict_center(mob), Some([1, 2, 3]));
         });
     }
 
@@ -1508,36 +1463,31 @@ mod tests {
                 .clone();
             game.mobs
                 .push(Mob::new(12, zombie, Vec3::new(3.5, 65.0, 3.5), 0.0));
-            let mob = game
-                .native_mob_ref(game.native_entity(12).unwrap())
-                .unwrap();
+            let mob = game.mob(game.entity(12).unwrap()).unwrap();
             // `Vec3i.distSqr` in doubles: the far corner of the int range is
             // outside, with no overflow on the way.
-            assert!(game.native_mob_restrict_to(mob, [i32::MIN, 0, 0], 6));
+            assert!(game.mob_restrict_to(mob, [i32::MIN, 0, 0], 6));
             assert_eq!(
-                game.native_mob_is_within_restriction(mob, [i32::MAX, 0, 0]),
+                game.mob_is_within_restriction(mob, [i32::MAX, 0, 0]),
                 Some(false)
             );
-            assert!(game.native_mob_restrict_to(mob, [i32::MIN, i32::MIN, i32::MIN], 6));
+            assert!(game.mob_restrict_to(mob, [i32::MIN, i32::MIN, i32::MIN], 6));
             assert_eq!(
-                game.native_mob_is_within_restriction(mob, [i32::MAX, i32::MAX, i32::MAX]),
+                game.mob_is_within_restriction(mob, [i32::MAX, i32::MAX, i32::MAX]),
                 Some(false)
             );
             // The radius squares as a Java `int`: 65 536² wraps to 0, so not
             // even the center is within.
-            assert!(game.native_mob_restrict_to(mob, [0, 0, 0], 65_536));
-            assert_eq!(
-                game.native_mob_is_within_restriction(mob, [0, 0, 0]),
-                Some(false)
-            );
+            assert!(game.mob_restrict_to(mob, [0, 0, 0], 65_536));
+            assert_eq!(game.mob_is_within_restriction(mob, [0, 0, 0]), Some(false));
             // The largest radius that squares without wrapping still holds.
-            assert!(game.native_mob_restrict_to(mob, [0, 0, 0], 46_340));
+            assert!(game.mob_restrict_to(mob, [0, 0, 0], 46_340));
             assert_eq!(
-                game.native_mob_is_within_restriction(mob, [46_339, 0, 0]),
+                game.mob_is_within_restriction(mob, [46_339, 0, 0]),
                 Some(true)
             );
             assert_eq!(
-                game.native_mob_is_within_restriction(mob, [46_340, 0, 0]),
+                game.mob_is_within_restriction(mob, [46_340, 0, 0]),
                 Some(false)
             );
         });
@@ -1558,56 +1508,51 @@ mod tests {
             let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
             dragon.id = 15;
             game.dragon = Some(dragon);
-            let entity = game.native_entity(12).unwrap();
-            let mob = game.native_mob_ref(entity).unwrap();
-            assert_eq!(game.native_mob_left_handed(mob), Some(false));
-            assert!(game.native_mob_set_left_handed(mob, true));
+            let entity = game.entity(12).unwrap();
+            let mob = game.mob(entity).unwrap();
+            assert_eq!(game.mob_left_handed(mob), Some(false));
+            assert!(game.mob_set_left_handed(mob, true));
             assert!(game.mobs[0].extra.left_handed && game.mobs[0].main_arm_left());
-            assert_eq!(game.native_mob_left_handed(mob), Some(true));
-            assert!(game.native_mob_set_can_pick_up_loot(mob, true));
+            assert_eq!(game.mob_left_handed(mob), Some(true));
+            assert!(game.mob_set_can_pick_up_loot(mob, true));
             assert!(game.mobs[0].extra.pick_up_loot);
-            assert_eq!(game.native_mob_can_pick_up_loot(mob), Some(true));
+            assert_eq!(game.mob_can_pick_up_loot(mob), Some(true));
             // Saved as LeftHanded / CanPickUpLoot.
             let saved =
                 horizon_client::entity_nbt::mob_to_nbt(&game.mobs[0], [0; 4], None, None, |_| None);
             assert_eq!(saved.get("LeftHanded"), Some(&Tag::Byte(1)));
             assert_eq!(saved.get("CanPickUpLoot"), Some(&Tag::Byte(1)));
-            assert!(game.native_mob_set_left_handed(mob, false));
-            assert!(game.native_mob_set_can_pick_up_loot(mob, false));
-            assert_eq!(game.native_mob_left_handed(mob), Some(false));
-            assert_eq!(game.native_mob_can_pick_up_loot(mob), Some(false));
+            assert!(game.mob_set_left_handed(mob, false));
+            assert!(game.mob_set_can_pick_up_loot(mob, false));
+            assert_eq!(game.mob_left_handed(mob), Some(false));
+            assert_eq!(game.mob_can_pick_up_loot(mob), Some(false));
             // The dragon is not a Mob for these.
-            let dragon = game
-                .native_mob_ref(game.native_entity(15).unwrap())
-                .unwrap();
-            assert_eq!(game.native_mob_left_handed(dragon), None);
-            assert!(!game.native_mob_set_left_handed(dragon, true));
-            assert_eq!(game.native_mob_can_pick_up_loot(dragon), None);
-            assert!(!game.native_mob_set_can_pick_up_loot(dragon, true));
-            assert!(!game.native_mob_look_at(dragon, [0.0; 3]));
-            assert!(!game.native_mob_jump(dragon));
-            assert!(!game.native_mob_restrict_to(dragon, [0, 0, 0], 5));
-            assert_eq!(game.native_mob_has_restriction(dragon), None);
+            let dragon = game.mob(game.entity(15).unwrap()).unwrap();
+            assert_eq!(game.mob_left_handed(dragon), None);
+            assert!(!game.mob_set_left_handed(dragon, true));
+            assert_eq!(game.mob_can_pick_up_loot(dragon), None);
+            assert!(!game.mob_set_can_pick_up_loot(dragon, true));
+            assert!(!game.mob_look_at(dragon, [0.0; 3]));
+            assert!(!game.mob_jump(dragon));
+            assert!(!game.mob_restrict_to(dragon, [0, 0, 0], 5));
+            assert_eq!(game.mob_has_restriction(dragon), None);
             // A stale handle changes no other entity.
             let stale = MobRef::new(EntityRef::new(
                 NativeWorldEpoch::new(entity.epoch().get() + 1),
                 12,
             ));
-            assert_eq!(game.native_mob_left_handed(stale), None);
-            assert!(!game.native_mob_set_left_handed(stale, true));
-            assert_eq!(game.native_mob_can_pick_up_loot(stale), None);
-            assert!(!game.native_mob_set_can_pick_up_loot(stale, true));
-            assert!(!game.native_mob_look_at(stale, [0.0; 3]));
-            assert!(!game.native_mob_jump(stale));
-            assert!(!game.native_mob_restrict_to(stale, [0, 0, 0], 5));
-            assert!(!game.native_mob_clear_restriction(stale));
-            assert_eq!(game.native_mob_restrict_center(stale), None);
-            assert_eq!(game.native_mob_restrict_radius(stale), None);
-            assert_eq!(game.native_mob_has_restriction(stale), None);
-            assert_eq!(
-                game.native_mob_is_within_restriction(stale, [0, 0, 0]),
-                None
-            );
+            assert_eq!(game.mob_left_handed(stale), None);
+            assert!(!game.mob_set_left_handed(stale, true));
+            assert_eq!(game.mob_can_pick_up_loot(stale), None);
+            assert!(!game.mob_set_can_pick_up_loot(stale, true));
+            assert!(!game.mob_look_at(stale, [0.0; 3]));
+            assert!(!game.mob_jump(stale));
+            assert!(!game.mob_restrict_to(stale, [0, 0, 0], 5));
+            assert!(!game.mob_clear_restriction(stale));
+            assert_eq!(game.mob_restrict_center(stale), None);
+            assert_eq!(game.mob_restrict_radius(stale), None);
+            assert_eq!(game.mob_has_restriction(stale), None);
+            assert_eq!(game.mob_is_within_restriction(stale, [0, 0, 0]), None);
             assert!(!game.mobs[0].extra.left_handed);
             assert!(!game.mobs[0].extra.pick_up_loot);
         });

@@ -896,7 +896,7 @@ mod tests {
                     |_, _| {},
                 )
                 .unwrap();
-            assert!(game.native_entity(old.id).is_none());
+            assert!(game.entity(old.id).is_none());
             assert!(
                 game.mobs
                     .iter()
@@ -930,7 +930,7 @@ mod tests {
                 cause: None,
             };
             game.thunder_hit(&mut bolt);
-            assert!(game.native_entity(pig_id).is_none());
+            assert!(game.entity(pig_id).is_none());
             let mushroom_type = game
                 .res
                 .mob_types()

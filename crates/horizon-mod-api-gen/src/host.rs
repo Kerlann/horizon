@@ -294,6 +294,90 @@ pub(super) fn areas_source(root: &Path) -> Result<String, String> {
     ))
 }
 
+/// Generate every area impl explicitly. Full-path calls plus a hard recursion lint
+/// refuse a missing inherent implementation instead of inheriting a trait default.
+pub(super) fn game_forwarders(root: &Path) -> Result<String, String> {
+    let mut code = String::from("use crate::game::Game;\nuse mod_api::*;\n");
+    for area in load(root)? {
+        for (tier, entries) in &area.tiers {
+            code.push_str(&format!(
+                "#[deny(unconditional_recursion)]\nimpl mod_api::prelude::{} for Game<'_> {{\n",
+                area.trait_name(*tier)
+            ));
+            for entry in entries {
+                let name = &entry.name;
+                let attrs: Vec<_> = entry
+                    .attrs
+                    .iter()
+                    .filter(|a| a.path().is_ident("access"))
+                    .collect();
+                if attrs.len() != 1 {
+                    return Err(format!("{name}: expected exactly one access declaration"));
+                }
+                let level = attrs[0]
+                    .parse_args::<syn::Ident>()
+                    .map_err(|e| e.to_string())?;
+                if !matches!(
+                    level.to_string().as_str(),
+                    "WorldOnly" | "Metadata" | "ClientSetup" | "PublishedResources"
+                ) {
+                    return Err(format!("{name}: unknown access level {level}"));
+                }
+                let args = signature_args(&entry.sig, name)?;
+                let static_call = entry.attrs.iter().any(|a| a.path().is_ident("static_call"));
+                let args = if static_call {
+                    args
+                } else if args.is_empty() {
+                    "self".into()
+                } else {
+                    format!("self, {args}")
+                };
+                let sig = entry.sig.to_token_stream();
+                let call = if entry.attrs.iter().any(|a| a.path().is_ident("service")) {
+                    "self".into()
+                } else {
+                    format!("Game::{name}({args})")
+                };
+                code.push_str(&format!("{sig} {{ mod_api::__private::check_access({name:?}, mod_api::__private::LoadAccess::{level}); {call} }}\n"));
+            }
+            code.push_str("}\n");
+        }
+    }
+    let parsed = syn::parse_file(&code).map_err(|e| e.to_string())?;
+    let imports = standard_imports(&parsed);
+    let parsed = syn::parse_file(&(imports + &code)).map_err(|e| e.to_string())?;
+    Ok(prettyplease::unparse(&parsed))
+}
+
+fn standard_imports(file: &syn::File) -> String {
+    struct StdTypes {
+        path_buf: bool,
+        arc: bool,
+    }
+    impl<'ast> Visit<'ast> for StdTypes {
+        fn visit_type_path(&mut self, ty: &'ast syn::TypePath) {
+            if ty.path.segments.len() == 1 {
+                self.path_buf |= ty.path.segments[0].ident == "PathBuf";
+                self.arc |= ty.path.segments[0].ident == "Arc";
+            }
+            syn::visit::visit_type_path(self, ty);
+        }
+    }
+    let mut std_types = StdTypes {
+        path_buf: false,
+        arc: false,
+    };
+    std_types.visit_file(file);
+    let mut imports = String::new();
+    if std_types.path_buf {
+        imports.push_str("use std::path::PathBuf;\n");
+    }
+    if std_types.arc {
+        imports.push_str("use std::sync::Arc;\n");
+    }
+    imports
+}
+
 fn signature_args(sig: &syn::Signature, name: &str) -> Result<String, String> {
     Ok(sig
         .inputs
@@ -472,32 +556,7 @@ pub(super) fn generate(root: &Path) -> Result<(String, String), String> {
     for (handle, code) in &by_handle {
         methods.push_str(&format!("impl {handle} {{\n{code}}}\n"));
     }
-    struct StdTypes {
-        path_buf: bool,
-        arc: bool,
-    }
-    impl<'ast> Visit<'ast> for StdTypes {
-        fn visit_type_path(&mut self, ty: &'ast syn::TypePath) {
-            if ty.path.segments.len() == 1 {
-                self.path_buf |= ty.path.segments[0].ident == "PathBuf";
-                self.arc |= ty.path.segments[0].ident == "Arc";
-            }
-            syn::visit::visit_type_path(self, ty);
-        }
-    }
-    let mut std_types = StdTypes {
-        path_buf: false,
-        arc: false,
-    };
-    std_types
-        .visit_file(&syn::parse_file(&methods).map_err(|e| format!("generated handles: {e}"))?);
-    let mut imports = String::new();
-    if std_types.path_buf {
-        imports.push_str("use std::path::PathBuf;\n");
-    }
-    if std_types.arc {
-        imports.push_str("use std::sync::Arc;\n");
-    }
+    let imports = standard_imports(&syn::parse_file(&methods).map_err(|e| e.to_string())?);
     let side_enum = |name: &str, server: &str, client: &str| {
         format!(
             "/// The logical side of a hook's host.\npub enum {name}<'a> {{\n/// The hook fired on the server.\nServer({server}),\n/// The hook fired on the client.\nClient({client}) }}\n"
@@ -802,6 +861,57 @@ mod tests {
                 .unwrap(),
             "duplicate handle receiver url",
         );
+    }
+
+    #[test]
+    fn game_provides_every_area_method_explicitly() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        use std::collections::BTreeSet;
+        let expected: BTreeSet<_> = load(&root)
+            .unwrap()
+            .into_iter()
+            .flat_map(|area| {
+                area.tiers.into_iter().flat_map(move |(tier, entries)| {
+                    let owner = format!("{}{}", area.camel, tier.suffix());
+                    entries
+                        .into_iter()
+                        .map(move |entry| (owner.clone(), entry.name))
+                })
+            })
+            .collect();
+        let source = game_forwarders(&root).unwrap();
+        let file = syn::parse_file(&source).unwrap();
+        let mut actual = BTreeSet::new();
+        for item in file.items {
+            if let Item::Impl(item) = item {
+                assert!(item.attrs.iter().any(|attr| {
+                    attr.path().is_ident("deny")
+                        && attr
+                            .parse_args::<syn::Ident>()
+                            .is_ok_and(|lint| lint == "unconditional_recursion")
+                }));
+                let owner = item
+                    .trait_
+                    .unwrap()
+                    .1
+                    .segments
+                    .last()
+                    .unwrap()
+                    .ident
+                    .to_string();
+                for member in item.items {
+                    let syn::ImplItem::Fn(method) = member else {
+                        panic!("non-method in Game impl")
+                    };
+                    let name = method.sig.ident.to_string();
+                    assert!(actual.insert((owner.clone(), name)));
+                }
+            }
+        }
+        assert_eq!(actual, expected, "Game must not inherit an area default");
+        // Other area traits must not be in scope. The current impl's own trait is
+        // implicitly in scope; deny(unconditional_recursion) rejects that fallback.
+        assert!(!source.contains("prelude::*"));
     }
 
     #[test]

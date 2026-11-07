@@ -80,3 +80,76 @@ pub mod tests {
         );
     }
 }
+
+/// Registrar operations for entity attributes.
+pub trait EntityAttributesRegistrar {
+    /// Declare the initial attribute set of the mod's entity type `path`
+    /// (NeoForge's `EntityAttributeCreationEvent`), starting from `template`'s
+    /// (`minecraft:zombie`, the one the type's content file copies, as
+    /// `Zombie.createAttributes` builds on the template's): each attribute's
+    /// id (`minecraft:max_health`) and the base value that differs from the
+    /// template's. The values reach the type's own fields, its live attribute
+    /// map and the attribute sync, so the reads of #1469 and #1493 answer the
+    /// same defaults with no second copy.
+    ///
+    /// Resolved once, at load: an id outside the mod's namespace, a duplicate
+    /// attribute, a non-finite base or a second declaration of the same type
+    /// refuses the mods, naming the mod; an attribute the game does not know,
+    /// or a template without attribute defaults, refuses the resource load,
+    /// naming the type.
+    fn declare_entity_attributes(
+        &mut self,
+        path: &str,
+        template: &str,
+        attributes: Vec<(String, f64)>,
+    ) -> Result<(), crate::EntityAttributeError>;
+}
+
+impl EntityAttributesRegistrar for PartRegistrar {
+    fn declare_entity_attributes(
+        &mut self,
+        path: &str,
+        template: &str,
+        attributes: Vec<(String, f64)>,
+    ) -> Result<(), crate::EntityAttributeError> {
+        let result = (|| {
+            let (namespace, name) = path.split_once(':').unwrap_or((self.mod_id, path));
+            if namespace.is_empty() || name.is_empty() || namespace != self.mod_id {
+                return Err(crate::EntityAttributeError::InvalidId);
+            }
+            let (template_ns, template_name) =
+                template.split_once(':').unwrap_or(("minecraft", template));
+            if template_ns.is_empty() || template_name.is_empty() {
+                return Err(crate::EntityAttributeError::InvalidId);
+            }
+            let id = format!("{namespace}:{name}");
+            if self.entity_attributes.iter().any(|d| d.id == id) {
+                return Err(crate::EntityAttributeError::Duplicate);
+            }
+            for (index, (attribute, base)) in attributes.iter().enumerate() {
+                if !base.is_finite() {
+                    return Err(crate::EntityAttributeError::NotFinite);
+                }
+                if attributes[..index]
+                    .iter()
+                    .any(|(other, _)| other == attribute)
+                {
+                    return Err(crate::EntityAttributeError::DuplicateAttribute);
+                }
+            }
+            self.entity_attributes.push(EntityAttributeDeclaration {
+                id,
+                template: format!("{template_ns}:{template_name}"),
+                attributes,
+            });
+            Ok(())
+        })();
+        if let Err(error) = &result {
+            self.refused.push(format!(
+                "mod {} entity attributes {path:?}: {error:?}",
+                self.mod_id
+            ));
+        }
+        result
+    }
+}

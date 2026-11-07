@@ -867,7 +867,12 @@ impl Game<'_> {
         ])
     }
     /// The `summon` command: spawn a mob in front of the player or at a position.
-    pub(super) fn summon(&mut self, kind: &str, at: Option<[f64; 3]>, baby: bool) -> Result<u32> {
+    pub(super) fn summon_command_mob(
+        &mut self,
+        kind: &str,
+        at: Option<[f64; 3]>,
+        baby: bool,
+    ) -> Result<u32> {
         let at = match at {
             Some(a) => a,
             None => self.default_summon_position()?,
@@ -4539,7 +4544,7 @@ impl Game<'_> {
                 Touch::Ignore => false,
                 Touch::Take => true,
                 // Inventory.add: a creative player takes what does not fit.
-                Touch::Give(stack) => self.give(stack).is_none() || creative,
+                Touch::Give(stack) => self.add_stack_to_inventory(stack).is_none() || creative,
             };
             if taken {
                 let r = &mut self.world.random;
@@ -6365,7 +6370,7 @@ impl Game<'_> {
             self.break_leash(id as u32, true, false);
             self.mobs[index].removed = true;
             if self.creative {
-                if let Some(rest) = self.give(filled) {
+                if let Some(rest) = self.add_stack_to_inventory(filled) {
                     self.spawn_item(rest, self.eye_position().unwrap_or([0.0; 3]), [0.0; 3], 40);
                 }
             } else {
@@ -7128,7 +7133,7 @@ impl Game<'_> {
             }
             if self.stack_in(selected).is_none() {
                 *self.stack_in_mut(selected) = Some(stack);
-            } else if let Some(rest) = self.give(stack) {
+            } else if let Some(rest) = self.add_stack_to_inventory(stack) {
                 let at = self.eye_position().unwrap_or(center);
                 self.spawn_item(rest, at, [0.0, 0.0, 0.0], 40);
             }
@@ -8612,7 +8617,7 @@ impl horizon_client::mobs::MobHooks for Game<'_> {
             return false;
         };
         let uuid = horizon_client::lan::playerdata::ints_uuid(player.uuid);
-        let Some(player) = self.native_player_ref(uuid) else {
+        let Some(player) = self.player(uuid) else {
             return false;
         };
         let mut cancel = false;
@@ -8637,7 +8642,7 @@ impl horizon_client::mobs::MobHooks for Game<'_> {
             return visibility;
         };
         let uuid = horizon_client::lan::playerdata::ints_uuid(player.uuid);
-        let Some(player) = self.native_player_ref(uuid) else {
+        let Some(player) = self.player(uuid) else {
             return visibility;
         };
         let mut visibility = visibility;
@@ -10169,7 +10174,7 @@ mod projectile_batch_tests {
     fn a_projectile_removed_in_its_impact_hook_stays_removed_after_replay() {
         with_batch(true, |game, ids, joins, spawned, buffered| {
             // Pending removal refuses the handle already, even before the physical sweep.
-            assert!(game.native_entity(ids[1]).is_none());
+            assert!(game.entity(ids[1]).is_none());
             game.native_removals_flush();
             let list = &game.creatures.projectiles;
             assert_eq!(
@@ -10215,9 +10220,7 @@ mod breeze_random_tests {
             shot.velocity = Vec3::new(4.0, 0.0, 0.0);
             game.add_projectile(shot);
             let id = game.creatures.projectiles[0].id;
-            let handle = game
-                .native_projectile_ref(game.native_entity(id).unwrap())
-                .unwrap();
+            let handle = game.projectile(game.entity(id).unwrap()).unwrap();
             assert_eq!(handle.pierce_level(game), Ok(0));
             assert_eq!(handle.set_pierce_level(game, 1), Ok(()));
             let health: Vec<_> = game.mobs.iter().map(|m| m.health).collect();

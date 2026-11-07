@@ -114,7 +114,7 @@ fn fluid_kind(fluid: &str) -> Option<FluidKind> {
 
 impl Game<'_> {
     /// The saved name for an engine-issued unresolved fluid.
-    pub(super) fn native_unresolved_fluid_id(&self, fluid: UnresolvedFluid) -> String {
+    pub(super) fn unresolved_fluid_id(&self, fluid: UnresolvedFluid) -> String {
         mod_api::__private::unresolved_fluid_name(fluid)
     }
 
@@ -128,19 +128,15 @@ impl Game<'_> {
 
     /// Whether the resolved block is in the world's merged block tag. Unknown tags return false;
     /// unavailable authoritative tags or owning-thread block mappings return None.
-    pub(super) fn native_block_in_tag(&self, block: BlockKey, tag: &str) -> Option<bool> {
+    pub(super) fn block_in_tag(&self, block: BlockKey, tag: &str) -> Option<bool> {
         self.native_tag_items()?;
         block_in_tag(block, tag)
     }
 
     /// The members of a tag in vanilla's order (`HolderSet.Named` iteration: file order, nested
     /// tags in place, first occurrence kept), over the merged tags. Empty for an unknown tag.
-    /// None as for `native_block_in_tag`.
-    pub(super) fn native_tag_members(
-        &self,
-        registry: TagRegistry,
-        tag: &str,
-    ) -> Option<Vec<String>> {
+    /// None as for `block_in_tag`.
+    pub(super) fn tag_members(&self, registry: TagRegistry, tag: &str) -> Option<Vec<String>> {
         let members = self
             .native_tag_items()?
             .tag_members(registry, &horizon_client::command::args::normalized(tag));
@@ -152,41 +148,37 @@ impl Game<'_> {
     /// max x, y, z]` in the block's own space, with no random offset and none of a world's
     /// context (a state that reads its neighbours or block entity answers what its state alone
     /// gives). Empty for a state with no outline, such as air. None for an id no state has.
-    pub(super) fn native_state_outline(&self, state: BlockStateId) -> Option<Vec<[f64; 6]>> {
+    pub(super) fn state_outline(&self, state: BlockStateId) -> Option<Vec<[f64; 6]>> {
         self.pack.assets.registry.state(state)?;
         Some(self.res.facts().get(state).outline.to_vec())
     }
 
     /// The fluid state `state` holds (`BlockState.getFluidState`): water for a waterlogged state,
     /// the empty fluid for most. None for an id no state has.
-    pub(super) fn native_state_fluid_state(&self, state: BlockStateId) -> Option<FluidState> {
+    pub(super) fn state_fluid_state(&self, state: BlockStateId) -> Option<FluidState> {
         state_fluid(self.res.behaviours(), self.pack.assets.registry, state)
     }
 
     /// Whether `fluid` is in the fluid tag `tag` (`FluidState.is(TagKey)`, `minecraft:water` or
     /// `water`), over the merged fluid tags. An unknown tag is false. None as for
-    /// `native_block_in_tag`.
-    pub(super) fn native_fluid_in_tag(&self, fluid: &str, tag: &str) -> Option<bool> {
+    /// `block_in_tag`.
+    pub(super) fn fluid_in_tag(&self, fluid: &str, tag: &str) -> Option<bool> {
         Some(fluid_in_tag(self.native_tag_items()?, fluid, tag))
     }
 
     /// The fluid state at `pos` of the level `level` names (`BlockGetter.getFluidState`). None
     /// for a stale handle, a chunk that isn't loaded or a `y` outside the world: a read never
     /// loads a chunk.
-    pub(super) fn native_level_fluid_state(
-        &self,
-        level: LevelRef,
-        pos: [i32; 3],
-    ) -> Option<FluidState> {
-        let state = self.native_level_state(level, pos)?;
-        self.native_state_fluid_state(state)
+    pub(super) fn level_fluid_state(&self, level: LevelRef, pos: [i32; 3]) -> Option<FluidState> {
+        let state = self.level_block_state(level, pos)?;
+        self.state_fluid_state(state)
     }
 
     /// Whether `fluid` and `other` are the same fluid (`Fluid.isSame`): a source and its
     /// flowing form are, so `minecraft:water` and `minecraft:flowing_water` are the same, water
     /// and lava not. Names are fluid ids, with or without `minecraft:`; false when either
     /// names no fluid.
-    pub(super) fn native_fluid_is_same(&self, fluid: &str, other: &str) -> bool {
+    pub(super) fn fluid_is_same(&self, fluid: &str, other: &str) -> bool {
         match (fluid_kind(fluid), fluid_kind(other)) {
             (Some(fluid), Some(other)) => fluid.same_family(other),
             _ => false,
@@ -196,14 +188,14 @@ impl Game<'_> {
     /// The bucket item that picks `fluid` up (`Fluid.getBucket`), `minecraft:water_bucket` for
     /// water and flowing water. None for `minecraft:empty`, whose bucket is air, and for a name
     /// no fluid has.
-    pub(super) fn native_fluid_bucket(&self, fluid: &str) -> Option<&'static str> {
+    pub(super) fn fluid_bucket(&self, fluid: &str) -> Option<&'static str> {
         horizon_world::level::fluid_bucket(fluid_kind(fluid)?)
     }
 
     /// The sound event a bucket plays as it picks `fluid` up (`Fluid.getPickupSound`),
     /// `minecraft:item.bucket.fill_lava` for lava and flowing lava. None for
     /// `minecraft:empty`, which has none, and for a name no fluid has.
-    pub(super) fn native_fluid_pickup_sound(&self, fluid: &str) -> Option<&'static str> {
+    pub(super) fn fluid_pickup_sound(&self, fluid: &str) -> Option<&'static str> {
         horizon_world::level::fluid_pickup_sound(fluid_kind(fluid)?)
     }
 
@@ -390,7 +382,7 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn recipes_of_type_answers_vanilla_types_from_the_live_table() {
         with_game(|game| {
-            let smelting = game.native_recipes_of_type("minecraft:smelting");
+            let smelting = game.recipes_of_type("minecraft:smelting");
             let iron = smelting
                 .iter()
                 .find(|recipe| recipe.id == "minecraft:iron_ingot_from_smelting_raw_iron")
@@ -401,7 +393,7 @@ mod tests {
             assert_eq!(iron.ingredients.len(), 1);
             assert!(iron.ingredients[0].items.contains("minecraft:raw_iron"));
             assert_eq!(iron.results[0].item.as_ref(), "minecraft:iron_ingot");
-            let shaped = game.native_recipes_of_type("minecraft:crafting_shaped");
+            let shaped = game.recipes_of_type("minecraft:crafting_shaped");
             let bucket = shaped
                 .iter()
                 .find(|recipe| recipe.id == "minecraft:bucket")
@@ -411,10 +403,10 @@ mod tests {
             assert_eq!(bucket.cooking_time, None);
             assert!(
                 !game
-                    .native_recipes_of_type("minecraft:campfire_cooking")
+                    .recipes_of_type("minecraft:campfire_cooking")
                     .is_empty()
             );
-            assert!(game.native_recipes_of_type("nope:missing").is_empty());
+            assert!(game.recipes_of_type("nope:missing").is_empty());
         });
     }
 
@@ -429,9 +421,9 @@ mod tests {
             let stone = registry.default_state("minecraft:stone").unwrap();
             let water = registry.default_state("minecraft:water").unwrap();
             let slab = game
-                .native_block_state_id("minecraft:oak_slab[waterlogged=true]")
+                .block_state_id("minecraft:oak_slab[waterlogged=true]")
                 .unwrap();
-            let dry_slab = game.native_block_state_id("minecraft:oak_slab").unwrap();
+            let dry_slab = game.block_state_id("minecraft:oak_slab").unwrap();
             let lava = registry.default_state("minecraft:lava").unwrap();
 
             // Members come in the tag file's order, in each registry, with or without the
@@ -445,7 +437,7 @@ mod tests {
             .map(|name| format!("minecraft:{name}"));
             for registry in [TagRegistry::Block, TagRegistry::Item] {
                 assert_eq!(
-                    game.native_tag_members(registry, "oak_logs").as_deref(),
+                    game.tag_members(registry, "oak_logs").as_deref(),
                     Some(&oak[..])
                 );
             }
@@ -461,52 +453,52 @@ mod tests {
                 );
             }
             assert_eq!(
-                game.native_tag_members(TagRegistry::Fluid, "minecraft:water")
+                game.tag_members(TagRegistry::Fluid, "minecraft:water")
                     .unwrap(),
                 ["minecraft:water", "minecraft:flowing_water"]
             );
             assert_eq!(
-                game.native_tag_members(TagRegistry::Item, "nope:missing"),
+                game.tag_members(TagRegistry::Item, "nope:missing"),
                 Some(Vec::new())
             );
 
             // A full block is one unit box, a bottom slab half of it, air none, and an id no
             // state has is unknown.
             assert_eq!(
-                game.native_state_outline(stone),
+                game.state_outline(stone),
                 Some(vec![[0.0, 0.0, 0.0, 1.0, 1.0, 1.0]])
             );
             assert_eq!(
-                game.native_state_outline(dry_slab),
+                game.state_outline(dry_slab),
                 Some(vec![[0.0, 0.0, 0.0, 1.0, 0.5, 1.0]])
             );
             let air = registry.default_state("minecraft:air").unwrap();
-            assert_eq!(game.native_state_outline(air), Some(Vec::new()));
-            assert_eq!(game.native_state_outline(BlockStateId(u32::MAX)), None);
+            assert_eq!(game.state_outline(air), Some(Vec::new()));
+            assert_eq!(game.state_outline(BlockStateId(u32::MAX)), None);
 
             assert_eq!(
-                game.native_block_in_tag(
+                game.block_in_tag(
                     mod_api::__private::part_tests::block_key("minecraft:stone"),
                     "minecraft:base_stone_overworld"
                 ),
                 Some(true)
             );
             assert_eq!(
-                game.native_block_in_tag(
+                game.block_in_tag(
                     mod_api::__private::part_tests::block_key("stone"),
                     "base_stone_overworld"
                 ),
                 Some(true)
             );
             assert_eq!(
-                game.native_block_in_tag(
+                game.block_in_tag(
                     mod_api::__private::part_tests::block_key("minecraft:stone"),
                     "minecraft:logs"
                 ),
                 Some(false)
             );
             assert_eq!(
-                game.native_block_in_tag(
+                game.block_in_tag(
                     mod_api::__private::part_tests::block_key("minecraft:stone"),
                     "nope:missing"
                 ),
@@ -514,65 +506,64 @@ mod tests {
             );
 
             assert_eq!(
-                game.native_state_fluid_state(water),
+                game.state_fluid_state(water),
                 api_fluid_state(EngineFluidState::WATER)
             );
             assert_eq!(
-                game.native_fluid_in_tag("minecraft:water", "minecraft:water"),
+                game.fluid_in_tag("minecraft:water", "minecraft:water"),
                 Some(true)
             );
-            assert_eq!(game.native_fluid_in_tag("water", "water"), Some(true));
+            assert_eq!(game.fluid_in_tag("water", "water"), Some(true));
             assert_eq!(
-                game.native_fluid_in_tag("minecraft:water", "minecraft:lava"),
+                game.fluid_in_tag("minecraft:water", "minecraft:lava"),
                 Some(false)
             );
             assert_eq!(
-                mod_api::__private::fluid_id(game.native_state_fluid_state(lava).unwrap().fluid)
-                    .unwrap(),
+                mod_api::__private::fluid_id(game.state_fluid_state(lava).unwrap().fluid).unwrap(),
                 "minecraft:lava"
             );
             assert_eq!(
-                game.native_fluid_in_tag("minecraft:lava", "minecraft:lava"),
+                game.fluid_in_tag("minecraft:lava", "minecraft:lava"),
                 Some(true)
             );
             assert_eq!(
-                game.native_fluid_in_tag("minecraft:lava", "minecraft:water"),
+                game.fluid_in_tag("minecraft:lava", "minecraft:water"),
                 Some(false)
             );
             assert_eq!(
-                game.native_fluid_in_tag("minecraft:empty", "minecraft:water"),
+                game.fluid_in_tag("minecraft:empty", "minecraft:water"),
                 Some(false)
             );
             assert_eq!(
-                game.native_state_fluid_state(slab),
+                game.state_fluid_state(slab),
                 api_fluid_state(EngineFluidState::WATER)
             );
             assert_eq!(
-                game.native_state_fluid_state(dry_slab),
+                game.state_fluid_state(dry_slab),
                 api_fluid_state(EngineFluidState::EMPTY)
             );
             assert_eq!(
-                game.native_state_fluid_state(stone),
+                game.state_fluid_state(stone),
                 api_fluid_state(EngineFluidState::EMPTY)
             );
-            assert_eq!(game.native_state_fluid_state(BlockStateId(u32::MAX)), None);
+            assert_eq!(game.state_fluid_state(BlockStateId(u32::MAX)), None);
 
             // The world holds a chunk with water in it; a neighbour is not loaded.
             let mut chunk = Chunk::empty(0, 0);
             chunk.set(1, 64, 1, slab.0);
             game.world.chunks.insert((0, 0), Arc::new(chunk));
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let chunks = game.world.chunks.len();
             assert_eq!(
-                game.native_level_fluid_state(level, [1, 64, 1]),
+                game.level_fluid_state(level, [1, 64, 1]),
                 api_fluid_state(EngineFluidState::WATER)
             );
             assert_eq!(
-                game.native_level_fluid_state(level, [2, 64, 1]),
+                game.level_fluid_state(level, [2, 64, 1]),
                 api_fluid_state(EngineFluidState::EMPTY)
             );
-            assert_eq!(game.native_level_fluid_state(level, [16, 64, 1]), None);
-            assert_eq!(game.native_level_fluid_state(level, [1, 4000, 1]), None);
+            assert_eq!(game.level_fluid_state(level, [16, 64, 1]), None);
+            assert_eq!(game.level_fluid_state(level, [1, 4000, 1]), None);
             game.with_level(|_, host, _| {
                 // Not an authoritative level: tags are not the server's, so they read None.
                 assert_eq!(
@@ -592,11 +583,11 @@ mod tests {
                 );
             });
             game.options.dedicated = Some(Vec::new());
-            let bounds = game.native_level_height(level).unwrap();
-            let parsed = game.native_block_state_id("minecraft:oak_slab[waterlogged=true]");
-            let default = game.native_block_state_default(
-                mod_api::__private::part_tests::block_key("minecraft:oak_slab"),
-            );
+            let bounds = game.level_height(level).unwrap();
+            let parsed = game.block_state_id("minecraft:oak_slab[waterlogged=true]");
+            let default = game.block_state_default(mod_api::__private::part_tests::block_key(
+                "minecraft:oak_slab",
+            ));
             game.with_level(|_, host, ticks| {
                 assert_eq!(
                     host.block_state_id("minecraft:oak_slab[waterlogged=true]"),

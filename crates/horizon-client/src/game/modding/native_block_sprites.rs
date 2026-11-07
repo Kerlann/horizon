@@ -14,13 +14,13 @@ impl Game<'_> {
     /// its tint source and whether it is cut out, translucent or animated; its particle sprite; whether it is a plain
     /// cube. None for a block the game does not know. The model is the state's first random variant. API
     /// 380.
-    pub(super) fn native_block_sprites(&self, blocks: &[&str]) -> Vec<Option<BlockSprites>> {
+    pub(super) fn block_sprites(&self, blocks: &[&str]) -> Vec<Option<BlockSprites>> {
         let lookup = self.native_sprite_lookup();
         blocks.iter().map(|block| lookup.block(block)).collect()
     }
     /// For a client mod: each texture's sprite by name (`minecraft:block/stone`, `block/stone`), none for one no
     /// model uses. API 380.
-    pub(super) fn native_texture_sprites(&self, textures: &[&str]) -> Vec<Option<SpriteRef>> {
+    pub(super) fn texture_sprites(&self, textures: &[&str]) -> Vec<Option<SpriteRef>> {
         let lookup = self.native_sprite_lookup();
         textures
             .iter()
@@ -33,7 +33,7 @@ impl Game<'_> {
     /// tint index (-1 for none): a copycat block drawing a box of its material's textures with `native_draw_cube`,
     /// kept with `BlockEntityDraw::keep`. The face culled against that side comes first, else the first facing it;
     /// None when the model has no face that way or isn't baked. API @API:block_face_sprite@.
-    pub(super) fn native_block_face_sprite(
+    pub(super) fn block_face_sprite(
         &self,
         state: BlockStateId,
         side: Direction,
@@ -53,14 +53,14 @@ impl Game<'_> {
         Some(mod_api::BlockFaceTexture::new(name, face.quad.tint_index))
     }
     /// For a client mod: changes each time the resources load (a resource pack turned on or off can move every
-    /// sprite): ask `native_block_sprites` again then. API 380.
-    pub(super) fn native_block_sprites_version(&self) -> u64 {
+    /// sprite): ask `block_sprites` again then. API 380.
+    pub(super) fn block_sprites_version(&self) -> u64 {
         self.pack.context.render.generation
     }
     /// For a client mod: where GUI sprite `sprite` lies in the GUI atlas and its size, none for one the atlas lacks
     /// (a server's metrics-only atlas lacks them all). The atlas names vanilla's sprites by path alone
     /// (`gui/sprites/container/slot`) and a mod's with its namespace (`mymod:gui/panel`).
-    pub(super) fn native_gui_sprite(&self, sprite: &Identifier) -> Option<AtlasRegion> {
+    pub(super) fn gui_sprite(&self, sprite: &Identifier) -> Option<AtlasRegion> {
         let r = if sprite.namespace() == "minecraft" {
             self.gui.atlas.sprites.get(sprite.path())
         } else {
@@ -141,10 +141,10 @@ mod texture_atlas_stitched_tests {
                 }
                 // A mod's namespace is part of the name; one the atlas lacks is none.
                 assert_eq!(
-                    game.native_gui_sprite(&id("mymod:gui/sprites/container/slot")),
+                    game.gui_sprite(&id("mymod:gui/sprites/container/slot")),
                     None
                 );
-                assert_eq!(game.native_gui_sprite(&id("gui/no_such_sprite")), None);
+                assert_eq!(game.gui_sprite(&id("gui/no_such_sprite")), None);
                 // F3+T: the reload stages on a worker and applies here.
                 kept.lock().unwrap().atlases.clear();
                 game.spawn_pack_reload(super::super::packs::ReloadKind::Selection)

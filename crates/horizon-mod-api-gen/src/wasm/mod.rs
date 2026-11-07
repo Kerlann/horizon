@@ -47,6 +47,8 @@ pub(super) const IMPORTS: &[&str] = &[
     "ServerReloadListeners",
     "ClientReloadListeners",
     "PackFinders",
+    "BlockTintSources",
+    "BlockAndTintGetter",
     "ServerReloadResources",
     "CriterionContext",
 ];
@@ -106,6 +108,7 @@ const EXPORTS: &[&str] = &[
     "MenuPart",
     "ServerReloadListener",
     "ClientReloadListener",
+    "BlockTintSource",
     "PlaceProvider",
     "TooltipAppender",
     "CriterionTest",
@@ -135,9 +138,10 @@ const LOAD_CONTEXTS: &[&str] = &[
     "ClientReloadContext",
 ];
 
-/// The traits the game calls on its worldgen worker threads: a mod's structure types and
-/// their pieces, which keep no mutable state and get no `Host`.
-const WORLDGEN: &[&str] = &["StructureType", "StructurePiece"];
+/// The traits the game calls on its worker threads: a mod's structure types and their pieces on
+/// the worldgen workers, its block tint sources on the meshing workers. They keep no mutable
+/// state and get no `Host`.
+const WORKERS: &[&str] = &["StructureType", "StructurePiece", "BlockTintSource"];
 
 /// Predicates that may synchronously borrow the store lent by their triggering import.
 pub(super) const CALLBACKS: &[&str] = &["CriterionTest"];
@@ -147,8 +151,8 @@ pub(super) fn call_class(types: &ty::Types<'_>, method: &Method) -> &'static str
     if CALLBACKS.contains(&method.owner) {
         return "super::Call::Callback";
     }
-    if WORLDGEN.contains(&method.owner) {
-        "super::Call::Worldgen"
+    if WORKERS.contains(&method.owner) {
+        "super::Call::Worker"
     } else if loads(types, method) {
         "super::Call::Load"
     } else {
@@ -477,7 +481,9 @@ pub(super) fn surface<'a>(
                 .iter()
                 .map(|segment| segment.ident.to_string())
                 .collect();
-            if segments.len() != 4 || segments[..2] != ["crate", "host"] {
+            let area_union = (segments.len() == 4 && segments[..2] == ["crate", "host"])
+                || (segments.len() == 3 && segments[..2] == ["crate", "parts"]);
+            if !area_union {
                 continue;
             }
             let via = segments[1..].join("::");
@@ -1083,7 +1089,12 @@ mod tests {
                         }),
                         _ => None,
                     }).unwrap();
-                    assert!(method.to_token_stream().to_string().contains("LoadAccess :: PublishedResources"));
+                    if owner == "ServicesClientHost" {
+                        let access = method.attrs.iter().find(|attr| attr.path().is_ident("access")).unwrap();
+                        assert_eq!(access.parse_args::<syn::Ident>().unwrap(), "PublishedResources");
+                    } else {
+                        assert!(method.to_token_stream().to_string().contains("LoadAccess :: PublishedResources"));
+                    }
                 }
                 assert!(wasm.host.contains("Ok(h.render_assets())"));
                 assert!(wasm.host.contains("ModelRef::from_parts"));

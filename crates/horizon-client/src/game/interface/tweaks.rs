@@ -91,7 +91,7 @@ impl Game<'_> {
         if self.remote.is_some() {
             return self.remote_menu_ops(&[(Some(slot), button, input)]);
         }
-        if !self.menu_click(Some(slot), button, input) {
+        if !self.click_open_inventory(Some(slot), button, input) {
             return false;
         }
         if let Some(key) = self.container {

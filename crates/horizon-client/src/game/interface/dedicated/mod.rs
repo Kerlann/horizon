@@ -2489,8 +2489,8 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn console_name_lookup_skips_fake_players() {
         crate::game::native_guest_turn_tests::with_guests(|game| {
-            let level = game.native_level("minecraft:overworld").unwrap();
-            game.native_fake_player(level, 100, "robot").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
+            game.fake_player(level, 100, "robot").unwrap();
             assert!(game.online_player("robot").is_none());
             assert_eq!(game.online_player("GUEST12").unwrap().id, 12);
             // A fake with the same name must not hide a real player later in join order.
@@ -2506,8 +2506,8 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn console_and_management_ip_ban_sets_skip_fake_players() {
         crate::game::native_guest_turn_tests::with_guests(|game| {
-            let level = game.native_level("minecraft:overworld").unwrap();
-            game.native_fake_player(level, 100, "robot").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
+            game.fake_player(level, 100, "robot").unwrap();
             assert!(game.ip_ban_players("0.0.0.0").is_empty());
             assert_eq!(game.ip_ban_players("127.0.0.1"), [12, 13]);
             // Even with a matching real peer, the fake is not counted as affected.

@@ -1,9 +1,6 @@
-//! The one list of point listeners, and the slot table the points read. A native mod's
-//! `#[horizon_mod] impl Points` and the wasm runtime's proxies both [`register`] here while the game
-//! loads, and raw listeners [`register_raw`]; the game then [`seal`]s the list, which
-//! sets [`POINTS`]. A firing slot walks the mods subscribed to that place, API listeners first and
-//! then raw ones, each in registration (dispatch) order, skipping disabled and [`stop`]ped mods.
-use crate::{POINT_COUNT, PointId, Points, SITE_COUNT, SiteId};
+//! One slot table for API functions, wasm exports and internals listeners. Sealing orders each
+//! phase by descending priority and dependency order; sites retain mod-id tie ordering.
+use crate::{POINT_COUNT, PointId, SITE_COUNT, SiteId};
 use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,12 +11,10 @@ pub static POINTS: [AtomicBool; POINT_COUNT] = [const { AtomicBool::new(false) }
 /// Call-expression slots, using the same sealed raw-listener table as points.
 pub static SITES: [AtomicBool; SITE_COUNT] = [const { AtomicBool::new(false) }; SITE_COUNT];
 
-struct Listener {
+struct Owner {
     id: &'static str,
     /// Resolved at the seal, so firing reads the owner's canonical enable flag without a scan.
     mod_index: Option<usize>,
-    /// The mod's `impl Points`, when it has one.
-    points: Option<&'static dyn Points>,
     /// Set when the mod stopped (a trap in its wasm group, or the game giving up on it): its
     /// listeners are skipped from then on.
     stopped: AtomicBool,
@@ -46,37 +41,65 @@ pub enum RawKind {
 unsafe impl Send for RawKind {}
 unsafe impl Sync for RawKind {}
 
+/// A typed API function or a generic wasm forwarding endpoint.
+#[derive(Clone, Copy)]
+pub enum ApiKind {
+    /// A function checked by the generated typed constructor before erasure.
+    Typed(*const ()),
+    /// One checked export index in a wasm mod.
+    #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
+    Forward(&'static dyn crate::wire::Forward, u32),
+}
+
+// The pointer is a function; forwarding endpoints are Send + Sync resources.
+unsafe impl Send for ApiKind {}
+unsafe impl Sync for ApiKind {}
+
+#[derive(Clone, Copy)]
+enum Kind {
+    Api(ApiKind),
+    Raw(RawKind),
+}
+
+impl Kind {
+    fn is_api(self) -> bool {
+        matches!(self, Self::Api(_))
+    }
+}
+
 /// A raw listener in its place's list.
 #[derive(Clone, Copy)]
-struct Raw {
+struct Slot {
     listener: u32,
-    kind: RawKind,
+    kind: Kind,
     priority: i32,
     injection: &'static str,
 }
 
 /// The list while mods load: registrations, and stops that came before the seal.
 struct Open {
-    listeners: Vec<Listener>,
-    raw: Vec<(usize, Raw)>,
+    listeners: Vec<Owner>,
+    slots: Vec<(usize, Slot)>,
     stopped: Vec<String>,
     /// Set once [`seal`] has taken the list: registering is refused from then on.
     sealing: bool,
 }
 
+struct SlotList {
+    entries: Box<[Slot]>,
+    api_end: usize,
+}
+
 struct Sealed {
-    listeners: Box<[Listener]>,
-    /// Each place's subscribed `impl Points`, by index into `listeners`, in order.
-    places: Box<[Box<[u32]>]>,
-    /// Each place's raw listeners, in order.
-    raw: Box<[Box<[Raw]>]>,
+    listeners: Box<[Owner]>,
+    slots: Box<[SlotList]>,
 }
 
 /// Registering, stopping and sealing all hold this lock, so a registration either lands in the
 /// sealed list or is refused, and a stop before the seal still holds after it.
 static OPEN: Mutex<Open> = Mutex::new(Open {
     listeners: Vec::new(),
-    raw: Vec::new(),
+    slots: Vec::new(),
     stopped: Vec::new(),
     sealing: false,
 });
@@ -88,15 +111,12 @@ static SEALED: OnceLock<Sealed> = OnceLock::new();
 pub enum RegisterError {
     /// The list was sealed: listeners register while the game loads, before its points are set.
     Sealed,
-    /// The mod already registered its `impl Points`.
-    Twice,
 }
 
 impl std::fmt::Display for RegisterError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Sealed => "the game's points were already set",
-            Self::Twice => "the mod already listens at points",
         })
     }
 }
@@ -121,10 +141,9 @@ fn listener(open: &mut Open, id: &'static str) -> usize {
     match open.listeners.iter().position(|listener| listener.id == id) {
         Some(index) => index,
         None => {
-            open.listeners.push(Listener {
+            open.listeners.push(Owner {
                 id,
                 mod_index: None,
-                points: None,
                 stopped: AtomicBool::new(false),
             });
             open.listeners.len() - 1
@@ -132,30 +151,16 @@ fn listener(open: &mut Open, id: &'static str) -> usize {
     }
 }
 
-/// Registers mod `id`'s listeners, `points`, at the places its [`Points::subscribed`] names. One
-/// route for both callers: a native mod's generated export and the wasm runtime's proxy.
-pub fn register(id: &'static str, points: &'static dyn Points) -> Result<(), RegisterError> {
-    let mut open = open()?;
-    let index = listener(&mut open, id);
-    let entry = &mut open.listeners[index].points;
-    if entry.is_some() {
-        return Err(RegisterError::Twice);
-    }
-    *entry = Some(points);
-    Ok(())
-}
-
-/// A raw listener at one place: a native mod's typed function, or a runtime's erased callback.
-/// Both constructors are `unsafe`: the caller guarantees the slot's pointers are used correctly.
-pub struct RawListener {
+/// A function or checked endpoint at an API, internals or site slot.
+pub struct SlotListener {
     id: &'static str,
     place: usize,
-    kind: RawKind,
+    kind: Kind,
     priority: i32,
     injection: &'static str,
 }
 
-impl RawListener {
+impl SlotListener {
     /// Mod `id`'s listener `function` at `place`.
     ///
     /// # Safety
@@ -167,7 +172,7 @@ impl RawListener {
         Self {
             id,
             place: place as usize,
-            kind: RawKind::Typed(function),
+            kind: Kind::Raw(RawKind::Typed(function)),
             priority: 0,
             injection: "",
         }
@@ -196,7 +201,7 @@ impl RawListener {
         Self {
             id,
             place: place as usize,
-            kind: RawKind::Erased(function),
+            kind: Kind::Raw(RawKind::Erased(function)),
             priority: 0,
             injection: "",
         }
@@ -218,9 +223,40 @@ impl RawListener {
         Self {
             id,
             place: POINT_COUNT + place as usize,
-            kind: RawKind::Typed(function),
+            kind: Kind::Raw(RawKind::Typed(function)),
             priority,
             injection,
+        }
+    }
+
+    /// An API listener whose function has the place's exact generated function type.
+    ///
+    /// # Safety
+    /// The generated constructor must check the function's host and record types before erasure.
+    pub const unsafe fn api(id: &'static str, place: PointId, function: *const ()) -> Self {
+        Self {
+            id,
+            place: place as usize,
+            kind: Kind::Api(ApiKind::Typed(function)),
+            priority: 0,
+            injection: "",
+        }
+    }
+
+    /// A checked wasm API export, forwarded without a per-point proxy.
+    #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
+    pub const fn forwarded(
+        id: &'static str,
+        place: PointId,
+        forward: &'static dyn crate::wire::Forward,
+        index: u32,
+    ) -> Self {
+        Self {
+            id,
+            place: place as usize,
+            kind: Kind::Api(ApiKind::Forward(forward, index)),
+            priority: 0,
+            injection: "",
         }
     }
 
@@ -237,17 +273,17 @@ impl RawListener {
     }
 }
 
-/// Registers a raw listener, in the same order for native functions and erased callbacks.
-pub fn register_raw(raw: &RawListener) -> Result<(), RegisterError> {
+/// Registers a function or checked endpoint, in the same order for native and wasm owners.
+pub fn register(slot: &SlotListener) -> Result<(), RegisterError> {
     let mut open = open()?;
-    let listener = listener(&mut open, raw.id) as u32;
-    open.raw.push((
-        raw.place,
-        Raw {
+    let listener = listener(&mut open, slot.id) as u32;
+    open.slots.push((
+        slot.place,
+        Slot {
             listener,
-            kind: raw.kind,
-            priority: raw.priority,
-            injection: raw.injection,
+            kind: slot.kind,
+            priority: slot.priority,
+            injection: slot.injection,
         },
     ));
     Ok(())
@@ -270,8 +306,6 @@ pub fn stop(id: &str) {
 /// Seals the list, so no listener registers after it, and sets each slot a mod listens at. The game
 /// calls it once, after the mods load.
 pub fn seal() {
-    // Takes the list under the lock, then asks each mod where it listens without it: a mod's
-    // `subscribed` may call `stop` (or `register`, refused) without deadlocking.
     let (mut listeners, raw_list) = {
         let mut open = lock();
         if open.sealing {
@@ -280,20 +314,11 @@ pub fn seal() {
         open.sealing = true;
         (
             std::mem::take(&mut open.listeners),
-            std::mem::take(&mut open.raw),
+            std::mem::take(&mut open.slots),
         )
     };
-    let mut places = vec![Vec::new(); POINT_COUNT];
-    for (index, listener) in listeners.iter_mut().enumerate() {
+    for listener in &mut listeners {
         listener.mod_index = mod_api::__private::mod_index(listener.id);
-        for place in listener
-            .points
-            .iter()
-            .flat_map(|points| points.subscribed())
-            .flatten()
-        {
-            places[*place as usize].push(index as u32);
-        }
     }
     let mut raw = vec![Vec::new(); POINT_COUNT + SITE_COUNT];
     for (place, function) in raw_list {
@@ -301,10 +326,17 @@ pub fn seal() {
     }
     for (place, site) in raw.iter_mut().enumerate() {
         if place < POINT_COUNT {
-            site.sort_by_key(|entry| std::cmp::Reverse(entry.priority));
-            for group in
-                site.chunk_by_mut(|a, b| a.priority == b.priority && a.listener == b.listener)
-            {
+            site.sort_by_key(|entry| {
+                (
+                    std::cmp::Reverse(entry.kind.is_api()),
+                    std::cmp::Reverse(entry.priority),
+                )
+            });
+            for group in site.chunk_by_mut(|a, b| {
+                a.kind.is_api() == b.kind.is_api()
+                    && a.priority == b.priority
+                    && a.listener == b.listener
+            }) {
                 group.sort_by_key(|entry| entry.injection);
             }
             continue;
@@ -330,22 +362,27 @@ pub fn seal() {
     }
     let sealed = SEALED.get_or_init(|| Sealed {
         listeners: listeners.into(),
-        places: places.into_iter().map(Vec::into_boxed_slice).collect(),
-        raw: raw.into_iter().map(Vec::into_boxed_slice).collect(),
+        slots: raw
+            .into_iter()
+            .map(|entries| SlotList {
+                api_end: entries.partition_point(|entry| entry.kind.is_api()),
+                entries: entries.into_boxed_slice(),
+            })
+            .collect(),
     });
     for (index, slot) in POINTS.iter().enumerate() {
-        let listened = !sealed.places[index].is_empty() || !sealed.raw[index].is_empty();
+        let listened = !sealed.slots[index].entries.is_empty();
         slot.store(listened, Ordering::Release);
     }
     for (index, slot) in SITES.iter().enumerate() {
         slot.store(
-            !sealed.raw[POINT_COUNT + index].is_empty(),
+            !sealed.slots[POINT_COUNT + index].entries.is_empty(),
             Ordering::Release,
         );
     }
 }
 
-fn active(listener: &Listener) -> bool {
+fn active(listener: &Owner) -> bool {
     !listener.stopped.load(Ordering::Acquire)
         && listener
             .mod_index
@@ -360,7 +397,8 @@ pub fn wrap<O>(
     call: impl FnOnce(Option<(*const (), usize)>) -> O,
 ) -> O {
     if let Some(sealed) = SEALED.get() {
-        for (index, raw) in sealed.raw[POINT_COUNT + place as usize]
+        for (index, raw) in sealed.slots[POINT_COUNT + place as usize]
+            .entries
             .iter()
             .enumerate()
             .skip(from)
@@ -369,7 +407,7 @@ pub fn wrap<O>(
             if !active(listener) {
                 continue;
             }
-            let RawKind::Typed(function) = raw.kind else {
+            let Kind::Raw(RawKind::Typed(function)) = raw.kind else {
                 unreachable!("only typed listeners register at sites")
             };
             let _guard = mod_api::__private::enter(listener.id, raw.injection);
@@ -389,21 +427,34 @@ fn run(sealed: &Sealed, listener: u32, name: &'static str, call: impl FnOnce()) 
     }
 }
 
-/// Runs the `impl Points` listeners at `place` (the `Points` method `name`), each through `call`.
-pub(crate) fn fire(place: PointId, name: &'static str, call: &mut dyn FnMut(&'static dyn Points)) {
+/// Walk one phase of a slot's ordered entries, under their owners' guards.
+fn fire(place: PointId, api: bool, call: &mut dyn FnMut(Kind)) {
     let Some(sealed) = SEALED.get() else { return };
-    for &index in &sealed.places[place as usize] {
-        let points = sealed.listeners[index as usize].points;
-        run(sealed, index, name, || {
-            call(points.expect("a subscribed mod has its Points"))
-        });
+    let slot = &sealed.slots[place as usize];
+    let entries = if api {
+        &slot.entries[..slot.api_end]
+    } else {
+        &slot.entries[slot.api_end..]
+    };
+    for entry in entries {
+        run(sealed, entry.listener, entry.injection, || call(entry.kind));
     }
 }
 
-/// Runs the raw listeners at `place`, each through `call` with its kind and function.
-pub(crate) fn fire_raw(place: PointId, name: &'static str, call: &mut dyn FnMut(RawKind)) {
-    let Some(sealed) = SEALED.get() else { return };
-    for raw in &sealed.raw[place as usize] {
-        run(sealed, raw.listener, name, || call(raw.kind));
-    }
+/// Run the API functions and forwarding endpoints at a point.
+pub(crate) fn fire_api(place: PointId, call: &mut dyn FnMut(ApiKind)) {
+    fire(place, true, &mut |kind| {
+        if let Kind::Api(api) = kind {
+            call(api);
+        }
+    });
+}
+
+/// Run the internals functions at a point.
+pub(crate) fn fire_raw(place: PointId, _name: &'static str, call: &mut dyn FnMut(RawKind)) {
+    fire(place, false, &mut |kind| {
+        if let Kind::Raw(raw) = kind {
+            call(raw);
+        }
+    });
 }

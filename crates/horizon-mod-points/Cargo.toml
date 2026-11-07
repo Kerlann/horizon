@@ -4,7 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 publish = false
-description = "The game's injection points for mods that listen at them: each point's record and the Points trait"
+description = "The game's injection points for mods that listen at them: typed function records and listener slots"
 
 [lib]
 name = "mod_points"
@@ -25,7 +25,7 @@ horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
 horizon-mod-api-macros = { path = "../horizon-mod-api-macros" }
 
 [features]
-# The game's side of wasm mods' listeners: the forwarding `Points` and the tables it checks a mod's
+# The game's side of wasm mods' listeners: the forwarding function slots and the tables it checks a mod's
 # places against. Only the game enables it; a mod compiles none of it.
 wasm-host = ["dep:wasmtime"]
 

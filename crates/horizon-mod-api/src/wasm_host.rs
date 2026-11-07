@@ -119,10 +119,11 @@ pub(crate) enum Call {
     Hook,
     /// Start-up or a load-phase call: within `Budgets::load`.
     Load,
-    /// A structure type's or piece's call, on a worldgen worker: within `Budgets::call`, and
-    /// queued for its group for as long as that takes. Refusing it would leave the chunk
-    /// without its structure depending on timing; the holder's own deadline bounds the wait.
-    Worldgen,
+    /// A call on a game worker: a structure type's or piece's on a worldgen worker, a block tint
+    /// source's on a meshing worker. Within `Budgets::call`, and queued for its group for as long
+    /// as that takes. Refusing it would leave the chunk without its structure, or the block
+    /// untinted, depending on timing; the holder's own deadline bounds the wait.
+    Worker,
 }
 
 impl Budgets {
@@ -451,7 +452,7 @@ impl Group {
         }
     }
 
-    /// Enters the group for a `call`: a worldgen call waits for it as long as another thread
+    /// Enters the group for a `call`: a worker call waits for it as long as another thread
     /// runs it, any other up to `budgets.wait`.
     fn enter(&self, call: Call) -> Result<Entered<'_>, CallRefused> {
         if self.poisoned.load(Ordering::Relaxed) {
@@ -470,7 +471,7 @@ impl Group {
                 self.budgets.wait
             };
         let store = loop {
-            if call == Call::Worldgen && !inside {
+            if call == Call::Worker && !inside {
                 break self.store.lock().unwrap_or_else(|e| e.into_inner());
             }
             match self.store.try_lock() {
@@ -1359,22 +1360,22 @@ mod tests {
     }
 
     #[test]
-    fn a_worldgen_call_waits_past_the_wait_for_its_group() {
+    fn a_worker_call_waits_past_the_wait_for_its_group() {
         let group = group(Duration::from_millis(1));
         let inside = group.enter(Call::Hook).unwrap();
         let other = group.clone();
-        let waiting = std::thread::spawn(move || other.enter(Call::Worldgen).is_ok());
+        let waiting = std::thread::spawn(move || other.enter(Call::Worker).is_ok());
         std::thread::sleep(Duration::from_millis(50));
         drop(inside);
         assert!(waiting.join().unwrap());
     }
 
     #[test]
-    fn a_worldgen_call_queued_behind_a_trap_finds_the_group_stopped() {
+    fn a_worker_call_queued_behind_a_trap_finds_the_group_stopped() {
         let group = group(Duration::from_millis(1));
         let inside = group.enter(Call::Hook).unwrap();
         let other = group.clone();
-        let waiting = std::thread::spawn(move || other.enter(Call::Worldgen).err());
+        let waiting = std::thread::spawn(move || other.enter(Call::Worker).err());
         std::thread::sleep(Duration::from_millis(50));
         group.poisoned.store(true, Ordering::Relaxed);
         drop(inside);

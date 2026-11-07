@@ -293,7 +293,7 @@ pub(super) trait RenderEntityBounds {
     fn render_id(&self) -> u32;
     fn render_bounds(&self, alpha: f64) -> Aabb;
     fn render_glowing(&self, game: &Game<'_>) -> bool {
-        game.entity_glowing(self.render_id())
+        game.tracked_entity_glowing(self.render_id())
     }
 }
 
@@ -1129,7 +1129,7 @@ impl Entity for Mob {
         Some((self.width(), self.height()))
     }
     fn can_use_portal(&self, game: &Game<'_>) -> bool {
-        game.mob_can_use_portal(self)
+        game.mob_portal_eligible(self)
     }
     /// `PersistentEntitySectionManager.Callback.onRemove`: discard stops
     /// section enumeration immediately, before the entity list is swept.
@@ -2299,3 +2299,7 @@ mod scoped_edit_tests {
         assert_eq!(lists.boats[1].velocity.x, 7.0);
     }
 }
+
+#[cfg(test)]
+#[path = "entity/taken_pass_tests.rs"]
+pub(in crate::game) mod taken_pass_tests;

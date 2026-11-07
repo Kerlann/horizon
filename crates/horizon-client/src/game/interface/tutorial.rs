@@ -439,7 +439,10 @@ impl super::Game<'_> {
             }
             text
         };
-        let mut title = Text::literal(substitute(self.translate(title_key, fallback), &icon_args));
+        let mut title = Text::literal(substitute(
+            self.translate_with_fallback(title_key, fallback),
+            &icon_args,
+        ));
         let desc_args = match hint {
             Hint::Move => vec![key("key.jump")],
             Hint::PunchTree => vec![key("key.attack")],
@@ -448,7 +451,7 @@ impl super::Game<'_> {
             _ => vec![],
         };
         let mut description = Some(Text::literal(substitute(
-            self.translate(description_key, description),
+            self.translate_with_fallback(description_key, description),
             &desc_args,
         )));
         if !self.add_toast(mod_api::ToastKind::Tutorial, &mut title, &mut description) {

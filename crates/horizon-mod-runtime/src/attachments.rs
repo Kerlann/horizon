@@ -4,7 +4,12 @@ pub mod index;
 mod lifetime;
 #[doc(hidden)]
 pub mod observer;
+mod query;
 mod resident;
+
+pub use query::{
+    AttachmentBatch, AttachmentIter, AttachmentQuery, AttachmentRowError, AttachmentRowRef,
+};
 
 #[doc(hidden)]
 pub use lifetime::{AttachmentLifetime, HasAttachmentLifetime};
@@ -479,6 +484,13 @@ impl AttachmentEntry {
         key: &AttachmentType<T>,
     ) -> Result<&T, AttachmentError> {
         key.validate_policy()?;
+        self.read_validated(key)
+    }
+
+    fn read_validated<T: Send + Sync + 'static>(
+        &self,
+        key: &AttachmentType<T>,
+    ) -> Result<&T, AttachmentError> {
         match &self.state {
             Entry::Decoded(value) => value
                 .value
@@ -1040,7 +1052,7 @@ mod tests {
     }
 
     #[test]
-    fn cow_rebind_keeps_unchanged_rows_and_rejects_stale_map_and_lifetime_handles() {
+    fn cow_rebind_keeps_entries_and_rejects_stale_rows_maps_and_lifetime_handles() {
         let index = Arc::new(Mutex::new(index::AttachmentIndex::default()));
         let mut old = Attachments::default();
         COUNTER.set(&mut old, Holder::Level, 1).unwrap();
@@ -1051,7 +1063,14 @@ mod tests {
         let before = rows(&index, &COUNTER);
         let mut current = old.clone();
         let registration = current.bind_index(&index, 1);
-        assert!(Arc::ptr_eq(&before, &rows(&index, &COUNTER)));
+        assert!(Arc::ptr_eq(
+            &before[0].entry,
+            &rows(&index, &COUNTER)[0].entry
+        ));
+        assert_eq!(
+            index.lock().unwrap().validate_row(&before[0]),
+            Err(AttachmentRowError::StaleHolder)
+        );
         COUNTER.set(&mut old, Holder::Level, 99).unwrap();
         COUNTER.remove(&mut old, Holder::Level).unwrap();
         old.apply_sync(change("counter", Some(100)));

@@ -510,3 +510,52 @@ pub mod tests {
         }
     }
 }
+
+/// Registrar operations for fluids.
+pub trait FluidsRegistrar {
+    /// Request a fluid by canonical registry id, checked when the registry loads.
+    fn fluid_key(&mut self, id: &str) -> crate::FluidKey;
+
+    /// Declare a tank-only fluid in this mod's namespace and return its key.
+    fn declare_fluid(&mut self, path: &str) -> crate::FluidKey;
+}
+
+impl FluidsRegistrar for PartRegistrar {
+    fn fluid_key(&mut self, id: &str) -> crate::FluidKey {
+        match self
+            .registry_keys
+            .borrow_mut()
+            .fluids
+            .request(self.mod_id, id)
+        {
+            Ok(slot) => crate::FluidKey(slot),
+            Err(error) => {
+                self.refused.push(error);
+                crate::FluidKey(u32::MAX)
+            }
+        }
+    }
+
+    fn declare_fluid(&mut self, path: &str) -> crate::FluidKey {
+        let id = format!("{}:{path}", self.mod_id);
+        if path.contains(':') || !horizon_mod_package::content::namespaced_id(&id) {
+            self.refused.push(format!(
+                "mod {}: invalid fluid declaration {id:?}",
+                self.mod_id
+            ));
+            return crate::FluidKey(u32::MAX);
+        }
+        let previous = self
+            .registry_keys
+            .borrow_mut()
+            .declared_fluids
+            .insert(id.clone(), self.mod_id);
+        if let Some(other) = previous {
+            self.refused.push(format!(
+                "fluid {id} declared by both {other} and {}",
+                self.mod_id
+            ));
+        }
+        self.fluid_key(&id)
+    }
+}

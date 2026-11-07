@@ -1,20 +1,16 @@
-//! The `client_render` area: host methods the game implements (`game/host/client_render.rs`).
+//! Host method declarations; access defaults and game forwarders are generated.
 #![allow(unused_variables)]
 use crate::*;
 /// The client host's methods of the `client_render` area, implemented by the game and reached through [`crate::ClientHost`].
+#[horizon_mod_api_macros::host_area]
 pub trait ClientRenderClientHost {
     /// Side: client.
     /// Asks `native_block_render_visibility` again for every state and, when the answers differ
     /// from those in use, remeshes every loaded section with them. Call it when your answer changes (a toggle key, a scan
     /// finishing) and once when the player joins, not every frame: a rebuild takes the workers a
     /// few seconds. With no part answering, nothing is asked and the mesher keeps its no-mod path.
-    fn refresh_render_visibility(&mut self) {
-        crate::phase::unprovided(
-            "ClientHost::refresh_render_visibility",
-            "refresh_render_visibility",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn refresh_render_visibility(&mut self);
     /// Side: client.
     /// Asks `native_biome_colors` again for every biome and, when the colours
     /// differ from those in use, rebuilds every loaded section and the far
@@ -22,13 +18,8 @@ pub trait ClientRenderClientHost {
     /// does). Call it when your colours change (a new season, a new day of a
     /// slow fade) and once when the player joins, not every frame: a rebuild
     /// takes the workers a few seconds.
-    fn refresh_biome_colors(&mut self) {
-        crate::phase::unprovided(
-            "ClientHost::refresh_biome_colors",
-            "refresh_biome_colors",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn refresh_biome_colors(&mut self);
     /// Side: client.
     /// A mod's own RGBA image, uploaded into the HUD atlas slot
     /// `MOD_IMAGE_SPRITE` and drawn with
@@ -37,13 +28,8 @@ pub trait ClientRenderClientHost {
     /// `MOD_IMAGE_SIZE`; false when it is not that
     /// size. The upload costs a texture patch of the image, so send one when the
     /// image changed, not every frame.
-    fn mod_image(&mut self, width: u32, height: u32, rgba: &[u8]) -> bool {
-        crate::phase::unprovided(
-            "ClientHost::mod_image",
-            "mod_image",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mod_image(&mut self, width: u32, height: u32, rgba: &[u8]) -> bool;
     /// Side: client.
     /// Published asset/data read: available in Setup, Reloading and World.
     /// For a client mod drawing a block entity: the texture block state `state`'s model shows on its `side`
@@ -52,13 +38,8 @@ pub trait ClientRenderClientHost {
     /// tint index (-1 for none): a copycat block drawing a box of its material's textures with `native_draw_cube`,
     /// kept with `BlockEntityDraw::keep`. The face culled against that side comes first, else the first facing it;
     /// None when the model has no face that way or isn't baked. API @API:block_face_sprite@.
-    fn block_face_sprite(&self, state: BlockStateId, side: Direction) -> Option<BlockFaceTexture> {
-        crate::phase::unprovided(
-            "ClientHost::block_face_sprite",
-            "block_face_sprite",
-            crate::phase::LoadAccess::PublishedResources,
-        )
-    }
+    #[access(PublishedResources)]
+    fn block_face_sprite(&self, state: BlockStateId, side: Direction) -> Option<BlockFaceTexture>;
     /// Side: client.
     /// Published asset/data read: available in Setup, Reloading and World.
     /// For a client mod: what each block (`minecraft:grass_block`, `oak_log[axis=x]`; properties left out take the
@@ -67,45 +48,25 @@ pub trait ClientRenderClientHost {
     /// its tint source and whether it is cut out, translucent or animated; its particle sprite; whether it is a plain
     /// cube. None for a block the game does not know. The model is the state's first random variant. API
     /// 380.
-    fn block_sprites(&self, blocks: &[&str]) -> Vec<Option<BlockSprites>> {
-        crate::phase::unprovided(
-            "ClientHost::block_sprites",
-            "block_sprites",
-            crate::phase::LoadAccess::PublishedResources,
-        )
-    }
+    #[access(PublishedResources)]
+    fn block_sprites(&self, blocks: &[&str]) -> Vec<Option<BlockSprites>>;
     /// Side: client.
     /// Published asset/data read: available in Setup, Reloading and World.
     /// For a client mod: each texture's sprite by name (`minecraft:block/stone`, `block/stone`), none for one no
     /// model uses. API 380.
-    fn texture_sprites(&self, textures: &[&str]) -> Vec<Option<SpriteRef>> {
-        crate::phase::unprovided(
-            "ClientHost::texture_sprites",
-            "texture_sprites",
-            crate::phase::LoadAccess::PublishedResources,
-        )
-    }
+    #[access(PublishedResources)]
+    fn texture_sprites(&self, textures: &[&str]) -> Vec<Option<SpriteRef>>;
     /// Side: client.
     /// Published asset/data read: available in Setup, Reloading and World.
     /// For a client mod: where GUI sprite `sprite` lies in the GUI atlas and its size, none for one the atlas lacks
     /// (a server's metrics-only atlas lacks them all). The atlas names vanilla's sprites by path alone
     /// (`gui/sprites/container/slot`) and a mod's with its namespace (`mymod:gui/panel`).
-    fn gui_sprite(&self, sprite: &Identifier) -> Option<AtlasRegion> {
-        crate::phase::unprovided(
-            "ClientHost::gui_sprite",
-            "gui_sprite",
-            crate::phase::LoadAccess::PublishedResources,
-        )
-    }
+    #[access(PublishedResources)]
+    fn gui_sprite(&self, sprite: &Identifier) -> Option<AtlasRegion>;
     /// Side: client.
     /// Published asset/data read: available in Setup, Reloading and World.
     /// For a client mod: changes each time the resources load (a resource pack turned on or off can move every
     /// sprite): ask `native_block_sprites` again then. API 380.
-    fn block_sprites_version(&self) -> u64 {
-        crate::phase::unprovided(
-            "ClientHost::block_sprites_version",
-            "block_sprites_version",
-            crate::phase::LoadAccess::PublishedResources,
-        )
-    }
+    #[access(PublishedResources)]
+    fn block_sprites_version(&self) -> u64;
 }

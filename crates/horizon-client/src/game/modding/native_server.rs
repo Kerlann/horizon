@@ -422,13 +422,13 @@ impl PlayerRead<'_> {
 #[allow(dead_code)]
 impl Game<'_> {
     /// Create or retrieve a connectionless player for the level currently in place.
-    pub(super) fn native_fake_player(
+    pub(super) fn fake_player(
         &mut self,
         level: LevelRef,
         uuid: u128,
         name: &str,
     ) -> Option<PlayerRef> {
-        if !self.native_level_in_place(level)
+        if !self.level_in_place(level)
             || !self.lan_guest_swaps.is_empty()
             || !horizon_client::lan::conn::valid_name(name)
         {
@@ -494,7 +494,7 @@ impl Game<'_> {
     }
 
     /// Remove a fake without treating it as a disconnect or saving it.
-    pub(super) fn native_player_remove_fake(&mut self, player: PlayerRef) -> bool {
+    pub(super) fn player_remove_fake(&mut self, player: PlayerRef) -> bool {
         if self.native_lifecycle.epoch() != Some(player.fields().entity.epoch())
             || !self.lan_guest_swaps.is_empty()
         {
@@ -531,7 +531,7 @@ impl Game<'_> {
     /// the answer says which; the action's own side effects (the swing, the hooks before it,
     /// vanilla's result) have still happened then. The fake is found once, and its turn
     /// starts at that place in the list.
-    pub(super) fn native_player_perform_action(
+    pub(super) fn player_perform_action(
         &mut self,
         player: PlayerRef,
         action: PlayerAction,
@@ -542,7 +542,7 @@ impl Game<'_> {
 
     /// A machine's one use on the persistent actor, with its private state put back even
     /// when the action refuses. Only the existing guest turn runs gameplay and its hooks.
-    pub(super) fn native_player_perform_action_scoped(
+    pub(super) fn player_perform_action_scoped(
         &mut self,
         player: PlayerRef,
         action: PlayerAction,
@@ -606,7 +606,7 @@ impl Game<'_> {
             Some(_) => return Err(ActionRefused::NotFake),
             // Not in the hub's list as itself: the acting player, or gone.
             None => {
-                return Err(match self.native_player_is_fake(player) {
+                return Err(match self.player_is_fake(player) {
                     Some(false) => ActionRefused::NotFake,
                     Some(true) => ActionRefused::Busy,
                     None => ActionRefused::Stale,
@@ -707,7 +707,7 @@ impl Game<'_> {
     }
 
     /// Whether a live player handle names a connectionless actor.
-    pub(super) fn native_player_is_fake(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn player_is_fake(&self, player: PlayerRef) -> Option<bool> {
         match self.player_handle_read(player)? {
             PlayerRead::Acting { .. } => Some(self.lan_acting_fake),
             PlayerRead::Guest(guest) => Some(guest.is_fake()),
@@ -717,7 +717,7 @@ impl Game<'_> {
     /// Resolve a real online player by UUID, never a fake. A fake is reached
     /// through the handle returned by its factory. During a nested player swap,
     /// outer players whose records are displaced return None.
-    pub(super) fn native_player_ref(&self, uuid: u128) -> Option<PlayerRef> {
+    pub(super) fn player(&self, uuid: u128) -> Option<PlayerRef> {
         let epoch = self.native_lifecycle.epoch()?;
         if let Some(remote) = self
             .remote
@@ -751,7 +751,7 @@ impl Game<'_> {
         };
         for run in runs {
             // A level the server no longer holds: nothing to name.
-            let Some(level) = self.native_level(&run.dimension) else {
+            let Some(level) = self.level(&run.dimension) else {
                 continue;
             };
             for watch in run.watches {
@@ -824,7 +824,7 @@ impl Game<'_> {
     ) -> Option<(String, [i32; 3])> {
         if !self.is_logical_server() {
             // A client's copy: what the login and respawn packets carried.
-            return (self.native_local_player()? == player)
+            return (self.local_player()? == player)
                 .then(|| self.level.last_death.clone())
                 .flatten();
         }
@@ -840,7 +840,7 @@ impl Game<'_> {
         if self.is_logical_server() {
             return self.player_handle_read(player);
         }
-        (self.native_local_player()? == player).then(|| PlayerRead::Acting {
+        (self.local_player()? == player).then(|| PlayerRead::Acting {
             mode: self.mode_id(),
             body: self.player.as_ref(),
             abilities: Some(self.client_abilities()),
@@ -893,7 +893,7 @@ impl Game<'_> {
 
     /// `ServerPlayerGameMode.getGameModeForPlayer`; Paper `HumanEntity#getGameMode`.
     /// None for stale, offline or unavailable players (including displaced outer players).
-    pub(super) fn native_player_game_mode(&self, player: PlayerRef) -> Option<GameMode> {
+    pub(super) fn player_game_mode(&self, player: PlayerRef) -> Option<GameMode> {
         match self.player_read_both(player)? {
             PlayerRead::Acting { .. } => Some(self.mode),
             PlayerRead::Guest(guest) => GameMode::from_id(guest.game_mode),
@@ -904,11 +904,7 @@ impl Game<'_> {
     /// `/gamemode` do, including the cancellable change hook and ability
     /// updates. Returns false for a stale or unavailable player, an active
     /// outer guest, no change, or a canceled change.
-    pub(super) fn native_player_set_game_mode(
-        &mut self,
-        player: PlayerRef,
-        mode: GameMode,
-    ) -> bool {
+    pub(super) fn player_set_game_mode(&mut self, player: PlayerRef, mode: GameMode) -> bool {
         if self.player_handle_read(player).is_none() {
             return false;
         }
@@ -925,7 +921,7 @@ impl Game<'_> {
     /// (vanilla's setters take any float). Returns false for a
     /// stale or unavailable player, a displaced outer player, and a speed
     /// that is not finite.
-    pub(super) fn native_player_set_abilities(
+    pub(super) fn player_set_abilities(
         &mut self,
         player: PlayerRef,
         abilities: NativePlayerAbilities,
@@ -962,12 +958,12 @@ impl Game<'_> {
     }
 
     /// `Player.isCreative`; Paper `HumanEntity#getGameMode`.
-    pub(super) fn native_player_is_creative(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn player_is_creative(&self, player: PlayerRef) -> Option<bool> {
         Some(self.player_read_both(player)?.creative())
     }
 
     /// `Inventory.getSelectedSlot`: the hotbar slot the player holds, 0..9.
-    pub(super) fn native_player_selected_slot(&self, player: PlayerRef) -> Option<usize> {
+    pub(super) fn player_selected_slot(&self, player: PlayerRef) -> Option<usize> {
         Some(match self.player_read_both(player)? {
             PlayerRead::Acting { .. } => self.selected,
             PlayerRead::Guest(guest) => guest.selected,
@@ -975,27 +971,24 @@ impl Game<'_> {
     }
 
     /// `Player.isSpectator`; Paper `HumanEntity#getGameMode`.
-    pub(super) fn native_player_is_spectator(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn player_is_spectator(&self, player: PlayerRef) -> Option<bool> {
         Some(self.player_read_both(player)?.mode() == 3)
     }
 
     /// `Player.mayBuild`; Paper `HumanEntity#getGameMode`.
-    pub(super) fn native_player_may_build(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn player_may_build(&self, player: PlayerRef) -> Option<bool> {
         Some(self.player_read_both(player)?.may_build())
     }
 
     /// `FoodData.getFoodLevel/getSaturationLevel/getExhaustionLevel`; Paper
     /// `HumanEntity#getFoodLevel/getSaturation/getExhaustion`. None until the
     /// guest's body exists, as well as for stale or unavailable players.
-    pub(super) fn native_player_food(&self, player: PlayerRef) -> Option<NativePlayerFood> {
+    pub(super) fn player_food(&self, player: PlayerRef) -> Option<NativePlayerFood> {
         self.player_read_both(player)?.food()
     }
 
     /// `Player.getAbilities`; Paper `Player#getAllowFlight/isFlying/getFlySpeed/getWalkSpeed`.
-    pub(super) fn native_player_abilities(
-        &self,
-        player: PlayerRef,
-    ) -> Option<NativePlayerAbilities> {
+    pub(super) fn player_abilities(&self, player: PlayerRef) -> Option<NativePlayerAbilities> {
         self.player_read_both(player)?.abilities()
     }
 
@@ -1048,7 +1041,7 @@ impl Game<'_> {
 
     /// The stable name of a connected or acting player. None for a stale or
     /// unavailable player; displaced online players retain their identity.
-    pub(super) fn native_player_name(&self, player: PlayerRef) -> Option<String> {
+    pub(super) fn player_name(&self, player: PlayerRef) -> Option<String> {
         if self.native_acting_player() == Some(player) {
             return self.lan_acting_name.clone();
         }
@@ -1059,7 +1052,7 @@ impl Game<'_> {
     /// Velocity proxy, the address the proxy forwards). Displaced connected
     /// players keep their address; an acting player with no known connection
     /// has an empty address. None for a stale or unavailable player.
-    pub(super) fn native_player_address(&self, player: PlayerRef) -> Option<String> {
+    pub(super) fn player_address(&self, player: PlayerRef) -> Option<String> {
         if let Some(guest) = self.online_player_record(player) {
             return Some(guest.address.ip().to_string());
         }
@@ -1069,7 +1062,7 @@ impl Game<'_> {
     /// The brand the player's client announced when it connected (`ServerPlayer.clientBrand`),
     /// empty when it sent none. Displaced connected players keep theirs; an acting player with
     /// no known connection has an empty one. None for a stale or unavailable player.
-    pub(super) fn native_player_client_brand(&self, player: PlayerRef) -> Option<String> {
+    pub(super) fn player_client_brand(&self, player: PlayerRef) -> Option<String> {
         if let Some(guest) = self.online_player_record(player) {
             return Some(guest.brand.clone());
         }
@@ -1084,7 +1077,7 @@ impl Game<'_> {
     }
     /// A system line in that player's chat, also inside a player's hook for
     /// the acting player; false when they aren't on.
-    pub(super) fn native_player_tell(&mut self, player: PlayerRef, line: Text) -> bool {
+    pub(super) fn player_tell(&mut self, player: PlayerRef, line: Text) -> bool {
         let Some(uuid) = self.message_player_uuid(player) else {
             return false;
         };
@@ -1092,7 +1085,7 @@ impl Game<'_> {
     }
     /// A line over that player's hotbar (the action bar), also inside a
     /// player's hook for the acting player; false when they aren't on.
-    pub(super) fn native_player_action_bar(&mut self, player: PlayerRef, line: Text) -> bool {
+    pub(super) fn player_action_bar(&mut self, player: PlayerRef, line: Text) -> bool {
         let Some(uuid) = self.message_player_uuid(player) else {
             return false;
         };
@@ -1172,7 +1165,7 @@ impl Game<'_> {
     /// The lines over and under that player's list of players (Tab):
     /// `ClientboundTabListPacket`, an empty text for none. False when they
     /// aren't on.
-    pub(super) fn native_player_tab_list(
+    pub(super) fn player_tab_list(
         &mut self,
         player: PlayerRef,
         header: &Text,
@@ -1191,7 +1184,7 @@ impl Game<'_> {
     /// milliseconds its ticks took on average lately, as `/tick query`
     /// reports them. The ticks a second it keeps up is the rate, or
     /// 1000 / milliseconds when that is lower.
-    pub(super) fn native_tick_stats(&self) -> (f32, f64) {
+    pub(super) fn tick_stats(&self) -> (f32, f64) {
         (
             self.clock.rate(),
             self.clock.average_nanos() as f64 / 1_000_000.0,
@@ -1203,11 +1196,7 @@ impl Game<'_> {
     /// until a mod sets it back or the server stops, also if they leave and
     /// come back. False when the server list is unavailable, the handle is
     /// stale or the player isn't online.
-    pub(super) fn native_player_set_sleep_ignored(
-        &mut self,
-        player: PlayerRef,
-        ignored: bool,
-    ) -> bool {
+    pub(super) fn player_set_sleep_ignored(&mut self, player: PlayerRef, ignored: bool) -> bool {
         let Some(uuid) = self.message_player_uuid(player) else {
             return false;
         };
@@ -1233,7 +1222,7 @@ impl Game<'_> {
     /// after this handle disconnects (the player rejoins hidden), until a mod sets it again
     /// or the server stops. Works inside a player's hook too; false for a stale
     /// world epoch, on a client and in a world nobody else can join.
-    pub(super) fn native_player_hide(&mut self, player: PlayerRef, level: Option<u8>) -> bool {
+    pub(super) fn player_hide(&mut self, player: PlayerRef, level: Option<u8>) -> bool {
         if self.native_lifecycle.epoch() != Some(player.entity().epoch()) {
             return false;
         }
@@ -1255,7 +1244,7 @@ impl Game<'_> {
     /// Plain text: the mod checks it (`Messages::text_allowed`, its length,
     /// other players' names). False when the server list is unavailable,
     /// the handle is stale or the player isn't online.
-    pub(super) fn native_player_set_nickname(
+    pub(super) fn player_set_nickname(
         &mut self,
         player: PlayerRef,
         nickname: Option<&str>,
@@ -1372,7 +1361,7 @@ impl Game<'_> {
     ///
     /// Not on wasm: a path in the game's file system, which a wasm mod has none of; a wasm mod
     /// keeps world data in level attachments.
-    pub(super) fn native_world_dir(&self) -> Option<PathBuf> {
+    pub(super) fn world_dir(&self) -> Option<PathBuf> {
         (!self.world_root.as_os_str().is_empty()).then(|| self.world_root.clone())
     }
 }
@@ -1396,7 +1385,7 @@ impl Game<'_> {
     /// cancels an orb in `native_entity_join_level`, to give its points with
     /// `PlayerRef::give_experience_points`. Empty for a level not in place and on a
     /// client of a server.
-    pub(super) fn native_experience_orbs(
+    pub(super) fn experience_orbs(
         &self,
         dimension: &str,
         min: [f64; 3],
@@ -1424,7 +1413,7 @@ impl Game<'_> {
     /// despawns at 6000); a `None` is left as it is.
     /// False, and nothing written, for an orb not in the server level `dimension`, a
     /// `value` or `count` of 0, and on a client of a server.
-    pub(super) fn native_set_experience_orb(
+    pub(super) fn set_experience_orb(
         &mut self,
         dimension: &str,
         id: u32,
@@ -1689,7 +1678,7 @@ impl Game<'_> {
                         dimension: source.origin_dimension,
                         ..source
                     },
-                    |game| game.native_entity(id),
+                    |game| game.entity(id),
                 )
                 .ok_or_else(|| err("argument.entity.notfound.entity", &[]))?;
             CommandSource::CommandBlockMinecart { entity, permission }
@@ -1741,7 +1730,7 @@ impl Game<'_> {
                         Target::Player => self.native_acting_player(),
                         Target::Guest(conn) => self
                             .command_guest(*conn)
-                            .and_then(|guest| self.native_player_ref(guest.uuid)),
+                            .and_then(|guest| self.player(guest.uuid)),
                         _ => None,
                     }
                     .ok_or_else(|| err("argument.entity.notfound.player", &[]))?;
@@ -2559,8 +2548,8 @@ mod tests {
                 super::super::native_guest_turn_tests::with_guests(|game| {
                     game.build_registries();
                     game.register_native_commands();
-                    let other = game.native_player_ref(13).unwrap();
-                    let acting = game.native_player_ref(12).unwrap();
+                    let other = game.player(13).unwrap();
+                    let acting = game.player(12).unwrap();
                     game.as_guest(12, |game| {
                         for line in [
                             "typed give guest13 nope",
@@ -3050,8 +3039,8 @@ mod fake_action_tests {
                 game.world.set(x, 63, z, stone).unwrap();
             }
         }
-        let level = game.native_level(game.dim.id()).unwrap();
-        let player = game.native_fake_player(level, 2, "fake").unwrap();
+        let level = game.level(game.dim.id()).unwrap();
+        let player = game.fake_player(level, 2, "fake").unwrap();
         let host = game.lan.as_mut().unwrap();
         let conn = |uuid| {
             host.hub
@@ -3143,7 +3132,7 @@ mod fake_action_tests {
                 location: [0.0, 0.5, 0.0],
             };
             assert_eq!(
-                game.native_player_perform_action(player, interact),
+                game.player_perform_action(player, interact),
                 Ok(ActionOutcome::Consumed)
             );
             let mob = game.mobs.iter().find(|m| m.id == id).unwrap();
@@ -3153,7 +3142,7 @@ mod fake_action_tests {
             assert!(!mob.extra.flag2, "the trader is not left trading");
             assert!(game.station.is_none(), "the session is not left open");
             assert_eq!(
-                game.native_player_perform_action(player, interact),
+                game.player_perform_action(player, interact),
                 Ok(ActionOutcome::Consumed),
                 "the next use opens it again",
             );
@@ -3199,7 +3188,7 @@ mod fake_action_tests {
                         .update_guest(fake_conn, |guest| guest.sneaking = sneaking)
                         .unwrap();
                     assert_eq!(
-                        game.native_player_perform_action(player, interact),
+                        game.player_perform_action(player, interact),
                         Ok(ActionOutcome::Consumed)
                     );
                     let key = (i32::MAX - 15, CART_KEY_Y, id as i32);
@@ -3280,7 +3269,7 @@ mod fake_action_tests {
             }
             let target = mod_api::EntityRef::new(game.native_lifecycle.epoch().unwrap(), 6110);
             assert_eq!(
-                game.native_player_perform_action(
+                game.player_perform_action(
                     player,
                     PlayerAction::InteractOn {
                         hand: Hand::Main,
@@ -3335,7 +3324,7 @@ mod fake_action_tests {
             let count =
                 |game: &Game<'_>| game.be_anims.shulkers.get(&shulker).map(|s| s.open_count);
             assert_eq!(
-                game.native_player_perform_action(player, on_top(shulker)),
+                game.player_perform_action(player, on_top(shulker)),
                 Ok(ActionOutcome::EffectBlocked(FakeEffect::Menu))
             );
             assert!(
@@ -3344,7 +3333,7 @@ mod fake_action_tests {
             );
             assert!(game.container.is_none());
             assert_eq!(
-                game.native_player_perform_action(player, on_top(shulker)),
+                game.player_perform_action(player, on_top(shulker)),
                 Ok(ActionOutcome::EffectBlocked(FakeEffect::Menu)),
                 "the next use is refused the same way",
             );
@@ -3356,7 +3345,7 @@ mod fake_action_tests {
             let ender = [2, 64, 0];
             place(game, ender, "minecraft:ender_chest");
             assert_eq!(
-                game.native_player_perform_action(player, on_top(ender)),
+                game.player_perform_action(player, on_top(ender)),
                 Ok(ActionOutcome::EffectBlocked(FakeEffect::Menu))
             );
             assert!(game.ender_open.is_none());
@@ -3398,7 +3387,7 @@ mod fake_action_tests {
 
             place(game, [1, 64, 0], "minecraft:crafting_table");
             assert_eq!(
-                game.native_player_perform_action(player, on_top([1, 64, 0])),
+                game.player_perform_action(player, on_top([1, 64, 0])),
                 Ok(ActionOutcome::EffectBlocked(FakeEffect::Menu))
             );
             assert_eq!(
@@ -3435,11 +3424,11 @@ mod fake_action_tests {
         with_game(|game| {
             let (player, ..) = fake(game, Some("minecraft:oak_log"), 0);
             assert_eq!(
-                game.native_player_perform_action(player, on_top([1, 63, 0])),
+                game.player_perform_action(player, on_top([1, 63, 0])),
                 Ok(ActionOutcome::Consumed)
             );
-            let level = game.native_level(game.dim.id()).unwrap();
-            let log = game.native_level_block_property(level, [1, 64, 0], "axis");
+            let level = game.level(game.dim.id()).unwrap();
+            let log = game.level_block_property(level, [1, 64, 0], "axis");
             assert_eq!(log.as_deref(), Some("y"), "placed on a top face, standing");
             assert_eq!(held(game, 2), None);
         });
@@ -3451,17 +3440,17 @@ mod fake_action_tests {
                 g.pitch = 90.0;
             });
             assert_eq!(
-                game.native_player_perform_action(player, on_top([1, 63, 0])),
+                game.player_perform_action(player, on_top([1, 63, 0])),
                 Ok(ActionOutcome::Passed)
             );
             let water = PlayerAction::UseItem { hand: Hand::Main };
             assert_eq!(
-                game.native_player_perform_action(player, water),
+                game.player_perform_action(player, water),
                 Ok(ActionOutcome::Consumed)
             );
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             assert_eq!(
-                game.native_level_block(level, [0, 64, 0]).as_deref(),
+                game.level_block(level, [0, 64, 0]).as_deref(),
                 Some("minecraft:water")
             );
             assert_eq!(
@@ -3474,7 +3463,7 @@ mod fake_action_tests {
             let (player, ..) = fake(game, Some("minecraft:ender_pearl"), 0);
             let pearl = PlayerAction::UseItem { hand: Hand::Main };
             assert_eq!(
-                game.native_player_perform_action(player, pearl),
+                game.player_perform_action(player, pearl),
                 Ok(ActionOutcome::Consumed)
             );
             assert_eq!(held(game, 2), None);
@@ -3539,7 +3528,7 @@ mod fake_action_tests {
                 horizon_core::geometry::Vec3::new(2.0, 64.0, 0.5),
                 0.0,
             ));
-            let target = game.native_entity(5000).unwrap();
+            let target = game.entity(5000).unwrap();
             let setup = PlayerActionSetup::new(
                 ItemStack::new("minecraft:bucket", 2),
                 [0.5, 64.0 + f64::from(1.62_f32), 0.5],
@@ -3572,8 +3561,8 @@ mod fake_action_tests {
                 Some(ItemStack::new("minecraft:emerald", 4))
             );
             assert!(guest.sneaking && guest.motion.as_ref().unwrap().shift_key_down);
-            let level = game.native_level(game.dim.id()).unwrap();
-            assert_eq!(game.native_fake_player(level, 2, "fake"), Some(player));
+            let level = game.level(game.dim.id()).unwrap();
+            assert_eq!(game.fake_player(level, 2, "fake"), Some(player));
             // The original cooldown is still in force, not the temporary action's timer.
             assert!(
                 game.lan.as_ref().unwrap().play[&conn]
@@ -3604,7 +3593,7 @@ mod fake_action_tests {
             viewpoint.eye = [2.5, 64.0 + f64::from(1.62_f32), 2.5];
             viewpoint.yaw = 117.0;
             let result = game
-                .native_player_perform_action_scoped(
+                .player_perform_action_scoped(
                     player,
                     PlayerAction::UseItem { hand: Hand::Main },
                     viewpoint,
@@ -3612,14 +3601,14 @@ mod fake_action_tests {
                 .unwrap();
             assert_eq!(result.outcome, ActionOutcome::Consumed);
             assert_eq!(result.held, Some(ItemStack::new("minecraft:bucket", 1)));
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             assert_eq!(
-                game.native_level_block(level, [2, 64, 2]).as_deref(),
+                game.level_block(level, [2, 64, 2]).as_deref(),
                 Some("minecraft:water")
             );
             place(game, [1, 64, 0], "minecraft:chest");
             let result = game
-                .native_player_perform_action_scoped(
+                .player_perform_action_scoped(
                     player,
                     on_top([1, 64, 0]),
                     setup("minecraft:oak_log", false),
@@ -3630,7 +3619,7 @@ mod fake_action_tests {
                 ActionOutcome::EffectBlocked(FakeEffect::Menu)
             );
             let result = game
-                .native_player_perform_action_scoped(
+                .player_perform_action_scoped(
                     player,
                     on_top([1, 64, 0]),
                     setup("minecraft:oak_log", true),
@@ -3642,11 +3631,11 @@ mod fake_action_tests {
                 "survival placement consumes the temporary stack"
             );
             assert_eq!(
-                game.native_level_block(level, [1, 65, 0]).as_deref(),
+                game.level_block(level, [1, 65, 0]).as_deref(),
                 Some("minecraft:oak_log")
             );
             assert_eq!(
-                game.native_player_perform_action_scoped(
+                game.player_perform_action_scoped(
                     player,
                     on_top([40, 63, 0]),
                     setup("minecraft:oak_log", false)
@@ -3656,12 +3645,12 @@ mod fake_action_tests {
             let mut invalid = setup("minecraft:oak_log", false);
             invalid.eye[0] = f64::NAN;
             assert_eq!(
-                game.native_player_perform_action_scoped(player, on_top([1, 63, 0]), invalid),
+                game.player_perform_action_scoped(player, on_top([1, 63, 0]), invalid),
                 Err(ActionRefused::InvalidSetup)
             );
-            let real = game.native_player_ref(1).unwrap();
+            let real = game.player(1).unwrap();
             assert_eq!(
-                game.native_player_perform_action_scoped(
+                game.player_perform_action_scoped(
                     real,
                     on_top([1, 63, 0]),
                     setup("minecraft:oak_log", false)
@@ -3670,7 +3659,7 @@ mod fake_action_tests {
             );
             let acting = Acting::start(&game.fake_action);
             assert_eq!(
-                game.native_player_perform_action_scoped(
+                game.player_perform_action_scoped(
                     player,
                     on_top([1, 63, 0]),
                     setup("minecraft:oak_log", false)
@@ -3698,7 +3687,7 @@ mod fake_action_tests {
                 location: [0.0; 3],
             };
             assert_eq!(
-                game.native_player_perform_action(player, interact(near)),
+                game.player_perform_action(player, interact(near)),
                 Ok(ActionOutcome::Passed)
             );
             assert_eq!(
@@ -3707,16 +3696,16 @@ mod fake_action_tests {
             );
             assert!(game.creatures.projectiles.is_empty());
             assert_eq!(
-                game.native_player_perform_action(player, interact(far)),
+                game.player_perform_action(player, interact(far)),
                 Err(ActionRefused::OutOfReach)
             );
             assert_eq!(
-                game.native_player_perform_action(player, interact(player.entity())),
+                game.player_perform_action(player, interact(player.entity())),
                 Err(ActionRefused::InvalidTarget)
             );
             let stale = mod_api::EntityRef::new(mod_api::NativeWorldEpoch::new(0), near.id());
             assert_eq!(
-                game.native_player_perform_action(player, interact(stale)),
+                game.player_perform_action(player, interact(stale)),
                 Err(ActionRefused::InvalidTarget)
             );
         });
@@ -3784,9 +3773,9 @@ mod fake_action_tests {
                     assert_eq!(result.outcome, ActionOutcome::Passed);
                     assert_eq!(result.held, Some(ItemStack::new("minecraft:oak_log", 1)));
                     assert!(game.use_failed, "outer per-action flag restored");
-                    let level = game.native_level(game.dim.id()).unwrap();
+                    let level = game.level(game.dim.id()).unwrap();
                     assert_eq!(
-                        game.native_level_block(level, [1, 64, 0]).as_deref(),
+                        game.level_block(level, [1, 64, 0]).as_deref(),
                         Some("minecraft:air")
                     );
                     assert_eq!(held(game, 2), Some(ItemStack::new("minecraft:diamond", 1)));
@@ -3801,8 +3790,8 @@ mod fake_action_tests {
         super::super::native_entity_refs::tests::with_game(|game| {
             let (player, conn, _) = fake(game, None, 0);
             let entity = zombie(game, 5000, [2.0, 64.0, 0.5]);
-            let mob = game.native_mob_ref(entity).unwrap();
-            let target = game.native_living(player.entity()).unwrap();
+            let mob = game.mob(entity).unwrap();
+            let target = game.living(player.entity()).unwrap();
             assert!(!mob.set_target(game, Some(target)));
             assert_eq!(mob.target(game), None);
             assert_eq!(
@@ -3830,7 +3819,7 @@ mod fake_action_tests {
             let near = zombie(game, 5000, [2.0, 64.0, 0.5]);
             let full = health(game, 5000);
             assert_eq!(
-                game.native_player_perform_action(player, PlayerAction::Attack { target: near }),
+                game.player_perform_action(player, PlayerAction::Attack { target: near }),
                 Ok(ActionOutcome::Consumed)
             );
             let dealt = 0.208f32 * (1.0 - (2.0 - 0.208 / 2.0) / 25.0);
@@ -3843,12 +3832,12 @@ mod fake_action_tests {
             // an id no entity has.
             let far = zombie(game, 5001, [10.5, 64.0, 0.5]);
             assert_eq!(
-                game.native_player_perform_action(player, PlayerAction::Attack { target: far }),
+                game.player_perform_action(player, PlayerAction::Attack { target: far }),
                 Err(ActionRefused::OutOfReach)
             );
             assert_eq!(health(game, 5001), full);
             assert_eq!(
-                game.native_player_perform_action(
+                game.player_perform_action(
                     player,
                     PlayerAction::Attack {
                         target: player.entity()
@@ -3858,7 +3847,7 @@ mod fake_action_tests {
             );
             let nobody = mod_api::EntityRef::new(game.native_lifecycle.epoch().unwrap(), 6000);
             assert_eq!(
-                game.native_player_perform_action(player, PlayerAction::Attack { target: nobody }),
+                game.player_perform_action(player, PlayerAction::Attack { target: nobody }),
                 Err(ActionRefused::InvalidTarget)
             );
         });
@@ -3869,30 +3858,27 @@ mod fake_action_tests {
     fn a_fake_breaks_blocks_at_once_by_the_game_modes_rules() {
         use super::super::native_entity_refs::tests::with_game;
         let level_block = |game: &mut Game<'_>, pos| {
-            let level = game.native_level(game.dim.id()).unwrap();
-            game.native_level_block(level, pos)
+            let level = game.level(game.dim.id()).unwrap();
+            game.level_block(level, pos)
         };
         // Survival, bare-handed: stone breaks at once, with no digging time.
         with_game(|game| {
             let (player, ..) = fake(game, None, 0);
             let pos = [1, 63, 0];
             assert_eq!(
-                game.native_player_perform_action(player, PlayerAction::BreakBlock { pos }),
+                game.player_perform_action(player, PlayerAction::BreakBlock { pos }),
                 Ok(ActionOutcome::Consumed)
             );
             assert_eq!(level_block(game, pos).as_deref(), Some("minecraft:air"));
             // Air breaks nothing; bedrock, which no digging breaks (destroy time -1), stays;
             // ten blocks off is out of reach.
             assert_eq!(
-                game.native_player_perform_action(player, PlayerAction::BreakBlock { pos }),
+                game.player_perform_action(player, PlayerAction::BreakBlock { pos }),
                 Ok(ActionOutcome::Passed)
             );
             place(game, [-1, 63, 0], "minecraft:bedrock");
             assert_eq!(
-                game.native_player_perform_action(
-                    player,
-                    PlayerAction::BreakBlock { pos: [-1, 63, 0] }
-                ),
+                game.player_perform_action(player, PlayerAction::BreakBlock { pos: [-1, 63, 0] }),
                 Ok(ActionOutcome::Passed)
             );
             assert_eq!(
@@ -3904,10 +3890,7 @@ mod fake_action_tests {
                 g.position = [-6.5, 64.0, -6.5];
             });
             assert_eq!(
-                game.native_player_perform_action(
-                    player,
-                    PlayerAction::BreakBlock { pos: [3, 64, 3] }
-                ),
+                game.player_perform_action(player, PlayerAction::BreakBlock { pos: [3, 64, 3] }),
                 Err(ActionRefused::OutOfReach)
             );
         });
@@ -3916,10 +3899,7 @@ mod fake_action_tests {
             let (player, ..) = fake(game, None, 1);
             place(game, [1, 63, 0], "minecraft:bedrock");
             assert_eq!(
-                game.native_player_perform_action(
-                    player,
-                    PlayerAction::BreakBlock { pos: [1, 63, 0] }
-                ),
+                game.player_perform_action(player, PlayerAction::BreakBlock { pos: [1, 63, 0] }),
                 Ok(ActionOutcome::Consumed)
             );
             assert_eq!(
@@ -3934,7 +3914,7 @@ mod fake_action_tests {
                 let (player, ..) = fake(game, item, mode);
                 let pos = [1, 63, 0];
                 assert_eq!(
-                    game.native_player_perform_action(player, PlayerAction::BreakBlock { pos }),
+                    game.player_perform_action(player, PlayerAction::BreakBlock { pos }),
                     Ok(ActionOutcome::Passed),
                     "game mode {mode}, holding {item:?}"
                 );
@@ -3983,7 +3963,7 @@ mod fake_action_tests {
             let (player, ..) = fake(game, None, 0);
             place(game, [1, 64, 0], "minecraft:chest");
             assert_eq!(
-                game.native_player_perform_action(player, on_top([1, 64, 0])),
+                game.player_perform_action(player, on_top([1, 64, 0])),
                 Ok(ActionOutcome::EffectBlocked(FakeEffect::Menu))
             );
         });
@@ -4001,7 +3981,7 @@ mod fake_action_tests {
                 "minecraft:red_bed[facing=north,part=head]",
             );
             assert_eq!(
-                game.native_player_perform_action(player, on_top([1, 64, 0])),
+                game.player_perform_action(player, on_top([1, 64, 0])),
                 Ok(ActionOutcome::EffectBlocked(FakeEffect::Sleep))
             );
         });
@@ -4010,7 +3990,7 @@ mod fake_action_tests {
             let (player, ..) = fake(game, None, 3);
             place(game, [1, 64, 0], "minecraft:chest");
             assert_eq!(
-                game.native_player_perform_action(player, on_top([1, 64, 0])),
+                game.player_perform_action(player, on_top([1, 64, 0])),
                 Ok(ActionOutcome::EffectBlocked(FakeEffect::Menu))
             );
         });
@@ -4018,12 +3998,12 @@ mod fake_action_tests {
         with_game(|game| {
             let (player, ..) = fake(game, Some("minecraft:oak_sign"), 0);
             assert_eq!(
-                game.native_player_perform_action(player, on_top([1, 63, 0])),
+                game.player_perform_action(player, on_top([1, 63, 0])),
                 Ok(ActionOutcome::EffectBlocked(FakeEffect::Menu))
             );
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             assert_eq!(
-                game.native_level_block(level, [1, 64, 0]).as_deref(),
+                game.level_block(level, [1, 64, 0]).as_deref(),
                 Some("minecraft:oak_sign")
             );
         });
@@ -4053,7 +4033,7 @@ mod fake_action_tests {
                 hit: BlockHit::new([40.5, 64.0, 0.5], [0, 1, 0], false),
             };
             assert_eq!(
-                game.native_player_perform_action(player, far),
+                game.player_perform_action(player, far),
                 Err(ActionRefused::OutOfReach)
             );
             assert_eq!(
@@ -4061,15 +4041,15 @@ mod fake_action_tests {
                 Some("minecraft:water_bucket")
             );
             // A real player's handle.
-            let real = game.native_player_ref(1).unwrap();
+            let real = game.player(1).unwrap();
             assert_eq!(
-                game.native_player_perform_action(real, on_top([1, 63, 0])),
+                game.player_perform_action(real, on_top([1, 63, 0])),
                 Err(ActionRefused::NotFake)
             );
             // Inside another action, as a hook running during it would ask.
             let acting = Acting::start(&game.fake_action);
             assert_eq!(
-                game.native_player_perform_action(player, on_top([1, 63, 0])),
+                game.player_perform_action(player, on_top([1, 63, 0])),
                 Err(ActionRefused::Busy)
             );
             drop(acting);
@@ -4092,11 +4072,11 @@ mod fake_action_tests {
             for count in [1u128, 64, 256] {
                 super::super::native_entity_refs::tests::with_game(|game| {
                     let (first, ..) = fake(game, None, 0);
-                    let level = game.native_level(game.dim.id()).unwrap();
+                    let level = game.level(game.dim.id()).unwrap();
                     let mut players = vec![first];
                     for i in 1..count {
                         players.push(
-                            game.native_fake_player(level, 100 + i, &format!("fake{i}"))
+                            game.fake_player(level, 100 + i, &format!("fake{i}"))
                                 .unwrap(),
                         );
                     }
@@ -4128,7 +4108,7 @@ mod fake_action_tests {
                             if let Kind::BreakBlock = kind {
                                 game.world.set(1, 63, 0, stone).unwrap();
                             }
-                            let outcome = game.native_player_perform_action(player, action);
+                            let outcome = game.player_perform_action(player, action);
                             assert_eq!(outcome, Ok(expected));
                         }
                     }
@@ -4179,7 +4159,7 @@ mod fake_action_tests {
             };
             game.forced_hit = Some(before);
             assert_eq!(
-                game.native_player_perform_action(player, on_top([1, 63, 0])),
+                game.player_perform_action(player, on_top([1, 63, 0])),
                 Ok(ActionOutcome::Consumed)
             );
             let after = game.forced_hit.expect("the forced hit is put back");

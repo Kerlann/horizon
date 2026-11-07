@@ -8,11 +8,10 @@
 //! sleep overlay and the subtitles (`SubtitleOverlay`).
 use crate::{
     font::Font,
-    hud_layout::{
-        Blend, GuiDraw, PoseOp, color_from_float, fill, hsv_to_argb, multiply, white, width,
-    },
+    hud_layout::{Blend, GuiDraw, PoseOp, color_from_float, fill, multiply, white, width},
     text::{Style, Text},
 };
+use horizon_core::color::hsv_to_argb;
 use std::{borrow::Cow, cmp::Ordering};
 
 /// `graphics.text`: dropped when fully transparent.
@@ -751,14 +750,7 @@ pub struct ItemDecorations {
 
 /// `Item.getBarWidth` and `getBarColor` for a damaged stack (`isDamaged`).
 pub fn damage_bar(damage: i32, max_damage: i32) -> Option<(i32, u32)> {
-    if max_damage <= 0 || damage <= 0 {
-        return None;
-    }
-    let width = (13.0 - damage as f32 * 13.0 / max_damage as f32)
-        .round()
-        .clamp(0.0, 13.0) as i32;
-    let health = ((max_damage as f32 - damage as f32) / max_damage as f32).max(0.0);
-    Some((width, hsv_to_argb(health / 3.0, 1.0, 1.0, 0)))
+    horizon_items::properties::damage_bar(damage, max_damage).map(|bar| (bar.width, bar.color))
 }
 
 /// `GuiGraphicsExtractor.itemDecorations` for a non-empty stack at (x, y):

@@ -616,7 +616,7 @@ impl Game<'_> {
                     .native_server_players()
                     .into_iter()
                     .find(|p| p.uuid() == player)
-                    .and_then(|p| self.native_player_name(p))
+                    .and_then(|p| self.player_name(p))
             {
                 self.native_player_item_mend(player, &name, &item, repaired, amount);
             }

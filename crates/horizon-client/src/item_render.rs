@@ -1676,7 +1676,7 @@ mod tests {
                 (stack.damage, stack.extra) = crate::item_data::decode_components(Some(
                     &Tag::compound([("minecraft:enchantment_glint_override", tag)]),
                 ));
-                assert_eq!(stack.has_foil(default), flag);
+                assert_eq!(stack.has_foil(Some(default)), flag);
                 let view = stack_view(&stack);
                 assert_eq!(
                     view.patch["minecraft:enchantment_glint_override"],

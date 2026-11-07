@@ -25,7 +25,7 @@ const MAIN_TEMPLATE: &str = "crates/horizon-client/src/native_main.rs.template";
 
 pub(super) fn template(path: &Path) -> Result<String, String> {
     fs::read_to_string(path).ok()
-        .filter(|template| ["/* MOD_ENTRIES */", "/* MOD_POINTS */", "/* MOD_RAW */", "/* BUILT_MODS */"].iter()
+        .filter(|template| ["/* MOD_ENTRIES */", "/* MOD_SLOTS */", "/* BUILT_MODS */"].iter()
             .all(|marker| template.matches(marker).count() == 1))
         .ok_or_else(|| crate::i18n::tr("This game source has no native inventory entry template. Update Horizon and rebuild the mods against this game.").to_string())
 }
@@ -45,18 +45,6 @@ pub(super) fn main_rs(
         "    horizon_mod_package::runtime::BuiltMod {{ id: {:?}, version: {:?}, side: horizon_mod_package::Side::{:?} }},\n",
         m.id, m.version, m.side,
     )).collect::<String>();
-    let checks = mods
-        .iter()
-        .enumerate()
-        .map(|(i, m)| super::inject::main_checks(i, &super::inject::of(m)))
-        .collect::<String>();
-    // A mod listens at points when it has point injections: its `impl Points` registers.
-    let points = mods
-        .iter()
-        .enumerate()
-        .filter(|(_, m)| !super::inject::of(m).is_empty())
-        .map(|(i, m)| format!("        ({:?}, mod_{i}::__horizon_points),\n", m.id))
-        .collect::<String>();
     let raw = mods.iter().enumerate().flat_map(|(i, manifest)| {
         super::inject::raw_of(manifest).into_iter().map(move |injection| {
             let point = listed.iter().find(|point| internals::plain_path(&point.target) == internals::plain_path(&injection.target)).expect("raw target checked");
@@ -67,6 +55,36 @@ pub(super) fn main_rs(
             format!("        mod_{i}_internals::raw::{place}({:?}, mod_{i}::{}){order}, // injection {:?}\n", manifest.id, injection.method, injection.id)
         })
     }).collect::<String>();
+    let raw = raw
+        + &mods
+            .iter()
+            .enumerate()
+            .flat_map(|(i, manifest)| {
+                manifest
+                    .inject
+                    .iter()
+                    .filter(|entry| {
+                        entry.access == horizon_mod_package::manifest::inject::Access::Api
+                            && entry.call.is_none()
+                    })
+                    .map(move |entry| {
+                        let point = listed
+                            .iter()
+                            .find(|point| {
+                                internals::plain_path(&point.target)
+                                    == internals::plain_path(&entry.at)
+                            })
+                            .expect("API slot checked");
+                        let place = point.place(
+                            entry.kind == horizon_mod_package::manifest::inject::Kind::Return,
+                        );
+                        format!(
+                        "        mod_points::listeners::{place}({:?}, {}, {:?}, mod_{i}::{}),\n",
+                        manifest.id, entry.priority, entry.id, entry.with
+                    )
+                    })
+            })
+            .collect::<String>();
     let raw = raw
         + &mods
             .iter()
@@ -97,9 +115,8 @@ pub(super) fn main_rs(
             })
             .collect::<String>();
     let markers = [
-        ("/* MOD_RAW */", &raw),
+        ("/* MOD_SLOTS */", &raw),
         ("/* MOD_ENTRIES */", &entries),
-        ("/* MOD_POINTS */", &points),
         ("/* BUILT_MODS */", &inventory),
     ];
     template
@@ -115,7 +132,6 @@ pub(super) fn main_rs(
                 .unwrap_or_else(|| chunk.to_owned())
         })
         .collect::<String>()
-        + &checks
 }
 
 /// Parsed once from the pipeline's immutable incoming copy, then reused for staging.
@@ -351,6 +367,7 @@ pub(super) fn stage(
     for name in [
         "horizon-client",
         "horizon-mod-api",
+        "horizon-mod-points",
         "horizon-threads",
         "horizon-mod-package",
     ] {

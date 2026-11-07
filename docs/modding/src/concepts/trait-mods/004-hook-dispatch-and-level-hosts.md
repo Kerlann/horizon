@@ -58,7 +58,7 @@ those states without a registry lookup. `block_state_id(name)` parses a block an
 `LevelRandomHost` provides vanilla's `Level.random` so
 mod draws come in vanilla's order. `LevelTicksHost` adds scheduling through
 `native_schedule_block_tick` and `native_schedule_fluid_tick`, while
-`LevelWriteHost` adds random access, `set_block`, `native_set_block_property`, `native_play_sound` and
+`LevelWriteHost` adds random access, `set_block`, `set_block_property`, `native_play_sound` and
 `native_send_particles` and `native_level_event` (`levelEvent`, queued in order with the write's own events).
 `set_block(pos, state, flags)` is `Level.setBlock` on a whole state, as `LevelRef::set_block` takes it: it
 removes the old block's block entity and creates the new block's in the write (`LevelChunk.setBlockState`), runs

@@ -18,14 +18,6 @@ pub fn mod_index_on(index: usize) -> bool {
     crate::mod_index_on(index)
 }
 
-/// The installed mod `id`'s hooks, for the game to hand its other faces (its `impl Points`) on.
-pub fn hooks_of(id: &str) -> Option<&'static dyn Hooks> {
-    crate::mods()
-        .iter()
-        .find(|entry| entry.id == id)
-        .map(|entry| &*entry.hooks)
-}
-
 /// Marks the thread as inside mod `id`'s `call` until the guard drops, as a hook's dispatch does,
 /// so a panic in it names both.
 pub fn enter(id: &'static str, call: &'static str) -> crate::crash::NativeModGuard {

@@ -16,13 +16,13 @@ impl Game<'_> {
 
     /// Narrows an entity to a dropped item, or None for another kind, a
     /// stale handle, a client, or an item temporarily taken out for ticking.
-    pub(super) fn native_item_entity_ref(&self, entity: EntityRef) -> Option<ItemEntityRef> {
+    pub(super) fn item_entity(&self, entity: EntityRef) -> Option<ItemEntityRef> {
         let item = ItemEntityRef::new(entity);
         self.native_item_entity_index(item).map(|_| item)
     }
 
     /// `ItemEntity.getItem`: the complete stack, or None if unavailable.
-    pub(super) fn native_item_entity_stack(&self, item: ItemEntityRef) -> Option<ItemStack> {
+    pub(super) fn item_entity_stack(&self, item: ItemEntityRef) -> Option<ItemStack> {
         Some(
             self.dropped
                 .get(self.native_item_entity_index(item)?)?
@@ -35,11 +35,7 @@ impl Game<'_> {
     /// stacks are refused: vanilla discards the item on its next tick. To
     /// remove an item entity, use the removal handle. False also for an
     /// unavailable item or outside a server.
-    pub(super) fn native_item_entity_set_stack(
-        &mut self,
-        item: ItemEntityRef,
-        stack: ItemStack,
-    ) -> bool {
+    pub(super) fn item_entity_set_stack(&mut self, item: ItemEntityRef, stack: ItemStack) -> bool {
         if stack.count == 0
             || &*stack.item == "minecraft:air"
             || self.native_item_entity_index(item).is_none()
@@ -51,7 +47,7 @@ impl Game<'_> {
 
     /// The signed pickup delay; the legacy infinite sentinel reads as vanilla's
     /// 32767. None also covers a stored value outside i32.
-    pub(super) fn native_item_entity_pickup_delay(&self, item: ItemEntityRef) -> Option<i32> {
+    pub(super) fn item_entity_pickup_delay(&self, item: ItemEntityRef) -> Option<i32> {
         let delay = self
             .dropped
             .get(self.native_item_entity_index(item)?)?
@@ -64,11 +60,7 @@ impl Game<'_> {
     }
 
     /// `ItemEntity.setPickUpDelay`.
-    pub(super) fn native_item_entity_set_pickup_delay(
-        &mut self,
-        item: ItemEntityRef,
-        ticks: i32,
-    ) -> bool {
+    pub(super) fn item_entity_set_pickup_delay(&mut self, item: ItemEntityRef, ticks: i32) -> bool {
         let Some(index) = self.native_item_entity_index(item) else {
             return false;
         };
@@ -77,31 +69,28 @@ impl Game<'_> {
     }
 
     /// `ItemEntity.setDefaultPickUpDelay`: ten ticks.
-    pub(super) fn native_item_entity_set_default_pickup_delay(
-        &mut self,
-        item: ItemEntityRef,
-    ) -> bool {
-        self.native_item_entity_set_pickup_delay(item, 10)
+    pub(super) fn item_entity_set_default_pickup_delay(&mut self, item: ItemEntityRef) -> bool {
+        self.item_entity_set_pickup_delay(item, 10)
     }
 
     /// `ItemEntity.setNoPickUpDelay`.
-    pub(super) fn native_item_entity_set_no_pickup_delay(&mut self, item: ItemEntityRef) -> bool {
-        self.native_item_entity_set_pickup_delay(item, 0)
+    pub(super) fn item_entity_set_no_pickup_delay(&mut self, item: ItemEntityRef) -> bool {
+        self.item_entity_set_pickup_delay(item, 0)
     }
 
     /// `ItemEntity.setNeverPickUp`: the infinite-delay sentinel 32767.
-    pub(super) fn native_item_entity_set_never_pickup(&mut self, item: ItemEntityRef) -> bool {
-        self.native_item_entity_set_pickup_delay(item, i32::from(i16::MAX))
+    pub(super) fn item_entity_set_never_pickup(&mut self, item: ItemEntityRef) -> bool {
+        self.item_entity_set_pickup_delay(item, i32::from(i16::MAX))
     }
 
     /// `ItemEntity.getAge`, including negative lifetime sentinels.
-    pub(super) fn native_item_entity_age(&self, item: ItemEntityRef) -> Option<i32> {
+    pub(super) fn item_entity_age(&self, item: ItemEntityRef) -> Option<i32> {
         Some(self.dropped.get(self.native_item_entity_index(item)?)?.age)
     }
 
     /// The UUID set by `ItemEntity.setTarget`, limiting pickup to that player;
     /// None also means an unavailable item. This is not the thrower.
-    pub(super) fn native_item_entity_target(&self, item: ItemEntityRef) -> Option<u128> {
+    pub(super) fn item_entity_target(&self, item: ItemEntityRef) -> Option<u128> {
         self.dropped
             .get(self.native_item_entity_index(item)?)?
             .target
@@ -109,7 +98,7 @@ impl Game<'_> {
     }
 
     /// `ItemEntity.setTarget`; None allows any player to pick it up.
-    pub(super) fn native_item_entity_set_target(
+    pub(super) fn item_entity_set_target(
         &mut self,
         item: ItemEntityRef,
         target: Option<u128>,
@@ -124,7 +113,7 @@ impl Game<'_> {
     /// `ItemEntity.getOwner`: the thrower as a resolved entity, not the pickup
     /// target. None for no thrower, an unloaded or different-level thrower,
     /// an unavailable handle, or one Horizon cannot resolve.
-    pub(super) fn native_item_entity_owner(&self, item: ItemEntityRef) -> Option<EntityRef> {
+    pub(super) fn item_entity_owner(&self, item: ItemEntityRef) -> Option<EntityRef> {
         let uuid = self
             .dropped
             .get(self.native_item_entity_index(item)?)?
@@ -134,7 +123,7 @@ impl Game<'_> {
             return None;
         }
         let id = u32::try_from(self.network_entity_id(target)?).ok()?;
-        self.native_entity(id)
+        self.entity(id)
     }
 }
 
@@ -160,8 +149,8 @@ mod tests {
             stack.data_mut().custom_name =
                 Some(horizon_core::nbt::Tag::String("Named pick".into()));
             game.spawn_item(stack.clone(), [0.0; 3], [0.0; 3], 0);
-            let entity = game.native_entity(game.dropped[0].id).unwrap();
-            let item = game.native_item_entity_ref(entity).unwrap();
+            let entity = game.entity(game.dropped[0].id).unwrap();
+            let item = game.item_entity(entity).unwrap();
             assert_eq!(item.entity(), entity);
             let read = item.stack(game).unwrap();
             assert_eq!(
@@ -196,18 +185,15 @@ mod tests {
                 .unwrap()
                 .clone();
             game.mobs.push(Mob::new(99, kind, Vec3::ZERO, 0.0));
-            let thrower = game.native_entity(99).unwrap();
-            game.dropped[0].thrower = Some(uuid_ints(game.native_entity_uuid(thrower).unwrap()));
+            let thrower = game.entity(99).unwrap();
+            game.dropped[0].thrower = Some(uuid_ints(game.entity_uuid(thrower).unwrap()));
             assert_eq!(item.owner(game), Some(thrower));
             assert_eq!(item.target(game), Some(target));
             assert!(item.set_target(game, None));
             assert_eq!(item.target(game), None);
             game.armor_stands
                 .push(ArmorStand::new(100, Vec3::ZERO, 0.0));
-            assert!(
-                game.native_item_entity_ref(game.native_entity(100).unwrap())
-                    .is_none()
-            );
+            assert!(game.item_entity(game.entity(100).unwrap()).is_none());
             let stale = ItemEntityRef::new(EntityRef::new(
                 NativeWorldEpoch::new(entity.epoch().get() + 1),
                 entity.id(),

@@ -69,11 +69,18 @@ pub(crate) fn sources(root: &Path) -> Result<BTreeMap<String, String>, String> {
     .map(|scope| (scope.to_owned(), String::new()))
     .into_iter()
     .collect();
+    let mut has_parts = false;
     for area in Catalog::modules(&dir).map_err(|e| e.to_string())? {
         let path = dir.join(format!("{area}.rs"));
         let source = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let file = syn::parse_file(&source).map_err(|e| format!("{}: {e}", path.display()))?;
+        has_parts |= file.items.iter().any(|item| matches!(item, Item::Mod(module) if module.ident == "parts" && module.content.is_none()));
         collect(root, "root", file.items, &mut out)?;
+    }
+    if has_parts {
+        out.get_mut("root")
+            .unwrap()
+            .push_str(&super::parts::trait_exports(root)?);
     }
     Ok(out
         .into_iter()
@@ -130,6 +137,11 @@ mod tests {
         let api = root.join("crates/horizon-mod-api/src");
         fs::create_dir_all(api.join("exports")).unwrap();
         fs::create_dir_all(api.join("parts")).unwrap();
+        fs::write(
+            api.join("parts/unions.rs.in"),
+            "pub trait Registrar {} pub trait CapabilityProviders {}\n",
+        )
+        .unwrap();
         fs::write(api.join("exports/parts.rs"), "mod parts;").unwrap();
         for expected in [api.join("parts/mod.rs"), api.join("parts.rs")] {
             fs::write(&expected, "").unwrap();

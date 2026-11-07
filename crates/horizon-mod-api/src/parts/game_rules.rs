@@ -96,7 +96,6 @@ pub mod tests {
 
     #[test]
     pub(crate) fn bool_rule_declarations_validate_slots_and_fail_atomically() {
-        use super::Registrar;
         let mut refused = super::PartRegistrar::new("example");
         refused
             .game_rule_bool("active", "missing:machines", true)
@@ -131,7 +130,6 @@ pub mod tests {
 
     #[test]
     pub(crate) fn category_registration_refuses_ignored_errors_and_installs_snapshot() {
-        use super::Registrar;
         let mut foreign = super::PartRegistrar::new("example");
         assert_eq!(
             foreign.game_rule_category("foreign:machines"),
@@ -159,5 +157,74 @@ pub mod tests {
             Err(crate::GameRuleError::Duplicate)
         );
         assert!(super::install_registrar(duplicate).is_err());
+    }
+}
+
+/// Registrar operations for game rules.
+pub trait GameRulesRegistrar {
+    /// Declare a game rule category in the calling mod's namespace. Invalid,
+    /// foreign or duplicate IDs refuse mod loading even if the error is ignored.
+    /// Categories appear in the host's game rules screen; remote clients do not
+    /// receive them in this version.
+    fn game_rule_category(&mut self, id: &str) -> Result<(), crate::GameRuleError>;
+
+    /// Declare a boolean game rule in this mod's namespace. Category references are
+    /// resolved after all mods register; an unknown category refuses installation then.
+    fn game_rule_bool(
+        &mut self,
+        id: &str,
+        category: &str,
+        default: bool,
+    ) -> Result<crate::BoolGameRuleKey, crate::GameRuleError>;
+}
+
+impl GameRulesRegistrar for PartRegistrar {
+    fn game_rule_category(&mut self, id: &str) -> Result<(), crate::GameRuleError> {
+        let result = (|| {
+            let id = self.game_rule_id(id)?;
+            if self.game_rule_categories.contains(&id) {
+                return Err(crate::GameRuleError::Duplicate);
+            }
+            self.game_rule_categories.push(id);
+            Ok(())
+        })();
+        if let Err(error) = &result {
+            self.refused
+                .push(format!("mod {} category {id:?}: {error:?}", self.mod_id));
+        }
+        result
+    }
+
+    fn game_rule_bool(
+        &mut self,
+        id: &str,
+        category: &str,
+        default: bool,
+    ) -> Result<crate::BoolGameRuleKey, crate::GameRuleError> {
+        let result = (|| {
+            let id = self.game_rule_id(id)?;
+            if self.game_rules.iter().any(|r| r.name == id) {
+                return Err(crate::GameRuleError::Duplicate);
+            }
+            let slot = self
+                .registry_keys
+                .borrow_mut()
+                .game_rules
+                .request(self.mod_id, &id)
+                .map_err(|_| crate::GameRuleError::InvalidId)?;
+            self.game_rules.push(horizon_client_core::gamerules::Rule {
+                name: id,
+                category: category.into(),
+                default: horizon_client_core::gamerules::Value::Bool(default),
+                min: 0,
+                max: 0,
+            });
+            Ok(crate::BoolGameRuleKey(slot))
+        })();
+        if let Err(error) = &result {
+            self.refused
+                .push(format!("mod {} rule {id:?}: {error:?}", self.mod_id));
+        }
+        result
     }
 }

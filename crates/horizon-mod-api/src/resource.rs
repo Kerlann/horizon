@@ -53,6 +53,8 @@ impl EnchantmentEffect {
 pub const PREVENT_ARMOR_CHANGE: EnchantmentEffect =
     EnchantmentEffect("minecraft:prevent_armor_change");
 
+pub use horizon_items::properties::{ItemBar, ItemRarity};
+
 /// An item and its components, without a count, as NeoForge's `ItemResource`: what a slot holds.
 /// An empty slot holds none.
 #[derive(Clone)]
@@ -93,15 +95,79 @@ impl ItemResource {
     /// (`host.item_default_component`), none where it has the component removed or the item
     /// hasn't one.
     pub fn value(&self, host: &dyn Host, id: &ComponentId) -> Option<Tag> {
+        self.value_id(host, id.as_str())
+    }
+    fn value_id(&self, host: &dyn Host, id: &str) -> Option<Tag> {
         if let Some(patch) = horizon_items::item_data::encode_components(&self.0) {
-            if let Some(own) = patch.get(id.as_str()) {
+            if let Some(own) = patch.get(id) {
                 return Some(own.clone());
             }
-            if patch.get(&format!("!{}", id.as_str())).is_some() {
+            if patch.get(&format!("!{id}")).is_some() {
                 return None;
             }
         }
-        host.item_default_component(self.item(), id.as_str())
+        host.item_default_component(self.item(), id)
+    }
+    /// `ItemStack.isDamageableItem`: maximum damage and damage components are
+    /// present, and the unbreakable component is absent, after this stack's patch.
+    pub fn damageable(&self, host: &dyn Host) -> bool {
+        horizon_items::properties::damageable(|id| self.value_id(host, id).is_some())
+    }
+    fn enchanted(&self, host: &dyn Host) -> bool {
+        matches!(self.value_id(host, "minecraft:enchantments"), Some(Tag::Compound(levels)) if !levels.is_empty())
+    }
+    /// `ItemStack.hasFoil`: the effective glint override wins, otherwise a
+    /// item-specific foil applies (lodestone compass or nonempty enchantments).
+    pub fn foil(&self, host: &dyn Host) -> bool {
+        let override_glint = self
+            .value_id(host, "minecraft:enchantment_glint_override")
+            .as_ref()
+            .and_then(horizon_items::item_data::component_bool);
+        let item_foil = horizon_items::properties::item_foil(
+            self.item(),
+            self.value_id(host, "minecraft:lodestone_tracker").is_some(),
+            self.enchanted(host),
+        );
+        horizon_items::properties::foil(override_glint, item_foil)
+    }
+    /// `ItemStack.getRarity`: the effective rarity, upgraded for a nonempty
+    /// enchantments component; removing rarity restores common before the upgrade.
+    pub fn rarity(&self, host: &dyn Host) -> ItemRarity {
+        let base = match self.value_id(host, "minecraft:rarity") {
+            Some(Tag::String(value)) => value.to_string_lossy(),
+            _ => String::new(),
+        };
+        ItemRarity::of(&base, self.enchanted(host))
+    }
+    /// `ItemStack.isEnchantable`: the effective enchantable component is
+    /// present and the enchantments component is present but empty.
+    pub fn enchantable(&self, host: &dyn Host) -> bool {
+        self.value_id(host, "minecraft:enchantable").is_some()
+            && matches!(self.value_id(host, "minecraft:enchantments"), Some(Tag::Compound(levels)) if levels.is_empty())
+    }
+    /// `ItemStack.isValidRepairItem`: whether `material` belongs to the
+    /// effective repairable component's item holder set. The comparison is by
+    /// item identity/tag, not its count, damage or components.
+    pub fn repairable(&self, host: &dyn Host, material: &ItemResource) -> bool {
+        self.value_id(host, "minecraft:repairable")
+            .is_some_and(|component| {
+                horizon_items::properties::repairable(&component, material.item(), |tag| {
+                    host.item_stack_in_tag(&material.0, tag).unwrap_or(false)
+                })
+            })
+    }
+    /// `Item.getUseDuration` and its item overrides, in ticks, including the
+    /// same use-duration Part as gameplay. Uses the host's current acting-player
+    /// context for Parts; vanilla's current implementations need no player argument.
+    /// None for an unknown item or a host without the engine backend.
+    pub fn use_duration(&self, host: &dyn Host) -> Option<i32> {
+        backend_of(host)?.item_resource_use_duration(&self.0)
+    }
+    /// `ItemStack.isBarVisible`, `getBarWidth` and `getBarColor`: the visible
+    /// vanilla durability or bundle bar, after effective components. None when
+    /// no bar is visible. Client drawing hooks can later replace this bar.
+    pub fn bar(&self, host: &dyn Host) -> Option<ItemBar> {
+        backend_of(host)?.item_resource_bar(&self.0)
     }
     /// Whether an enchantment on this item has effect `effect` (`EnchantmentHelper.has`), by the
     /// enchantments' definitions, data packs' included, not their ids.

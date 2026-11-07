@@ -117,7 +117,7 @@ impl Game<'_> {
     /// most 32 a player a tick) to `player`'s client, at the tick's end, from
     /// any server hook. Ok means accepted: a player who left or isn't on a
     /// Horizon client doesn't get it.
-    pub(super) fn native_net_send_to_player(
+    pub(super) fn net_send_to_player(
         &mut self,
         player: u128,
         channel: &str,
@@ -140,11 +140,7 @@ impl Game<'_> {
     /// caps, 32 a tick). An error when the server doesn't carry mod messages
     /// (a vanilla server), and until the player has joined: a server says it
     /// carries them during configuration, before it can take one.
-    pub(super) fn native_net_send_to_server(
-        &mut self,
-        channel: &str,
-        data: &[u8],
-    ) -> Result<(), String> {
+    pub(super) fn net_send_to_server(&mut self, channel: &str, data: &[u8]) -> Result<(), String> {
         // Not joined first: the announcement may still be on its way, and a
         // mod that gives up on "carries no mod messages" never tries again.
         let Some(remote) = self.remote.as_ref() else {
@@ -175,7 +171,7 @@ impl Game<'_> {
     /// comes only from ChatScreen). An error when the player isn't in a
     /// server's play state or the Chat option blocks the message. API
     /// 404.
-    pub(super) fn native_send_chat(&mut self, message: &str) -> Result<(), String> {
+    pub(super) fn send_chat(&mut self, message: &str) -> Result<(), String> {
         let Some(remote) = self.remote.as_ref() else {
             return Err("not connected to a server".into());
         };
@@ -190,7 +186,7 @@ impl Game<'_> {
         if !self.chat_abilities().allows(message) {
             return Err("the Chat option blocks this message".into());
         }
-        self.send_chat(message);
+        self.send_signed_chat_input(message);
         Ok(())
     }
 
@@ -200,14 +196,14 @@ impl Game<'_> {
     /// player edits and sends it, or presses Escape. The box keeps its limit
     /// (256 characters) and its character filter. An error with no player in a
     /// world, or while another screen is open. API @API:open_chat@.
-    pub(super) fn native_open_chat(&mut self, text: &str) -> Result<(), String> {
+    pub(super) fn open_chat(&mut self, text: &str) -> Result<(), String> {
         if self.player.is_none() {
             return Err("no player in a world".into());
         }
         if self.screen != super::Screen::Playing {
             return Err("another screen is open".into());
         }
-        self.open_chat(text);
+        self.begin_chat_screen(text);
         Ok(())
     }
 
@@ -219,7 +215,7 @@ impl Game<'_> {
     /// player isn't in a server's play state, and for a custom payload past
     /// `ServerboundCustomPayloadPacket.MAX_PAYLOAD_SIZE`, which a server
     /// disconnects for. API 409.
-    pub(super) fn native_send_packet(
+    pub(super) fn send_packet(
         &mut self,
         packet: ServerboundPlayPacket,
     ) -> Result<(), SendPacketError> {
@@ -306,21 +302,18 @@ mod tests {
             )
         };
 
-        assert!(game.native_send_packet(payload(4)).is_err());
+        assert!(game.send_packet(payload(4)).is_err());
         let (client, _server) = Pipe::pair();
         game.connect_local(client, "PacketTest").unwrap();
-        assert!(game.native_send_packet(payload(4)).is_err());
+        assert!(game.send_packet(payload(4)).is_err());
         game.remote.as_mut().unwrap().joined = true;
-        assert!(game.native_send_packet(payload(4)).is_ok());
-        assert!(game.native_send_packet(payload(quiet::MAX_PAYLOAD)).is_ok());
-        assert!(
-            game.native_send_packet(payload(quiet::MAX_PAYLOAD + 1))
-                .is_err()
-        );
+        assert!(game.send_packet(payload(4)).is_ok());
+        assert!(game.send_packet(payload(quiet::MAX_PAYLOAD)).is_ok());
+        assert!(game.send_packet(payload(quiet::MAX_PAYLOAD + 1)).is_err());
         let mut pong = Writer::new();
         pong.i32(7);
         assert_eq!(
-            game.native_send_packet(ServerboundPlayPacket::new(
+            game.send_packet(ServerboundPlayPacket::new(
                 Identifier::parse("minecraft:pong").unwrap(),
                 pong.data.clone(),
             )),
@@ -328,7 +321,7 @@ mod tests {
         );
         pong.bytes(&[0]);
         assert_eq!(
-            game.native_send_packet(ServerboundPlayPacket::new(
+            game.send_packet(ServerboundPlayPacket::new(
                 Identifier::parse("minecraft:pong").unwrap(),
                 pong.data,
             )),
@@ -336,7 +329,7 @@ mod tests {
         );
         let unknown = Identifier::parse("test:unknown_packet").unwrap();
         assert_eq!(
-            game.native_send_packet(ServerboundPlayPacket::new(unknown.clone(), Vec::new())),
+            game.send_packet(ServerboundPlayPacket::new(unknown.clone(), Vec::new())),
             Err(SendPacketError::UnknownPacket { id: unknown })
         );
     }

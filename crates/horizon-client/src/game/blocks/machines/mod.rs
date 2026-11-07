@@ -955,7 +955,7 @@ impl Game<'_> {
             side: Some(side),
         };
         let providers = mod_api::block_entity_providers(&mod_api::ITEMS, self, at)?;
-        let game = self.native_container_size(at).is_some();
+        let game = self.container_size(at).is_some();
         providers.ask(self, game)
     }
     /// Offers `stack` to a capability part and, in the same transaction, `take`s what it took
@@ -1378,7 +1378,7 @@ impl Game<'_> {
             providers.ask(game, has_game_answer)
         };
         for &id in &vanilla {
-            let entity = self.native_entity(id);
+            let entity = self.entity(id);
             match entity.and_then(|entity| Some((entity, ask(self, entity, true)?))) {
                 Some((entity, part)) => found.push(AutomationEntity::Part(entity, part)),
                 None => found.push(AutomationEntity::Container(id)),
@@ -1387,10 +1387,7 @@ impl Game<'_> {
         if let Some(level) = self.native_level_here() {
             let min = [at[0] - 0.5, at[1] - 0.5, at[2] - 0.5];
             let max = [at[0] + 0.5, at[1] + 0.5, at[2] + 0.5];
-            for entity in self
-                .native_level_entities_in(level, min, max)
-                .unwrap_or_default()
-            {
+            for entity in self.level_entities_in(level, min, max).unwrap_or_default() {
                 if !vanilla.contains(&entity.id())
                     && let Some(part) = ask(self, entity, false)
                 {
@@ -1659,7 +1656,7 @@ impl Game<'_> {
                     ..stack
                 })
                 .filter(|s| s.count > 0),
-                None => self.dispense_default(key, facing, stack),
+                None => self.dispense_default_in_level(key, facing, stack),
             }
         } else {
             self.dispense_item(key, facing, stack)?
@@ -1801,8 +1798,10 @@ impl Game<'_> {
         }
         let grey = horizon_client::hud::rgba(64, 64, 64, 255);
         let title = &self.remote_menu_title().unwrap_or_else(|| {
-            horizon_client::text::Text::literal(self.container_title(self.translate(key, fallback)))
-                .resolve_legacy()
+            horizon_client::text::Text::literal(
+                self.container_title(self.translate_with_fallback(key, fallback)),
+            )
+            .resolve_legacy()
         });
         super::screen_info::name_container(|| title.plain());
         let title_x = if screen == Screen::Hopper {
@@ -1811,7 +1810,7 @@ impl Game<'_> {
             (176.0 - atlas.font.width_text(title)) / 2.0
         };
         batch.text_styled(atlas, title, ox + title_x, oy + 6.0, grey, false);
-        let inventory = self.translate("container.inventory", "Inventory");
+        let inventory = self.translate_with_fallback("container.inventory", "Inventory");
         batch.text(atlas, &inventory, ox + 8.0, oy + height - 94.0, grey, false);
         true
     }
@@ -2125,7 +2124,7 @@ mod part_front_tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let state = horizon_world::chunk::BlockState {
                 name: "minecraft:crafter".into(),
                 properties: [("orientation".into(), "west_up".into())]
@@ -2133,7 +2132,7 @@ mod part_front_tests {
                     .collect(),
             };
             let crafter = game.pack.assets.registry.resolve(&state).unwrap();
-            assert!(game.native_level_set_block(
+            assert!(game.level_set_block(
                 level,
                 [2, 64, 8],
                 crafter,
@@ -2145,12 +2144,7 @@ mod part_front_tests {
                 .registry
                 .default_state("test:pipe")
                 .unwrap();
-            assert!(game.native_level_set_block(
-                level,
-                [1, 64, 8],
-                pipe,
-                NativeBlockUpdateFlags::NONE
-            ));
+            assert!(game.level_set_block(level, [1, 64, 8], pipe, NativeBlockUpdateFlags::NONE));
             if let Some(BlockEntity::Crafter(c)) = game.world.block_entities.get_mut(&(2, 64, 8)) {
                 c.items[3] = Some(stack("minecraft:oak_planks", 1));
                 c.items[6] = Some(stack("minecraft:oak_planks", 1));
@@ -2190,13 +2184,13 @@ mod part_front_tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let state = horizon_world::chunk::BlockState {
                 name: "minecraft:dropper".into(),
                 properties: [("facing".into(), "west".into())].into_iter().collect(),
             };
             let dropper = game.pack.assets.registry.resolve(&state).unwrap();
-            assert!(game.native_level_set_block(
+            assert!(game.level_set_block(
                 level,
                 [2, 64, 8],
                 dropper,
@@ -2208,12 +2202,7 @@ mod part_front_tests {
                 .registry
                 .default_state("test:pipe")
                 .unwrap();
-            assert!(game.native_level_set_block(
-                level,
-                [1, 64, 8],
-                pipe,
-                NativeBlockUpdateFlags::NONE
-            ));
+            assert!(game.level_set_block(level, [1, 64, 8], pipe, NativeBlockUpdateFlags::NONE));
             if let Some(BlockEntity::Chest(items)) = game.world.block_entities.get_mut(&(2, 64, 8))
             {
                 items[0] = Some(stack("minecraft:stick", 2));
@@ -2252,7 +2241,7 @@ mod part_front_tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let state = |game: &super::Game<'_>, name: &str, prop: (&str, &str)| {
                 let state = horizon_world::chunk::BlockState {
                     name: name.to_owned(),
@@ -2280,10 +2269,10 @@ mod part_front_tests {
                 };
             for (z, part, taken) in [(0, "test:pipe", true), (4, "test:greedy", false)] {
                 for (x, block) in [(0, dropper), (2, chest)] {
-                    assert!(game.native_level_set_block(level, [x, 64, z], block, flags));
+                    assert!(game.level_set_block(level, [x, 64, z], block, flags));
                 }
                 let state = game.pack.assets.registry.default_state(part).unwrap();
-                assert!(game.native_level_set_block(
+                assert!(game.level_set_block(
                     level,
                     [1, 64, z],
                     state,
@@ -2309,10 +2298,10 @@ mod part_front_tests {
                 // Two planks make four sticks.
                 let z = z + 2;
                 for (x, block) in [(0, crafter), (2, chest)] {
-                    assert!(game.native_level_set_block(level, [x, 64, z], block, flags));
+                    assert!(game.level_set_block(level, [x, 64, z], block, flags));
                 }
                 let state = game.pack.assets.registry.default_state(part).unwrap();
-                assert!(game.native_level_set_block(
+                assert!(game.level_set_block(
                     level,
                     [1, 64, z],
                     state,

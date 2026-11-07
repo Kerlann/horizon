@@ -714,3 +714,64 @@ pub mod tests {
         assert!(r.refused[2].contains("write it without #"));
     }
 }
+
+/// Registrar operations for blocks.
+pub trait BlocksRegistrar {
+    /// Request a block by canonical registry id. All mods' declarations are checked at load.
+    fn block_key(&mut self, id: &str) -> crate::BlockKey;
+
+    /// Attach `part`, of kind `kind` (its type's name), to block `block`.
+    fn attach_block_part(
+        &mut self,
+        block: crate::BlockKey,
+        kind: &'static str,
+        part: Arc<dyn BlockPart>,
+    );
+
+    /// Attach `part`, of kind `kind`, to every block in tag `tag`.
+    fn attach_block_part_tag(&mut self, tag: &str, kind: &'static str, part: Arc<dyn BlockPart>);
+}
+
+impl BlocksRegistrar for PartRegistrar {
+    fn block_key(&mut self, id: &str) -> crate::BlockKey {
+        match self
+            .registry_keys
+            .borrow_mut()
+            .blocks
+            .request(self.mod_id, id)
+        {
+            Ok(slot) => crate::BlockKey(slot),
+            Err(error) => {
+                self.refused.push(error);
+                crate::BlockKey(u32::MAX)
+            }
+        }
+    }
+
+    fn attach_block_part(
+        &mut self,
+        block: crate::BlockKey,
+        kind: &'static str,
+        part: Arc<dyn BlockPart>,
+    ) {
+        let id = self
+            .registry_keys
+            .borrow()
+            .blocks
+            .id(block.0)
+            .map(str::to_owned);
+        let Some(id) = id else {
+            self.refused.push(format!(
+                "mod {}: invalid block key slot {}",
+                self.mod_id, block.0
+            ));
+            return;
+        };
+        self.attach(|p| &mut p.blocks, kind, &id, part);
+    }
+
+    fn attach_block_part_tag(&mut self, tag: &str, kind: &'static str, part: Arc<dyn BlockPart>) {
+        let part = self.tagged(kind, tag, part);
+        self.tags.blocks.extend(part);
+    }
+}

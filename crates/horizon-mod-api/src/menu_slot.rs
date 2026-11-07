@@ -34,7 +34,7 @@ pub enum MenuSlotBacking {
     CraftGrid(usize),
     /// The inventory crafting grid's result, which nothing writes: a craft is a click.
     CraftResult,
-    /// Slot `.0` of a mod's chest menu (`native_open_menu`).
+    /// Slot `.0` of a mod's chest menu (`open_menu`).
     Native(usize),
 }
 

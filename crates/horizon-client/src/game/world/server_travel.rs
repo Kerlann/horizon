@@ -534,6 +534,7 @@ impl Game<'_> {
             host.hub
                 .change_level(i, at, yaw, None, true, PLAYER_DELAY, &ctx);
         }
+        self.bind_player_attachments(conn, false);
         self.as_guest(conn, |g| {
             g.trigger_dimension(source, target, [from.x, from.y, from.z])
         });
@@ -1011,6 +1012,7 @@ impl Game<'_> {
                     }
                 });
             }
+            self.bind_player_attachments(t.conn, false);
             self.as_guest(t.conn, |g| {
                 g.trigger_dimension(source, t.dim, origin);
                 // The mods hear the teleport into another level, with the

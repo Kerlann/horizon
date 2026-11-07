@@ -12,7 +12,7 @@ impl Game<'_> {
     /// False for a target in another level. None for a stale or unavailable
     /// living entity or target, one outside the level in place, or on a
     /// client.
-    pub(super) fn native_living_has_line_of_sight(
+    pub(super) fn living_has_line_of_sight(
         &self,
         living: LivingRef,
         target: EntityRef,
@@ -25,9 +25,9 @@ impl Game<'_> {
         if self.target_level(seen) != self.dim {
             return Some(false);
         }
-        let feet = self.native_entity_position(living.entity())?;
-        let from = self.native_entity_eye_position(living.entity())?;
-        let to = self.native_entity_eye_position(target)?;
+        let feet = self.entity_position(living.entity())?;
+        let from = self.entity_eye_position(living.entity())?;
+        let to = self.entity_eye_position(target)?;
         let w = self.mob_world_base(&[]);
         Some(w.line_of_sight_for(
             Some(feet[1]),
@@ -42,7 +42,7 @@ impl Game<'_> {
     /// own state still answers where its `getDefaultDimensions` reads it: a
     /// digging sniffer or an emerging warden is low in every pose. None for
     /// a stale or unavailable handle.
-    pub(super) fn native_living_dimensions_for_pose(
+    pub(super) fn living_dimensions_for_pose(
         &self,
         living: LivingRef,
         pose: Pose,
@@ -121,7 +121,7 @@ impl Game<'_> {
     /// True when the entity moved. False when no spot was found, for a
     /// non-finite point, a fake player, a player in another level, an armor
     /// stand or the dragon, a stale handle, or on a client.
-    pub(super) fn native_living_random_teleport(
+    pub(super) fn living_random_teleport(
         &mut self,
         living: LivingRef,
         at: [f64; 3],
@@ -177,8 +177,8 @@ mod tests {
                 .unwrap()
                 .clone();
             game.mobs.push(Mob::new(55, ty, Vec3::ZERO, 0.0));
-            let living = game.native_living(game.native_entity(55).unwrap()).unwrap();
-            assert!(game.native_living_set_attribute_base(living, "minecraft:scale", 2.0));
+            let living = game.living(game.entity(55).unwrap()).unwrap();
+            assert!(game.living_set_attribute_base(living, "minecraft:scale", 2.0));
             assert_eq!(
                 living.dimensions_for_pose(game, Pose::Dying),
                 Some([f64::from(0.2_f32), f64::from(0.2_f32), f64::from(1.62_f32)])
@@ -196,7 +196,7 @@ mod tests {
                     Vec3::ZERO,
                     0.0,
                 ));
-            let living = game.native_living(game.native_entity(55).unwrap()).unwrap();
+            let living = game.living(game.entity(55).unwrap()).unwrap();
             assert_eq!(
                 living.dimensions_for_pose(game, Pose::Sleeping),
                 Some([f64::from(0.2_f32); 3])
@@ -211,7 +211,7 @@ mod tests {
             let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
             dragon.id = 55;
             game.dragon = Some(dragon);
-            let living = game.native_living(game.native_entity(55).unwrap()).unwrap();
+            let living = game.living(game.entity(55).unwrap()).unwrap();
             assert_eq!(
                 living.dimensions_for_pose(game, Pose::Standing),
                 Some([16.0, 8.0, f64::from(6.8_f32)])
@@ -247,8 +247,8 @@ mod tests {
                     Vec3::ZERO,
                     0.0,
                 ));
-            let living = game.native_living(game.native_entity(55).unwrap()).unwrap();
-            assert!(game.native_living_set_attribute_base(living, "minecraft:scale", 2.0));
+            let living = game.living(game.entity(55).unwrap()).unwrap();
+            assert!(game.living_set_attribute_base(living, "minecraft:scale", 2.0));
             assert_eq!(
                 living.dimensions_for_pose(game, Pose::Standing),
                 Some([1.0, f64::from(3.95_f32), f64::from(3.555_f32)])
@@ -284,7 +284,7 @@ mod tests {
             horizon_client::mobs::sync::set_pose(&mut mob, horizon_client::mobs::sync::DIGGING);
             mob.extra.model_scale = 2.0;
             game.mobs.push(mob);
-            let living = game.native_living(game.native_entity(55).unwrap()).unwrap();
+            let living = game.living(game.entity(55).unwrap()).unwrap();
             assert_eq!(
                 living.dimensions_for_pose(game, Pose::Standing),
                 Some([f64::from(0.9_f32), 1.0, f64::from(0.85_f32)])
@@ -328,8 +328,8 @@ mod tests {
     fn line_of_sight_follows_the_blocks_between() {
         with_game(|game| {
             floor_and_zombies(game);
-            let a = game.native_living(game.native_entity(12).unwrap()).unwrap();
-            let b = game.native_entity(13).unwrap();
+            let a = game.living(game.entity(12).unwrap()).unwrap();
+            let b = game.entity(13).unwrap();
             assert_eq!(a.has_line_of_sight(game, b), Some(true));
             let stone = game
                 .pack
@@ -355,7 +355,7 @@ mod tests {
     fn random_teleport_drops_to_the_ground_and_honours_the_avoid_tag() {
         with_game(|game| {
             floor_and_zombies(game);
-            let zombie = game.native_living(game.native_entity(12).unwrap()).unwrap();
+            let zombie = game.living(game.entity(12).unwrap()).unwrap();
             let at = |game: &Game<'_>| game.mobs.iter().find(|m| m.id == 12).unwrap().position;
             // From six blocks up it lands on the floor, one block lower per
             // step down (`randomTeleport`).
@@ -449,7 +449,7 @@ mod tests {
                     .unwrap();
             guest.motion = Some(Box::new(motion));
             game.lan.as_mut().unwrap().hub.guests.push(guest);
-            let living = game.native_living(game.native_entity(12).unwrap()).unwrap();
+            let living = game.living(game.entity(12).unwrap()).unwrap();
             // Avatar.POSES: the box of each stance a player takes.
             assert_eq!(
                 living.dimensions_for_pose(game, Pose::Standing),
@@ -474,7 +474,7 @@ mod tests {
                 living.dimensions_for_pose(game, Pose::Roaring),
                 Some([f64::from(0.6_f32), f64::from(1.8_f32), f64::from(1.62_f32)])
             );
-            assert!(game.native_living_set_attribute_base(living, "minecraft:scale", 2.0));
+            assert!(game.living_set_attribute_base(living, "minecraft:scale", 2.0));
             assert_eq!(
                 living.dimensions_for_pose(game, Pose::Dying),
                 Some([f64::from(0.2_f32), f64::from(0.2_f32), f64::from(1.62_f32)]),
@@ -497,7 +497,7 @@ mod tests {
             let ty = game.res.mob_types().get("minecraft:camel").unwrap().clone();
             game.mobs
                 .push(Mob::new(20, ty, Vec3::new(0.5, 64.0, 0.5), 0.0));
-            let camel = game.native_living(game.native_entity(20).unwrap()).unwrap();
+            let camel = game.living(game.entity(20).unwrap()).unwrap();
             let standing = camel.dimensions_for_pose(game, Pose::Standing).unwrap();
             // Camel.getDefaultDimensions: the sitting box 1.43 lower, its eyes
             // at 0.845 (`sitting_dims`), asked of a camel that stands.
@@ -533,7 +533,7 @@ mod tests {
             let ty = game.res.mob_types().get("minecraft:goat").unwrap().clone();
             game.mobs
                 .push(Mob::new(21, ty, Vec3::new(0.5, 64.0, 0.5), 0.0));
-            let goat = game.native_living(game.native_entity(21).unwrap()).unwrap();
+            let goat = game.living(game.entity(21).unwrap()).unwrap();
             let standing = goat.dimensions_for_pose(game, Pose::Standing).unwrap();
             let long_jump = goat.dimensions_for_pose(game, Pose::LongJumping).unwrap();
             for (asked, is) in standing.iter().zip(&long_jump) {
@@ -563,7 +563,7 @@ mod tests {
                 .clone();
             game.mobs
                 .push(Mob::new(22, ty, Vec3::new(0.5, 64.0, 0.5), 0.0));
-            let warden = game.native_living(game.native_entity(22).unwrap()).unwrap();
+            let warden = game.living(game.entity(22).unwrap()).unwrap();
             let mob = game.mobs.iter_mut().find(|m| m.id == 22).unwrap();
             horizon_client::mobs::sync::set_pose(mob, horizon_client::mobs::sync::DIGGING);
             // Warden.getDefaultDimensions reads its own state, not the pose
@@ -594,7 +594,7 @@ mod tests {
                 .clone();
             game.mobs
                 .push(Mob::new(23, ty, Vec3::new(0.5, 64.0, 0.5), 0.0));
-            let villager = game.native_living(game.native_entity(23).unwrap()).unwrap();
+            let villager = game.living(game.entity(23).unwrap()).unwrap();
             let standing = villager.dimensions_for_pose(game, Pose::Standing).unwrap();
             let mob = game.mobs.iter_mut().find(|m| m.id == 23).unwrap();
             mob.extra.ints[1] = 1;
@@ -621,9 +621,7 @@ mod tests {
     fn no_action_time_and_pathfinding_malus_reach_the_mob() {
         with_game(|game| {
             floor_and_zombies(game);
-            let mob = game
-                .native_mob_ref(game.native_entity(12).unwrap())
-                .unwrap();
+            let mob = game.mob(game.entity(12).unwrap()).unwrap();
             assert_eq!(mob.no_action_time(game), Some(0));
             assert!(mob.set_no_action_time(game, 650));
             assert_eq!(

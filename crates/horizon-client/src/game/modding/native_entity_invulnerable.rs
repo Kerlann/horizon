@@ -33,7 +33,7 @@ impl Game<'_> {
     /// only damage that bypasses invulnerability (the void, `/kill`) or a
     /// creative player gets past. Mobs keep it; Horizon keeps no such flag
     /// for players or other kinds yet, so they read None.
-    pub(super) fn native_entity_permanently_invulnerable(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_permanently_invulnerable(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_target(entity)? {
             Target::Mob(id) => Some(self.mobs.iter().find(|m| m.id == id)?.invulnerable_flag),
             _ => None,
@@ -41,7 +41,7 @@ impl Game<'_> {
     }
     /// `Entity.setInvulnerable`: sets a mob's `Invulnerable` flag, saved
     /// with it. False for the other kinds.
-    pub(super) fn native_entity_set_invulnerable(
+    pub(super) fn entity_set_invulnerable(
         &mut self,
         entity: EntityRef,
         invulnerable: bool,
@@ -58,7 +58,7 @@ impl Game<'_> {
     /// `LivingEntity.damageCooldownTime`: 20 after a hit, counting down;
     /// while it is above 10 a hit does only what it deals beyond the last
     /// one. Mobs and players.
-    pub(super) fn native_entity_damage_cooldown_time(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn entity_damage_cooldown_time(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_target(entity)? {
             Target::Mob(id) => Some(self.mobs.iter().find(|m| m.id == id)?.invulnerable),
             t => Some(self.native_player_body(t)?.health.hurt.cooldown),
@@ -66,7 +66,7 @@ impl Game<'_> {
     }
     /// Sets `LivingEntity.damageCooldownTime`, as mods do to let rapid hits
     /// through (0). Mobs and players.
-    pub(super) fn native_entity_set_damage_cooldown_time(
+    pub(super) fn entity_set_damage_cooldown_time(
         &mut self,
         entity: EntityRef,
         ticks: i32,
@@ -111,23 +111,20 @@ mod tests {
                 .unwrap()
                 .clone();
             game.mobs.push(Mob::new(12, zombie, Vec3::ZERO, 0.0));
-            let mob = game.native_entity(12).unwrap();
-            assert_eq!(
-                game.native_entity_permanently_invulnerable(mob),
-                Some(false)
-            );
-            assert!(game.native_entity_set_invulnerable(mob, true));
-            assert_eq!(game.native_entity_permanently_invulnerable(mob), Some(true));
+            let mob = game.entity(12).unwrap();
+            assert_eq!(game.entity_permanently_invulnerable(mob), Some(false));
+            assert!(game.entity_set_invulnerable(mob, true));
+            assert_eq!(game.entity_permanently_invulnerable(mob), Some(true));
             assert!(game.mobs[0].invulnerable_flag);
-            assert_eq!(game.native_entity_damage_cooldown_time(mob), Some(0));
-            assert!(game.native_entity_set_damage_cooldown_time(mob, 20));
+            assert_eq!(game.entity_damage_cooldown_time(mob), Some(0));
+            assert!(game.entity_set_damage_cooldown_time(mob, 20));
             assert_eq!(game.mobs[0].invulnerable, 20);
-            assert_eq!(game.native_entity_damage_cooldown_time(mob), Some(20));
+            assert_eq!(game.entity_damage_cooldown_time(mob), Some(20));
             let stale = EntityRef::new(NativeWorldEpoch::new(mob.epoch().get() + 1), 12);
-            assert_eq!(game.native_entity_permanently_invulnerable(stale), None);
-            assert!(!game.native_entity_set_invulnerable(stale, false));
-            assert_eq!(game.native_entity_damage_cooldown_time(stale), None);
-            assert!(!game.native_entity_set_damage_cooldown_time(stale, 0));
+            assert_eq!(game.entity_permanently_invulnerable(stale), None);
+            assert!(!game.entity_set_invulnerable(stale, false));
+            assert_eq!(game.entity_damage_cooldown_time(stale), None);
+            assert!(!game.entity_set_damage_cooldown_time(stale, 0));
             assert!(game.mobs[0].invulnerable_flag);
         });
     }

@@ -506,10 +506,10 @@ mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let state = game.pack.assets.registry.default_state(CRATE).unwrap();
             for x in [1, 2] {
-                assert!(game.native_level_set_block(
+                assert!(game.level_set_block(
                     level,
                     [x, 64, 0],
                     state,

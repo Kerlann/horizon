@@ -55,8 +55,11 @@ refuse the manifest. Code adds `[native]`:
 | `module` | array of tables | optional support modules, written as `[[native.module]]` |
 
 An injection has a unique, nonempty `id` and a `kind`; it selects exactly one of `hook` or `target`, and
-exactly one of `helper`, `trait_method` or `raw`. A helper is a selected `.rs` file under `src/`, or `build.rs`.
-A `trait_method` listens at a point's `HEAD` or `RETURN`, takes `target`, and has no helper fields.
+exactly one of `helper` or `raw`. A helper is a selected `.rs` file under `src/`, or `build.rs`.
+API function listeners use top-level `[[inject]]`: `id`, `at`, lowercase `kind`, `with`, and `hash`,
+with optional `access` (default `api`) and `priority` (default 0). `head` and `return` are supported
+for API slots; internals slots also accept the listed call kinds with `call`, `nth` and `ctx`.
+Unknown fields are refused by the schema. API function declarations use only `[[inject]]`.
 See [Injections](../injections.md) for the fields, bindings and point injections, and
 [Native mods](../how-to/native-mods.md#named-hook-points) for the named hook contracts.
 

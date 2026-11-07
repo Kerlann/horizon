@@ -67,7 +67,7 @@ impl Game<'_> {
     /// client's copy of the world, for another dimension, a position outside
     /// `/summon`'s bounds, a chunk that isn't loaded, a kind Horizon can't
     /// load, or one a mod kept out (`native_entity_join_level`).
-    pub(super) fn native_summon(
+    pub(super) fn summon(
         &mut self,
         dimension: &str,
         kind: &str,

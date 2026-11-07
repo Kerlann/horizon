@@ -16,7 +16,7 @@ fn takes_from(view: &View) -> bool {
 impl Game<'_> {
     /// The level in place (`minecraft:overworld`), for a hook that isn't told
     /// which it runs in.
-    pub(in crate::game) fn native_dimension(&self) -> &'static str {
+    pub(in crate::game) fn dimension(&self) -> &'static str {
         self.dim.id()
     }
     /// Whether this game simulates a world, as `native_set_block` asks
@@ -50,7 +50,7 @@ impl Game<'_> {
     /// level in place. Not a composter, which has no block entity, nor a block entity without
     /// slots (a sign, a banner, a mod's without a container).
     fn capability_view(&self, at: BlockSide) -> Option<View> {
-        if !self.native_level_in_place(at.level) {
+        if !self.level_in_place(at.level) {
             return None;
         }
         let view = self
@@ -61,15 +61,11 @@ impl Game<'_> {
     /// How many slots of the block entity at `at` its side reaches (none: every slot), by its
     /// `WorldlyContainer` rules: a furnace's top reaches its input only. None where no block
     /// entity has slots, in a level not in place, and on a client's copy of the world.
-    pub(in crate::game) fn native_container_size(&self, at: BlockSide) -> Option<usize> {
+    pub(in crate::game) fn container_size(&self, at: BlockSide) -> Option<usize> {
         Some(self.capability_view(at)?.slots_for_face(at.side).len())
     }
-    /// The stack in slot `slot` of those `at`'s side reaches (`native_container_size`).
-    pub(in crate::game) fn native_container_stack(
-        &self,
-        at: BlockSide,
-        slot: usize,
-    ) -> Option<ItemStack> {
+    /// The stack in slot `slot` of those `at`'s side reaches (`container_size`).
+    pub(in crate::game) fn container_stack(&self, at: BlockSide, slot: usize) -> Option<ItemStack> {
         let view = self.capability_view(at)?;
         let slot = *view.slots_for_face(at.side).get(slot)?;
         self.containers().get(&view, slot).cloned()
@@ -86,7 +82,7 @@ impl Game<'_> {
     /// Puts as much of `stack` as slot `slot` of those `at`'s side reaches takes, as a hopper
     /// would (`canPlaceItem`, the slot's limit, the same item and components), in transaction
     /// `tx`; what didn't fit.
-    pub(in crate::game) fn native_container_insert(
+    pub(in crate::game) fn container_insert(
         &mut self,
         at: BlockSide,
         slot: usize,
@@ -122,7 +118,7 @@ impl Game<'_> {
     /// How many of `stack` slot `slot` of those `at`'s side reaches holds when empty, as
     /// NeoForge's `isValid` and `getCapacityAsLong` answer: none where it may not go in (a
     /// furnace's output, `canPlaceItem`), else the slot's limit for it.
-    pub(in crate::game) fn native_container_capacity(
+    pub(in crate::game) fn container_capacity(
         &self,
         at: BlockSide,
         slot: usize,
@@ -137,7 +133,7 @@ impl Game<'_> {
     }
     /// Takes up to `max` out of slot `slot` of those `at`'s side reaches, in transaction `tx`;
     /// through a side, only what that side may take (`canTakeItemThroughFace`). What came out.
-    pub(in crate::game) fn native_container_extract(
+    pub(in crate::game) fn container_extract(
         &mut self,
         at: BlockSide,
         slot: usize,

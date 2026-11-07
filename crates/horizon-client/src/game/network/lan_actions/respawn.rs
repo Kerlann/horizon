@@ -1,7 +1,7 @@
 use super::*;
 
 impl Game<'_> {
-    pub(super) fn guest_respawn(&mut self, conn: u32) {
+    pub(in crate::game) fn guest_respawn(&mut self, conn: u32) {
         let Some(host) = self.lan.as_ref() else {
             return;
         };
@@ -167,6 +167,7 @@ impl Game<'_> {
         if let Some(host) = self.lan.as_mut() {
             host.hub.respawn(i, spawn, rotation, &ctx);
         }
+        self.bind_player_attachments(conn, false);
         // ServerGamePacketListenerImpl.handleClientCommand: a hardcore world's
         // respawned player only watches.
         if self.level.hardcore {

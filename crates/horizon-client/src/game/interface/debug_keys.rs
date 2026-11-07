@@ -888,7 +888,7 @@ impl Game<'_> {
             }
             // Entity.saveWithoutId.
             let tag = if add_nbt {
-                self.entity_nbt(super::commands::Target::Mob(id))
+                self.command_target_nbt(super::commands::Target::Mob(id))
                     .map(|mut tag| {
                         if let Tag::Compound(c) = &mut tag {
                             c.remove(&"id".into());

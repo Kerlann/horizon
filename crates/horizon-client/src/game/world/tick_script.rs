@@ -74,7 +74,7 @@ impl Game<'_> {
                 return;
             };
             self.tick_script.running = Some(script);
-            self.send_chat("/wire-mark");
+            self.send_signed_chat_input("/wire-mark");
         }
         let Some(running) = self.tick_script.running.as_mut() else {
             return;

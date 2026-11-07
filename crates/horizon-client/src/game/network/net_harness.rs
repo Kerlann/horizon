@@ -80,7 +80,7 @@ impl Game<'_> {
                 {
                     chunks = count;
                     signed = self.remote.as_ref().is_some_and(|r| r.secure_chat.signed());
-                    self.send_chat(&lines[0]);
+                    self.send_signed_chat_input(&lines[0]);
                     sent = 1;
                     step = 2;
                     step_at = now;
@@ -97,7 +97,7 @@ impl Game<'_> {
                         self.answer_command_prompt(answer == "yes");
                         chat_box = self.ui.chat_screen.as_ref().map(|c| c.value().to_owned());
                     } else {
-                        self.send_chat(line);
+                        self.send_signed_chat_input(line);
                     }
                     sent += 1;
                     step_at = now;

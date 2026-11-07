@@ -45,7 +45,7 @@ a fork addition: NeoForge 26.3's `ItemAccess` reaches a player's inventory slot 
 and the storage's rules hold: the player's inventory, armour and off hand by their
 [`ENTITY_ITEMS`](013-an-entitys-items.md#an-entitys-items) index, a chest's or a furnace's slot through its `ITEMS` handler, a chest minecart's
 or a chested mount's through its `ENTITY_ITEMS`, and the player's ender chest, inventory crafting grid and a mod's chest
-menu (`native_open_menu`), kept by the game. The slot's own rules come first, as a click has them:
+menu (`open_menu`), kept by the game. The slot's own rules come first, as a click has them:
 `menu.slot_holds(host, slot, &stack)` is how many of a stack it holds (`Slot.mayPlace`, then `Slot.getMaxStackSize`: a
 furnace's fuel slot one bucket, an armour slot one piece that fits it, a shulker box's slot no shulker box, a result
 slot none), and `menu.slot_gives(host, slot)` whether it gives up what it holds (`Slot.mayPickup`: bound armour stays

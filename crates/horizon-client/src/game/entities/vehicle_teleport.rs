@@ -513,13 +513,15 @@ impl Game<'_> {
                 }
             }
             Target::Other(id) => {
-                if let Some(o) = self.others.iter_mut().find(|o| o.id == id) {
-                    if yaw.is_finite() {
-                        o.yaw = yaw;
-                    }
-                    if let Some(pitch) = pitch {
-                        o.pitch = pitch;
-                    }
+                if let Some(i) = self.others.iter().position(|e| e.id == id) {
+                    self.others.update(i, |o| {
+                        if yaw.is_finite() {
+                            o.yaw = yaw;
+                        }
+                        if let Some(pitch) = pitch {
+                            o.pitch = pitch;
+                        }
+                    });
                 }
             }
             Target::Stand(id) if yaw.is_finite() => {
@@ -546,8 +548,10 @@ impl Game<'_> {
                 }
             }
             Target::Fangs(id) if yaw.is_finite() => {
-                if let Some(f) = self.fangs.list.iter_mut().find(|f| f.id == id) {
-                    f.yaw = yaw;
+                if let Some(i) = self.fangs.list.iter().position(|e| e.id == id) {
+                    self.fangs.list.update(i, |f| {
+                        f.yaw = yaw;
+                    });
                 }
             }
             _ => {}

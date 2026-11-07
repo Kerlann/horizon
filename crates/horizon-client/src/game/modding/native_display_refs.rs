@@ -151,18 +151,18 @@ impl Game<'_> {
 
     /// Narrows an entity to a display, or None for another kind, a stale
     /// handle or a client.
-    pub(super) fn native_display(&self, entity: EntityRef) -> Option<DisplayRef> {
+    pub(super) fn display(&self, entity: EntityRef) -> Option<DisplayRef> {
         let display = DisplayRef::new(entity);
         self.display_entity(display).map(|_| display)
     }
 
     /// Which `Display` subclass the entity is.
-    pub(super) fn native_display_kind(&self, display: DisplayRef) -> Option<NativeDisplayKind> {
+    pub(super) fn display_kind(&self, display: DisplayRef) -> Option<NativeDisplayKind> {
         Some(self.display_entity(display)?.0)
     }
 
     /// `Display.createTransformation`: the transformation as shown.
-    pub(super) fn native_display_transformation(
+    pub(super) fn display_transformation(
         &self,
         display: DisplayRef,
     ) -> Option<NativeTransformation> {
@@ -182,7 +182,7 @@ impl Game<'_> {
     /// Sets the transformation. False for a value that isn't finite or a
     /// zero quaternion. Clients ease to it when the start delay is set
     /// (`set_start_interpolation`).
-    pub(super) fn native_display_set_transformation(
+    pub(super) fn display_set_transformation(
         &mut self,
         display: DisplayRef,
         transformation: NativeTransformation,
@@ -205,7 +205,7 @@ impl Game<'_> {
     }
 
     /// `Display.getBillboardConstraints`.
-    pub(super) fn native_display_billboard(&self, display: DisplayRef) -> Option<NativeBillboard> {
+    pub(super) fn display_billboard(&self, display: DisplayRef) -> Option<NativeBillboard> {
         match self.display_value(display, None, 15)? {
             Value::Byte(v) => NativeBillboard::ALL.get(usize::try_from(v).ok()?).copied(),
             _ => None,
@@ -213,7 +213,7 @@ impl Game<'_> {
     }
 
     /// `Display.setBillboardConstraints`.
-    pub(super) fn native_display_set_billboard(
+    pub(super) fn display_set_billboard(
         &mut self,
         display: DisplayRef,
         billboard: NativeBillboard,
@@ -223,14 +223,14 @@ impl Game<'_> {
     }
 
     /// `Display.getBrightnessOverride`: block and sky light, 0 to 15 each, or None for no override.
-    pub(super) fn native_display_brightness(&self, display: DisplayRef) -> Option<(u8, u8)> {
+    pub(super) fn display_brightness(&self, display: DisplayRef) -> Option<(u8, u8)> {
         let packed = self.display_int(display, None, 16)?;
         (packed != -1).then_some((((packed >> 4) & 15) as u8, ((packed >> 20) & 15) as u8))
     }
 
     /// `Display.setBrightnessOverride`; None clears the override. False for a
     /// light level above 15.
-    pub(super) fn native_display_set_brightness(
+    pub(super) fn display_set_brightness(
         &mut self,
         display: DisplayRef,
         brightness: Option<(u8, u8)>,
@@ -253,40 +253,32 @@ impl Game<'_> {
     }
 
     /// `Display.getViewRange`.
-    pub(super) fn native_display_view_range(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn display_view_range(&self, display: DisplayRef) -> Option<f32> {
         self.display_float(display, 17)
     }
 
     /// `Display.setViewRange`. False for a value that isn't finite.
-    pub(super) fn native_display_set_view_range(
-        &mut self,
-        display: DisplayRef,
-        range: f32,
-    ) -> bool {
+    pub(super) fn display_set_view_range(&mut self, display: DisplayRef, range: f32) -> bool {
         self.display_put_float(display, "view_range", range)
     }
 
     /// `Display.getShadowRadius`.
-    pub(super) fn native_display_shadow_radius(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn display_shadow_radius(&self, display: DisplayRef) -> Option<f32> {
         self.display_float(display, 18)
     }
 
     /// `Display.setShadowRadius`. False for a value that isn't finite.
-    pub(super) fn native_display_set_shadow_radius(
-        &mut self,
-        display: DisplayRef,
-        radius: f32,
-    ) -> bool {
+    pub(super) fn display_set_shadow_radius(&mut self, display: DisplayRef, radius: f32) -> bool {
         self.display_put_float(display, "shadow_radius", radius)
     }
 
     /// `Display.getShadowStrength`.
-    pub(super) fn native_display_shadow_strength(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn display_shadow_strength(&self, display: DisplayRef) -> Option<f32> {
         self.display_float(display, 19)
     }
 
     /// `Display.setShadowStrength`. False for a value that isn't finite.
-    pub(super) fn native_display_set_shadow_strength(
+    pub(super) fn display_set_shadow_strength(
         &mut self,
         display: DisplayRef,
         strength: f32,
@@ -295,32 +287,32 @@ impl Game<'_> {
     }
 
     /// `Display.getWidth`: the culling box's width, 0 for none.
-    pub(super) fn native_display_width(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn display_width(&self, display: DisplayRef) -> Option<f32> {
         self.display_float(display, 20)
     }
 
     /// `Display.setWidth`. False for a value that isn't finite.
-    pub(super) fn native_display_set_width(&mut self, display: DisplayRef, width: f32) -> bool {
+    pub(super) fn display_set_width(&mut self, display: DisplayRef, width: f32) -> bool {
         self.display_put_float(display, "width", width)
     }
 
     /// `Display.getHeight`: the culling box's height, 0 for none.
-    pub(super) fn native_display_height(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn display_height(&self, display: DisplayRef) -> Option<f32> {
         self.display_float(display, 21)
     }
 
     /// `Display.setHeight`. False for a value that isn't finite.
-    pub(super) fn native_display_set_height(&mut self, display: DisplayRef, height: f32) -> bool {
+    pub(super) fn display_set_height(&mut self, display: DisplayRef, height: f32) -> bool {
         self.display_put_float(display, "height", height)
     }
 
     /// `Display.getGlowColorOverride`: an ARGB color, or -1 for none.
-    pub(super) fn native_display_glow_color_override(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn display_glow_color_override(&self, display: DisplayRef) -> Option<i32> {
         self.display_int(display, None, 22)
     }
 
     /// `Display.setGlowColorOverride`.
-    pub(super) fn native_display_set_glow_color_override(
+    pub(super) fn display_set_glow_color_override(
         &mut self,
         display: DisplayRef,
         color: i32,
@@ -329,12 +321,12 @@ impl Game<'_> {
     }
 
     /// `Display.getTransformationInterpolationDuration`, in ticks.
-    pub(super) fn native_display_interpolation_duration(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn display_interpolation_duration(&self, display: DisplayRef) -> Option<i32> {
         self.display_int(display, None, 9)
     }
 
     /// `Display.setTransformationInterpolationDuration`.
-    pub(super) fn native_display_set_interpolation_duration(
+    pub(super) fn display_set_interpolation_duration(
         &mut self,
         display: DisplayRef,
         ticks: i32,
@@ -344,14 +336,14 @@ impl Game<'_> {
 
     /// `Display.getTransformationInterpolationDelay`: ticks before an
     /// interpolation starts.
-    pub(super) fn native_display_start_interpolation(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn display_start_interpolation(&self, display: DisplayRef) -> Option<i32> {
         self.display_int(display, None, 8)
     }
 
     /// `Display.setTransformationInterpolationDelay`. Like vanilla, every
     /// call is sent to the clients that track the display, even with the
     /// delay it already has, and each client restarts its interpolation.
-    pub(super) fn native_display_set_start_interpolation(
+    pub(super) fn display_set_start_interpolation(
         &mut self,
         display: DisplayRef,
         ticks: i32,
@@ -365,13 +357,13 @@ impl Game<'_> {
     }
 
     /// `Display.getPosRotInterpolationDuration`: ticks a move eases over, 0 to 59.
-    pub(super) fn native_display_teleport_duration(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn display_teleport_duration(&self, display: DisplayRef) -> Option<i32> {
         self.display_int(display, None, 10)
     }
 
     /// `Display.setPosRotInterpolationDuration`, kept from 0 to 59 as
     /// vanilla's load keeps it.
-    pub(super) fn native_display_set_teleport_duration(
+    pub(super) fn display_set_teleport_duration(
         &mut self,
         display: DisplayRef,
         ticks: i32,
@@ -381,7 +373,7 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.getText`; None for another kind of display.
-    pub(super) fn native_display_text(&self, display: DisplayRef) -> Option<Text> {
+    pub(super) fn display_text(&self, display: DisplayRef) -> Option<Text> {
         match self.display_value(display, Some(NativeDisplayKind::Text), 23)? {
             Value::Text(tag) => Some(comp_text(&tag_to_json(&tag))),
             _ => None,
@@ -389,22 +381,18 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.setText`; false for another kind of display.
-    pub(super) fn native_display_set_text(&mut self, display: DisplayRef, text: Text) -> bool {
+    pub(super) fn display_set_text(&mut self, display: DisplayRef, text: Text) -> bool {
         let text = json_to_tag(&text.component());
         self.display_put(display, Some(NativeDisplayKind::Text), "text", text)
     }
 
     /// `TextDisplay.getLineWidth`.
-    pub(super) fn native_display_line_width(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn display_line_width(&self, display: DisplayRef) -> Option<i32> {
         self.display_int(display, Some(NativeDisplayKind::Text), 24)
     }
 
     /// `TextDisplay.setLineWidth`; false for another kind of display.
-    pub(super) fn native_display_set_line_width(
-        &mut self,
-        display: DisplayRef,
-        width: i32,
-    ) -> bool {
+    pub(super) fn display_set_line_width(&mut self, display: DisplayRef, width: i32) -> bool {
         self.display_put(
             display,
             Some(NativeDisplayKind::Text),
@@ -414,12 +402,12 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.getBackgroundColor`: ARGB.
-    pub(super) fn native_display_background(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn display_background(&self, display: DisplayRef) -> Option<i32> {
         self.display_int(display, Some(NativeDisplayKind::Text), 25)
     }
 
     /// `TextDisplay.setBackgroundColor`; false for another kind of display.
-    pub(super) fn native_display_set_background(&mut self, display: DisplayRef, argb: i32) -> bool {
+    pub(super) fn display_set_background(&mut self, display: DisplayRef, argb: i32) -> bool {
         self.display_put(
             display,
             Some(NativeDisplayKind::Text),
@@ -429,16 +417,12 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.getTextOpacity`: -1 is opaque, else 0 to 127 then -128 to -2.
-    pub(super) fn native_display_text_opacity(&self, display: DisplayRef) -> Option<i8> {
+    pub(super) fn display_text_opacity(&self, display: DisplayRef) -> Option<i8> {
         self.display_byte(display, NativeDisplayKind::Text, 26)
     }
 
     /// `TextDisplay.setTextOpacity`; false for another kind of display.
-    pub(super) fn native_display_set_text_opacity(
-        &mut self,
-        display: DisplayRef,
-        opacity: i8,
-    ) -> bool {
+    pub(super) fn display_set_text_opacity(&mut self, display: DisplayRef, opacity: i8) -> bool {
         self.display_put(
             display,
             Some(NativeDisplayKind::Text),
@@ -457,44 +441,37 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.FLAG_SHADOW`.
-    pub(super) fn native_display_text_shadow(&self, display: DisplayRef) -> Option<bool> {
+    pub(super) fn display_text_shadow(&self, display: DisplayRef) -> Option<bool> {
         self.display_text_flag(display, 1)
     }
 
     /// Sets the shadow flag; false for another kind of display.
-    pub(super) fn native_display_set_text_shadow(&mut self, display: DisplayRef, on: bool) -> bool {
+    pub(super) fn display_set_text_shadow(&mut self, display: DisplayRef, on: bool) -> bool {
         self.display_set_text_flag(display, "shadow", on)
     }
 
     /// `TextDisplay.FLAG_SEE_THROUGH`.
-    pub(super) fn native_display_see_through(&self, display: DisplayRef) -> Option<bool> {
+    pub(super) fn display_see_through(&self, display: DisplayRef) -> Option<bool> {
         self.display_text_flag(display, 2)
     }
 
     /// Sets the see-through flag; false for another kind of display.
-    pub(super) fn native_display_set_see_through(&mut self, display: DisplayRef, on: bool) -> bool {
+    pub(super) fn display_set_see_through(&mut self, display: DisplayRef, on: bool) -> bool {
         self.display_set_text_flag(display, "see_through", on)
     }
 
     /// `TextDisplay.FLAG_USE_DEFAULT_BACKGROUND`.
-    pub(super) fn native_display_default_background(&self, display: DisplayRef) -> Option<bool> {
+    pub(super) fn display_default_background(&self, display: DisplayRef) -> Option<bool> {
         self.display_text_flag(display, 4)
     }
 
     /// Sets the default-background flag; false for another kind of display.
-    pub(super) fn native_display_set_default_background(
-        &mut self,
-        display: DisplayRef,
-        on: bool,
-    ) -> bool {
+    pub(super) fn display_set_default_background(&mut self, display: DisplayRef, on: bool) -> bool {
         self.display_set_text_flag(display, "default_background", on)
     }
 
     /// `TextDisplay.getAlign`, from the left and right flags.
-    pub(super) fn native_display_alignment(
-        &self,
-        display: DisplayRef,
-    ) -> Option<NativeTextAlignment> {
+    pub(super) fn display_alignment(&self, display: DisplayRef) -> Option<NativeTextAlignment> {
         let flags = self.display_byte(display, NativeDisplayKind::Text, 27)?;
         Some(match (flags & 8 != 0, flags & 16 != 0) {
             (true, _) => NativeTextAlignment::Left,
@@ -504,7 +481,7 @@ impl Game<'_> {
     }
 
     /// Sets the alignment; false for another kind of display.
-    pub(super) fn native_display_set_alignment(
+    pub(super) fn display_set_alignment(
         &mut self,
         display: DisplayRef,
         alignment: NativeTextAlignment,
@@ -514,7 +491,7 @@ impl Game<'_> {
     }
 
     /// `BlockDisplay.getBlockState`; None for another kind of display.
-    pub(super) fn native_display_block_state(&self, display: DisplayRef) -> Option<BlockStateId> {
+    pub(super) fn display_block_state(&self, display: DisplayRef) -> Option<BlockStateId> {
         let (_, tag) = self.display_tag(display, Some(NativeDisplayKind::Block))?;
         tag.get("block_state")
             .and_then(|t| self.state_from_nbt(t))
@@ -522,7 +499,7 @@ impl Game<'_> {
     }
 
     /// `BlockDisplay.setBlockState`; false for another kind of display or an unknown state.
-    pub(super) fn native_display_set_block_state(
+    pub(super) fn display_set_block_state(
         &mut self,
         display: DisplayRef,
         state: BlockStateId,
@@ -535,13 +512,13 @@ impl Game<'_> {
     }
 
     /// `ItemDisplay.getItemStack`; None for another kind of display or an empty stack.
-    pub(super) fn native_display_item(&self, display: DisplayRef) -> Option<ItemStack> {
+    pub(super) fn display_item(&self, display: DisplayRef) -> Option<ItemStack> {
         let (_, tag) = self.display_tag(display, Some(NativeDisplayKind::Item))?;
         item_from_nbt(tag.get("item")?)
     }
 
     /// `ItemDisplay.setItemStack`; None empties it. False for another kind of display.
-    pub(super) fn native_display_set_item(
+    pub(super) fn display_set_item(
         &mut self,
         display: DisplayRef,
         stack: Option<ItemStack>,
@@ -558,7 +535,7 @@ impl Game<'_> {
     }
 
     /// `ItemDisplay.getItemTransform`: how the item is displayed.
-    pub(super) fn native_display_item_context(
+    pub(super) fn display_item_context(
         &self,
         display: DisplayRef,
     ) -> Option<NativeItemDisplayContext> {
@@ -571,7 +548,7 @@ impl Game<'_> {
     }
 
     /// `ItemDisplay.setItemTransform`; false for another kind of display.
-    pub(super) fn native_display_set_item_context(
+    pub(super) fn display_set_item_context(
         &mut self,
         display: DisplayRef,
         context: NativeItemDisplayContext,
@@ -597,8 +574,8 @@ mod tests {
             yaw: 0.0,
             pitch: 0.0,
         });
-        let entity = game.native_entity(id).unwrap();
-        game.native_display(entity).unwrap()
+        let entity = game.entity(id).unwrap();
+        game.display(entity).unwrap()
     }
 
     #[test]
@@ -611,7 +588,7 @@ mod tests {
             assert_eq!(text.kind(game), Some(NativeDisplayKind::Text));
             assert_eq!(block.kind(game), Some(NativeDisplayKind::Block));
             assert_eq!(item.kind(game), Some(NativeDisplayKind::Item));
-            assert_eq!(text.entity(), game.native_entity(21).unwrap());
+            assert_eq!(text.entity(), game.entity(21).unwrap());
             game.others.push(OtherEntity {
                 id: 24,
                 kind: "minecraft:marker".into(),
@@ -619,10 +596,7 @@ mod tests {
                 yaw: 0.0,
                 pitch: 0.0,
             });
-            assert!(
-                game.native_display(game.native_entity(24).unwrap())
-                    .is_none()
-            );
+            assert!(game.display(game.entity(24).unwrap()).is_none());
 
             assert_eq!(
                 text.transformation(game),
@@ -732,11 +706,11 @@ mod tests {
             assert_eq!(text.text_shadow(game), Some(false));
             assert_eq!(text.see_through(game), Some(true));
 
-            let stone = game.native_block_state_id("minecraft:stone").unwrap();
+            let stone = game.block_state_id("minecraft:stone").unwrap();
             let stairs = game
-                .native_block_state_id("minecraft:oak_stairs[facing=east]")
+                .block_state_id("minecraft:oak_stairs[facing=east]")
                 .unwrap();
-            let air = game.native_block_state_id("minecraft:air").unwrap();
+            let air = game.block_state_id("minecraft:air").unwrap();
             assert_eq!(block.block_state(game), Some(air));
             assert!(block.set_block_state(game, stone));
             assert_eq!(block.block_state(game), Some(stone));

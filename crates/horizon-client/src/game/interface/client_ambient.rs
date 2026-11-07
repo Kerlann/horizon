@@ -147,7 +147,7 @@ impl Game<'_> {
     /// Spawn sprint particles when called explicitly by a client mod. A
     /// valid entity returns true even if the block beneath it is invisible.
     /// Returns false for stale, untracked, server-side, or unsupported entities.
-    pub(super) fn native_entity_sprint_particles(&mut self, entity: EntityRef) -> bool {
+    pub(super) fn entity_sprint_particles(&mut self, entity: EntityRef) -> bool {
         use super::commands::Target;
         if self.is_logical_server() {
             return false;
@@ -155,13 +155,13 @@ impl Game<'_> {
         let Some(target) = self.native_client_entity_target(entity) else {
             return false;
         };
-        let Some([x, y, z]) = self.native_entity_position(entity) else {
+        let Some([x, y, z]) = self.entity_position(entity) else {
             return false;
         };
-        let Some([vx, vy, vz]) = self.native_entity_velocity(entity) else {
+        let Some([vx, vy, vz]) = self.entity_velocity(entity) else {
             return false;
         };
-        let Some([min, max]) = self.native_entity_bounding_box(entity) else {
+        let Some([min, max]) = self.entity_bounding_box(entity) else {
             return false;
         };
         let support = match target {
@@ -219,7 +219,7 @@ impl Game<'_> {
                 "minecraft:fence_gates",
             ]
             .iter()
-            .any(|tag| game.block_in_tag(tag, &name))
+            .any(|tag| game.named_block_in_tag(tag, &name))
         };
         let at = match support {
             Some(s) if tall(self, s) => s,
@@ -354,7 +354,6 @@ mod sprint_handle_tests {
     use horizon_client::{chunk::Chunk, motion::PlayerMotion};
     use horizon_core::geometry::Vec3;
     use horizon_protocol::connection::Pipe;
-    use mod_api::prelude::*;
     use mod_api::{ClientHost, EntityRef, NativeWorldEpoch};
     use std::sync::Arc;
 

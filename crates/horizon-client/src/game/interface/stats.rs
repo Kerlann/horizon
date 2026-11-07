@@ -243,7 +243,7 @@ impl Game<'_> {
         namespaced(key, |key| self.award_stat("custom", key, n));
     }
     /// The per-tick counters (`Player.tick`/`ServerPlayer.tick` awardStat).
-    pub(super) fn tick_stats(&mut self) {
+    pub(super) fn tick_player_stat_counters(&mut self) {
         self.load_stats();
         self.count_tick_stats(self.sleeping.is_some());
         self.tick_movement_stats();

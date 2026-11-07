@@ -1202,7 +1202,9 @@ impl SoundEngine {
         }
     }
     /// Where a mod's sound is (`SoundRef::state`). `isActive` alone would not do: an instance
-    /// keeps its ended channel until its delete time, 20 ticks after it started.
+    /// keeps its ended channel until its delete time, 20 ticks after it started. A sound that
+    /// repeats after a gap (`looping` with a `delay`) is waiting for its next repeat from the
+    /// moment its channel ends: `tick_in_game` queues that repeat at the delete time.
     pub fn mod_sound_state(&self, id: InstanceId) -> mod_api::SoundState {
         use mod_api::SoundState::{Playing, Stopped, Waiting};
         let Some(instance) = self.instances.get(&id) else {
@@ -1217,6 +1219,7 @@ impl SoundEngine {
         } else if self.queued.iter().any(|(queued, _)| *queued == id)
             || self.queued_tickable.contains(&id)
             || channel.is_none()
+            || (instance.looping && instance.delay > 0)
         {
             Waiting
         } else {

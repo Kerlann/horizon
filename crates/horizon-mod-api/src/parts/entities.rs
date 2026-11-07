@@ -299,3 +299,77 @@ pub mod tests {
         }
     }
 }
+
+/// Registrar operations for entities.
+pub trait EntitiesRegistrar {
+    /// Attach `part`, of kind `kind`, to the entity type `entity`
+    /// (`minecraft:zombie`, `mymod:golem`): its `register_goals` runs at every
+    /// `Mob` construction of that type (#1077).
+    ///
+    /// Not on wasm: the goal surface a part's `register_goals` hands the game
+    /// does not cross yet (#1077); entity parts are a native mod's for now.
+    /// The gate keeps a wasm mod's call a compile error, not a runtime one;
+    /// the generator still keeps the method off the wasm world by this doc.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn attach_entity_part(&mut self, entity: &str, kind: &'static str, part: Arc<dyn EntityPart>);
+
+    /// Answer entity capability `name` for entity type `kind` with `provider`; mods reach it
+    /// through `entity_capability`.
+    fn provide_entity_capability(
+        &mut self,
+        name: &'static str,
+        kind: &str,
+        before_game: bool,
+        provider: EntityProviderOf,
+    );
+}
+
+impl EntitiesRegistrar for PartRegistrar {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn attach_entity_part(&mut self, entity: &str, kind: &'static str, part: Arc<dyn EntityPart>) {
+        self.attach(|p| &mut p.entities, kind, entity, part);
+    }
+
+    fn provide_entity_capability(
+        &mut self,
+        name: &'static str,
+        kind: &str,
+        before_game: bool,
+        provider: EntityProviderOf,
+    ) {
+        self.capability(
+            |p| &mut p.entity_capabilities,
+            name,
+            ProviderTarget::Id(kind),
+            before_game,
+            {
+                let handler = provider.handler();
+                (provider, handler)
+            },
+        );
+    }
+}
+
+/// CapabilityProviders operations for entities.
+// hidden: per-kind lookup implementation, exposed for generated provider bindings
+#[doc(hidden)]
+pub trait EntitiesCapabilityProviders {
+    /// The next enabled provider of entity capability `name` for entity type `kind`, advancing `index`.
+    fn entity_provider(
+        &self,
+        name: &str,
+        kind: &str,
+        index: &mut u32,
+    ) -> Option<(EntityProviderOf, &'static str, bool)>;
+}
+
+impl EntitiesCapabilityProviders for InstalledProviders {
+    fn entity_provider(
+        &self,
+        name: &str,
+        kind: &str,
+        index: &mut u32,
+    ) -> Option<(EntityProviderOf, &'static str, bool)> {
+        next(&installed()?.keys.entity_capabilities, name, kind, index)
+    }
+}

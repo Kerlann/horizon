@@ -258,7 +258,7 @@ impl Game<'_> {
     /// The tail of a biome change: the columns in `touched` are saved and re-meshed, and the
     /// players who see `columns` are sent their new biomes (`ChunkMap.resendBiomesForChunks`), in
     /// the order the columns were gathered (z, then x). Shared by `/fillbiome` and
-    /// `native_level_set_biome`.
+    /// `level_set_biome`.
     pub(in crate::game) fn commit_biome_columns(
         &mut self,
         touched: &std::collections::HashSet<(i32, i32)>,
@@ -700,7 +700,7 @@ impl Game<'_> {
                     if t != Target::Player {
                         continue;
                     }
-                    if let Some(rest) = self.give(d.clone()) {
+                    if let Some(rest) = self.add_stack_to_inventory(d.clone()) {
                         let p = self.source_position();
                         self.spawn_item(rest, [p[0], p[1] + 1.32, p[2]], [0.0; 3], 0);
                     }

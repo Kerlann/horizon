@@ -12,5 +12,9 @@ pub fn handle_chat_input(_host: HostSide<'_>, args: &mut HandleChatInputArgs<'_>
     args.message = format!("{}W", args.message).into();
 }
 
+pub fn other_tail(_host: HostSide<'_>, args: &mut HandleChatInputArgs<'_>) {
+    args.message = format!("{}V", args.message).into();
+}
+
 #[cfg(target_arch = "wasm32")]
 include!(concat!(env!("OUT_DIR"), "/guest_injects.rs"));

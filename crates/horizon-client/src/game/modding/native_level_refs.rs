@@ -42,7 +42,7 @@ pub(super) fn world_brightness(world: &World, layer: LightLayer, pos: [i32; 3]) 
 
 impl Game<'_> {
     /// The border of a resident server level, through the handle's lifetime check.
-    pub(super) fn native_level_world_border(&self, level: LevelRef) -> Option<[f64; 4]> {
+    pub(super) fn level_world_border(&self, level: LevelRef) -> Option<[f64; 4]> {
         self.native_level_world(level)?;
         Some(self.border.bounds())
     }
@@ -69,7 +69,7 @@ impl Game<'_> {
         .then_some(&self.world)
     }
     /// Find a loaded chunk in an open server level.
-    pub(super) fn native_chunk(&self, level: LevelRef, pos: [i32; 2]) -> Option<ChunkRef> {
+    pub(super) fn chunk(&self, level: LevelRef, pos: [i32; 2]) -> Option<ChunkRef> {
         self.native_level_world(level)?
             .chunks
             .contains_key(&(pos[0], pos[1]))
@@ -77,7 +77,7 @@ impl Game<'_> {
     }
     /// Every loaded chunk of an open server level as handles, ordered by chunk x then z. None
     /// for a stale handle or on a client. Loads nothing.
-    pub(super) fn native_level_loaded_chunks(&self, level: LevelRef) -> Option<Vec<ChunkRef>> {
+    pub(super) fn level_loaded_chunks(&self, level: LevelRef) -> Option<Vec<ChunkRef>> {
         let mut positions: Vec<(i32, i32)> = self
             .native_level_world(level)?
             .chunks
@@ -93,22 +93,18 @@ impl Game<'_> {
         )
     }
     /// Whether this chunk is loaded; false on a client or for a stale handle.
-    pub(super) fn native_chunk_ref_loaded(&self, chunk: ChunkRef) -> bool {
-        self.native_chunk(chunk.level(), chunk.pos()).is_some()
+    pub(super) fn chunk_loaded(&self, chunk: ChunkRef) -> bool {
+        self.chunk(chunk.level(), chunk.pos()).is_some()
     }
     /// The status of a loaded chunk. Proto chunks are not exposed here.
-    pub(super) fn native_chunk_status(&self, chunk: ChunkRef) -> Option<ChunkStatus> {
-        self.native_chunk(chunk.level(), chunk.pos())
+    pub(super) fn chunk_status(&self, chunk: ChunkRef) -> Option<ChunkStatus> {
+        self.chunk(chunk.level(), chunk.pos())
             .map(|_| ChunkStatus::Full)
     }
     /// A handle for chunk `pos` of an open level, loaded or not, so a mod can
     /// force an unloaded chunk. None for a stale handle, on a client, and for
     /// a chunk outside the world (`ChunkPos` past 30 million blocks).
-    pub(super) fn native_level_chunk_ref(
-        &self,
-        level: LevelRef,
-        pos: [i32; 2],
-    ) -> Option<ChunkRef> {
+    pub(super) fn level_chunk_ref(&self, level: LevelRef, pos: [i32; 2]) -> Option<ChunkRef> {
         self.native_level_world(level)?;
         chunk_in_world(pos).then_some(ChunkRef::new(level, pos))
     }
@@ -123,7 +119,7 @@ impl Game<'_> {
     }
     /// Whether `/forceload` holds the chunk (`ServerLevel.getForcedChunks`),
     /// loaded or not; a mod's own ticket on it does not count. None for a stale handle or on a client.
-    pub(super) fn native_chunk_forced(&self, chunk: ChunkRef) -> Option<bool> {
+    pub(super) fn chunk_forced(&self, chunk: ChunkRef) -> Option<bool> {
         let [x, z] = chunk.pos();
         Some(
             self.native_level_streaming(chunk.level())?
@@ -141,7 +137,7 @@ impl Game<'_> {
     /// before returning, as vanilla does.
     /// False for a stale handle, on a client, and for a level the server
     /// has not opened.
-    pub(super) fn native_chunk_set_forced(&mut self, chunk: ChunkRef, forced: bool) -> bool {
+    pub(super) fn chunk_set_forced(&mut self, chunk: ChunkRef, forced: bool) -> bool {
         if self.native_level_streaming(chunk.level()).is_none() {
             return false;
         }
@@ -205,7 +201,7 @@ impl Game<'_> {
     /// discarded. False outside a mod's hook, for another mod's controller, on
     /// a client, for a chunk outside the world and for a level the server has
     /// not opened.
-    pub(super) fn native_chunk_set_mod_forced(
+    pub(super) fn chunk_set_mod_forced(
         &mut self,
         chunk: ChunkRef,
         controller: TicketController,
@@ -239,7 +235,7 @@ impl Game<'_> {
     /// The chunk tickets `controller` holds in the level, as (owner, chunk
     /// position, natural_spawning), in order. None for a stale handle, on a
     /// client, outside a mod's hook and for another mod's controller.
-    pub(super) fn native_level_mod_forced_chunks(
+    pub(super) fn level_mod_forced_chunks(
         &self,
         level: LevelRef,
         controller: TicketController,
@@ -257,7 +253,7 @@ impl Game<'_> {
     }
     /// The level's force-loaded chunks (`/forceload query`), sorted as
     /// the command lists them. None for a stale handle or on a client.
-    pub(super) fn native_level_forced_chunks(&self, level: LevelRef) -> Option<Vec<[i32; 2]>> {
+    pub(super) fn level_forced_chunks(&self, level: LevelRef) -> Option<Vec<[i32; 2]>> {
         let mut forced: Vec<(i32, i32)> = self
             .native_level_streaming(level)?
             .commanded()
@@ -270,11 +266,7 @@ impl Game<'_> {
     /// The block state ID at `pos` (`Level.getBlockState`), without formatting a string.
     /// None for a chunk that isn't loaded or a `y` outside the world. On a client, the
     /// state is the one the server sent for a chunk the client holds.
-    pub(super) fn native_level_state(
-        &self,
-        level: LevelRef,
-        pos: [i32; 3],
-    ) -> Option<BlockStateId> {
+    pub(super) fn level_block_state(&self, level: LevelRef, pos: [i32; 3]) -> Option<BlockStateId> {
         let world = self.native_level_read_world(level)?;
         let [x, y, z] = pos;
         world.is_loaded_at(x, y, z).then(|| world.block(x, y, z))
@@ -284,7 +276,7 @@ impl Game<'_> {
     /// simulation. The player must be live in the level in place, and the block must be loaded;
     /// parked levels cannot provide the hook's level context. A stale handle, invalid face,
     /// unavailable player or level, or no transformation returns None.
-    pub(super) fn native_level_block_transform(
+    pub(super) fn level_block_transform(
         &self,
         level: LevelRef,
         player: PlayerRef,
@@ -338,7 +330,7 @@ impl Game<'_> {
     /// `FluidState.getFlow` at `pos`: the current that pushes an entity there, after the
     /// `fluid_flow` hook, as entities feel it. Zero where no fluid flows. None as for
     /// `block_state`.
-    pub(super) fn native_level_fluid_flow(&self, level: LevelRef, pos: [i32; 3]) -> Option<Vec3> {
+    pub(super) fn level_fluid_flow(&self, level: LevelRef, pos: [i32; 3]) -> Option<Vec3> {
         let world = self.native_level_read_world(level)?;
         let [x, y, z] = pos;
         world.is_loaded_at(x, y, z).then(|| {
@@ -353,20 +345,20 @@ impl Game<'_> {
     }
     /// The block at `pos` without its properties: `minecraft:oak_stairs`.
     /// None as for `block_state`. API 381.
-    pub(super) fn native_level_block(&self, level: LevelRef, pos: [i32; 3]) -> Option<String> {
-        self.native_level_state(level, pos)
+    pub(super) fn level_block(&self, level: LevelRef, pos: [i32; 3]) -> Option<String> {
+        self.level_block_state(level, pos)
             .map(|state| self.res.facts().get(state).name.to_string())
     }
     /// Property `key` of the block state at `pos` (`BlockState.getValue`):
     /// `east` for `facing`. None for a block without it, or as for
     /// `block_state`. API 381.
-    pub(super) fn native_level_block_property(
+    pub(super) fn level_block_property(
         &self,
         level: LevelRef,
         pos: [i32; 3],
         key: &str,
     ) -> Option<String> {
-        let state = self.native_level_state(level, pos)?;
+        let state = self.level_block_state(level, pos)?;
         self.pack
             .assets
             .registry
@@ -380,7 +372,7 @@ impl Game<'_> {
     /// `LevelRef::capability` looks up. False for a level parked while the server ticks
     /// another (its blocks can still be read), for a handle of an earlier open, and on a
     /// client.
-    pub(super) fn native_level_in_place(&self, level: LevelRef) -> bool {
+    pub(super) fn level_in_place(&self, level: LevelRef) -> bool {
         self.is_logical_server()
             && self.native_lifecycle.epoch() == Some(level.epoch())
             && self.dim.key() == level.dimension()
@@ -396,7 +388,7 @@ impl Game<'_> {
             &horizon_world::level::Signals<'_, super::native_level_signals::ReadLevel<'_, '_>>,
         ) -> R,
     ) -> Option<R> {
-        if !self.native_level_in_place(level) {
+        if !self.level_in_place(level) {
             return None;
         }
         let view = super::native_level_signals::ReadLevel { game: self, level };
@@ -406,7 +398,7 @@ impl Game<'_> {
     /// conducts included (`SignalGetter.getSignal(pos, direction)`, as a block reads its
     /// neighbour `pos` that lies `direction` from it), 0 to 15. None for another level, a stale
     /// handle or a client. Takes a shared host and opens no transaction.
-    pub(super) fn native_level_signal(
+    pub(super) fn level_signal(
         &self,
         level: LevelRef,
         pos: [i32; 3],
@@ -416,7 +408,7 @@ impl Game<'_> {
     }
     /// The strong power alone that the block at `pos` gives that way
     /// (`SignalGetter.getDirectSignal(pos, direction)`), 0 to 15. None as for `signal`.
-    pub(super) fn native_level_direct_signal(
+    pub(super) fn level_direct_signal(
         &self,
         level: LevelRef,
         pos: [i32; 3],
@@ -426,26 +418,18 @@ impl Game<'_> {
     }
     /// The strongest strong power reaching the block at `pos` from its six neighbours
     /// (`SignalGetter.getDirectSignalTo`), 0 to 15. None as for `signal`.
-    pub(super) fn native_level_direct_signal_to(
-        &self,
-        level: LevelRef,
-        pos: [i32; 3],
-    ) -> Option<i32> {
+    pub(super) fn level_direct_signal_to(&self, level: LevelRef, pos: [i32; 3]) -> Option<i32> {
         self.native_level_signals(level, |s| s.direct_signal_to(block_pos(pos)))
     }
     /// The strongest power reaching the block at `pos` from its six neighbours
     /// (`SignalGetter.getBestNeighborSignal`, what a dispenser or a piston reads), 0 to 15.
     /// None as for `signal`.
-    pub(super) fn native_level_best_neighbor_signal(
-        &self,
-        level: LevelRef,
-        pos: [i32; 3],
-    ) -> Option<i32> {
+    pub(super) fn level_best_neighbor_signal(&self, level: LevelRef, pos: [i32; 3]) -> Option<i32> {
         self.native_level_signals(level, |s| s.best_neighbor_signal(block_pos(pos)))
     }
     /// Whether any neighbour powers the block at `pos` (`SignalGetter.hasNeighborSignal`),
     /// asking no side past the first that does. False where `signal` is None.
-    pub(super) fn native_level_has_neighbor_signal(&self, level: LevelRef, pos: [i32; 3]) -> bool {
+    pub(super) fn level_has_neighbor_signal(&self, level: LevelRef, pos: [i32; 3]) -> bool {
         self.native_level_signals(level, |s| s.has_neighbor_signal(block_pos(pos)))
             .unwrap_or(false)
     }
@@ -454,13 +438,13 @@ impl Game<'_> {
     /// read or write there finds the world. False on a client or for a stale
     /// handle: the position is not loaded here. On a client, a chunk it holds is loaded
     /// (`ClientLevel.hasChunkAt`). API 381.
-    pub(super) fn native_level_is_loaded(&self, level: LevelRef, pos: [i32; 3]) -> bool {
+    pub(super) fn level_is_loaded(&self, level: LevelRef, pos: [i32; 3]) -> bool {
         self.native_level_read_world(level)
             .is_some_and(|w| w.is_loaded_at(pos[0], pos[1], pos[2]))
     }
     /// The stored light of one layer at `pos` (`BlockAndLightGetter.getBrightness`), 0 to 15.
     /// None as for `block_state`: a position that isn't loaded has no light to read.
-    pub(super) fn native_level_brightness(
+    pub(super) fn level_brightness(
         &self,
         level: LevelRef,
         layer: LightLayer,
@@ -475,23 +459,23 @@ impl Game<'_> {
     /// (`LevelHeightAccessor.getMinY`, `getHeight`). Reads any loaded server level
     /// or the client's current level. None for a stale handle, before client login,
     /// or for a dimension unavailable on this side. Does not load chunks. API 381.
-    pub(super) fn native_level_height(&self, level: LevelRef) -> Option<(i32, i32)> {
+    pub(super) fn level_height(&self, level: LevelRef) -> Option<(i32, i32)> {
         self.native_level_read_world(level)
             .map(|w| (w.shape.min_y, w.shape.height))
     }
     /// `Level.isInWorldBounds`: `pos` within 30,000,000 blocks on x and z and inside the level's
-    /// build height. None as for `native_level_height`. Does not load chunks.
-    pub(in crate::game) fn native_level_in_world_bounds(
+    /// build height. None as for `level_height`. Does not load chunks.
+    pub(in crate::game) fn level_in_world_bounds(
         &self,
         level: LevelRef,
         pos: [i32; 3],
     ) -> Option<bool> {
-        let (min_y, height) = self.native_level_height(level)?;
+        let (min_y, height) = self.level_height(level)?;
         Some(horizontal_in_bounds(pos) && pos[1] >= min_y && pos[1] < min_y.saturating_add(height))
     }
     /// `Level.isInSpawnableBounds`: 30,000,000 blocks on x and z, 20,000,000 on y. None as for
-    /// `native_level_height`. Does not load chunks.
-    pub(in crate::game) fn native_level_in_spawnable_bounds(
+    /// `level_height`. Does not load chunks.
+    pub(in crate::game) fn level_in_spawnable_bounds(
         &self,
         level: LevelRef,
         pos: [i32; 3],
@@ -501,7 +485,7 @@ impl Game<'_> {
     }
     /// The ticks the server has run (`Level.getGameTime`), shared by every
     /// level as in vanilla. API 381.
-    pub(super) fn native_level_game_time(&self, level: LevelRef) -> Option<i64> {
+    pub(super) fn level_game_time(&self, level: LevelRef) -> Option<i64> {
         self.native_level_world(level)?;
         Some(self.world.game_time)
     }
@@ -509,7 +493,7 @@ impl Game<'_> {
     /// every level; it keeps counting past 24000. On a client, the synchronized
     /// Overworld clock, advanced at its server-supplied rate, even when the
     /// displayed dimension has a different default clock. API 381.
-    pub(super) fn native_level_day_time(&self, level: LevelRef) -> Option<i64> {
+    pub(super) fn level_day_time(&self, level: LevelRef) -> Option<i64> {
         self.native_level_read_world(level)?;
         if self.is_logical_server() {
             Some(self.world.day_time)
@@ -528,7 +512,6 @@ fn horizontal_in_bounds(pos: [i32; 3]) -> bool {
 mod tests {
     use super::super::{Dim, native_entity_refs::tests::with_game};
     use horizon_core::position::BlockPos;
-    use mod_api::prelude::*;
     use mod_api::{ChunkRef, LevelRef, LightLayer, NativeWorldEpoch};
 
     /// A logical server with its worker queue running rather than the
@@ -592,8 +575,8 @@ mod tests {
                         .guests
                         .update(0, |g| g.inventory[0] = value);
                 }
-                let player = game.native_player_ref(12).unwrap();
-                let level = game.native_level(game.dim.id()).unwrap();
+                let player = game.player(12).unwrap();
+                let level = game.level(game.dim.id()).unwrap();
                 let hit = BlockHit::new([0.5, 65.0, 0.5], [0, 1, 0], false);
                 let preview = level
                     .block_transform(game, player, Hand::Main, &tool, pos, hit)
@@ -660,7 +643,7 @@ mod tests {
                 .default_state("minecraft:glass")
                 .unwrap();
             game.world.set(1, y, 1, glass).unwrap();
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let host: &dyn Host = game;
             assert_eq!(level.signal(host, [1, y, 1], Direction::East), Some(15));
             assert_eq!(
@@ -699,7 +682,7 @@ mod tests {
             game.block_ticks
                 .comparator_outputs
                 .insert(BlockPos::new(4, y, 4), 9);
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let host: &dyn Host = game;
             assert_eq!(level.signal(host, [1, y, 1], Direction::East), Some(15));
             assert_eq!(level.best_neighbor_signal(host, [2, y, 1]), Some(15));
@@ -848,7 +831,7 @@ mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let bottom = game.world.bottom_y();
             let top = game.world.top_y();
             let registry = &game.pack.assets.registry;
@@ -880,7 +863,7 @@ mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let registry = &game.pack.assets.registry;
             let stone = registry.default_state("minecraft:stone").unwrap();
             let water = registry.default_state("minecraft:water").unwrap();
@@ -909,47 +892,44 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn forced_chunks_set_clear_and_query_like_forceload() {
         with_chunk_streaming(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
-            let far = game.native_level_chunk_ref(level, [40, -7]).unwrap();
-            let near = game.native_level_chunk_ref(level, [-3, 2]).unwrap();
-            assert_eq!(game.native_chunk_forced(far), Some(false));
-            assert_eq!(game.native_level_forced_chunks(level), Some(vec![]));
+            let level = game.level(game.dim.id()).unwrap();
+            let far = game.level_chunk_ref(level, [40, -7]).unwrap();
+            let near = game.level_chunk_ref(level, [-3, 2]).unwrap();
+            assert_eq!(game.chunk_forced(far), Some(false));
+            assert_eq!(game.level_forced_chunks(level), Some(vec![]));
             // A synchronous load leaves existing columns for the normal owner
             // update to save and unload, including their entity data.
             let old = std::sync::Arc::new(horizon_client::chunk::Chunk::empty(-40, 40));
             game.world.chunks.insert((-40, 40), old.clone());
             game.world.modified.insert((-40, 40));
-            assert!(!game.native_chunk_ref_loaded(far));
-            assert!(game.native_chunk_set_forced(far, true));
-            assert!(game.native_chunk_ref_loaded(far), "loaded before returning");
+            assert!(!game.chunk_loaded(far));
+            assert!(game.chunk_set_forced(far, true));
+            assert!(game.chunk_loaded(far), "loaded before returning");
             assert!(std::sync::Arc::ptr_eq(&old, &game.world.chunks[&(-40, 40)]));
             assert!(game.world.modified.contains(&(-40, 40)));
-            assert!(!game.native_chunk_set_forced(far, true), "already forced");
-            assert!(game.native_chunk_set_forced(near, true));
-            assert_eq!(game.native_chunk_forced(far), Some(true));
+            assert!(!game.chunk_set_forced(far, true), "already forced");
+            assert!(game.chunk_set_forced(near, true));
+            assert_eq!(game.chunk_forced(far), Some(true));
             // The command's own set and order.
             assert!(game.streaming.forced.contains(&(40, -7)));
-            let listed = game.native_level_forced_chunks(level).unwrap();
+            let listed = game.level_forced_chunks(level).unwrap();
             // Signed packed positions: z first, then x.
             assert_eq!(listed, vec![[40, -7], [-3, 2]]);
-            assert!(game.native_chunk_set_forced(far, false));
-            assert!(!game.native_chunk_set_forced(far, false), "already clear");
-            assert_eq!(game.native_level_forced_chunks(level), Some(vec![[-3, 2]]));
+            assert!(game.chunk_set_forced(far, false));
+            assert!(!game.chunk_set_forced(far, false), "already clear");
+            assert_eq!(game.level_forced_chunks(level), Some(vec![[-3, 2]]));
             assert!(!game.streaming.forced.contains(&(40, -7)));
             // Outside the world.
             // Unchanged adds and removals do not load a missing column.
-            let pending = game.native_level_chunk_ref(level, [200, 200]).unwrap();
+            let pending = game.level_chunk_ref(level, [200, 200]).unwrap();
             assert!(game.streaming.set_forced(200, 200, true));
-            assert!(!game.native_chunk_ref_loaded(pending));
-            assert!(!game.native_chunk_set_forced(pending, true));
-            assert!(!game.native_chunk_ref_loaded(pending));
-            assert!(game.native_chunk_set_forced(pending, false));
-            assert!(!game.native_chunk_ref_loaded(pending));
-            assert!(game.native_level_chunk_ref(level, [1_875_000, 0]).is_none());
-            assert!(
-                game.native_level_chunk_ref(level, [0, -1_875_001])
-                    .is_none()
-            );
+            assert!(!game.chunk_loaded(pending));
+            assert!(!game.chunk_set_forced(pending, true));
+            assert!(!game.chunk_loaded(pending));
+            assert!(game.chunk_set_forced(pending, false));
+            assert!(!game.chunk_loaded(pending));
+            assert!(game.level_chunk_ref(level, [1_875_000, 0]).is_none());
+            assert!(game.level_chunk_ref(level, [0, -1_875_001]).is_none());
         });
     }
 
@@ -957,15 +937,15 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn forced_chunk_changes_the_ticket_sources_and_the_saved_set() {
         with_chunk_streaming(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
-            let chunk = game.native_level_chunk_ref(level, [5, 6]).unwrap();
-            assert!(game.native_chunk_set_forced(chunk, true));
+            let level = game.level(game.dim.id()).unwrap();
+            let chunk = game.level_chunk_ref(level, [5, 6]).unwrap();
+            assert!(game.chunk_set_forced(chunk, true));
             assert!(game.levels_to_tick().contains(&game.dim));
             game.save
                 .save_forced_chunks(&game.streaming.forced)
                 .unwrap();
             assert!(game.save.load_forced_chunks().contains(&(5, 6)));
-            assert!(game.native_chunk_set_forced(chunk, false));
+            assert!(game.chunk_set_forced(chunk, false));
             game.save
                 .save_forced_chunks(&game.streaming.forced)
                 .unwrap();
@@ -979,13 +959,13 @@ mod tests {
         with_chunk_streaming(|game| {
             let stale_epoch =
                 NativeWorldEpoch::new(game.native_lifecycle.epoch().unwrap().get() + 1);
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let stale_level = mod_api::LevelRef::new(stale_epoch, level.dimension());
             let stale = ChunkRef::new(stale_level, [0, 0]);
-            assert_eq!(game.native_chunk_forced(stale), None);
-            assert!(!game.native_chunk_set_forced(stale, true));
-            assert_eq!(game.native_level_forced_chunks(stale_level), None);
-            assert!(game.native_level_chunk_ref(stale_level, [0, 0]).is_none());
+            assert_eq!(game.chunk_forced(stale), None);
+            assert!(!game.chunk_set_forced(stale, true));
+            assert_eq!(game.level_forced_chunks(stale_level), None);
+            assert!(game.level_chunk_ref(stale_level, [0, 0]).is_none());
             // A level the server has not opened.
             let other = if game.dim == Dim::Nether {
                 Dim::End
@@ -994,24 +974,24 @@ mod tests {
             };
             let parked = mod_api::LevelRef::new(level.epoch(), other.key());
             let chunk = ChunkRef::new(parked, [1, 1]);
-            assert_eq!(game.native_chunk_forced(chunk), None);
-            assert!(!game.native_chunk_set_forced(chunk, true));
+            assert_eq!(game.chunk_forced(chunk), None);
+            assert!(!game.chunk_set_forced(chunk, true));
             // Opened, then parked.
             let back = game.dim;
             game.enter_level(other).unwrap();
             game.enter_level(back).unwrap();
-            assert_eq!(game.native_chunk_forced(chunk), Some(false));
-            assert!(!game.native_chunk_ref_loaded(chunk));
-            assert!(game.native_chunk_set_forced(chunk, true));
+            assert_eq!(game.chunk_forced(chunk), Some(false));
+            assert!(!game.chunk_loaded(chunk));
+            assert!(game.chunk_set_forced(chunk, true));
             assert!(
-                game.native_chunk_ref_loaded(chunk),
+                game.chunk_loaded(chunk),
                 "parked level loaded before returning"
             );
             assert_eq!(game.dim, back, "forcing must not switch the acting level");
-            assert_eq!(game.native_level_forced_chunks(parked), Some(vec![[1, 1]]));
-            assert_eq!(game.native_level_forced_chunks(level), Some(vec![]));
+            assert_eq!(game.level_forced_chunks(parked), Some(vec![[1, 1]]));
+            assert_eq!(game.level_forced_chunks(level), Some(vec![]));
             assert!(game.levels_to_tick().contains(&other));
-            assert!(game.native_chunk_set_forced(chunk, false));
+            assert!(game.chunk_set_forced(chunk, false));
             assert!(!game.levels_to_tick().contains(&other));
         });
     }
@@ -1023,7 +1003,7 @@ mod tests {
         use mod_api::{LevelRef, ServerHost};
 
         with_game(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             // The level in place: the draws advance `World.random` itself.
             let mut expected = game.world.random.clone();
             let host: &mut dyn ServerHost = game;
@@ -1170,71 +1150,61 @@ mod tests {
     fn mod_tickets_are_scoped_by_owner_and_share_the_forceload_store() {
         use mod_api::NativeTicketOwner::{Block, Entity};
         with_machines(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
-            let chunk = game.native_level_chunk_ref(level, [5, 6]).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
+            let chunk = game.level_chunk_ref(level, [5, 6]).unwrap();
             let (a, b) = (Block([80, 64, 96]), Entity(7));
             // Outside a mod's hook there is no caller to own a ticket.
-            assert!(!game.native_chunk_set_mod_forced(chunk, quarry(), a, true, false));
+            assert!(!game.chunk_set_mod_forced(chunk, quarry(), a, true, false));
             let guard = in_mod("machines");
-            assert!(game.native_chunk_set_mod_forced(chunk, quarry(), a, true, false));
+            assert!(game.chunk_set_mod_forced(chunk, quarry(), a, true, false));
             assert!(
-                !game.native_chunk_set_mod_forced(chunk, quarry(), a, true, false),
+                !game.chunk_set_mod_forced(chunk, quarry(), a, true, false),
                 "held"
             );
-            assert!(game.native_chunk_set_mod_forced(chunk, quarry(), b, true, false));
+            assert!(game.chunk_set_mod_forced(chunk, quarry(), b, true, false));
             assert!(game.streaming.forced.contains(&(5, 6)));
-            assert_eq!(
-                game.native_chunk_forced(chunk),
-                Some(false),
-                "not /forceload's"
-            );
-            assert_eq!(game.native_level_forced_chunks(level), Some(vec![]));
+            assert_eq!(game.chunk_forced(chunk), Some(false), "not /forceload's");
+            assert_eq!(game.level_forced_chunks(level), Some(vec![]));
             // Two owners in one chunk release separately.
-            assert!(game.native_chunk_set_mod_forced(chunk, quarry(), a, false, false));
+            assert!(game.chunk_set_mod_forced(chunk, quarry(), a, false, false));
             assert!(game.streaming.forced.contains(&(5, 6)));
             assert_eq!(
-                game.native_level_mod_forced_chunks(level, quarry()),
+                game.level_mod_forced_chunks(level, quarry()),
                 Some(vec![(b, [5, 6], false)])
             );
             // Another mod cannot use our controller, however it asks; its own is empty.
             drop(guard);
             let guard = in_mod("other");
-            assert_eq!(game.native_level_mod_forced_chunks(level, quarry()), None);
-            assert!(!game.native_chunk_set_mod_forced(chunk, quarry(), b, false, false));
-            assert!(!game.native_chunk_set_mod_forced(chunk, quarry(), b, true, false));
+            assert_eq!(game.level_mod_forced_chunks(level, quarry()), None);
+            assert!(!game.chunk_set_mod_forced(chunk, quarry(), b, false, false));
+            assert!(!game.chunk_set_mod_forced(chunk, quarry(), b, true, false));
             let vault = controller("other:vault");
-            assert_eq!(
-                game.native_level_mod_forced_chunks(level, vault),
-                Some(vec![])
-            );
-            assert!(game.native_chunk_set_mod_forced(chunk, vault, b, true, false));
-            assert!(game.native_chunk_set_mod_forced(chunk, vault, b, false, false));
+            assert_eq!(game.level_mod_forced_chunks(level, vault), Some(vec![]));
+            assert!(game.chunk_set_mod_forced(chunk, vault, b, true, false));
+            assert!(game.chunk_set_mod_forced(chunk, vault, b, false, false));
             drop(guard);
             // Our other controller is apart from the first: it neither lists nor releases its tickets.
             let guard = in_mod("machines");
             let drill = controller("machines:drill");
+            assert_eq!(game.level_mod_forced_chunks(level, drill), Some(vec![]));
+            assert!(!game.chunk_set_mod_forced(chunk, drill, b, false, false));
+            assert!(game.chunk_set_mod_forced(chunk, drill, b, true, false));
+            assert!(game.chunk_set_mod_forced(chunk, drill, b, false, false));
             assert_eq!(
-                game.native_level_mod_forced_chunks(level, drill),
-                Some(vec![])
-            );
-            assert!(!game.native_chunk_set_mod_forced(chunk, drill, b, false, false));
-            assert!(game.native_chunk_set_mod_forced(chunk, drill, b, true, false));
-            assert!(game.native_chunk_set_mod_forced(chunk, drill, b, false, false));
-            assert_eq!(
-                game.native_level_mod_forced_chunks(level, quarry()),
+                game.level_mod_forced_chunks(level, quarry()),
                 Some(vec![(b, [5, 6], false)])
             );
             drop(guard);
             // /forceload and a ticket on one chunk: the chunk stays until both go.
-            assert!(game.native_chunk_set_forced(chunk, true));
-            assert!(game.native_chunk_set_forced(chunk, false));
+            assert!(game.chunk_set_forced(chunk, true));
+            assert!(game.chunk_set_forced(chunk, false));
             assert!(
                 game.streaming.forced.contains(&(5, 6)),
                 "the ticket holds it"
             );
-            assert!(game.native_chunk_set_forced(chunk, true));
+            assert!(game.chunk_set_forced(chunk, true));
             let _guard = in_mod("machines");
-            assert!(game.native_chunk_set_mod_forced(chunk, quarry(), b, false, false));
+            assert!(game.chunk_set_mod_forced(chunk, quarry(), b, false, false));
             assert!(
                 game.streaming.forced.contains(&(5, 6)),
                 "/forceload holds it"
@@ -1243,7 +1213,7 @@ mod tests {
             assert!(game.streaming.forced.is_empty());
             // The world's bounds, as /forceload checks them.
             let outside = mod_api::ChunkRef::new(level, [1_875_000, 0]);
-            assert!(!game.native_chunk_set_mod_forced(outside, quarry(), a, true, false));
+            assert!(!game.chunk_set_mod_forced(outside, quarry(), a, true, false));
         });
     }
 
@@ -1252,14 +1222,14 @@ mod tests {
     fn mod_tickets_save_apart_from_vanillas_tickets_and_release_with_the_world() {
         use mod_api::NativeTicketOwner::{Block, Entity};
         with_machines(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
-            let chunk = game.native_level_chunk_ref(level, [-9, 4]).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
+            let chunk = game.level_chunk_ref(level, [-9, 4]).unwrap();
             let _guard = in_mod("machines");
             let drill = controller("machines:drill");
             let (block, entity) = (Block([-140, 70, 70]), Entity(u128::MAX - 3));
-            assert!(game.native_chunk_set_mod_forced(chunk, quarry(), block, true, false));
-            assert!(game.native_chunk_set_mod_forced(chunk, quarry(), entity, true, false));
-            assert!(game.native_chunk_set_mod_forced(chunk, drill, block, true, false));
+            assert!(game.chunk_set_mod_forced(chunk, quarry(), block, true, false));
+            assert!(game.chunk_set_mod_forced(chunk, quarry(), entity, true, false));
+            assert!(game.chunk_set_mod_forced(chunk, drill, block, true, false));
             game.save_chunk_tickets().unwrap();
             let vanilla = game.save.load_forced_chunks();
             assert!(vanilla.is_empty(), "vanilla's file has no mod ticket");
@@ -1273,9 +1243,8 @@ mod tests {
             };
             reopen(game, known_slot);
             // Each ticket comes back under the controller that held it.
-            let listed = |game: &super::super::Game<'_>, c| {
-                game.native_level_mod_forced_chunks(level, c).unwrap()
-            };
+            let listed =
+                |game: &super::super::Game<'_>, c| game.level_mod_forced_chunks(level, c).unwrap();
             assert_eq!(listed(game, quarry()).len(), 2);
             assert_eq!(listed(game, drill), vec![(block, [-9, 4], false)]);
             assert!(game.streaming.forced.contains(&(-9, 4)));
@@ -1288,14 +1257,8 @@ mod tests {
             assert!(game.streaming.forced.is_empty());
             assert!(game.save.load_mod_tickets(known_slot).is_empty());
             // Released tickets leave the file.
-            assert!(game.native_chunk_set_mod_forced(
-                chunk,
-                quarry(),
-                Block([-140, 70, 70]),
-                true,
-                false
-            ));
-            assert!(game.native_chunk_set_mod_forced(
+            assert!(game.chunk_set_mod_forced(chunk, quarry(), Block([-140, 70, 70]), true, false));
+            assert!(game.chunk_set_mod_forced(
                 chunk,
                 quarry(),
                 Block([-140, 70, 70]),
@@ -1311,7 +1274,7 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_mod_ticket_keeps_a_parked_level_active() {
         with_machines(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let other = if game.dim == Dim::Nether {
                 Dim::End
             } else {
@@ -1325,9 +1288,9 @@ mod tests {
             let _guard = in_mod("machines");
             let owner = mod_api::NativeTicketOwner::Block([32, 64, 32]);
             assert!(!game.levels_to_tick().contains(&other));
-            assert!(game.native_chunk_set_mod_forced(chunk, quarry(), owner, true, false));
+            assert!(game.chunk_set_mod_forced(chunk, quarry(), owner, true, false));
             assert!(game.levels_to_tick().contains(&other));
-            assert!(game.native_chunk_set_mod_forced(chunk, quarry(), owner, false, false));
+            assert!(game.chunk_set_mod_forced(chunk, quarry(), owner, false, false));
             assert!(!game.levels_to_tick().contains(&other));
         });
     }
@@ -1368,12 +1331,12 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn forceload_query_lists_only_command_tickets() {
         with_machines(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
-            let chunk = game.native_level_chunk_ref(level, [3, 3]).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
+            let chunk = game.level_chunk_ref(level, [3, 3]).unwrap();
             game.ui.registries.permission = 4;
             let _guard = in_mod("machines");
             let owner = mod_api::NativeTicketOwner::Block([48, 64, 48]);
-            assert!(game.native_chunk_set_mod_forced(chunk, quarry(), owner, true, false));
+            assert!(game.chunk_set_mod_forced(chunk, quarry(), owner, true, false));
             assert!(game.streaming.forced.contains(&(3, 3)));
             assert_eq!(query_result(game, "forceload query"), Some(0), "list form");
             assert_eq!(
@@ -1381,7 +1344,7 @@ mod tests {
                 None,
                 "position form"
             );
-            assert!(game.native_chunk_set_forced(chunk, true));
+            assert!(game.chunk_set_forced(chunk, true));
             assert_eq!(query_result(game, "forceload query"), Some(1));
             assert_eq!(query_result(game, "forceload query 48 48"), Some(1));
         });
@@ -1392,13 +1355,13 @@ mod tests {
     fn natural_spawning_tickets_and_plain_ones_save_and_load_apart() {
         use mod_api::NativeTicketOwner::Block;
         with_machines(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
-            let plain = game.native_level_chunk_ref(level, [11, 12]).unwrap();
-            let spawning = game.native_level_chunk_ref(level, [13, 12]).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
+            let plain = game.level_chunk_ref(level, [11, 12]).unwrap();
+            let spawning = game.level_chunk_ref(level, [13, 12]).unwrap();
             let _guard = in_mod("machines");
             let owner = Block([176, 64, 192]);
-            assert!(game.native_chunk_set_mod_forced(plain, quarry(), owner, true, false));
-            assert!(game.native_chunk_set_mod_forced(spawning, quarry(), owner, true, true));
+            assert!(game.chunk_set_mod_forced(plain, quarry(), owner, true, false));
+            assert!(game.chunk_set_mod_forced(spawning, quarry(), owner, true, true));
             let tickets = game.streaming.mod_tickets();
             assert!(!tickets.forces_natural_spawning((11, 12)));
             assert!(tickets.forces_natural_spawning((13, 12)));
@@ -1407,12 +1370,12 @@ mod tests {
             assert!(game.streaming.forced.contains(&(13, 12)));
             assert!(game.levels_to_tick().contains(&game.dim));
             assert_eq!(
-                game.native_level_mod_forced_chunks(level, quarry()),
+                game.level_mod_forced_chunks(level, quarry()),
                 Some(vec![(owner, [11, 12], false), (owner, [13, 12], true)])
             );
             // One owner holds both kinds on one chunk apart.
-            assert!(game.native_chunk_set_mod_forced(plain, quarry(), owner, true, true));
-            assert!(game.native_chunk_set_mod_forced(plain, quarry(), owner, false, true));
+            assert!(game.chunk_set_mod_forced(plain, quarry(), owner, true, true));
+            assert!(game.chunk_set_mod_forced(plain, quarry(), owner, false, true));
             assert!(game.streaming.forced.contains(&(11, 12)));
             assert!(
                 !game
@@ -1454,15 +1417,15 @@ mod tests {
                     game.world.chunks.insert((cx, cz), Arc::new(chunk));
                 }
             }
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             // Both chunks lie in the player's 8-chunk area and past 128 blocks of it.
-            let flagged = game.native_level_chunk_ref(level, [8, 8]).unwrap();
-            let plain = game.native_level_chunk_ref(level, [8, 7]).unwrap();
+            let flagged = game.level_chunk_ref(level, [8, 8]).unwrap();
+            let plain = game.level_chunk_ref(level, [8, 7]).unwrap();
             {
                 let _guard = in_mod("machines");
                 let owner = Block([128, 64, 128]);
-                assert!(game.native_chunk_set_mod_forced(flagged, quarry(), owner, true, true));
-                assert!(game.native_chunk_set_mod_forced(plain, quarry(), owner, true, false));
+                assert!(game.chunk_set_mod_forced(flagged, quarry(), owner, true, true));
+                assert!(game.chunk_set_mod_forced(plain, quarry(), owner, true, false));
             }
             game.spawn_natural();
             assert_eq!(game.world.inhabited.get(&(8, 8)), Some(&1));
@@ -1607,15 +1570,15 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn validation_sees_the_saved_tickets_not_ones_added_after_the_load() {
         with_machines(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let tickets = vec![saved("machines:quarry", [1, 64, 1], (7, 7))];
             game.streaming.load_forced(Default::default(), tickets);
             // `level_load` runs after the load: its hold is the same owner's.
-            let fresh = game.native_level_chunk_ref(level, [6, 6]).unwrap();
+            let fresh = game.level_chunk_ref(level, [6, 6]).unwrap();
             {
                 let _guard = in_mod("machines");
                 let owner = mod_api::NativeTicketOwner::Block([1, 64, 1]);
-                assert!(game.native_chunk_set_mod_forced(fresh, quarry(), owner, true, false));
+                assert!(game.chunk_set_mod_forced(fresh, quarry(), owner, true, false));
             }
             game.validate_mod_chunk_tickets(game.dim);
             assert!(!game.streaming.forced.contains(&(7, 7)), "saved one pruned");
@@ -1635,7 +1598,7 @@ mod tests {
             // Block light 5 and sky light 12 in the lowest section.
             Arc::make_mut(&mut chunk.sections[0]).light = Light::Uniform(0xC5);
             game.world.chunks.insert((0, 0), Arc::new(chunk));
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let lit = [3, -60, 5];
             let sky = game.world.light(3, -60, 5) >> 4;
             let block = game.world.light(3, -60, 5) & 15;
@@ -1659,26 +1622,20 @@ mod tests {
                 assert!(!host.is_loaded([16, -60, 0]));
             });
             assert_eq!(
-                game.native_level_brightness(level, LightLayer::Block, lit),
+                game.level_brightness(level, LightLayer::Block, lit),
                 Some(5)
             );
+            assert_eq!(game.level_brightness(level, LightLayer::Sky, lit), Some(12));
             assert_eq!(
-                game.native_level_brightness(level, LightLayer::Sky, lit),
-                Some(12)
-            );
-            assert_eq!(
-                game.native_level_brightness(level, LightLayer::Sky, [16, -60, 0]),
+                game.level_brightness(level, LightLayer::Sky, [16, -60, 0]),
                 None
             );
             assert_eq!(
-                game.native_level_brightness(level, LightLayer::Sky, [0, 320, 0]),
+                game.level_brightness(level, LightLayer::Sky, [0, 320, 0]),
                 None
             );
             let stale = LevelRef::new(NativeWorldEpoch::new(u64::MAX), game.dim.key());
-            assert_eq!(
-                game.native_level_brightness(stale, LightLayer::Sky, lit),
-                None
-            );
+            assert_eq!(game.level_brightness(stale, LightLayer::Sky, lit), None);
             assert_eq!(game.world.chunks.len(), chunks, "nothing was loaded");
         });
     }

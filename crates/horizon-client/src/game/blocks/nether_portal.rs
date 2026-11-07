@@ -738,7 +738,7 @@ impl Game<'_> {
     /// `canUsePortal(false)` of a mob: what the mob itself decides
     /// (`mobs::mob_can_use_portal`), riding nothing, not asleep, and not
     /// carrying the players this side does.
-    pub(super) fn mob_can_use_portal(&self, m: &horizon_client::mobs::Mob) -> bool {
+    pub(super) fn mob_portal_eligible(&self, m: &horizon_client::mobs::Mob) -> bool {
         horizon_client::mobs::mob_can_use_portal(m)
             && m.extra.mount.is_none()
             && self.riding != Some(m.id)

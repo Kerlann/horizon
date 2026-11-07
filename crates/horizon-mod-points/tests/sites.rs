@@ -1,6 +1,7 @@
 //! Real sealed-registry dispatch, with the same typed slot the staging macro emits.
+use mod_points::register;
 use mod_points::{
-    __private::{RawListener, SITES, register_raw, seal},
+    __private::{SITES, SlotListener, seal},
     SiteId,
 };
 use std::sync::{Mutex, atomic::Ordering};
@@ -25,9 +26,9 @@ fn inner(r: (), a: &mut Args, next: &mut dyn FnMut((), &mut Args) -> i64) -> i64
     TRACE.lock().unwrap().push(5);
     result
 }
-fn listener(id: &'static str, priority: i32, injection: &'static str, f: Listener) -> RawListener {
+fn listener(id: &'static str, priority: i32, injection: &'static str, f: Listener) -> SlotListener {
     // SAFETY: this test executable supplies the site's exact typed slot below; no game fires it.
-    unsafe { RawListener::site(id, SITE, priority, injection, f as *const ()) }
+    unsafe { SlotListener::site(id, SITE, priority, injection, f as *const ()) }
 }
 
 #[test]
@@ -54,11 +55,11 @@ fn site_listeners_nest_repeat_original_and_skip_stopped_mods() {
     );
     TRACE.lock().unwrap().clear();
     // Register in reverse order: priority wins, then mod id, then injection id.
-    register_raw(&listener("z_low", 0, "inner", inner)).unwrap();
-    register_raw(&listener("a_high", 10, "outer", outer)).unwrap();
-    register_raw(&listener("a_high", 0, "stopped", outer)).unwrap();
+    register(&listener("z_low", 0, "inner", inner)).unwrap();
+    register(&listener("a_high", 10, "outer", outer)).unwrap();
+    register(&listener("a_high", 0, "stopped", outer)).unwrap();
     mod_points::stop("a_high");
-    register_raw(&listener("b_high", 10, "outer", outer)).unwrap();
+    register(&listener("b_high", 10, "outer", outer)).unwrap();
     seal();
     assert!(SITES[SITE as usize].load(Ordering::Relaxed));
     assert_eq!(
@@ -77,7 +78,7 @@ fn site_listeners_nest_repeat_original_and_skip_stopped_mods() {
     );
     assert_eq!(*TRACE.lock().unwrap(), [1, 2, 3, 3, 5, 6]);
     assert_eq!(
-        register_raw(&listener("late", 0, "late", outer)),
+        register(&listener("late", 0, "late", outer)),
         Err(mod_points::RegisterError::Sealed)
     );
     mod_points::stop("b_high");

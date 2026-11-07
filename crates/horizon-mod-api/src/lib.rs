@@ -15,7 +15,7 @@ extern crate self as mod_api;
 #[horizon_mod_api_macros::wasm(host_constructor = from_slot)]
 pub struct UnresolvedFluid(u64);
 
-/// A block requested once through [`Registrar::block_key`]. Its load-owned slot survives reload.
+/// A block requested once through [`Registrar::block_key`](BlocksRegistrar::block_key). Its load-owned slot survives reload.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: its field is private, so only registration creates a key
 #[horizon_mod_api_macros::wasm(host_constructor = from_slot)]
@@ -67,7 +67,7 @@ pub enum GameRuleError {
 }
 
 /// Why an entity type's attribute declaration was refused
-/// ([`Registrar::declare_entity_attributes`](crate::Registrar)).
+/// ([`Registrar::declare_entity_attributes`](EntityAttributesRegistrar::declare_entity_attributes)).
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum EntityAttributeError {
@@ -87,7 +87,7 @@ pub enum EntityAttributeError {
 // exhaustive: only the registration table creates keys
 #[horizon_mod_api_macros::wasm(host_constructor = from_slot)]
 pub struct BoolGameRuleKey(u32);
-/// A load-owned fluid identity requested through [`Registrar::fluid_key`] or resolved through
+/// A load-owned fluid identity requested through [`Registrar::fluid_key`](FluidsRegistrar::fluid_key) or resolved through
 /// [`DataLoadContext::fluid_key`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: only the registration table creates keys
@@ -99,7 +99,7 @@ pub struct FluidKey(u32);
 #[horizon_mod_api_macros::wasm(host_constructor = from_slot)]
 pub struct ItemKey(u32);
 
-/// An effect requested once through [`Registrar::effect_key`]. The registry is fixed until restart.
+/// An effect requested once through [`Registrar::effect_key`](EffectsRegistrar::effect_key). The registry is fixed until restart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: its field is private, so only registration creates a key
 #[horizon_mod_api_macros::wasm(host_constructor = from_slot)]
@@ -1100,7 +1100,7 @@ pub struct NativeScreenView<'a> {
     /// the inventory menu's). Counted, not listed.
     pub slots: usize,
     /// The pointer in GUI pixels (`Screen.mouseX`, `mouseY`, from the
-    /// window's top left), as `native_cursor` gives it: for hover highlights.
+    /// window's top left), as `cursor` gives it: for hover highlights.
     pub mouse: [f32; 2],
     /// This frame's partial tick (`getGameTimeDeltaPartialTick(false)`, 0 to
     /// 1): what the screen draws animation against.
@@ -1195,7 +1195,7 @@ pub struct NativeScreen {
     pub own_background: bool,
 }
 
-/// An item the panel shows (`native_panel_items`): its id
+/// An item the panel shows (`panel_items`): its id
 /// (`minecraft:diamond`), a count (1 draws none) and its components beyond
 /// the item's own, in vanilla's item syntax, or "".
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -1214,7 +1214,7 @@ pub struct NativeStack {
 #[non_exhaustive]
 pub enum NativePanelEvent {
     /// A click on an item of the panel, by its index in
-    /// `native_panel_items`' list.
+    /// `panel_items`' list.
     Clicked {
         /// The item's index in the panel's list.
         index: u32,
@@ -4155,7 +4155,8 @@ pub(crate) fn backend_of(host: &dyn Host) -> Option<&dyn Backend> {
 /// fn read(host: &dyn Host) { let _ = host.downcast_ref::<dyn ServerHost>(); }
 /// ```
 impl HostSide<'_> {
-    fn reborrow(&mut self) -> HostSide<'_> {
+    /// Borrows this side's host again for a shorter call.
+    pub fn reborrow(&mut self) -> HostSide<'_> {
         match self {
             Self::Server(host) => HostSide::Server(&mut **host),
             Self::Client(host) => HostSide::Client(&mut **host),

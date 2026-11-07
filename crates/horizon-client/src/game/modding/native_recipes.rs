@@ -105,7 +105,7 @@ impl Game<'_> {
     /// (each 1 to 3, `items` row by row) makes, through the crafting table's matcher, with the
     /// world's data packs' recipes and the special recipes. None when no recipe matches or it
     /// makes nothing, for a grid of another size, and off the server.
-    pub(super) fn native_level_craft(
+    pub(super) fn level_craft(
         &self,
         level: LevelRef,
         width: u32,
@@ -149,7 +149,7 @@ impl Game<'_> {
         }
         self.recipe_tables.categories.as_ref()?.get(kind).cloned()
     }
-    /// `native_give`: `count` of `item`, refused outside a world, unless
+    /// `give`: `count` of `item`, refused outside a world, unless
     /// creative and for an item the game doesn't have.
     pub(super) fn recipe_give(&mut self, item: &str, count: u32) -> Result<(), String> {
         if self.player.is_none() || self.res.rest.get().is_none() {
@@ -164,7 +164,7 @@ impl Game<'_> {
         self.mod_give(item, count.clamp(1, 99), "");
         Ok(())
     }
-    /// `native_place_recipe`: refused as `recipes.place` refuses it.
+    /// `place_recipe`: refused as `recipes.place` refuses it.
     pub(super) fn recipe_place(&mut self, book_id: i32, all: bool) -> Result<(), String> {
         if !self.mod_recipe_screen() {
             return Err("no screen that takes recipes is open".into());
@@ -191,7 +191,7 @@ impl Game<'_> {
             .map_or((0, None), |tag| {
                 horizon_client::item_data::decode_components(Some(&tag))
             });
-        let _ = self.give(ItemStack {
+        let _ = self.add_stack_to_inventory(ItemStack {
             item: item.into(),
             // One stack at most, as the creative inventory hands out.
             count: count.min(max),
@@ -521,7 +521,7 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn craft_matches_the_grid_and_returns_what_each_slot_keeps() {
         with_game(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let cake = [
                 stack("milk_bucket"),
                 stack("milk_bucket"),
@@ -580,7 +580,7 @@ mod tests {
     #[ignore = "a benchmark: run it in release with HORIZON_TEST_RESOURCES"]
     fn craft_cost() {
         with_game(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let mut cake = vec![stack("milk_bucket"); 3];
             cake.extend([stack("sugar"), stack("egg"), stack("sugar")]);
             cake.extend(vec![stack("wheat"); 3]);

@@ -15,6 +15,7 @@ pub struct AttachmentRow<H> {
     pub holder: H,
     /// Shared with the holder's attachment map, never copied by snapshot acquisition.
     pub entry: Arc<AttachmentEntry>,
+    generation: Arc<()>,
 }
 
 /// Authority to publish one registration's changes. Cloning or dropping this token has
@@ -122,7 +123,10 @@ impl<H: Copy + Eq + Hash> AttachmentIndex<H> {
     /// Install the authoritative map, replacing the holder's previous membership.
     /// Only lifecycle code may register; a bound map publishes through its token.
     /// Rebinding invalidates stale save/COW bindings, even when their keys match.
-    /// Shared keys keep their dense slots; unchanged entries do not copy row vectors.
+    /// Shared keys keep their dense slots and entry pointers; a new generation
+    /// replaces row metadata even when its value is unchanged.
+    /// Any rebind may therefore copy a bucket a retained batch still holds: at
+    /// placement and travel, and after a chunk-extras copy-on-write.
     pub fn register(
         &mut self,
         holder: H,
@@ -162,6 +166,21 @@ impl<H: Copy + Eq + Hash> AttachmentIndex<H> {
         self.buckets.get(key).unwrap_or(&self.empty).clone()
     }
 
+    /// Refuse a captured row after unload or re-registration, including in another index.
+    /// Call under the same owning-thread access as the subsequent holder write. This
+    /// only checks residency; writes must still use the holder's normal journal path.
+    pub fn validate_row(&self, row: &AttachmentRow<H>) -> Result<(), super::AttachmentRowError> {
+        if self
+            .owners
+            .get(&row.holder)
+            .is_some_and(|owner| Arc::ptr_eq(&owner.generation, &row.generation))
+        {
+            Ok(())
+        } else {
+            Err(super::AttachmentRowError::StaleHolder)
+        }
+    }
+
     /// Publish insertion or replacement. Return false for a stale or foreign token,
     /// leaving the index unchanged. Replacement does not reorder the holder's row.
     pub fn set(
@@ -183,10 +202,13 @@ impl<H: Copy + Eq + Hash> AttachmentIndex<H> {
         let row = AttachmentRow {
             holder: token.holder,
             entry,
+            generation: token.generation.clone(),
         };
         if let Some(&slot) = owner.slots.get(key) {
             let rows = self.buckets.get_mut(key).unwrap();
-            if !Arc::ptr_eq(&rows[slot].entry, &row.entry) {
+            if !Arc::ptr_eq(&rows[slot].entry, &row.entry)
+                || !Arc::ptr_eq(&rows[slot].generation, &row.generation)
+            {
                 let old = std::mem::replace(&mut Arc::make_mut(rows)[slot], row);
                 change.retire(old.entry);
             }
@@ -455,7 +477,7 @@ mod tests {
     }
 
     #[test]
-    fn same_key_rebind_preserves_slots_and_only_changed_entries_copy_rows() {
+    fn same_key_rebind_preserves_slots_and_entries_but_refreshes_row_generation() {
         let mut index = AttachmentIndex::default();
         let original = entry(1);
         let old = index
@@ -464,7 +486,14 @@ mod tests {
         index.register(2, [(key("value"), entry(2))]).into_result();
         let retained = index.snapshot(&key("value"));
         let refreshed = index.register(1, [(key("value"), original)]).into_result();
-        assert!(Arc::ptr_eq(&retained, &index.snapshot(&key("value"))));
+        assert!(Arc::ptr_eq(
+            &retained[0].entry,
+            &index.snapshot(&key("value"))[0].entry
+        ));
+        assert_eq!(
+            index.validate_row(&retained[0]),
+            Err(super::super::AttachmentRowError::StaleHolder)
+        );
         assert!(!index.set(&old, &key("value"), entry(99)).into_result());
         let current = index.register(1, [(key("value"), entry(10))]).into_result();
         assert!(!index.unregister(&refreshed).into_result());

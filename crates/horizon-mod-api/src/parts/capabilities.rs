@@ -773,3 +773,22 @@ pub mod tests {
         assert!(!named.get(), "an empty table resolved the block's name");
     }
 }
+
+/// CapabilityProviders operations for capabilities.
+// hidden: per-kind lookup implementation, exposed for generated provider bindings
+#[doc(hidden)]
+pub trait CapabilitiesCapabilityProviders {
+    /// Whether any mod registered capability `name` for the things `by` names. This presence
+    /// check includes disabled mods; enumeration skips their providers.
+    fn provided(&self, by: ProvidedBy, name: &str) -> bool;
+}
+
+impl CapabilitiesCapabilityProviders for InstalledProviders {
+    fn provided(&self, by: ProvidedBy, name: &str) -> bool {
+        installed().is_some_and(|installed| match by {
+            ProvidedBy::BlockEntity => installed.keys.capabilities.contains_key(name),
+            ProvidedBy::Item => installed.keys.item_capabilities.contains_key(name),
+            ProvidedBy::Entity => installed.keys.entity_capabilities.contains_key(name),
+        })
+    }
+}

@@ -854,7 +854,7 @@ impl Game<'_> {
         if is_player_in_place(uuid, self.lan_acting_uuid, self.level.player_uuid) {
             if self.native_command_filter {
                 return self
-                    .native_player_ref(horizon_client::lan::playerdata::ints_uuid(uuid))
+                    .player(horizon_client::lan::playerdata::ints_uuid(uuid))
                     .and_then(|player| self.native_entity_target(player.entity()));
             }
             return Some(Target::Player);

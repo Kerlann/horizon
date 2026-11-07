@@ -39,7 +39,7 @@ impl Game<'_> {
     /// block entity's, and not the placeholder standing in while it ticks), if `at`'s side
     /// reaches a fill or a drain (none: every side does).
     fn energy_buffer(&self, at: BlockSide) -> Option<(Arc<ModEnergyBuffer>, i32)> {
-        if !self.native_level_in_place(at.level) {
+        if !self.level_in_place(at.level) {
             return None;
         }
         let [x, y, z] = at.pos;
@@ -96,18 +96,18 @@ impl Game<'_> {
     /// game's own energy capability: none where no buffer is, in another level, a chunk that
     /// isn't loaded, or the block entity ticking now, or where `at`'s side reaches neither a
     /// fill nor a drain.
-    pub(in crate::game) fn native_energy_amount(&self, at: BlockSide) -> Option<u32> {
+    pub(in crate::game) fn energy_amount(&self, at: BlockSide) -> Option<u32> {
         Some(self.energy_buffer(at)?.1.unsigned_abs())
     }
-    /// The capacity of the buffer at `at` (`native_energy_amount`), 0 where none is.
-    pub(in crate::game) fn native_energy_capacity(&self, at: BlockSide) -> u32 {
+    /// The capacity of the buffer at `at` (`energy_amount`), 0 where none is.
+    pub(in crate::game) fn energy_capacity(&self, at: BlockSide) -> u32 {
         self.energy_buffer(at)
             .map_or(0, |(buffer, _)| buffer.capacity.max(0).unsigned_abs())
     }
     /// `SimpleEnergyHandler.insert`: puts up to `amount` into the buffer at `at`
-    /// (`native_energy_amount`) through its side, no more than its room and its limit per call,
+    /// (`energy_amount`) through its side, no more than its room and its limit per call,
     /// kept by transaction `tx`. How much went in.
-    pub(in crate::game) fn native_energy_insert(
+    pub(in crate::game) fn energy_insert(
         &mut self,
         at: BlockSide,
         amount: u32,
@@ -117,9 +117,9 @@ impl Game<'_> {
         self.energy_moved(at, amount, true)
     }
     /// `SimpleEnergyHandler.extract`: takes up to `amount` out of the buffer at `at`
-    /// (`native_energy_amount`) by its side, no more than it holds and its limit per call, kept
+    /// (`energy_amount`) by its side, no more than it holds and its limit per call, kept
     /// by transaction `tx`. How much came out.
-    pub(in crate::game) fn native_energy_extract(
+    pub(in crate::game) fn energy_extract(
         &mut self,
         at: BlockSide,
         amount: u32,
@@ -167,7 +167,7 @@ mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let block = game
                 .pack
                 .assets
@@ -181,12 +181,7 @@ mod tests {
                     Arc::new(buffer(1000, 1000, 1000)),
                 )]));
             let pos = [0, 64, 0];
-            assert!(game.native_level_set_block(
-                level,
-                pos,
-                block,
-                NativeBlockUpdateFlags::NEIGHBORS
-            ));
+            assert!(game.level_set_block(level, pos, block, NativeBlockUpdateFlags::NEIGHBORS));
             let mut fields = ModBlockEntityFields::default();
             fields.nbt.insert("energy".into(), Tag::Int(800));
             game.world.block_entities.insert(
@@ -199,9 +194,9 @@ mod tests {
             let pig = game.res.mob_types().get("minecraft:pig").unwrap().clone();
             game.mobs.push(Mob::new(15, pig, Vec3::ZERO, 0.0));
             let (stand, other, pig) = (
-                game.native_entity(13).unwrap(),
-                game.native_entity(14).unwrap(),
-                game.native_entity(15).unwrap(),
+                game.entity(13).unwrap(),
+                game.entity(14).unwrap(),
+                game.entity(15).unwrap(),
             );
             let host: &mut dyn ServerHost = game;
             assert!(pig.capability(host, &ENTITY_ENERGY, None).is_none());
@@ -305,7 +300,7 @@ mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let block = game
                 .pack
                 .assets
@@ -325,7 +320,7 @@ mod tests {
             let (from, to) = ([0, 64, 0], [2, 64, 0]);
             for (pos, energy) in [(from, 800), (to, 0)] {
                 let flags = NativeBlockUpdateFlags::NEIGHBORS;
-                assert!(game.native_level_set_block(level, pos, block, flags));
+                assert!(game.level_set_block(level, pos, block, flags));
                 let mut fields = ModBlockEntityFields::default();
                 fields
                     .nbt

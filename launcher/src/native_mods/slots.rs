@@ -12,7 +12,7 @@ pub(super) fn points(manifest: &Manifest) -> impl Iterator<Item = PointInjection
     manifest
         .inject
         .iter()
-        .filter(|entry| entry.call.is_none())
+        .filter(|entry| entry.access == Access::Internals && entry.call.is_none())
         .map(|entry| PointInjection {
             mod_id: manifest.id.clone(),
             id: entry.id.clone(),
@@ -68,10 +68,14 @@ pub(super) fn check(catalog: &Catalog, manifest: &Manifest) -> Result<(), Inject
                 slots: point
                     .map(|point| {
                         let mut slots = Vec::new();
-                        if point.raw && point.listener.is_some() {
+                        if entry.access == Access::Api || (point.raw && point.listener.is_some()) {
                             slots.push(SlotKind::Head);
                         }
-                        if point.raw && point.return_listener.is_some() {
+                        if (entry.access == Access::Api && point.at_return)
+                            || (entry.access == Access::Internals
+                                && point.raw
+                                && point.return_listener.is_some())
+                        {
                             slots.push(SlotKind::Return);
                         }
                         slots
@@ -105,7 +109,6 @@ pub(super) fn check(catalog: &Catalog, manifest: &Manifest) -> Result<(), Inject
             (Route::Source(_), _, _) => Some(NoSlotReason::SourcePending),
             (_, Kind::Replace, _) => Some(NoSlotReason::ReplacePending),
             (Route::Slot(SlotKind::Site), _, Access::Api) => Some(NoSlotReason::ApiSitesPending),
-            (_, _, Access::Api) => Some(NoSlotReason::ApiPointsPending),
             _ => None,
         };
         if let Some(reason) = pending {
@@ -143,8 +146,15 @@ pub(super) fn report(manifest: &Manifest) -> impl Iterator<Item = String> + '_ {
             "head"
         };
         format!(
-            "{}:{}: {} -> slot ({form}, internals)",
-            manifest.id, entry.id, entry.at
+            "{}:{}: {} -> slot ({form}, {})",
+            manifest.id,
+            entry.id,
+            entry.at,
+            if entry.access == Access::Api {
+                "api"
+            } else {
+                "internals"
+            }
         )
     })
 }

@@ -78,7 +78,7 @@ impl Game<'_> {
     /// Opens a chest menu of `rows` rows (1 to 6) titled `title` for the
     /// player, showing `items` (by slot, padded with empty ones), in place of
     /// the menu they had open: its window id.
-    pub(super) fn native_open_menu(
+    pub(super) fn open_menu(
         &mut self,
         uuid: u128,
         rows: u8,
@@ -96,7 +96,7 @@ impl Game<'_> {
         )
     }
     /// Closes the player's native menu (a `native_menu_closed` follows).
-    pub(super) fn native_close_menu(&mut self, uuid: u128) {
+    pub(super) fn close_menu(&mut self, uuid: u128) {
         if let Some(conn) = self.native_conn(uuid)
             && let Some(host) = self.lan.as_mut()
             && host

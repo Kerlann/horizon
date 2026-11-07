@@ -47,7 +47,7 @@ impl Game<'_> {
     /// `send_to_self`. True when a swing started. Mobs and players; false
     /// for armor stands and the dragon, and for a player other than the
     /// acting one while another player acts.
-    pub(super) fn native_living_swing(
+    pub(super) fn living_swing(
         &mut self,
         living: LivingRef,
         hand: Hand,
@@ -87,28 +87,24 @@ impl Game<'_> {
 
     /// `LivingEntity.getArrowCount`: the arrows stuck in a player. None for
     /// the other kinds, which Horizon keeps no count for.
-    pub(super) fn native_living_arrow_count(&mut self, living: LivingRef) -> Option<i32> {
+    pub(super) fn living_arrow_count(&mut self, living: LivingRef) -> Option<i32> {
         Some(self.native_living_stuck(living)?.arrows)
     }
     /// `LivingEntity.setArrowCount`: players around see the arrows (vanilla
     /// does not limit the count). False for the other kinds.
-    pub(super) fn native_living_set_arrow_count(&mut self, living: LivingRef, count: i32) -> bool {
+    pub(super) fn living_set_arrow_count(&mut self, living: LivingRef, count: i32) -> bool {
         self.native_living_stuck(living)
             .map(|s| s.arrows = count)
             .is_some()
     }
     /// `LivingEntity.getStingerCount`: the bee stingers stuck in a player.
     /// None for the other kinds.
-    pub(super) fn native_living_stinger_count(&mut self, living: LivingRef) -> Option<i32> {
+    pub(super) fn living_stinger_count(&mut self, living: LivingRef) -> Option<i32> {
         Some(self.native_living_stuck(living)?.stingers)
     }
     /// `LivingEntity.setStingerCount`: players around see the stingers. False
     /// for the other kinds.
-    pub(super) fn native_living_set_stinger_count(
-        &mut self,
-        living: LivingRef,
-        count: i32,
-    ) -> bool {
+    pub(super) fn living_set_stinger_count(&mut self, living: LivingRef, count: i32) -> bool {
         self.native_living_stuck(living)
             .map(|s| s.stingers = count)
             .is_some()
@@ -116,18 +112,14 @@ impl Game<'_> {
     /// `LivingEntity.removeArrowTime`: the ticks until the next arrow falls
     /// out of a player; at 0 or less it restarts at `20 * (30 - arrows)`.
     /// False for the other kinds.
-    pub(super) fn native_living_set_arrow_removal_ticks(
-        &mut self,
-        living: LivingRef,
-        ticks: i32,
-    ) -> bool {
+    pub(super) fn living_set_arrow_removal_ticks(&mut self, living: LivingRef, ticks: i32) -> bool {
         self.native_living_stuck(living)
             .map(|s| s.remove_arrow_time = ticks)
             .is_some()
     }
     /// `LivingEntity.removeStingerTime`, as `set_arrow_removal_ticks` for the
     /// stingers.
-    pub(super) fn native_living_set_stinger_removal_ticks(
+    pub(super) fn living_set_stinger_removal_ticks(
         &mut self,
         living: LivingRef,
         ticks: i32,
@@ -140,7 +132,7 @@ impl Game<'_> {
     /// `LivingEntity.getUseItemRemainingTicks`: the ticks left of the item a
     /// player uses, 0 when they use none. None for the other kinds (a mob's
     /// item use is a counter of its goal, not this timer).
-    pub(super) fn native_living_item_use_remaining(&self, living: LivingRef) -> Option<i32> {
+    pub(super) fn living_item_use_remaining(&self, living: LivingRef) -> Option<i32> {
         match self.native_living_target(living)? {
             Target::Player => Some(super::item_use::remaining_of(self.using, self.use_duration)),
             Target::Guest(conn) => Some(self.lan.as_ref()?.play.get(&conn)?.use_remaining()),
@@ -155,11 +147,7 @@ impl Game<'_> {
     /// trident, spear, instrument and bundle uses ignore it, and a call from
     /// inside the Tick hook itself is overwritten by that hook's result. False
     /// when the player uses nothing, and for the other kinds.
-    pub(super) fn native_living_set_item_use_remaining(
-        &mut self,
-        living: LivingRef,
-        ticks: i32,
-    ) -> bool {
+    pub(super) fn living_set_item_use_remaining(&mut self, living: LivingRef, ticks: i32) -> bool {
         match self.native_living_target(living) {
             Some(Target::Player) => {
                 super::item_use::set_remaining(self.using, &mut self.use_duration, ticks)
@@ -175,7 +163,7 @@ impl Game<'_> {
     /// `LivingEntity.getUsedItemHand` while `isUsingItem`: the hand of the item
     /// a player or a mob uses, None when it uses none. On a client, the local
     /// player's only.
-    pub(in crate::game) fn native_living_used_item_hand(&self, living: LivingRef) -> Option<Hand> {
+    pub(in crate::game) fn living_used_item_hand(&self, living: LivingRef) -> Option<Hand> {
         match self.native_living_read_target(living)? {
             Target::Player => self.used_hand(),
             Target::Guest(conn) => self.lan.as_ref()?.play.get(&conn)?.used_hand(),
@@ -204,7 +192,7 @@ impl Game<'_> {
     /// `release_using_item` or a goal ends it. False for a piglin with
     /// something in its off hand and a drinking witch, whose counter is their
     /// own timer.
-    pub(in crate::game) fn native_living_start_using_item(
+    pub(in crate::game) fn living_start_using_item(
         &mut self,
         living: LivingRef,
         hand: Hand,
@@ -226,7 +214,7 @@ impl Game<'_> {
     /// false when none runs, for armor stands and the dragon, and for a player
     /// other than the acting one while another player acts. A mob's bow or
     /// trident has no release of its own, as in vanilla.
-    pub(in crate::game) fn native_living_release_using_item(&mut self, living: LivingRef) -> bool {
+    pub(in crate::game) fn living_release_using_item(&mut self, living: LivingRef) -> bool {
         match self.native_living_target(living) {
             Some(Target::Mob(id)) => self.release_mob_using_item(id),
             Some(Target::Player | Target::Guest(_)) => self
@@ -353,7 +341,7 @@ mod tests {
                 game.lan_acting_entity = Some(20);
                 game.screen = super::super::Screen::Playing;
                 game.right = true;
-                let player = game.native_living(game.native_entity(20).unwrap()).unwrap();
+                let player = game.living(game.entity(20).unwrap()).unwrap();
                 test(game, &uses, player);
                 mod_api::__private::install_parts(&[]).unwrap();
                 game.resolve_parts().unwrap();
@@ -372,28 +360,28 @@ mod tests {
                 let bow = Some(ItemStack::new("minecraft:bow", 1));
                 game.inventory[3] = None;
                 game.offhand = None;
-                assert!(!game.native_living_start_using_item(player, hand));
+                assert!(!game.living_start_using_item(player, hand));
                 match hand {
                     Hand::Main => game.inventory[3] = bow,
                     Hand::Off => game.offhand = bow,
                 }
-                assert_eq!(game.native_living_used_item_hand(player), None);
-                assert!(game.native_living_start_using_item(player, hand));
-                assert!(!game.native_living_start_using_item(player, hand));
-                assert_eq!(game.native_living_used_item_hand(player), Some(hand));
-                assert_eq!(game.native_living_item_use_remaining(player), Some(72_000));
+                assert_eq!(game.living_used_item_hand(player), None);
+                assert!(game.living_start_using_item(player, hand));
+                assert!(!game.living_start_using_item(player, hand));
+                assert_eq!(game.living_used_item_hand(player), Some(hand));
+                assert_eq!(game.living_item_use_remaining(player), Some(72_000));
                 for _ in 0..25 {
                     game.tick_using();
                 }
-                assert_eq!(game.native_living_used_item_hand(player), Some(hand));
-                assert_eq!(game.native_living_item_use_remaining(player), Some(71_975));
+                assert_eq!(game.living_used_item_hand(player), Some(hand));
+                assert_eq!(game.living_item_use_remaining(player), Some(71_975));
 
                 let arrows = game.creatures.projectiles.len();
-                assert!(game.native_living_release_using_item(player));
+                assert!(game.living_release_using_item(player));
                 assert_eq!(game.creatures.projectiles.len(), arrows + 1);
-                assert_eq!(game.native_living_used_item_hand(player), None);
-                assert_eq!(game.native_living_item_use_remaining(player), Some(0));
-                assert!(!game.native_living_release_using_item(player));
+                assert_eq!(game.living_used_item_hand(player), None);
+                assert_eq!(game.living_item_use_remaining(player), Some(0));
+                assert!(!game.living_release_using_item(player));
                 assert_eq!(game.creatures.projectiles.len(), arrows + 1);
                 let uses = uses.lock().unwrap();
                 assert_eq!(uses.stops.len(), round + 1);
@@ -411,8 +399,8 @@ mod tests {
         with_uses(|game, uses, player| {
             game.offhand = Some(ItemStack::new("minecraft:bow", 1));
             uses.lock().unwrap().refuse = true;
-            assert!(!game.native_living_start_using_item(player, Hand::Off));
-            assert_eq!(game.native_living_used_item_hand(player), None);
+            assert!(!game.living_start_using_item(player, Hand::Off));
+            assert_eq!(game.living_used_item_hand(player), None);
         });
     }
 
@@ -423,9 +411,9 @@ mod tests {
         with_uses(|game, uses, player| {
             game.right = false;
             game.offhand = Some(ItemStack::new("minecraft:bow", 1));
-            assert!(game.native_living_start_using_item(player, Hand::Off));
+            assert!(game.living_start_using_item(player, Hand::Off));
             game.tick_using();
-            assert_eq!(game.native_living_used_item_hand(player), None);
+            assert_eq!(game.living_used_item_hand(player), None);
             assert_eq!(uses.lock().unwrap().stops, [(None, Hand::Off, 72_000)]);
         });
     }
@@ -440,20 +428,20 @@ mod tests {
             for (item, from_item) in items.into_iter().flat_map(|i| [(i, false), (i, true)]) {
                 let stack = ItemStack::new(item, 2);
                 game.offhand = Some(stack.clone());
-                assert!(game.native_living_start_using_item(player, Hand::Off));
+                assert!(game.living_start_using_item(player, Hand::Off));
                 {
                     let mut uses = uses.lock().unwrap();
                     uses.release_on_tick = (!from_item).then_some(player);
                     uses.release_on_use_tick = from_item.then_some(player);
                 }
                 game.tick_using();
-                assert_eq!(game.native_living_used_item_hand(player), None);
+                assert_eq!(game.living_used_item_hand(player), None);
                 {
                     let mut uses = uses.lock().unwrap();
                     (uses.release_on_tick, uses.release_on_use_tick) = (None, None);
                 }
                 game.tick_using();
-                assert_eq!(game.native_living_used_item_hand(player), None);
+                assert_eq!(game.living_used_item_hand(player), None);
                 assert_eq!(game.offhand, Some(stack));
             }
             assert_eq!(uses.lock().unwrap().stops.len(), 6);
@@ -474,28 +462,28 @@ mod tests {
                 let kind = game.res.mob_types().get(kind).unwrap().clone();
                 game.mobs.push(Mob::new(id, kind, Vec3::ZERO, 0.0));
             }
-            let zombie = game.native_living(game.native_entity(12).unwrap()).unwrap();
-            let piglin = game.native_living(game.native_entity(13).unwrap()).unwrap();
+            let zombie = game.living(game.entity(12).unwrap()).unwrap();
+            let piglin = game.living(game.entity(13).unwrap()).unwrap();
             for (round, (hand, slot)) in [(Hand::Main, MAINHAND), (Hand::Off, OFFHAND)]
                 .into_iter()
                 .enumerate()
             {
-                assert!(!game.native_living_start_using_item(zombie, hand));
+                assert!(!game.living_start_using_item(zombie, hand));
                 let bow = ItemStack::new("minecraft:bow", 1);
                 game.mobs[0].extra.set_slot_stack(slot, Some(bow));
-                assert_eq!(game.native_living_used_item_hand(zombie), None);
-                assert!(game.native_living_start_using_item(zombie, hand));
-                assert!(!game.native_living_start_using_item(zombie, hand));
-                assert_eq!(game.native_living_used_item_hand(zombie), Some(hand));
+                assert_eq!(game.living_used_item_hand(zombie), None);
+                assert!(game.living_start_using_item(zombie, hand));
+                assert!(!game.living_start_using_item(zombie, hand));
+                assert_eq!(game.living_used_item_hand(zombie), Some(hand));
                 // Its clients are told through the counter and the hand.
                 assert_eq!(game.mobs[0].extra.using_item, 1);
                 assert_eq!(game.mobs[0].extra.using_off_hand, hand == Hand::Off);
 
                 game.mobs[0].extra.using_item = 6;
                 let arrows = game.creatures.projectiles.len();
-                assert!(game.native_living_release_using_item(zombie));
-                assert_eq!(game.native_living_used_item_hand(zombie), None);
-                assert!(!game.native_living_release_using_item(zombie));
+                assert!(game.living_release_using_item(zombie));
+                assert_eq!(game.living_used_item_hand(zombie), None);
+                assert!(!game.living_release_using_item(zombie));
                 // `BowItem.releaseUsing` shoots for a player only.
                 assert_eq!(game.creatures.projectiles.len(), arrows);
                 let uses = uses.lock().unwrap();
@@ -512,18 +500,18 @@ mod tests {
                 .extra
                 .set_slot_stack(OFFHAND, Some(gold.clone()));
             game.mobs[1].extra.set_slot_stack(MAINHAND, Some(gold));
-            assert!(!game.native_living_start_using_item(piglin, Hand::Main));
+            assert!(!game.living_start_using_item(piglin, Hand::Main));
             assert_eq!(game.mobs[1].extra.using_item, 0);
 
             // A witch's drink is its own timer: no use to read, end or replace.
-            let witch = game.native_living(game.native_entity(14).unwrap()).unwrap();
+            let witch = game.living(game.entity(14).unwrap()).unwrap();
             let potion = ItemStack::new("minecraft:potion", 1);
             game.mobs[2].extra.set_slot_stack(MAINHAND, Some(potion));
             game.mobs[2].extra.using_item = 10;
             game.mobs[2].extra.flag = true;
-            assert_eq!(game.native_living_used_item_hand(witch), None);
-            assert!(!game.native_living_start_using_item(witch, Hand::Main));
-            assert!(!game.native_living_release_using_item(witch));
+            assert_eq!(game.living_used_item_hand(witch), None);
+            assert!(!game.living_start_using_item(witch, Hand::Main));
+            assert!(!game.living_release_using_item(witch));
             assert_eq!(game.mobs[2].extra.using_item, 10);
         });
     }
@@ -536,30 +524,30 @@ mod tests {
                 let kind = game.res.mob_types().get(kind).unwrap().clone();
                 game.mobs.push(Mob::new(id, kind, Vec3::ZERO, 0.0));
             }
-            let zombie = game.native_living(game.native_entity(12).unwrap()).unwrap();
+            let zombie = game.living(game.entity(12).unwrap()).unwrap();
 
-            assert!(game.native_living_swing(zombie, Hand::Off, false));
+            assert!(game.living_swing(zombie, Hand::Off, false));
             assert!(game.mobs[0].ai.swinging);
             assert_eq!(game.mobs[0].extra.swing_right_arm, Some(false));
             // In the first half of a swing it doesn't restart, past it does.
             game.mobs[0].ai.swing_time = 1;
-            assert!(!game.native_living_swing(zombie, Hand::Main, false));
+            assert!(!game.living_swing(zombie, Hand::Main, false));
             game.mobs[0].ai.swing_time = 3;
-            assert!(game.native_living_swing(zombie, Hand::Main, false));
+            assert!(game.living_swing(zombie, Hand::Main, false));
             assert_eq!(game.mobs[0].ai.swing_time, -1);
 
             // A mob keeps no stuck arrows, item use timer or player state.
-            assert_eq!(game.native_living_arrow_count(zombie), None);
-            assert!(!game.native_living_set_arrow_count(zombie, 3));
-            assert!(!game.native_living_set_stinger_count(zombie, 3));
-            assert!(!game.native_living_set_arrow_removal_ticks(zombie, 3));
-            assert_eq!(game.native_living_item_use_remaining(zombie), None);
-            assert!(!game.native_living_set_item_use_remaining(zombie, 3));
+            assert_eq!(game.living_arrow_count(zombie), None);
+            assert!(!game.living_set_arrow_count(zombie, 3));
+            assert!(!game.living_set_stinger_count(zombie, 3));
+            assert!(!game.living_set_arrow_removal_ticks(zombie, 3));
+            assert_eq!(game.living_item_use_remaining(zombie), None);
+            assert!(!game.living_set_item_use_remaining(zombie, 3));
 
             let stale =
                 EntityRef::new(NativeWorldEpoch::new(zombie.entity().epoch().get() + 1), 12);
             let stale = mod_api::LivingRef::new(stale);
-            assert!(!game.native_living_swing(stale, Hand::Main, true));
+            assert!(!game.living_swing(stale, Hand::Main, true));
         });
     }
 
@@ -633,55 +621,55 @@ mod tests {
             game.lan.as_mut().unwrap().hub.guests.push(guest);
             // A first turn starts a fresh combat record: take it first.
             game.as_guest(12, |_| {}).unwrap();
-            let player = game.native_living(game.native_entity(12).unwrap()).unwrap();
+            let player = game.living(game.entity(12).unwrap()).unwrap();
 
             // Between its turns the guest's counts are in its combat record.
-            assert_eq!(game.native_living_arrow_count(player), Some(0));
-            assert!(game.native_living_set_arrow_count(player, 4));
-            assert!(game.native_living_set_stinger_count(player, 2));
-            assert!(game.native_living_set_arrow_removal_ticks(player, 7));
-            assert!(game.native_living_set_stinger_removal_ticks(player, 9));
+            assert_eq!(game.living_arrow_count(player), Some(0));
+            assert!(game.living_set_arrow_count(player, 4));
+            assert!(game.living_set_stinger_count(player, 2));
+            assert!(game.living_set_arrow_removal_ticks(player, 7));
+            assert!(game.living_set_stinger_removal_ticks(player, 9));
             let stuck = &game.guest_combat[&12].stuck;
             assert_eq!((stuck.arrows, stuck.stingers), (4, 2));
             assert_eq!((stuck.remove_arrow_time, stuck.remove_stinger_time), (7, 9));
-            assert_eq!(game.native_living_arrow_count(player), Some(4));
-            assert_eq!(game.native_living_stinger_count(player), Some(2));
-            assert!(game.native_living_swing(player, Hand::Off, false));
+            assert_eq!(game.living_arrow_count(player), Some(4));
+            assert_eq!(game.living_stinger_count(player), Some(2));
+            assert!(game.living_swing(player, Hand::Off, false));
             // No item in use: nothing to move.
-            assert_eq!(game.native_living_item_use_remaining(player), Some(0));
-            assert!(!game.native_living_set_item_use_remaining(player, 5));
+            assert_eq!(game.living_item_use_remaining(player), Some(0));
+            assert!(!game.living_set_item_use_remaining(player, 5));
 
             // Between its turns its use is in its own record too: a bow's is 72000.
-            assert_eq!(game.native_living_used_item_hand(player), None);
+            assert_eq!(game.living_used_item_hand(player), None);
             game.as_guest(12, |game| {
                 game.offhand = Some(ItemStack::new("minecraft:bow", 1));
             })
             .unwrap();
-            assert!(game.native_living_start_using_item(player, Hand::Off));
-            assert_eq!(game.native_living_used_item_hand(player), Some(Hand::Off));
-            assert_eq!(game.native_living_item_use_remaining(player), Some(72_000));
-            assert!(game.native_living_release_using_item(player));
-            assert_eq!(game.native_living_used_item_hand(player), None);
-            assert!(!game.native_living_release_using_item(player));
+            assert!(game.living_start_using_item(player, Hand::Off));
+            assert_eq!(game.living_used_item_hand(player), Some(Hand::Off));
+            assert_eq!(game.living_item_use_remaining(player), Some(72_000));
+            assert!(game.living_release_using_item(player));
+            assert_eq!(game.living_used_item_hand(player), None);
+            assert!(!game.living_release_using_item(player));
 
             // The acting player's own state: an item in use for 3 of 32 ticks.
             game.as_guest(12, |game| {
-                let player = game.native_living(game.native_entity(12).unwrap()).unwrap();
-                assert_eq!(game.native_living_arrow_count(player), Some(4));
+                let player = game.living(game.entity(12).unwrap()).unwrap();
+                assert_eq!(game.living_arrow_count(player), Some(4));
                 game.using = Some((0, 3));
                 game.use_duration = 32;
-                assert_eq!(game.native_living_item_use_remaining(player), Some(29));
-                assert!(game.native_living_set_item_use_remaining(player, 1));
+                assert_eq!(game.living_item_use_remaining(player), Some(29));
+                assert!(game.living_set_item_use_remaining(player, 1));
                 assert_eq!(game.use_duration, 4);
-                assert_eq!(game.native_living_item_use_remaining(player), Some(1));
+                assert_eq!(game.living_item_use_remaining(player), Some(1));
                 game.using = None;
                 // Its swing is queued for it when asked: not in the first half.
                 game.swing.ticks = 0;
                 game.guest_packets.clear();
-                assert!(game.native_living_swing(player, Hand::Main, true));
+                assert!(game.living_swing(player, Hand::Main, true));
                 assert_eq!(game.guest_packets.len(), 1);
                 game.swing.ticks = 1;
-                assert!(!game.native_living_swing(player, Hand::Main, true));
+                assert!(!game.living_swing(player, Hand::Main, true));
                 assert_eq!(game.guest_packets.len(), 1);
             })
             .unwrap();
@@ -755,7 +743,7 @@ mod tests {
                 .clone();
             game.mobs
                 .push(Mob::new(40, kind, Vec3::new(3.0, 64.0, 5.0), 0.0));
-            let zombie = game.native_living(game.native_entity(40).unwrap()).unwrap();
+            let zombie = game.living(game.entity(40).unwrap()).unwrap();
             // The hand in the swing packet the flush sends after each swing.
             let mut sent = Vec::new();
             for natural in [false, true] {
@@ -766,7 +754,7 @@ mod tests {
                         // A swing no hand was named for (a melee attack).
                         game.mobs[0].swing();
                     } else {
-                        assert!(game.native_living_swing(zombie, hand, false));
+                        assert!(game.living_swing(zombie, hand, false));
                     }
                     game.lan_flush_effects();
                     while let Ok(Out::Packet(body)) = rx.try_recv() {

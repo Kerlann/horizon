@@ -3,7 +3,7 @@ use super::*;
 /// The hook points. Each does nothing in Horizon.
 impl Game<'_> {
     /// Declare categories for custom recipe types, with registered item icons.
-    /// Asked lazily once per recipe table by `native_recipe_book_category`.
+    /// Asked lazily once per recipe table by `recipe_book_category`.
     /// Invalid declarations are logged and skipped; the first valid category
     /// owns its id and type. This does not yet add tabs or book displays.
     pub(in crate::game) fn native_recipe_book_categories(
@@ -21,7 +21,7 @@ impl Game<'_> {
     /// The validated category and icon of a custom recipe type, or None for
     /// an undeclared/invalid type, before resources load, or outside a world.
     /// Rebuilt when the recipe table changes. Does not unlock any recipes.
-    pub(in crate::game) fn native_recipe_book_category(
+    pub(in crate::game) fn recipe_book_category(
         &mut self,
         kind: &str,
     ) -> Option<RecipeBookCategory> {

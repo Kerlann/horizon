@@ -42,7 +42,7 @@ impl Game<'_> {
     /// entity Horizon doesn't simulate (a display, a painting) has none, so
     /// zero. On a client, another entity's is the motion the server last
     /// sent it (`Entity.lerpMotion`). API 379.
-    pub(super) fn native_entity_velocity(&self, entity: EntityRef) -> Option<[f64; 3]> {
+    pub(super) fn entity_velocity(&self, entity: EntityRef) -> Option<[f64; 3]> {
         let t = self.native_entity_read_target(entity)?;
         if !self.is_logical_server() {
             // The client's copy: its own player's motion, and the motion the
@@ -111,11 +111,7 @@ impl Game<'_> {
     /// `Entity.getControllingPassenger` when it is a player.
     fn native_controlling_player(&self, t: Target, entity: EntityRef) -> Option<EntityRef> {
         let steered = self.native_steered(t);
-        let first = *self
-            .native_entity_passengers(entity)
-            .ok_or(())
-            .ok()?
-            .first()?;
+        let first = *self.entity_passengers(entity).ok_or(()).ok()?.first()?;
         let player = matches!(
             self.native_entity_target(first)?,
             Target::Player | Target::Guest(_)
@@ -126,11 +122,7 @@ impl Game<'_> {
     /// as they see the entity move. False for a player (its client moves
     /// it), an entity Horizon doesn't simulate, a value that isn't finite,
     /// or on a client. API 379.
-    pub(super) fn native_entity_set_velocity(
-        &mut self,
-        entity: EntityRef,
-        velocity: [f64; 3],
-    ) -> bool {
+    pub(super) fn entity_set_velocity(&mut self, entity: EntityRef, velocity: [f64; 3]) -> bool {
         if self.remote.is_some()
             || !velocity.iter().all(|v| v.is_finite())
             || self.native_entity_target(entity).is_none()
@@ -151,7 +143,7 @@ impl Game<'_> {
     /// landing hurts it as a step does (a fan's or a launcher's push, a mod's soft block).
     /// Players too, the acting one and guests. False for a stale handle or an entity not in
     /// the level in place; true for a kind that keeps no fall distance, which has none to forget.
-    pub(super) fn native_entity_reset_fall_distance(&mut self, entity: EntityRef) -> bool {
+    pub(super) fn entity_reset_fall_distance(&mut self, entity: EntityRef) -> bool {
         let Some(target) = self.native_entity_target(entity) else {
             return false;
         };
@@ -179,7 +171,7 @@ impl Game<'_> {
     /// Whether the entity stands on a block (`Entity.onGround`).
     /// Whether the entity stands on a block (`Entity.onGround`). API
     /// 379.
-    pub(super) fn native_entity_on_ground(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_on_ground(&self, entity: EntityRef) -> Option<bool> {
         let t = self.native_entity_target(entity)?;
         if let Some(p) = self.native_client_player(t) {
             return Some(p.ground.on_ground);
@@ -195,7 +187,7 @@ impl Game<'_> {
     /// The entity's box (`Entity.getBoundingBox`): its lowest and highest
     /// corner. None for the kinds whose box Horizon doesn't keep (displays,
     /// markers, End crystals, the dragon). API 379.
-    pub(super) fn native_entity_bounding_box(&self, entity: EntityRef) -> Option<[[f64; 3]; 2]> {
+    pub(super) fn entity_bounding_box(&self, entity: EntityRef) -> Option<[[f64; 3]; 2]> {
         let t = self.native_entity_read_target(entity)?;
         if let Some(p) = self.native_client_player(t) {
             return Some(corners(p.bounds()));
@@ -215,30 +207,26 @@ impl Game<'_> {
     }
     /// The height of the entity's eyes above its feet (`Entity.getEyeHeight`).
     /// API 379.
-    pub(super) fn native_entity_eye_height(&self, entity: EntityRef) -> Option<f64> {
+    pub(super) fn entity_eye_height(&self, entity: EntityRef) -> Option<f64> {
         Some(self.target_eye_height(self.native_entity_target(entity)?))
     }
     /// Where the entity's eyes are (`Entity.getEyePosition`). API
     /// 379.
-    pub(super) fn native_entity_eye_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
-        let [x, y, z] = self.native_entity_position(entity)?;
-        Some([x, y + self.native_entity_eye_height(entity)?, z])
+    pub(super) fn entity_eye_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
+        let [x, y, z] = self.entity_position(entity)?;
+        Some([x, y + self.entity_eye_height(entity)?, z])
     }
     /// The unit vector the entity looks along (`Entity.getViewVector`, from
     /// its pitch and yaw). API 379.
-    pub(super) fn native_entity_view_vector(&self, entity: EntityRef) -> Option<[f64; 3]> {
-        let [yaw, pitch] = self.native_entity_rotation(entity)?;
+    pub(super) fn entity_view_vector(&self, entity: EntityRef) -> Option<[f64; 3]> {
+        let [yaw, pitch] = self.entity_rotation(entity)?;
         let v = horizon_world::view_direction::view_vector(pitch, yaw);
         Some([v.x, v.y, v.z])
     }
     /// The square of the distance from the entity's feet to `pos`
     /// (`Entity.distanceToSqr`). API 379.
-    pub(super) fn native_entity_distance_to_sqr(
-        &self,
-        entity: EntityRef,
-        pos: [f64; 3],
-    ) -> Option<f64> {
-        let p = self.native_entity_position(entity)?;
+    pub(super) fn entity_distance_to_sqr(&self, entity: EntityRef, pos: [f64; 3]) -> Option<f64> {
+        let p = self.entity_position(entity)?;
         let [dx, dy, dz] = std::array::from_fn(|i| p[i] - pos[i]);
         Some(dx * dx + dy * dy + dz * dz)
     }
@@ -284,23 +272,20 @@ mod tests {
             let mut cart = Minecart::new(41, CartKind::Rideable, Vec3::ZERO);
             cart.fall_distance = 7.0;
             game.carts.push(cart);
-            let (zombie, cart) = (
-                game.native_entity(40).unwrap(),
-                game.native_entity(41).unwrap(),
-            );
-            assert!(game.native_entity_reset_fall_distance(zombie));
-            assert!(game.native_entity_reset_fall_distance(cart));
+            let (zombie, cart) = (game.entity(40).unwrap(), game.entity(41).unwrap());
+            assert!(game.entity_reset_fall_distance(zombie));
+            assert!(game.entity_reset_fall_distance(cart));
             assert_eq!(game.mobs[0].fall_distance, 0.0);
             assert_eq!(game.carts[0].fall_distance, 0.0);
             // A player: the fake guest's own motion.
-            let level = game.native_level(game.dim.id()).unwrap();
-            let fake = game.native_fake_player(level, 2, "fake").unwrap().entity();
+            let level = game.level(game.dim.id()).unwrap();
+            let fake = game.fake_player(level, 2, "fake").unwrap().entity();
             *fake_fall(game) = 9.0;
-            assert!(game.native_entity_reset_fall_distance(fake));
+            assert!(game.entity_reset_fall_distance(fake));
             assert_eq!(*fake_fall(game), 0.0);
             // An entity that is gone: nothing.
             game.mobs.clear();
-            assert!(!game.native_entity_reset_fall_distance(zombie));
+            assert!(!game.entity_reset_fall_distance(zombie));
         });
     }
 

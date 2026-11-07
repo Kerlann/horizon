@@ -6,7 +6,7 @@ use super::*;
 impl Game<'_> {
     /// Whether `stack` fits `ingredient` (`Ingredient.test`), matched with this
     /// game's loop context.
-    pub(in crate::game) fn native_recipe_ingredient_test(
+    pub(in crate::game) fn recipe_ingredient_test(
         &self,
         ingredient: &Ingredient,
         stack: &ItemStack,

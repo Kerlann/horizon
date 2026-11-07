@@ -25,23 +25,20 @@ impl Game<'_> {
     /// The entity's vehicle as a handle, if it rides one in this level.
     fn native_vehicle(&self, entity: EntityRef) -> Option<Option<EntityRef>> {
         let t = self.native_entity_target(entity)?;
-        Some(
-            self.native_vehicle_id(t)
-                .and_then(|v| self.native_entity(v)),
-        )
+        Some(self.native_vehicle_id(t).and_then(|v| self.entity(v)))
     }
     /// What the entity rides (`Entity.getVehicle`): `None` when it rides
     /// nothing, or for a stale handle.
-    pub(super) fn native_entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
+    pub(super) fn entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
         self.native_vehicle(entity).flatten()
     }
     /// Whether the entity rides another (`Entity.isPassenger`).
-    pub(super) fn native_entity_is_passenger(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_is_passenger(&self, entity: EntityRef) -> Option<bool> {
         Some(self.native_vehicle(entity)?.is_some())
     }
     /// The lowest vehicle under the entity (`Entity.getRootVehicle`): the
     /// entity itself when it rides nothing.
-    pub(super) fn native_entity_root_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
+    pub(super) fn entity_root_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
         let mut root = entity;
         // A chain of riders is short; the bound only guards against a loop.
         for _ in 0..64 {
@@ -54,7 +51,7 @@ impl Game<'_> {
     }
     /// The entities riding this one (`Entity.getPassengers`): its players
     /// in the order they got in, then its mobs.
-    pub(super) fn native_entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
+    pub(super) fn entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
         self.native_entity_target(entity)?;
         let id = entity.id();
         let acting = self.lan_acting.filter(|_| self.player.is_some());
@@ -92,11 +89,11 @@ impl Game<'_> {
             .filter(|m| m.extra.mount == Some(id) && !m.removed && m.alive())
             .map(|m| m.id);
         let ids = players.into_iter().map(|(_, id)| id).chain(mobs);
-        Some(ids.filter_map(|id| self.native_entity(id)).collect())
+        Some(ids.filter_map(|id| self.entity(id)).collect())
     }
     /// Whether anything rides the entity (`Entity.isVehicle`).
-    pub(super) fn native_entity_is_vehicle(&self, entity: EntityRef) -> Option<bool> {
-        Some(!self.native_entity_passengers(entity)?.is_empty())
+    pub(super) fn entity_is_vehicle(&self, entity: EntityRef) -> Option<bool> {
+        Some(!self.entity_passengers(entity)?.is_empty())
     }
     /// Attempts one mount, shared by handle writes and the ride command.
     pub(super) fn start_riding_target(
@@ -136,7 +133,7 @@ impl Game<'_> {
             }
             current = self
                 .native_vehicle_id(target)
-                .and_then(|id| self.native_entity(id))
+                .and_then(|id| self.entity(id))
                 .and_then(|e| self.native_entity_target(e));
         }
         if current.is_some() {
@@ -257,7 +254,7 @@ impl Game<'_> {
     /// mob and up to two passengers in total. `force` bypasses normal
     /// admission checks, not these storage limits. Player boarding cooldown and the strider's
     /// eye-in-lava admission check are not yet represented by the game.
-    pub(super) fn native_entity_start_riding(
+    pub(super) fn entity_start_riding(
         &mut self,
         entity: EntityRef,
         vehicle: EntityRef,
@@ -275,7 +272,7 @@ impl Game<'_> {
     /// Gets the entity off its vehicle (`Entity.stopRiding`), where the
     /// vehicle lets it out, as `/ride ... dismount` does. False when it rode
     /// nothing, a mod's `mob_ride` hook kept it on, or for a stale handle.
-    pub(super) fn native_entity_stop_riding(&mut self, entity: EntityRef) -> bool {
+    pub(super) fn entity_stop_riding(&mut self, entity: EntityRef) -> bool {
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };
@@ -294,13 +291,13 @@ impl Game<'_> {
     /// Gets every passenger off the entity (`Entity.ejectPassengers`), last
     /// first as vanilla walks the list, so `mob_ride` hears them in its
     /// order. False when nothing rode it, or for a stale handle.
-    pub(super) fn native_entity_eject_passengers(&mut self, entity: EntityRef) -> bool {
-        let Some(passengers) = self.native_entity_passengers(entity) else {
+    pub(super) fn entity_eject_passengers(&mut self, entity: EntityRef) -> bool {
+        let Some(passengers) = self.entity_passengers(entity) else {
             return false;
         };
         let mut any = false;
         for p in passengers.into_iter().rev() {
-            any |= self.native_entity_stop_riding(p);
+            any |= self.entity_stop_riding(p);
         }
         any
     }
@@ -391,10 +388,10 @@ mod tests {
                 events.lock().unwrap().clear();
                 assert!(!game.run_command(pig));
                 assert!(!game.run_command(boat));
-                let rider = game.native_entity(40).unwrap();
+                let rider = game.entity(40).unwrap();
                 for id in [41, 44] {
-                    let vehicle = game.native_entity(id).unwrap();
-                    assert!(!game.native_entity_start_riding(rider, vehicle, true));
+                    let vehicle = game.entity(id).unwrap();
+                    assert!(!game.entity_start_riding(rider, vehicle, true));
                 }
                 assert!(events.lock().unwrap().is_empty());
             });
@@ -484,17 +481,17 @@ mod tests {
                 let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
                 game.mobs.push(Mob::new(id, kind, Vec3::ZERO, 0.0));
             }
-            let rider = game.native_entity(50).unwrap();
-            let vehicle = game.native_entity(51).unwrap();
+            let rider = game.entity(50).unwrap();
+            let vehicle = game.entity(51).unwrap();
             let stale = mod_api::EntityRef::new(
                 mod_api::NativeWorldEpoch::new(rider.epoch().get().wrapping_add(1)),
                 rider.id(),
             );
-            assert!(!game.native_entity_start_riding(stale, vehicle, true));
+            assert!(!game.entity_start_riding(stale, vehicle, true));
             game.held_out.push(51);
-            assert!(!game.native_entity_start_riding(rider, vehicle, true));
+            assert!(!game.entity_start_riding(rider, vehicle, true));
             game.held_out.pop();
-            assert!(game.native_entity_start_riding(rider, vehicle, true));
+            assert!(game.entity_start_riding(rider, vehicle, true));
             assert_eq!(game.mobs[0].extra.mount, Some(51));
         });
     }

@@ -885,6 +885,7 @@ mod tests {
             "crates/horizon-mod-api/src/hooks",
             "crates/horizon-mod-api/src/exports",
             "crates/horizon-mod-api/src/host",
+            "crates/horizon-mod-api/src/parts",
             "crates/horizon-client/src/game.rs",
             "crates/horizon-client/src/game",
             "crates/horizon-mod-api/src/lib.rs",

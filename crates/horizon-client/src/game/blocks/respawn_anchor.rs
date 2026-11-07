@@ -418,7 +418,7 @@ impl Game<'_> {
         let (lz, hz) = (bounds.min(Axis::Z), bounds.max(Axis::Z) - 1.0e-5);
         self.border.contains(lo, lz) && self.border.contains(hi, hz)
     }
-    pub(super) fn block_in_tag(&self, tag: &str, block: &str) -> bool {
+    pub(super) fn named_block_in_tag(&self, tag: &str, block: &str) -> bool {
         self.res
             .items()
             .block_tags

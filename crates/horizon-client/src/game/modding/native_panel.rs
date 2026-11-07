@@ -1,5 +1,5 @@
 //! The item panel beside container screens: the items a recipe viewer mod
-//! lists (a native mod's `native_panel_items`, or WIT `interface browser`
+//! lists (a native mod's `panel_items`, or WIT `interface browser`
 //! of a WebAssembly mod, docs/modding/src/how-to/content-mods.md), drawn as the game's own item slots
 //! in pages right of the screen's window, with a search box under them. The
 //! mod says what the panel holds; the game pages it and tells the mod what
@@ -76,7 +76,7 @@ impl Panel {
     pub(super) fn shown(&self, on: impl Fn(&str) -> bool) -> Option<&Shown> {
         self.native.as_ref().filter(|s| on(s.owner.native_id()))
     }
-    /// `native_panel_items`.
+    /// `panel_items`.
     pub(super) fn show_items(&mut self, mod_id: &str, mut items: Vec<BrowserStack>) {
         items.truncate(ITEMS);
         if let Some(shown) = self.native_of(mod_id, !items.is_empty()) {
@@ -287,8 +287,8 @@ impl Game<'_> {
         let cursor = self.cursor;
         if pages > 1 {
             let labels = [
-                self.translate("gui.recipebook.previous_page", "Previous Page"),
-                self.translate("gui.recipebook.next_page", "Next Page"),
+                self.translate_with_fallback("gui.recipebook.previous_page", "Previous Page"),
+                self.translate_with_fallback("gui.recipebook.next_page", "Next Page"),
             ];
             let shown = [page > 0, page + 1 < pages];
             let atlas = &self.gui.atlas;
@@ -361,7 +361,7 @@ impl Game<'_> {
         } else {
             self.draw_browser_items(batch, &layout);
         }
-        let hint = self.translate("gui.recipebook.search_hint", "Search...");
+        let hint = self.translate_with_fallback("gui.recipebook.search_hint", "Search...");
         let search = self.browser_search(&layout);
         // The hint shows in an empty box without focus, as the recipe book's.
         search.suggestion = (search.value.is_empty() && !search.focused).then_some(hint);

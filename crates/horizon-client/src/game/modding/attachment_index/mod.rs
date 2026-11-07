@@ -12,8 +12,12 @@ use std::{
 
 pub(super) type Indexes = HashMap<Dim, Arc<Mutex<AttachmentIndex<AttachmentHolder>>>>;
 
+mod players;
+
 #[cfg(test)]
 mod painting_tests;
+#[cfg(test)]
+mod player_tests;
 
 impl Game<'_> {
     /// Publish saved contents only when an authoritative entity owns their lifetime.
@@ -21,7 +25,7 @@ impl Game<'_> {
         if !self.native_authoritative() {
             return;
         }
-        let Some(level) = self.native_level(self.dim.id()) else {
+        let Some(level) = self.level(self.dim.id()) else {
             return;
         };
         let Some(map) = self
@@ -43,7 +47,7 @@ impl Game<'_> {
 
     /// Publish the dimension's saved maps before listeners observe its load.
     pub(super) fn bind_dimension_attachments(&mut self, dim: Dim) {
-        let Some(level) = self.native_level(dim.id()) else {
+        let Some(level) = self.level(dim.id()) else {
             return;
         };
         let index = self.attachment_indexes.entry(dim).or_default();
@@ -122,7 +126,7 @@ mod tests {
             };
             let key = ("test".into(), "mana".into());
             game.native_level_opened(Dim::Overworld);
-            let level = game.native_level(Dim::Overworld.id()).unwrap();
+            let level = game.level(Dim::Overworld.id()).unwrap();
             let overworld = game.attachment_indexes[&Dim::Overworld].clone();
             game.world.chunks.insert((2, 3), chunk());
             let old = overworld.lock().unwrap().snapshot(&key);
@@ -167,7 +171,7 @@ mod tests {
                     .unwrap()
             ));
             game.enter_level(Dim::Nether).unwrap();
-            let nether_level = game.native_level(Dim::Nether.id()).unwrap();
+            let nether_level = game.level(Dim::Nether.id()).unwrap();
             let nether = game.attachment_indexes[&Dim::Nether].clone();
             game.world.chunks.insert((2, 3), chunk());
             assert_eq!(
@@ -192,7 +196,7 @@ mod tests {
             let overworld = game.attachment_indexes[&Dim::Overworld].clone();
             let old = overworld.lock().unwrap().snapshot(&key);
             assert_eq!(old.len(), 1);
-            let old_level = game.native_level(Dim::Overworld.id()).unwrap();
+            let old_level = game.level(Dim::Overworld.id()).unwrap();
             assert_eq!(old[0].holder, AttachmentHolder::Level(old_level));
 
             game.enter_level(Dim::Nether).unwrap();

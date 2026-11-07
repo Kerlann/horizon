@@ -533,9 +533,7 @@ mod tests {
             let mut cow = Mob::new(77, kind, Vec3::ZERO, 0.0);
             horizon_client::mobs::finalize::set_baby(&mut cow, true);
             game.mobs.push(cow);
-            let mob = game
-                .native_mob_ref(game.native_entity(77).unwrap())
-                .unwrap();
+            let mob = game.mob(game.entity(77).unwrap()).unwrap();
             let area = Aabb::new(Vec3::new(0.3, 0.0, 0.0), Vec3::new(0.4, 1.0, 0.1));
             assert!(!game.mobs[0].bounds().intersects(area));
             let mods = vec![mod_api::ModEntry::new("resize-test", Box::new(Resize))].into();

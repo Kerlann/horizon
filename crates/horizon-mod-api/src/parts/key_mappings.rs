@@ -29,3 +29,33 @@ pub mod tests {
         assert_eq!(registrar.parts.key_mappings[0].1.key, "key.keyboard.z");
     }
 }
+
+/// Registrar operations for key mappings.
+pub trait KeyMappingsRegistrar {
+    /// Register a Controls binding owned by the calling mod (`RegisterKeyMappingsEvent`).
+    /// Called from `Hooks::register`; invalid or duplicate local ids refuse startup.
+    fn register_key_mapping(&mut self, mapping: crate::NativeKeyRegistration);
+}
+
+impl KeyMappingsRegistrar for PartRegistrar {
+    fn register_key_mapping(&mut self, mapping: crate::NativeKeyRegistration) {
+        if mapping.id.is_empty()
+            || !mapping
+                .id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"_.-".contains(&byte))
+            || self
+                .parts
+                .key_mappings
+                .iter()
+                .any(|(owner, prior)| *owner == self.mod_id && prior.id == mapping.id)
+        {
+            self.refused.push(format!(
+                "mod {}: duplicate or invalid key mapping {:?}",
+                self.mod_id, mapping.id
+            ));
+            return;
+        }
+        self.parts.key_mappings.push((self.mod_id, mapping));
+    }
+}

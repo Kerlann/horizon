@@ -2225,3 +2225,207 @@ pub mod tests {
     #[cfg(test)]
     mod_api::impl_server_host_areas!(HeldItem);
 }
+
+/// Registrar operations for items.
+pub trait ItemsRegistrar {
+    /// Request an item by registry id, validated after all declarations.
+    fn item_key(&mut self, id: &str) -> crate::ItemKey;
+
+    /// Attach `part`, of kind `kind`, to item `item`.
+    fn attach_item_part(
+        &mut self,
+        item: crate::ItemKey,
+        kind: &'static str,
+        part: Arc<dyn ItemPart>,
+    );
+
+    /// Attach `part`, of kind `kind`, to every item in tag `tag`.
+    fn attach_item_part_tag(&mut self, tag: &str, kind: &'static str, part: Arc<dyn ItemPart>);
+
+    /// Answer item capability `name` for item `item` with `provider`; mods reach it through
+    /// `item_capability`.
+    fn provide_item_capability(
+        &mut self,
+        name: &'static str,
+        item: &str,
+        before_game: bool,
+        provider: ItemProviderOf,
+    );
+
+    /// Read and write the item places `ItemPlace::Mod { provider: name, .. }` with `provider`,
+    /// as an accessory mod exposes its slots. One provider a name.
+    fn place_provider(&mut self, name: &'static str, provider: Arc<dyn PlaceProvider>);
+
+    /// Register `appender` as the lines data component `component` (`mymod:charge`) adds to a
+    /// stack's tooltip, where `placement` puts them (NeoForge's `RegisterTooltipAppendersEvent`).
+    /// Only this mod's appender is asked, for a stack that carries the component and whose
+    /// tooltip shows it, and only while the mod is enabled. A component id that isn't namespaced,
+    /// or a `Before`/`After` anchor the game doesn't list as a component detail, refuses the mods
+    /// at startup, naming the mod.
+    fn register_tooltip_appender(
+        &mut self,
+        component: &str,
+        placement: crate::TooltipPlacement,
+        appender: Arc<dyn crate::TooltipAppender>,
+    );
+}
+
+impl ItemsRegistrar for PartRegistrar {
+    fn item_key(&mut self, id: &str) -> crate::ItemKey {
+        match self
+            .registry_keys
+            .borrow_mut()
+            .items
+            .request(self.mod_id, id)
+        {
+            Ok(slot) => crate::ItemKey(slot),
+            Err(error) => {
+                self.refused.push(error);
+                crate::ItemKey(u32::MAX)
+            }
+        }
+    }
+
+    fn attach_item_part(
+        &mut self,
+        item: crate::ItemKey,
+        kind: &'static str,
+        part: Arc<dyn ItemPart>,
+    ) {
+        let id = self
+            .registry_keys
+            .borrow()
+            .items
+            .id(item.0)
+            .map(str::to_owned);
+        let Some(id) = id else {
+            self.refused.push(format!(
+                "mod {}: invalid item key slot {}",
+                self.mod_id, item.0
+            ));
+            return;
+        };
+        self.attach(|p| &mut p.items, kind, &id, part);
+    }
+
+    fn attach_item_part_tag(&mut self, tag: &str, kind: &'static str, part: Arc<dyn ItemPart>) {
+        let part = self.tagged(kind, tag, part);
+        self.tags.items.extend(part);
+    }
+
+    fn provide_item_capability(
+        &mut self,
+        name: &'static str,
+        item: &str,
+        before_game: bool,
+        provider: ItemProviderOf,
+    ) {
+        self.capability(
+            |p| &mut p.item_capabilities,
+            name,
+            ProviderTarget::Id(item),
+            before_game,
+            {
+                let handler = provider.handler();
+                (provider, handler)
+            },
+        );
+    }
+
+    /// Read and write the item places `ItemPlace::Mod { provider: name, .. }` with `provider`,
+    /// as an accessory mod exposes its slots. One provider a name.
+    fn place_provider(&mut self, name: &'static str, provider: Arc<dyn PlaceProvider>) {
+        if !namespaced(name) {
+            self.refused.push(format!(
+                "{} provides item places {name:?}, which is not a namespaced name",
+                self.mod_id
+            ));
+            return;
+        }
+        if let Some(other) = self.parts.place_providers.get(name) {
+            self.refused.push(format!(
+                "item places {name} are provided twice, by {} and {}",
+                other.mod_id, self.mod_id
+            ));
+            return;
+        }
+        self.parts.place_providers.insert(
+            name,
+            PlaceProviderPart {
+                mod_id: self.mod_id,
+                mod_index: self.mod_index,
+                provider,
+            },
+        );
+    }
+
+    fn register_tooltip_appender(
+        &mut self,
+        component: &str,
+        placement: crate::TooltipPlacement,
+        appender: Arc<dyn crate::TooltipAppender>,
+    ) {
+        let refusal = if !namespaced(component) {
+            Some(format!(
+                "{} registers a tooltip appender for {component:?}, which is not a namespaced data component id",
+                self.mod_id
+            ))
+        } else {
+            match &placement {
+                crate::TooltipPlacement::Before(anchor)
+                | crate::TooltipPlacement::After(anchor)
+                    if !crate::TOOLTIP_DETAILS.contains(&anchor.as_str()) =>
+                {
+                    Some(format!(
+                        "{} anchors a tooltip appender for {component:?} to {anchor:?}, which is not a component detail Horizon lists",
+                        self.mod_id
+                    ))
+                }
+                _ => None,
+            }
+        };
+        if let Some(refusal) = refusal {
+            self.refused.push(refusal);
+            return;
+        }
+        self.parts.tooltip_appenders.push(TooltipAppenderPart {
+            mod_id: self.mod_id,
+            mod_index: self.mod_index,
+            component: component.into(),
+            placement,
+            appender,
+        });
+    }
+}
+
+/// CapabilityProviders operations for items.
+// hidden: per-kind lookup implementation, exposed for generated provider bindings
+#[doc(hidden)]
+pub trait ItemsCapabilityProviders {
+    /// The next enabled provider of item capability `name` for item `item`, advancing `index`.
+    fn item_provider(
+        &self,
+        name: &str,
+        item: &str,
+        index: &mut u32,
+    ) -> Option<(ItemProviderOf, &'static str, bool)>;
+
+    /// The enabled provider of the item places named `name`, with its mod.
+    fn place_provider(&self, name: &str) -> Option<(Arc<dyn PlaceProvider>, &'static str)>;
+}
+
+impl ItemsCapabilityProviders for InstalledProviders {
+    fn item_provider(
+        &self,
+        name: &str,
+        item: &str,
+        index: &mut u32,
+    ) -> Option<(ItemProviderOf, &'static str, bool)> {
+        next(&installed()?.keys.item_capabilities, name, item, index)
+    }
+
+    fn place_provider(&self, name: &str) -> Option<(Arc<dyn PlaceProvider>, &'static str)> {
+        let part = installed()?.keys.place_providers.get(name)?;
+        crate::mod_index_on(part.mod_index).then(|| (part.provider.clone(), part.mod_id))
+    }
+}

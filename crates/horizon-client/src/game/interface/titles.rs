@@ -57,7 +57,7 @@ impl Game<'_> {
             batch.height as i32,
             self.clock.fraction() as f32,
             &self.gui.atlas.font,
-            Text::literal(self.translate("menu.savingLevel", "Saving world")),
+            Text::literal(self.translate_with_fallback("menu.savingLevel", "Saving world")),
             self.settings.text_background(0.0),
         );
         hud_layout::paint(batch, &self.gui.atlas, &draws);

@@ -1,51 +1,38 @@
-//! The `network` area: host methods the game implements (`game/host/network.rs`).
+//! Host method declarations; access defaults and game forwarders are generated.
 #![allow(unused_variables)]
 use crate::*;
 /// The server host's methods of the `network` area, implemented by the game and reached through [`ServerHost`].
+#[horizon_mod_api_macros::host_area]
 pub trait NetworkServerHost {
     /// Side: server.
     /// Sends `data` on `channel` (`mod_id:name`, at most 30 000 bytes, at
     /// most 32 a player a tick) to `player`'s client, at the tick's end, from
     /// any server hook. Ok means accepted: a player who left or isn't on a
     /// Horizon client doesn't get it.
+    #[access(WorldOnly)]
     fn net_send_to_player(
         &mut self,
         player: u128,
         channel: &str,
         data: &[u8],
-    ) -> Result<(), String> {
-        crate::phase::unprovided(
-            "ServerHost::net_send_to_player",
-            "net_send_to_player",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Result<(), String>;
 }
 /// The client host's methods of the `network` area, implemented by the game and reached through [`crate::ClientHost`].
+#[horizon_mod_api_macros::host_area]
 pub trait NetworkClientHost {
     /// Side: client.
     /// Opens the chat screen with `text` typed in for the player to finish and
     /// send, as T and / open it; nothing is sent. Returns an error with no
     /// player in a world or while another screen is open.
-    fn open_chat(&mut self, text: &str) -> Result<(), String> {
-        crate::phase::unprovided(
-            "ClientHost::open_chat",
-            "open_chat",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn open_chat(&mut self, text: &str) -> Result<(), String>;
     /// Side: client.
     /// The client half: sends `data` on `channel` to the server (the same
     /// caps, 32 a tick). An error when the server doesn't carry mod messages
     /// (a vanilla server), and until the player has joined: a server says it
     /// carries them during configuration, before it can take one.
-    fn net_send_to_server(&mut self, channel: &str, data: &[u8]) -> Result<(), String> {
-        crate::phase::unprovided(
-            "ClientHost::net_send_to_server",
-            "net_send_to_server",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn net_send_to_server(&mut self, channel: &str, data: &[u8]) -> Result<(), String>;
     /// Side: client.
     /// A mod's chat line or command (`/` first), sent as `send_chat` sends
     /// it (ClientPacketListener.sendChat / sendCommand), to any server: no
@@ -53,13 +40,8 @@ pub trait NetworkClientHost {
     /// comes only from ChatScreen). An error when the player isn't in a
     /// server's play state or the Chat option blocks the message. API
     /// 404.
-    fn send_chat(&mut self, message: &str) -> Result<(), String> {
-        crate::phase::unprovided(
-            "ClientHost::send_chat",
-            "send_chat",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn send_chat(&mut self, message: &str) -> Result<(), String>;
     /// Side: client.
     /// Sends `packet` to the server as it is, to any server, a vanilla one
     /// included: a plugin channel's payload (`ServerboundCustomPayloadPacket`)
@@ -69,11 +51,6 @@ pub trait NetworkClientHost {
     /// player isn't in a server's play state, and for a custom payload past
     /// `ServerboundCustomPayloadPacket.MAX_PAYLOAD_SIZE`, which a server
     /// disconnects for. API 409.
-    fn send_packet(&mut self, packet: ServerboundPlayPacket) -> Result<(), SendPacketError> {
-        crate::phase::unprovided(
-            "ClientHost::send_packet",
-            "send_packet",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn send_packet(&mut self, packet: ServerboundPlayPacket) -> Result<(), SendPacketError>;
 }

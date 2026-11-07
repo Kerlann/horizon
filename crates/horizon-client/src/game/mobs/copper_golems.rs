@@ -149,8 +149,15 @@ impl Game<'_> {
         self.with_entity_held_out(id, |game| {
             let mut m = game.mobs[i].clone();
             game.golem_turn_to_statue(&mut m);
-            if let Some(i) = game.mobs.iter().position(|x| x.id == id) {
-                game.mobs[i] = m;
+            if !game
+                .persist
+                .removals
+                .contains(&super::commands::Target::Mob(id))
+                && let Some(i) = game.mobs.iter().position(|x| x.id == id)
+            {
+                game.mobs.update(i, |owner| {
+                    horizon_client::join_seq::store_back(owner, m);
+                });
             }
         });
     }
@@ -385,3 +392,7 @@ impl Game<'_> {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "copper_golems/lifetime_tests.rs"]
+mod lifetime_tests;

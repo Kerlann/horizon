@@ -25,7 +25,7 @@ fn with_client(test: impl FnOnce(&mut Game<'_>, LivingRef, i32)) {
             .id("minecraft:speed")
             .unwrap();
         game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
-        let living = game.native_living(game.native_entity(7).unwrap()).unwrap();
+        let living = game.living(game.entity(7).unwrap()).unwrap();
         test(game, living, speed);
     });
 }

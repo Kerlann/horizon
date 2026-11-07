@@ -82,15 +82,15 @@ fn discarded_mob_leaves_selectors_and_saves_while_frozen() {
     let before_save = saved.values().any(|tags| !tags.is_empty());
     let health = game.mobs[0].health;
     let world_time = game.world.game_time;
-    assert!(!game.native_entity_discard(mod_api::EntityRef::new(
+    assert!(!game.entity_discard(mod_api::EntityRef::new(
         mod_api::NativeWorldEpoch::new(u64::MAX),
         42
     )));
-    assert!(game.native_entity_discard(mod_api::EntityRef::new(
+    assert!(game.entity_discard(mod_api::EntityRef::new(
         game.native_lifecycle.epoch().unwrap(),
         42
     )));
-    assert!(!game.native_entity_discard(mod_api::EntityRef::new(
+    assert!(!game.entity_discard(mod_api::EntityRef::new(
         game.native_lifecycle.epoch().unwrap(),
         42
     )));
@@ -139,7 +139,7 @@ fn discarded_mob_leaves_selectors_and_saves_while_frozen() {
     }
     // Removing another mob during its death animation also hides UUID lookup
     // immediately. No dead/alive predicate was added to general lookup.
-    assert!(game.native_entity_discard(mod_api::EntityRef::new(
+    assert!(game.entity_discard(mod_api::EntityRef::new(
         game.native_lifecycle.epoch().unwrap(),
         43
     )));
@@ -164,7 +164,7 @@ fn discarded_mob_leaves_selectors_and_saves_while_frozen() {
     game.save_every_entity(&keys, &mut saved);
     let root = &saved[&(0, 0)][0];
     assert!(matches!(root.get("Passengers"), Some(Tag::List(list)) if list.len() == 1));
-    assert!(game.native_entity_discard(mod_api::EntityRef::new(
+    assert!(game.entity_discard(mod_api::EntityRef::new(
         game.native_lifecycle.epoch().unwrap(),
         45
     )));

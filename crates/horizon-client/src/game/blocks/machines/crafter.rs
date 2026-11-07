@@ -276,7 +276,7 @@ impl Game<'_> {
         // A server's crafter menu has the title it was given.
         let title = self.remote_menu_title().unwrap_or_else(|| {
             horizon_client::text::Text::literal(
-                self.container_title(self.translate("container.crafter", "Crafter")),
+                self.container_title(self.translate_with_fallback("container.crafter", "Crafter")),
             )
             .resolve_legacy()
         });
@@ -290,7 +290,7 @@ impl Game<'_> {
             grey,
             false,
         );
-        let inventory = self.translate("container.inventory", "Inventory");
+        let inventory = self.translate_with_fallback("container.inventory", "Inventory");
         batch.text(atlas, &inventory, ox + 8.0, oy + 72.0, grey, false);
         self.paint_screen(batch, ox, oy, rest, true);
     }
@@ -299,7 +299,7 @@ impl Game<'_> {
         let c = self.container.and_then(|k| self.crafter_at(k))?;
         let i = slot.checked_sub(300).filter(|i| *i < 9)?;
         (self.carried.is_none() && c.items[i].is_none() && !c.disabled[i] && !self.spectator())
-            .then(|| self.translate("gui.togglable_slot", "Click to disable slot"))
+            .then(|| self.translate_with_fallback("gui.togglable_slot", "Click to disable slot"))
     }
     /// A click in the crafter menu: `CrafterMenu` on the verified menu engine.
     pub(in crate::game) fn crafter_click(&mut self, slot: usize, shift: bool, right: bool) -> bool {
@@ -311,7 +311,7 @@ impl Game<'_> {
         } else {
             horizon_client::menu::Input::Pickup
         };
-        self.menu_click(Some(slot), i32::from(right), input);
+        self.click_open_inventory(Some(slot), i32::from(right), input);
         true
     }
     /// `CrafterScreen.slotClicked`: an empty grid slot is enabled by a click

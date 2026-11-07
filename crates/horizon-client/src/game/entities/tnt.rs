@@ -1313,7 +1313,7 @@ mod tests {
         let clock = game.world.game_time;
         assert!(before.join.is_joined());
         let reference = Target::Tnt(id);
-        let saved_before = game.entity_nbt(reference).unwrap();
+        let saved_before = game.command_target_nbt(reference).unwrap();
         assert_eq!(saved_before.get("NoGravity"), Some(&Tag::Byte(1)));
         assert_eq!(
             saved_before.get("owner"),
@@ -1341,7 +1341,7 @@ mod tests {
         assert_eq!(live.no_gravity, before.no_gravity);
         assert_eq!(game.world.game_time, clock);
         assert_eq!(game.persist.uuid_of(id), Some([89, 0, 0, 1]));
-        let saved = game.entity_nbt(reference).unwrap();
+        let saved = game.command_target_nbt(reference).unwrap();
         assert_eq!(saved.get("fuse"), Some(&Tag::Short(60)));
         assert_eq!(
             saved.get("Tags"),

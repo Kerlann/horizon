@@ -64,16 +64,16 @@ fn saved_painting_residency_precedes_reads_and_retires_at_the_sweep() {
         let index = game.attachment_indexes[&Dim::Overworld].clone();
         let key = ("test".into(), "mana".into());
         let batch = index.lock().unwrap().snapshot(&key);
-        let entity = game.native_entity(id).unwrap();
+        let entity = game.entity(id).unwrap();
         assert_eq!(batch.len(), 1);
         assert_eq!(batch[0].holder, AttachmentHolder::Entity(entity));
         assert_eq!(batch[0].entry.read(&VALUE), Ok(&7));
         let clone = game.paintings[0].clone();
         assert!(entity.add_tag(game, "before_removal"));
-        assert!(game.native_entity_discard(entity));
+        assert!(game.entity_discard(entity));
         assert_eq!(game.paintings.len(), 1);
-        assert!(game.native_entity(id).is_none());
-        assert!(game.native_entity_position(entity).is_none());
+        assert!(game.entity(id).is_none());
+        assert!(game.entity_position(entity).is_none());
         // Residency ends at the sweep, but the row's handle is already stale.
         let pending = index.lock().unwrap().snapshot(&key);
         assert_eq!(pending.len(), 1);
@@ -265,8 +265,8 @@ fn first_write_painting_publication_and_rollback() {
             index.lock().unwrap().snapshot(&key)[0].entry.read(&VALUE),
             Ok(&17)
         );
-        let entity = game.native_entity(id).unwrap();
-        assert!(game.native_entity_discard(entity));
+        let entity = game.entity(id).unwrap();
+        assert!(game.entity_discard(entity));
         let store: &mut dyn horizon_mod_runtime::attachments::AttachmentStore = game;
         assert_eq!(
             VALUE.set(store, holder, 18),

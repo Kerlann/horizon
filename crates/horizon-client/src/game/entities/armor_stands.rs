@@ -295,7 +295,7 @@ impl Game<'_> {
                 .enchantments
                 .props
                 .get(item)
-                .is_some_and(|p| p.glint);
+                .and_then(|p| p.glint);
             let overlay = if stack.is_some_and(|s| s.has_foil(item_glint)) {
                 horizon_client::mobs::render::ARMOR_GLINT
             } else {
@@ -1194,7 +1194,7 @@ impl Game<'_> {
                 self.armor_stand_vertices(a, base, packed, None, out);
                 None
             };
-            if !self.entity_glowing(a.id) {
+            if !self.tracked_entity_glowing(a.id) {
                 self.cull_skinned(out, entity_start, skinned);
             }
         }
@@ -1323,7 +1323,7 @@ impl Game<'_> {
                 .enchantments
                 .props
                 .get(&stack.item)
-                .is_some_and(|p| p.glint);
+                .and_then(|p| p.glint);
             let overlay = if stack.has_foil(item_glint) {
                 horizon_client::mobs::render::ARMOR_GLINT
             } else {
@@ -1579,7 +1579,7 @@ impl Game<'_> {
         // Inventory.add, else Player.drop (in creative a full inventory
         // takes it anyway: hasInfiniteMaterials empties the stack).
         if let Some(old) = swap.to_inventory
-            && let Some(rest) = self.give(old)
+            && let Some(rest) = self.add_stack_to_inventory(old)
             && !self.creative
             // Player.drop is the server's on a client: it spawns the item.
             && self.remote.is_none()

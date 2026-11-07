@@ -425,7 +425,7 @@ mod tests {
     }
 
     fn read(game: &Game<'_>, id: u32, name: &str) -> (Option<f64>, Option<f64>) {
-        let living = game.native_living(game.native_entity(id).unwrap()).unwrap();
+        let living = game.living(game.entity(id).unwrap()).unwrap();
         (
             living.attribute_value(game, name),
             living.attribute_base(game, name),
@@ -462,17 +462,17 @@ mod tests {
                 ])])),
             );
             assert!(
-                game.native_living_set_equipment(zombie, EquipmentSlot::MainHand, Some(own)),
+                game.living_set_equipment(zombie, EquipmentSlot::MainHand, Some(own)),
                 "the write takes"
             );
             assert_eq!(attack(game), 4.0, "the stack's own +1, not the sword's +6");
-            assert!(game.native_living_set_equipment(
+            assert!(game.living_set_equipment(
                 zombie,
                 EquipmentSlot::MainHand,
                 stack("minecraft:diamond_sword")
             ));
             assert_eq!(attack(game), 9.0, "the plain sword's own +6");
-            assert!(game.native_living_set_equipment(zombie, EquipmentSlot::MainHand, None));
+            assert!(game.living_set_equipment(zombie, EquipmentSlot::MainHand, None));
             assert_eq!(attack(game), 3.0);
         });
     }
@@ -500,7 +500,7 @@ mod tests {
                     ("slot", Tag::String("chest".into())),
                 ])])),
             );
-            assert!(game.native_living_set_equipment(zombie, EquipmentSlot::Chest, Some(own)));
+            assert!(game.living_set_equipment(zombie, EquipmentSlot::Chest, Some(own)));
             // A finalize write, whose rebuild keeps the equipment's rows.
             assert!(zombie.set_attribute_base(game, "minecraft:max_health", 25.0));
             let mut synced = Vec::new();
@@ -631,7 +631,7 @@ mod tests {
             let zombie = living(game, 12);
             // The zombie's own armor is 2, the diamond chestplate's 8 and 2
             // toughness: the write through the handle collects at once.
-            assert!(game.native_living_set_equipment(
+            assert!(game.living_set_equipment(
                 zombie,
                 EquipmentSlot::Chest,
                 stack("minecraft:diamond_chestplate")
@@ -650,7 +650,7 @@ mod tests {
                     ("slot", Tag::String("chest".into())),
                 ])])),
             );
-            assert!(game.native_living_set_equipment(zombie, EquipmentSlot::Chest, Some(own)));
+            assert!(game.living_set_equipment(zombie, EquipmentSlot::Chest, Some(own)));
             assert_eq!(values(game), (6.0, 0.0));
             // A `/attribute` base write lands at once, on top of the stack's.
             assert!(zombie.set_attribute_base(game, "minecraft:armor", 5.0));
@@ -663,7 +663,7 @@ mod tests {
                 modifier("test:plated", 3.0, AddValue),
                 Permanent
             ));
-            assert!(game.native_living_set_equipment(zombie, EquipmentSlot::Chest, None));
+            assert!(game.living_set_equipment(zombie, EquipmentSlot::Chest, None));
             assert_eq!(values(game), (8.0, 0.0));
             let level = crate::game::entity::damage_level_of!(game);
             let m = game.mobs.iter_mut().find(|m| m.id == 12).unwrap();
@@ -686,7 +686,7 @@ mod tests {
             let horse_kind = game.res.mob_types().get("minecraft:horse").unwrap().clone();
             game.mobs.push(Mob::new(15, horse_kind, Vec3::ZERO, 0.0));
             let horse = living(game, 15);
-            assert!(game.native_living_set_equipment(
+            assert!(game.living_set_equipment(
                 horse,
                 EquipmentSlot::Body,
                 stack("minecraft:diamond_horse_armor")
@@ -797,7 +797,7 @@ mod tests {
     fn a_stale_handle_reads_none() {
         with_game(|game| {
             spawn(game);
-            let living = game.native_living(game.native_entity(12).unwrap()).unwrap();
+            let living = game.living(game.entity(12).unwrap()).unwrap();
             assert_eq!(
                 living.attribute_value(game, "minecraft:max_health"),
                 Some(20.0)
@@ -914,7 +914,7 @@ mod tests {
     }
 
     fn living(game: &Game<'_>, id: u32) -> mod_api::LivingRef {
-        game.native_living(game.native_entity(id).unwrap()).unwrap()
+        game.living(game.entity(id).unwrap()).unwrap()
     }
 
     /// The ids of the modifiers a saved `attributes` list holds.

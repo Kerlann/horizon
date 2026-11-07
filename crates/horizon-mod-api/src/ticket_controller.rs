@@ -13,7 +13,7 @@ pub(crate) struct ControllerInfo {
 }
 
 /// A ticket controller a mod registered with
-/// [`Registrar::register_ticket_controller`](super::Registrar::register_ticket_controller): the
+/// [`Registrar::register_ticket_controller`](super::TicketsRegistrar::register_ticket_controller): the
 /// handle `chunk.set_mod_forced` and `level.mod_forced_chunks` take. Only the registrar makes
 /// one, resolved once there, and it is `Copy`: keep it from `register`, for example in a
 /// `OnceLock`. Another mod's controller does not work.

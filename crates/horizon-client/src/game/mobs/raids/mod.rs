@@ -480,7 +480,7 @@ impl Game<'_> {
         if triggered {
             self.award_custom_stat("raid_trigger", 1);
             self.trigger_player("minecraft:voluntary_exile");
-            if let Some(level) = self.native_level(self.dim.id()) {
+            if let Some(level) = self.level(self.dim.id()) {
                 self.native_raid_state_change(
                     mod_api::RaidRef::new(level, id),
                     center,
@@ -515,7 +515,7 @@ impl Game<'_> {
     }
     pub(super) fn raid_command_stop(&mut self, id: i32) {
         if let Some(center) = self.raiding.raids.stop(id)
-            && let Some(level) = self.native_level(self.dim.id())
+            && let Some(level) = self.level(self.dim.id())
         {
             self.native_raid_state_change(mod_api::RaidRef::new(level, id), center, "stopped");
         }
@@ -551,7 +551,7 @@ impl Game<'_> {
         members(&self.mobs, id)
     }
     /// `getHealthOfLivingRaiders`, leaving out one raider.
-    fn raid_living_health(&self, id: i32, except: Option<u32>) -> f32 {
+    fn remaining_raider_health(&self, id: i32, except: Option<u32>) -> f32 {
         self.raid_members(id)
             .filter(|m| Some(m.id) != except)
             .fold(0.0, |a, m| a + m.health)
@@ -568,7 +568,7 @@ impl Game<'_> {
         let Some((seq, mob, before)) = last else {
             return;
         };
-        let living = self.raid_living_health(id, Some(mob)) + before;
+        let living = self.remaining_raider_health(id, Some(mob)) + before;
         if let Some(r) = self.raiding.raids.get_mut(id) {
             r.update_bossbar(living);
         }
@@ -616,7 +616,7 @@ impl Game<'_> {
             })
             .collect();
         for (mob, id, wave, health, leader) in pending {
-            let living = self.raid_living_health(id, None);
+            let living = self.remaining_raider_health(id, None);
             let known = match self.raiding.raids.get_mut(id) {
                 Some(r) => {
                     r.add_wave_mob(health, false, living);
@@ -681,7 +681,7 @@ impl Game<'_> {
         for (id, (old, _)) in old_states {
             if let Some(r) = self.raiding.raids.get(id)
                 && r.status != old
-                && let Some(level) = self.native_level(self.dim.id())
+                && let Some(level) = self.level(self.dim.id())
             {
                 self.native_raid_state_change(
                     mod_api::RaidRef::new(level, id),
@@ -1089,7 +1089,7 @@ impl Game<'_> {
         s.can_join_raid = true;
         s.ticks_outside_raid = 0;
         s.registered = true;
-        let living = self.raid_living_health(id, None);
+        let living = self.remaining_raider_health(id, None);
         if let Some(r) = self.raiding.raids.get_mut(id) {
             r.add_wave_mob(health, true, living);
         }
@@ -1162,7 +1162,7 @@ impl Game<'_> {
         };
         let (leader, wave) = (s.patrol_leader, s.wave);
         self.flush_raid_bar(id);
-        let living = self.raid_living_health(id, Some(m.id));
+        let living = self.remaining_raider_health(id, Some(m.id));
         let uuid = self.player_uuid_of(killer);
         if let Some(r) = self.raiding.raids.get_mut(id) {
             if leader {

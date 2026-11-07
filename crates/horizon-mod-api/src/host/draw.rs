@@ -1,18 +1,14 @@
-//! The `draw` area: host methods the game implements (`game/host/draw.rs`).
+//! Host method declarations; access defaults and game forwarders are generated.
 #![allow(unused_variables)]
 use crate::*;
 /// The client host's methods of the `draw` area, implemented by the game and reached through [`crate::ClientHost`].
+#[horizon_mod_api_macros::host_area]
 pub trait DrawClientHost {
     /// Side: client.
     /// Fluid `fluid`'s name as the lang names it (`fluid_type.<mod>.<name>`, vanilla's by its block),
     /// else its path in words.
-    fn fluid_name(&self, fluid: &str) -> String {
-        crate::phase::unprovided(
-            "ClientHost::fluid_name",
-            "fluid_name",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn fluid_name(&self, fluid: &str) -> String;
     /// Side: client.
     /// Entity model layer `layer` baked into its `ModelPart` tree, each part
     /// at its pose, as `EntityModelSet.bakeLayer` bakes it: one a native mod
@@ -23,13 +19,8 @@ pub trait DrawClientHost {
     /// for a layer neither has. A vanilla layer no mob has (a player's, a
     /// chest's) is read from the resources each call, so slow. API
     /// @API:model_layers@.
-    fn bake_layer(&self, layer: &str) -> Option<ModelPart> {
-        crate::phase::unprovided(
-            "ClientHost::bake_layer",
-            "bake_layer",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn bake_layer(&self, layer: &str) -> Option<ModelPart>;
 }
 /// What the HUD, screen and tooltip hooks draw with, in GUI pixels: one per hook call.
 pub trait DrawContext {

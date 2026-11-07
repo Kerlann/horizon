@@ -58,14 +58,24 @@ pub const REMOVE_ONE: &str = "minecraft:item.bundle.remove_one";
 pub const DROP_CONTENTS: &str = "minecraft:item.bundle.drop_contents";
 
 fn max_stack(items: &Items, stack: &ItemStack) -> u32 {
-    items.get(&stack.item).map_or(64, |i| i.max_stack).max(1)
+    let info = items.get(&stack.item);
+    if !stack.carries_component(info, "minecraft:max_stack_size") {
+        return 1;
+    }
+    stack
+        .data()
+        .and_then(|data| data.other("minecraft:max_stack_size"))
+        .and_then(crate::properties::component_int)
+        .unwrap_or_else(|| info.map_or(1, |item| item.max_stack as i32))
+        .max(1) as u32
 }
 
 /// The stack's `bundle_contents`, when it has the component.
 fn contents_of<'a>(items: &Items, stack: &'a ItemStack) -> Option<&'a [ItemStack]> {
     let inside = stack.data().map_or(&[][..], |d| &d.bundle_contents[..]);
-    let bundle = items.get(&stack.item).is_some_and(|i| i.bundle);
-    (bundle || !inside.is_empty()).then_some(inside)
+    stack
+        .carries_component(items.get(&stack.item), "minecraft:bundle_contents")
+        .then_some(inside)
 }
 
 /// `BundleContents.getWeight`: a nested bundle weighs its contents plus

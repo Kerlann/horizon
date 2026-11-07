@@ -23,30 +23,150 @@ fn real_catalog_has_compiling_host_and_guest_bindings() {
         .canonicalize()
         .unwrap();
     let build = root.join("target/internals-catalog-coverage");
-    if build.exists() {
-        fs::remove_dir_all(&build).unwrap();
+    fs::create_dir_all(&build).unwrap();
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let wasm_cargo =
+        std::env::var_os("HORIZON_COVERAGE_WASM_CARGO").unwrap_or_else(|| cargo.clone());
+    let mut guest = Command::new(wasm_cargo);
+    if let Some(rustc) = std::env::var_os("HORIZON_COVERAGE_WASM_RUSTC") {
+        guest_compiler(
+            &mut guest,
+            Path::new(&rustc),
+            std::env::var_os("LD_LIBRARY_PATH"),
+        );
     }
-    let stage = build.join("stage");
-    fs::create_dir_all(&stage).unwrap();
+    // Fail on missing target/toolchain before spending time generating the real catalog.
+    let probe = build.join("probe");
+    fs::create_dir_all(probe.join("src")).unwrap();
+    fs::write(
+        probe.join("Cargo.toml"),
+        "[package]\nname='coverage-probe'\nversion='0.0.0'\nedition='2024'\n[workspace]\n",
+    )
+    .unwrap();
+    fs::write(
+        probe.join("src/lib.rs"),
+        "pub fn probe() -> std::vec::Vec<u8> { vec![1] }",
+    )
+    .unwrap();
+    checked(
+        guest
+            .current_dir(&probe)
+            .env("CARGO_TARGET_DIR", build.join("probe-target"))
+            .args(["check", "--target", "wasm32-unknown-unknown"]),
+    );
+    // Reuse the compiler environment, not the probe's arguments.
+    let mut check_guest = Command::new(guest.get_program());
+    for (key, value) in guest.get_envs() {
+        if let Some(value) = value {
+            check_guest.env(key, value);
+        }
+    }
     let files = checked(
         Command::new("git")
             .current_dir(&root)
             .args(["ls-files", "-z"]),
     );
-    for path in files.stdout.split(|b| *b == 0).filter(|p| !p.is_empty()) {
-        let path = std::str::from_utf8(path).unwrap();
-        let source = root.join(path);
-        if !source.is_file() {
-            continue;
-        }
-        let dest = stage.join(path);
-        fs::create_dir_all(dest.parent().unwrap()).unwrap();
-        fs::copy(source, dest).unwrap();
+    let paths: Vec<_> = files
+        .stdout
+        .split(|b| *b == 0)
+        .filter(|p| !p.is_empty())
+        .map(|p| std::str::from_utf8(p).unwrap())
+        .filter(|p| root.join(p).is_file())
+        .collect();
+    use sha2::{Digest, Sha256};
+    let mut hash = Sha256::new();
+    for path in &paths {
+        hash.update((path.len() as u64).to_le_bytes());
+        hash.update(path.as_bytes());
+        let bytes = fs::read(root.join(path)).unwrap();
+        hash.update((bytes.len() as u64).to_le_bytes());
+        hash.update(bytes);
     }
+    let fingerprint = format!("{:x}", hash.finalize());
+    let stage = build.join("stage");
+    let marker = build.join("source.sha256");
+    if fs::read_to_string(&marker).ok().as_deref() != Some(&fingerprint) {
+        let fresh = build.join("fresh");
+        if fresh.exists() {
+            fs::remove_dir_all(&fresh).unwrap();
+        }
+        fs::create_dir_all(&fresh).unwrap();
+        for path in paths {
+            let dest = fresh.join(path);
+            fs::create_dir_all(dest.parent().unwrap()).unwrap();
+            fs::copy(root.join(path), dest).unwrap();
+        }
+        prepare(&fresh, &build);
+        sync_tree(&fresh, &stage);
+        fs::remove_dir_all(&fresh).unwrap();
+        fs::write(marker, fingerprint).unwrap();
+    } else {
+        println!("reusing staged catalog for identical tracked sources");
+    }
+    let report = fs::read_to_string(build.join("summary.md")).unwrap();
+    if let Some(summary) = std::env::var_os("GITHUB_STEP_SUMMARY") {
+        use std::io::Write;
+        fs::OpenOptions::new()
+            .append(true)
+            .open(summary)
+            .unwrap()
+            .write_all(report.as_bytes())
+            .unwrap();
+    }
+    println!("{report}");
+    let target = root.join("target/internals-catalog-check");
+    println!("checking staged host");
+    checked(
+        Command::new(&cargo)
+            .current_dir(&stage)
+            .env("CARGO_TARGET_DIR", &target)
+            .env("CARGO_PROFILE_DEV_DEBUG", "0")
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .args([
+                "check",
+                "--message-format=short",
+                "-j4",
+                "-p",
+                "horizon-client",
+                "--lib",
+                "--no-default-features",
+            ]),
+    );
+    println!("checking generated wasm32 guest");
+    checked(
+        check_guest
+            .current_dir(&stage)
+            .env("CARGO_TARGET_DIR", target.join("wasm"))
+            .env("CARGO_PROFILE_DEV_DEBUG", "0")
+            .env(
+                "HORIZON_MOD_INTERNALS_MANIFEST",
+                build.join("coverage.toml"),
+            )
+            .env(
+                "HORIZON_MOD_INTERNALS_CATALOG",
+                stage.join("internals.json"),
+            )
+            .args([
+                "check",
+                "--message-format=short",
+                "-j4",
+                "-p",
+                "horizon-mod-internals",
+                "--target",
+                "wasm32-unknown-unknown",
+            ])
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit()),
+    );
+    println!("real catalog coverage passed in {:?}", started.elapsed());
+}
+
+fn prepare(stage: &Path, build: &Path) {
     let catalog = stage.join("internals.json");
     println!("staging real game catalog");
     let mut staged = staging::stage(
-        &stage,
+        stage,
         &stage.join("points.json"),
         &catalog,
         staging::Mode::Build,
@@ -64,7 +184,7 @@ fn real_catalog_has_compiling_host_and_guest_bindings() {
         .filter(|i| i.cfg.is_empty())
         .map(|i| i.path.clone())
         .collect();
-    let game_points = points::game_points(&stage).unwrap();
+    let game_points = points::game_points(stage).unwrap();
     println!("selecting universal bindings");
     let rule = Rule::new(entries);
     let hashes = entries
@@ -209,59 +329,137 @@ fn real_catalog_has_compiling_host_and_guest_bindings() {
             .join("\n")
     );
     fs::write(build.join("summary.md"), &report).unwrap();
-    if let Some(summary) = std::env::var_os("GITHUB_STEP_SUMMARY") {
-        use std::io::Write;
-        fs::OpenOptions::new()
-            .append(true)
-            .open(summary)
-            .unwrap()
-            .write_all(report.as_bytes())
-            .unwrap();
-    }
     println!("{report}");
-    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    let target = root.join("target/internals-catalog-check");
-    println!("checking staged host");
-    checked(
-        Command::new(&cargo)
-            .current_dir(&stage)
-            .env("CARGO_TARGET_DIR", &target)
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .args([
-                "check",
-                "--message-format=short",
-                "-j4",
-                "-p",
-                "horizon-client",
-                "--lib",
-                "--no-default-features",
-            ]),
-    );
-    let wasm_cargo =
-        std::env::var_os("HORIZON_COVERAGE_WASM_CARGO").unwrap_or_else(|| cargo.clone());
-    let mut guest = Command::new(wasm_cargo);
-    guest
-        .current_dir(&stage)
-        .env("CARGO_TARGET_DIR", target.join("wasm"))
-        .env("HORIZON_MOD_INTERNALS_MANIFEST", &manifest_path)
-        .env("HORIZON_MOD_INTERNALS_CATALOG", &catalog)
-        .args([
-            "check",
-            "--message-format=short",
-            "-j4",
-            "-p",
-            "horizon-mod-internals",
-            "--target",
-            "wasm32-unknown-unknown",
-        ]);
-    if let Some(rustc) = std::env::var_os("HORIZON_COVERAGE_WASM_RUSTC") {
-        guest.env("RUSTC", rustc).env("RUSTC_WRAPPER", "");
+}
+
+// Cargo test prepends its own toolchain's lib. Identical compiler builds can then load
+// that toolchain's driver and infer its sysroot, even with an absolute RUSTC path.
+fn guest_compiler(command: &mut Command, rustc: &Path, loader: Option<std::ffi::OsString>) {
+    let lib = rustc.parent().unwrap().parent().unwrap().join("lib");
+    let mut paths = vec![lib];
+    if let Some(existing) = loader {
+        paths.extend(std::env::split_paths(&existing));
     }
-    println!("checking generated wasm32 guest");
-    guest
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit());
-    checked(&mut guest);
-    println!("real catalog coverage passed in {:?}", started.elapsed());
+    command
+        .env("RUSTC", rustc)
+        .env("RUSTC_WRAPPER", "")
+        .env("LD_LIBRARY_PATH", std::env::join_paths(paths).unwrap());
+}
+
+// Preserve unchanged mtimes for Cargo, but remove deleted sources and generated outputs.
+fn sync_tree(source: &Path, dest: &Path) {
+    fs::create_dir_all(dest).unwrap();
+    for entry in fs::read_dir(dest).unwrap() {
+        let path = entry.unwrap().path();
+        let original = source.join(path.file_name().unwrap());
+        if !original.exists() || original.is_dir() != path.is_dir() {
+            if path.is_dir() {
+                fs::remove_dir_all(path).unwrap();
+            } else {
+                fs::remove_file(path).unwrap();
+            }
+        }
+    }
+    for entry in fs::read_dir(source).unwrap() {
+        let path = entry.unwrap().path();
+        let target = dest.join(path.file_name().unwrap());
+        if path.is_dir() {
+            sync_tree(&path, &target);
+        } else {
+            let bytes = fs::read(&path).unwrap();
+            if fs::read(&target).ok().as_deref() != Some(bytes.as_slice()) {
+                fs::write(target, bytes).unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn stage_sync_preserves_unchanged_files_and_removes_stale_files() {
+    let temp = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(format!("../../target/coverage-sync-{}", std::process::id()));
+    if temp.exists() {
+        fs::remove_dir_all(&temp).unwrap();
+    }
+    let source = temp.join("source");
+    let dest = temp.join("dest");
+    fs::create_dir_all(source.join("nested")).unwrap();
+    fs::write(source.join("nested/keep"), "same").unwrap();
+    sync_tree(&source, &dest);
+    let before = fs::metadata(dest.join("nested/keep"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    fs::write(dest.join("stale"), "old").unwrap();
+    fs::write(source.join("new"), "new").unwrap();
+    sync_tree(&source, &dest);
+    assert_eq!(
+        before,
+        fs::metadata(dest.join("nested/keep"))
+            .unwrap()
+            .modified()
+            .unwrap()
+    );
+    assert!(!dest.join("stale").exists());
+    assert_eq!(fs::read_to_string(dest.join("new")).unwrap(), "new");
+    fs::write(source.join("nested/keep"), "changed").unwrap();
+    sync_tree(&source, &dest);
+    assert_eq!(
+        fs::read_to_string(dest.join("nested/keep")).unwrap(),
+        "changed"
+    );
+    fs::remove_dir_all(temp).unwrap();
+}
+
+#[test]
+#[ignore = "requires the coverage wasm compiler; run by wasm-mods"]
+fn guest_compiler_ignores_another_toolchains_driver() {
+    let rustc = std::env::var_os("HORIZON_COVERAGE_WASM_RUSTC").expect("coverage compiler");
+    let rustc = Path::new(&rustc);
+    let root = rustc.parent().unwrap().parent().unwrap();
+    let temp = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/coverage-loader");
+    let other = temp.join("other/lib");
+    fs::create_dir_all(&other).unwrap();
+    // Same driver, different installation with no target std: the Cargo-test failure.
+    for entry in fs::read_dir(root.join("lib")).unwrap() {
+        let path = entry.unwrap().path();
+        if path
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("librustc_driver")
+        {
+            let dest = other.join(path.file_name().unwrap());
+            if !dest.exists() {
+                fs::copy(path, dest).unwrap();
+            }
+        }
+    }
+    let other = other.canonicalize().unwrap();
+    let polluted = std::env::join_paths([other.clone(), root.join("lib")]).unwrap();
+    let wrong = checked(
+        Command::new(rustc)
+            .env("LD_LIBRARY_PATH", &polluted)
+            .args(["--print", "sysroot"]),
+    );
+    assert_eq!(
+        Path::new(std::str::from_utf8(&wrong.stdout).unwrap().trim()),
+        other.parent().unwrap()
+    );
+    let source = temp.join("probe.rs");
+    fs::write(&source, "pub fn probe() -> std::vec::Vec<u8> { vec![1] }").unwrap();
+    let mut command = Command::new(rustc);
+    guest_compiler(&mut command, rustc, Some(polluted));
+    checked(
+        command
+            .args([
+                "--crate-type=lib",
+                "--emit=metadata",
+                "--target=wasm32-unknown-unknown",
+            ])
+            .arg(&source)
+            .arg("-o")
+            .arg(temp.join("probe.rmeta")),
+    );
+    fs::remove_dir_all(temp).unwrap();
 }

@@ -1,65 +1,43 @@
-//! The `services` area: host methods the game implements (`game/host/services.rs`).
+//! Host method declarations; access defaults and game forwarders are generated.
 #![allow(unused_variables)]
 use crate::*;
 /// The server host's methods of the `services` area, implemented by the game and reached through [`ServerHost`].
+#[horizon_mod_api_macros::host_area]
 pub trait ServicesServerHost {
     /// The commands service.
     /// Not on wasm: a frame resource; its methods are the imports.
-    fn commands(&mut self) -> &mut dyn Commands {
-        crate::phase::unprovided(
-            "ServerHost::commands",
-            "commands",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    #[service]
+    fn commands(&mut self) -> &mut dyn Commands;
     /// The levels service.
     /// Not on wasm: a frame resource; its methods are the imports.
-    fn levels(&self) -> &dyn Levels {
-        crate::phase::unprovided(
-            "ServerHost::levels",
-            "levels",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    #[service]
+    fn levels(&self) -> &dyn Levels;
     /// The messages service.
     /// Not on wasm: a frame resource; its methods are the imports.
-    fn messages(&self) -> &dyn Messages {
-        crate::phase::unprovided(
-            "ServerHost::messages",
-            "messages",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    #[service]
+    fn messages(&self) -> &dyn Messages;
     /// The players service.
     /// Not on wasm: a frame resource; its methods are the imports.
-    fn players(&self) -> &dyn Players {
-        crate::phase::unprovided(
-            "ServerHost::players",
-            "players",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    #[service]
+    fn players(&self) -> &dyn Players;
 }
 /// The client host's methods of the `services` area, implemented by the game and reached through [`crate::ClientHost`].
+#[horizon_mod_api_macros::host_area]
 pub trait ServicesClientHost {
     /// The client_session service.
     /// Not on wasm: a frame resource; its methods are the imports.
-    fn client_session(&self) -> &dyn ClientSession {
-        crate::phase::unprovided(
-            "ClientHost::client_session",
-            "client_session",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    #[service]
+    fn client_session(&self) -> &dyn ClientSession;
     /// The render_assets service.
     /// Not on wasm: a frame resource; its methods are the imports.
-    fn render_assets(&self) -> &dyn RenderAssets {
-        crate::phase::unprovided(
-            "ClientHost::render_assets",
-            "render_assets",
-            crate::phase::LoadAccess::PublishedResources,
-        )
-    }
+    #[access(PublishedResources)]
+    #[service]
+    fn render_assets(&self) -> &dyn RenderAssets;
 }
 /// The client_session service, reached through its host.
 pub trait ClientSession {

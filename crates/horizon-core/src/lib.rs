@@ -8,6 +8,7 @@ pub mod arm_pose;
 pub mod biome;
 pub mod bounding_box;
 pub mod carving;
+pub mod color;
 pub mod connection_kind;
 pub mod density;
 pub mod dimension;

@@ -1071,11 +1071,11 @@ impl Game<'_> {
             .map(|g| g.conn);
         let mut tag = match player {
             Some(player) => self
-                .as_guest(player, |g| g.entity_nbt(Target::Player))
+                .as_guest(player, |g| g.command_target_nbt(Target::Player))
                 .flatten()?,
             None => {
                 let target = self.level_entity(id)?;
-                self.entity_nbt(target)?
+                self.command_target_nbt(target)?
             }
         };
         if let horizon_core::nbt::Tag::Compound(c) = &mut tag {

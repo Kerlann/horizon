@@ -7,12 +7,12 @@ contract can be offered.
 
 ## What the existing paths do
 
-`Game::native_level_set_block` in `game/modding/native_entity_refs.rs` checks the level and position, then
+`Game::level_set_block` in `game/modding/native_entity_refs.rs` checks the level and position, then
 calls `Game::native_set_block` in `game/native_hooks/`. The latter calls
 `GameLevel::native_set_block` through `with_level`, then processes level events. The level method
 calls `behaviours.set_block` and creates a new block entity when the landed block needs one. This
 is the normal block lifecycle path; it is **not** currently made transactional by
-`native_level_set_block`.
+`level_set_block`.
 
 The separate `Game::journal_set_block` in `game/runtime/transactions.rs` is currently used by the native
 fluid handler, not by that public block-write path. It keeps the first block state at each depth,

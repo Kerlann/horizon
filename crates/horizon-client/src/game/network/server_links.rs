@@ -438,7 +438,7 @@ impl Game<'_> {
             if i == 0 {
                 // DialogConnectionAccess.disconnect: leave with the custom
                 // screens' reason.
-                let reason = self.translate(
+                let reason = self.translate_with_fallback(
                     "menu.custom_screen_info.disconnect",
                     "Custom screen rejected",
                 );

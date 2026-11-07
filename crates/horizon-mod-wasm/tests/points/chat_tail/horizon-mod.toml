@@ -13,6 +13,14 @@ kind = "head"
 with = "handle_chat_input"
 hash = "a67549f95b962755"
 
+[[inject]]
+id = "other_tail"
+at = "horizon_client::game::chat::Game<'_>::handle_chat_input"
+kind = "head"
+with = "other_tail"
+priority = 8
+hash = "a67549f95b962755"
+
 [wasm]
-sha512 = "ea3756b8acdaba14ca1de6b1bf759d29868efee59193e58057f0036f702e53a4144bec094cd2ec03340278d2484c41d546bc6b472347154bef1b80aed68e6801"
+sha512 = "abc04f9265ace306506e00fadb011605dc5896d98fc4e64366933fa7f51f425bc502123db692c13187a05b14ecc3962ced5ab2913271f46d6eb20376ab114d64"
 toolchain = "1.99.1 58cf8f9c35b355199727627d07ae34a4e2846d67"

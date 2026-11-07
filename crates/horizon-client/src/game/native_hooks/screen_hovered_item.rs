@@ -6,7 +6,7 @@ use super::*;
 impl Game<'_> {
     /// The id of the item in the slot under the pointer on the open container screen
     /// (`AbstractContainerScreen.getHoveredSlot().getItem()`), None over no slot or an empty one.
-    pub(in crate::game) fn native_screen_hovered_item(&self) -> Option<String> {
+    pub(in crate::game) fn screen_hovered_item(&self) -> Option<String> {
         let size = self
             .renderer
             .as_ref()

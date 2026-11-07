@@ -1,16 +1,7 @@
 //! The game's side of the `draw` area (`horizon-mod-api/src/host/draw.rs`).
 use crate::game::Game;
 use mod_api::{prelude::*, *};
-impl DrawClientHost for Game<'_> {
-    fn fluid_name(&self, fluid: &str) -> String {
-        mod_api::__private::check_access("fluid_name", mod_api::__private::LoadAccess::ClientSetup);
-        self.native_fluid_name(fluid)
-    }
-    fn bake_layer(&self, layer: &str) -> Option<ModelPart> {
-        mod_api::__private::check_access("bake_layer", mod_api::__private::LoadAccess::ClientSetup);
-        self.native_bake_layer(layer)
-    }
-}
+
 /// [`DrawContext`] on the game's `crate::hud::HudBatch`.
 pub(crate) struct GameDrawContext<'a, 'g> {
     pub(crate) game: &'a Game<'g>,

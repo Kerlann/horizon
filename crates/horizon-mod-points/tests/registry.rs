@@ -1,27 +1,22 @@
 //! The registry's lifecycle, registering, sealing and stopping, on the real points: an integration
 //! test, so the generated points compile once for the tests.
-use mod_points::__private::{POINTS, RawKind, RawListener, register_raw, seal};
-use mod_points::{PointId, Points, RegisterError, register, stop};
+use mod_points::__private::{POINTS, RawKind, SlotListener, seal};
+use mod_points::{PointId, RegisterError, register, stop};
 use std::sync::atomic::Ordering;
 
-struct Tick;
-
-impl Points for Tick {
-    fn subscribed(&self) -> &'static [Option<PointId>] {
-        &[mod_points::ids::tick, mod_points::ids::tick_return]
-    }
+fn tick(_: mod_api::HostSide<'_>, args: &mut mod_points::TickArgs) {
+    assert_eq!(mod_api::crash::current_native_mod(), Some("tick_mod"));
+    args.cancel = true;
 }
 
 struct Quiet;
+impl mod_api::Host for Quiet {}
+mod_api::impl_host_areas!(Quiet);
+impl mod_api::ServerHost for Quiet {}
+mod_api::impl_server_host_areas!(Quiet);
 
 #[mod_api::__subscriptions]
 impl mod_api::Hooks for Quiet {}
-
-impl Points for Quiet {
-    fn subscribed(&self) -> &'static [Option<PointId>] {
-        &[]
-    }
-}
 
 fn raw_listener() {}
 
@@ -31,19 +26,17 @@ unsafe fn erased_listener(place: usize, receiver: *mut (), raw: *mut ()) {
 }
 
 /// `raw_listener` at `place`: the test's slots never call it.
-fn raw_at(id: &'static str, place: PointId) -> RawListener {
+fn raw_at(id: &'static str, place: PointId) -> SlotListener {
     // SAFETY: nothing fires a raw place here with a call into the function.
-    unsafe { RawListener::new(id, place, raw_listener as *const ()) }
+    unsafe { SlotListener::new(id, place, raw_listener as *const ()) }
 }
 
-/// Stops its own mod, and tries to register another, from inside the seal.
+/// Stopping from the mod's subscription callback still applies to slots registered later.
 struct SelfStop;
-
-impl Points for SelfStop {
-    fn subscribed(&self) -> &'static [Option<PointId>] {
+impl mod_api::Hooks for SelfStop {
+    fn subscribed(&self) -> &'static [Option<mod_api::HookId>] {
         stop("self_stopping");
-        assert_eq!(register("during", &Quiet), Err(RegisterError::Sealed));
-        &[mod_points::ids::tick]
+        &[]
     }
 }
 
@@ -52,45 +45,76 @@ fn one_list_registered_sealed_and_stopped() {
     mod_api::__private::install(
         ["tick_mod", "raw_mod", "stopped_early", "self_stopping"]
             .into_iter()
-            .map(|id| mod_api::ModEntry::new(id, Box::new(Quiet)))
+            .map(|id| {
+                mod_api::ModEntry::new(
+                    id,
+                    if id == "self_stopping" {
+                        Box::new(SelfStop) as Box<dyn mod_api::Hooks>
+                    } else {
+                        Box::new(Quiet)
+                    },
+                )
+            })
             .collect(),
     );
     assert!(mod_api::__private::set_mod_enabled("tick_mod", false));
     assert!(mod_api::__private::set_mod_enabled("raw_mod", false));
-    assert_eq!(register("tick_mod", &Tick), Ok(()));
-    assert_eq!(register("tick_mod", &Quiet), Err(RegisterError::Twice));
-    assert_eq!(register("quiet_mod", &Quiet), Ok(()));
-    // A stop before the seal holds after it.
-    assert_eq!(register("stopped_early", &Tick), Ok(()));
+    assert_eq!(
+        register(&mod_points::listeners::tick("tick_mod", 0, "head", tick)),
+        Ok(())
+    );
+    assert_eq!(
+        register(&mod_points::listeners::tick_return(
+            "tick_mod", 0, "tail", tick
+        )),
+        Ok(())
+    );
+    assert_eq!(
+        register(&mod_points::listeners::tick(
+            "stopped_early",
+            0,
+            "head",
+            tick
+        )),
+        Ok(())
+    );
     stop("stopped_early");
-    assert_eq!(register("self_stopping", &SelfStop), Ok(()));
+    assert_eq!(
+        register(&mod_points::listeners::tick(
+            "self_stopping",
+            0,
+            "head",
+            tick
+        )),
+        Ok(())
+    );
     let raw = PointId::Tick as usize + 2;
     let place = PointId::Tick;
-    assert_eq!(register_raw(&raw_at("raw_mod", place)), Ok(()));
+    assert_eq!(register(&raw_at("raw_mod", place)), Ok(()));
     // SAFETY: the callback checks its place and never dereferences the pointers.
-    let erased = unsafe { RawListener::erased("raw_mod", place, erased_listener) };
-    assert_eq!(register_raw(&erased), Ok(()));
-    assert_eq!(register_raw(&raw_at("raw_mod", place)), Ok(()));
+    let erased = unsafe { SlotListener::erased("raw_mod", place, erased_listener) };
+    assert_eq!(register(&erased), Ok(()));
+    assert_eq!(register(&raw_at("raw_mod", place)), Ok(()));
     assert!(
         !POINTS[PointId::Tick as usize].load(Ordering::Acquire),
         "nothing listens before the seal"
     );
     seal();
-    assert_eq!(register("late", &Quiet), Err(RegisterError::Sealed));
+    assert_eq!(register(&raw_at("late", place)), Err(RegisterError::Sealed));
     assert_eq!(
-        register_raw(&raw_at("late", place)),
+        register(&mod_points::listeners::tick("late", 0, "head", tick)),
         Err(RegisterError::Sealed)
     );
     assert!(POINTS[PointId::Tick as usize].load(Ordering::Acquire));
     assert!(POINTS[PointId::TickReturn as usize].load(Ordering::Acquire));
     assert!(!POINTS[raw].load(Ordering::Acquire));
     let (mut heard, mut raw_heard) = (0, 0);
-    mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
+    mod_points::__private::fire_api(PointId::Tick, &mut |_| heard += 1);
     mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |_| raw_heard += 1);
     assert_eq!((heard, raw_heard), (0, 0), "disabled before sealing");
     assert!(mod_api::__private::set_mod_enabled("tick_mod", true));
     assert!(mod_api::__private::set_mod_enabled("raw_mod", true));
-    mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
+    mod_points::__private::fire_api(PointId::Tick, &mut |_| heard += 1);
     let mut order = Vec::new();
     mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |kind| {
         match kind {
@@ -107,8 +131,15 @@ fn one_list_registered_sealed_and_stopped() {
     });
     assert_eq!(order, ["typed", "erased", "typed"]);
     assert_eq!((heard, raw_heard), (1, 3));
+    let mut args = mod_points::TickArgs::__new();
+    mod_points::dispatch::tick(mod_api::HostSide::Server(&mut Quiet), &mut args);
+    assert!(
+        args.cancel,
+        "the checked function runs under its owner's guard and writes back"
+    );
+    assert_eq!(mod_api::crash::current_native_mod(), None);
     assert!(mod_api::__private::set_mod_enabled("tick_mod", false));
-    mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
+    mod_points::__private::fire_api(PointId::Tick, &mut |_| heard += 1);
     mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |_| raw_heard += 1);
     assert_eq!(
         (heard, raw_heard),
@@ -116,7 +147,7 @@ fn one_list_registered_sealed_and_stopped() {
         "only the API listener is disabled"
     );
     assert!(mod_api::__private::set_mod_enabled("raw_mod", false));
-    mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
+    mod_points::__private::fire_api(PointId::Tick, &mut |_| heard += 1);
     mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |_| raw_heard += 1);
     assert_eq!(
         (heard, raw_heard),
@@ -125,7 +156,7 @@ fn one_list_registered_sealed_and_stopped() {
     );
     assert!(mod_api::__private::set_mod_enabled("tick_mod", true));
     assert!(mod_api::__private::set_mod_enabled("raw_mod", true));
-    mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
+    mod_points::__private::fire_api(PointId::Tick, &mut |_| heard += 1);
     mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |_| raw_heard += 1);
     assert_eq!(
         (heard, raw_heard),
@@ -138,19 +169,11 @@ fn one_list_registered_sealed_and_stopped() {
         assert!(mod_api::__private::set_mod_enabled(id, false));
         assert!(mod_api::__private::set_mod_enabled(id, true));
     }
-    mod_points::__private::fire(PointId::Tick, "tick", &mut |_| heard += 1);
+    mod_points::__private::fire_api(PointId::Tick, &mut |_| heard += 1);
     mod_points::__private::fire_raw(PointId::Tick, "tick", &mut |_| raw_heard += 1);
     assert_eq!(
         (heard, raw_heard),
         (2, 9),
         "an enable switch cannot undo a stop"
     );
-}
-
-#[test]
-fn lists_finds_a_name_at_compile_time() {
-    use mod_points::__private::lists;
-    const LIST: &[&str] = &["tick", "tick_return"];
-    const _: () = assert!(lists(LIST, "tick_return"));
-    assert!(!lists(LIST, "tic") && !lists(LIST, "ticks") && !lists(&[], "tick"));
 }

@@ -76,7 +76,7 @@ fn a_client_reads_the_entities_and_menu_the_server_shows_it() {
         })
     };
     // No client level yet: no handle.
-    assert_eq!(game.native_entity(20), None);
+    assert_eq!(game.entity(20), None);
     game.handle_packet(C::Login(play::Login {
         player_id: 7,
         hardcore: false,
@@ -103,13 +103,10 @@ fn a_client_reads_the_entities_and_menu_the_server_shows_it() {
         relatives: 0,
     }))
     .unwrap();
-    let me = game.native_entity(7).expect("the own player");
-    assert_eq!(
-        game.native_entity_kind(me).as_deref(),
-        Some("minecraft:player")
-    );
-    assert_eq!(game.native_entity_position(me), Some([0.5, 65.0, 0.5]));
-    assert_eq!(game.native_entity_rotation(me), Some([45.0, 10.0]));
+    let me = game.entity(7).expect("the own player");
+    assert_eq!(game.entity_kind(me).as_deref(), Some("minecraft:player"));
+    assert_eq!(game.entity_position(me), Some([0.5, 65.0, 0.5]));
+    assert_eq!(game.entity_rotation(me), Some([45.0, 10.0]));
     // The profile the login named (the net thread's `Joined`).
     game.remote.as_mut().unwrap().profile_name = "Steve".into();
     assert_eq!(
@@ -131,22 +128,22 @@ fn a_client_reads_the_entities_and_menu_the_server_shows_it() {
         slots: vec![(5, Some(Stack::new(item("minecraft:diamond_helmet"), 1)))],
     }))
     .unwrap();
-    let stand = game.native_entity(20).expect("the stand is tracked");
+    let stand = game.entity(20).expect("the stand is tracked");
     assert_eq!(
-        game.native_entity_kind(stand).as_deref(),
+        game.entity_kind(stand).as_deref(),
         Some("minecraft:armor_stand")
     );
-    assert_eq!(game.native_entity_position(stand), Some([1.5, 64.0, 2.5]));
-    assert_eq!(game.native_entity_block_position(stand), Some([1, 64, 2]));
-    assert_eq!(game.native_entity_rotation(stand), Some([90.0, 0.0]));
-    assert_eq!(game.native_entity_uuid(stand), Some(uuid));
+    assert_eq!(game.entity_position(stand), Some([1.5, 64.0, 2.5]));
+    assert_eq!(game.entity_block_position(stand), Some([1, 64, 2]));
+    assert_eq!(game.entity_rotation(stand), Some([90.0, 0.0]));
+    assert_eq!(game.entity_uuid(stand), Some(uuid));
     assert_eq!(
         stand.name(&game as &dyn mod_api::ClientHost).as_deref(),
         Some("Greeter")
     );
     // The client keeps the stand's equipment for rendering, but only its own
     // player is exposed as a LivingRef.
-    assert_eq!(game.native_living(stand), None);
+    assert_eq!(game.living(stand), None);
     let head = &game
         .armor_stands
         .iter()
@@ -158,31 +155,28 @@ fn a_client_reads_the_entities_and_menu_the_server_shows_it() {
         Some("minecraft:diamond_helmet")
     );
     // A client knows no saved data or tags, and changes nothing itself.
-    assert_eq!(game.native_entity_nbt(stand), None);
-    assert_eq!(game.native_entity_tags(stand), None);
-    assert!(!game.native_entity_add_tag(stand, "seen"));
-    assert!(!game.native_entity_set_velocity(stand, [0.0, 1.0, 0.0]));
+    assert_eq!(game.entity_nbt(stand), None);
+    assert_eq!(game.entity_tags(stand), None);
+    assert!(!game.entity_add_tag(stand, "seen"));
+    assert!(!game.entity_set_velocity(stand, [0.0, 1.0, 0.0]));
 
     // An entity the client keeps no list of its own for: its type and
     // where the server put it.
     game.handle_packet(add(21, 5, "minecraft:text_display", [4.0, 70.0, -3.0]))
         .unwrap();
-    let display = game.native_entity(21).expect("the display is tracked");
+    let display = game.entity(21).expect("the display is tracked");
     assert_eq!(
-        game.native_entity_kind(display).as_deref(),
+        game.entity_kind(display).as_deref(),
         Some("minecraft:text_display")
     );
-    assert_eq!(
-        game.native_entity_position(display),
-        Some([4.0, 70.0, -3.0])
-    );
-    assert_eq!(game.native_entity_uuid(display), Some(5));
-    assert_eq!(game.native_entity(99), None);
+    assert_eq!(game.entity_position(display), Some([4.0, 70.0, -3.0]));
+    assert_eq!(game.entity_uuid(display), Some(5));
+    assert_eq!(game.entity(99), None);
 
     // Before the chest opens, the player's inventory menu is current.
-    let player = game.native_local_player().unwrap();
-    let inventory = game.native_menu_ref(player).unwrap();
-    assert_eq!(game.native_menu_slot_count(inventory), Some(46));
+    let player = game.local_player().unwrap();
+    let inventory = game.player_container_menu(player).unwrap();
+    assert_eq!(game.menu_slot_count(inventory), Some(46));
     // A chest the server opened, by its slot numbers: the chest's 9,
     // then the inventory's 27, then the hotbar's 9.
     game.handle_packet(C::OpenScreen(play::OpenScreen {
@@ -206,18 +200,20 @@ fn a_client_reads_the_entities_and_menu_the_server_shows_it() {
         carried: None,
     }))
     .unwrap();
-    let menu = game.native_menu_ref(player).expect("a server menu is open");
-    assert_eq!(game.native_menu_slot_count(inventory), None);
-    assert_eq!(game.native_menu_slot_count(menu), Some(45));
+    let menu = game
+        .player_container_menu(player)
+        .expect("a server menu is open");
+    assert_eq!(game.menu_slot_count(inventory), None);
+    assert_eq!(game.menu_slot_count(menu), Some(45));
     let gem = game
-        .native_menu_slot(menu, 0)
+        .menu_slot(menu, 0)
         .flatten()
         .expect("the chest's first slot");
     assert_eq!((&*gem.item, gem.count), ("minecraft:diamond", 2));
     assert_eq!(gem.custom_name().as_deref(), Some("Gem"));
-    assert_eq!(game.native_menu_slot(menu, 1), Some(None));
+    assert_eq!(game.menu_slot(menu, 1), Some(None));
     let stone = game
-        .native_menu_slot(menu, 36)
+        .menu_slot(menu, 36)
         .flatten()
         .expect("the hotbar's first slot");
     assert_eq!((&*stone.item, stone.count), ("minecraft:stone", 5));
@@ -230,8 +226,8 @@ fn a_client_reads_the_entities_and_menu_the_server_shows_it() {
         keep: 0,
     }))
     .unwrap();
-    assert_eq!(game.native_entity_position(stand), None);
-    assert_eq!(game.native_entity_kind(display), None);
+    assert_eq!(game.entity_position(stand), None);
+    assert_eq!(game.entity_kind(display), None);
 }
 
 /// #8589: the server sends entity event 42 (the raid sweat) for a villager;

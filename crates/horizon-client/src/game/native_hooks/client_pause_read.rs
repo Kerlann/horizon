@@ -5,7 +5,7 @@ use super::*;
 #[allow(dead_code)]
 impl Game<'_> {
     /// The applied client pause state, not whether a pause screen is open.
-    pub(in crate::game) fn native_is_paused(&self) -> bool {
+    pub(in crate::game) fn is_paused(&self) -> bool {
         self.pause
     }
 }

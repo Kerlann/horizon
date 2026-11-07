@@ -1,4 +1,4 @@
-use super::super::{api, inject};
+use super::super::api;
 use super::*;
 
 fn fixture() -> (Manifest, Catalog) {
@@ -9,7 +9,7 @@ fn fixture() -> (Manifest, Catalog) {
             "path":"game::run", "kind":"fn", "signature":"fn run()", "hash":"signature", "cfg":"", "shape_only":false
         }])).unwrap(),
         points: serde_json::from_value(serde_json::json!([{
-            "name":"run", "target":"game::run", "raw":true,
+            "name":"run", "target":"game::run", "raw":true, "at_return":true,
             "listener":"game::__RunListener", "return_listener":"game::__RunReturnListener"
         }])).unwrap(),
         sites: serde_json::from_value(serde_json::json!([{
@@ -68,7 +68,6 @@ fn every_native_kind_and_access_registers_or_refuses_by_name() {
                 (Kind::Expression, _) => Some(NoSlotReason::SourcePending),
                 (Kind::Replace, _) => Some(NoSlotReason::ReplacePending),
                 (_, Access::Api) if call => Some(NoSlotReason::ApiSitesPending),
-                (_, Access::Api) => Some(NoSlotReason::ApiPointsPending),
                 _ => None,
             };
             if let Some(expected) = pending {
@@ -81,11 +80,24 @@ fn every_native_kind_and_access_registers_or_refuses_by_name() {
             check(&catalog, &manifest).unwrap();
             let facade = catalog.facade(&manifest).unwrap();
             let main = api::main_rs(
-                "/* MOD_RAW */",
+                "/* MOD_SLOTS */",
                 &[&manifest],
                 &catalog.points,
                 &catalog.sites,
             );
+            if access == Access::Api {
+                assert!(
+                    main.contains(if kind == Kind::Return {
+                        "mod_points::listeners::run_return"
+                    } else {
+                        "mod_points::listeners::run"
+                    }),
+                    "{main}"
+                );
+                assert!(main.contains("(\"example\", 7, \"test\","), "{main}");
+                assert!(main.contains("mod_0::listen"), "{main}");
+                continue;
+            }
             assert_eq!(main.matches("mod_0_internals::raw::").count(), 1, "{main}");
             assert!(main.contains("mod_0::listen"), "{main}");
             assert!(
@@ -151,5 +163,4 @@ fn unified_route_refuses_changed_missing_unlisted_and_invalid_condition() {
         check(&catalog, &manifest),
         Err(InjectError::Missing { .. })
     ));
-    assert!(inject::of(&manifest).is_empty());
 }

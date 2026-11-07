@@ -40,7 +40,7 @@ pub(super) fn mob_effect(m: &Mob, e: &horizon_client::mobs::StoredEffect) -> Nat
 
 impl Game<'_> {
     /// Apply one loaded consumable effect without consuming the item.
-    pub(super) fn native_living_apply_consume_effect(
+    pub(super) fn living_apply_consume_effect(
         &mut self,
         living: LivingRef,
         stack: &ItemStack,
@@ -88,7 +88,7 @@ impl Game<'_> {
     /// ticks. False before effect resolution, for a duration below -1, an armor
     /// stand, the dragon, a stale handle or a client, or when the active
     /// instance did not change, as in vanilla's `addEffect`.
-    pub(super) fn native_living_add_effect(
+    pub(super) fn living_add_effect(
         &mut self,
         living: LivingRef,
         effect: &NativeActiveEffect,
@@ -140,7 +140,7 @@ impl Game<'_> {
     /// amplifier and the flags. The effect is a registration-slot key resolved at load.
     /// None when it has the effect not, before effect resolution, or for an armor
     /// stand, the dragon, a stale handle or a client.
-    pub(super) fn native_living_effect(
+    pub(super) fn living_effect(
         &self,
         living: LivingRef,
         effect: EffectKey,
@@ -167,10 +167,7 @@ impl Game<'_> {
     /// The entity's active effects (`LivingEntity.getActiveEffects`), in the
     /// order their store keeps them, in `Some` even when it has none. None
     /// for an armor stand, the dragon, a stale handle or a client.
-    pub(super) fn native_living_effects(
-        &self,
-        living: LivingRef,
-    ) -> Option<Vec<NativeActiveEffect>> {
+    pub(super) fn living_effects(&self, living: LivingRef) -> Option<Vec<NativeActiveEffect>> {
         match self.native_living_read_target(living)? {
             t @ (Target::Player | Target::Guest(_)) => self
                 .native_living_player_effects(t)
@@ -187,11 +184,7 @@ impl Game<'_> {
     /// Whether the entity has `effect` (`LivingEntity.hasEffect`), using its resolved key.
     /// False before effect resolution, for an armor stand, the dragon,
     /// a stale handle or a client.
-    pub(super) fn native_living_potion_affected(
-        &self,
-        living: LivingRef,
-        effect: EffectKey,
-    ) -> bool {
+    pub(super) fn living_potion_affected(&self, living: LivingRef, effect: EffectKey) -> bool {
         let Some(def) = mod_api::__private::resolved_effect(effect) else {
             return false;
         };
@@ -225,7 +218,7 @@ impl Game<'_> {
     /// 0 when the entity lacks the effect. None before effect resolution, for a stale
     /// handle, or an entity other than the local player: the client keeps no
     /// other entity's effects.
-    pub(super) fn native_living_effect_blend_factor(
+    pub(super) fn living_effect_blend_factor(
         &self,
         living: LivingRef,
         effect: EffectKey,
@@ -258,11 +251,7 @@ impl Game<'_> {
     /// leaving the same way its expiry takes them. False (and nothing
     /// changes) when the entity has the effect not, before effect resolution, or for
     /// an armor stand, the dragon, a stale handle or a client.
-    pub(super) fn native_living_remove_effect(
-        &mut self,
-        living: LivingRef,
-        effect: EffectKey,
-    ) -> bool {
+    pub(super) fn living_remove_effect(&mut self, living: LivingRef, effect: EffectKey) -> bool {
         let Some(def) = mod_api::__private::resolved_effect(effect) else {
             return false;
         };
@@ -304,7 +293,7 @@ impl Game<'_> {
     /// every effect's attribute modifiers and absorption hearts leave with
     /// them. False when the entity has none, or for an armor stand, the
     /// dragon, a stale handle or a client.
-    pub(super) fn native_living_remove_all_effects(&mut self, living: LivingRef) -> bool {
+    pub(super) fn living_remove_all_effects(&mut self, living: LivingRef) -> bool {
         match self.native_living_target(living) {
             Some(t @ (Target::Player | Target::Guest(_))) => self
                 .for_player(t, |g| g.remove_player_effects(None))
@@ -375,7 +364,7 @@ mod tests {
                 .unwrap()
                 .clone();
             game.mobs.push(Mob::new(21, kind, Vec3::ZERO, 0.0));
-            let zombie = game.native_living(game.native_entity(21).unwrap()).unwrap();
+            let zombie = game.living(game.entity(21).unwrap()).unwrap();
             // The same load-owned slot is used for application, enumeration and diagnostics.
             let speed = NativeActiveEffect::new(
                 mod_api::__private::part_tests::effect_key("minecraft:speed"),
@@ -384,8 +373,8 @@ mod tests {
                 false,
                 true,
             );
-            assert!(game.native_living_add_effect(zombie, &speed));
-            let listed = game.native_living_effects(zombie).unwrap();
+            assert!(game.living_add_effect(zombie, &speed));
+            let listed = game.living_effects(zombie).unwrap();
             assert_eq!(
                 listed[0].id,
                 mod_api::__private::part_tests::effect_key("speed")
@@ -400,15 +389,15 @@ mod tests {
         with_game(|game| {
             let kind = game.res.mob_types().get("minecraft:cow").unwrap().clone();
             game.mobs.push(Mob::new(22, kind, Vec3::ZERO, 0.0));
-            let cow = game.native_living(game.native_entity(22).unwrap()).unwrap();
+            let cow = game.living(game.entity(22).unwrap()).unwrap();
             let key = mod_api::__private::part_tests::effect_key("speed");
-            assert!(game.native_living_add_effect(cow, &effect("speed", 2, 1)));
-            assert!(!game.native_living_add_effect(cow, &effect("speed", 5, 0)));
+            assert!(game.living_add_effect(cow, &effect("speed", 2, 1)));
+            assert!(!game.living_add_effect(cow, &effect("speed", 5, 0)));
             let mob = &game.mobs[0];
             assert_eq!(mob.extra.effect_chains[0].id, "minecraft:speed");
             assert_eq!(mob.extra.effect_chains[0].registry_index, Some(0));
-            assert_eq!(game.native_living_effect(cow, key).unwrap().id, key);
-            assert_eq!(game.native_living_effect(cow, key).unwrap().amplifier, 1);
+            assert_eq!(game.living_effect(cow, key).unwrap().id, key);
+            assert_eq!(game.living_effect(cow, key).unwrap().amplifier, 1);
         });
     }
 
@@ -420,56 +409,56 @@ mod tests {
         with_game(|game| {
             let kind = game.res.mob_types().get("minecraft:cow").unwrap().clone();
             game.mobs.push(Mob::new(12, kind, Vec3::ZERO, 0.0));
-            let cow = game.native_living(game.native_entity(12).unwrap()).unwrap();
+            let cow = game.living(game.entity(12).unwrap()).unwrap();
             let item = |id| ItemStack::new(id, 1);
             let mut expected = game.mobs[0].random.clone();
             let mut level_random = game.world.random.clone();
             expected.next_float();
             assert_eq!(
-                game.native_living_apply_consume_effect(cow, &item("minecraft:pufferfish"), 0),
+                game.living_apply_consume_effect(cow, &item("minecraft:pufferfish"), 0),
                 Some(true)
             );
             assert_eq!(game.mobs[0].random.next_float(), expected.next_float());
             assert_eq!(game.world.random.next_float(), level_random.next_float());
-            assert!(game.native_living_potion_affected(
+            assert!(game.living_potion_affected(
                 cow,
                 mod_api::__private::part_tests::effect_key("minecraft:poison")
             ));
             assert_eq!(
-                game.native_living_apply_consume_effect(cow, &item("minecraft:honey_bottle"), 0),
+                game.living_apply_consume_effect(cow, &item("minecraft:honey_bottle"), 0),
                 Some(true)
             );
             assert_eq!(
-                game.native_living_apply_consume_effect(cow, &item("minecraft:honey_bottle"), 0),
+                game.living_apply_consume_effect(cow, &item("minecraft:honey_bottle"), 0),
                 Some(false)
             );
             assert_eq!(
-                game.native_living_apply_consume_effect(cow, &item("minecraft:milk_bucket"), 0),
+                game.living_apply_consume_effect(cow, &item("minecraft:milk_bucket"), 0),
                 Some(true)
             );
             assert_eq!(
-                game.native_living_apply_consume_effect(cow, &item("minecraft:milk_bucket"), 0),
+                game.living_apply_consume_effect(cow, &item("minecraft:milk_bucket"), 0),
                 Some(false)
             );
             // This fixture has no server sound hub; a sound cannot be queued.
             assert_eq!(
-                game.native_living_apply_consume_effect(cow, &item("minecraft:ominous_bottle"), 0),
+                game.living_apply_consume_effect(cow, &item("minecraft:ominous_bottle"), 0),
                 None
             );
             assert_eq!(
-                game.native_living_apply_consume_effect(cow, &item("minecraft:chorus_fruit"), 0),
+                game.living_apply_consume_effect(cow, &item("minecraft:chorus_fruit"), 0),
                 None
             );
             assert_eq!(
-                game.native_living_apply_consume_effect(cow, &item("minecraft:pufferfish"), 1),
+                game.living_apply_consume_effect(cow, &item("minecraft:pufferfish"), 1),
                 None
             );
             assert_eq!(
-                game.native_living_apply_consume_effect(cow, &item("minecraft:stone"), 0),
+                game.living_apply_consume_effect(cow, &item("minecraft:stone"), 0),
                 None
             );
             assert_eq!(
-                game.native_living_apply_consume_effect(cow, &item("missing:unknown"), 0),
+                game.living_apply_consume_effect(cow, &item("missing:unknown"), 0),
                 None
             );
             let stale = LivingRef::new(EntityRef::new(
@@ -477,7 +466,7 @@ mod tests {
                 12,
             ));
             assert_eq!(
-                game.native_living_apply_consume_effect(stale, &item("minecraft:pufferfish"), 0),
+                game.living_apply_consume_effect(stale, &item("minecraft:pufferfish"), 0),
                 None
             );
         });
@@ -506,7 +495,7 @@ mod tests {
             remote.entity_id = 7;
             remote.profile = 42;
             game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
-            let me = game.native_living(game.native_entity(7).unwrap()).unwrap();
+            let me = game.living(game.entity(7).unwrap()).unwrap();
             assert_eq!(
                 me.effect_blend_factor(
                     game,
@@ -635,42 +624,39 @@ mod tests {
                 let kind = game.res.mob_types().get(kind).unwrap().clone();
                 game.mobs.push(Mob::new(id, kind, Vec3::ZERO, 0.0));
             }
-            let zombie = game.native_living(game.native_entity(12).unwrap()).unwrap();
-            let spider = game.native_living(game.native_entity(13).unwrap()).unwrap();
-            let cow = game.native_living(game.native_entity(14).unwrap()).unwrap();
+            let zombie = game.living(game.entity(12).unwrap()).unwrap();
+            let spider = game.living(game.entity(13).unwrap()).unwrap();
+            let cow = game.living(game.entity(14).unwrap()).unwrap();
 
             // Reusing the registered key reads the applied instance.
-            assert!(game.native_living_add_effect(zombie, &effect("minecraft:speed", 200, 0)));
-            assert!(game.native_living_potion_affected(
+            assert!(game.living_add_effect(zombie, &effect("minecraft:speed", 200, 0)));
+            assert!(game.living_potion_affected(
                 zombie,
                 mod_api::__private::part_tests::effect_key("speed")
             ));
             assert_eq!(
-                game.native_living_effect(
-                    zombie,
-                    mod_api::__private::part_tests::effect_key("speed")
-                ),
+                game.living_effect(zombie, mod_api::__private::part_tests::effect_key("speed")),
                 Some(effect("minecraft:speed", 200, 0))
             );
             assert_eq!(
-                game.native_living_effects(zombie),
+                game.living_effects(zombie),
                 Some(vec![effect("minecraft:speed", 200, 0)])
             );
 
             // A re-add is `MobEffectInstance.update`: a weaker or shorter
             // one changes nothing, a stronger replaces with its own
             // duration, an equal one only extends.
-            assert!(!game.native_living_add_effect(zombie, &effect("minecraft:speed", 100, 0)));
+            assert!(!game.living_add_effect(zombie, &effect("minecraft:speed", 100, 0)));
             assert_eq!(
-                game.native_living_effect(
+                game.living_effect(
                     zombie,
                     mod_api::__private::part_tests::effect_key("minecraft:speed")
                 ),
                 Some(effect("minecraft:speed", 200, 0))
             );
-            assert!(game.native_living_add_effect(zombie, &effect("minecraft:speed", 90, 1)));
+            assert!(game.living_add_effect(zombie, &effect("minecraft:speed", 90, 1)));
             assert_eq!(
-                game.native_living_effect(
+                game.living_effect(
                     zombie,
                     mod_api::__private::part_tests::effect_key("minecraft:speed")
                 ),
@@ -679,64 +665,64 @@ mod tests {
 
             // canBeAffected: a spider shrugs off poison and an undead one
             // with it, a cow takes it.
-            assert!(!game.native_living_add_effect(spider, &effect("minecraft:poison", 100, 0)));
-            assert_eq!(game.native_living_effects(spider), Some(Vec::new()));
-            assert!(!game.native_living_add_effect(zombie, &effect("minecraft:poison", 100, 0)));
-            assert!(game.native_living_add_effect(cow, &effect("minecraft:poison", 100, 0)));
+            assert!(!game.living_add_effect(spider, &effect("minecraft:poison", 100, 0)));
+            assert_eq!(game.living_effects(spider), Some(Vec::new()));
+            assert!(!game.living_add_effect(zombie, &effect("minecraft:poison", 100, 0)));
+            assert!(game.living_add_effect(cow, &effect("minecraft:poison", 100, 0)));
 
             // A duration below -1 changes nothing.
 
-            assert!(!game.native_living_add_effect(zombie, &effect("minecraft:speed", -2, 0)));
+            assert!(!game.living_add_effect(zombie, &effect("minecraft:speed", -2, 0)));
 
             // remove_effect takes its absorption hearts with it; a second
             // remove has nothing to do.
-            assert!(game.native_living_add_effect(zombie, &effect("minecraft:absorption", 100, 1)));
+            assert!(game.living_add_effect(zombie, &effect("minecraft:absorption", 100, 1)));
             game.mobs[0].absorption = 8.0;
-            assert!(game.native_living_remove_effect(
+            assert!(game.living_remove_effect(
                 zombie,
                 mod_api::__private::part_tests::effect_key("minecraft:absorption")
             ));
             assert_eq!(game.mobs[0].absorption, 0.0);
-            assert!(!game.native_living_remove_effect(
+            assert!(!game.living_remove_effect(
                 zombie,
                 mod_api::__private::part_tests::effect_key("minecraft:absorption")
             ));
-            assert!(game.native_living_potion_affected(
+            assert!(game.living_potion_affected(
                 zombie,
                 mod_api::__private::part_tests::effect_key("minecraft:speed")
             ));
 
             // remove_all_effects takes the rest, and says when there was none.
-            assert!(game.native_living_remove_all_effects(zombie));
-            assert_eq!(game.native_living_effects(zombie), Some(Vec::new()));
-            assert!(!game.native_living_potion_affected(
+            assert!(game.living_remove_all_effects(zombie));
+            assert_eq!(game.living_effects(zombie), Some(Vec::new()));
+            assert!(!game.living_potion_affected(
                 zombie,
                 mod_api::__private::part_tests::effect_key("minecraft:speed")
             ));
-            assert!(!game.native_living_remove_all_effects(zombie));
+            assert!(!game.living_remove_all_effects(zombie));
 
             // A stale handle reads nothing and writes nothing.
             let stale =
                 EntityRef::new(NativeWorldEpoch::new(zombie.entity().epoch().get() + 1), 12);
             let stale = LivingRef::new(stale);
-            assert!(!game.native_living_add_effect(stale, &effect("minecraft:speed", 100, 0)));
+            assert!(!game.living_add_effect(stale, &effect("minecraft:speed", 100, 0)));
             assert_eq!(
-                game.native_living_effect(
+                game.living_effect(
                     stale,
                     mod_api::__private::part_tests::effect_key("minecraft:speed")
                 ),
                 None
             );
-            assert_eq!(game.native_living_effects(stale), None);
-            assert!(!game.native_living_potion_affected(
+            assert_eq!(game.living_effects(stale), None);
+            assert!(!game.living_potion_affected(
                 stale,
                 mod_api::__private::part_tests::effect_key("minecraft:speed")
             ));
-            assert!(!game.native_living_remove_effect(
+            assert!(!game.living_remove_effect(
                 stale,
                 mod_api::__private::part_tests::effect_key("minecraft:speed")
             ));
-            assert!(!game.native_living_remove_all_effects(stale));
+            assert!(!game.living_remove_all_effects(stale));
         });
     }
 }

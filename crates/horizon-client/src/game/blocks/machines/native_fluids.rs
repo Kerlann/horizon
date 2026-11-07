@@ -297,7 +297,7 @@ impl Game<'_> {
     }
     /// The tanks the game's own fluid capability reaches at `at`: in the level in place only.
     fn capability_tanks(&self, at: BlockSide) -> Option<FluidAt> {
-        if !self.native_level_in_place(at.level) {
+        if !self.level_in_place(at.level) {
             return None;
         }
         self.native_fluid_at(at.pos)
@@ -305,18 +305,14 @@ impl Game<'_> {
     /// How many tanks of the block at `at` in the level in place its side reaches
     /// (none: every tank), for the game's own fluid capability: a mod block's by its table, a
     /// cauldron's one. None where no tanks are.
-    pub(in crate::game) fn native_fluid_tank_count(&self, at: BlockSide) -> Option<usize> {
+    pub(in crate::game) fn fluid_tank_count(&self, at: BlockSide) -> Option<usize> {
         match self.capability_tanks(at)? {
             FluidAt::Mod(tanks) => Some(side_tanks(&tanks, at.side).count()),
             FluidAt::Cauldron(_) => Some(1),
         }
     }
-    /// What tank `tank` of those `at`'s side reaches holds (`native_fluid_tank_count`).
-    pub(in crate::game) fn native_fluid_tank(
-        &self,
-        at: BlockSide,
-        tank: usize,
-    ) -> Option<FluidStack> {
+    /// What tank `tank` of those `at`'s side reaches holds (`fluid_tank_count`).
+    pub(in crate::game) fn fluid_tank(&self, at: BlockSide, tank: usize) -> Option<FluidStack> {
         match self.capability_tanks(at)? {
             FluidAt::Mod(tanks) => {
                 let real = side_tanks(&tanks, at.side).nth(tank)?;
@@ -345,7 +341,7 @@ impl Game<'_> {
     /// block's fillable tank its capacity, a cauldron a bucket; none for another tank, a
     /// drain-only one, or a fluid the tanks there don't take: other than water and lava, or
     /// with components into a mod block's tanks.
-    pub(in crate::game) fn native_fluid_tank_capacity(
+    pub(in crate::game) fn fluid_tank_capacity(
         &self,
         at: BlockSide,
         tank: usize,
@@ -366,7 +362,7 @@ impl Game<'_> {
     /// whole thirds, lava only whole into an empty one, discarding the fluid's components as
     /// NeoForge's `CauldronFluidContent` does. What didn't fit. The write is kept by
     /// transaction `tx`.
-    pub(in crate::game) fn native_fluid_tank_insert(
+    pub(in crate::game) fn fluid_tank_insert(
         &mut self,
         at: BlockSide,
         tank: usize,
@@ -426,7 +422,7 @@ impl Game<'_> {
     /// Takes up to `max` out of tank `tank` of those `at`'s side reaches: a mod block's
     /// drainable tank, a cauldron by whole thirds and lava only whole. What came out. The
     /// write is kept by transaction `tx`.
-    pub(in crate::game) fn native_fluid_tank_extract(
+    pub(in crate::game) fn fluid_tank_extract(
         &mut self,
         at: BlockSide,
         tank: usize,
@@ -564,7 +560,7 @@ mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let water = |game: &Game<'_>, n: u8| {
                 let state = horizon_world::chunk::BlockState {
                     name: "minecraft:water_cauldron".to_owned(),
@@ -575,8 +571,8 @@ mod tests {
             let (full, one) = (water(game, 3), water(game, 1));
             let (from, to) = ([0, 64, 0], [2, 64, 0]);
             let flags = NativeBlockUpdateFlags::NEIGHBORS;
-            assert!(game.native_level_set_block(level, from, full, flags));
-            assert!(game.native_level_set_block(level, to, one, flags));
+            assert!(game.level_set_block(level, from, full, flags));
+            assert!(game.level_set_block(level, to, one, flags));
             // The target has room for two levels: the bucket the source first gives doesn't
             // fit, so the move is undone and tried again with what fit, two levels' worth.
             let host: &mut dyn ServerHost = game;
@@ -817,7 +813,7 @@ mod tests {
                 game.world
                     .chunks
                     .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-                let level = game.native_level("minecraft:overworld").unwrap();
+                let level = game.level("minecraft:overworld").unwrap();
                 let block = game
                     .pack
                     .assets
@@ -834,7 +830,7 @@ mod tests {
                     .set_mod_fluids(FxHashMap::from_iter([(block.0, Arc::new(table))]));
                 let (from, to) = ([0, 64, 0], [2, 64, 0]);
                 for pos in [from, to] {
-                    assert!(game.native_level_set_block(
+                    assert!(game.level_set_block(
                         level,
                         pos,
                         block,
@@ -882,7 +878,7 @@ mod tests {
                 let handle = mod_api::__private::intern_unresolved_fluid("othermod:fluid").unwrap();
                 game.set_tank_state(from, &tanks(&[(Some("othermod:fluid"), 1000), (None, 0)]));
                 let pipe_target = [4, 64, 0];
-                assert!(game.native_level_set_block(
+                assert!(game.level_set_block(
                     level,
                     pipe_target,
                     block,

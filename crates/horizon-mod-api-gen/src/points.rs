@@ -3,7 +3,7 @@
 //! pass ([`stage`]) puts `#[point]` on each in a staged copy of the game's source, the copy the
 //! prebuilt game and the launcher's source builds compile, with each raw form's types beside it;
 //! the generator lists the same points from any copy, staged or not, as `mod_points` (each point's
-//! record, the `Points` trait, `PointId`) and as `points.json`, the list the launcher routes
+//! record, typed function slots, `PointId`) and as `points.json`, the list the launcher routes
 //! injections by. All of them are build outputs, never committed.
 
 use quote::{ToTokens, quote};
@@ -45,10 +45,10 @@ pub struct GamePoint {
     pub return_listener: Option<String>,
     #[serde(skip)]
     record_item: String,
-    /// Its `Points` methods, `PointId` variants, subscription consts and forwarding methods
+    /// Its typed function constructors, place ids and dispatch functions
     /// ([`point_shape::Shape::api_items`]).
     #[serde(skip)]
-    api: [String; 4],
+    api: [String; 3],
     /// Its record's shape, as a wasm mod's listener and the game check it
     /// ([`point_shape::Shape::wire_shape`]).
     #[serde(skip)]
@@ -625,10 +625,9 @@ pub fn game_points(root: &Path) -> Result<Vec<GamePoint>, String> {
         points.push(GamePoint {
             record_item: shape.record_item(&target).to_string(),
             api: [
-                api.methods.to_string(),
+                api.listeners.to_string(),
                 api.variants.to_string(),
-                api.consts.to_string(),
-                api.forwards.to_string(),
+                api.dispatch.to_string(),
             ],
             wire_shape: shape.wire_shape(),
             at_return: shape.has_return(),
@@ -874,18 +873,16 @@ fn locked_with(lock: &str, name: &str, added: &[&str]) -> Option<String> {
     ))
 }
 
-/// `mod_points`: each point's record, the type its listeners take, and the `Points` trait a
-/// mod implements to listen, with its `PointId`s and subscription consts.
+/// `mod_points`: records, typed function constructors, dispatchers and place ids.
 pub(crate) fn records(points: &[GamePoint]) -> String {
     let parse = |code: &str| {
         code.parse::<proc_macro2::TokenStream>()
             .expect("generated points")
     };
     let records = points.iter().map(|point| parse(&point.record_item));
-    let methods = points.iter().map(|point| parse(&point.api[0]));
+    let listeners = points.iter().map(|point| parse(&point.api[0]));
     let variants = points.iter().map(|point| parse(&point.api[1]));
-    let consts = points.iter().map(|point| parse(&point.api[2]));
-    let forwards = points.iter().map(|point| parse(&point.api[3]));
+    let dispatch = points.iter().map(|point| parse(&point.api[2]));
     // Each place's name, function and record shape, in `PointId` order: a point's head, then its
     // return.
     let places: Vec<(String, &str, &str)> = points
@@ -916,7 +913,7 @@ pub(crate) fn records(points: &[GamePoint]) -> String {
     });
     quote! {
         #(#records)*
-        /// A point's place: each point's head and return, in the order of [`Points`]' methods.
+        /// A point's place: its head and return in catalog order.
         #[doc(hidden)]
         #[repr(usize)]
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -925,30 +922,11 @@ pub(crate) fn records(points: &[GamePoint]) -> String {
         /// The number of places, the length of the game's slot table.
         #[doc(hidden)]
         pub const POINT_COUNT: usize = PointId::__Count as usize;
-        /// The game's injection points a mod listens to (#589): one method per point's head and
-        /// return, each a no-op until the mod overrides it. Implement it with
-        /// `#[mod_api::horizon_mod]` on the same type as the mod's `Hooks`, and name each method
-        /// in a `[[native.injection]]` with the point's function as `target`.
-        pub trait Points: Send + Sync {
-            #[doc(hidden)]
-            fn subscribed(&self) -> &'static [Option<PointId>];
-            #(#methods)*
-        }
-        /// Each place's `PointId`, by its `Points` method's name: the subscriptions
-        /// `#[horizon_mod]` derives.
+        /// Typed API listener aliases and constructors, generated from the point catalog.
+        pub mod listeners { use super::*; #(#listeners)* }
+        /// The game's typed dispatch, not part of the API a mod is written against.
         #[doc(hidden)]
-        pub mod ids {
-            use super::PointId;
-            #(#consts)*
-        }
-        /// A wasm mod's listeners as the game's `Points`: every place forwarded with its record.
-        #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
-        impl<F: crate::wire::Forward + ?Sized> Points for crate::wire::Forwarded<F> {
-            fn subscribed(&self) -> &'static [Option<PointId>] {
-                self.0.subscribed()
-            }
-            #(#forwards)*
-        }
+        pub mod dispatch { use super::*; #(#dispatch)* }
         /// Each place's name, function and record shape, by `PointId`: what the game checks a
         /// wasm mod's listeners against at load.
         #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
@@ -957,7 +935,7 @@ pub(crate) fn records(points: &[GamePoint]) -> String {
             use super::{POINT_COUNT, PointId};
             /// Each place.
             pub static IDS: [PointId; POINT_COUNT] = [#(PointId::#ids),*];
-            /// Each place's `Points` method.
+            /// Each place's catalog name.
             pub static NAMES: [&str; POINT_COUNT] = [#(#names),*];
             /// Each place's function, as an injection's `target` names it.
             pub static TARGETS: [&str; POINT_COUNT] = [#(#targets),*];
@@ -1275,7 +1253,7 @@ mod tests {
             api.contains("fn tick_return")
                 && !api.contains("fn slot_return")
                 && api.contains("SlotReturn")
-                && api.contains("fn game_remote_other_send (& self , args"),
+                && api.contains("fn game_remote_other_send (args"),
             "{api}"
         );
         assert_eq!(

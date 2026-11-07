@@ -61,26 +61,33 @@ pub struct UiMetadata(HashMap<String, NineSlice>);
 pub fn set_metadata(metadata: UiMetadata) {
     *NINE_SLICE.write().unwrap_or_else(|e| e.into_inner()) = Some(metadata.0);
 }
-/// Reads the metadata [`load_metadata`] puts in use, without putting it in use.
+/// Reads the metadata [`load_metadata`] puts in use, without putting it in use. Another
+/// namespace's sprites are named with it (`lobby:gui/sprites/...`), as the GUI atlas packs them.
 pub fn read_metadata(root: &ResourceSource) -> UiMetadata {
     let mut map = HashMap::new();
-    let base = "assets/minecraft/textures/";
-    for name in root.list("assets/minecraft/textures/gui/sprites/") {
-        let Some(stripped) = name.strip_suffix(".png.mcmeta") else {
-            continue;
+    for namespace in root.namespaces("assets") {
+        let base = format!("assets/{namespace}/textures/");
+        let prefix = match namespace.as_str() {
+            "minecraft" => String::new(),
+            namespace => format!("{namespace}:"),
         };
-        let Ok(text) = root.read_to_string(&name) else {
-            continue;
-        };
-        let Some(nine_slice) = serde_json::from_str(&text)
-            .ok()
-            .as_ref()
-            .and_then(parse_nine_slice)
-        else {
-            continue;
-        };
-        let key = stripped.strip_prefix(base).unwrap_or_default().to_owned();
-        map.insert(key, nine_slice);
+        for name in root.list(&format!("{base}gui/sprites/")) {
+            let Some(stripped) = name.strip_suffix(".png.mcmeta") else {
+                continue;
+            };
+            let Ok(text) = root.read_to_string(&name) else {
+                continue;
+            };
+            let Some(nine_slice) = serde_json::from_str(&text)
+                .ok()
+                .as_ref()
+                .and_then(parse_nine_slice)
+            else {
+                continue;
+            };
+            let key = stripped.strip_prefix(base.as_str()).unwrap_or_default();
+            map.insert(format!("{prefix}{key}"), nine_slice);
+        }
     }
     UiMetadata(map)
 }
@@ -1057,6 +1064,46 @@ fn tooltip_size(atlas: &HudAtlas, lines: &[Text]) -> (f32, f32) {
     };
     (w, h)
 }
+/// `TooltipRenderUtil.getBackgroundSprite` and `getFrameSprite` of a tooltip style
+/// (`<namespace>:<path>`): `tooltip/<path>_background` and `tooltip/<path>_frame` in the style's
+/// namespace, named as the GUI atlas packs them.
+pub fn tooltip_style_sprites(namespace: &str, path: &str) -> [String; 2] {
+    let prefix = match namespace {
+        "minecraft" => String::new(),
+        namespace => format!("{namespace}:"),
+    };
+    ["background", "frame"].map(|part| format!("{prefix}gui/sprites/tooltip/{path}_{part}"))
+}
+/// `TooltipRenderUtil.renderTooltipBackground`: the background sprite, then the frame sprite,
+/// each drawn by `blitSprite` (nine-sliced as its `gui.scaling` says, stretched without it)
+/// 12 pixels out from the tooltip's contents `[x, y, w, h]` (`PADDING` 3 and `MARGIN` 9 on
+/// every side). Whether the atlas has both sprites; one that lacks either draws nothing.
+pub fn tooltip_sprites(
+    batch: &mut HudBatch,
+    atlas: &HudAtlas,
+    [background, frame]: [&str; 2],
+    [x, y, w, h]: [f32; 4],
+) -> bool {
+    if ![background, frame]
+        .iter()
+        .all(|sprite| atlas.sprites.contains_key(*sprite))
+    {
+        return false;
+    }
+    for sprite in [background, frame] {
+        blit_sprite(
+            batch,
+            atlas,
+            sprite,
+            x - 12.0,
+            y - 12.0,
+            w + 24.0,
+            h + 24.0,
+            u32::MAX,
+        );
+    }
+    true
+}
 fn tooltip_box(
     batch: &mut HudBatch,
     atlas: &HudAtlas,
@@ -1067,25 +1114,14 @@ fn tooltip_box(
     h: f32,
 ) {
     crate::widgets::frame_tooltip(lines);
-    nine_slice(
+    tooltip_sprites(
         batch,
         atlas,
-        "gui/sprites/tooltip/background",
-        x - 12.0,
-        y - 12.0,
-        w + 24.0,
-        h + 24.0,
-        u32::MAX,
-    );
-    nine_slice(
-        batch,
-        atlas,
-        "gui/sprites/tooltip/frame",
-        x - 12.0,
-        y - 12.0,
-        w + 24.0,
-        h + 24.0,
-        u32::MAX,
+        [
+            "gui/sprites/tooltip/background",
+            "gui/sprites/tooltip/frame",
+        ],
+        [x, y, w, h],
     );
     let mut ly = y;
     for (i, line) in lines.iter().enumerate() {
@@ -2399,13 +2435,86 @@ mod tests {
              Resource::bytes(br#"{"gui":{"scaling":{"type":"nine_slice","width":20,"height":12,"border":3}}}"#.to_vec())),
             ("assets/minecraft/textures/gui/sprites/broken.png.mcmeta".to_owned(), Resource::bytes(b"invalid".to_vec())),
             ("assets/minecraft/textures/block/stone.png.mcmeta".to_owned(), Resource::bytes(b"{}".to_vec())),
+            ("assets/lobby/textures/gui/sprites/tooltip/gold_frame.png.mcmeta".to_owned(),
+             Resource::bytes(br#"{"gui":{"scaling":{"type":"nine_slice","width":40,"height":40,"border":6}}}"#.to_vec())),
         ]));
         let metadata = read_metadata(&source);
-        assert_eq!(metadata.0.len(), 1);
+        assert_eq!(metadata.0.len(), 2);
         let button = metadata.0.get("gui/sprites/widget/button").unwrap();
         assert_eq!(
             (button.width, button.height, button.border),
             (20, 12, [3; 4])
+        );
+        // Another namespace's sprite is named with it, as the GUI atlas packs it.
+        let frame = metadata
+            .0
+            .get("lobby:gui/sprites/tooltip/gold_frame")
+            .unwrap();
+        assert_eq!((frame.width, frame.border), (40, [6; 4]));
+    }
+    /// A tooltip style names its sprites as `TooltipRenderUtil` does, in the GUI atlas's names;
+    /// the box draws the background, then the frame, 12 pixels out from the contents, each
+    /// stretched when it has no `gui.scaling` (`GuiMetadataSection.DEFAULT`), and nothing
+    /// without either sprite.
+    #[test]
+    fn a_tooltip_style_draws_its_own_background_and_frame() {
+        assert_eq!(
+            tooltip_style_sprites("minecraft", "fancy"),
+            [
+                "gui/sprites/tooltip/fancy_background",
+                "gui/sprites/tooltip/fancy_frame"
+            ]
+        );
+        let [background, frame] = tooltip_style_sprites("lobby", "gold");
+        assert_eq!(
+            [background.as_str(), frame.as_str()],
+            [
+                "lobby:gui/sprites/tooltip/gold_background",
+                "lobby:gui/sprites/tooltip/gold_frame"
+            ]
+        );
+        let mut atlas = atlas();
+        let mut batch = HudBatch::scratch([640, 480]);
+        assert!(!tooltip_sprites(
+            &mut batch,
+            &atlas,
+            [&background, &frame],
+            [20.0, 20.0, 50.0, 8.0]
+        ));
+        assert!(batch.vertices.is_empty());
+        // Two 16 × 16 sprites without metadata, in different places on the atlas.
+        let region = |u0: f32| Rect {
+            u0,
+            v0: 0.0,
+            u1: u0 + 0.25,
+            v1: 0.25,
+            w: 16,
+            h: 16,
+        };
+        // A background without its frame would draw a box with no border.
+        atlas.sprites.insert(background.clone(), region(0.0));
+        assert!(!tooltip_sprites(
+            &mut batch,
+            &atlas,
+            [&background, &frame],
+            [20.0, 20.0, 50.0, 8.0]
+        ));
+        assert!(batch.vertices.is_empty());
+        atlas.sprites.insert(frame.clone(), region(0.5));
+        assert!(tooltip_sprites(
+            &mut batch,
+            &atlas,
+            [&background, &frame],
+            [20.0, 20.0, 50.0, 8.0]
+        ));
+        // Each is one stretched picture over the whole box, the background under the frame.
+        let box_ = [8.0, 8.0, 82.0, 40.0];
+        assert_eq!(
+            quads(&batch),
+            [
+                (box_, [0.0, 0.0, 0.25, 0.25]),
+                (box_, [0.5, 0.0, 0.75, 0.25])
+            ]
         );
     }
 }

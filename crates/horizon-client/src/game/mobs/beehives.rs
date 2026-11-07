@@ -268,7 +268,7 @@ impl Game<'_> {
             let bottle = ItemStack::new("minecraft:honey_bottle", 1);
             if self.held().is_none() {
                 *self.held_mut() = Some(bottle);
-            } else if let Some(rest) = self.give(bottle)
+            } else if let Some(rest) = self.add_stack_to_inventory(bottle)
                 && let Some(eye) = self.eye_position()
             {
                 self.spawn_item(rest, eye, [0.0, 0.1, 0.0], 40);

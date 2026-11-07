@@ -20,7 +20,7 @@ impl Game<'_> {
     /// slider. A `minecraft:` event must be registered; a mod's goes by name
     /// and is heard where its resources define it. True means queued, not
     /// heard.
-    pub(super) fn native_level_play_sound(
+    pub(super) fn level_play_sound(
         &mut self,
         level: LevelRef,
         sound: &str,
@@ -32,7 +32,7 @@ impl Game<'_> {
         self.native_queue_sound(level, sound, at, source, volume, pitch, None)
             .is_some()
     }
-    /// `native_level_play_sound`, leaving out the player on connection
+    /// `level_play_sound`, leaving out the player on connection
     /// `except` (`Level.playSound(except, ...)`): the queued sound, None
     /// when it can't be sent.
     pub(super) fn native_queue_sound(
@@ -71,7 +71,7 @@ impl Game<'_> {
     /// count sends one particle moving along `spread`). Block particle types
     /// need `state`; item, trail and vibration particles aren't supported.
     /// True means queued, not drawn.
-    pub(super) fn native_level_send_particles(
+    pub(super) fn level_send_particles(
         &mut self,
         level: LevelRef,
         options: &ParticleOptions,

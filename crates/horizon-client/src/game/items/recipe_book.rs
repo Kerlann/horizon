@@ -363,7 +363,7 @@ impl Game<'_> {
             .map_or_else(Vec::new, |b| b.entries.clone())
     }
     /// The display ids the player's book holds, and a number that changes
-    /// whenever they do (`native_known_recipes`).
+    /// whenever they do (`known_recipes`).
     pub(super) fn recipe_book_displays(&mut self) -> (u64, Vec<i32>) {
         self.sync_client_book();
         (
@@ -996,17 +996,17 @@ impl Game<'_> {
         }
         self.recipe_ui.last_placed = Some(id);
         self.recipe_ui.ghost.clear();
-        self.place_recipe(book_type, entry_index, use_max);
+        self.place_book_recipe(book_type, entry_index, use_max);
         true
     }
-    /// Whether the open screen takes `native_place_recipe`: a crafting grid's
+    /// Whether the open screen takes `place_recipe`: a crafting grid's
     /// book (the inventory's or a crafting table's).
     pub(super) fn mod_recipe_screen(&self) -> bool {
         self.screen == Screen::Inventory
             && self.active_book() == Some(BookType::Crafting)
             && !self.spectator()
     }
-    /// `native_place_recipe`: the book's click on the recipe with this display
+    /// `place_recipe`: the book's click on the recipe with this display
     /// id, refused as `handlePlaceRecipe` refuses it (no crafting screen,
     /// not in the player's book; an impossible one in `place_recipe`).
     pub(super) fn mod_place_recipe(&mut self, display_id: i32, all: bool) {
@@ -1023,12 +1023,12 @@ impl Game<'_> {
             return;
         };
         self.recipe_ui.ghost.clear();
-        self.place_recipe(BookType::Crafting, index, all);
+        self.place_book_recipe(BookType::Crafting, index, all);
     }
     /// `ServerboundPlaceRecipePacket`: the server places the recipe
     /// (`ServerPlaceRecipe` on the menu engine) and answers with a ghost
     /// recipe when the items are missing.
-    fn place_recipe(&mut self, book_type: BookType, entry_index: usize, use_max: bool) {
+    fn place_book_recipe(&mut self, book_type: BookType, entry_index: usize, use_max: bool) {
         let Some(entry) = self
             .recipe_ui
             .book
@@ -1433,7 +1433,7 @@ impl Game<'_> {
             }
             None => (Vec::new(), None),
         };
-        let translate = |key: &str| self.translate(key, key);
+        let translate = |key: &str| self.translate_with_fallback(key, key);
         let text_width = |s: &str| HudBatch::text_width(atlas, s) as i32;
         let layout = Layout {
             book: book_type,
@@ -1588,7 +1588,7 @@ impl Game<'_> {
                         let mut lines = self.stack_tooltip(stack);
                         if *more {
                             lines.push((
-                                horizon_client::text::Text::literal(self.translate(
+                                horizon_client::text::Text::literal(self.translate_with_fallback(
                                     "gui.recipebook.moreRecipes",
                                     "Right Click for More",
                                 )),

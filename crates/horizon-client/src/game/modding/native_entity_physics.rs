@@ -15,7 +15,7 @@ impl Game<'_> {
     /// `AbstractArrow.noPhysics`, set once a loyal trident turns back. The
     /// ender dragon, an area-effect cloud, an ominous item spawner and a
     /// shulker bullet set it in their constructors and never clear it.
-    pub(super) fn native_entity_no_physics(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_no_physics(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_target(entity)? {
             Target::Player => Some(self.player.as_ref()?.spectator),
             Target::Guest(conn) => Some(self.command_guest(conn)?.motion.as_deref()?.spectator),
@@ -55,7 +55,7 @@ mod tests {
             game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
             game.lan_acting_uuid = Some(123);
             game.lan_acting_entity = Some(20);
-            let player = game.native_entity(20).unwrap();
+            let player = game.entity(20).unwrap();
             game.player.as_mut().unwrap().spectator = false;
             assert_eq!(player.no_physics(game), Some(false));
             game.player.as_mut().unwrap().spectator = true;
@@ -63,7 +63,7 @@ mod tests {
 
             let kind = game.res.mob_types().get("minecraft:vex").unwrap().clone();
             game.mobs.push(Mob::new(42, kind, Vec3::ZERO, 0.0));
-            let mob = game.native_entity(42).unwrap();
+            let mob = game.entity(42).unwrap();
             assert_eq!(mob.no_physics(game), Some(false));
 
             let mut arrow = Projectile::new(
@@ -78,7 +78,7 @@ mod tests {
             arrow.id = game.take_entity_id();
             let arrow_id = arrow.id;
             game.creatures.projectiles.push(arrow);
-            let arrow = game.native_entity(arrow_id).unwrap();
+            let arrow = game.entity(arrow_id).unwrap();
             assert_eq!(arrow.no_physics(game), Some(false));
             game.creatures
                 .projectiles
@@ -88,7 +88,7 @@ mod tests {
             let trident_id = game.take_entity_id();
             game.tridents
                 .push(ThrownTrident::remote(trident_id, Vec3::ZERO, 0.0, 0.0));
-            let trident = game.native_entity(trident_id).unwrap();
+            let trident = game.entity(trident_id).unwrap();
             assert_eq!(trident.no_physics(game), Some(false));
             game.tridents[0].no_physics = true;
             assert_eq!(trident.no_physics(game), Some(true));
@@ -97,7 +97,7 @@ mod tests {
             snowball.id = game.take_entity_id();
             let snowball_id = snowball.id;
             game.creatures.projectiles.push(snowball);
-            let snowball = game.native_entity(snowball_id).unwrap();
+            let snowball = game.entity(snowball_id).unwrap();
             assert_eq!(snowball.no_physics(game), None);
 
             let mut bullet = Projectile::new(
@@ -114,14 +114,14 @@ mod tests {
             bullet.id = game.take_entity_id();
             let bullet_id = bullet.id;
             game.creatures.projectiles.push(bullet);
-            let bullet = game.native_entity(bullet_id).unwrap();
+            let bullet = game.entity(bullet_id).unwrap();
             assert_eq!(bullet.no_physics(game), Some(true));
 
             let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
             dragon.id = game.take_entity_id();
             let dragon_id = dragon.id;
             game.dragon = Some(dragon);
-            let dragon = game.native_entity(dragon_id).unwrap();
+            let dragon = game.entity(dragon_id).unwrap();
             assert_eq!(dragon.no_physics(game), Some(true));
 
             game.boats.push(super::super::boats::Boat::new(
@@ -130,7 +130,7 @@ mod tests {
                 Vec3::ZERO,
                 0.0,
             ));
-            let boat = game.native_entity(44).unwrap();
+            let boat = game.entity(44).unwrap();
             assert_eq!(boat.no_physics(game), None);
             let stale = EntityRef::new(NativeWorldEpoch::new(mob.epoch().get() + 1), mob.id());
             assert_eq!(stale.no_physics(game), None);

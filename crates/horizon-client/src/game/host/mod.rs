@@ -1,6 +1,6 @@
 //! The game's side of the host traits: `horizon-mod-api/src/host/<area>.rs` declares each
-//! area's methods and `host/<area>.rs` here implements them, forwarding to the game's
-//! `native_*` functions. `Host`, `ServerHost` and `ClientHost` are the unions of those traits, so
+//! area's methods and access levels. Build-time generated impls forward to the inherent
+//! `Game` functions with the same names. `Host`, `ServerHost` and `ClientHost` are the unions of those traits, so
 //! a mod reaches every area through them and the handles.
 use super::Game;
 use mod_api::__private::game::*;

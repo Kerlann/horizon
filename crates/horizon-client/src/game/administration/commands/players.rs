@@ -45,7 +45,7 @@ impl Game<'_> {
     /// Native console calls cannot reach an outer turn's displaced player.
     /// Ordinary command resolution is unchanged, including nested turns.
     fn native_command_player_available(&self, guest: &Guest) -> bool {
-        !self.native_command_filter || self.native_entity(guest.entity_id as u32).is_some()
+        !self.native_command_filter || self.entity(guest.entity_id as u32).is_some()
     }
 
     /// The entity the command runs as (`CommandSourceStack.getEntity`): a

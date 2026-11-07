@@ -8,6 +8,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner for coverage verification
+        type: choice
+        default: auto
+        options: [auto, ubuntu-latest, dyna-large]
 permissions:
   contents: read
   actions: read
@@ -49,7 +55,7 @@ jobs:
     # A mod built to mod.wasm and loaded as the game loads it;
     # the mod API's generated WIT as an artifact, and its diff in the job summary (never a failure).
     needs: runner
-    runs-on: ${{ needs.runner.outputs.self_hosted == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && 'dyna-large' || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner != '' && inputs.runner != 'auto' && inputs.runner || (needs.runner.outputs.self_hosted == 'true' && 'dyna-large' || 'ubuntu-latest') }}
     # The universal host and guest binding build alone takes about an hour on the OVH runners (36 minutes
     # for the whole job on the desktop runner). This workflow has its own queue, so it never holds up the
     # lint and verify of a newer main commit.
@@ -85,6 +91,19 @@ jobs:
           # are cached once rather than in seven independent target directories.
           workspaces: .
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Unlike rust-cache, retain the staged workspace artifacts and source mtimes.
+      # Dyna's target symlink already persists these directories between jobs.
+      - uses: actions/cache/restore@v4
+        if: runner.environment == 'github-hosted'
+        id: coverage-cache
+        with:
+          path: |
+            target/internals-catalog-coverage
+            target/internals-catalog-check
+          key: internals-coverage-v1-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            internals-coverage-v1-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
+            internals-coverage-v1-${{ runner.os }}-
       - name: The mod API, points and internals crates build for wasm32
         run: cargo +1.99.1 check -p horizon-mod-api -p horizon-mod-points -p horizon-mod-internals --target wasm32-unknown-unknown
       - name: Generated internals copies, containers and functions compile for wasm32
@@ -96,7 +115,15 @@ jobs:
         run: |
           export HORIZON_COVERAGE_WASM_CARGO="$(rustup which --toolchain 1.99.1 cargo)"
           export HORIZON_COVERAGE_WASM_RUSTC="$(rustup which --toolchain 1.99.1 rustc)"
+          cargo +stable test -j4 -p horizon-mod-api-gen --lib guest_compiler_ignores_another_toolchains_driver -- --ignored --nocapture
           cargo +stable test -j4 -p horizon-mod-api-gen --lib real_catalog_has_compiling_host_and_guest_bindings -- --ignored --nocapture
+      - uses: actions/cache/save@v4
+        if: runner.environment == 'github-hosted' && steps.coverage-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            target/internals-catalog-coverage
+            target/internals-catalog-check
+          key: ${{ steps.coverage-cache.outputs.cache-primary-key }}
       - name: Build all wasm fixtures and the std member in one shared target
         run: |
           cargo +stable build -p cargo-horizon-mod -p xtask

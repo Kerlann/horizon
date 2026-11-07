@@ -24,13 +24,13 @@ impl Game<'_> {
 
     /// The entity as the ender dragon, or None for another kind, a stale
     /// handle or a client.
-    pub(super) fn native_dragon_ref(&self, entity: EntityRef) -> Option<DragonRef> {
+    pub(super) fn dragon(&self, entity: EntityRef) -> Option<DragonRef> {
         self.native_dragon(entity)?;
         Some(DragonRef::new(entity))
     }
 
     /// `EnderDragonPhaseManager.getCurrentPhase`.
-    pub(super) fn native_dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase> {
+    pub(super) fn dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase> {
         Some(self.native_dragon(dragon.entity())?.native_phase())
     }
 
@@ -40,11 +40,7 @@ impl Game<'_> {
     /// nothing, as in vanilla (a strafing dragon keeps its player). No
     /// random draw. False for a stale handle or a client. The new phase
     /// runs from the dragon's next tick.
-    pub(super) fn native_dragon_set_phase(
-        &mut self,
-        dragon: DragonRef,
-        phase: NativeDragonPhase,
-    ) -> bool {
+    pub(super) fn dragon_set_phase(&mut self, dragon: DragonRef, phase: NativeDragonPhase) -> bool {
         let Some(d) = self.native_dragon_mut(dragon.entity()) else {
             return false;
         };
@@ -63,13 +59,13 @@ impl Game<'_> {
     /// `EnderDragonFight.aliveCrystals`: the crystals the last scan found
     /// (every 100 ticks). None for a stale handle, a client, or a dragon
     /// outside the End or whose fight is not loaded.
-    pub(super) fn native_dragon_alive_crystals(&self, dragon: DragonRef) -> Option<i32> {
+    pub(super) fn dragon_alive_crystals(&self, dragon: DragonRef) -> Option<i32> {
         Some(self.native_dragon_fight(dragon)?.alive_crystals)
     }
 
     /// `EnderDragonFight.hasPreviouslyKilledDragon`. None as
     /// `alive_crystals` is.
-    pub(super) fn native_dragon_previously_killed(&self, dragon: DragonRef) -> Option<bool> {
+    pub(super) fn dragon_previously_killed(&self, dragon: DragonRef) -> Option<bool> {
         Some(self.native_dragon_fight(dragon)?.previously_killed)
     }
 
@@ -93,9 +89,9 @@ impl Game<'_> {
     /// it is no longer a valid target. The dragon's flight never sets or
     /// reads it.
     pub(super) fn native_dragon_target(&self, entity: EntityRef) -> Option<LivingRef> {
-        let target = self.native_entity(self.native_dragon(entity)?.target?)?;
+        let target = self.entity(self.native_dragon(entity)?.target?)?;
         self.native_dragon_valid_target(self.native_entity_target(target)?)
-            .then(|| self.native_living(target))?
+            .then(|| self.living(target))?
     }
 
     /// `Mob.setTarget` for the dragon; None clears it. An invalid target is
@@ -141,8 +137,8 @@ mod tests {
         let mut dragon = Dragon::new(Vec3::ZERO, 0.0, 0);
         dragon.id = 15;
         game.dragon = Some(dragon);
-        let entity = game.native_entity(15).unwrap();
-        (entity, game.native_dragon_ref(entity).unwrap())
+        let entity = game.entity(15).unwrap();
+        (entity, game.dragon(entity).unwrap())
     }
 
     #[test]
@@ -161,11 +157,8 @@ mod tests {
             game.mobs.push(shielded);
             game.armor_stands.push(ArmorStand::new(14, Vec3::ZERO, 0.0));
             let (entity, dragon) = dragon_in(game);
-            assert!(
-                game.native_dragon_ref(game.native_entity(12).unwrap())
-                    .is_none()
-            );
-            let mob = game.native_mob_ref(entity).unwrap();
+            assert!(game.dragon(game.entity(12).unwrap()).is_none());
+            let mob = game.mob(entity).unwrap();
             assert_eq!(mob, dragon.mob());
             assert_eq!(mob.living().entity(), entity);
 
@@ -198,9 +191,9 @@ mod tests {
             }
 
             // A target a mod set: valid mobs only, and it goes stale.
-            let zombie = game.native_living(game.native_entity(12).unwrap()).unwrap();
-            let shield = game.native_living(game.native_entity(13).unwrap()).unwrap();
-            let stand = game.native_living(game.native_entity(14).unwrap()).unwrap();
+            let zombie = game.living(game.entity(12).unwrap()).unwrap();
+            let shield = game.living(game.entity(13).unwrap()).unwrap();
+            let stand = game.living(game.entity(14).unwrap()).unwrap();
             assert_eq!(mob.target(game), None);
             assert!(mob.set_target(game, Some(zombie)));
             assert_eq!(mob.target(game), Some(zombie));
@@ -348,13 +341,13 @@ mod tests {
     fn an_invulnerable_player_is_not_a_target() {
         with_game(|game| {
             let (entity, _) = dragon_in(game);
-            let mob = game.native_mob_ref(entity).unwrap();
+            let mob = game.mob(entity).unwrap();
             game.player =
                 Some(horizon_client::motion::PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
             game.lan_acting_uuid = Some(7);
             game.lan_acting_entity = Some(30);
-            let target = game.native_entity(30).unwrap();
-            let living = game.native_living(target).unwrap();
+            let target = game.entity(30).unwrap();
+            let living = game.living(target).unwrap();
             assert!(mob.set_target(game, Some(living)));
             game.player.as_mut().unwrap().invulnerable = true;
             assert_eq!(mob.target(game), None);

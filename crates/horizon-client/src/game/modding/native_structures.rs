@@ -25,7 +25,7 @@ impl Game<'_> {
     /// entities are left out. None for an id that doesn't parse or has a `.`
     /// or `..` part, a template the game doesn't have, and on a client.
     /// API @API:structure_template@.
-    pub(super) fn native_structure_template(
+    pub(super) fn structure_template(
         &mut self,
         id: &str,
         at: [i32; 3],

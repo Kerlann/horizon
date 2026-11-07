@@ -53,7 +53,7 @@ impl Game<'_> {
             Interaction::Take(stack) => {
                 // Player.addItem returns leftovers on the client without
                 // spawning an item entity; the server owns any dropped stack.
-                let _ = self.give(stack);
+                let _ = self.add_stack_to_inventory(stack);
             }
         }
         true
@@ -395,7 +395,7 @@ impl Game<'_> {
             if let Some(stack) = carried {
                 self.spawn_item(stack, at, [0.0, 0.2, 0.0], 40);
             }
-            if let Some(rest) = self.give(ItemStack { count: 1, ..held })
+            if let Some(rest) = self.add_stack_to_inventory(ItemStack { count: 1, ..held })
                 && let Some(eye) = self.eye_position()
             {
                 self.spawn_item(rest, eye, [0.0; 3], 0);

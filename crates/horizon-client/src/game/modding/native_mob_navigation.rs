@@ -26,7 +26,7 @@ impl Game<'_> {
     /// and coordinates too large for safe block arithmetic. As in vanilla,
     /// the mob's own goals may replace the path next tick. False for the
     /// dragon, which flies by its phase and keeps no navigation.
-    pub(super) fn native_mob_move_to(&mut self, mob: MobRef, at: [f64; 3], speed: f64) -> bool {
+    pub(super) fn mob_move_to(&mut self, mob: MobRef, at: [f64; 3], speed: f64) -> bool {
         if !navigation_move_accepts(at, speed) {
             return false;
         }
@@ -47,7 +47,7 @@ impl Game<'_> {
 
     /// `PathNavigation.stop`. False for a stale or unavailable mob, or on a
     /// client, and for the dragon (no navigation).
-    pub(super) fn native_mob_stop(&mut self, mob: MobRef) -> bool {
+    pub(super) fn mob_stop(&mut self, mob: MobRef) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -60,7 +60,7 @@ impl Game<'_> {
 
     /// `PathNavigation.isDone`; None for a stale or unavailable mob, or on a
     /// client, and for the dragon (no navigation).
-    pub(super) fn native_mob_is_done(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn mob_is_done(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -71,7 +71,7 @@ impl Game<'_> {
     /// is followed at (1.0 is the mob's normal speed; 0 until a path sets
     /// one). This is not the mob's movement-speed attribute. None for a
     /// stale or unavailable mob, or on a client, and for the dragon.
-    pub(super) fn native_mob_navigation_speed(&self, mob: MobRef) -> Option<f64> {
+    pub(super) fn mob_navigation_speed(&self, mob: MobRef) -> Option<f64> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -82,7 +82,7 @@ impl Game<'_> {
     /// pathfinder — its own override, else the kind's default (a negative
     /// malus closes the kind). None for a stale or unavailable mob, the
     /// dragon, or on a client.
-    pub(super) fn native_mob_pathfinding_malus(&self, mob: MobRef, kind: PathType) -> Option<f32> {
+    pub(super) fn mob_pathfinding_malus(&self, mob: MobRef, kind: PathType) -> Option<f32> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -99,7 +99,7 @@ impl Game<'_> {
     /// saved, as in vanilla, so a reload or conversion keeps the species'
     /// own. False for a malus that is not finite, a stale or unavailable mob,
     /// the dragon, or on a client.
-    pub(super) fn native_mob_set_pathfinding_malus(
+    pub(super) fn mob_set_pathfinding_malus(
         &mut self,
         mob: MobRef,
         kind: PathType,
@@ -123,7 +123,7 @@ impl Game<'_> {
     /// own AI — a goal's or a brain species' next `moveTo` — sets its own
     /// again, as in vanilla. False for a non-finite speed, a stale or
     /// unavailable mob, or on a client, and for the dragon.
-    pub(super) fn native_mob_set_navigation_speed(&mut self, mob: MobRef, speed: f64) -> bool {
+    pub(super) fn mob_set_navigation_speed(&mut self, mob: MobRef, speed: f64) -> bool {
         if !speed.is_finite() {
             return false;
         }
@@ -173,8 +173,8 @@ mod tests {
             let mut zombie = Mob::new(99, kind, Vec3::new(3.5, 65.0, 3.5), 0.0);
             zombie.on_ground = true;
             game.mobs.push(zombie);
-            let entity = game.native_entity(99).unwrap();
-            let mob = game.native_mob_ref(entity).unwrap();
+            let entity = game.entity(99).unwrap();
+            let mob = game.mob(entity).unwrap();
             assert_eq!(mob.is_done(game), Some(true));
             assert!(mob.move_to(game, [10.5, 65.0, 3.5], 1.25));
             assert_eq!(mob.is_done(game), Some(false));
@@ -220,7 +220,7 @@ mod tests {
                     Vec3::ZERO,
                     0.0,
                 ));
-            let wrong = MobRef::new(game.native_entity(102).unwrap());
+            let wrong = MobRef::new(game.entity(102).unwrap());
             assert!(!wrong.move_to(game, [5.0, 65.0, 3.0], 1.0));
             assert!(!wrong.stop(game));
             assert_eq!(wrong.is_done(game), None);
@@ -232,17 +232,13 @@ mod tests {
                 .clone();
             game.mobs
                 .push(Mob::new(100, parrot, Vec3::new(3.5, 66.0, 5.5), 0.0));
-            let flying = game
-                .native_mob_ref(game.native_entity(100).unwrap())
-                .unwrap();
+            let flying = game.mob(game.entity(100).unwrap()).unwrap();
             assert!(flying.move_to(game, [9.5, 66.0, 5.5], 1.0));
             assert_eq!(flying.is_done(game), Some(false));
             let cod = game.res.mob_types().get("minecraft:cod").unwrap().clone();
             game.mobs
                 .push(Mob::new(101, cod, Vec3::new(3.5, 65.0, 7.5), 0.0));
-            let fish = game
-                .native_mob_ref(game.native_entity(101).unwrap())
-                .unwrap();
+            let fish = game.mob(game.entity(101).unwrap()).unwrap();
             assert!(!fish.move_to(game, [9.5, 65.0, 7.5], 1.0));
             assert_eq!(fish.is_done(game), Some(true));
         });
@@ -260,8 +256,8 @@ mod tests {
                 .clone();
             game.mobs
                 .push(Mob::new(99, kind, Vec3::new(3.5, 65.0, 3.5), 0.0));
-            let entity = game.native_entity(99).unwrap();
-            let mob = game.native_mob_ref(entity).unwrap();
+            let entity = game.entity(99).unwrap();
+            let mob = game.mob(entity).unwrap();
             // A fresh navigation has no path, so no speed was set for one.
             assert_eq!(mob.navigation_speed(game), Some(0.0));
             assert!(mob.set_navigation_speed(game, 1.25));

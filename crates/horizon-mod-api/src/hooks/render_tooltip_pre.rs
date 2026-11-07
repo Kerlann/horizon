@@ -7,7 +7,7 @@ pub trait Hooks {
     /// and `y` to move it. `screen_width` and `screen_height` are the screen's size. `elements` are its text lines, then its images, as `render_tooltip_gather_components`
     /// left them (a tooltip with no item has only lines), and are read-only here. `stack` is the
     /// item the tooltip describes, `None` for a text tooltip. Set `cancel` and nothing is drawn,
-    /// and no `tooltip_color` is asked. Asked each frame a tooltip shows, only while a mod listens.
+    /// and no `render_tooltip_texture` is asked. Asked each frame a tooltip shows, only while a mod listens.
     /// `draw` is the tooltip's GUI drawing context. Custom drawing stays visible even when
     /// the tooltip is cancelled; `draw.gui_draw_item_with` draws a stack with optional count text.
     /// Client-side.

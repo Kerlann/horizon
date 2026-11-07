@@ -1,6 +1,6 @@
 //! Where a block's textures are in the block sprite arrays, side by side, for drawing the block
 //! somewhere the mesher does not: a native mod's own pass drawing blocks as voxels
-//! (`native_block_sprites`, `WorldDrawn::block_sprites`; docs/modding/src/how-to/native-mods.md). The answer is the
+//! (`block_sprites`, `WorldDrawn::block_sprites`; docs/modding/src/how-to/native-mods.md). The answer is the
 //! model's own faces, as the mesher bakes them: each face's sprite (its array and layer), where on
 //! the block's side it lies and how its texture runs across it, and its tint source.
 //!

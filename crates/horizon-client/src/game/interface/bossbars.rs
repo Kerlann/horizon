@@ -825,8 +825,8 @@ pub(super) mod audience_tests {
         host.hub.guests.push(real);
         // The real guest took entity id 1: the fake made next takes the one after it.
         game.next_entity = game.next_entity.max(1);
-        let level = game.native_level(game.dim.id()).unwrap();
-        game.native_fake_player(level, 2, "fake").unwrap();
+        let level = game.level(game.dim.id()).unwrap();
+        game.fake_player(level, 2, "fake").unwrap();
         let guests = &mut game.lan.as_mut().unwrap().hub.guests;
         let index = guests.iter().position(|g| g.uuid == 2).unwrap();
         guests.update(index, |g| g.position = [0.0, 100.0, 0.0]);

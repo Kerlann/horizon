@@ -137,8 +137,6 @@ pub struct Injection {
     pub kind: InjectionKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub helper: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub trait_method: Option<String>,
     /// A crate-root function of the target point's raw listener type.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub raw: Option<String>,
@@ -272,7 +270,7 @@ fn rust_ident(name: &str) -> bool {
         && !name.as_bytes()[0].is_ascii_digit()
 }
 
-/// One injection's own rules: a hook or a target, and a source helper, trait method or raw
+/// One injection's own rules: a hook or a target, and a source helper or raw
 /// function that listens at a point as only a point's listener can.
 fn check_injection(injection: &Injection) -> Result<(), String> {
     // Modules share horizon-mixins' one id space with injections.
@@ -281,12 +279,12 @@ fn check_injection(injection: &Injection) -> Result<(), String> {
             "{MANIFEST}: injection needs exactly one hook or target"
         ));
     }
-    match (&injection.helper, &injection.trait_method, &injection.raw) {
-        (Some(helper), None, None) if plain_path(helper) && source_file(helper) => {}
-        (None, Some(method), None) | (None, None, Some(method)) if rust_ident(method) => {}
+    match (&injection.helper, &injection.raw) {
+        (Some(helper), None) if plain_path(helper) && source_file(helper) => {}
+        (None, Some(method)) if rust_ident(method) => {}
         _ => {
             return Err(format!(
-                "{MANIFEST}: injection needs exactly one source helper, trait_method or raw"
+                "{MANIFEST}: injection needs exactly one source helper or raw"
             ));
         }
     }
@@ -325,7 +323,7 @@ fn check_injection(injection: &Injection) -> Result<(), String> {
     }
     // Point listeners run at the head or return with the point's own types, so nothing
     // else of a mixin applies.
-    if (injection.trait_method.is_some() || injection.raw.is_some())
+    if injection.raw.is_some()
         && (injection.hook.is_some()
             || !matches!(injection.kind, InjectionKind::Head | InjectionKind::Return)
             || source_options
@@ -333,7 +331,7 @@ fn check_injection(injection: &Injection) -> Result<(), String> {
             || injection.ordinal.is_some())
     {
         return Err(format!(
-            "{MANIFEST}: injection {}: a trait_method or raw listener listens at the HEAD or RETURN of the point its `target` names, and takes the point's record: no `hook` (a hook is its own Hooks method), bindings, cancellable, argument, selector, ordinal, require, slice, variable or result (cancel through the record's `cancel`); use a helper for the rest",
+            "{MANIFEST}: injection {}: a raw listener listens at the HEAD or RETURN of the point its `target` names, and takes the point's record: no `hook` (a hook is its own Hooks method), bindings, cancellable, argument, selector, ordinal, require, slice, variable or result (cancel through the record's `cancel`); use a helper for the rest",
             injection.id
         ));
     }
@@ -435,7 +433,8 @@ impl Manifest {
             .map_err(|e| format!("{MANIFEST}: {e}"))?;
         if let Some(native) = &m.native {
             Internal::check_all(&native.internals)?;
-            let mut ids = std::collections::HashSet::new();
+            let mut ids: std::collections::HashSet<_> =
+                m.inject.iter().map(|entry| &entry.id).collect();
             for injection in &native.injection {
                 if injection.id.is_empty() || !ids.insert(&injection.id) {
                     return Err(format!("{MANIFEST}: empty or duplicate injection id"));
@@ -1069,6 +1068,19 @@ capabilities = ["registries"]
 "#;
 
     #[test]
+    fn unified_and_native_raw_injections_share_the_id_namespace() {
+        let pin = "a".repeat(40);
+        let text = |raw_id| {
+            format!(
+                "{EXAMPLE}[native]\ngame='26.3'\nhorizon='{pin}'\nmixins='{pin}'\n[[inject]]\nid='shared'\nat='game::tick'\nkind='head'\nwith='tick'\nhash='signature'\n[[native.injection]]\nid='{raw_id}'\ntarget='game::tick'\nkind='HEAD'\nraw='raw_tick'\n"
+            )
+        };
+        assert!(Manifest::parse(&text("distinct")).is_ok());
+        let error = Manifest::parse(&text("shared")).unwrap_err();
+        assert!(error.contains("duplicate injection id"), "{error}");
+    }
+
+    #[test]
     fn refuses_bad_ids_and_retired_manifests() {
         let bad_id = EXAMPLE.replace("ruby", "Ruby!");
         assert!(Manifest::parse(&bad_id).unwrap_err().contains("is not"));
@@ -1117,31 +1129,19 @@ capabilities = ["registries"]
     }
 
     #[test]
-    fn a_trait_method_listens_at_a_points_head_or_return_only() {
-        let native = format!(
-            "[native]\ngame = '26.3'\nhorizon = '{}'\nmixins = '{}'\n",
-            "a".repeat(40),
-            "b".repeat(40)
-        );
-        let injection = |rest: &str| {
+    fn unknown_injection_fields_are_refused_by_the_schema() {
+        for code in [
             format!(
-                "{EXAMPLE}{native}[[native.injection]]\nid = 'tick'\ntarget = \"horizon_client::game::Game<'_>::tick\"\ntrait_method = 'tick'\n{rest}"
-            )
-        };
-        for ok in ["kind = 'HEAD'\n", "kind = 'RETURN'\n"] {
-            Manifest::parse(&injection(ok)).unwrap();
-        }
-        for refused in [
-            "kind = 'MODIFY_ARG'\n",
-            "kind = 'HEAD'\ncancellable = true\n",
-            "kind = 'HEAD'\nselector = 'x'\n",
-            "kind = 'HEAD'\nbindings = [{ name = 'a', ty = 'i32', value = 'a' }]\n",
+                "[native]\ngame='26.3'\nhorizon='{}'\nmixins='{}'\n",
+                "a".repeat(40),
+                "b".repeat(40)
+            ),
+            format!("[wasm]\nsha512='{}'\ntoolchain='1.99.1'\n", "0".repeat(128)),
         ] {
-            let error = Manifest::parse(&injection(refused)).unwrap_err();
-            assert!(
-                error.contains("injection tick") && error.contains("helper"),
-                "{refused}: {error}"
-            );
+            for kind in ["HEAD", "RETURN"] {
+                let error = Manifest::parse(&format!("{EXAMPLE}{code}[[native.injection]]\nid='tick'\ntarget='game::tick'\nkind='{kind}'\ntrait_method='tick'\n")).unwrap_err();
+                assert!(error.contains("unknown field"), "{error}");
+            }
         }
     }
 
@@ -1198,16 +1198,13 @@ capabilities = ["registries"]
         for keys in [
             "",
             "raw='count'\nhelper='src/a.rs'",
-            "raw='count'\ntrait_method='tick'",
-            "helper='src/a.rs'\ntrait_method='tick'",
-            "raw='count'\nhelper='src/a.rs'\ntrait_method='tick'",
             "raw=''",
             "raw='nested::count'",
             "raw='0count'",
         ] {
             let error = Manifest::parse(&format!("{base}{injection}{keys}\n")).unwrap_err();
             assert!(
-                error.contains("exactly one source helper, trait_method or raw"),
+                error.contains("exactly one source helper or raw"),
                 "{error}"
             );
         }
@@ -1256,7 +1253,7 @@ capabilities = ["registries"]
             // duplicate id, also against an injection's
             format!("{valid}{valid}"),
             format!(
-                "{valid}[[native.injection]]\nid = 'runtime'\ntarget = 'a'\nkind = 'HEAD'\ntrait_method = 'b'\n"
+                "{valid}[[native.injection]]\nid = 'runtime'\ntarget = 'a'\nkind = 'HEAD'\nraw = 'b'\n"
             ),
             // not an identifier
             valid.replace("name = 'runtime'", "name = 'run time'"),

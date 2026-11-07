@@ -6,8 +6,8 @@ Rules for a coding agent making a Horizon mod. They are short on purpose; each l
    implements `Hooks` with `#[mod_api::horizon_mod]`. Never write raw injections first.
 2. **Use a hook or a Part method** when one exists (search the rustdoc of `horizon-mod-api`). A per-block,
    per-item or per-entity moment is a Part method ([Parts](concepts/trait-mods.md#parts)).
-3. **Otherwise follow the [injection ladder](injections.md#for-agents):** a `trait_method` point injection
-   (`impl mod_points::Points`, from `horizon-mod-points`), and a `helper` bound to `Game` only as a last resort. Every injection comes
+3. **Otherwise follow the [injection ladder](injections.md#for-agents):** an API `[[inject]]` declaration
+   naming a crate-root function and its `mod_points` record, and a `helper` bound to `Game` only as a last resort. Every injection comes
    with a [hook request](injections.md#ask-for-the-hook).
 4. **Names:** NeoForge 26.3 names for hooks that have a counterpart; no `on_` prefix; the event is `&mut`;
    handles come from the event; writes take `host`.

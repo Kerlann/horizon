@@ -1143,7 +1143,7 @@ impl Game<'_> {
         }
         let [x, y, z] = hit.pos;
         let block = self.res.facts().get(self.world.block(x, y, z)).name.clone();
-        if !self.block_in_tag("minecraft:banners", &block) {
+        if !self.named_block_in_tag("minecraft:banners", &block) {
             return false;
         }
         let current = self.map_banner_at(hit.pos);
@@ -1248,7 +1248,7 @@ impl Game<'_> {
         }
     }
     fn give_or_drop_stack(&mut self, stack: ItemStack) {
-        if let Some(rest) = self.give(stack)
+        if let Some(rest) = self.add_stack_to_inventory(stack)
             && let Some(eye) = self.eye_position()
         {
             self.spawn_item(rest, [eye[0], eye[1] - 0.3, eye[2]], [0.0, 0.1, 0.0], 40);

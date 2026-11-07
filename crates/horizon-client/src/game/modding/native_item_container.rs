@@ -199,7 +199,7 @@ impl Game<'_> {
     /// `Capabilities.Item.ITEM`, read: the slots of one item of `stack`,
     /// empty ones included, kept in its `minecraft:container`. None for an
     /// item without slots, and for an empty stack.
-    pub(in crate::game) fn native_item_container_slots(
+    pub(in crate::game) fn item_container_slots(
         &self,
         stack: &ItemStack,
     ) -> Option<Vec<Option<ItemStack>>> {
@@ -214,7 +214,7 @@ impl Game<'_> {
     /// becomes (the item itself when none did). The stack given is not
     /// changed: shrink it by one and hand out the result, or leave the result
     /// unused to simulate. None where the item has no slots.
-    pub(in crate::game) fn native_item_container_insert(
+    pub(in crate::game) fn item_container_insert(
         &self,
         stack: &ItemStack,
         item: &ItemStack,
@@ -222,11 +222,11 @@ impl Game<'_> {
         let size = self.item_container_size(&stack.item);
         insert_one(stack, size, item, self.item_container_limit(item))
     }
-    /// `ResourceHandler.insert(index, …)`: as `native_item_container_insert`,
+    /// `ResourceHandler.insert(index, …)`: as `item_container_insert`,
     /// into slot `slot` alone: topped up when it holds the same item and
     /// components, filled when empty. Nothing goes into a slot past the
     /// item's slots or holding another item.
-    pub(in crate::game) fn native_item_container_insert_slot(
+    pub(in crate::game) fn item_container_insert_slot(
         &self,
         stack: &ItemStack,
         slot: usize,
@@ -238,7 +238,7 @@ impl Game<'_> {
     /// `ResourceHandler.isValid` and `getCapacityAsLong`: how many of `item`
     /// slot `slot` of one item of `stack` holds when empty. None of a shulker
     /// box, nor into a slot past the item's slots.
-    pub(in crate::game) fn native_item_container_capacity(
+    pub(in crate::game) fn item_container_capacity(
         &self,
         stack: &ItemStack,
         slot: usize,
@@ -257,9 +257,9 @@ impl Game<'_> {
     /// `ResourceHandler.extract`: up to `max` out of slot `slot` of one item
     /// of `stack`. What came out (none when the slot is empty or past the
     /// item's slots), and the single item it becomes. The stack given is not
-    /// changed, as with `native_item_container_insert`. None where the item
+    /// changed, as with `item_container_insert`. None where the item
     /// has no slots.
-    pub(in crate::game) fn native_item_container_extract(
+    pub(in crate::game) fn item_container_extract(
         &self,
         stack: &ItemStack,
         slot: usize,

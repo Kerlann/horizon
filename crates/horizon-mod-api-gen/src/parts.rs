@@ -36,6 +36,7 @@ pub(crate) fn source(root: &Path) -> Result<String, String> {
     let dir = root.join(DIRECTORY);
     let mut modules = String::new();
     let mut fixtures = String::new();
+    let mut unions = [Vec::new(), Vec::new()];
     for kind in Catalog::modules(&dir).map_err(|e| e.to_string())? {
         if kind == "mod" {
             continue;
@@ -47,6 +48,16 @@ pub(crate) fn source(root: &Path) -> Result<String, String> {
         modules.push_str(&format!("#[path = {path:?}] mod {kind};\n"));
         modules.push_str(&reexport(&file.items, &kind));
         for item in &file.items {
+            if let Item::Trait(item) = item {
+                let name = item.ident.to_string();
+                for (index, suffix) in ["Registrar", "CapabilityProviders"].iter().enumerate() {
+                    if name.ends_with(suffix) {
+                        unions[index].push(format!("crate::parts::{name}"));
+                    }
+                }
+            }
+        }
+        for item in &file.items {
             if let Item::Mod(module) = item
                 && module.ident == "tests"
                 && !matches!(module.vis, Visibility::Inherited)
@@ -56,15 +67,134 @@ pub(crate) fn source(root: &Path) -> Result<String, String> {
             }
         }
     }
+    let mut template = fs::read_to_string(dir.join("unions.rs.in")).map_err(|e| e.to_string())?;
+    for (owner, members) in ["Registrar", "CapabilityProviders"].iter().zip(unions) {
+        let declaration = format!("pub trait {owner} {{}}");
+        let bounds = if members.is_empty() {
+            String::new()
+        } else {
+            format!(": {}", members.join(" + "))
+        };
+        template = template.replace(&declaration, &format!("pub trait {owner}{bounds} {{}}"));
+    }
+    syn::parse_file(&template).map_err(|e| e.to_string())?;
+    modules.push_str(&template);
     modules.push_str(&format!(
         "/// Shared Parts fixtures for engine tests.\n#[cfg(any(test, feature = \"testing\"))]\npub mod tests {{\n{fixtures}}}\n"
     ));
     Ok(modules)
 }
 
+/// Export just the discovered area traits; runtime-only Parts remain private.
+pub(crate) fn trait_exports(root: &Path) -> Result<String, String> {
+    let file = syn::parse_file(&source(root)?).map_err(|e| e.to_string())?;
+    let mut names = Vec::new();
+    for item in file.items {
+        if let Item::Trait(item) = item {
+            for bound in item.supertraits {
+                if let syn::TypeParamBound::Trait(bound) = bound {
+                    names.push(bound.path.segments.last().unwrap().ident.to_string());
+                }
+            }
+        }
+    }
+    if names.is_empty() {
+        return Ok(String::new());
+    }
+    Ok(format!("pub use crate::parts::{{{}}};\n", names.join(",")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_new_kind_supplies_union_methods_impls_and_fixtures_without_shared_edits() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+            "../../target/parts-union-discovery-{}",
+            std::process::id()
+        ));
+        let dir = root.join(DIRECTORY);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("mod.rs"), "").unwrap();
+        fs::write(
+            dir.join("unions.rs.in"),
+            "pub trait Registrar {} pub trait CapabilityProviders {}\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("alpha.rs"),
+            r#"
+            pub trait AlphaRegistrar { fn add(&mut self); }
+            impl AlphaRegistrar for super::FakeRegistrar { fn add(&mut self) { self.0 += 1; } }
+            #[cfg(test)] pub mod tests {
+                pub fn seeded() -> super::super::FakeRegistrar { super::super::FakeRegistrar(5) }
+                #[test] fn old_kind_through_union() {
+                    let mut r = seeded();
+                    let u: &mut dyn super::super::Registrar = &mut r;
+                    u.add(); assert_eq!(r.0, 6);
+                }
+            }
+        "#,
+        )
+        .unwrap();
+        let shared = r#"
+            include!("exported.rs");
+            mod parts {
+                include!("generated.rs");
+                pub struct FakeRegistrar(pub u32);
+                pub struct FakeProviders;
+                impl Registrar for FakeRegistrar {}
+                impl CapabilityProviders for FakeProviders {}
+            }
+        "#;
+        let wrapper = root.join("wrapper.rs");
+        fs::write(&wrapper, shared).unwrap();
+        let compile_and_run = || {
+            fs::write(root.join("generated.rs"), source(&root).unwrap()).unwrap();
+            fs::write(root.join("exported.rs"), trait_exports(&root).unwrap()).unwrap();
+            let binary = root.join(format!("union-test{}", std::env::consts::EXE_SUFFIX));
+            let output = std::process::Command::new("rustc")
+                .args(["--edition=2024", "--test"])
+                .arg(&wrapper)
+                .arg("-o")
+                .arg(&binary)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let output = std::process::Command::new(binary).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+            String::from_utf8(output.stdout).unwrap()
+        };
+        assert!(compile_and_run().contains("old_kind_through_union"));
+        fs::write(dir.join("beta.rs"), r#"
+            pub trait BetaRegistrar { fn double(&mut self); }
+            impl BetaRegistrar for super::FakeRegistrar { fn double(&mut self) { self.0 *= 2; } }
+            pub trait BetaCapabilityProviders { fn ready(&self) -> bool; }
+            impl BetaCapabilityProviders for super::FakeProviders { fn ready(&self) -> bool { true } }
+            #[cfg(test)] pub mod tests {
+                #[test] fn new_kind_through_unions() {
+                    let mut r = super::super::tests::seeded();
+                    let u: &mut dyn super::super::Registrar = &mut r;
+                    u.double(); assert_eq!(r.0, 10);
+                    crate::BetaRegistrar::double(&mut r); assert_eq!(r.0, 20);
+                    let p: &dyn super::super::CapabilityProviders = &super::super::FakeProviders;
+                    assert!(p.ready());
+                }
+            }
+        "#).unwrap();
+        assert!(compile_and_run().contains("new_kind_through_unions"));
+        assert_eq!(fs::read_to_string(wrapper).unwrap(), shared);
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn a_new_parts_kind_needs_no_shared_list() {
@@ -75,6 +205,11 @@ mod tests {
         let dir = root.join(DIRECTORY);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("mod.rs"), "").unwrap();
+        fs::write(
+            dir.join("unions.rs.in"),
+            "pub trait Registrar {} pub trait CapabilityProviders {}\n",
+        )
+        .unwrap();
         fs::write(
             dir.join("zeta.rs"),
             "pub struct Last; #[cfg(test)] mod tests { fn local_test() {} }",

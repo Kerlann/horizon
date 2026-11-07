@@ -496,13 +496,13 @@ impl Game<'_> {
                     "entity.minecraft.{}",
                     m.kind.id.trim_start_matches("minecraft:")
                 );
-                self.translate(&key, &key)
+                self.translate_with_fallback(&key, &key)
             }),
             None => String::new(),
         };
         super::screen_info::name_container(|| title.clone());
         batch.text(atlas, &title, ox + 8.0, oy + 6.0, grey, false);
-        let inventory = self.translate("container.inventory", "Inventory");
+        let inventory = self.translate_with_fallback("container.inventory", "Inventory");
         batch.text(atlas, &inventory, ox + 8.0, oy + 72.0, grey, false);
         if let Some(m) = self.mobs.iter().find(|m| m.id == open.mob) {
             self.draw_mob_preview(

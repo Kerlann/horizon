@@ -69,6 +69,28 @@ pub enum ConsumeEffect {
     },
 }
 
+/// Typed consumable shared by item prototypes and stack component patches.
+pub type ItemConsumable = horizon_world::consumable::Consumable<String, ConsumeEffect>;
+
+/// Decode `Consumable.CODEC` defaults and ordered effects at the component boundary.
+pub(crate) fn parse_consumable(cons: &Value) -> ItemConsumable {
+    ItemConsumable {
+        seconds: cons["consume_seconds"].as_f64().map_or(1.6, |s| s as f32),
+        animation: crate::use_animation::consumable_animation(cons),
+        sound: cons["sound"]
+            .as_str()
+            .unwrap_or("minecraft:entity.generic.eat")
+            .to_owned(),
+        particles: cons["has_consume_particles"].as_bool().unwrap_or(true),
+        effects: cons["on_consume_effects"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(parse_consume_effect)
+            .collect(),
+    }
+}
+
 /// One `on_consume_effects` entry. A bare type name is minecraft's own, as
 /// a bare item id is: `apply_effects` and `:apply_effects` are
 /// `minecraft:apply_effects`. A
@@ -143,6 +165,8 @@ pub struct ItemInfo {
     pub id: Arc<str>,
     pub max_stack: u32,
     pub max_damage: u32,
+    /// Prototype damage, cached when default components are loaded.
+    pub damage: i32,
     pub block: Option<BlockStateId>,
     pub tool: Vec<ToolRule>,
     pub tool_default_speed: f32,
@@ -429,8 +453,12 @@ pub struct Instrument {
 impl Instrument {
     /// `InstrumentItem.getUseDuration`: `Mth.floor(useDuration * 20)`.
     pub fn use_ticks(&self) -> i32 {
-        (self.use_duration * 20.0).floor() as i32
+        instrument_use_ticks(self.use_duration)
     }
+}
+/// `InstrumentItem.getUseDuration`: floor after the float multiplication.
+pub fn instrument_use_ticks(seconds: f32) -> i32 {
+    (seconds * 20.0).floor() as i32
 }
 /// The id of a goat horn's instrument (`InstrumentItem.getInstrument`): the
 /// stack's own `instrument` component, else the item's `ponder_goat_horn`.
@@ -905,18 +933,6 @@ impl Items {
                 .and_then(|f| f.get("can_always_eat"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let mut consume_effects = Vec::new();
-            if let Some(effects) = c
-                .get("minecraft:consumable")
-                .and_then(|cons| cons.get("on_consume_effects"))
-                .and_then(|e| e.as_array())
-            {
-                for effect in effects {
-                    if let Some(parsed) = parse_consume_effect(effect) {
-                        consume_effects.push(parsed);
-                    }
-                }
-            }
             items.insert(
                 id.clone(),
                 ItemInfo {
@@ -925,6 +941,7 @@ impl Items {
                     id: id.clone(),
                     max_stack: c["minecraft:max_stack_size"].as_u64().unwrap_or(64) as u32,
                     max_damage: c["minecraft:max_damage"].as_u64().unwrap_or(0) as u32,
+                    damage: c["minecraft:damage"].as_i64().unwrap_or(0).max(0) as i32,
                     block: block_for_item.get(name.as_str()).copied(),
                     tool,
                     tool_default_speed: c["minecraft:tool"]["default_mining_speed"]
@@ -943,18 +960,7 @@ impl Items {
                         .get("minecraft:kinetic_weapon")
                         .and_then(crate::kinetic_weapon::UseTiming::from_json),
                     // Consumable.CODEC's defaults.
-                    consumable: c.get("minecraft:consumable").map(|cons| {
-                        horizon_world::consumable::Consumable {
-                            seconds: cons["consume_seconds"].as_f64().map_or(1.6, |s| s as f32),
-                            animation: crate::use_animation::consumable_animation(cons),
-                            sound: cons["sound"]
-                                .as_str()
-                                .unwrap_or("minecraft:entity.generic.eat")
-                                .to_owned(),
-                            particles: cons["has_consume_particles"].as_bool().unwrap_or(true),
-                            effects: std::mem::take(&mut consume_effects),
-                        }
-                    }),
+                    consumable: c.get("minecraft:consumable").map(parse_consumable),
                     use_remainder: c["minecraft:use_remainder"]["id"]
                         .as_str()
                         .map(str::to_owned),
@@ -1205,6 +1211,13 @@ impl Items {
     }
     /// Whether an item belongs to a loaded item tag.
     pub fn item_in_tag(&self, tag: &str, item: &str) -> bool {
+        let normalized;
+        let tag = if !tag.contains(':') || tag.starts_with(':') {
+            normalized = format!("minecraft:{}", tag.strip_prefix(':').unwrap_or(tag));
+            normalized.as_str()
+        } else {
+            tag
+        };
         self.item_tags.get(tag).is_some_and(|s| s.contains(item))
     }
     fn block_matches(&self, spec: &str, block: &str) -> bool {

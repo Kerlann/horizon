@@ -68,7 +68,7 @@ impl Game<'_> {
     /// guest out of reach inside another player's hook, where the hub is taken out), dead, a
     /// spectator or riding, an input that is not a number, and when the movement code fails.
     /// API @API:player_bots@.
-    pub(super) fn native_player_simulate_move(
+    pub(super) fn player_simulate_move(
         &mut self,
         player: mod_api::PlayerRef,
         input: NativePlayerInput,
@@ -83,7 +83,7 @@ impl Game<'_> {
             return None;
         }
         let keys = input_keys(&input)?;
-        self.native_player_name(player)?;
+        self.player_name(player)?;
         let mut body = self.native_bot_body(player.uuid())?;
         body.yaw = input.yaw;
         body.pitch = input.pitch.clamp(-90.0, 90.0);
@@ -158,13 +158,13 @@ impl Game<'_> {
     /// bot's own collision checks and pathfinding. Empty off a server, for another level than the
     /// one in place, a box that isn't a box (not numbers, or min past max), and one over about a
     /// million blocks. API @API:player_bots@.
-    pub(super) fn native_level_collision_boxes(
+    pub(super) fn level_collision_boxes(
         &self,
         level: mod_api::LevelRef,
         aabb: [f64; 6],
     ) -> Option<Vec<[f64; 6]>> {
         let bounds = aabb_of(aabb)?;
-        if !self.native_level_in_place(level) {
+        if !self.level_in_place(level) {
             return None;
         }
         let mut scene = SceneCollisions {

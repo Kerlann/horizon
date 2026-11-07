@@ -31,7 +31,7 @@ impl Game<'_> {
     /// limits still apply. True means submitted, not necessarily visible: an unknown
     /// provider or missing sprite set draws nothing. False on a server, without a
     /// client player/level, or for non-finite numeric input. API @API:client_particles@.
-    pub(super) fn native_add_particle(
+    pub(super) fn add_particle(
         &mut self,
         options: &ParticleOptions,
         at: [f64; 3],

@@ -869,8 +869,8 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn management_online_skips_fake_players_by_name_and_id() {
         crate::game::native_guest_turn_tests::with_guests(|game| {
-            let level = game.native_level("minecraft:overworld").unwrap();
-            game.native_fake_player(level, 100, "robot").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
+            game.fake_player(level, 100, "robot").unwrap();
             assert_eq!(game.management_online(&json!({"name": "robot"})), None);
             assert_eq!(game.management_online(&json!({"id": "64"})), None);
             assert_eq!(

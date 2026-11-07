@@ -45,7 +45,7 @@ impl Game<'_> {
     /// The value of statistic `stat_type` for `key` (`minecraft:stone`,
     /// `minecraft:jump`...), as `ServerStatsCounter.getValue`: 0 when never
     /// counted.
-    pub(super) fn native_player_stat(
+    pub(super) fn player_stat(
         &self,
         player: PlayerRef,
         stat_type: NativeStatType,
@@ -59,7 +59,7 @@ impl Game<'_> {
     /// for its own counts, so `player_stat_award` hears it and may cancel
     /// it, and scoreboard criteria follow. False for a player it can't
     /// reach.
-    pub(super) fn native_player_award_stat(
+    pub(super) fn player_award_stat(
         &mut self,
         player: PlayerRef,
         stat_type: NativeStatType,
@@ -73,7 +73,7 @@ impl Game<'_> {
     }
     /// `Player.resetStat`: sets the statistic back to 0, which scoreboard
     /// criteria follow. False for a player it can't reach.
-    pub(super) fn native_player_reset_stat(
+    pub(super) fn player_reset_stat(
         &mut self,
         player: PlayerRef,
         stat_type: NativeStatType,
@@ -87,7 +87,7 @@ impl Game<'_> {
 
     /// Whether the player's recipe book knows `recipe`
     /// (`ServerRecipeBook.contains`).
-    pub(super) fn native_player_has_discovered_recipe(
+    pub(super) fn player_has_discovered_recipe(
         &self,
         player: PlayerRef,
         recipe: &str,
@@ -103,10 +103,7 @@ impl Game<'_> {
     }
     /// Every recipe the player's recipe book knows (`ServerRecipeBook.recipes`), qualified ids in
     /// order. None for a player it can't reach.
-    pub(super) fn native_player_discovered_recipes(
-        &self,
-        player: PlayerRef,
-    ) -> Option<Vec<String>> {
+    pub(super) fn player_discovered_recipes(&self, player: PlayerRef) -> Option<Vec<String>> {
         if !self.native_player_current(player) {
             return None;
         }
@@ -121,7 +118,7 @@ impl Game<'_> {
     /// `player_recipe_discovered` hook, and the client hears of them.
     /// Unknown ids are skipped. The number of recipe displays added, None
     /// for a player it can't reach.
-    pub(super) fn native_player_award_recipes(
+    pub(super) fn player_award_recipes(
         &mut self,
         player: PlayerRef,
         recipes: &[&str],
@@ -130,7 +127,7 @@ impl Game<'_> {
     }
     /// `ServerPlayer.resetRecipes`, as `/recipe take` does. The number of
     /// recipe displays taken out, None for a player it can't reach.
-    pub(super) fn native_player_reset_recipes(
+    pub(super) fn player_reset_recipes(
         &mut self,
         player: PlayerRef,
         recipes: &[&str],
@@ -226,21 +223,20 @@ mod tests {
             host.play.insert(1, play);
             game.stats.add("custom", "minecraft:jump", 3);
 
-            let player = game.native_player_ref(123).unwrap();
-            let jump = |game: &super::Game<'_>| {
-                game.native_player_stat(player, NativeStatType::Custom, "jump")
-            };
+            let player = game.player(123).unwrap();
+            let jump =
+                |game: &super::Game<'_>| game.player_stat(player, NativeStatType::Custom, "jump");
             assert_eq!(jump(game), Some(7));
             assert_eq!(
-                game.native_player_has_discovered_recipe(player, "stick"),
+                game.player_has_discovered_recipe(player, "stick"),
                 Some(true)
             );
             assert_eq!(
-                game.native_player_has_discovered_recipe(player, "minecraft:diamond_pickaxe"),
+                game.player_has_discovered_recipe(player, "minecraft:diamond_pickaxe"),
                 Some(false)
             );
             assert_eq!(
-                game.native_player_discovered_recipes(player),
+                game.player_discovered_recipes(player),
                 Some(vec!["minecraft:stick".to_string()])
             );
             // In the guest's turn their state is in the game.

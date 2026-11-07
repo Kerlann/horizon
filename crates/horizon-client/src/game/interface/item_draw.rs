@@ -354,7 +354,7 @@ impl Game<'_> {
             .enchantments
             .props
             .get(&*stack.item)
-            .is_some_and(|p| p.glint);
+            .and_then(|p| p.glint);
         stack.has_foil(item_glint)
     }
     /// [`Self::resolve_item`] of a stack held in `hand`, which OptiFine CIT rules can test

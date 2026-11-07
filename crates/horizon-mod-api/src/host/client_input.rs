@@ -1,96 +1,52 @@
-//! The `client_input` area: host methods the game implements (`game/host/client_input.rs`).
+//! Host method declarations; access defaults and game forwarders are generated.
 #![allow(unused_variables)]
 use crate::*;
 /// The client host's methods of the `client_input` area, implemented by the game and reached through [`crate::ClientHost`].
+#[horizon_mod_api_macros::host_area]
 pub trait ClientInputClientHost {
     /// Side: client.
     /// Right-clicks with these items (at most 64 ids) are mod `mod_id`'s; a later call replaces the list.
-    fn claim_items(&mut self, mod_id: &str, ids: &[String]) {
-        crate::phase::unprovided(
-            "ClientHost::claim_items",
-            "claim_items",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn claim_items(&mut self, mod_id: &str, ids: &[String]);
     /// Side: client.
     /// Mod `mod_id`'s events since its last poll (at most 256 wait).
-    fn poll(&mut self, mod_id: &str) -> Vec<NativeModEvent> {
-        crate::phase::unprovided(
-            "ClientHost::poll",
-            "poll",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn poll(&mut self, mod_id: &str) -> Vec<NativeModEvent>;
     /// Side: client.
     /// Where the mouse is, in GUI pixels.
-    fn cursor(&self) -> [f32; 2] {
-        crate::phase::unprovided(
-            "ClientHost::cursor",
-            "cursor",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn cursor(&self) -> [f32; 2];
     /// Side: client.
     /// The saved key and modifiers for an owner-bound registration, or its declared default.
-    fn mod_key(&self, mod_id: &str, name: &str) -> Option<(String, ClientModifiers)> {
-        crate::phase::unprovided(
-            "ClientHost::mod_key",
-            "mod_key",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn mod_key(&self, mod_id: &str, name: &str) -> Option<(String, ClientModifiers)>;
     /// Side: client.
     /// Playing, with nothing over the world: keys and zoom apply.
-    fn playing(&self) -> bool {
-        crate::phase::unprovided(
-            "ClientHost::playing",
-            "playing",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn playing(&self) -> bool;
     /// Side: client.
     /// A vanilla mapping (`key.forward`, `key.jump`, `key.attack`…): whether
     /// it is held (`KeyMapping.isDown`), and its key's name as Controls shows
     /// it. None for a mapping it doesn't answer for.
-    fn mapping(&self, name: &str) -> Option<NativeKeyMapping> {
-        crate::phase::unprovided(
-            "ClientHost::mapping",
-            "mapping",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn mapping(&self, name: &str) -> Option<NativeKeyMapping>;
     /// Side: client.
     /// The current window modifier keys in the same GLFW encoding as input hooks.
     /// Cleared when the window loses focus; available even outside a world.
-    fn modifiers(&self) -> ClientModifiers {
-        crate::phase::unprovided(
-            "ClientHost::modifiers",
-            "modifiers",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn modifiers(&self) -> ClientModifiers;
     /// Side: client.
     /// The clipboard's text (`KeyboardHandler.getClipboard`), empty when it holds none,
     /// while the game handles a key, mouse or typed-text event: a mod's key or screen hook
     /// pasting into its own field. None at any other moment (a tick, a frame, a packet),
     /// so no mod reads the clipboard without the player doing something, and None on a
     /// server.
-    fn clipboard_text(&self) -> Option<String> {
-        crate::phase::unprovided(
-            "ClientHost::clipboard_text",
-            "clipboard_text",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn clipboard_text(&self) -> Option<String>;
     /// Side: client.
     /// Puts `text` on the clipboard (`KeyboardHandler.setClipboard`) on the same terms as
     /// `native_clipboard_text` reads it. False, with nothing copied, at any other moment or
     /// on a server; empty text copies nothing, as vanilla's.
-    fn set_clipboard_text(&self, text: &str) -> bool {
-        crate::phase::unprovided(
-            "ClientHost::set_clipboard_text",
-            "set_clipboard_text",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn set_clipboard_text(&self, text: &str) -> bool;
 }

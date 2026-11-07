@@ -264,7 +264,7 @@ fn reads_answer_the_tick_view_and_refuse_what_it_lacks() {
         zombie(game, 20, [3.5, 65.0, 3.5]);
         zombie(game, 21, [13.5, 65.0, 13.5]);
         game.mobs[1].health = 12.5;
-        let other = game.native_entity(21).unwrap();
+        let other = game.entity(21).unwrap();
         set_other(other);
         tick_goals(game, 0);
         let reads = READS.lock().unwrap();
@@ -368,7 +368,7 @@ fn set_target_follows_the_write_rules() {
         game.resolve_parts().unwrap();
         zombie(game, 40, [3.5, 65.0, 3.5]);
         zombie(game, 41, [13.5, 65.0, 13.5]);
-        let other = game.native_entity(41).unwrap();
+        let other = game.entity(41).unwrap();
         set_other(other);
         // Only the writing goal, so no species goal races it.
         game.mobs[0].ai.goals.clear();
@@ -488,7 +488,7 @@ fn the_host_answers_without_panicking() {
             (0, 0),
             std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
         );
-        let other = game.native_entity(71).unwrap();
+        let other = game.entity(71).unwrap();
         set_other(other);
         // Only the reader goal, so nothing else races it.
         game.mobs[0].ai.goals.clear();
@@ -722,7 +722,7 @@ fn set_target_refuses_what_the_write_handle_refuses() {
         game.mobs[0].ai.targets.clear();
         mobs::part_goals::attach(&mut game.mobs[0]);
         for id in [91, 92, 93] {
-            *TARGET.lock().unwrap() = Some(game.native_entity(id).unwrap());
+            *TARGET.lock().unwrap() = Some(game.entity(id).unwrap());
             tick_goals(game, 0);
             // The write handle's valid-target rules, over the tick's facts:
             // a zombie stores, a creeper (`IronGolem.canAttack`) and a ghast
@@ -745,7 +745,7 @@ fn set_target_refuses_what_the_write_handle_refuses() {
         // The player the tick sees, through the same rule set: a fighting
         // difficulty stores her, Peaceful refuses, and a golem a player
         // built never targets a player.
-        let epoch = game.native_entity(91).unwrap().epoch();
+        let epoch = game.entity(91).unwrap().epoch();
         let player = EntityRef::new(epoch, 5000);
         *TARGET.lock().unwrap() = Some(player);
         let view = view_player([9.5, 65.0, 9.5]);

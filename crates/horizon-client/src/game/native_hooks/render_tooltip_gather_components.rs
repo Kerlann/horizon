@@ -10,7 +10,7 @@ impl Game<'_> {
     /// images in order, under any bundle's contents. `max_width` starts at -1,
     /// no limit, which leaves the lines as they are; a mod that sets it
     /// wraps every line wider than that, in GUI pixels. Set `cancel` and
-    /// nothing is drawn, and no `tooltip_color` is asked. Asked each frame
+    /// nothing is drawn, and no `render_tooltip_texture` is asked. Asked each frame
     /// the tooltip shows, never for one the stack hides. Client-side.
     pub(in crate::game) fn native_render_tooltip_gather_components(
         &self,

@@ -797,24 +797,20 @@ fn server_reload_retains_listeners_for_other_hooks() {
         ListenerKey::<CheckListener>::new(Identifier::parse("reload_test:kept").unwrap());
     mod_api::testing::with_mods(mods, || {
         with_game(|game| {
-            assert!(game.native_reload_resources().listener(&key).is_none());
+            assert!(game.reload_resources().listener(&key).is_none());
             install_mod_resources(game, &resources, &package);
             game.load_world(request(&world)).unwrap();
-            let kept = game.native_reload_resources().listener(&key).unwrap();
+            let kept = game.reload_resources().listener(&key).unwrap();
             assert_eq!(*kept.live.lock().unwrap(), 2);
             assert!(Arc::ptr_eq(
                 &kept,
-                &game.native_reload_resources().listener(&key).unwrap()
+                &game.reload_resources().listener(&key).unwrap()
             ));
-            assert!(
-                game.native_reload_resources()
-                    .listener(&wrong_type)
-                    .is_none()
-            );
+            assert!(game.reload_resources().listener(&wrong_type).is_none());
             let before = Arc::as_ptr(&kept);
             write(&data, "3");
             assert!(game.run_command("reload"));
-            let kept = game.native_reload_resources().listener(&key).unwrap();
+            let kept = game.reload_resources().listener(&key).unwrap();
             assert_eq!(*kept.live.lock().unwrap(), 3);
             assert_ne!(
                 Arc::as_ptr(&kept),
@@ -824,7 +820,7 @@ fn server_reload_retains_listeners_for_other_hooks() {
             write(&data, "4");
             reject.store(true, Ordering::Relaxed);
             assert!(!game.run_command("reload"));
-            let kept = game.native_reload_resources().listener(&key).unwrap();
+            let kept = game.reload_resources().listener(&key).unwrap();
             assert_eq!(
                 *kept.live.lock().unwrap(),
                 3,

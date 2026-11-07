@@ -127,7 +127,7 @@ impl Game<'_> {
                 };
                 horizon_client::containers::display_name(custom(k), &key)
             }
-            // Opened by a mod (`native_open_menu`), never here.
+            // Opened by a mod (`open_menu`), never here.
             Slots::Native => return MenuOpen::Refused,
         };
         let Some(host) = self.lan.as_ref() else {

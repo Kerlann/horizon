@@ -65,8 +65,8 @@ impl Game<'_> {
     /// The ordinary block-or-entity pick (Minecraft.hitResult), using the
     /// game's targeting ray, reach and occlusion. None without a client world
     /// or on a miss. Entity hits carry this client level's epoch. Unlike
-    /// native_view_hit, this never traces distant terrain.
-    pub(super) fn native_crosshair_target(&self) -> Option<NativeCrosshairTarget> {
+    /// view_hit, this never traces distant terrain.
+    pub(super) fn crosshair_target(&self) -> Option<NativeCrosshairTarget> {
         if !self.native_window() || self.title.is_some() {
             return None;
         }

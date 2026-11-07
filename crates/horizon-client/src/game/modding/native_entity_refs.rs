@@ -1,5 +1,5 @@
 //! Entity and level handles for native server mods (docs/modding/src/how-to/native-mods.md,
-//! "Entity and level handles", #7387): `native_entity(id)` turns an event's
+//! "Entity and level handles", #7387): `entity(id)` turns an event's
 //! entity id into an `EntityRef`, and each `native_entity_*` helper reads the
 //! entity a handle names. They read where the world is simulated: on a client,
 //! with no world open, or for a handle of an earlier open, they return `None`,
@@ -113,7 +113,7 @@ impl Game<'_> {
     /// in place or among the server's players. On a client (API
     /// @API:client_entity_refs@), any entity the server shows this window,
     /// this window's own player included. API 373.
-    pub(super) fn native_entity(&self, id: u32) -> Option<EntityRef> {
+    pub(super) fn entity(&self, id: u32) -> Option<EntityRef> {
         let entity = EntityRef::new(self.native_lifecycle.epoch()?, id);
         (self.native_entity_read_target(entity).is_some()
             || self.native_client_tracked(entity).is_some())
@@ -122,7 +122,7 @@ impl Game<'_> {
     /// The level `dimension` (`minecraft:the_nether`) as a handle: on a client,
     /// the level it shows, whatever the server calls it. None with no world
     /// open, or for a dimension the server hasn't loaded. API 373.
-    pub(super) fn native_level(&self, dimension: &str) -> Option<LevelRef> {
+    pub(super) fn level(&self, dimension: &str) -> Option<LevelRef> {
         if !self.is_logical_server() {
             let epoch = self.native_lifecycle.epoch()?;
             let remote = self.remote.as_ref().filter(|r| r.logged_in)?;
@@ -135,7 +135,7 @@ impl Game<'_> {
         Some(LevelRef::new(epoch, dim.key()))
     }
     /// The name of a dimension's key.
-    pub(in crate::game) fn native_dimension_key_id(&self, key: DimensionKey) -> Option<String> {
+    pub(in crate::game) fn dimension_key_id(&self, key: DimensionKey) -> Option<String> {
         mod_api::__private::dimension_id(key).map(str::to_owned)
     }
     /// The key of the level in place: on a client the level it shows, which
@@ -152,7 +152,7 @@ impl Game<'_> {
         }
         self.loaded_dims()
             .into_iter()
-            .filter_map(|dim| self.native_level(dim.id()))
+            .filter_map(|dim| self.level(dim.id()))
             .collect()
     }
     /// Entities whose bounding boxes intersect this box (`Level.getEntities`).
@@ -165,7 +165,7 @@ impl Game<'_> {
     /// are not on the entity-list walk.
     /// During `hears_projectile_impacts`, the projectile list is taken out of
     /// the game and is not visible; it is restored for `projectile_impact`.
-    pub(super) fn native_level_entities_in(
+    pub(super) fn level_entities_in(
         &self,
         level: LevelRef,
         min: [f64; 3],
@@ -224,7 +224,7 @@ impl Game<'_> {
     /// Set a block in the level in place (`Level.setBlock`). Parked levels,
     /// stale handles, clients and unloaded or out-of-height positions return
     /// false. Client notification follows the supplied update flags.
-    pub(super) fn native_level_set_block(
+    pub(super) fn level_set_block(
         &mut self,
         level: LevelRef,
         pos: [i32; 3],
@@ -237,7 +237,7 @@ impl Game<'_> {
         self.native_set_block(level.dimension_id(), pos, state, flags.bits())
     }
     /// Remove a block in place (`Level.removeBlock`), preserving its fluid.
-    pub(super) fn native_level_remove_block(
+    pub(super) fn level_remove_block(
         &mut self,
         level: LevelRef,
         pos: [i32; 3],
@@ -259,7 +259,7 @@ impl Game<'_> {
     /// changes without its state changing). `source` is the state whose block vanilla passes as
     /// the one that changed. False, with nothing done, off the level in place, for a position
     /// that isn't loaded, or for a `source` that is no block state.
-    pub(super) fn native_level_update_neighbors(
+    pub(super) fn level_update_neighbors(
         &mut self,
         level: LevelRef,
         pos: [i32; 3],
@@ -283,7 +283,7 @@ impl Game<'_> {
     /// as a diode tells the block in front of it before updating that block's neighbours. False,
     /// with nothing done, as for `update_neighbors`: off the level in place, for a position that
     /// isn't loaded, or for a `source` that is no block state.
-    pub(super) fn native_level_neighbor_changed(
+    pub(super) fn level_neighbor_changed(
         &mut self,
         level: LevelRef,
         pos: [i32; 3],
@@ -307,7 +307,7 @@ impl Game<'_> {
     /// once, in vanilla's random order. `drop` false suppresses resources entirely.
     /// None means nothing broke: air, a refused write, a stale handle, a client, an
     /// unloaded/out-of-height position, or a parked level.
-    pub(super) fn native_level_destroy_block(
+    pub(super) fn level_destroy_block(
         &mut self,
         level: LevelRef,
         pos: [i32; 3],
@@ -331,7 +331,7 @@ impl Game<'_> {
 
     /// Send `ServerLevel.destroyBlockProgress` in this level: stages 0..9 show a crack,
     /// any other stage removes it. A machine uses a stable negative breaker id.
-    pub(super) fn native_level_set_break_progress(
+    pub(super) fn level_set_break_progress(
         &mut self,
         level: LevelRef,
         breaker: i32,
@@ -348,7 +348,7 @@ impl Game<'_> {
     /// `growWaterPlant`): the mods' `bonemeal` hook first, level event 1505 when something grew.
     /// False for a refused write, a stale or parked handle, a client, and a block that did not
     /// grow.
-    pub(super) fn native_level_bone_meal(&mut self, level: LevelRef, pos: [i32; 3]) -> bool {
+    pub(super) fn level_bone_meal(&mut self, level: LevelRef, pos: [i32; 3]) -> bool {
         if !self.native_level_write_allowed(level, pos) || self.dim.key() != level.dimension() {
             return false;
         }
@@ -374,12 +374,7 @@ impl Game<'_> {
     }
     /// Set the biome of the cell holding `pos` to `biome` (`/fillbiome` for one cell). False for a
     /// refused write, a stale or parked handle, a client, an unknown biome and an unchanged cell.
-    pub(super) fn native_level_set_biome(
-        &mut self,
-        level: LevelRef,
-        pos: [i32; 3],
-        biome: &str,
-    ) -> bool {
+    pub(super) fn level_set_biome(&mut self, level: LevelRef, pos: [i32; 3], biome: &str) -> bool {
         if !self.native_level_write_allowed(level, pos) || self.dim.key() != level.dimension() {
             return false;
         }
@@ -394,8 +389,8 @@ impl Game<'_> {
     /// Block-local outline or collision boxes with an empty context. Interaction,
     /// visual, occlusion and support shapes are not exposed. Returns None on a
     /// client, for a stale handle, or for a closed level. Unloaded blocks read
-    /// as air; collision errors return no boxes, like `native_block_collision`.
-    pub(super) fn native_level_block_shape(
+    /// as air; collision errors return no boxes, like `block_collision`.
+    pub(super) fn level_block_shape(
         &self,
         level: LevelRef,
         pos: [i32; 3],
@@ -431,14 +426,14 @@ impl Game<'_> {
     /// Gameplay's face support in the current or a parked server level, including
     /// live block entities for dynamic shapes. None for stale or closed levels,
     /// unloaded blocks, unsupported states or a shape query error.
-    pub(super) fn native_level_block_face_sturdy(
+    pub(super) fn level_block_face_sturdy(
         &self,
         level: LevelRef,
         pos: [i32; 3],
         face: NativeBlockFace,
         support: NativeSupportType,
     ) -> Option<bool> {
-        let state = self.native_level_state(level, pos)?;
+        let state = self.level_block_state(level, pos)?;
         use horizon_core::geometry::Direction;
         let direction = match face {
             NativeBlockFace::Down => Direction::Down,
@@ -481,7 +476,7 @@ impl Game<'_> {
 
     /// Clip an empty-context ray against collider or outline shapes, without fluids.
     /// None on failed reads, dynamic shapes, invalid rays or traversal limits.
-    pub(super) fn native_level_clip(
+    pub(super) fn level_clip(
         &self,
         level: LevelRef,
         from: [f64; 3],
@@ -549,7 +544,7 @@ impl Game<'_> {
 
     /// The entity's position (`Entity.position`): its feet, the middle of
     /// its box for a painting or an item frame.
-    pub(super) fn native_entity_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
+    pub(super) fn entity_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
         match self.native_entity_read_target(entity) {
             Some(target) => self.target_position(target),
             None => self
@@ -559,18 +554,18 @@ impl Game<'_> {
     }
     /// The block the entity's position is in (`Entity.blockPosition`). API
     /// 373.
-    pub(super) fn native_entity_block_position(&self, entity: EntityRef) -> Option<[i32; 3]> {
-        self.native_entity_position(entity)
+    pub(super) fn entity_block_position(&self, entity: EntityRef) -> Option<[i32; 3]> {
+        self.entity_position(entity)
             .map(|p| p.map(|v| v.floor() as i32))
     }
     /// The entity's yaw and pitch in degrees (`Entity.getYRot`, `getXRot`); 0
     /// for the kinds that don't turn. API 373.
-    pub(super) fn native_entity_rotation(&self, entity: EntityRef) -> Option<[f32; 2]> {
+    pub(super) fn entity_rotation(&self, entity: EntityRef) -> Option<[f32; 2]> {
         Some(self.target_rotation(self.native_entity_read_target(entity)?))
     }
     /// The entity's type (`Entity.getType`): `minecraft:zombie`. API
     /// 373.
-    pub(super) fn native_entity_kind(&self, entity: EntityRef) -> Option<String> {
+    pub(super) fn entity_kind(&self, entity: EntityRef) -> Option<String> {
         match self.native_entity_read_target(entity) {
             Some(t) => Some(self.target_type(t)),
             None => self
@@ -582,7 +577,7 @@ impl Game<'_> {
     /// entity that has none yet gets it now, as a new vanilla entity does.
     /// On a client, the one the server added it with (a player's is its
     /// profile's). API 373.
-    pub(super) fn native_entity_uuid(&mut self, entity: EntityRef) -> Option<u128> {
+    pub(super) fn entity_uuid(&mut self, entity: EntityRef) -> Option<u128> {
         if let Some(r) = &self.remote {
             let id = i32::try_from(entity.id()).ok()?;
             if self.native_entity_read_target(entity).is_none()
@@ -609,7 +604,7 @@ impl Game<'_> {
     }
     /// The level the entity is in (`Entity.level`): on a client, the
     /// client's level. API 373.
-    pub(super) fn native_entity_level(&self, entity: EntityRef) -> Option<LevelRef> {
+    pub(super) fn entity_level(&self, entity: EntityRef) -> Option<LevelRef> {
         let key = match self.native_entity_read_target(entity) {
             Some(t) if self.is_logical_server() => self.target_level(t).key(),
             Some(_) => self.native_level_key(),
@@ -631,7 +626,6 @@ fn uuid_from_words(words: [i32; 4]) -> u128 {
 #[cfg(test)]
 pub(super) mod tests {
     use mod_api::__private::game::*;
-    use mod_api::prelude::*;
     /// Isolate declarations and frozen registries without changing another test's resources.
     pub(in crate::game) fn run_fresh_cases(name: &str, flag: &str, cases: &[&str]) -> bool {
         if std::env::var_os(flag).is_some() {
@@ -862,7 +856,7 @@ pub(super) mod tests {
 
         with_game(|game| {
             lever_on(game, "minecraft:stone");
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let (stone, lever, beside, far) = ([5, 64, 5], [6, 64, 5], [4, 64, 5], [5, 64, 9]);
             // A powered lever: weak 15 every way, strong 15 only into the block it hangs on,
             // which lies the way it faces from that block (LeverBlock.getDirectSignal).
@@ -882,7 +876,7 @@ pub(super) mod tests {
         // Glass is no conductor: the lever's power stops at it.
         with_game(|game| {
             lever_on(game, "minecraft:glass");
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             assert_eq!(level.best_neighbor_signal(game, [4, 64, 5]), Some(0));
             assert_eq!(level.signal(game, [5, 64, 5], West), Some(0));
         });
@@ -906,19 +900,16 @@ pub(super) mod tests {
             game.world.set(0, 63, 0, farmland).unwrap();
             game.world.set(0, 64, 0, wheat).unwrap();
             game.world.set(5, 64, 5, stone).unwrap();
-            let level = game.native_level(game.dim.id()).unwrap();
-            assert!(game.native_level_bone_meal(level, [0, 64, 0]));
+            let level = game.level(game.dim.id()).unwrap();
+            assert!(game.level_bone_meal(level, [0, 64, 0]));
             assert_ne!(game.world.block(0, 64, 0), wheat, "the crop grew");
-            assert!(!game.native_level_bone_meal(level, [5, 64, 5]), "stone");
-            assert!(
-                !game.native_level_bone_meal(level, [100_000, 64, 0]),
-                "unloaded"
-            );
+            assert!(!game.level_bone_meal(level, [5, 64, 5]), "stone");
+            assert!(!game.level_bone_meal(level, [100_000, 64, 0]), "unloaded");
 
             let current = usize::from(game.world.chunks[&(0, 0)].biome(0, 64, 0));
             let target = usize::from(current == 0);
             let name = world_biomes!(game).list[target].name.clone();
-            assert!(game.native_level_set_biome(level, [0, 64, 0], &name));
+            assert!(game.level_set_biome(level, [0, 64, 0], &name));
             assert_eq!(
                 usize::from(game.world.chunks[&(0, 0)].biome(3, 67, 3)),
                 target,
@@ -926,11 +917,11 @@ pub(super) mod tests {
             );
             assert!(game.world.modified.contains(&(0, 0)));
             assert!(
-                !game.native_level_set_biome(level, [0, 64, 0], &name),
+                !game.level_set_biome(level, [0, 64, 0], &name),
                 "already set"
             );
-            assert!(!game.native_level_set_biome(level, [0, 64, 0], "minecraft:nope"));
-            assert!(!game.native_level_set_biome(level, [100_000, 64, 0], &name));
+            assert!(!game.level_set_biome(level, [0, 64, 0], "minecraft:nope"));
+            assert!(!game.level_set_biome(level, [100_000, 64, 0], &name));
         });
     }
 
@@ -968,7 +959,7 @@ pub(super) mod tests {
 
         let lit = |game: &super::super::Game<'_>, [x, y, z]: [i32; 3]| {
             let state = game.world.block(x, y, z);
-            game.native_block_state_property(state, "lit") == Some("true")
+            game.block_state_property(state, "lit") == Some("true")
         };
         let set = |game: &mut super::super::Game<'_>, [x, y, z]: [i32; 3], name: &str| {
             let state = game.pack.assets.registry.default_state(name).unwrap();
@@ -979,7 +970,7 @@ pub(super) mod tests {
         let (lever, east, above) = ([6, 64, 5], [7, 64, 5], [6, 65, 5]);
         with_game(|game| {
             lever_on(game, "minecraft:stone");
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let state = game.world.block(6, 64, 5);
             set(game, east, "minecraft:redstone_lamp");
             set(game, above, "minecraft:redstone_lamp");
@@ -993,7 +984,7 @@ pub(super) mod tests {
         // `Level.neighborChanged(east, lever)`: only that lamp hears.
         with_game(|game| {
             lever_on(game, "minecraft:stone");
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let state = game.world.block(6, 64, 5);
             set(game, east, "minecraft:redstone_lamp");
             set(game, above, "minecraft:redstone_lamp");
@@ -1010,7 +1001,7 @@ pub(super) mod tests {
             game.block_ticks
                 .add_empty_chunk(horizon_core::position::ChunkPos::new(0, 0))
                 .unwrap();
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             set(game, [7, 63, 5], "minecraft:stone");
             let repeater = game
                 .pack
@@ -1051,7 +1042,7 @@ pub(super) mod tests {
             game.block_ticks
                 .add_empty_chunk(horizon_core::position::ChunkPos::new(0, 0))
                 .unwrap();
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             // Both stand on stone, as they must to survive a neighbour update.
             set(game, [10, 63, 5], "minecraft:stone");
             set(game, [11, 63, 5], "minecraft:stone");
@@ -1156,7 +1147,7 @@ pub(super) mod tests {
         mod_api::__private::part_tests::weak_power_game_thread();
         with_game(|game| {
             lever_on(game, "minecraft:glass");
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             assert_eq!(level.signal(game, [5, 64, 5], West), Some(15));
             assert_eq!(level.best_neighbor_signal(game, [4, 64, 5]), Some(15));
             // Strong power into the glass is its own; the part changes only what it conducts.
@@ -1353,7 +1344,7 @@ pub(super) mod tests {
             game.world
                 .chunks
                 .insert((-2, 3), Arc::new(Chunk::empty(-2, 3)));
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             // The integrated server thread (game/world/integrated.rs sets the role and
             // `dedicated` on the serving Game) and a dedicated server simulate;
             // a client never does. A remote client runs with the `Client` role
@@ -1366,15 +1357,15 @@ pub(super) mod tests {
                 game.options.execution_role = role;
                 game.options.dedicated = dedicated.then(Vec::new);
                 assert!(game.native_simulates());
-                assert!(game.native_level(game.dim.id()).is_some());
-                assert!(game.native_level_in_place(level));
+                assert!(game.level(game.dim.id()).is_some());
+                assert!(game.level_in_place(level));
                 assert!(game.native_level_write_allowed(level, [-32, 64, 48]));
             }
             game.options.execution_role = ExecutionRole::Client;
             game.options.dedicated = None;
             assert!(!game.native_simulates());
-            assert!(game.native_level(game.dim.id()).is_none());
-            assert!(!game.native_level_in_place(level));
+            assert!(game.level(game.dim.id()).is_none());
+            assert!(!game.level_in_place(level));
             assert!(!game.native_level_write_allowed(level, [-32, 64, 48]));
         });
     }
@@ -1386,7 +1377,7 @@ pub(super) mod tests {
         use mod_api::{ChunkStatus, NativeAuthority};
         use std::sync::Arc;
         with_game(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             game.world
                 .chunks
                 .insert((-2, 3), Arc::new(Chunk::empty(-2, 3)));
@@ -1431,7 +1422,7 @@ pub(super) mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let stone = game
                 .pack
                 .assets
@@ -1440,26 +1431,26 @@ pub(super) mod tests {
                 .unwrap();
             game.world.set(0, 127, 0, stone).unwrap();
             game.world.set(0, 128, 0, stone).unwrap();
-            assert!(game.native_level_is_loaded(level, [0, 127, 0]));
-            assert_eq!(game.native_level_state(level, [0, 127, 0]), Some(stone));
+            assert!(game.level_is_loaded(level, [0, 127, 0]));
+            assert_eq!(game.level_block_state(level, [0, 127, 0]), Some(stone));
             assert_eq!(
-                game.native_level_block(level, [0, 127, 0]).as_deref(),
+                game.level_block(level, [0, 127, 0]).as_deref(),
                 Some("minecraft:stone")
             );
             assert!(game.native_level_write_allowed(level, [0, 127, 0]));
-            assert!(!game.native_level_is_loaded(level, [0, 128, 0]));
-            assert_eq!(game.native_level_state(level, [0, 128, 0]), None);
-            assert_eq!(game.native_level_block(level, [0, 128, 0]), None);
-            assert!(!game.native_level_is_loaded(level, [0, -1, 0]));
-            assert_eq!(game.native_level_state(level, [0, -1, 0]), None);
-            assert!(!game.native_level_set_block(
+            assert!(!game.level_is_loaded(level, [0, 128, 0]));
+            assert_eq!(game.level_block_state(level, [0, 128, 0]), None);
+            assert_eq!(game.level_block(level, [0, 128, 0]), None);
+            assert!(!game.level_is_loaded(level, [0, -1, 0]));
+            assert_eq!(game.level_block_state(level, [0, -1, 0]), None);
+            assert!(!game.level_set_block(
                 level,
                 [0, 128, 0],
                 stone,
                 NativeBlockUpdateFlags::NEIGHBORS
             ));
             assert!(
-                game.native_level_destroy_block(level, [0, 128, 0], false, None, false)
+                game.level_destroy_block(level, [0, 128, 0], false, None, false)
                     .is_none()
             );
         });
@@ -1662,12 +1653,12 @@ pub(super) mod tests {
                 .hub
                 .update_guest(12, |guest| guest.motion = Some(Box::new(motion)))
                 .unwrap();
-            let player = game.native_player_ref(12).unwrap();
+            let player = game.player(12).unwrap();
             assert_eq!(
                 player.inventory(game),
                 Some(vec![ItemStack::new("minecraft:stone", 1)])
             );
-            let guest_living = game.native_living(player.fields().entity).unwrap();
+            let guest_living = game.living(player.fields().entity).unwrap();
             let host: &dyn mod_api::Host = game;
             assert_eq!(
                 guest_living.attribute_base(host, "minecraft:max_health"),
@@ -1685,20 +1676,16 @@ pub(super) mod tests {
                 .update_guest(12, |guest| guest.motion = None)
                 .unwrap();
             // Body and saddle are stored on a guest like on a mob.
-            let living = game.native_living(player.fields().entity).unwrap();
+            let living = game.living(player.fields().entity).unwrap();
             let saddle = ItemStack::new("minecraft:saddle", 1);
-            assert!(game.native_living_set_equipment(
-                living,
-                EquipmentSlot::Saddle,
-                Some(saddle.clone())
-            ));
-            assert!(game.native_living_set_equipment(
+            assert!(game.living_set_equipment(living, EquipmentSlot::Saddle, Some(saddle.clone())));
+            assert!(game.living_set_equipment(
                 living,
                 EquipmentSlot::Body,
                 Some(ItemStack::new("minecraft:iron_horse_armor", 1))
             ));
             assert_eq!(
-                game.native_living_equipment(living, EquipmentSlot::Saddle),
+                game.living_equipment(living, EquipmentSlot::Saddle),
                 Some(saddle.clone())
             );
             assert_eq!(
@@ -1708,33 +1695,24 @@ pub(super) mod tests {
                     .map(|s| &*s.item),
                 Some("minecraft:iron_horse_armor")
             );
-            assert!(game.native_living_set_equipment(living, EquipmentSlot::Saddle, None));
-            assert_eq!(
-                game.native_living_equipment(living, EquipmentSlot::Saddle),
-                None
-            );
+            assert!(game.living_set_equipment(living, EquipmentSlot::Saddle, None));
+            assert_eq!(game.living_equipment(living, EquipmentSlot::Saddle), None);
             // The host's own previous mode, which no guest's change may touch.
             game.previous_mode = Some(horizon_client::command::args::GameMode::Adventure);
-            assert_eq!(game.native_player_previous_game_mode(player), Some(None));
-            assert!(!game.native_player_set_game_mode(player, GameMode::Survival));
-            assert_eq!(game.native_player_previous_game_mode(player), Some(None));
-            assert!(game.native_player_set_game_mode(player, GameMode::Creative));
+            assert_eq!(game.player_previous_game_mode(player), Some(None));
+            assert!(!game.player_set_game_mode(player, GameMode::Survival));
+            assert_eq!(game.player_previous_game_mode(player), Some(None));
+            assert!(game.player_set_game_mode(player, GameMode::Creative));
+            assert_eq!(game.player_game_mode(player), Some(GameMode::Creative));
             assert_eq!(
-                game.native_player_game_mode(player),
-                Some(GameMode::Creative)
-            );
-            assert_eq!(
-                game.native_player_previous_game_mode(player),
+                game.player_previous_game_mode(player),
                 Some(Some(GameMode::Survival))
             );
-            let abilities = game.native_player_abilities(player).unwrap();
+            let abilities = game.player_abilities(player).unwrap();
             assert!(abilities.invulnerable && abilities.may_fly && abilities.instabuild);
-            assert!(game.native_player_set_game_mode(player, GameMode::Survival));
-            assert_eq!(
-                game.native_player_game_mode(player),
-                Some(GameMode::Survival)
-            );
-            let abilities = game.native_player_abilities(player).unwrap();
+            assert!(game.player_set_game_mode(player, GameMode::Survival));
+            assert_eq!(game.player_game_mode(player), Some(GameMode::Survival));
+            let abilities = game.player_abilities(player).unwrap();
             assert!(!abilities.invulnerable && !abilities.may_fly && !abilities.instabuild);
             // A write sticks, is refused for a speed that is not a number, and a
             // mode change sets the flags again (the speeds stay).
@@ -1742,18 +1720,18 @@ pub(super) mod tests {
             written.may_build = false;
             written.walk_speed = 0.2;
             written.fly_speed = 0.1;
-            assert!(game.native_player_set_abilities(player, written));
-            assert_eq!(game.native_player_abilities(player), Some(written));
-            assert_eq!(game.native_player_may_build(player), Some(false));
+            assert!(game.player_set_abilities(player, written));
+            assert_eq!(game.player_abilities(player), Some(written));
+            assert_eq!(game.player_may_build(player), Some(false));
             let mut bad = written;
             bad.walk_speed = f32::NAN;
-            assert!(!game.native_player_set_abilities(player, bad));
-            assert_eq!(game.native_player_abilities(player), Some(written));
-            assert!(game.native_player_set_game_mode(player, GameMode::Creative));
-            let abilities = game.native_player_abilities(player).unwrap();
+            assert!(!game.player_set_abilities(player, bad));
+            assert_eq!(game.player_abilities(player), Some(written));
+            assert!(game.player_set_game_mode(player, GameMode::Creative));
+            let abilities = game.player_abilities(player).unwrap();
             assert!(abilities.may_build && abilities.instabuild && abilities.may_fly);
             assert_eq!((abilities.walk_speed, abilities.fly_speed), (0.2, 0.1));
-            assert!(game.native_player_set_game_mode(player, GameMode::Survival));
+            assert!(game.player_set_game_mode(player, GameMode::Survival));
             let stale = mod_api::__private::game::player_ref(
                 mod_api::EntityRef::new(
                     mod_api::NativeWorldEpoch::new(0),
@@ -1761,19 +1739,19 @@ pub(super) mod tests {
                 ),
                 player.uuid(),
             );
-            assert!(!game.native_player_set_game_mode(stale, GameMode::Creative));
+            assert!(!game.player_set_game_mode(stale, GameMode::Creative));
             let other = game
                 .native_lifecycle
                 .epoch()
                 .map(|epoch| mod_api::EntityRef::new(epoch, 13))
                 .unwrap();
             game.as_guest(12, |game| {
-                let player = game.native_player_ref(12).unwrap();
-                let entity = game.native_entity(12).unwrap();
+                let player = game.player(12).unwrap();
+                let entity = game.entity(12).unwrap();
                 assert_eq!(player.fields().entity, entity);
                 assert_eq!(entity.position(game), Some([3.0, 64.0, 5.0]));
                 assert_eq!(entity.uuid(game), Some(12));
-                let living = game.native_living(entity).unwrap();
+                let living = game.living(entity).unwrap();
                 assert_eq!(
                     living
                         .equipment(game, EquipmentSlot::MainHand)
@@ -1793,44 +1771,38 @@ pub(super) mod tests {
                     f64::from(0.25f32)
                 );
                 // In the player's own turn the write reaches the body as well.
-                let mut a = game.native_player_abilities(player).unwrap();
+                let mut a = game.player_abilities(player).unwrap();
                 a.may_fly = true;
                 a.walk_speed = 0.3;
-                assert!(game.native_player_set_abilities(player, a));
-                assert_eq!(game.native_player_abilities(player), Some(a));
+                assert!(game.player_set_abilities(player, a));
+                assert_eq!(game.player_abilities(player), Some(a));
                 assert!(game.player.as_ref().unwrap().may_fly);
                 assert_eq!(other.position(game), Some([3.0, 64.0, 5.0]));
-                assert!(game.native_living(other).is_some());
+                assert!(game.living(other).is_some());
             })
             .unwrap();
             // A mode change in a turn, then a write in the same turn: the write wins.
             game.as_guest(12, |game| {
-                let player = game.native_player_ref(12).unwrap();
+                let player = game.player(12).unwrap();
                 // The guest's own previous mode is swapped in for the turn.
                 assert_eq!(
-                    game.native_player_previous_game_mode(player),
+                    game.player_previous_game_mode(player),
                     Some(Some(GameMode::Creative))
                 );
-                assert_eq!(
-                    game.native_player_is_secondary_use_active(player),
-                    Some(false)
-                );
+                assert_eq!(game.player_is_secondary_use_active(player), Some(false));
                 game.player.as_mut().unwrap().shift_key_down = true;
-                assert_eq!(
-                    game.native_player_is_secondary_use_active(player),
-                    Some(true)
-                );
+                assert_eq!(game.player_is_secondary_use_active(player), Some(true));
                 game.player.as_mut().unwrap().shift_key_down = false;
-                assert!(game.native_player_set_game_mode(player, GameMode::Creative));
+                assert!(game.player_set_game_mode(player, GameMode::Creative));
                 assert_eq!(
-                    game.native_player_previous_game_mode(player),
+                    game.player_previous_game_mode(player),
                     Some(Some(GameMode::Survival))
                 );
-                let mut a = game.native_player_abilities(player).unwrap();
+                let mut a = game.player_abilities(player).unwrap();
                 assert!(a.instabuild && a.may_fly);
                 a.fly_speed = 0.4;
                 a.walk_speed = 0.3;
-                assert!(game.native_player_set_abilities(player, a));
+                assert!(game.player_set_abilities(player, a));
             })
             .unwrap();
             let kept = game.lan.as_ref().unwrap().hub.guest(12).unwrap();
@@ -1847,12 +1819,12 @@ pub(super) mod tests {
             let stored = game.lan.as_ref().unwrap().hub.guest(12).unwrap().abilities;
             assert!(stored.may_fly && stored.walking_speed == 0.3);
             let swap = game.enter_guest(12).unwrap();
-            assert!(game.native_entity(12).is_some());
-            let other = game.native_entity(13).unwrap();
+            assert!(game.entity(12).is_some());
+            let other = game.entity(13).unwrap();
             assert_eq!(other.position(game), Some([3.0, 64.0, 5.0]));
             assert_eq!(other.uuid(game), Some(13));
             assert_eq!(other.kind(game).as_deref(), Some("minecraft:player"));
-            let living = game.native_living(other).unwrap();
+            let living = game.living(other).unwrap();
             assert_eq!(
                 living
                     .equipment(game, EquipmentSlot::MainHand)
@@ -1861,28 +1833,25 @@ pub(super) mod tests {
                     .as_ref(),
                 "minecraft:stone"
             );
-            let player = game.native_player_ref(13).unwrap();
+            let player = game.player(13).unwrap();
             assert_eq!(player.fields().entity, other);
             assert_eq!(player.game_mode(game), Some(GameMode::Survival));
-            assert!(game.native_player_set_game_mode(player, GameMode::Creative));
+            assert!(game.player_set_game_mode(player, GameMode::Creative));
             assert_eq!(player.game_mode(game), Some(GameMode::Creative));
             assert_eq!(game.lan_acting, Some(12));
-            let acting = game.native_player_ref(12).unwrap();
-            assert!(game.native_player_set_game_mode(acting, GameMode::Adventure));
-            assert_eq!(
-                game.native_player_game_mode(acting),
-                Some(GameMode::Adventure)
-            );
+            let acting = game.player(12).unwrap();
+            assert!(game.player_set_game_mode(acting, GameMode::Adventure));
+            assert_eq!(game.player_game_mode(acting), Some(GameMode::Adventure));
             let nested = game.enter_guest(13).unwrap();
             assert!(game.enter_guest(12).is_none());
             assert_eq!(game.lan_acting, Some(13));
-            assert!(game.native_entity(12).is_none());
-            assert!(game.native_player_ref(12).is_none());
+            assert!(game.entity(12).is_none());
+            assert!(game.player(12).is_none());
             assert!(
-                game.native_living(mod_api::EntityRef::new(other.epoch(), 12))
+                game.living(mod_api::EntityRef::new(other.epoch(), 12))
                     .is_none()
             );
-            assert!(game.native_entity(13).is_some());
+            assert!(game.entity(13).is_some());
             game.leave_guest(nested);
             assert_eq!(game.lan_acting, Some(12));
             game.leave_guest(swap);
@@ -1932,11 +1901,11 @@ pub(super) mod tests {
                 horizon_core::geometry::Vec3::ZERO,
                 0.0,
             ));
-            let guest = game.native_entity(12).unwrap();
-            let vehicle = game.native_entity(21).unwrap();
-            assert!(game.native_entity_start_riding(guest, vehicle, true));
+            let guest = game.entity(12).unwrap();
+            let vehicle = game.entity(21).unwrap();
+            assert!(game.entity_start_riding(guest, vehicle, true));
             assert_eq!(game.command_guest(12).unwrap().vehicle, Some(21));
-            assert!(game.native_entity_stop_riding(guest));
+            assert!(game.entity_stop_riding(guest));
             assert_eq!(game.command_guest(12).unwrap().vehicle, None);
             game.lan
                 .as_mut()
@@ -1944,8 +1913,8 @@ pub(super) mod tests {
                 .hub
                 .update_guest(12, |guest| guest.dimension = "minecraft:the_nether".into())
                 .unwrap();
-            assert!(!game.native_entity_start_riding(guest, vehicle, true));
-            assert!(!game.native_entity_start_riding(vehicle, guest, true));
+            assert!(!game.entity_start_riding(guest, vehicle, true));
+            assert!(!game.entity_start_riding(vehicle, guest, true));
             let _ = std::fs::remove_dir_all(root);
         });
     }
@@ -1957,28 +1926,28 @@ pub(super) mod tests {
         use horizon_core::geometry::Vec3;
         use mod_api::{LevelRef, NativeWorldEpoch};
         with_game(|game| {
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             game.armor_stands
                 .push(ArmorStand::new(0, Vec3::new(0.5, 0.0, 0.0), 0.0));
-            assert!(game.native_entity(0).is_none());
+            assert!(game.entity(0).is_none());
             game.armor_stands
                 .push(ArmorStand::new(12, Vec3::new(1.0, 0.0, 0.0), 0.0));
             let found = game
-                .native_level_entities_in(level, [0.0, 0.0, -1.0], [0.8, 1.0, 1.0])
+                .level_entities_in(level, [0.0, 0.0, -1.0], [0.8, 1.0, 1.0])
                 .unwrap();
             assert_eq!(found.len(), 1);
-            assert_eq!(game.native_entity_position(found[0]), Some([1.0, 0.0, 0.0]));
+            assert_eq!(game.entity_position(found[0]), Some([1.0, 0.0, 0.0]));
             assert_eq!(
-                game.native_entity_kind(found[0]).as_deref(),
+                game.entity_kind(found[0]).as_deref(),
                 Some("minecraft:armor_stand")
             );
             assert!(
-                game.native_level_entities_in(level, [0.0, 0.0, -1.0], [0.75, 1.0, 1.0])
+                game.level_entities_in(level, [0.0, 0.0, -1.0], [0.75, 1.0, 1.0])
                     .unwrap()
                     .is_empty()
             );
             assert!(
-                game.native_level_entities_in(
+                game.level_entities_in(
                     LevelRef::new(NativeWorldEpoch::new(0), game.dim.key()),
                     [0.0; 3],
                     [2.0; 3]
@@ -2124,35 +2093,35 @@ pub(super) mod tests {
             game.next_entity = 100;
             game.lan.as_ref().unwrap().hub.lan.shared.next_id();
             game.lan.as_ref().unwrap().hub.lan.shared.next_id();
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let role = game.options.execution_role;
             game.options.execution_role = super::super::execution_role::ExecutionRole::Client;
-            assert!(game.native_fake_player(level, 1234, "machine").is_none());
+            assert!(game.fake_player(level, 1234, "machine").is_none());
             game.options.execution_role = role;
-            let made = game.native_fake_player(level, 1234, "machine").unwrap();
-            assert_eq!(game.native_fake_player(level, 1234, "machine"), Some(made));
-            assert!(game.native_fake_player(level, 1234, "other").is_none());
-            assert!(game.native_fake_player(level, 1, "real").is_none());
-            assert_eq!(game.native_player_is_fake(made), Some(true));
-            assert!(game.native_player_ref(1234).is_none());
-            let mut abilities = game.native_player_abilities(made).unwrap();
+            let made = game.fake_player(level, 1234, "machine").unwrap();
+            assert_eq!(game.fake_player(level, 1234, "machine"), Some(made));
+            assert!(game.fake_player(level, 1234, "other").is_none());
+            assert!(game.fake_player(level, 1, "real").is_none());
+            assert_eq!(game.player_is_fake(made), Some(true));
+            assert!(game.player(1234).is_none());
+            let mut abilities = game.player_abilities(made).unwrap();
             abilities.may_fly = true;
-            assert!(game.native_player_set_abilities(made, abilities));
-            assert!(game.native_player_abilities(made).unwrap().may_fly);
-            assert!(game.native_player_set_food_level(made, 10));
-            assert!(game.native_player_feed(made, 3, 0.0));
-            assert_eq!(game.native_player_food(made).unwrap().level, 13);
-            assert!(game.native_player_set_experience_levels(made, 7));
-            assert_eq!(game.native_player_experience(made).unwrap().level, 7);
-            assert!(game.native_player_set_item_cooldown(made, "minecraft:stone", 20));
+            assert!(game.player_set_abilities(made, abilities));
+            assert!(game.player_abilities(made).unwrap().may_fly);
+            assert!(game.player_set_food_level(made, 10));
+            assert!(game.player_feed(made, 3, 0.0));
+            assert_eq!(game.player_food(made).unwrap().level, 13);
+            assert!(game.player_set_experience_levels(made, 7));
+            assert_eq!(game.player_experience(made).unwrap().level, 7);
+            assert!(game.player_set_item_cooldown(made, "minecraft:stone", 20));
             assert_eq!(
-                game.native_player_has_item_cooldown(made, "minecraft:stone"),
+                game.player_has_item_cooldown(made, "minecraft:stone"),
                 Some(true)
             );
-            assert!(game.native_player_remove_fake(made));
-            assert!(!game.native_player_remove_fake(made));
-            assert_eq!(game.native_player_is_fake(made), None);
-            let replacement = game.native_fake_player(level, 1234, "machine").unwrap();
+            assert!(game.player_remove_fake(made));
+            assert!(!game.player_remove_fake(made));
+            assert_eq!(game.player_is_fake(made), None);
+            let replacement = game.fake_player(level, 1234, "machine").unwrap();
             assert_ne!(made, replacement);
             let saved_root = game.world_root.clone();
             let scratch = std::env::current_dir()
@@ -2178,13 +2147,13 @@ pub(super) mod tests {
                 .unwrap()
                 .conn;
             game.as_guest(conn, |game| {
-                assert_eq!(game.native_player_permission_level(replacement), Some(0));
-                assert!(!game.native_player_remove_fake(replacement));
-                assert!(game.native_fake_player(level, 4321, "other").is_none());
+                assert_eq!(game.player_permission_level(replacement), Some(0));
+                assert!(!game.player_remove_fake(replacement));
+                assert!(game.fake_player(level, 4321, "other").is_none());
             })
             .unwrap();
-            assert!(game.native_player_remove_fake(replacement));
-            let overworld_actor = game.native_fake_player(level, 2345, "parked").unwrap();
+            assert!(game.player_remove_fake(replacement));
+            let overworld_actor = game.fake_player(level, 2345, "parked").unwrap();
             let attachment = horizon_mod_runtime::attachments::AttachmentType {
                 namespace: "test",
                 name: "identity",
@@ -2216,9 +2185,9 @@ pub(super) mod tests {
                 game.enter_command_level(super::super::Dim::Nether)
                     .is_some()
             );
-            let nether = game.native_level("minecraft:the_nether").unwrap();
-            assert!(game.native_fake_player(level, 3456, "other").is_none());
-            let nether_actor = game.native_fake_player(nether, 2345, "parked").unwrap();
+            let nether = game.level("minecraft:the_nether").unwrap();
+            assert!(game.fake_player(level, 3456, "other").is_none());
+            let nether_actor = game.fake_player(nether, 2345, "parked").unwrap();
             attachment
                 .set(
                     game.attachment_map_quiet(holder, mod_api::AttachmentAccess::Existing)
@@ -2287,22 +2256,11 @@ pub(super) mod tests {
                 Ok(1)
             );
             assert_eq!(place.stack(game).unwrap().count, 1);
-            assert_eq!(
-                game.native_fake_player(nether, 2345, "parked"),
-                Some(nether_actor)
-            );
-            assert!(game.native_player_set_experience_levels(nether_actor, 8));
-            assert!(game.native_player_set_experience_levels(overworld_actor, 3));
-            assert_eq!(
-                game.native_player_experience(nether_actor).unwrap().level,
-                8
-            );
-            assert_eq!(
-                game.native_player_experience(overworld_actor)
-                    .unwrap()
-                    .level,
-                3
-            );
+            assert_eq!(game.fake_player(nether, 2345, "parked"), Some(nether_actor));
+            assert!(game.player_set_experience_levels(nether_actor, 8));
+            assert!(game.player_set_experience_levels(overworld_actor, 3));
+            assert_eq!(game.player_experience(nether_actor).unwrap().level, 8);
+            assert_eq!(game.player_experience(overworld_actor).unwrap().level, 3);
             assert!(
                 game.enter_command_level(super::super::Dim::Overworld)
                     .is_some()
@@ -2317,7 +2275,7 @@ pub(super) mod tests {
                     .unwrap(),
                 3
             );
-            assert!(game.native_player_remove_fake(overworld_actor));
+            assert!(game.player_remove_fake(overworld_actor));
             assert_eq!(
                 attachment
                     .get(
@@ -2339,7 +2297,7 @@ pub(super) mod tests {
                     .unwrap(),
                 8
             );
-            assert!(game.native_player_remove_fake(nether_actor));
+            assert!(game.player_remove_fake(nether_actor));
             game.enter_command_level(super::super::Dim::Overworld)
                 .unwrap();
             game.options.dedicated = None;
@@ -2587,10 +2545,10 @@ pub(super) mod tests {
                 assert_eq!(cooldown.group, expected);
                 assert!(receiver.try_recv().is_err());
             }
-            let fake = game.native_fake_player(level, 5678, "joiner").unwrap();
+            let fake = game.fake_player(level, 5678, "joiner").unwrap();
             game.enter_command_level(super::super::Dim::Nether).unwrap();
-            let nether = game.native_level("minecraft:the_nether").unwrap();
-            let other_fake = game.native_fake_player(nether, 5678, "joiner").unwrap();
+            let nether = game.level("minecraft:the_nether").unwrap();
+            let other_fake = game.fake_player(nether, 5678, "joiner").unwrap();
             game.enter_command_level(super::super::Dim::Overworld)
                 .unwrap();
             let saved_root = game.world_root.clone();
@@ -2641,8 +2599,8 @@ pub(super) mod tests {
                 game.tick_lan_packets();
                 assert_eq!(logouts.load(std::sync::atomic::Ordering::Relaxed), 0);
             });
-            assert_eq!(game.native_player_is_fake(fake), None);
-            assert_eq!(game.native_player_is_fake(other_fake), None);
+            assert_eq!(game.player_is_fake(fake), None);
+            assert_eq!(game.player_is_fake(other_fake), None);
             assert!(
                 !horizon_client::lan::playerdata::path(&scratch, 5678).exists(),
                 "fake login replacement saved player data"
@@ -2687,13 +2645,13 @@ pub(super) mod tests {
             let host = game.lan.as_ref().unwrap();
             assert!(host.hub.guest(fake_id).unwrap().left_reason.is_empty());
             assert!(!host.hub.guest(real_id).unwrap().left_reason.is_empty());
-            let old = game.native_fake_player(level, 6789, "reopen").unwrap();
+            let old = game.fake_player(level, 6789, "reopen").unwrap();
             game.native_lifecycle_world_closed();
             game.native_lifecycle_open_started();
-            let reopened = game.native_level(game.dim.id()).unwrap();
+            let reopened = game.level(game.dim.id()).unwrap();
             assert_ne!(level.epoch(), reopened.epoch());
-            assert_eq!(game.native_player_is_fake(old), None);
-            let fresh = game.native_fake_player(reopened, 6789, "reopen").unwrap();
+            assert_eq!(game.player_is_fake(old), None);
+            let fresh = game.fake_player(reopened, 6789, "reopen").unwrap();
             assert_ne!(fresh, old);
         });
     }
@@ -2710,7 +2668,7 @@ pub(super) mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let slab = game
                 .pack
                 .assets
@@ -2922,7 +2880,7 @@ pub(super) mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level(game.dim.id()).unwrap();
+            let level = game.level(game.dim.id()).unwrap();
             let stone = game
                 .pack
                 .assets
@@ -3080,7 +3038,7 @@ pub(super) mod tests {
             dragon.id = 14;
             game.dragon = Some(dragon);
             for (id, max) in [(12, 20.0), (13, 20.0), (14, 200.0)] {
-                let living = game.native_living(game.native_entity(id).unwrap()).unwrap();
+                let living = game.living(game.entity(id).unwrap()).unwrap();
                 assert_eq!(
                     living.attribute_base(game, "minecraft:max_health"),
                     Some(max)
@@ -3138,7 +3096,7 @@ pub(super) mod tests {
         game.native_lifecycle
             .begin_open(NativeAuthority::IntegratedServer);
 
-        let level = game.native_level("minecraft:overworld").unwrap();
+        let level = game.level("minecraft:overworld").unwrap();
         assert!(
             game.enter_command_level(super::super::Dim::Nether)
                 .is_some()
@@ -3157,23 +3115,22 @@ pub(super) mod tests {
             game.enter_command_level(super::super::Dim::Overworld)
                 .is_some()
         );
-        let nether = game.native_level("minecraft:the_nether").unwrap();
+        let nether = game.level("minecraft:the_nether").unwrap();
         let host: &dyn mod_api::ServerHost = &game;
         assert_eq!(host.levels().list_levels(), vec![level, nether]);
         let cube = vec![[0.0, 0.0, 0.0, 1.0, 1.0, 1.0]];
         assert_eq!(
-            game.native_level_block_shape(nether, [0, 64, 0], NativeBlockShapeKind::Outline),
+            game.level_block_shape(nether, [0, 64, 0], NativeBlockShapeKind::Outline),
             Some(cube.clone())
         );
         assert_eq!(
-            game.native_level_block_shape(nether, [0, 64, 0], NativeBlockShapeKind::Collision),
+            game.level_block_shape(nether, [0, 64, 0], NativeBlockShapeKind::Collision),
             Some(cube)
         );
         let shape = |game: &mut Game<'_>, name: &str, kind| {
             let state = game.pack.assets.registry.default_state(name).unwrap();
             game.world.set(0, 64, 0, state).unwrap();
-            game.native_level_block_shape(level, [0, 64, 0], kind)
-                .unwrap()
+            game.level_block_shape(level, [0, 64, 0], kind).unwrap()
         };
         game.inventory[game.selected] = Some(horizon_client::items::ItemStack {
             item: "minecraft:light".into(),
@@ -3304,7 +3261,7 @@ pub(super) mod tests {
         game.native_lifecycle
             .begin_open(NativeAuthority::IntegratedServer);
 
-        let level = game.native_level("minecraft:overworld").unwrap();
+        let level = game.level("minecraft:overworld").unwrap();
         let stone = game
             .pack
             .assets
@@ -3325,21 +3282,11 @@ pub(super) mod tests {
             .unwrap();
         // Flag-aware writes log only client updates; ordinary World::set still logs by default.
         game.world.block_log = Some(Vec::new());
-        assert!(game.native_level_set_block(
-            level,
-            [2, 64, 0],
-            stone,
-            NativeBlockUpdateFlags::NONE
-        ));
+        assert!(game.level_set_block(level, [2, 64, 0], stone, NativeBlockUpdateFlags::NONE));
         assert!(game.world.block_log.as_ref().unwrap().is_empty());
-        assert!(game.native_level_set_block(
-            level,
-            [3, 64, 0],
-            stone,
-            NativeBlockUpdateFlags::CLIENTS
-        ));
+        assert!(game.level_set_block(level, [3, 64, 0], stone, NativeBlockUpdateFlags::CLIENTS));
         assert_eq!(game.world.block_log.as_ref().unwrap(), &vec![(3, 64, 0)]);
-        assert!(game.native_level_set_block(
+        assert!(game.level_set_block(
             level,
             [4, 64, 0],
             stone,
@@ -3372,7 +3319,7 @@ pub(super) mod tests {
             .unwrap();
         for moved in [false, true] {
             game.world.set(5, 64, 0, waterlogged).unwrap();
-            assert!(game.native_level_remove_block(level, [5, 64, 0], moved));
+            assert!(game.level_remove_block(level, [5, 64, 0], moved));
             assert_eq!(game.world.block(5, 64, 0), water);
             game.world.set(5, 64, 0, waterlogged).unwrap();
             let removed = game.with_level(|_, level, ticks| {
@@ -3383,17 +3330,17 @@ pub(super) mod tests {
             assert_eq!(game.world.block(5, 64, 0), water);
         }
         let flags = NativeBlockUpdateFlags::NEIGHBORS;
-        assert!(game.native_level_set_block(level, [0, 64, 0], stone, flags));
+        assert!(game.level_set_block(level, [0, 64, 0], stone, flags));
         assert_eq!(game.world.block(0, 64, 0), stone);
-        assert!(!game.native_level_set_block(level, [16, 64, 0], stone, flags));
-        assert!(!game.native_level_set_block(level, [0, 10000, 0], stone, flags));
+        assert!(!game.level_set_block(level, [16, 64, 0], stone, flags));
+        assert!(!game.level_set_block(level, [0, 10000, 0], stone, flags));
         let stale = mod_api::LevelRef::new(
             mod_api::NativeWorldEpoch::new(level.epoch().get() + 1),
             level.dimension(),
         );
-        assert!(!game.native_level_set_block(stale, [0, 64, 0], stone, flags));
+        assert!(!game.level_set_block(stale, [0, 64, 0], stone, flags));
         assert!(
-            game.native_level_destroy_block(stale, [0, 64, 0], true, None, false)
+            game.level_destroy_block(stale, [0, 64, 0], true, None, false)
                 .is_none()
         );
         let fill_chest = |game: &mut Game<'_>| {
@@ -3409,9 +3356,9 @@ pub(super) mod tests {
                 extra: None,
             });
         };
-        assert!(game.native_level_set_block(level, [0, 64, 0], chest, flags));
+        assert!(game.level_set_block(level, [0, 64, 0], chest, flags));
         fill_chest(&mut game);
-        assert!(game.native_level_set_block(level, [0, 64, 0], air, flags));
+        assert!(game.level_set_block(level, [0, 64, 0], air, flags));
         assert_eq!(
             game.dropped
                 .iter()
@@ -3421,9 +3368,9 @@ pub(super) mod tests {
             3
         );
         game.dropped.clear();
-        assert!(game.native_level_set_block(level, [0, 64, 0], chest, flags));
+        assert!(game.level_set_block(level, [0, 64, 0], chest, flags));
         fill_chest(&mut game);
-        assert!(game.native_level_set_block(
+        assert!(game.level_set_block(
             level,
             [0, 64, 0],
             air,
@@ -3431,16 +3378,16 @@ pub(super) mod tests {
         ));
         assert!(!game.world.block_entities.contains_key(&(0, 64, 0)));
         assert!(game.dropped.is_empty());
-        assert!(game.native_level_set_block(level, [0, 64, 0], stone, flags));
+        assert!(game.level_set_block(level, [0, 64, 0], stone, flags));
         assert!(
-            game.native_level_destroy_block(level, [0, 64, 0], false, None, false)
+            game.level_destroy_block(level, [0, 64, 0], false, None, false)
                 .is_some()
         );
         assert!(game.dropped.is_empty());
         assert_eq!(game.world.block(0, 64, 0), air);
-        assert!(game.native_level_set_block(level, [0, 64, 0], stone, flags));
+        assert!(game.level_set_block(level, [0, 64, 0], stone, flags));
         assert!(
-            game.native_level_destroy_block(level, [0, 64, 0], true, None, false)
+            game.level_destroy_block(level, [0, 64, 0], true, None, false)
                 .is_some()
         );
         assert!(
@@ -3449,7 +3396,7 @@ pub(super) mod tests {
                 .any(|item| item.stack.item.as_ref() == "minecraft:cobblestone")
         );
         assert!(
-            game.native_level_destroy_block(level, [0, 64, 0], true, None, false)
+            game.level_destroy_block(level, [0, 64, 0], true, None, false)
                 .is_none()
         );
         game.dropped.clear();
@@ -3465,9 +3412,9 @@ pub(super) mod tests {
             .registry
             .default_state("minecraft:exposed_copper_chest")
             .unwrap();
-        assert!(game.native_level_set_block(level, [0, 64, 0], copper, flags));
+        assert!(game.level_set_block(level, [0, 64, 0], copper, flags));
         fill_chest(&mut game);
-        assert!(game.native_level_set_block(level, [0, 64, 0], exposed, flags));
+        assert!(game.level_set_block(level, [0, 64, 0], exposed, flags));
         let Some(super::super::BlockEntity::Chest(items)) =
             game.world.block_entities.get(&(0, 64, 0))
         else {
@@ -3481,12 +3428,12 @@ pub(super) mod tests {
             .registry
             .default_state("minecraft:sculk_sensor")
             .unwrap();
-        assert!(game.native_level_set_block(level, [0, 64, 0], sensor, flags));
+        assert!(game.level_set_block(level, [0, 64, 0], sensor, flags));
         assert!(matches!(
             game.world.block_entities.get(&(0, 64, 0)),
             Some(super::super::BlockEntity::Sculk(_))
         ));
-        assert!(game.native_level_set_block(level, [0, 64, 0], chest, flags));
+        assert!(game.level_set_block(level, [0, 64, 0], chest, flags));
         assert!(matches!(
             game.world.block_entities.get(&(0, 64, 0)),
             Some(super::super::BlockEntity::Chest(_))
@@ -3495,9 +3442,9 @@ pub(super) mod tests {
             game.enter_command_level(super::super::Dim::Nether)
                 .is_some()
         );
-        assert!(!game.native_level_set_block(level, [0, 64, 0], stone, flags));
+        assert!(!game.level_set_block(level, [0, 64, 0], stone, flags));
         assert!(
-            game.native_level_destroy_block(level, [0, 64, 0], true, None, false)
+            game.level_destroy_block(level, [0, 64, 0], true, None, false)
                 .is_none()
         );
     }

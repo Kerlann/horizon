@@ -199,7 +199,7 @@ impl Game<'_> {
             }));
         } else {
             self.message = Some((
-                self.translate(KEY, "Click actions are disabled for this sign"),
+                self.translate_with_fallback(KEY, "Click actions are disabled for this sign"),
                 std::time::Instant::now(),
             ));
         }
@@ -766,7 +766,7 @@ impl Game<'_> {
         } else {
             ("sign.edit", "Edit Sign Message")
         };
-        let title = self.translate(key, fallback);
+        let title = self.translate_with_fallback(key, fallback);
         // SignEditScreen / HangingSignEditScreen: their title.
         horizon_client::widgets::begin_screen(|| {
             horizon_client::widgets::ScreenInfo::new("sign_edit", title.clone())

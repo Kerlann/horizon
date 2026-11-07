@@ -100,12 +100,12 @@ impl Game<'_> {
         })
     }
     /// The first block along the view within `distance` (at most 1024), past the loaded chunks over the distant terrain.
-    pub(super) fn native_raycast(&self, distance: f32) -> Option<NativeHit> {
-        let (d, hit) = self.native_view_hit()?;
+    pub(super) fn raycast(&self, distance: f32) -> Option<NativeHit> {
+        let (d, hit) = self.view_hit()?;
         (d <= distance.clamp(0.0, RAYCAST_MAX)).then_some(hit)
     }
     /// The first block along the view within `RAYCAST_MAX`, and its distance.
-    pub(super) fn native_view_hit(&self) -> Option<(f32, NativeHit)> {
+    pub(super) fn view_hit(&self) -> Option<(f32, NativeHit)> {
         self.player.as_ref()?;
         let eye = self.eye_position()?;
         let dir = super::view_vector(self.yaw, self.pitch);
@@ -162,11 +162,11 @@ impl Game<'_> {
         None
     }
     /// Right-clicks with these items (at most 64 ids) are mod `mod_id`'s; a later call replaces the list.
-    pub(super) fn native_claim_items(&mut self, mod_id: &str, ids: &[String]) {
+    pub(super) fn claim_items(&mut self, mod_id: &str, ids: &[String]) {
         self.native_input.claim(mod_id, ids);
     }
     /// Mod `mod_id`'s events since its last poll (at most 256 wait).
-    pub(super) fn native_poll(&mut self, mod_id: &str) -> Vec<NativeModEvent> {
+    pub(super) fn poll(&mut self, mod_id: &str) -> Vec<NativeModEvent> {
         self.native_input.poll(mod_id)
     }
     /// `use_hand`: a right-click with an item a mod claims starts its use for

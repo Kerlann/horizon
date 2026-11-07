@@ -2584,7 +2584,7 @@ impl OptionsUi {
     /// chunks were decoded with: changing it mid-world remaps their ids
     /// (Forge/Fabric freeze the registry before a world opens). One with only
     /// assets and data reloads live, and a native mod toggles live through
-    /// `native_on`, so they stay available.
+    /// `on`, so they stay available.
     fn mod_frozen(&self, installed: &crate::mod_list::Installed) -> bool {
         self.in_world && installed.native.is_none() && !self.mods_live.contains(&installed.id)
     }
@@ -7817,7 +7817,7 @@ mod tests {
 
     /// A content mod's set builds the block-state tables an open world's
     /// chunks were decoded with, so its toggle freezes in-world; a native
-    /// mod gates live through `native_on` and one of assets and data reloads
+    /// mod gates live through `on` and one of assets and data reloads
     /// live, so they stay available.
     #[test]
     fn in_a_world_only_live_mod_toggles_stay_active() {

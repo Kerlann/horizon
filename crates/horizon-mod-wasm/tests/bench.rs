@@ -344,9 +344,7 @@ fn a_point_filled_by_a_wasm_mod() {
         std::hint::black_box(tick_at_point(bench_mod::tick));
     });
     let wasm_time = timed(20_000, || {
-        mod_points::__private::fire(mod_points::PointId::Tick, "tick", &mut |listener| {
-            std::hint::black_box(tick_at_point(|host, args| listener.tick(host, args)));
-        });
+        std::hint::black_box(tick_at_point(mod_points::dispatch::tick));
     });
     let table = format!(
         "### A point filled by a mod\n\n| Slot | Per tick |\n| --- | --- |\n\

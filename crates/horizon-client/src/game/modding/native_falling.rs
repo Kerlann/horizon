@@ -8,7 +8,7 @@ use horizon_core::{geometry::Vec3, position::BlockPos};
 use horizon_world::registry::BlockStateId;
 pub use mod_api::game::NativeFalling;
 
-/// The most falling blocks a level holds before `native_spawn_falling_block`
+/// The most falling blocks a level holds before `spawn_falling_block`
 /// refuses more: a mod's debris shouldn't take the server's tick with it.
 pub(super) const NATIVE_FALLING_MAX: usize = 1024;
 /// The largest speed a thrown block starts with, in blocks a tick on each
@@ -36,7 +36,7 @@ impl Game<'_> {
     /// dimension, an air or unknown state, a chunk that isn't loaded, a value
     /// that isn't finite, or with 1024 falling blocks in the level already.
     /// Each axis of `velocity` is cut to 3.9.
-    pub(super) fn native_spawn_falling_block(
+    pub(super) fn spawn_falling_block(
         &mut self,
         dimension: &str,
         state: BlockStateId,

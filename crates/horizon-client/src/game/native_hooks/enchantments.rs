@@ -5,7 +5,7 @@ use super::*;
 #[allow(dead_code)]
 impl Game<'_> {
     /// Registered enchantments, in registry order.
-    pub(in crate::game) fn native_enchantments(&self) -> Vec<EnchantmentInfo> {
+    pub(in crate::game) fn enchantments(&self) -> Vec<EnchantmentInfo> {
         let enchantments = &self.stations().enchantments;
         enchantments
             .list
@@ -20,14 +20,14 @@ impl Game<'_> {
             .collect()
     }
     /// `Enchantment.getMinCost(level)`: the enchanting power needed, or None for an unknown id.
-    pub(in crate::game) fn native_enchantment_min_cost(&self, id: &str, level: u32) -> Option<i32> {
+    pub(in crate::game) fn enchantment_min_cost(&self, id: &str, level: u32) -> Option<i32> {
         self.stations()
             .enchantments
             .get(id)
             .map(|e| e.min_cost.calculate(level))
     }
     /// Whether enchantment `id` can go on `item` (`Enchantment.isSupportedItem`).
-    pub(in crate::game) fn native_enchantment_supports(&self, id: &str, item: &str) -> bool {
+    pub(in crate::game) fn enchantment_supports(&self, id: &str, item: &str) -> bool {
         self.stations()
             .enchantments
             .can_enchant(self.items(), id, item)

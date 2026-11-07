@@ -182,7 +182,7 @@ fn internal_slots_preserve_automation_limits_and_nested_transactions() {
                 .block_entities
                 .insert(pos, BlockEntity::Mod(Box::new(replacement)));
             assert_eq!(get(game, 0), Err(Error::Stale));
-            let replacement = game.native_block_entity_ref(level, [1, 64, 1]).unwrap();
+            let replacement = game.block_entity(level, [1, 64, 1]).unwrap();
             assert_ne!(entity, replacement);
             let get = |host: &dyn Host, slot| replacement.item_slot(host, slot);
             let set = |host: &mut dyn ServerHost, tx: &Transaction, slot, stack| {

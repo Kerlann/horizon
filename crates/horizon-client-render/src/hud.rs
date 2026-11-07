@@ -126,7 +126,7 @@ pub fn map_slot_sprite(slot: usize) -> Option<&'static str> {
 }
 /// The atlas slot the minimap extra draws into.
 pub const MINIMAP_SPRITE: &str = "horizon/minimap";
-/// A mod's own image (`native_mod_image`), drawn with `native_sprite`; big
+/// A mod's own image (`mod_image`), drawn with `native_sprite`; big
 /// enough for a world map's 1024 blocks at a block a pixel.
 pub const MOD_IMAGE_SPRITE: &str = "horizon/modimage";
 pub const MOD_IMAGE_SIZE: u32 = 1024;

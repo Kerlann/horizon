@@ -101,7 +101,7 @@ impl Site {
         }
         exports.insert(format!("    pub use {};\n", self.record));
         let listener = self.listener.rsplit("::").next().expect("listener name");
-        constructors.insert(format!("    /// Registers this site's exact typed wrap listener.\n    pub const fn {}(id: &'static str, priority: i32, injection: &'static str, f: {listener}) -> mod_points::__private::RawListener {{\n        // SAFETY: the function's exact type is checked before erasure.\n        unsafe {{ mod_points::__private::RawListener::site(id, mod_points::SiteId::{}, priority, injection, f as *const ()) }}\n    }}\n", self.constructor(), self.name));
+        constructors.insert(format!("    /// Registers this site's exact typed wrap listener.\n    pub const fn {}(id: &'static str, priority: i32, injection: &'static str, f: {listener}) -> mod_points::__private::SlotListener {{\n        // SAFETY: the function's exact type is checked before erasure.\n        unsafe {{ mod_points::__private::SlotListener::site(id, mod_points::SiteId::{}, priority, injection, f as *const ()) }}\n    }}\n", self.constructor(), self.name));
     }
 
     pub(super) fn registration(

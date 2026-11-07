@@ -30,7 +30,7 @@ impl GameLevel<'_> {
     /// emits, in order, and plays when the write that runs the hook is
     /// done (`process_level_events`), with the guests told as for any event
     /// the behaviour raises. False off an authoritative server, or for an
-    /// event that carries a block state (see `native_level_level_event`)
+    /// event that carries a block state (see `level_level_event`)
     /// when `data` isn't one.
     pub(super) fn native_level_event(&mut self, id: i32, pos: [i32; 3], data: i32) -> bool {
         if !self.native_authoritative || !level_event_data_ok(id, data, self.facts.states.len()) {
@@ -53,14 +53,14 @@ impl Game<'_> {
     /// block with state id `data`). No player is left out, the acting one
     /// included. False for an event that carries a block state (2001, 2014,
     /// 3008) when `data` isn't one.
-    pub(super) fn native_level_level_event(
+    pub(super) fn level_level_event(
         &mut self,
         level: LevelRef,
         id: i32,
         pos: [i32; 3],
         data: i32,
     ) -> bool {
-        if !self.native_level_in_place(level) {
+        if !self.level_in_place(level) {
             return false;
         }
         if !level_event_data_ok(id, data, self.res.facts().states.len()) {
@@ -73,16 +73,11 @@ impl Game<'_> {
     /// `Level.gameEvent(null, event, at)` does: sculk sensors, shriekers,
     /// wardens and allays in range hear it. False for an event vanilla
     /// doesn't have.
-    pub(super) fn native_level_game_event(
-        &mut self,
-        level: LevelRef,
-        event: &str,
-        at: [f64; 3],
-    ) -> bool {
+    pub(super) fn level_game_event(&mut self, level: LevelRef, event: &str, at: [f64; 3]) -> bool {
         let Some(event) = horizon_client::sculk::intern(event) else {
             return false;
         };
-        if !self.native_level_in_place(level) || !in_bounds(at) {
+        if !self.level_in_place(level) || !in_bounds(at) {
             return false;
         }
         self.post_game_event(event, at, Context::default());
@@ -94,7 +89,7 @@ impl Game<'_> {
     /// blocks: `None`, `Block` or `Tnt` (vanilla's `Mob` and `Trigger` aren't
     /// offered yet). False for a chunk that isn't loaded or a radius outside
     /// `0 < radius <= 32`.
-    pub(super) fn native_level_explode(
+    pub(super) fn level_explode(
         &mut self,
         level: LevelRef,
         center: [f64; 3],
@@ -102,7 +97,7 @@ impl Game<'_> {
         fire: bool,
         interaction: NativeExplosionInteraction,
     ) -> bool {
-        if !self.native_level_in_place(level) {
+        if !self.level_in_place(level) {
             return false;
         }
         let blast = match interaction {
@@ -119,13 +114,13 @@ impl Game<'_> {
     /// `visual_only` it only flashes and sounds (`setVisualOnly`). The
     /// `lightning_strike` hook hears it first with the cause `mod` and may
     /// cancel it. False for a chunk that isn't loaded or a canceled strike.
-    pub(super) fn native_level_strike_lightning(
+    pub(super) fn level_strike_lightning(
         &mut self,
         level: LevelRef,
         at: [f64; 3],
         visual_only: bool,
     ) -> bool {
-        if !self.native_level_in_place(level) || !in_bounds(at) {
+        if !self.level_in_place(level) || !in_bounds(at) {
             return false;
         }
         let chunk = ((at[0].floor() as i32) >> 4, (at[2].floor() as i32) >> 4);

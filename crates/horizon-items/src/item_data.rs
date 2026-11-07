@@ -61,6 +61,8 @@ pub type Levels = Vec<(Arc<str>, u32)>;
 #[derive(Clone, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub struct StackData {
+    /// An explicit zero damage component overriding a damaged prototype.
+    damage_set: bool,
     /// `minecraft:enchantments`.
     pub enchantments: Levels,
     /// `minecraft:stored_enchantments` (enchanted books).
@@ -72,6 +74,8 @@ pub struct StackData {
     pub custom_name: Option<Tag>,
     /// Full kinetic component with its typed rendering timing, decoded together.
     kinetic_weapon: Option<crate::kinetic_weapon::KineticComponent>,
+    /// Saved consumable and its typed runtime value, replaced together.
+    consumable: Option<Arc<ConsumableComponent>>,
     /// `minecraft:potion_contents.potion`.
     pub potion: Option<Arc<str>>,
     /// The rest of `minecraft:potion_contents` (`custom_color`, `custom_effects`,
@@ -121,6 +125,27 @@ pub struct StackData {
     /// What the server sent for this stack, for sending it back unchanged.
     pub wire: Wire,
 }
+/// A saved consumable decoded once for use animation, countdown and completion.
+#[derive(Clone, Debug, PartialEq)]
+struct ConsumableComponent {
+    raw: Tag,
+    value: crate::items::ItemConsumable,
+}
+impl ConsumableComponent {
+    fn new(raw: Tag) -> Arc<Self> {
+        let mut value =
+            crate::items::parse_consumable(&horizon_client_core::scoreboard::tag_to_json(&raw));
+        value.seconds = raw
+            .get("consume_seconds")
+            .and_then(crate::properties::component_float)
+            .unwrap_or(1.6);
+        value.particles = raw
+            .get("has_consume_particles")
+            .and_then(component_bool)
+            .unwrap_or(true);
+        Arc::new(Self { raw, value })
+    }
+}
 /// The component patch a server sent for a stack, as the creative slot packet
 /// writes it, and the stack Horizon decoded from it, to tell whether anything
 /// changed since. Like vanilla's `BundleContents.selectedItem` it is left out
@@ -162,6 +187,7 @@ const MODELLED: &[&str] = &[
     "minecraft:bundle_contents",
     "minecraft:charged_projectiles",
     "minecraft:container",
+    "minecraft:consumable",
     "minecraft:custom_name",
     "minecraft:damage",
     "minecraft:dyed_color",
@@ -198,6 +224,9 @@ impl StackData {
         if id == "minecraft:kinetic_weapon" {
             return self.kinetic_weapon.as_ref().map(|k| k.raw());
         }
+        if id == "minecraft:consumable" {
+            return self.consumable.as_ref().map(|c| &c.raw);
+        }
         self.other.iter().find(|(k, _)| k == id).map(|(_, v)| v)
     }
     /// Whether the stack's own data sets component `id`, read from the live fields: the same
@@ -208,6 +237,7 @@ impl StackData {
             return true;
         }
         match id {
+            "minecraft:damage" => self.damage_set,
             "minecraft:enchantments" => !self.enchantments.is_empty(),
             "minecraft:stored_enchantments" => !self.stored_enchantments.is_empty(),
             "minecraft:repair_cost" => self.repair_cost > 0,
@@ -265,6 +295,10 @@ impl StackData {
         self.other.retain(|(k, _)| k != id);
         if id == "minecraft:kinetic_weapon" {
             self.kinetic_weapon = value.map(crate::kinetic_weapon::KineticComponent::new);
+            return;
+        }
+        if id == "minecraft:consumable" {
+            self.consumable = value.map(ConsumableComponent::new);
             return;
         }
         if id == "minecraft:custom_name" {
@@ -402,6 +436,47 @@ impl ItemStack {
         }
         info.is_some_and(|info| info.components.iter().any(|c| c == id))
     }
+    /// Effective consumable, decoded when the patch/prototype is loaded, with no tick allocation.
+    pub fn consumable<'a>(
+        &'a self,
+        info: Option<&'a ItemInfo>,
+    ) -> Option<&'a crate::items::ItemConsumable> {
+        if let Some(data) = self.data() {
+            if let Some(consumable) = &data.consumable {
+                return Some(&consumable.value);
+            }
+            if data.other("!minecraft:consumable").is_some() {
+                return None;
+            }
+        }
+        info.and_then(|item| item.consumable.as_ref())
+    }
+    /// `ItemStack.getMaxDamage`: the stack override, removal, or item default.
+    pub fn max_damage(&self, info: Option<&ItemInfo>) -> i32 {
+        if !self.carries_component(info, "minecraft:max_damage") {
+            return 0;
+        }
+        self.data()
+            .and_then(|data| data.other("minecraft:max_damage"))
+            .map(|value| crate::properties::component_int(value).unwrap_or(0))
+            .unwrap_or_else(|| info.map_or(0, |item| item.max_damage as i32))
+    }
+    /// `ItemStack.getDamageValue`: a live patch, removal, or cached prototype damage.
+    /// Preserve an explicit zero patch when the prototype starts damaged.
+    pub fn effective_damage(&self, info: Option<&ItemInfo>) -> i32 {
+        if self.damage > 0 || self.data().is_some_and(|data| data.damage_set) {
+            return self.damage as i32;
+        }
+        if let Some(data) = self.data() {
+            if let Some(value) = data.other("minecraft:damage") {
+                return crate::properties::component_int(value).unwrap_or(0).max(0);
+            }
+            if data.other("!minecraft:damage").is_some() {
+                return 0;
+            }
+        }
+        info.map_or(0, |item| item.damage)
+    }
     /// The patch the server sent for this stack, while the stack is still what
     /// it decoded to (its count aside); None once anything else changed.
     pub fn wire_patch(&self) -> Option<Arc<[u8]>> {
@@ -486,17 +561,25 @@ impl ItemStack {
     }
     /// `ItemStack.hasFoil`: an explicit `minecraft:enchantment_glint_override`
     /// component wins, then the item's default override (`item_glint`), then a
-    /// non-empty `minecraft:enchantments` component (`Item.isFoil` is
-    /// `ItemStack.isEnchanted`; stored book enchantments do not count).
-    pub fn has_foil(&self, item_glint: bool) -> bool {
-        if let Some(flag) = self
+    /// `Item.isFoil` (enchantments, or a compass carrying a lodestone tracker).
+    /// Stored book enchantments do not count.
+    pub fn has_foil(&self, item_glint: Option<bool>) -> bool {
+        let own = self
             .data()
-            .and_then(|d| d.other("minecraft:enchantment_glint_override"))
-            .and_then(component_bool)
-        {
-            return flag;
-        }
-        item_glint || !self.enchantments().is_empty()
+            .and_then(|data| data.other("minecraft:enchantment_glint_override"))
+            .and_then(component_bool);
+        let removed = self.data().is_some_and(|data| {
+            data.other("!minecraft:enchantment_glint_override")
+                .is_some()
+        });
+        let override_glint = own.or(if removed { None } else { item_glint });
+        let item_foil = crate::properties::item_foil(
+            &self.item,
+            self.data()
+                .is_some_and(|data| data.other("minecraft:lodestone_tracker").is_some()),
+            !self.enchantments().is_empty(),
+        );
+        crate::properties::foil(override_glint, item_foil)
     }
     pub fn repair_cost(&self) -> u32 {
         self.data().map_or(0, |d| d.repair_cost)
@@ -949,7 +1032,7 @@ pub fn encode_components(stack: &ItemStack) -> Option<Tag> {
 /// `encode_components` from the damage value and extra components.
 pub fn components_tag(damage: u32, data: Option<&StackData>) -> Option<Tag> {
     let mut entries: Vec<(&str, Tag)> = Vec::new();
-    if damage > 0 {
+    if damage > 0 || data.is_some_and(|data| data.damage_set) {
         entries.push(("minecraft:damage", Tag::Int(damage as i32)));
     }
     if let Some(d) = data {
@@ -967,6 +1050,9 @@ pub fn components_tag(damage: u32, data: Option<&StackData>) -> Option<Tag> {
         }
         if let Some(name) = &d.custom_name {
             entries.push(("minecraft:custom_name", name.clone()));
+        }
+        if let Some(consumable) = &d.consumable {
+            entries.push(("minecraft:consumable", consumable.raw.clone()));
         }
         if let Some(kinetic) = &d.kinetic_weapon {
             entries.push(("minecraft:kinetic_weapon", kinetic.raw().clone()));
@@ -1183,6 +1269,7 @@ pub fn decode_components(components: Option<&Tag>) -> (u32, Option<Box<StackData
         _ => Vec::new(),
     };
     let data = StackData {
+        damage_set: damage == 0 && c.get("minecraft:damage").is_some(),
         enchantments: read_levels(c.get("minecraft:enchantments")),
         stored_enchantments: read_levels(c.get("minecraft:stored_enchantments")),
         repair_cost: c
@@ -1197,6 +1284,10 @@ pub fn decode_components(components: Option<&Tag>) -> (u32, Option<Box<StackData
             .map(collapsed_text),
         potion,
         potion_extra,
+        consumable: c
+            .get("minecraft:consumable")
+            .cloned()
+            .map(ConsumableComponent::new),
         kinetic_weapon: c
             .get("minecraft:kinetic_weapon")
             .cloned()
@@ -1565,7 +1656,7 @@ mod tests {
                 saved
                     .get("components")
                     .and_then(|c| c.get("minecraft:damage")),
-                (expected > 0).then_some(&Tag::Int(expected as i32)),
+                raw.is_some().then_some(&Tag::Int(expected as i32)),
                 "{raw:?}"
             );
             assert_eq!(
@@ -1581,6 +1672,7 @@ mod tests {
             fresh
                 .data_mut()
                 .set_other("minecraft:custom_data", Some(keep.clone()));
+            fresh.data_mut().damage_set = expected == 0 && raw.is_some();
             assert_eq!(crate::item_nbt::item_to_nbt(&fresh), saved);
         }
     }
@@ -2090,17 +2182,13 @@ mod carried_component_tests {
     use super::*;
 
     #[test]
-    fn damage_keeps_its_existing_canonical_encoding() {
+    fn damage_keeps_a_canonical_int_including_explicit_zero() {
         for damage in [0, 5] {
             let original = Tag::compound([("minecraft:damage", Tag::Int(damage))]);
             let (decoded, extra) = decode_components(Some(&original));
             assert_eq!(decoded, damage as u32);
             let encoded = components_tag(decoded, extra.as_deref());
-            if damage == 0 {
-                assert!(encoded.is_none());
-            } else {
-                assert_eq!(encoded, Some(original));
-            }
+            assert_eq!(encoded, Some(original));
         }
         let removed = Tag::compound([("!minecraft:damage", Tag::Compound(Default::default()))]);
         let (damage, extra) = decode_components(Some(&removed));

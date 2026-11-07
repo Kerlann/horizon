@@ -16,19 +16,15 @@ impl Game<'_> {
     /// chest boat or a minecart with a chest still drops what it holds, and
     /// a boat its lead, as vanilla's `remove` does. False for a player, or a
     /// stale handle.
-    pub(super) fn native_entity_discard(&mut self, entity: EntityRef) -> bool {
-        self.native_entity_remove(entity, NativeRemovalReason::Discarded)
+    pub(super) fn entity_discard(&mut self, entity: EntityRef) -> bool {
+        self.entity_remove(entity, NativeRemovalReason::Discarded)
     }
     /// Removes the entity for `reason` (`Entity.remove`): `Discarded`, as
     /// `discard`, or `Killed`, which also runs a mob's effects that act on
     /// removal (Oozing's slimes, Weaving's cobwebs, Wind Charged's burst),
     /// still with no death and no loot. False for a player, or a stale
     /// handle.
-    pub(super) fn native_entity_remove(
-        &mut self,
-        entity: EntityRef,
-        reason: NativeRemovalReason,
-    ) -> bool {
+    pub(super) fn entity_remove(&mut self, entity: EntityRef, reason: NativeRemovalReason) -> bool {
         let killed = reason == NativeRemovalReason::Killed;
         match self.native_entity_target(entity) {
             None | Some(Target::Player | Target::Guest(_)) => false,
@@ -50,7 +46,7 @@ impl Game<'_> {
     /// default pickup delay: the item entity. None for an empty stack or an
     /// unknown item, a stale handle, a player in another level, or an item a
     /// mod kept out.
-    pub(super) fn native_entity_spawn_at_location(
+    pub(super) fn entity_spawn_at_location(
         &mut self,
         entity: EntityRef,
         stack: ItemStack,
@@ -210,7 +206,7 @@ mod tests {
                 SaveDir::new(root.clone(), shape).load_entities(0, 0).len(),
                 1
             );
-            let entity = game.native_entity(12).unwrap();
+            let entity = game.entity(12).unwrap();
             assert!(entity.discard(game));
             assert!(!entity.discard(game));
             game.native_removals_flush();
@@ -240,14 +236,14 @@ mod tests {
                 .unwrap()
                 .clone();
             game.mobs.push(Mob::new(12, kind, Vec3::ZERO, 0.0));
-            let mob = game.native_entity(12).unwrap();
+            let mob = game.entity(12).unwrap();
             assert!(mob.discard(game));
             assert!(game.mobs[0].removed);
             assert!(!mob.discard(game));
             game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
             game.lan_acting_uuid = Some(123);
             game.lan_acting_entity = Some(20);
-            let player = game.native_entity(20).unwrap();
+            let player = game.entity(20).unwrap();
             assert!(!player.discard(game));
             assert!(game.player.is_some());
         });
@@ -269,7 +265,7 @@ mod tests {
                 .clone();
             game.mobs
                 .push(Mob::new(12, kind, Vec3::new(3.5, 70.0, -2.5), 0.0));
-            let mob = game.native_entity(12).unwrap();
+            let mob = game.entity(12).unwrap();
             let item = mob
                 .spawn_at_location(game, ItemStack::new("minecraft:carrot", 2), 0.5)
                 .unwrap();
@@ -341,7 +337,7 @@ mod tests {
                 (13, Vec3::new(0.81875, 65.0, 0.5)),
                 (14, Vec3::new(0.5, 65.0, 0.81875)),
             ] {
-                let entity = game.native_entity(id).unwrap();
+                let entity = game.entity(id).unwrap();
                 let item = entity
                     .spawn_at_location(game, ItemStack::new("minecraft:carrot", 2), 0.5)
                     .unwrap();

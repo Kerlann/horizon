@@ -107,7 +107,7 @@ impl Game<'_> {
             }
             "use" => {
                 let pos = [arg(1)?.parse()?, arg(2)?.parse()?, arg(3)?.parse()?];
-                self.open_menu(pos);
+                self.open_block_effect_menu(pos);
                 Ok(Some(
                     json!({ "ok": true, "station": self.station.as_ref().map(|s| format!("{:?}", s.kind)) }),
                 ))
@@ -150,7 +150,7 @@ impl Game<'_> {
             "book" => Ok(Some(self.book_control(words.get(1).copied())?)),
             "potion" => {
                 let stack = ItemStack::new(&id(arg(1)?), 1).with_potion(&id(arg(2)?));
-                let rest = self.give(stack);
+                let rest = self.add_stack_to_inventory(stack);
                 Ok(Some(json!({ "ok": rest.is_none() })))
             }
             "menu" => {

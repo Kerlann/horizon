@@ -351,7 +351,7 @@ impl Game<'_> {
             }
             if ok && !s.nbt.is_empty() {
                 // NbtPredicate: the entity's saved data contains the pattern.
-                let data = self.entity_nbt(t);
+                let data = self.command_target_nbt(t);
                 for (pattern, negated) in &s.nbt {
                     let matches = match (&data, horizon_core::nbt::parse_snbt(pattern)) {
                         (Some(d), Ok((p, _))) => horizon_client::nbt_path::compare_nbt(&p, Some(d)),

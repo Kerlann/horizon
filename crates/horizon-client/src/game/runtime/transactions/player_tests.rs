@@ -58,7 +58,7 @@ fn nested_player_turns_preserve_binding_and_rollback_whole_membership() {
         let index = Arc::new(Mutex::new(AttachmentIndex::default()));
         let mut bindings = Vec::new();
         for (conn, uuid, value) in [(12, 112, 7), (13, 113, 8)] {
-            let player = game.native_player_ref(uuid).unwrap();
+            let player = game.player(uuid).unwrap();
             let map = game
                 .attachment_map_quiet(Holder::Player(uuid), AttachmentAccess::Existing)
                 .unwrap();
@@ -85,7 +85,7 @@ fn nested_player_turns_preserve_binding_and_rollback_whole_membership() {
             .lock()
             .unwrap()
             .snapshot(&("player_test".into(), "value".into()));
-        game.transaction_open();
+        game.open_storage_transaction();
         game.as_guest(12, |game| {
             let host: &mut dyn ServerHost = game;
             VALUE.set(host, Holder::Player(112), 9).unwrap();
@@ -95,11 +95,11 @@ fn nested_player_turns_preserve_binding_and_rollback_whole_membership() {
                     game.attachment_slot(Holder::Player(112), AttachmentAccess::Existing)
                         .is_err()
                 );
-                game.transaction_open();
+                game.open_storage_transaction();
                 let host: &mut dyn ServerHost = game;
                 VALUE.set(host, Holder::Player(113), 88).unwrap();
                 OTHER.set(host, Holder::Player(113), 6).unwrap();
-                game.transaction_close(false);
+                game.close_storage_transaction(false);
                 assert_eq!(rows(&index, "value"), [(112, 9), (113, 8)]);
                 assert!(rows(&index, "other").is_empty());
             })
@@ -107,7 +107,7 @@ fn nested_player_turns_preserve_binding_and_rollback_whole_membership() {
             assert_eq!(rows(&index, "value"), [(112, 9), (113, 8)]);
         })
         .unwrap();
-        game.transaction_close(false);
+        game.close_storage_transaction(false);
         assert_eq!(rows(&index, "value"), [(112, 7), (113, 8)]);
         assert_eq!(rows(&index, "other"), [(112, 4)]);
         assert_eq!(VALUE.get_existing(&mut saved, Holder::Level), Ok(Some(7)));
@@ -135,7 +135,7 @@ fn retained_player_records_and_save_snapshots_do_not_keep_residency() {
             .update_all(|g| g.uuid += 100);
         let index = Arc::new(Mutex::new(AttachmentIndex::default()));
         for (conn, uuid) in [(12, 112), (13, 113)] {
-            let player = game.native_player_ref(uuid).unwrap();
+            let player = game.player(uuid).unwrap();
             let map = game
                 .attachment_slot(Holder::Player(uuid), AttachmentAccess::Existing)
                 .unwrap();

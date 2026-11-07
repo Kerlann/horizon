@@ -127,10 +127,10 @@ mod entity_inside_tests {
                 game.world.set(1, 64, 1, stone).unwrap();
                 game.world.set(2, 64, 1, stone).unwrap();
                 game.world.set(3, 64, 1, dirt).unwrap();
-                let level = game.native_level(game.dim.id()).unwrap();
+                let level = game.level(game.dim.id()).unwrap();
                 let stack = || ItemStack::new("minecraft:stone", 1);
                 let kept = game
-                    .native_level_spawn_item(level, 1.5, 70.0, 1.5, stack(), 10)
+                    .level_spawn_item(level, 1.5, 70.0, 1.5, stack(), 10)
                     .unwrap();
                 let at = |x| BlockPos::new(x, 64, 1);
                 in_level(Some(game.dim.id()), || {

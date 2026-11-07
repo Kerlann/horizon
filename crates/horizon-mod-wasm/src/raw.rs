@@ -5,10 +5,11 @@ use crate::frame::{Frame, Root};
 use crate::view::{self, Resolved};
 use horizon_mod_package::manifest::{Internal, Manifest};
 use mod_api::__private::wasm_host::{CallHost, Exports};
-use mod_points::__private::{RawListener, register_raw};
+use mod_points::__private::SlotListener;
 use mod_points::internals::bindings::exports::horizon::mod_internals::raw_listeners::HostKind;
 use mod_points::internals::{Place, Table};
 use mod_points::places::{IDS, NAMES, TARGETS};
+use mod_points::register;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -42,8 +43,8 @@ impl Listeners {
             if listeners.is_empty() {
                 // SAFETY: load checked the descriptor against this exact place's raw shape;
                 // `fire` uses it only for the callback's synchronous lifetime.
-                let raw = unsafe { RawListener::erased(key.0, IDS[key.1], fire) };
-                register_raw(&raw)?;
+                let raw = unsafe { SlotListener::erased(key.0, IDS[key.1], fire) };
+                register(&raw)?;
             }
             listeners.push(listener);
         }
@@ -348,20 +349,20 @@ mod tests {
         // SAFETY: no real game slot fires in this test. The synthetic slot below does not call
         // the typed pointer, and supplies the erased callback with the fixture descriptor's types.
         unsafe {
-            register_raw(&RawListener::new(
+            register(&SlotListener::new(
                 "fixture_native",
                 point,
                 native as *const (),
             ))
             .unwrap();
-            register_raw(&RawListener::erased("fixture_wasm", point, erased)).unwrap();
-            register_raw(&RawListener::new(
+            register(&SlotListener::erased("fixture_wasm", point, erased)).unwrap();
+            register(&SlotListener::new(
                 "fixture_middle",
                 point,
                 native as *const (),
             ))
             .unwrap();
-            register_raw(&RawListener::erased("fixture_wasm_other", point, erased)).unwrap();
+            register(&SlotListener::erased("fixture_wasm_other", point, erased)).unwrap();
         }
         mod_points::__private::seal();
         let mut value: i64 = 1;

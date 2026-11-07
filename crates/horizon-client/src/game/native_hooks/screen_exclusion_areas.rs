@@ -2,7 +2,7 @@ use super::*;
 
 /// The hook points. Each does nothing in Horizon.
 impl Game<'_> {
-    /// The hook `native_screen_exclusion` asks: a mod adds the rectangles it
+    /// The hook `screen_exclusion` asks: a mod adds the rectangles it
     /// draws over `screen` (a side panel, a button column) to `areas`, in GUI
     /// pixels, `[x, y, width, height]`. NeoForge has no counterpart in the
     /// game; recipe viewers ask for it through their own API
@@ -28,7 +28,7 @@ impl Game<'_> {
     /// non-finite one is dropped. A mod that lays out its own panels
     /// (a recipe viewer) keeps them clear of these. Client-side; empty with
     /// no screen up.
-    pub(in crate::game) fn native_screen_exclusion(&self) -> Vec<[f32; 4]> {
+    pub(in crate::game) fn screen_exclusion(&self) -> Vec<[f32; 4]> {
         let Some(view) = self.observed_screen_view() else {
             return Vec::new();
         };

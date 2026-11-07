@@ -725,7 +725,12 @@ mod tests {
 
     /// `CitRules::glint` in the main hand, with the stack's own `has_foil` as callers pass it.
     fn glint(cit: &CitRules, stack: &ItemStack, item_glint: bool) -> Option<Arc<StackGlint>> {
-        cit.glint(stack, Hand::Main, 0, stack.has_foil(item_glint))
+        cit.glint(
+            stack,
+            Hand::Main,
+            0,
+            stack.has_foil(item_glint.then_some(true)),
+        )
     }
 
     /// `stack` with its `enchantment_glint_override` set to `on`.

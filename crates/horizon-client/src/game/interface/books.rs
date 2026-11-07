@@ -1232,7 +1232,7 @@ impl Game<'_> {
             r.v1 = r.v0 + 192.0 * dv;
             batch.rect_uv(left, top, 192.0, 192.0, r, u32::MAX);
         }
-        let tr = |key: &str, fallback: &str| self.translate(key, fallback);
+        let tr = |key: &str, fallback: &str| self.translate_with_fallback(key, fallback);
         let page_buttons = |batch: &mut HudBatch, back: bool, forward: bool| {
             for (show, x, name) in [
                 (forward, 116.0, "page_forward"),

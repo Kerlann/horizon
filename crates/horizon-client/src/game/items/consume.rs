@@ -118,7 +118,7 @@ impl Game<'_> {
             let remainder = ItemStack::new(remainder, 1);
             if self.held().is_none() {
                 *self.held_mut() = Some(remainder);
-            } else if let Some(rest) = self.give(remainder) {
+            } else if let Some(rest) = self.add_stack_to_inventory(remainder) {
                 self.player_drop(rest);
             }
         }

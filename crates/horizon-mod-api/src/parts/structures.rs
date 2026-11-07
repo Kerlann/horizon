@@ -67,3 +67,43 @@ pub mod tests {
         assert!(errors[2].contains("no name"));
     }
 }
+
+/// Registrar operations for structures.
+pub trait StructuresRegistrar {
+    /// Register structure type `name` with `ty`; mods reach it through
+    /// `register_structure_type`.
+    fn add_structure_type(&mut self, name: &str, ty: Arc<dyn crate::StructureType>);
+}
+
+impl StructuresRegistrar for PartRegistrar {
+    fn add_structure_type(&mut self, name: &str, ty: Arc<dyn crate::StructureType>) {
+        let (namespace, path) = name.split_once(':').unwrap_or((self.mod_id, name));
+        let id = format!("{}:{}", self.mod_id, path);
+        let refusal = if namespace != self.mod_id {
+            Some(format!(
+                "{} registered structure type {name:?} in the namespace {namespace:?}, which is not its own",
+                self.mod_id
+            ))
+        } else if path.is_empty() {
+            Some(format!(
+                "{} registered a structure type with no name",
+                self.mod_id
+            ))
+        } else {
+            self.structure_types
+                .iter()
+                .any(|t| *t.id == *id)
+                .then(|| format!("{} registered structure type {id} twice", self.mod_id))
+        };
+        if let Some(refusal) = refusal {
+            self.refused.push(refusal);
+            return;
+        }
+        let engine_type = crate::structure_type::Adapter::new(&id, ty).into_engine_type();
+        self.structure_types
+            .push(crate::structure_type::StructureTypeInfo {
+                id: id.into(),
+                ty: engine_type,
+            });
+    }
+}

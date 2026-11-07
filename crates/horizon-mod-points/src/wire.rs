@@ -192,14 +192,6 @@ mod guest {
     use super::{HostKind, Lift, Record, Value};
     use mod_api::__private::wasm_guest;
 
-    /// The mod's `impl Points`: its hooks, the same value.
-    pub fn listener<T: 'static>() -> &'static T {
-        let hooks: &'static dyn std::any::Any = wasm_guest::hooks();
-        hooks
-            .downcast_ref::<T>()
-            .expect("a mod's Points and Hooks are one type")
-    }
-
     /// A listener's host, from the one the call names.
     pub trait FromHost {
         fn from_host(host: HostKind) -> Self;
@@ -253,14 +245,12 @@ mod guest {
     }
 }
 #[cfg(target_arch = "wasm32")]
-pub use guest::{FromHost, fire, listener};
+pub use guest::{FromHost, fire};
 
-/// The game's side: a wasm mod's listeners as one [`Points`](crate::Points), each place
-/// forwarded with its record.
+/// The game's side: checked wasm export indices forwarded with their records.
 #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
 mod host {
     use super::{Mismatch, Record, Value};
-    use crate::PointId;
 
     /// The host a point hands its listeners.
     pub enum PointHost<'a> {
@@ -274,13 +264,11 @@ mod host {
 
     /// One mod's listeners, every place forwarded to it with its record.
     pub trait Forward: Send + Sync {
-        fn subscribed(&self) -> &'static [Option<PointId>];
-        fn forward(&self, place: PointId, host: PointHost<'_>, record: &mut dyn Record);
+        fn forward(&self, index: u32, host: PointHost<'_>, record: &mut dyn Record);
     }
 
     // Keep monomorphizations private: non-generic impls involving a public trait or record
     // export their methods even when the other half of the impl is private.
-    pub(crate) struct Forwarded<F: ?Sized>(pub(crate) Box<F>);
     pub(crate) struct RecordRef<'a, R>(pub(crate) &'a mut R);
 
     /// A concrete record's codec, generic over its field sink and source so only the erased
@@ -300,13 +288,8 @@ mod host {
             self.0.write_back(fields.into_iter())
         }
     }
-
-    /// A wasm mod's listeners as the game's `Points`, without exposing its per-place methods.
-    pub fn forwarded(forward: Box<dyn Forward>) -> Box<dyn crate::Points> {
-        Box::new(Forwarded(forward))
-    }
 }
 #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
-pub(crate) use host::{Fields, Forwarded, RecordRef};
+pub(crate) use host::{Fields, RecordRef};
 #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
-pub use host::{Forward, PointHost, forwarded};
+pub use host::{Forward, PointHost};

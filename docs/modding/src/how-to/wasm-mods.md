@@ -58,8 +58,7 @@ hooks this game doesn't have, or has with another type, names the first such imp
 
 ## Listening at points
 
-API function slots use `[[inject]]`, with a crate-root function named by `with`, rather than
-`impl Points`. The [chat fixture's manifest](https://github.com/arismoko/horizon/blob/main/crates/horizon-mod-wasm/tests/points/chat_tail/horizon-mod.toml)
+API function slots use `[[inject]]`, with a crate-root function named by `with`, without an implementation trait. The [chat fixture's manifest](https://github.com/arismoko/horizon/blob/main/crates/horizon-mod-wasm/tests/points/chat_tail/horizon-mod.toml)
 and [listener](https://github.com/arismoko/horizon/blob/main/crates/horizon-mod-wasm/tests/points/chat_tail/src/lib.rs) are compiled examples.
 The function takes the point's host and API record (only the record for a hostless point).
 
@@ -70,11 +69,11 @@ The [shared fixture build script](https://github.com/arismoko/horizon/blob/main/
 complete path; the generator itself has no manifest-crate dependency. Include its output in the guest
 bootstrap, not one hand-written wasm adapter per point.
 
-The initial loader supports API `head` and `return`, priority 0, with one declaration per place.
-Other access forms, kinds, nonzero priorities and duplicate places are explicitly refused while the
-function registry and the remaining wasm routing land. The loader checks the export's subscriptions
-and record shapes against the declarations; missing, undeclared and changed records refuse the mod.
-Full route/hash checks and the rest of the wasm inject kinds follow separately.
+The loader supports API `head` and `return`, including priorities and multiple declarations at one
+place. Each export is checked by inject id and record shape, then registered by its checked export
+index alongside native functions. Missing, undeclared and changed records refuse the mod. Other
+access forms and kinds are explicitly refused pending the remaining wasm routing. Full route/hash
+checks and the rest of the wasm inject kinds follow separately.
 
 A listener changes its record's fields (`cancel`, `result`, the arguments), and the game takes them
 back when it returns. Internals use the view below. Source mixins require a native mod.
@@ -83,7 +82,7 @@ back when it returns. Internals use the view below. Source mixins require a nati
 
 For internals that the typed API does not yet cover, add `horizon-mod-internals` (library name
 `mod_internals`) to the mod's Cargo dependencies. Declare each internal with
-`cargo horizon-mod internals add <path>` and use `raw = "<function>"` on its internals declaration.
+`cargo horizon-mod internals add <path>` and use `raw = "<function>"` for its internals declaration.
 Its raw-only schema accepts `id`, `target`, `kind` (`HEAD` or `RETURN`) and `raw`; API functions
 are declared only through `[[inject]]`. `cargo horizon-mod build --wasm` fetches the newest prebuilt game's
 `internals.json` and generates `mod_internals::view` for exactly those declarations and the

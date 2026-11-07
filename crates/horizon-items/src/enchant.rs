@@ -66,7 +66,8 @@ pub struct ItemProps {
     pub enchantable: u32,
     /// `minecraft:repairable.items` (ids or a `#tag`).
     pub repairable: Vec<String>,
-    pub glint: bool,
+    /// The prototype override; absence differs from an explicit false.
+    pub glint: Option<bool>,
     pub rarity: String,
     /// `minecraft:provides_trim_material`.
     pub trim_material: Option<String>,
@@ -322,9 +323,7 @@ impl Enchantments {
                 ItemProps {
                     enchantable: c["minecraft:enchantable"]["value"].as_u64().unwrap_or(0) as u32,
                     repairable: string_list(&c["minecraft:repairable"]["items"]),
-                    glint: c["minecraft:enchantment_glint_override"]
-                        .as_bool()
-                        .unwrap_or(false),
+                    glint: c["minecraft:enchantment_glint_override"].as_bool(),
                     rarity: c["minecraft:rarity"]
                         .as_str()
                         .unwrap_or("common")
@@ -424,9 +423,8 @@ impl Enchantments {
     }
     /// Whether `item` matches an id / `#tag` list.
     pub fn item_in(items: &Items, specs: &[String], item: &str) -> bool {
-        specs.iter().any(|s| match s.strip_prefix('#') {
-            Some(tag) => items.item_tags.get(tag).is_some_and(|t| t.contains(item)),
-            None => s == item,
+        specs.iter().any(|spec| {
+            crate::properties::item_matches(spec, item, |tag| items.item_in_tag(tag, item))
         })
     }
     /// `Enchantment.canEnchant` / `isSupportedItem`.

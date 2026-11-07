@@ -1,40 +1,7 @@
 //! The game's side of the `services` area (`horizon-mod-api/src/host/services.rs`).
 use crate::game::Game;
 use mod_api::{prelude::*, *};
-impl ServicesServerHost for Game<'_> {
-    fn commands(&mut self) -> &mut dyn Commands {
-        mod_api::__private::check_access("commands", mod_api::__private::LoadAccess::WorldOnly);
-        self
-    }
-    fn levels(&self) -> &dyn Levels {
-        mod_api::__private::check_access("levels", mod_api::__private::LoadAccess::WorldOnly);
-        self
-    }
-    fn messages(&self) -> &dyn Messages {
-        mod_api::__private::check_access("messages", mod_api::__private::LoadAccess::WorldOnly);
-        self
-    }
-    fn players(&self) -> &dyn Players {
-        mod_api::__private::check_access("players", mod_api::__private::LoadAccess::WorldOnly);
-        self
-    }
-}
-impl ServicesClientHost for Game<'_> {
-    fn client_session(&self) -> &dyn ClientSession {
-        mod_api::__private::check_access(
-            "client_session",
-            mod_api::__private::LoadAccess::WorldOnly,
-        );
-        self
-    }
-    fn render_assets(&self) -> &dyn RenderAssets {
-        mod_api::__private::check_access(
-            "render_assets",
-            mod_api::__private::LoadAccess::PublishedResources,
-        );
-        self
-    }
-}
+
 impl ClientSession for Game<'_> {
     fn client_server(&self) -> Option<ClientServer> {
         mod_api::__private::check_access(

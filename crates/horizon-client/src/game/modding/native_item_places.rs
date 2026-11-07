@@ -17,7 +17,7 @@ impl Game<'_> {
                 Some(*player)
             }
             ItemPlace::PlayerCursor { menu } => self
-                .native_menu_carried(*menu)
+                .menu_carried(*menu)
                 .map(|_| menu.fields().player.uuid()),
             _ => None,
         }
@@ -83,8 +83,8 @@ impl Game<'_> {
     }
     /// How many slots the inventory of entity `entity` in the level in place has, as
     /// `entity_slots` reaches them: none for an entity without one, and on a client.
-    pub(super) fn native_entity_container_size(&self, entity: u32) -> Option<usize> {
-        self.native_entity_automation_size(entity).or_else(|| {
+    pub(super) fn entity_container_size(&self, entity: u32) -> Option<usize> {
+        self.entity_automation_size(entity).or_else(|| {
             let m = self
                 .mobs
                 .iter()
@@ -95,7 +95,7 @@ impl Game<'_> {
     /// How many slots the container entity `entity` of the level in place shows automation
     /// (`EntitySelector.CONTAINER_ENTITY_SELECTOR`: chest and hopper minecarts, chest boats; a
     /// chested mount is not one): none for any other entity, and on a client.
-    pub(super) fn native_entity_automation_size(&self, entity: u32) -> Option<usize> {
+    pub(super) fn entity_automation_size(&self, entity: u32) -> Option<usize> {
         if self.remote.is_some() {
             return None;
         }
@@ -108,14 +108,14 @@ impl Game<'_> {
     }
     /// `EntityType.is(TagKey)`: whether `entity_type` (`minecraft:player`) is in the entity
     /// type tag `tag` (`minecraft:cannot_be_pushed_onto_boats`).
-    pub(super) fn native_entity_type_in_tag(&self, entity_type: &str, tag: &str) -> bool {
+    pub(super) fn entity_type_in_tag(&self, entity_type: &str, tag: &str) -> bool {
         let tag = horizon_client::command::args::normalize(tag);
         self.res.mob_data().entity_has(&tag, entity_type)
     }
     /// The stack at a player's or an item entity's place; none for an empty one, a player who
     /// isn't here or is dead, an item entity not in the level in place, any other place
     /// (`ItemPlace::stack` reads those), and on a client.
-    pub(super) fn native_game_stack(&mut self, place: &ItemPlace) -> Option<ItemStack> {
+    pub(super) fn game_stack(&mut self, place: &ItemPlace) -> Option<ItemStack> {
         if !self.places_simulated() {
             return None;
         }
@@ -146,9 +146,9 @@ impl Game<'_> {
     /// the root commit (a creative player's hand takes anything, and gives them one if they have
     /// none, as `ItemUtils.createFilledResult`); an item entity's dropped beside it at the root
     /// commit; an entity slot's into the entity's other slots (`forHandlerIndex`). How much
-    /// went: 0 where `native_game_stack` reads nothing for want of the place. In transaction
+    /// went: 0 where `game_stack` reads nothing for want of the place. In transaction
     /// `tx`, which keeps each place as it was. The player's screen follows with the tick's sync.
-    pub(super) fn native_game_insert(
+    pub(super) fn game_insert(
         &mut self,
         place: &ItemPlace,
         stack: ItemStack,
@@ -235,14 +235,17 @@ impl Game<'_> {
             if g.creative && matches!(place, ItemPlace::PlayerHand { .. }) {
                 let have = g.inventory.iter().flatten();
                 if !have.clone().any(|h| h.same_item_same_components(&stack)) {
-                    g.give(ItemStack { count: 1, ..stack });
+                    g.add_stack_to_inventory(ItemStack { count: 1, ..stack });
                 }
                 return;
             }
             if let Some(slot) = g.player_place(place) {
                 fill(slot, &mut rest);
             }
-            if let Some(rest) = (rest.count > 0).then(|| g.give(rest)).flatten() {
+            if let Some(rest) = (rest.count > 0)
+                .then(|| g.add_stack_to_inventory(rest))
+                .flatten()
+            {
                 g.drop_after_commit(player, rest);
             }
         });
@@ -251,7 +254,7 @@ impl Game<'_> {
     /// `ItemAccess.extract` at those places: up to `stack.count` of the item and components of
     /// `stack`, how many came out. An item entity emptied stays, empty, until the root commit
     /// removes it. A creative player's hand gives without losing any (`forInfiniteMaterials`).
-    pub(super) fn native_game_extract(
+    pub(super) fn game_extract(
         &mut self,
         place: &ItemPlace,
         stack: ItemStack,
@@ -336,7 +339,7 @@ impl Game<'_> {
     }
     /// Drops `stack` at the middle of the block at `pos`, as a block entity's handler gives up
     /// what it can't put back.
-    pub(super) fn native_drop_at(&mut self, pos: [i32; 3], stack: ItemStack) {
+    pub(super) fn drop_at(&mut self, pos: [i32; 3], stack: ItemStack) {
         if self.places_simulated() && stack.count > 0 {
             // `Block.popResource`'s default pickup delay, at the root commit.
             self.after_commit(After::Drop(pos, stack));
@@ -423,7 +426,7 @@ pub(super) mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let cauldron = |game: &super::Game<'_>, n: u8| {
                 let registry = &game.pack.assets.registry;
                 if n == 0 {
@@ -438,7 +441,7 @@ pub(super) mod tests {
             let set = |game: &mut super::Game<'_>, pos, n| {
                 let state = cauldron(game, n);
                 let flags = NativeBlockUpdateFlags::NEIGHBORS;
-                assert!(game.native_level_set_block(level, pos, state, flags));
+                assert!(game.level_set_block(level, pos, state, flags));
             };
             let (a, b) = ([0, 64, 0], [2, 64, 0]);
             set(game, a, 3);
@@ -712,8 +715,8 @@ pub(super) mod tests {
 
     /// The open menu of guest 1 (UUID 123).
     fn menu_of(game: &super::Game<'_>) -> MenuRef {
-        let player = game.native_player_ref(123).unwrap();
-        game.native_menu_ref(player).unwrap()
+        let player = game.player(123).unwrap();
+        game.player_container_menu(player).unwrap()
     }
 
     /// One write at `place` in a transaction of its own: how many went in (`amount > 0`) or
@@ -748,10 +751,10 @@ pub(super) mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let chest = game.pack.assets.registry.default_state("minecraft:chest");
             let flags = NativeBlockUpdateFlags::NEIGHBORS;
-            assert!(game.native_level_set_block(level, [0, 64, 0], chest.unwrap(), flags));
+            assert!(game.level_set_block(level, [0, 64, 0], chest.unwrap(), flags));
             let mut player = guest(1);
             player.carried = Some(ItemStack::new("minecraft:emerald", 9));
             game.lan.as_mut().unwrap().hub.guests.push(player);
@@ -824,7 +827,7 @@ pub(super) mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let state = |game: &super::Game<'_>, name| {
                 game.pack.assets.registry.default_state(name).unwrap()
             };
@@ -833,7 +836,7 @@ pub(super) mod tests {
                 state(game, "minecraft:furnace"),
             );
             let flags = NativeBlockUpdateFlags::NEIGHBORS;
-            assert!(game.native_level_set_block(level, [0, 64, 0], chest, flags));
+            assert!(game.level_set_block(level, [0, 64, 0], chest, flags));
             let mut player = guest(1);
             player.inventory[8] = Some(ItemStack::new("minecraft:stick", 4));
             game.lan.as_mut().unwrap().hub.guests.push(player);
@@ -848,7 +851,7 @@ pub(super) mod tests {
                 None,
             );
             let menu = menu_of(game);
-            assert!(game.native_level_set_block(level, [0, 64, 0], furnace, flags));
+            assert!(game.level_set_block(level, [0, 64, 0], furnace, flags));
             // Until the close pass, the menu still has the chest's 63 slots: 0 was the chest's
             // first, 62 is the last of the hotbar, past a furnace menu's 39.
             let (first, hotbar) = (
@@ -987,10 +990,10 @@ pub(super) mod tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let furnace = game.pack.assets.registry.default_state("minecraft:furnace");
             let flags = NativeBlockUpdateFlags::NEIGHBORS;
-            assert!(game.native_level_set_block(level, [0, 64, 0], furnace.unwrap(), flags));
+            assert!(game.level_set_block(level, [0, 64, 0], furnace.unwrap(), flags));
             game.lan.as_mut().unwrap().hub.guests.push(guest(1));
             game.lan.as_mut().unwrap().hub.open_container(
                 1,
@@ -1599,13 +1602,8 @@ pub(super) mod tests {
             let crafter = game
                 .with_props(base, &[("orientation", "down_east")])
                 .unwrap();
-            let level = game.native_level("minecraft:overworld").unwrap();
-            assert!(game.native_level_set_block(
-                level,
-                [0, 64, 0],
-                crafter,
-                NativeBlockUpdateFlags::NONE
-            ));
+            let level = game.level("minecraft:overworld").unwrap();
+            assert!(game.level_set_block(level, [0, 64, 0], crafter, NativeBlockUpdateFlags::NONE));
             pig(game, 700, 63.0);
             for (before, after, refused) in [(0, 4, 0), (62, 64, 2), (64, 64, 4)] {
                 *bin.held.lock().unwrap() =

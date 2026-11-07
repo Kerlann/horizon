@@ -6,7 +6,7 @@ use horizon_world::{level::signal_access::SignalAccess, registry::BlockStateId};
 use mod_api::LevelHost;
 use std::collections::HashMap;
 
-/// Created only after `native_level_in_place` accepts the level. No mutable world,
+/// Created only after `level_in_place` accepts the level. No mutable world,
 /// random source, entity snapshots or transaction is needed by a signal read.
 pub(super) struct ReadLevel<'g, 'a> {
     pub game: &'g Game<'a>,
@@ -144,13 +144,13 @@ impl LevelHost for ReadLevel<'_, '_> {
             .map(|s| &*s.name)
     }
     fn block_state_id(&self, name: &str) -> Option<BlockStateId> {
-        self.game.native_block_state_id(name)
+        self.game.block_state_id(name)
     }
     fn block_state_default(&self, block: mod_api::BlockKey) -> Option<BlockStateId> {
-        self.game.native_block_state_default(block)
+        self.game.block_state_default(block)
     }
     fn state_string(&self, state: BlockStateId) -> Option<String> {
-        self.game.native_block_state_string(state)
+        self.game.block_state_string(state)
     }
     fn min_y(&self) -> i32 {
         self.game.world.shape.min_y
@@ -176,7 +176,7 @@ impl LevelHost for ReadLevel<'_, '_> {
             .and_then(|state| self.state_fluid_state(state))
     }
     fn state_fluid_state(&self, state: BlockStateId) -> Option<mod_api::FluidState> {
-        self.game.native_state_fluid_state(state)
+        self.game.state_fluid_state(state)
     }
     fn fluid_in_tag(&self, fluid: &str, tag: &str) -> Option<bool> {
         Some(super::native_world_read::fluid_in_tag(
@@ -205,7 +205,7 @@ impl LevelHost for ReadLevel<'_, '_> {
     }
     fn is_raining_at(&self, pos: [i32; 3]) -> bool {
         self.game
-            .native_level_is_raining_at(self.level, pos)
+            .level_is_raining_at(self.level, pos)
             .unwrap_or(false)
     }
     fn enabled_features(&self) -> mod_api::FeatureFlags {

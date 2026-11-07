@@ -345,7 +345,7 @@ impl Game<'_> {
         }
     }
     /// The number of slots of the open container.
-    pub(super) fn container_size(&self) -> usize {
+    pub(super) fn open_container_size(&self) -> usize {
         self.container_parts().iter().map(|p| p.1).sum()
     }
     pub(super) fn container_slot(&self, mut n: usize) -> &Option<ItemStack> {
@@ -411,7 +411,7 @@ impl Game<'_> {
             Some(n) if is_chest_block(n) => true,
             _ => self.open_cart_kind() == Some(super::minecarts::CartKind::Chest),
         };
-        generic.then(|| self.container_size() / 9)
+        generic.then(|| self.open_container_size() / 9)
     }
     /// The title of the open chest-like menu.
     fn chest_title(&self, rows: usize) -> Text {
@@ -427,7 +427,8 @@ impl Game<'_> {
             _ if rows > 3 => ("container.chestDouble", "Large Chest"),
             _ => ("container.chest", "Chest"),
         };
-        Text::literal(self.container_title(self.translate(key, fallback))).resolve_legacy()
+        Text::literal(self.container_title(self.translate_with_fallback(key, fallback)))
+            .resolve_legacy()
     }
     /// `ContainerScreen` / `ShulkerBoxScreen`: the background with its
     /// container rows, the title and the inventory label.
@@ -455,14 +456,14 @@ impl Game<'_> {
             // ShulkerBoxScreen draws the menu's title: the box's custom name
             // (BaseContainerBlockEntity.getDisplayName) or its default name.
             let title = self.remote_menu_title().unwrap_or_else(|| {
-                Text::literal(
-                    self.container_title(self.translate("container.shulkerBox", "Shulker Box")),
-                )
+                Text::literal(self.container_title(
+                    self.translate_with_fallback("container.shulkerBox", "Shulker Box"),
+                ))
                 .resolve_legacy()
             });
             super::screen_info::name_container(|| title.plain());
             batch.text_styled(atlas, &title, ox + 8.0, oy + 6.0, grey, false);
-            let inventory = self.translate("container.inventory", "Inventory");
+            let inventory = self.translate_with_fallback("container.inventory", "Inventory");
             batch.text(atlas, &inventory, ox + 8.0, oy + 73.0, grey, false);
             return;
         }
@@ -486,7 +487,7 @@ impl Game<'_> {
         let title = self.chest_title(rows);
         super::screen_info::name_container(|| title.plain());
         batch.text_styled(atlas, &title, ox + 8.0, oy + 6.0, grey, false);
-        let inventory = self.translate("container.inventory", "Inventory");
+        let inventory = self.translate_with_fallback("container.inventory", "Inventory");
         batch.text(
             atlas,
             &inventory,
@@ -503,7 +504,7 @@ impl Game<'_> {
     /// menu for a shift-click on `slot`, run by the verified menu engine
     /// (`horizon_client::menu`); false when the menu has none.
     pub(super) fn container_quick_move(&mut self, slot: usize) -> bool {
-        self.menu_click(Some(slot), 0, horizon_client::menu::Input::QuickMove)
+        self.click_open_inventory(Some(slot), 0, horizon_client::menu::Input::QuickMove)
     }
 }
 

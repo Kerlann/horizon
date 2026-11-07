@@ -51,7 +51,9 @@ impl Game<'_> {
             let stack = self.dropped[i].stack.clone();
             let before = stack.count;
             let thrower = self.dropped[i].thrower;
-            let rest = self.as_guest(conn, |g| g.give(stack)).flatten();
+            let rest = self
+                .as_guest(conn, |g| g.add_stack_to_inventory(stack))
+                .flatten();
             match rest {
                 None => {
                     let item = self.remove_dropped(i);
@@ -134,7 +136,10 @@ impl Game<'_> {
                 Touch::Take => true,
                 // Inventory.add: a creative player takes what does not fit.
                 Touch::Give(stack) => {
-                    self.as_guest(conn, |g| g.give(stack)).flatten().is_none() || creative
+                    self.as_guest(conn, |g| g.add_stack_to_inventory(stack))
+                        .flatten()
+                        .is_none()
+                        || creative
                 }
             };
             if taken {

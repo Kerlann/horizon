@@ -11,8 +11,6 @@ use horizon_client::mobs::{Mob, Species, sync};
 use horizon_client::motion::PlayerMotion;
 use horizon_client::pose::Pose;
 use mod_api::EntityRef;
-#[cfg(test)]
-use mod_api::prelude::*;
 
 /// `Pose`'s serialized names by id (`Pose.STANDING` is 0).
 const POSES: [&str; 18] = [
@@ -77,7 +75,7 @@ impl Game<'_> {
     /// `isSecondaryUseActive`: the local client's live semantic sneak state (not the
     /// physical key binding or last tick's crouching pose); the server's shift-key flag.
     /// False for non-player entities, None for a stale or unreachable handle.
-    pub(super) fn native_entity_is_shift_key_down(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_is_shift_key_down(&self, entity: EntityRef) -> Option<bool> {
         if !self.is_logical_server() {
             return Some(match self.native_client_entity_target(entity)? {
                 Target::Player => self.keys.held(horizon_client::actions::Action::Sneak),
@@ -91,13 +89,13 @@ impl Game<'_> {
     }
     /// Whether the entity crouches (`Entity.isCrouching`: the crouching
     /// pose).
-    pub(super) fn native_entity_is_crouching(&self, entity: EntityRef) -> Option<bool> {
-        Some(self.native_entity_pose(entity)? == "crouching")
+    pub(super) fn entity_is_crouching(&self, entity: EntityRef) -> Option<bool> {
+        Some(self.entity_pose(entity)? == "crouching")
     }
     /// Whether the entity sprints (`Entity.isSprinting`): a player, or a
     /// cat or ocelot dashing after its target (their shared sprinting flag);
     /// false for the other kinds.
-    pub(super) fn native_entity_is_sprinting(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_is_sprinting(&self, entity: EntityRef) -> Option<bool> {
         Some(match self.native_entity_body(entity)? {
             Body::Player(p) => p.sprinting,
             Body::Mob(m) => m.extra.sprinting,
@@ -106,7 +104,7 @@ impl Game<'_> {
     }
     /// Whether the entity touched water at its last fluid update
     /// (`Entity.isInWater`): players and mobs.
-    pub(super) fn native_entity_is_in_water(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_is_in_water(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.fluids.was_touching_water),
             Body::Mob(m) => Some(m.fluids.in_water),
@@ -114,7 +112,7 @@ impl Game<'_> {
         }
     }
     /// Whether the entity is in lava (`Entity.isInLava`): players and mobs.
-    pub(super) fn native_entity_is_in_lava(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_is_in_lava(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.is_in_lava()),
             Body::Mob(m) => Some(m.fluids.in_lava),
@@ -123,7 +121,7 @@ impl Game<'_> {
     }
     /// Whether the entity's type never burns (`EntityType.fireImmune`):
     /// players and mobs.
-    pub(super) fn native_entity_fire_immune(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_fire_immune(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(_) => Some(false),
             Body::Mob(m) => Some(horizon_client::mobs::spawn_rules::fire_immune(m.species())),
@@ -132,7 +130,7 @@ impl Game<'_> {
     }
     /// The ticks the entity burns for (`Entity.getRemainingFireTicks`):
     /// players, mobs, armor stands and items.
-    pub(super) fn native_entity_fire_ticks(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn entity_fire_ticks(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.fire_ticks),
             Body::Mob(m) => Some(m.fire_ticks),
@@ -148,7 +146,7 @@ impl Game<'_> {
     /// `Entity.getPortalCooldown`: a player's own portal state, the falling
     /// block's, a pearl's End gateway state, or the level's for the other
     /// kinds its portal walk carries (zero when it keeps no state for one).
-    pub(super) fn native_entity_portal_cooldown(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn entity_portal_cooldown(&self, entity: EntityRef) -> Option<i32> {
         let id = match self.native_entity_target(entity)? {
             // The acting guest's state is in place for its turn (`enter_guest`).
             Target::Player => return Some(self.portals.player.cooldown),
@@ -187,7 +185,7 @@ impl Game<'_> {
         Some(self.portals.entities.get(&id).map_or(0, |p| p.cooldown))
     }
     /// Sets the remaining fire ticks (`Entity.setRemainingFireTicks`).
-    pub(super) fn native_entity_set_remaining_fire_ticks(
+    pub(super) fn entity_set_remaining_fire_ticks(
         &mut self,
         entity: EntityRef,
         ticks: i32,
@@ -231,14 +229,14 @@ impl Game<'_> {
         }
     }
     /// Clears positive fire ticks while retaining fire immunity (`Entity.clearFire`).
-    pub(super) fn native_entity_clear_fire(&mut self, entity: EntityRef) -> bool {
-        let Some(ticks) = self.native_entity_fire_ticks(entity) else {
+    pub(super) fn entity_clear_fire(&mut self, entity: EntityRef) -> bool {
+        let Some(ticks) = self.entity_fire_ticks(entity) else {
             return false;
         };
-        self.native_entity_set_remaining_fire_ticks(entity, ticks.min(0))
+        self.entity_set_remaining_fire_ticks(entity, ticks.min(0))
     }
     /// The entity's air (`Entity.getAirSupply`): players and mobs.
-    pub(super) fn native_entity_air_supply(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn entity_air_supply(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.air),
             Body::Mob(m) => Some(m.air),
@@ -246,7 +244,7 @@ impl Game<'_> {
         }
     }
     /// Sets the entity's air (`Entity.setAirSupply`).
-    pub(super) fn native_entity_set_air_supply(&mut self, entity: EntityRef, air: i32) -> bool {
+    pub(super) fn entity_set_air_supply(&mut self, entity: EntityRef, air: i32) -> bool {
         match self.native_entity_target(entity) {
             Some(Target::Player) => match self.player.as_mut() {
                 Some(player) => {
@@ -279,7 +277,7 @@ impl Game<'_> {
     }
     /// The most air the entity holds (`Entity.getMaxAirSupply`): 300, a
     /// dolphin's 4800, an axolotl's 6000.
-    pub(super) fn native_entity_max_air_supply(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn entity_max_air_supply(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_body(entity)? {
             Body::Mob(m) => Some(max_air(Some(m.species()))),
             _ => Some(max_air(None)),
@@ -287,7 +285,7 @@ impl Game<'_> {
     }
     /// Whether the mob makes no sounds (`Entity.isSilent`, its `Silent`
     /// tag); false for a player.
-    pub(super) fn native_entity_is_silent(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_is_silent(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(_) => Some(false),
             Body::Mob(m) => Some(m.silent),
@@ -296,7 +294,7 @@ impl Game<'_> {
     }
     /// Silences the mob or lets it make sounds again (`Entity.setSilent`).
     /// False for the other kinds.
-    pub(super) fn native_entity_set_silent(&mut self, entity: EntityRef, silent: bool) -> bool {
+    pub(super) fn entity_set_silent(&mut self, entity: EntityRef, silent: bool) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(entity) else {
             return false;
         };
@@ -311,7 +309,7 @@ impl Game<'_> {
     /// Whether the entity's model is hidden (`Entity.isInvisible`): the
     /// invisibility effect on a player or a mob, a mob's or an armor stand's
     /// flag.
-    pub(super) fn native_entity_is_invisible(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_is_invisible(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_target(entity)? {
             Target::Player => Some(self.potions.effects.get("invisibility").is_some()),
             Target::Guest(conn) => Some(
@@ -329,7 +327,7 @@ impl Game<'_> {
         }
     }
     /// Sets the entity's frozen ticks (`Entity.setTicksFrozen`).
-    pub(super) fn native_entity_set_ticks_frozen(&mut self, entity: EntityRef, ticks: i32) -> bool {
+    pub(super) fn entity_set_ticks_frozen(&mut self, entity: EntityRef, ticks: i32) -> bool {
         match self.native_entity_target(entity) {
             Some(Target::Player) => self.player.as_mut().is_some_and(|p| {
                 p.ticks_frozen = ticks;
@@ -352,21 +350,21 @@ impl Game<'_> {
         }
     }
     /// Returns the mob's persistent glowing tag (`Entity.hasGlowingTag`).
-    pub(super) fn native_entity_glowing(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_glowing(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Mob(m) => Some(m.glowing),
             _ => None,
         }
     }
     /// Returns the mob's no-gravity flag (`Entity.isNoGravity`).
-    pub(super) fn native_entity_no_gravity(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_no_gravity(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Mob(m) => Some(m.no_gravity),
             _ => None,
         }
     }
     /// Returns the entity's frozen ticks (`Entity.getTicksFrozen`).
-    pub(super) fn native_entity_ticks_frozen(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn entity_ticks_frozen(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.ticks_frozen),
             Body::Mob(m) => Some(m.ticks_frozen),
@@ -375,7 +373,7 @@ impl Game<'_> {
     }
     /// Ticks the entity has lived (`Entity.tickCount`): mobs, item entities,
     /// experience orbs and minecarts. Wraps as vanilla's `int` does.
-    pub(super) fn native_entity_tick_count(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn entity_tick_count(&self, entity: EntityRef) -> Option<i32> {
         Some(match self.native_entity_target(entity)? {
             Target::Mob(id) => self.mobs.iter().find(|m| m.id == id)?.age as i32,
             Target::Item(id) => self.dropped.iter().find(|i| i.id == id)?.ticks as i32,
@@ -385,7 +383,7 @@ impl Game<'_> {
         })
     }
     /// Sets the mob's persistent glowing tag (`Entity.setGlowingTag`). Returns false for players and guests.
-    pub(super) fn native_entity_set_glowing(&mut self, entity: EntityRef, glowing: bool) -> bool {
+    pub(super) fn entity_set_glowing(&mut self, entity: EntityRef, glowing: bool) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(entity) else {
             return false;
         };
@@ -396,11 +394,7 @@ impl Game<'_> {
         })
     }
     /// Sets the mob's no-gravity flag (`Entity.setNoGravity`). Returns false for players and guests.
-    pub(super) fn native_entity_set_no_gravity(
-        &mut self,
-        entity: EntityRef,
-        no_gravity: bool,
-    ) -> bool {
+    pub(super) fn entity_set_no_gravity(&mut self, entity: EntityRef, no_gravity: bool) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(entity) else {
             return false;
         };
@@ -411,11 +405,7 @@ impl Game<'_> {
         })
     }
     /// Sets the entity's shared invisibility flag (`Entity.setInvisible`). Returns false for players and guests.
-    pub(super) fn native_entity_set_invisible(
-        &mut self,
-        entity: EntityRef,
-        invisible: bool,
-    ) -> bool {
+    pub(super) fn entity_set_invisible(&mut self, entity: EntityRef, invisible: bool) -> bool {
         match self.native_entity_target(entity) {
             Some(Target::Mob(id)) => self.mobs.iter_mut().find(|m| m.id == id).is_some_and(|m| {
                 m.invisible = invisible;
@@ -436,7 +426,7 @@ impl Game<'_> {
     /// The entity's pose (`Entity.getPose`) as `Pose` names it: `standing`,
     /// `crouching`, `swimming`, `sleeping`, a warden's `roaring`... Kinds
     /// with no pose stand.
-    pub(super) fn native_entity_pose(&self, entity: EntityRef) -> Option<&'static str> {
+    pub(super) fn entity_pose(&self, entity: EntityRef) -> Option<&'static str> {
         Some(match self.native_entity_body(entity)? {
             Body::Player(p) => player_pose(p.pose),
             Body::Mob(m) => POSES.get(usize::from(sync::pose_id(m))).copied()?,
@@ -480,15 +470,15 @@ mod tests {
                 .unwrap()
                 .clone();
             game.mobs.push(Mob::new(42, kind, Vec3::ZERO, 0.0));
-            let entity = game.native_entity(42).unwrap();
+            let entity = game.entity(42).unwrap();
             assert!(entity.set_air_supply(game, -7));
             assert_eq!(game.mobs[0].air, -7);
             assert!(entity.set_remaining_fire_ticks(game, 37));
             assert_eq!(game.mobs[0].fire_ticks, 37);
             assert!(entity.clear_fire(game));
             assert_eq!(game.mobs[0].fire_ticks, 0);
-            assert!(game.native_entity_set_remaining_fire_ticks(entity, -12));
-            assert!(game.native_entity_clear_fire(entity));
+            assert!(game.entity_set_remaining_fire_ticks(entity, -12));
+            assert!(game.entity_clear_fire(entity));
             assert_eq!(game.mobs[0].fire_ticks, -12);
             assert!(entity.set_ticks_frozen(game, 31));
             assert_eq!(game.mobs[0].ticks_frozen, 31);
@@ -513,7 +503,7 @@ mod tests {
             game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
             game.lan_acting_uuid = Some(123);
             game.lan_acting_entity = Some(20);
-            let player = game.native_entity(20).unwrap();
+            let player = game.entity(20).unwrap();
             test(game, player);
         });
     }
@@ -539,12 +529,12 @@ mod tests {
                 .clone();
             game.mobs.push(Mob::new(42, kind, Vec3::ZERO, 0.0));
             game.mobs[0].fire_ticks = 37;
-            let mob = game.native_entity(42).unwrap();
+            let mob = game.entity(42).unwrap();
             assert_eq!(mob.fire_ticks(game), Some(37));
 
             game.armor_stands.push(ArmorStand::new(43, Vec3::ZERO, 0.0));
             game.armor_stands[0].fire_ticks = 23;
-            let stand = game.native_entity(43).unwrap();
+            let stand = game.entity(43).unwrap();
             assert_eq!(stand.fire_ticks(game), Some(23));
 
             game.spawn_item(
@@ -559,7 +549,7 @@ mod tests {
                 0,
             );
             game.dropped[0].fire_ticks = 19;
-            let item = game.native_entity(game.dropped[0].id).unwrap();
+            let item = game.entity(game.dropped[0].id).unwrap();
             assert_eq!(item.fire_ticks(game), Some(19));
 
             game.boats.push(super::super::boats::Boat::new(
@@ -568,7 +558,7 @@ mod tests {
                 Vec3::ZERO,
                 0.0,
             ));
-            let boat = game.native_entity(44).unwrap();
+            let boat = game.entity(44).unwrap();
             assert_eq!(boat.fire_ticks(game), None);
             let stale = EntityRef::new(NativeWorldEpoch::new(mob.epoch().get() + 1), mob.id());
             assert_eq!(stale.fire_ticks(game), None);
@@ -595,7 +585,7 @@ mod tests {
             game.mobs.push(Mob::new(42, kind, Vec3::ZERO, 0.0));
             game.mobs[0].age = 2401;
             game.mobs[0].extra.age = -24000;
-            let mob = game.native_entity(42).unwrap();
+            let mob = game.entity(42).unwrap();
             assert_eq!(mob.tick_count(game), Some(2401));
 
             game.spawn_item(
@@ -611,7 +601,7 @@ mod tests {
             );
             game.dropped[0].ticks = 77;
             game.dropped[0].age = 5000;
-            let item = game.native_entity(game.dropped[0].id).unwrap();
+            let item = game.entity(game.dropped[0].id).unwrap();
             assert_eq!(item.tick_count(game), Some(77));
 
             game.orbs.push(ExperienceOrb {
@@ -630,13 +620,13 @@ mod tests {
                 health: 5,
                 no_gravity: true,
             });
-            let orb = game.native_entity(43).unwrap();
+            let orb = game.entity(43).unwrap();
             assert_eq!(orb.tick_count(game), Some(21));
 
             game.carts
                 .push(Minecart::new(44, CartKind::Rideable, Vec3::ZERO));
             game.carts[0].tick_count = 5;
-            let cart = game.native_entity(44).unwrap();
+            let cart = game.entity(44).unwrap();
             assert_eq!(cart.tick_count(game), Some(5));
 
             game.boats.push(super::super::boats::Boat::new(
@@ -645,7 +635,7 @@ mod tests {
                 Vec3::ZERO,
                 0.0,
             ));
-            let boat = game.native_entity(45).unwrap();
+            let boat = game.entity(45).unwrap();
             assert_eq!(boat.tick_count(game), None);
             let stale = EntityRef::new(NativeWorldEpoch::new(mob.epoch().get() + 1), mob.id());
             assert_eq!(stale.tick_count(game), None);
@@ -671,10 +661,7 @@ mod tests {
             host.play.entry(12).or_default().portal.cooldown = 7;
             host.play.entry(13).or_default().portal.cooldown = 4;
             game.portals.player.cooldown = 99;
-            let (acting, other) = (
-                game.native_entity(12).unwrap(),
-                game.native_entity(13).unwrap(),
-            );
+            let (acting, other) = (game.entity(12).unwrap(), game.entity(13).unwrap());
             assert_eq!(acting.portal_cooldown(game), Some(7));
             game.as_guest(12, |game| {
                 assert_eq!(acting.portal_cooldown(game), Some(7));
@@ -687,7 +674,7 @@ mod tests {
             // A mob counts down from `setPortalCooldown`'s 300 as the level ticks.
             let kind = game.res.mob_types().get("minecraft:cow").unwrap().clone();
             game.mobs.push(Mob::new(40, kind, Vec3::ZERO, 0.0));
-            let mob = game.native_entity(40).unwrap();
+            let mob = game.entity(40).unwrap();
             assert_eq!(mob.portal_cooldown(game), Some(0));
             game.set_portal_cooldown(40);
             assert_eq!(mob.portal_cooldown(game), Some(300));
@@ -747,7 +734,7 @@ mod tests {
             game.tridents
                 .push(ThrownTrident::remote(45, Vec3::ZERO, 0.0, 0.0));
             for id in [item, 41, 42, 43, tnt, arrow, snowball, 44, 45] {
-                let entity = game.native_entity(id).unwrap();
+                let entity = game.entity(id).unwrap();
                 assert_eq!(entity.portal_cooldown(game), Some(0), "entity {id}");
                 game.set_portal_cooldown(id);
                 assert_eq!(entity.portal_cooldown(game), Some(300), "entity {id}");
@@ -783,21 +770,19 @@ mod tests {
                 damage: horizon_client::falling_block::Damage::falling("minecraft:sand"),
                 saved: None,
             });
-            let falling = game.native_entity(falling).unwrap();
+            let falling = game.entity(falling).unwrap();
             assert_eq!(falling.portal_cooldown(game), Some(25));
 
             // No portal cooldown: an armor stand, a wind charge, a stale handle, a parked level.
             game.armor_stands.push(ArmorStand::new(46, Vec3::ZERO, 0.0));
-            let stand = game.native_entity(46).unwrap();
+            let stand = game.entity(46).unwrap();
             assert_eq!(stand.portal_cooldown(game), None);
             game.add_projectile(Projectile::new(
                 ProjectileKind::WindCharge,
                 Vec3::ZERO,
                 None,
             ));
-            let charge = game
-                .native_entity(game.creatures.projectiles[2].id)
-                .unwrap();
+            let charge = game.entity(game.creatures.projectiles[2].id).unwrap();
             assert_eq!(charge.portal_cooldown(game), None);
             let stale = EntityRef::new(NativeWorldEpoch::new(mob.epoch().get() + 1), mob.id());
             assert_eq!(stale.portal_cooldown(game), None);

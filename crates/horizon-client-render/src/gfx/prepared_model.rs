@@ -332,12 +332,16 @@ impl PreparedModels {
             "fs_entity",
             wgpu::ColorWrites::ALL,
         );
+        // Bias 0, the same as the CPU entity mark (`hdr_mark_pipeline`). The colour
+        // pass writes depth at bias 128, so this mark fails the depth test and the
+        // world keeps no scene gain. A bias of 128 here made instanced copies brighter
+        // in scRGB than the CPU route.
         let hdr_pipeline = make(
             "Prepared model HDR mark",
             wgpu::BlendState::REPLACE,
             false,
             wgpu::DepthBiasState {
-                constant: 128,
+                constant: 0,
                 slope_scale: 0.0,
                 clamp: 0.0,
             },

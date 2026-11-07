@@ -863,7 +863,7 @@ impl Game<'_> {
                 while given < count {
                     let n = (count - given).min(max);
                     let rest = self
-                        .give(ItemStack {
+                        .add_stack_to_inventory(ItemStack {
                             item: item.as_str().into(),
                             count: n,
                             damage: 0,
@@ -927,13 +927,14 @@ impl Game<'_> {
                     let id = server
                         .call(move |g| {
                             g.in_owner_level(|g| {
-                                g.summon(&kind, Some(at), baby).map_err(|e| e.to_string())
+                                g.summon_command_mob(&kind, Some(at), baby)
+                                    .map_err(|e| e.to_string())
                             })
                         })
                         .ok_or(super::integrated::NO_ANSWER)??;
                     return Ok(Some(json!({ "ok": true, "id": id })));
                 }
-                let id = self.summon(&kind, at, baby)?;
+                let id = self.summon_command_mob(&kind, at, baby)?;
                 Ok(Some(json!({ "ok": true, "id": id })))
             }
             "mobs" => {

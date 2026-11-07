@@ -2235,9 +2235,12 @@ mod tests {
                 Some(&json_tag(&components["minecraft:custom_name"]))
             );
             assert_eq!(encoded.get("!minecraft:damage").is_some(), removed);
-            if expected_damage == 0 {
-                assert!(encoded.get("minecraft:damage").is_none());
-            }
+            // A result patch setting zero must survive until the output's prototype is
+            // known: that prototype may itself start damaged after native registration.
+            assert_eq!(
+                encoded.get("minecraft:damage"),
+                (!removed).then_some(&Tag::Int(expected_damage as i32))
+            );
         }
         let mut map = input.clone();
         map.data_mut().map_post_processing = Some(1);

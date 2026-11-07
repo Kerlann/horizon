@@ -18,13 +18,13 @@ impl Game<'_> {
     /// pasting into its own field. None at any other moment (a tick, a frame, a packet),
     /// so no mod reads the clipboard without the player doing something, and None on a
     /// server.
-    pub(super) fn native_clipboard_text(&self) -> Option<String> {
+    pub(super) fn clipboard_text(&self) -> Option<String> {
         (self.native_window() && self.user_input.get()).then(|| self.clipboard.text())
     }
     /// Puts `text` on the clipboard (`KeyboardHandler.setClipboard`) on the same terms as
-    /// `native_clipboard_text` reads it. False, with nothing copied, at any other moment or
+    /// `clipboard_text` reads it. False, with nothing copied, at any other moment or
     /// on a server; empty text copies nothing, as vanilla's.
-    pub(super) fn native_set_clipboard_text(&self, text: &str) -> bool {
+    pub(super) fn set_clipboard_text(&self, text: &str) -> bool {
         if !self.native_window() || !self.user_input.get() {
             return false;
         }

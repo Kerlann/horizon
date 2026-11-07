@@ -138,24 +138,6 @@ pub fn multiply(l: u32, r: u32) -> u32 {
 pub fn lerp_discrete(alpha: f32, p0: i32, p1: i32) -> i32 {
     p0 + floor(alpha * (p1 - p0 - 1) as f32) + i32::from(alpha > 0.0)
 }
-/// `Mth.hsvToArgb`.
-pub fn hsv_to_argb(hue: f32, saturation: f32, value: f32, alpha: u32) -> u32 {
-    let h = (hue * 6.0) as i32 % 6;
-    let f = hue * 6.0 - h as f32;
-    let p = value * (1.0 - saturation);
-    let q = value * (1.0 - f * saturation);
-    let t = value * (1.0 - (1.0 - f) * saturation);
-    let (r, g, b) = match h {
-        0 => (value, t, p),
-        1 => (q, value, p),
-        2 => (p, value, t),
-        3 => (p, q, value),
-        4 => (t, p, value),
-        _ => (value, p, q),
-    };
-    let c = |v: f32| ((v * 255.0) as i32).clamp(0, 255) as u32;
-    argb(alpha, c(r), c(g), c(b))
-}
 /// `Font.width` of styled text.
 pub fn width(font: &Font, t: &Text) -> i32 {
     font.width_text(t) as i32

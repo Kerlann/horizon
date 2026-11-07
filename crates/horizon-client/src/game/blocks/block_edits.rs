@@ -1,4 +1,4 @@
-//! A server mod's bulk block edit (`native_edit_blocks`): its palette and
+//! A server mod's bulk block edit (`edit_blocks`): its palette and
 //! filters read as commands read blocks, its heights read, and its runs made
 //! at once through `World::edit_runs`, with what `fill ... strict` does for
 //! the block entities and the watched blocks of each block changed.
@@ -28,7 +28,7 @@ impl Game<'_> {
     /// refused: the bulk path sets states only), a run naming a palette entry
     /// or filter past the end, or more than 65536 filters, and nothing is
     /// made.
-    pub(super) fn edit_blocks(&mut self, edit: &BlockEdit) -> Result<u64, String> {
+    pub(super) fn apply_block_edit(&mut self, edit: &BlockEdit) -> Result<u64, String> {
         let parse = |name: &str, testing: bool| -> Result<BlockInput, String> {
             let mut reader = Reader::new(name);
             let b = block::parse(&mut reader, &self.ui.registries, testing)
@@ -116,7 +116,11 @@ impl Game<'_> {
     }
 
     /// Each column's height on `h` as `edit_height` reads it, none where its chunk is not loaded.
-    pub(super) fn surface_heights(&self, columns: &[(i32, i32)], h: Heightmap) -> Vec<Option<i32>> {
+    pub(super) fn loaded_column_heights(
+        &self,
+        columns: &[(i32, i32)],
+        h: Heightmap,
+    ) -> Vec<Option<i32>> {
         loaded_heights(&self.world, columns, |x, z| self.edit_height(h, x, z))
     }
 
@@ -125,7 +129,7 @@ impl Game<'_> {
     /// names seen, with the biome's grass, foliage and water tints at the column's top (0 where it is not loaded;
     /// unblended). `Err`, reading nothing, when `below + above` is 0 or more than the level's height, or the read
     /// would be more than `MAX_READ` blocks.
-    pub(super) fn read_columns(
+    pub(super) fn read_loaded_block_columns(
         &self,
         columns: &[(i32, i32)],
         h: Heightmap,
@@ -133,7 +137,7 @@ impl Game<'_> {
         above: u32,
     ) -> Result<ColumnBlocks, String> {
         read_size(columns.len(), below, above, self.world.layout().height())?;
-        let bases = self.surface_heights(columns, h);
+        let bases = self.loaded_column_heights(columns, h);
         let facts = self.res.facts();
         let (palette, blocks) = column_blocks(&self.world, columns, &bases, below, above, |s| {
             facts.get(s).name.clone()

@@ -298,7 +298,7 @@ impl Catalog {
                 .and_then(|name| name.strip_suffix("Listener"))
                 .expect("generated listener name");
             constructors.insert(format!(
-                "    /// Registers a function of this place's exact listener type.\n    pub const fn {constructor}(id: &'static str, f: {name}) -> mod_points::__private::RawListener {{\n        // SAFETY: `f` has this place's listener type, checked by the signature.\n        unsafe {{ mod_points::__private::RawListener::new(id, mod_points::PointId::{variant}, f as *const ()) }}\n    }}\n"
+                "    /// Registers a function of this place's exact listener type.\n    pub const fn {constructor}(id: &'static str, f: {name}) -> mod_points::__private::SlotListener {{\n        // SAFETY: `f` has this place's listener type, checked by the signature.\n        unsafe {{ mod_points::__private::SlotListener::new(id, mod_points::PointId::{variant}, f as *const ()) }}\n    }}\n"
             ));
         }
         for injection in sites::of(manifest) {
@@ -485,7 +485,7 @@ mod tests {
                 { "path": "horizon_client::game::maps::Game<'_>::dimension_id", "kind": "method", "signature": "impl Game<'_> { fn dimension_id(&self) -> u8 }", "hash": "abcd" }
             ])).unwrap(),
             points: serde_json::from_value(serde_json::json!([
-                { "name": "tick", "target": "horizon_client::game::Game<'_>::tick", "raw": true,
+                { "name": "tick", "target": "horizon_client::game::Game<'_>::tick", "raw": true, "at_return": true,
                     "listener": "horizon_client::game::__TickListener", "return_listener": "horizon_client::game::__TickReturnListener" }
             ])).unwrap(),
         };
@@ -509,7 +509,7 @@ mod tests {
         assert!(!source.contains("pub use lower;"));
         assert!(!source.contains("pub use lower::Shape;"));
         assert!(source.contains("pub use horizon_client::game::__TickListener;"));
-        assert!(source.contains("mod_points::__private::RawListener::new"));
+        assert!(source.contains("mod_points::__private::SlotListener::new"));
         assert!(!normal.contains("pub use horizon_client::*;"));
         assert_eq!(catalog.facade(&bundle.manifest).unwrap().source, normal);
         fs::remove_dir_all(dir).unwrap();
@@ -532,9 +532,9 @@ pub mod raw {
     pub use horizon_client::game::__TickListener;
     pub use horizon_client::game::__TickRaw;
     /// Registers a function of this place's exact listener type.
-    pub const fn tick(id: &'static str, f: __TickListener) -> mod_points::__private::RawListener {
+    pub const fn tick(id: &'static str, f: __TickListener) -> mod_points::__private::SlotListener {
         // SAFETY: `f` has this place's listener type, checked by the signature.
-        unsafe { mod_points::__private::RawListener::new(id, mod_points::PointId::Tick, f as *const ()) }
+        unsafe { mod_points::__private::SlotListener::new(id, mod_points::PointId::Tick, f as *const ()) }
     }
 }
 "#
@@ -553,7 +553,7 @@ pub mod raw {
         assert!(main.contains(
             "mod_0_internals::raw::tick(\"example\", mod_0::count), // injection \"count\""
         ));
-        assert!(!main.contains("/* MOD_RAW */"));
+        assert!(!main.contains("/* MOD_SLOTS */"));
         assert!(!main.contains("mod_0::__horizon_points"));
         assert!(!main.contains("unsafe {"));
         fs::remove_dir_all(dir).unwrap();
@@ -654,7 +654,7 @@ pub mod raw {
         );
         assert!(text.contains("PointId::TickReturn"));
         let main = api::main_rs(
-            "/* MOD_RAW */",
+            "/* MOD_SLOTS */",
             &[&bundle.manifest],
             &catalog.points,
             &catalog.sites,
@@ -747,7 +747,7 @@ pub mod raw {
             .is_empty());
         super::super::tests::write_bundle(&dir, "example", "pub fn count<T>(_: &mut T) {}\n");
         let path = dir.join(horizon_mod_package::manifest::MANIFEST);
-        fs::write(&path, fs::read_to_string(&path).unwrap() + "[[inject]]\nid='/* MOD_ENTRIES *//* MOD_POINTS */'\nat='horizon_client::net::receive_brand'\nkind='head'\naccess='internals'\nwith='count'\nhash='5678'\n").unwrap();
+        fs::write(&path, fs::read_to_string(&path).unwrap() + "[[inject]]\nid='/* MOD_ENTRIES *//* MOD_SLOTS */'\nat='horizon_client::net::receive_brand'\nkind='head'\naccess='internals'\nwith='count'\nhash='5678'\n").unwrap();
         fs::write(
             dir.join("Cargo.toml"),
             "[package]\nname='example'\nversion='1.0.0'\n[dependencies]\nhorizon-mod-api='0.1'\n",
@@ -774,7 +774,7 @@ pub mod raw {
         let facade = fs::read_to_string(stage.join("native-internals/example/src/lib.rs")).unwrap();
         assert!(facade.contains("fn receive_brand("));
         let main = fs::read_to_string(stage.join("crates/native-game/src/main.rs")).unwrap();
-        assert!(main.contains(".ordered(0, \"/* MOD_ENTRIES *//* MOD_POINTS */\")"));
+        assert!(main.contains(".ordered(0, \"/* MOD_ENTRIES *//* MOD_SLOTS */\")"));
         fs::remove_dir_all(stage).unwrap();
         fs::remove_dir_all(dir).unwrap();
     }

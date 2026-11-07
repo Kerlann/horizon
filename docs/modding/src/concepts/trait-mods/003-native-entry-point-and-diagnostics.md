@@ -14,6 +14,6 @@ Before installation, `mod_api::mods()` still returns an empty list. Parts retain
 id for startup errors and hook panics. The game stops. A point listener's panic names its mod and
 method; render hooks are not named yet.
 
-A code mod may listen at the game's injection points as a rare escape hatch, through `impl mod_points::Points`
-(the `horizon-mod-points` crate) on the same type as its `Hooks`; the form
+A code mod may listen at the game's injection points as a rare escape hatch, through a crate-root function
+named by `[[inject]].with`, taking a `mod_points` record; the form
 and its limits are in [Injections](../../injections.md).

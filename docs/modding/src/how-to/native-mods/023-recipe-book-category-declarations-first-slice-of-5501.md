@@ -17,7 +17,7 @@ event.categories.push(RecipeBookCategory {
 
 Mixin bundles use `native_recipe_book_categories(categories)` at the same hook
 point. `host.recipe_book_category("mymod:crusher")` (the mixin helper is
-`native_recipe_book_category`) returns the validated declaration, including its
+`recipe_book_category`) returns the validated declaration, including its
 icon, or `None`. It does not grant recipes. Declarations are requested lazily at
 first lookup, cached for that recipe table, and invalidated on a new session,
 server recipe-content replacement or server `/reload`. No lookup means no hook

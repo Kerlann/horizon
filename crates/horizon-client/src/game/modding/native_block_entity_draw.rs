@@ -1133,7 +1133,7 @@ impl Game<'_> {
     /// for a layer neither has. A vanilla layer no mob has (a player's, a
     /// chest's) is read from the resources each call, so slow. API
     /// @API:model_layers@.
-    pub(super) fn native_bake_layer(&self, layer: &str) -> Option<ModelPart> {
+    pub(super) fn bake_layer(&self, layer: &str) -> Option<ModelPart> {
         if let Some(definition) = model_layers::registered(layer) {
             return Some(definition.bake_root());
         }
@@ -1183,11 +1183,7 @@ impl Game<'_> {
     /// Property `key` of block state `state` (a machine's `facing`, from the
     /// `state` `native_block_entity_submit` gets), if it has one: no lookup in
     /// the world, so cheap each frame.
-    pub(super) fn native_block_state_property(
-        &self,
-        state: BlockStateId,
-        key: &str,
-    ) -> Option<&str> {
+    pub(super) fn block_state_property(&self, state: BlockStateId, key: &str) -> Option<&str> {
         self.pack
             .assets
             .registry
@@ -1714,11 +1710,13 @@ mod tests {
                 worst = worst.max(cpu.abs_diff(*gpu));
             }
             assert!(worst <= 2, "cpu and instance pixels differed by {worst}");
+            // The HDR mark uses bias 0 on both routes, so it does not land on the
+            // colour pass's biased depth. Coverage is the colour, not a mid alpha.
             assert!(
                 cpu.as_chunks::<4>()
                     .0
                     .iter()
-                    .any(|pixel| pixel[3] != 255 && pixel[3] != 0)
+                    .any(|pixel| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0)
             );
             fail_next_prepared_upload();
             assert!(

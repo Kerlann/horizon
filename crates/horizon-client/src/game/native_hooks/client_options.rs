@@ -5,7 +5,7 @@ use super::*;
 #[allow(dead_code)]
 impl Game<'_> {
     /// A snapshot of the current graphics preferences.
-    pub(in crate::game) fn native_graphics_options(&self) -> ClientGraphicsOptions {
+    pub(in crate::game) fn graphics_options(&self) -> ClientGraphicsOptions {
         let s = &self.settings;
         ClientGraphicsOptions {
             fov: s.fov,
@@ -23,7 +23,7 @@ impl Game<'_> {
         }
     }
     /// A snapshot of the current GUI and accessibility preferences.
-    pub(in crate::game) fn native_gui_options(&self) -> ClientGuiOptions {
+    pub(in crate::game) fn gui_options(&self) -> ClientGuiOptions {
         let s = &self.settings;
         ClientGuiOptions {
             gui_scale: s.gui_scale,
@@ -38,7 +38,7 @@ impl Game<'_> {
         }
     }
     /// A snapshot of the current chat preferences.
-    pub(in crate::game) fn native_chat_options(&self) -> ClientChatOptions {
+    pub(in crate::game) fn chat_options(&self) -> ClientChatOptions {
         let s = &self.settings;
         ClientChatOptions {
             visibility: s.chat_visibility,
@@ -54,7 +54,7 @@ impl Game<'_> {
         }
     }
     /// A snapshot of the current audio preferences.
-    pub(in crate::game) fn native_audio_options(&self) -> ClientAudioOptions {
+    pub(in crate::game) fn audio_options(&self) -> ClientAudioOptions {
         ClientAudioOptions {
             master_volume: self.settings.master_volume,
         }

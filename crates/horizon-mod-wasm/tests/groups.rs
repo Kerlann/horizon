@@ -106,7 +106,7 @@ fn assert_refused_library_point(method: &str, reason: &str) {
         .map(|(id, why)| {
             let why = match why {
                 horizon_mod_wasm::Refusal::NoSuchPoint { .. } => "no such point".to_owned(),
-                horizon_mod_wasm::Refusal::UnfilledPoint { point } if point == "tick" => {
+                horizon_mod_wasm::Refusal::UnfilledPoint { point } if point == "gone" => {
                     "no guest export".to_owned()
                 }
                 horizon_mod_wasm::Refusal::DependencyRefused { dependency } => {

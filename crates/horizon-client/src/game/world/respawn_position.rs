@@ -65,7 +65,7 @@ impl Game<'_> {
             .iter()
             .find(|g| g.conn == conn)?
             .uuid;
-        let player = self.native_player_ref(uuid)?;
+        let player = self.player(uuid)?;
         let original = [found.at.x, found.at.y, found.at.z];
         let (mut level, mut position) = (found.dim.level(), original);
         let (mut yaw, mut pitch) = (found.yaw, found.pitch);

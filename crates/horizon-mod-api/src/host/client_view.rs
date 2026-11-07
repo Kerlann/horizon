@@ -1,111 +1,63 @@
-//! The `client_view` area: host methods the game implements (`game/host/client_view.rs`).
+//! Host method declarations; access defaults and game forwarders are generated.
 #![allow(unused_variables)]
 use crate::*;
 /// The host's methods both sides share of the `client_view` area, implemented by the game and reached through [`Host`].
+#[horizon_mod_api_macros::host_area]
 pub trait ClientViewHost {
     /// Side: both.
     /// Collision boxes in block-local coordinates with an empty collision context.
-    fn block_collision(&self, pos: [i32; 3]) -> Vec<[f64; 6]> {
-        crate::phase::unprovided(
-            "Host::block_collision",
-            "block_collision",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn block_collision(&self, pos: [i32; 3]) -> Vec<[f64; 6]>;
 }
 /// The client host's methods of the `client_view` area, implemented by the game and reached through [`crate::ClientHost`].
+#[horizon_mod_api_macros::host_area]
 pub trait ClientViewClientHost {
     /// Side: client.
     /// The window's camera type (`Options.getCameraType`), including its latest pending request.
-    fn camera_type(&self) -> CameraType {
-        crate::phase::unprovided(
-            "ClientHost::camera_type",
-            "camera_type",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn camera_type(&self) -> CameraType;
     /// Side: client.
     /// Request the window's camera type without cycling, also from shared-host callbacks.
     /// The last request wins and [`Self::camera_type`] reports it immediately. Requests before
     /// or during `camera_pose` apply to that frame's camera, FOV and spectator post effects;
     /// later requests apply at the next frame's camera extraction. Explicit pose overrides
     /// remain unchanged when vanilla placement is refreshed. No cycle hook is emitted.
-    fn set_camera_type(&self, camera_type: CameraType) {
-        crate::phase::unprovided(
-            "ClientHost::set_camera_type",
-            "set_camera_type",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn set_camera_type(&self, camera_type: CameraType);
     /// Side: client.
     /// The applied client pause state, not whether a pause screen is open.
-    fn is_paused(&self) -> bool {
-        crate::phase::unprovided(
-            "ClientHost::is_paused",
-            "is_paused",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn is_paused(&self) -> bool;
     /// Side: client.
     /// The clock of the world this window shows, for client mods: its game
     /// time and time of day as the server last sent them
     /// (`ClientboundSetTimePacket`), advanced each tick between packets; none
     /// on the title screen.
-    fn clock(&self) -> Option<NativeClock> {
-        crate::phase::unprovided(
-            "ClientHost::clock",
-            "clock",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn clock(&self) -> Option<NativeClock>;
     /// Side: client.
     /// The first block along the view within `distance` (at most 1024), past the loaded chunks over the distant terrain.
-    fn raycast(&self, distance: f32) -> Option<NativeHit> {
-        crate::phase::unprovided(
-            "ClientHost::raycast",
-            "raycast",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn raycast(&self, distance: f32) -> Option<NativeHit>;
     /// Side: client.
     /// The first block along the view within `RAYCAST_MAX`, and its distance.
-    fn view_hit(&self) -> Option<(f32, NativeHit)> {
-        crate::phase::unprovided(
-            "ClientHost::view_hit",
-            "view_hit",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn view_hit(&self) -> Option<(f32, NativeHit)>;
     /// Side: client.
     /// The most recently extracted world frame's camera, if one exists.
     /// During GUI rendering this is the current frame, including bob/spin and FOV.
-    fn camera(&self) -> Option<NativeCamera> {
-        crate::phase::unprovided(
-            "ClientHost::camera",
-            "camera",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn camera(&self) -> Option<NativeCamera>;
     /// Side: client.
     /// The entity the view follows (`Minecraft.getCameraEntity`): the entity a server attached
     /// the camera to, else the local player. None outside a client world.
-    fn camera_entity(&self) -> Option<EntityRef> {
-        crate::phase::unprovided(
-            "ClientHost::camera_entity",
-            "camera_entity",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn camera_entity(&self) -> Option<EntityRef>;
     /// Side: client.
     /// The ordinary block-or-entity pick (Minecraft.hitResult), using the
     /// game's targeting ray, reach and occlusion. None without a client world
     /// or on a miss. Entity hits carry this client level's epoch. Unlike
     /// native_view_hit, this never traces distant terrain.
-    fn crosshair_target(&self) -> Option<NativeCrosshairTarget> {
-        crate::phase::unprovided(
-            "ClientHost::crosshair_target",
-            "crosshair_target",
-            crate::phase::LoadAccess::ClientSetup,
-        )
-    }
+    #[access(ClientSetup)]
+    fn crosshair_target(&self) -> Option<NativeCrosshairTarget>;
 }

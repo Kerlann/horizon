@@ -18,7 +18,7 @@ use std::sync::Arc;
 impl Game<'_> {
     /// The cooldowns of `player`, where they are kept now: a guest's own
     /// outside their turn, the game's while theirs is swapped in (as
-    /// `native_player_ref` finds the player).
+    /// `player` finds the player).
     fn native_cooldowns_of(&self, player: PlayerRef) -> Option<&Cooldowns> {
         match self.player_handle_read(player)? {
             super::native_server::PlayerRead::Acting { .. } => Some(&self.cooldowns),
@@ -35,7 +35,7 @@ impl Game<'_> {
     /// `ItemCooldowns.getCooldownGroup(stack)`: the group `stack`'s
     /// cooldown is filed under, the group its `use_cooldown` component names
     /// (its own, else its item's default), else its item id.
-    pub(super) fn native_item_cooldown_group(&self, stack: &ItemStack) -> String {
+    pub(super) fn item_cooldown_group(&self, stack: &ItemStack) -> String {
         let default = self
             .items()
             .get(&stack.item)
@@ -44,7 +44,7 @@ impl Game<'_> {
     }
     /// Every group the player waits on and its ticks left, ordered by
     /// group.
-    pub(super) fn native_player_item_cooldowns(
+    pub(super) fn player_item_cooldowns(
         &self,
         player: PlayerRef,
     ) -> Option<Vec<NativeItemCooldown>> {
@@ -61,16 +61,12 @@ impl Game<'_> {
         Some(out)
     }
     /// `ItemCooldowns.isOnCooldown`: whether `group` still has time to run.
-    pub(super) fn native_player_has_item_cooldown(
-        &self,
-        player: PlayerRef,
-        group: &str,
-    ) -> Option<bool> {
+    pub(super) fn player_has_item_cooldown(&self, player: PlayerRef, group: &str) -> Option<bool> {
         Some(self.native_cooldowns_of(player)?.is_on_cooldown(group))
     }
     /// `ItemCooldowns.getCooldownPercent(group, 0)`: what is left of the
     /// group's cooldown, from 1 (just started) to 0 (none).
-    pub(super) fn native_player_item_cooldown_percent(
+    pub(super) fn player_item_cooldown_percent(
         &self,
         player: PlayerRef,
         group: &str,
@@ -80,7 +76,7 @@ impl Game<'_> {
     /// `ItemCooldowns.addCooldown(group, ticks)`: starts (or restarts) the
     /// group's cooldown, and the player's client draws it on every item of the
     /// group (`ServerItemCooldowns.onCooldownStarted`).
-    pub(super) fn native_player_set_item_cooldown(
+    pub(super) fn player_set_item_cooldown(
         &mut self,
         player: PlayerRef,
         group: &str,
@@ -91,11 +87,7 @@ impl Game<'_> {
     }
     /// `ItemCooldowns.removeCooldown(group)`: ends the group's cooldown now,
     /// on the client too (`ServerItemCooldowns.onCooldownEnded`).
-    pub(super) fn native_player_remove_item_cooldown(
-        &mut self,
-        player: PlayerRef,
-        group: &str,
-    ) -> bool {
+    pub(super) fn player_remove_item_cooldown(&mut self, player: PlayerRef, group: &str) -> bool {
         let group: Arc<str> = group.into();
         self.native_as_player_handle(player, |game| {
             game.cooldowns.remove(&group);
@@ -106,7 +98,7 @@ impl Game<'_> {
     }
     /// `Player.takeXpDelay`: the ticks before the player can take the next
     /// experience orb.
-    pub(super) fn native_player_exp_cooldown(&self, player: PlayerRef) -> Option<u32> {
+    pub(super) fn player_exp_cooldown(&self, player: PlayerRef) -> Option<u32> {
         match self.player_handle_read(player)? {
             super::native_server::PlayerRead::Acting { .. } => Some(self.xp_delay),
             super::native_server::PlayerRead::Guest(g) => Some(
@@ -120,7 +112,7 @@ impl Game<'_> {
     }
     /// Sets `Player.takeXpDelay`: no orb is taken for `ticks` ticks. The
     /// change is not reported to `player_exp_cooldown_change`.
-    pub(super) fn native_player_set_exp_cooldown(&mut self, player: PlayerRef, ticks: u32) -> bool {
+    pub(super) fn player_set_exp_cooldown(&mut self, player: PlayerRef, ticks: u32) -> bool {
         self.native_as_player_handle(player, |game| game.xp_delay = ticks)
     }
     /// Sets the player's `WardenSpawnTracker.cooldownTicks`: sculk shriekers
@@ -128,7 +120,7 @@ impl Game<'_> {
     /// one tracker here, the integrated server owner's (the shriekers read it
     /// for whoever sets them off), so this is every player's.
     /// False, changing nothing, for anyone but the tracker's owner until each player has their own.
-    pub(super) fn native_player_set_warden_warning_cooldown(
+    pub(super) fn player_set_warden_warning_cooldown(
         &mut self,
         player: PlayerRef,
         ticks: u32,
@@ -169,10 +161,7 @@ mod tests {
     fn a_stack_names_its_cooldown_group() {
         with_game(|game| {
             let pearl = ItemStack::new("minecraft:ender_pearl", 1);
-            assert_eq!(
-                game.native_item_cooldown_group(&pearl),
-                "minecraft:ender_pearl"
-            );
+            assert_eq!(game.item_cooldown_group(&pearl), "minecraft:ender_pearl");
             let mut wand = ItemStack::new("minecraft:stick", 1);
             wand.data_mut().set_other(
                 "minecraft:use_cooldown",
@@ -181,12 +170,9 @@ mod tests {
                     ("cooldown_group", Tag::String("mymod:wands".into())),
                 ])),
             );
-            assert_eq!(game.native_item_cooldown_group(&wand), "mymod:wands");
+            assert_eq!(game.item_cooldown_group(&wand), "mymod:wands");
             let unknown = ItemStack::new("mymod:not_an_item", 1);
-            assert_eq!(
-                game.native_item_cooldown_group(&unknown),
-                "mymod:not_an_item"
-            );
+            assert_eq!(game.item_cooldown_group(&unknown), "mymod:not_an_item");
         });
     }
 
@@ -206,33 +192,30 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn exp_cooldowns_reach_their_player() {
         super::super::native_guest_turn_tests::with_guests(|game| {
-            let (a, b) = (
-                game.native_player_ref(12).unwrap(),
-                game.native_player_ref(13).unwrap(),
-            );
-            assert!(game.native_player_set_exp_cooldown(a, 5));
-            assert_eq!(game.native_player_exp_cooldown(a), Some(5));
-            assert_eq!(game.native_player_exp_cooldown(b), Some(0));
+            let (a, b) = (game.player(12).unwrap(), game.player(13).unwrap());
+            assert!(game.player_set_exp_cooldown(a, 5));
+            assert_eq!(game.player_exp_cooldown(a), Some(5));
+            assert_eq!(game.player_exp_cooldown(b), Some(0));
             // In A's turn, A's own delay is in place and B's is still B's.
             game.as_guest(12, |game| {
-                assert_eq!(game.native_player_exp_cooldown(a), Some(5));
-                assert_eq!(game.native_player_exp_cooldown(b), Some(0));
-                assert!(game.native_player_set_exp_cooldown(a, 9));
-                assert!(game.native_player_set_exp_cooldown(b, 3));
+                assert_eq!(game.player_exp_cooldown(a), Some(5));
+                assert_eq!(game.player_exp_cooldown(b), Some(0));
+                assert!(game.player_set_exp_cooldown(a, 9));
+                assert!(game.player_set_exp_cooldown(b, 3));
                 // A's state is displaced while B's turn runs inside A's.
                 game.as_guest(13, |game| {
-                    assert_eq!(game.native_player_exp_cooldown(a), None);
-                    assert!(!game.native_player_set_exp_cooldown(a, 1));
+                    assert_eq!(game.player_exp_cooldown(a), None);
+                    assert!(!game.player_set_exp_cooldown(a, 1));
                 })
                 .unwrap();
             })
             .unwrap();
-            assert_eq!(game.native_player_exp_cooldown(a), Some(9));
-            assert_eq!(game.native_player_exp_cooldown(b), Some(3));
+            assert_eq!(game.player_exp_cooldown(a), Some(9));
+            assert_eq!(game.player_exp_cooldown(b), Some(3));
 
-            assert_eq!(game.native_player_exp_cooldown(stale(a)), None);
-            assert!(!game.native_player_set_exp_cooldown(stale(a), 1));
-            assert_eq!(game.native_player_exp_cooldown(a), Some(9));
+            assert_eq!(game.player_exp_cooldown(stale(a)), None);
+            assert!(!game.player_set_exp_cooldown(stale(a), 1));
+            assert_eq!(game.player_exp_cooldown(a), Some(9));
         });
     }
 
@@ -268,27 +251,24 @@ mod tests {
                     tracker(4)
                 };
             });
-            let (a, b) = (
-                game.native_player_ref(12).unwrap(),
-                game.native_player_ref(13).unwrap(),
-            );
+            let (a, b) = (game.player(12).unwrap(), game.player(13).unwrap());
 
             // Anyone else's write is refused and loads nothing, in or out of
             // their turn; so is the owner's while another turn is in place.
-            assert!(!game.native_player_set_warden_warning_cooldown(b, 40));
+            assert!(!game.player_set_warden_warning_cooldown(b, 40));
             game.as_guest(13, |game| {
-                assert!(!game.native_player_set_warden_warning_cooldown(b, 40));
-                assert!(!game.native_player_set_warden_warning_cooldown(a, 40));
+                assert!(!game.player_set_warden_warning_cooldown(b, 40));
+                assert!(!game.player_set_warden_warning_cooldown(a, 40));
             })
             .unwrap();
             game.as_guest(12, |game| {
                 game.as_guest(13, |game| {
-                    assert!(!game.native_player_set_warden_warning_cooldown(a, 40));
+                    assert!(!game.player_set_warden_warning_cooldown(a, 40));
                 })
                 .unwrap();
             })
             .unwrap();
-            assert!(!game.native_player_set_warden_warning_cooldown(stale(a), 40));
+            assert!(!game.player_set_warden_warning_cooldown(stale(a), 40));
             assert!(!game.sculk.tracker_loaded);
             assert_eq!(game.sculk.tracker, WardenSpawnTracker::default());
             game.tick_sculk_entities();
@@ -298,7 +278,7 @@ mod tests {
             // run out, over the level's saved tracker.
             game.sculk.tracker = WardenSpawnTracker::default();
             game.sculk.tracker_loaded = false;
-            assert!(game.native_player_set_warden_warning_cooldown(a, 40));
+            assert!(game.player_set_warden_warning_cooldown(a, 40));
             for _ in 0..39 {
                 game.tick_sculk_entities();
             }
@@ -307,7 +287,7 @@ mod tests {
             assert_eq!(warns(game), Some(3));
             // Also from the owner's own turn.
             game.as_guest(12, |game| {
-                assert!(game.native_player_set_warden_warning_cooldown(a, 5));
+                assert!(game.player_set_warden_warning_cooldown(a, 5));
             })
             .unwrap();
             assert_eq!(game.sculk.tracker.cooldown_ticks, 5);

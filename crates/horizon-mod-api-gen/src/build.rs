@@ -95,15 +95,18 @@ pub(crate) fn native_hook_modules(root: &Path) -> Result<String, String> {
 pub(crate) fn game_host_modules(root: &Path) -> Result<String, String> {
     let dir = root.join("crates/horizon-client/src/game/host");
     let mut modules = String::new();
-    for stem in Catalog::modules(&dir)? {
-        syn::parse_str::<syn::Ident>(&stem).map_err(|e| e.to_string())?;
+    for stem in ["draw", "services"] {
         let path = fs::canonicalize(dir.join(format!("{stem}.rs"))).map_err(|e| e.to_string())?;
         modules.push_str(&format!("#[path = {path:?}] pub(crate) mod {stem};\n"));
     }
+    modules.push_str(&format!(
+        "mod generated {{\n{}\n}}\n",
+        host::game_forwarders(root)?
+    ));
     Ok(modules)
 }
 
-/// `horizon-mod-points`' generated file: each point's record, `PointId` and the `Points` trait,
+/// `horizon-mod-points`' generated file: each point's record, `PointId` and typed function constructors,
 /// from the game's source, tracking the game module's files.
 pub fn generate_points(root: &Path, out_dir: &Path) -> Result<(), String> {
     let src = root.join("crates/horizon-client/src");

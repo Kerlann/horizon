@@ -85,7 +85,7 @@ impl Game<'_> {
         let at = BlockPos::new(pos[0], pos[1], pos[2]);
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let name = self.res.facts().get(state).name.clone();
-        let fire = self.block_in_tag("minecraft:fire", &name);
+        let fire = self.named_block_in_tag("minecraft:fire", &name);
         if fire {
             // Level.destroyBlock(pos, false, this).
             self.with_level(|b, level, ticks| b.destroy_block(level, ticks, at, false));
@@ -111,7 +111,7 @@ impl Game<'_> {
     /// `CampfireBlock.isLitCampfire`: the state of a lit block in
     /// `#minecraft:campfires`.
     fn lit_campfire(&self, state: BlockStateId, name: &str) -> Option<BlockState> {
-        if !self.block_in_tag("minecraft:campfires", name) {
+        if !self.named_block_in_tag("minecraft:campfires", name) {
             return None;
         }
         self.pack

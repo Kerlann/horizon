@@ -145,6 +145,7 @@ impl Game<'_> {
             world_biomes!(self),
             self.streaming.biome_zoom,
             self.streaming.biome_blend,
+            self.streaming.nether_shading,
         );
         let tables = &self.pack.context.tables;
         let light = |quad: &horizon_assets::bake::ModelQuad| {

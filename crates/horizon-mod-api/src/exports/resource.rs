@@ -1,5 +1,5 @@
 mod resource;
 pub use resource::{
-    ComponentId, EnchantmentEffect, ItemResource, Overanswered, PREVENT_ARMOR_CHANGE,
-    ResourceHandler, move_resources,
+    ComponentId, EnchantmentEffect, ItemBar, ItemRarity, ItemResource, Overanswered,
+    PREVENT_ARMOR_CHANGE, ResourceHandler, move_resources,
 };

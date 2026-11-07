@@ -812,7 +812,7 @@ mod tests {
                 .unwrap()
                 .slots[0] = Some(wheat);
             let mut tag = game
-                .entity_nbt(super::super::commands::Target::Mob(40))
+                .command_target_nbt(super::super::commands::Target::Mob(40))
                 .unwrap();
             if let Tag::Compound(data) = &mut tag {
                 data.insert(
@@ -941,7 +941,7 @@ mod tests {
             session.offers[0].uses = 3;
             session.xp = 17;
             let target = super::super::commands::Target::Mob(40);
-            let old = game.entity_nbt(target).unwrap();
+            let old = game.command_target_nbt(target).unwrap();
             let replacement = offer("minecraft:coal", "minecraft:diamond");
             let patch = Tag::compound([
                 (

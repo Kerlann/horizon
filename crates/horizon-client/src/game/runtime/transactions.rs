@@ -151,20 +151,16 @@ impl Level {
 impl Game<'_> {
     /// Opens a transaction, nested in the open one if any (`Transaction.open`). Only
     /// `host.transaction` reaches it, through its seal.
-    pub(in crate::game) fn native_transaction_open(&mut self, seal: TransactionSeal) {
+    pub(in crate::game) fn transaction_open(&mut self, seal: TransactionSeal) {
         let _ = seal;
-        self.transaction_open();
+        self.open_storage_transaction();
     }
-    /// `native_transaction_close`, which only `host.transaction` reaches, through its seal.
-    pub(in crate::game) fn native_transaction_close(
-        &mut self,
-        seal: TransactionSeal,
-        commit: bool,
-    ) {
+    /// `transaction_close`, which only `host.transaction` reaches, through its seal.
+    pub(in crate::game) fn transaction_close(&mut self, seal: TransactionSeal, commit: bool) {
         let _ = seal;
-        self.transaction_close(commit);
+        self.close_storage_transaction(commit);
     }
-    fn transaction_open(&mut self) {
+    fn open_storage_transaction(&mut self) {
         self.transactions.push(Level {
             dimension: Some(self.dim),
             ..Level::default()
@@ -173,7 +169,7 @@ impl Game<'_> {
     /// Closes the innermost transaction: `commit` hands its changes to the one around it, or
     /// at the root makes them final and tells the world; otherwise every storage it wrote goes
     /// back to how it was. Nothing happens with none open.
-    fn transaction_close(&mut self, commit: bool) {
+    fn close_storage_transaction(&mut self, commit: bool) {
         let Some(level) = self.transactions.pop() else {
             return;
         };
@@ -219,7 +215,7 @@ impl Game<'_> {
     /// none is left open by a mod.
     pub(super) fn abort_open_transactions(&mut self) {
         while !self.transactions.is_empty() {
-            self.transaction_close(false);
+            self.close_storage_transaction(false);
         }
     }
     /// Keeps the block entity at `pos` as it is, with its attachments and a hopper's
@@ -652,10 +648,10 @@ mod tests {
                 game.selected = 0;
                 game.creative = false;
                 game.inventory[0] = Some(ItemStack::new("minecraft:water_bucket", 1));
-                game.transaction_open();
+                game.open_storage_transaction();
                 assert!(game.use_on_cauldron(pos).unwrap());
                 assert!(seen.lock().unwrap().is_empty());
-                game.transaction_close(false);
+                game.close_storage_transaction(false);
                 assert!(seen.lock().unwrap().is_empty());
                 assert!(game.use_on_cauldron(pos).unwrap());
                 assert_eq!(
@@ -664,10 +660,10 @@ mod tests {
                 );
                 game.world.set(pos[0], pos[1], pos[2], empty).unwrap();
                 game.inventory[0] = Some(ItemStack::new("minecraft:water_bucket", 1));
-                game.transaction_open();
+                game.open_storage_transaction();
                 assert!(game.use_on_cauldron(pos).unwrap());
                 assert_eq!(seen.lock().unwrap().len(), 1);
-                game.transaction_close(true);
+                game.close_storage_transaction(true);
             })
             .unwrap();
             assert_eq!(
@@ -703,14 +699,14 @@ mod tests {
                 );
                 drops.lock().unwrap().clear();
                 setup(game);
-                game.transaction_open();
+                game.open_storage_transaction();
                 assert!(game.use_on_cauldron(pos).unwrap());
                 assert!(drops.lock().unwrap().is_empty());
-                game.transaction_close(false);
+                game.close_storage_transaction(false);
                 assert!(drops.lock().unwrap().is_empty());
-                game.transaction_open();
+                game.open_storage_transaction();
                 assert!(game.use_on_cauldron(pos).unwrap());
-                game.transaction_close(true);
+                game.close_storage_transaction(true);
                 assert_eq!(
                     drops.lock().unwrap().as_slice(),
                     &[("toss", Some(level2)), ("spawn", Some(level2))]
@@ -753,11 +749,11 @@ mod tests {
             game.inventory[0] = Some(ItemStack::new("minecraft:water_bucket", 1));
             let before = game.stats.get("custom", "minecraft:fill_cauldron");
             game.audio.capture = Some(Vec::new());
-            game.transaction_open();
+            game.open_storage_transaction();
             assert!(game.use_on_cauldron(pos).unwrap());
             assert_eq!(game.stats.get("custom", "minecraft:fill_cauldron"), before);
             assert!(game.audio.capture.as_ref().unwrap().is_empty());
-            game.transaction_close(false);
+            game.close_storage_transaction(false);
             assert_eq!(game.world.block(pos[0], pos[1], pos[2]), empty);
             assert_eq!(
                 &*game.inventory[0].as_ref().unwrap().item,
@@ -765,16 +761,16 @@ mod tests {
             );
             assert_eq!(game.stats.get("custom", "minecraft:fill_cauldron"), before);
             assert!(game.audio.capture.as_ref().unwrap().is_empty());
-            game.transaction_open();
-            game.transaction_open();
+            game.open_storage_transaction();
+            game.open_storage_transaction();
             assert!(game.use_on_cauldron(pos).unwrap());
-            game.transaction_close(false);
+            game.close_storage_transaction(false);
             assert_eq!(game.world.block(pos[0], pos[1], pos[2]), empty);
             assert_eq!(
                 &*game.inventory[0].as_ref().unwrap().item,
                 "minecraft:water_bucket"
             );
-            game.transaction_close(true);
+            game.close_storage_transaction(true);
             assert_eq!(game.stats.get("custom", "minecraft:fill_cauldron"), before);
             assert!(game.audio.capture.as_ref().unwrap().is_empty());
             assert!(game.use_on_cauldron(pos).unwrap());
@@ -804,8 +800,8 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_menu_write_outside_a_transaction_keeps_no_journal() {
         super::super::native_guest_turn_tests::with_guests(|game| {
-            let player = game.native_player_ref(12).unwrap();
-            let menu = game.native_menu_ref(player).unwrap();
+            let player = game.player(12).unwrap();
+            let menu = game.player_container_menu(player).unwrap();
             let stone = ItemStack::new("minecraft:stone", 4);
             game.journal_menus(player);
             *game.native_menu_storage(menu, 1).unwrap() = Some(stone.clone());
@@ -818,8 +814,8 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn menu_journals_keep_only_the_first_write_inside_a_transaction() {
         super::super::native_guest_turn_tests::with_guests(|game| {
-            let player = game.native_player_ref(12).unwrap();
-            let menu = game.native_menu_ref(player).unwrap();
+            let player = game.player(12).unwrap();
+            let menu = game.player_container_menu(player).unwrap();
             let stone = ItemStack::new("minecraft:stone", 4);
             *game.native_menu_storage(menu, 1).unwrap() = Some(stone.clone());
             let place = mod_api::ItemPlace::MenuSlot { menu, slot: 1 };
@@ -945,7 +941,7 @@ mod tests {
         // from Host::backend is a bug, never a fallback.
         assert!(mod_api::Host::backend(&game).is_some());
         assert!(ServerHost::backend_mut(&mut game).is_some());
-        let level = game.native_level("minecraft:overworld").unwrap();
+        let level = game.level("minecraft:overworld").unwrap();
         let registry = &game.pack.assets.registry;
         let chest = registry.default_state("minecraft:chest").unwrap();
         let full = horizon_world::chunk::BlockState {
@@ -956,9 +952,9 @@ mod tests {
         let empty = registry.default_state("minecraft:cauldron").unwrap();
         let jukebox = registry.default_state("minecraft:jukebox").unwrap();
         let flags = NativeBlockUpdateFlags::NEIGHBORS;
-        assert!(game.native_level_set_block(level, [0, 64, 0], chest, flags));
-        assert!(game.native_level_set_block(level, [2, 64, 0], full, flags));
-        assert!(game.native_level_set_block(level, [4, 64, 0], jukebox, flags));
+        assert!(game.level_set_block(level, [0, 64, 0], chest, flags));
+        assert!(game.level_set_block(level, [2, 64, 0], full, flags));
+        assert!(game.level_set_block(level, [4, 64, 0], jukebox, flags));
         let sticks = |count| ItemStack::new("minecraft:stick", count);
         let stick = ItemResource::of(&sticks(1));
         let rod = ItemResource::of(&ItemStack::new("minecraft:blaze_rod", 1));
@@ -1006,7 +1002,7 @@ mod tests {
 
         // A transaction a mod opened through the helpers and never closed is aborted before
         // the next tick.
-        game.transaction_open();
+        game.open_storage_transaction();
         let host: &mut dyn ServerHost = &mut game;
         let _ = host.transaction(|host, tx| {
             Ok::<_, ()>(insert(host, on([0, 64, 0], None), 0, sticks(1), tx))
@@ -1030,17 +1026,17 @@ mod tests {
         // An attachment map a write made inside an aborted transaction is gone with it.
         let chest_holder = mod_api::Holder::BlockEntity([0, 64, 0]);
         assert!(game.world.block_entities.attachments((0, 64, 0)).is_none());
-        game.transaction_open();
+        game.open_storage_transaction();
         assert!(
             game.attachment_map_quiet(chest_holder, mod_api::AttachmentAccess::Existing)
                 .is_ok()
         );
         assert!(game.world.block_entities.attachments((0, 64, 0)).is_some());
-        game.transaction_close(false);
+        game.close_storage_transaction(false);
         assert!(game.world.block_entities.attachments((0, 64, 0)).is_none());
 
         // An aborted cauldron change leaves no write behind in the world's queues.
-        assert!(game.native_level_set_block(level, [2, 64, 0], full, flags));
+        assert!(game.level_set_block(level, [2, 64, 0], full, flags));
         game.world.block_log = Some(Vec::new());
         game.world.path_writes = Some(Vec::new());
         let queues = |game: &Game<'_>| {
@@ -1171,7 +1167,7 @@ mod tests {
         ];
         // An aborted write leaves a chested donkey's item list as long as it was.
         let id = game
-            .native_summon(
+            .summon(
                 "minecraft:overworld",
                 "minecraft:donkey",
                 [8.5, 70.0, 8.5],
@@ -1229,7 +1225,7 @@ mod tests {
 
         for (kind, nbt) in vehicles {
             let id = game
-                .native_summon("minecraft:overworld", kind, [8.5, 70.0, 8.5], nbt)
+                .summon("minecraft:overworld", kind, [8.5, 70.0, 8.5], nbt)
                 .unwrap_or_else(|| panic!("{kind} not summoned"));
             let place = |slot| mod_api::ItemPlace::EntitySlot { entity: id, slot };
             let host: &mut dyn ServerHost = &mut game;
@@ -1292,15 +1288,15 @@ mod tests {
             .registry
             .default_state("minecraft:chest")
             .unwrap();
-        assert!(game.native_level_set_block(level, [0, 64, 4], hopper, flags));
-        assert!(game.native_level_set_block(level, [2, 64, 4], chest, flags));
+        assert!(game.level_set_block(level, [0, 64, 4], hopper, flags));
+        assert!(game.level_set_block(level, [2, 64, 4], chest, flags));
         let slots = |game: &Game<'_>, pos| match game.world.block_entities.get(&pos) {
             Some(BlockEntity::Chest(items)) => items.iter().flatten().map(|s| s.count).sum::<u32>(),
             _ => panic!("no container at {pos:?}"),
         };
         for (id, moved) in [("test:pipe", 1), ("test:greedy", 0)] {
             let state = game.pack.assets.registry.default_state(id).unwrap();
-            assert!(game.native_level_set_block(
+            assert!(game.level_set_block(
                 level,
                 [1, 64, 4],
                 state,
@@ -1352,7 +1348,7 @@ mod mod_capability_tests {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-            let level = game.native_level("minecraft:overworld").unwrap();
+            let level = game.level("minecraft:overworld").unwrap();
             let hydrogen = Chemical("test:hydrogen".into());
             let mut nbt = Compound::new();
             nbt.insert("chemical".into(), Tag::String("test:hydrogen".into()));
@@ -1464,8 +1460,8 @@ mod mod_capability_tests {
                 config,
             )
             .unwrap();
-            let level = game.native_level(game.dim.id()).unwrap();
-            let player_ref = game.native_fake_player(level, guest, "test").unwrap();
+            let level = game.level(game.dim.id()).unwrap();
+            let player_ref = game.fake_player(level, guest, "test").unwrap();
             let conn = game
                 .lan
                 .as_ref()
@@ -1514,7 +1510,7 @@ mod mod_capability_tests {
 
             // Written while the guest's state is swapped in for their turn, aborted after it
             // is swapped back out: the guest's own map is put back.
-            game.transaction_open();
+            game.open_storage_transaction();
             game.lan_acting_uuid = Some(guest);
             std::mem::swap(
                 &mut game.player_attachments,
@@ -1539,7 +1535,7 @@ mod mod_capability_tests {
                     .unwrap(),
             );
             game.lan_acting_uuid = None;
-            game.transaction_close(false);
+            game.close_storage_transaction(false);
             let host: &mut dyn ServerHost = game;
             assert_eq!(energy(host, player), Some(40));
             assert!(game.transactions.is_empty());

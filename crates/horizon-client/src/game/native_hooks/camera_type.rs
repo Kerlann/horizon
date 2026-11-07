@@ -12,11 +12,11 @@ impl Game<'_> {
         self.fire_camera_type_cycle(previous, next);
     }
     /// The window's camera type (`Options.getCameraType`).
-    pub(in crate::game) fn native_camera_type(&self) -> CameraType {
+    pub(in crate::game) fn camera_type(&self) -> CameraType {
         self.requested_camera_type.get().unwrap_or(self.camera_type)
     }
     /// Queue the window's camera type without cycling, including from shared hooks.
-    pub(in crate::game) fn native_set_camera_type(&self, camera_type: CameraType) {
+    pub(in crate::game) fn set_camera_type(&self, camera_type: CameraType) {
         self.requested_camera_type.set(Some(camera_type));
     }
 }
@@ -56,7 +56,7 @@ mod camera_type_tests {
             let mut seen = Vec::new();
             for _ in 0..3 {
                 game.cycle_camera();
-                seen.push(game.native_camera_type());
+                seen.push(game.camera_type());
             }
             use CameraType::*;
             assert_eq!(seen, [ThirdPersonBack, ThirdPersonFront, FirstPerson]);
@@ -72,15 +72,11 @@ mod camera_type_tests {
                 use CameraType::*;
                 game.options.execution_role = super::ExecutionRole::Client;
                 game.cycle_camera();
-                assert_eq!(game.native_camera_type(), ThirdPersonBack);
+                assert_eq!(game.camera_type(), ThirdPersonBack);
                 game.cycle_camera();
-                assert_eq!(
-                    game.native_camera_type(),
-                    FirstPerson,
-                    "the front view is skipped"
-                );
-                game.native_set_camera_type(ThirdPersonFront);
-                assert_eq!(game.native_camera_type(), ThirdPersonFront);
+                assert_eq!(game.camera_type(), FirstPerson, "the front view is skipped");
+                game.set_camera_type(ThirdPersonFront);
+                assert_eq!(game.camera_type(), ThirdPersonFront);
                 assert_eq!(game.camera_type, FirstPerson, "the request is pending");
                 assert_eq!(heard.lock().unwrap().len(), 2, "setting is not a cycle");
                 game.cycle_camera();
@@ -146,7 +142,7 @@ mod camera_type_tests {
                 assert_eq!(vanilla.0.z, 0.0);
                 let posed = game.native_camera_pose_now(1.0, vanilla);
                 assert_eq!(game.camera_type, CameraType::ThirdPersonBack);
-                assert_eq!(game.native_camera_type(), CameraType::ThirdPersonBack);
+                assert_eq!(game.camera_type(), CameraType::ThirdPersonBack);
                 assert_eq!(game.spectated_post_effect, None);
                 assert!((posed.0.z + 4.0).abs() < 1e-6, "refresh unchanged position");
                 assert_eq!(posed.1, 15.0, "preserve the explicit yaw override");

@@ -40,7 +40,7 @@ impl Game<'_> {
     }
     /// Fluid `fluid`'s name as the lang names it (`fluid_type.<mod>.<name>`, vanilla's by its block),
     /// else its path in words.
-    pub(in crate::game) fn native_fluid_name(&self, fluid: &str) -> String {
+    pub(in crate::game) fn fluid_name(&self, fluid: &str) -> String {
         crate::game::native_panel_recipes::fluid_name(fluid)
     }
 }

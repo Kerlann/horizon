@@ -174,6 +174,8 @@ pub fn current_phase() -> ModPhase {
 pub enum LoadAccess {
     /// No extra load access beyond the phase's metadata/settings exceptions.
     WorldOnly,
+    /// Registry and immutable metadata available in setup and reload.
+    Metadata,
     /// The existing client setup reads, not general reload permissions.
     ClientSetup,
     /// Published asset/data facts, including resource-cache queries.
@@ -195,34 +197,7 @@ pub fn check_access(operation: &str, access: LoadAccess) {
     if phase == ModPhase::World {
         return;
     }
-    let metadata = matches!(
-        operation,
-        "on" | "is_loaded"
-            | "block_key_id"
-            | "item_key_id"
-            | "effect_key_id"
-            | "dimension_key_id"
-            | "block_states_of"
-            | "block_item"
-            | "block_in_tag"
-            | "max_stack_size"
-            | "item_stack_in_tag"
-            | "item_crafting_remainder"
-            | "item_default_component"
-            | "item_burn_time"
-            | "item_compost_chance"
-            | "item_cooldown_group"
-            | "entity_type_in_tag"
-            | "tag_members"
-            | "state_outline"
-            | "state_fluid_state"
-            | "fluid_in_tag"
-            | "fluid_is_same"
-            | "fluid_bucket"
-            | "fluid_pickup_sound"
-            | "fluid_state_definition"
-            | "fluid_state_validate"
-    ) || operation.starts_with("block_state_");
+    let metadata = access == LoadAccess::Metadata;
     let settings = operation == "setting";
     let allowed = match phase {
         ModPhase::World => true,
@@ -757,7 +732,7 @@ mod tests {
                 let _ = std::panic::catch_unwind(|| {
                     let _reload = owner.reloading().unwrap();
                     assert_eq!(current_phase(), Reloading);
-                    check_access("block_state_default", LoadAccess::WorldOnly);
+                    check_access("block_state_default", LoadAccess::Metadata);
                     panic!("failed prepare");
                 });
                 assert_eq!(current_phase(), World);
@@ -777,7 +752,7 @@ mod tests {
             let _owner = PhaseOwner::new(phase);
             for operation in ["fluid_state_definition", "fluid_state_validate"] {
                 let result = std::panic::catch_unwind(|| {
-                    check_access(operation, LoadAccess::WorldOnly);
+                    check_access(operation, LoadAccess::Metadata);
                 });
                 assert_eq!(result.is_ok(), matches!(phase, Setup | Reloading | World));
             }

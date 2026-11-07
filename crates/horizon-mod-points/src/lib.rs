@@ -1,10 +1,9 @@
 //! The game's injection points (#589), for mods that listen at them. Every function of the game
 //! module the prebuilt game's staging pass admits is a point, and so is each listed function of the
 //! crates below it: a mod listens at its head (before the body runs) and at its return (after)
-//! through [`Points`], with no game rebuild. Each listener gets the
+//! through manifest `[[inject]]` functions, with no game rebuild. Each listener gets the
 //! point's record: the arguments the API carries, and `cancel` or `result` where the function's
-//! return allows. A mod names each method in a `[[native.injection]]` whose `target` is the
-//! point's function.
+//! return allows. Each declaration names the target, access and listener function.
 //!
 //! Depend on this crate only to listen at points: it is large (one record per point), and every
 //! crate that depends on it compiles a few seconds slower. Hooks, handles and parts are in
@@ -35,17 +34,16 @@ pub use registry::{RegisterError, register, stop};
 // hidden: the game's side of the points, not part of the API a mod is written against
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::registry::{POINTS, RawKind, RawListener, SITES, register_raw, seal, wrap};
+    use crate::PointId;
+    pub use crate::registry::{ApiKind, POINTS, RawKind, SITES, SlotListener, seal, wrap};
     #[cfg(any(target_arch = "wasm32", feature = "wasm-host"))]
     pub use crate::wire;
-    use crate::{PointId, Points};
 
-    /// Runs the `impl Points` listeners at `place` (the `Points` method `name`), each through
-    /// `call`: one copy of the loop for every point, out of the pointed functions' own code.
+    /// Runs the checked API functions and forwarding endpoints under their owner guards.
     #[cold]
     #[inline(never)]
-    pub fn fire(place: PointId, name: &'static str, call: &mut dyn FnMut(&'static dyn Points)) {
-        crate::registry::fire(place, name, call);
+    pub fn fire_api(place: PointId, call: &mut dyn FnMut(ApiKind)) {
+        crate::registry::fire_api(place, call);
     }
 
     /// Runs the raw listeners at `place`, each through `call` with its kind and function. The
@@ -83,25 +81,5 @@ pub mod __private {
     #[inline(never)]
     pub fn fire_raw(place: PointId, name: &'static str, call: &mut dyn FnMut(RawKind)) {
         crate::registry::fire_raw(place, name, call);
-    }
-
-    /// Whether `list` holds `name`, at compile time: the launcher's generated `main` checks each
-    /// point injection's method against the mod's `__HORIZON_POINTS` with it.
-    pub const fn lists(list: &[&str], name: &str) -> bool {
-        let mut i = 0;
-        while i < list.len() {
-            let (a, b) = (list[i].as_bytes(), name.as_bytes());
-            if a.len() == b.len() {
-                let mut j = 0;
-                while j < a.len() && a[j] == b[j] {
-                    j += 1;
-                }
-                if j == a.len() {
-                    return true;
-                }
-            }
-            i += 1;
-        }
-        false
     }
 }

@@ -18,6 +18,7 @@ pub mod item_nbt;
 pub mod items;
 pub mod kinetic_weapon;
 pub mod native_enchantment_hooks;
+pub mod properties;
 pub mod random_sequences;
 pub mod recipe_filters;
 pub mod recipe_sources;

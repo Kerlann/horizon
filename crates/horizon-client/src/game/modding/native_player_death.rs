@@ -17,7 +17,7 @@ use mod_api::{GlobalPos, Identifier, PlayerRef};
 impl Game<'_> {
     /// The dimension and block of the player's last death
     /// (`Player.getLastDeathLocation`).
-    pub(super) fn native_player_last_death_location(&self, player: PlayerRef) -> Option<GlobalPos> {
+    pub(super) fn player_last_death_location(&self, player: PlayerRef) -> Option<GlobalPos> {
         let (dimension, [x, y, z]) = self.native_player_last_death_record(player)?;
         let dimension = Identifier::parse(&dimension).ok()?;
         Some(GlobalPos::new(dimension, BlockPos::new(x, y, z)))
@@ -26,12 +26,12 @@ impl Game<'_> {
     /// `Player.setLastDeathLocation`: stores where the player died, or
     /// forgets it for None. The client hears of it with the player's next
     /// respawn, as in vanilla. False in the cases a read gives None.
-    pub(super) fn native_player_set_last_death_location(
+    pub(super) fn player_set_last_death_location(
         &mut self,
         player: PlayerRef,
         location: Option<GlobalPos>,
     ) -> bool {
-        if self.native_player_ref(player.uuid()) != Some(player) {
+        if self.player(player.uuid()) != Some(player) {
             return false;
         }
         let stored = location.map(|l| {
@@ -121,7 +121,7 @@ mod tests {
         game.lan_host(settings, net, config).unwrap();
         let guest = new_guest(1, 123);
         game.lan.as_mut().unwrap().hub.guests.push(guest);
-        game.native_player_ref(123).unwrap()
+        game.player(123).unwrap()
     }
 
     #[test]

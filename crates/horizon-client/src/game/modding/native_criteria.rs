@@ -57,7 +57,7 @@ impl Game<'_> {
     /// and reports `Test`; earlier matching criteria may already be granted.
     /// Wasm's generated resource route exists, but a callback into the group
     /// currently firing the trigger is refused by the runtime's reentry guard.
-    pub(super) fn native_player_trigger_criterion(
+    pub(super) fn player_trigger_criterion(
         &mut self,
         player: PlayerRef,
         trigger: &Identifier,

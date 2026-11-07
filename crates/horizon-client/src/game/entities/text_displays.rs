@@ -579,7 +579,7 @@ mod tests {
             let mut tag = Compound::new();
             tag.insert("teleport_duration".into(), Tag::Int(4));
             game.persist.raw.insert(12, Tag::Compound(tag));
-            let entity = game.native_entity(12).unwrap();
+            let entity = game.entity(12).unwrap();
             assert!(entity.teleport_to(game, [8.0, 0.0, 0.0], None));
             let metadata =
                 horizon_client::text_display::display_data(&game.persist.raw[&12], false);

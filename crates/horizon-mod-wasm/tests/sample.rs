@@ -152,7 +152,7 @@ fn declarations_require_a_place_and_matching_guest_export() {
     let elsewhere = "at = \"horizon_client::game::Game<'_>::tick_world\"";
     let undeclared = load(listing(&manifest, elsewhere), module.clone(), &std_member);
     assert!(
-        matches!(&undeclared.refused[..], [(_, Refusal::UndeclaredPoint { point })] if point == "tick"),
+        matches!(&undeclared.refused[..], [(_, Refusal::UndeclaredPoint { point })] if point == "count_ticks"),
         "the mod listens at tick, which its manifest doesn't list: {:?}",
         undeclared.refused
     );
@@ -228,9 +228,7 @@ fn the_sample_mod_loads_subscribes_and_registers_its_part() {
     assert!(falling_source.falling && falling_source.is_source() && !falling_source.is_empty());
     for _ in 0..400 {
         let mut args = mod_points::TickArgs::__new();
-        mod_points::__private::fire(mod_points::PointId::Tick, "tick", &mut |listener| {
-            listener.tick(mod_api::HostSide::Server(&mut server), &mut args)
-        });
+        mod_points::dispatch::tick(mod_api::HostSide::Server(&mut server), &mut args);
         assert!(!args.cancel, "the sample lets the tick run");
     }
     // Registration returned slot tokens into mod.wasm. Its chat listener sends them back through

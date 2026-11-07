@@ -448,3 +448,135 @@ pub mod tests {
         assert_eq!(distance("test:other"), 64.0);
     }
 }
+
+/// Registrar operations for block entities.
+pub trait BlockEntitiesRegistrar {
+    /// Look up a vanilla or another mod's type. The final registry validates it at load.
+    fn block_entity_type_key(&mut self, id: &str) -> crate::BlockEntityTypeKey;
+
+    /// Declare block entity type `path` in this mod's namespace, held by `blocks`; mods usually
+    /// reach it through `block_entity_type`.
+    fn declare_block_entity_type(
+        &mut self,
+        path: &str,
+        blocks: Vec<String>,
+    ) -> crate::BlockEntityTypeKey;
+
+    /// Attach `part`, of kind `kind`, to the mod block entity type `key`.
+    fn attach_block_entity_part(
+        &mut self,
+        key: &crate::BlockEntityTypeKey,
+        kind: &'static str,
+        part: Arc<dyn BlockEntityPart>,
+    ) -> Result<(), crate::BlockEntityPartError>;
+
+    /// Answer block entity capability `name` for type `kind` with `provider`, asked ahead of the
+    /// game's own when `before_game`; mods reach it through `block_entity_capability`.
+    fn provide_block_entity_capability(
+        &mut self,
+        name: &'static str,
+        kind: &crate::BlockEntityTypeKey,
+        before_game: bool,
+        provider: BlockProviderOf,
+    );
+}
+
+impl BlockEntitiesRegistrar for PartRegistrar {
+    fn block_entity_type_key(&mut self, id: &str) -> crate::BlockEntityTypeKey {
+        match self
+            .registry_keys
+            .borrow_mut()
+            .block_entity_types
+            .request(self.mod_id, id)
+        {
+            Ok(slot) => crate::BlockEntityTypeKey(slot),
+            Err(error) => {
+                self.refused.push(error);
+                crate::BlockEntityTypeKey(u32::MAX)
+            }
+        }
+    }
+
+    fn declare_block_entity_type(
+        &mut self,
+        path: &str,
+        blocks: Vec<String>,
+    ) -> crate::BlockEntityTypeKey {
+        let id = format!("{}:{path}", self.mod_id);
+        let key = self.block_entity_type_key(&id);
+        self.block_entity_types.push(BlockEntityType { id, blocks });
+        key
+    }
+
+    fn attach_block_entity_part(
+        &mut self,
+        key: &crate::BlockEntityTypeKey,
+        kind: &'static str,
+        part: Arc<dyn BlockEntityPart>,
+    ) -> Result<(), crate::BlockEntityPartError> {
+        let id = self
+            .registry_keys
+            .borrow()
+            .block_entity_types
+            .id(key.0)
+            .map(str::to_owned)
+            .unwrap_or_default();
+        if id.starts_with("minecraft:") {
+            return Err(crate::BlockEntityPartError::VanillaType { kind: *key });
+        }
+        if self.attach_known(|p| &mut p.block_entity_kinds, kind, &id, part) {
+            Ok(())
+        } else {
+            Err(crate::BlockEntityPartError::Duplicate {
+                kind: *key,
+                part: kind,
+            })
+        }
+    }
+
+    fn provide_block_entity_capability(
+        &mut self,
+        name: &'static str,
+        kind: &crate::BlockEntityTypeKey,
+        before_game: bool,
+        provider: BlockProviderOf,
+    ) {
+        self.capability(
+            |p| &mut p.capabilities,
+            name,
+            ProviderTarget::BlockEntity(kind),
+            before_game,
+            {
+                let handler = provider.handler();
+                (provider, handler)
+            },
+        );
+    }
+}
+
+/// CapabilityProviders operations for block entities.
+// hidden: per-kind lookup implementation, exposed for generated provider bindings
+#[doc(hidden)]
+pub trait BlockEntitiesCapabilityProviders {
+    /// The next enabled provider of block entity capability `name` for block entity type `kind`,
+    /// with its mod and whether it is asked ahead of the game. `index` starts at zero and advances
+    /// past every visited registration, including disabled ones.
+    fn block_entity_provider(
+        &self,
+        name: &str,
+        kind: crate::BlockEntityTypeKey,
+        index: &mut u32,
+    ) -> Option<(BlockProviderOf, &'static str, bool)>;
+}
+
+impl BlockEntitiesCapabilityProviders for InstalledProviders {
+    fn block_entity_provider(
+        &self,
+        name: &str,
+        kind: crate::BlockEntityTypeKey,
+        index: &mut u32,
+    ) -> Option<(BlockProviderOf, &'static str, bool)> {
+        let kind = crate::registry_keys::block_entity_type_name(kind)?;
+        next(&installed()?.keys.capabilities, name, kind, index)
+    }
+}

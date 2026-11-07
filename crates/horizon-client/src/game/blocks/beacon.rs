@@ -463,7 +463,7 @@ impl Game<'_> {
         // BeaconScreen draws no title, but has the menu's.
         super::screen_info::name_container(|| {
             self.remote_menu_title().map_or_else(
-                || self.translate("container.beacon", "Beacon"),
+                || self.translate_with_fallback("container.beacon", "Beacon"),
                 |t| t.plain(),
             )
         });
@@ -480,7 +480,7 @@ impl Game<'_> {
             ("block.minecraft.beacon.primary", "Primary Power", 62.0),
             ("block.minecraft.beacon.secondary", "Secondary Power", 169.0),
         ] {
-            let text = self.translate(key, fallback);
+            let text = self.translate_with_fallback(key, fallback);
             let atlas = &self.gui.atlas;
             let w = HudBatch::text_width(atlas, &text);
             batch.text(
@@ -588,7 +588,7 @@ impl Game<'_> {
         } else if let Some(stack) = stack_tip {
             self.draw_stack_tooltip(batch, &stack, self.cursor.0, self.cursor.1);
         } else if let Some(key) = tooltip {
-            let text = self.translate(&key, &key);
+            let text = self.translate_with_fallback(&key, &key);
             self.draw_tooltip_lines(
                 batch,
                 &[(horizon_client::text::Text::literal(text), u32::MAX)],

@@ -14,6 +14,7 @@ fn main() {
         .inject
         .iter()
         .map(|entry| GuestInject {
+            id: &entry.id,
             at: &entry.at,
             with: &entry.with,
             at_return: match (entry.access, entry.kind) {

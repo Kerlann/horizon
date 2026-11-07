@@ -25,7 +25,7 @@ impl Game<'_> {
     /// so blur is applied at most once per frame. Returns true if blur was newly
     /// requested this frame, or false if it was already applied/requested this frame.
     /// API @API:screen_transparent_background@.
-    pub(in crate::game) fn native_apply_screen_blur(&self) -> bool {
+    pub(in crate::game) fn apply_screen_blur(&self) -> bool {
         if self.screen_blur_requested.get() {
             return false;
         }
@@ -34,7 +34,7 @@ impl Game<'_> {
     }
     /// The user's configured menu background blur radius (`menuBackgroundBlurriness` in options.txt,
     /// usually 0.0 to 10.0; default 5.0). 0.0 means blur is turned off. API @API:screen_transparent_background@.
-    pub(in crate::game) fn native_menu_blur_radius(&self) -> f32 {
+    pub(in crate::game) fn menu_blur_radius(&self) -> f32 {
         self.settings.menu_blur as f32
     }
     /// `Screen.renderMenuBackground`: draws the tiled menu background (32x32) across `rect`

@@ -1088,7 +1088,7 @@ impl Game<'_> {
                 // AdvancementRewards then drops that remainder with no
                 // pickup sound. A stack the inventory takes whole plays
                 // entity.item.pickup at the player's feet.
-                if let Some(rest) = self.give(s) {
+                if let Some(rest) = self.add_stack_to_inventory(s) {
                     if let Some(eye) = self.eye_position() {
                         self.spawn_item(rest, eye, [0.0; 3], 0);
                     }

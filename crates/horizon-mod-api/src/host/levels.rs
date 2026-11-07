@@ -1,132 +1,84 @@
-//! The `levels` area: host methods the game implements (`game/host/levels.rs`).
+//! Host method declarations; access defaults and game forwarders are generated.
 #![allow(unused_variables)]
 use crate::*;
 /// The host's methods both sides share of the `levels` area, implemented by the game and reached through [`Host`].
+#[horizon_mod_api_macros::host_area]
 pub trait LevelsHost {
     /// Side: both.
     /// Whether a mod with the `horizon-mod.toml` id `id` is installed: a
     /// native, wasm or content package (Fabric's `FabricLoader.isModLoaded`,
     /// NeoForge's `ModList.isLoaded`). The list is fixed at startup.
-    fn is_loaded(&self, id: &str) -> bool {
-        crate::phase::unprovided(
-            "Host::is_loaded",
-            "is_loaded",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(Metadata)]
+    #[static_call]
+    fn is_loaded(&self, id: &str) -> bool;
     /// Side: both.
     /// Find a loaded chunk in an open server level.
-    fn chunk(&self, level: LevelRef, pos: [i32; 2]) -> Option<ChunkRef> {
-        crate::phase::unprovided("Host::chunk", "chunk", crate::phase::LoadAccess::WorldOnly)
-    }
+    #[access(WorldOnly)]
+    fn chunk(&self, level: LevelRef, pos: [i32; 2]) -> Option<ChunkRef>;
 }
 /// The handles' reads of the `levels` area, implemented by the game and reached through [`Backend`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait
 #[doc(hidden)]
+#[horizon_mod_api_macros::host_area]
 pub trait LevelsBackend {
     /// Side: server.
     /// The level's world border as [min_x, min_z, max_x, max_z], using the
     /// previous size while it moves. Horizon currently shares one border
     /// across its dimensions. None for a stale handle or a closed level.
-    fn level_world_border(&self, level: LevelRef) -> Option<[f64; 4]> {
-        crate::phase::unprovided(
-            "Backend::level_world_border",
-            "level_world_border",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_world_border(&self, level: LevelRef) -> Option<[f64; 4]>;
     /// Side: both.
     /// The name of a dimension's key.
-    fn dimension_key_id(&self, key: DimensionKey) -> Option<String> {
-        crate::phase::unprovided(
-            "Backend::dimension_key_id",
-            "dimension_key_id",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(Metadata)]
+    fn dimension_key_id(&self, key: DimensionKey) -> Option<String>;
     /// Side: server.
     /// A handle for chunk `pos` of an open level, loaded or not, so a mod can
     /// force an unloaded chunk. None for a stale handle, on a client, and for
     /// a chunk outside the world (`ChunkPos` past 30 million blocks).
-    fn level_chunk_ref(&self, level: LevelRef, pos: [i32; 2]) -> Option<ChunkRef> {
-        crate::phase::unprovided(
-            "Backend::level_chunk_ref",
-            "level_chunk_ref",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_chunk_ref(&self, level: LevelRef, pos: [i32; 2]) -> Option<ChunkRef>;
     /// Side: server.
     /// Whether `/forceload` holds the chunk (`ServerLevel.getForcedChunks`),
     /// loaded or not; a mod's own ticket on it does not count. None for a stale handle or on a client.
-    fn chunk_forced(&self, chunk: ChunkRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::chunk_forced",
-            "chunk_forced",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn chunk_forced(&self, chunk: ChunkRef) -> Option<bool>;
     /// Side: server.
     /// The level's force-loaded chunks (`/forceload query`), sorted as
     /// the command lists them. None for a stale handle or on a client.
-    fn level_forced_chunks(&self, level: LevelRef) -> Option<Vec<[i32; 2]>> {
-        crate::phase::unprovided(
-            "Backend::level_forced_chunks",
-            "level_forced_chunks",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_forced_chunks(&self, level: LevelRef) -> Option<Vec<[i32; 2]>>;
     /// Side: server.
     /// The chunk tickets `controller` holds in the level, as (owner, chunk
     /// position, natural_spawning), in order. None for a stale handle, on a
     /// client, outside a mod's hook and for another mod's controller.
+    #[access(WorldOnly)]
     fn level_mod_forced_chunks(
         &self,
         level: LevelRef,
         controller: TicketController,
-    ) -> Option<Vec<(NativeTicketOwner, [i32; 2], bool)>> {
-        crate::phase::unprovided(
-            "Backend::level_mod_forced_chunks",
-            "level_mod_forced_chunks",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<Vec<(NativeTicketOwner, [i32; 2], bool)>>;
     /// Side: server.
     /// Whether this chunk is loaded; false on a client or for a stale handle.
-    fn chunk_loaded(&self, chunk: ChunkRef) -> bool {
-        crate::phase::unprovided(
-            "Backend::chunk_loaded",
-            "chunk_loaded",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn chunk_loaded(&self, chunk: ChunkRef) -> bool;
     /// Side: server.
     /// The status of a loaded chunk. Proto chunks are not exposed here.
-    fn chunk_status(&self, chunk: ChunkRef) -> Option<ChunkStatus> {
-        crate::phase::unprovided(
-            "Backend::chunk_status",
-            "chunk_status",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn chunk_status(&self, chunk: ChunkRef) -> Option<ChunkStatus>;
     /// Side: server.
     /// `RecipeManager.getRecipeFor(CRAFTING, CraftingInput.of(width, height, items), level)`,
     /// then the recipe's `assemble` and `getRemainingItems`: what a `width` by `height` grid
     /// (each 1 to 3, `items` row by row) makes, through the crafting table's matcher, with the
     /// world's data packs' recipes and the special recipes. None when no recipe matches or it
     /// makes nothing, for a grid of another size, and off the server.
+    #[access(WorldOnly)]
     fn level_craft(
         &self,
         level: LevelRef,
         width: u32,
         height: u32,
         items: &[Option<ItemStack>],
-    ) -> Option<CraftResult> {
-        crate::phase::unprovided(
-            "Backend::level_craft",
-            "level_craft",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<CraftResult>;
     /// Side: server.
     /// Entities whose bounding boxes intersect this box (`Level.getEntities`).
     /// Face-only contact does not intersect; spectator players are excluded.
@@ -138,35 +90,26 @@ pub trait LevelsBackend {
     /// are not on the entity-list walk.
     /// During `hears_projectile_impacts`, the projectile list is taken out of
     /// the game and is not visible; it is restored for `projectile_impact`.
+    #[access(WorldOnly)]
     fn level_entities_in(
         &self,
         level: LevelRef,
         min: [f64; 3],
         max: [f64; 3],
-    ) -> Option<Vec<EntityRef>> {
-        crate::phase::unprovided(
-            "Backend::level_entities_in",
-            "level_entities_in",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<Vec<EntityRef>>;
     /// Side: both.
     /// The block state ID at `pos` (`Level.getBlockState`), without formatting a string.
     /// None for a chunk that isn't loaded or a `y` outside the world. On a client, the
     /// state is the one the server sent for a chunk the client holds.
-    fn level_block_state(&self, level: LevelRef, pos: [i32; 3]) -> Option<BlockStateId> {
-        crate::phase::unprovided(
-            "Backend::level_block_state",
-            "level_block_state",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_block_state(&self, level: LevelRef, pos: [i32; 3]) -> Option<BlockStateId>;
     /// Side: server.
     /// Preview a held tool's transformation without changing the block or stack. The existing
     /// block-tool hook fires with `simulated` true; listeners must not mutate the level in a
     /// simulation. The player must be live in the level in place, and the block must be loaded;
     /// parked levels cannot provide the hook's level context. A stale handle, invalid face,
     /// unavailable player or level, or no transformation returns None.
+    #[access(WorldOnly)]
     fn level_block_transform(
         &self,
         level: LevelRef,
@@ -175,155 +118,90 @@ pub trait LevelsBackend {
         stack: &ItemStack,
         pos: [i32; 3],
         hit: BlockHit,
-    ) -> Option<BlockTransformPreview> {
-        crate::phase::unprovided(
-            "Backend::level_block_transform",
-            "level_block_transform",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<BlockTransformPreview>;
     /// Side: both.
     /// The block at `pos` without its properties: `minecraft:oak_stairs`.
     /// None as for `block_state`. API 381.
-    fn level_block(&self, level: LevelRef, pos: [i32; 3]) -> Option<String> {
-        crate::phase::unprovided(
-            "Backend::level_block",
-            "level_block",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_block(&self, level: LevelRef, pos: [i32; 3]) -> Option<String>;
     /// Side: both.
     /// Property `key` of the block state at `pos` (`BlockState.getValue`):
     /// `east` for `facing`. None for a block without it, or as for
     /// `block_state`. API 381.
-    fn level_block_property(&self, level: LevelRef, pos: [i32; 3], key: &str) -> Option<String> {
-        crate::phase::unprovided(
-            "Backend::level_block_property",
-            "level_block_property",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_block_property(&self, level: LevelRef, pos: [i32; 3], key: &str) -> Option<String>;
     /// Side: server.
     /// Whether this is the level in place: the one the server ticks now, whose block entities
     /// the game's own capabilities read and write and whose capabilities
     /// `LevelRef::capability` looks up. False for a level parked while the server ticks
     /// another (its blocks can still be read), for a handle of an earlier open, and on a
     /// client.
-    fn level_in_place(&self, level: LevelRef) -> bool {
-        crate::phase::unprovided(
-            "Backend::level_in_place",
-            "level_in_place",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_in_place(&self, level: LevelRef) -> bool;
     /// Side: both.
     /// Whether `pos` is inside the world's height and its chunk is loaded
     /// (`Level.isLoaded`, which is false outside `isInValidBounds`): a block
     /// read or write there finds the world. False on a client or for a stale
     /// handle: the position is not loaded here. On a client, a chunk it holds is loaded
     /// (`ClientLevel.hasChunkAt`). API 381.
-    fn level_is_loaded(&self, level: LevelRef, pos: [i32; 3]) -> bool {
-        crate::phase::unprovided(
-            "Backend::level_is_loaded",
-            "level_is_loaded",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_is_loaded(&self, level: LevelRef, pos: [i32; 3]) -> bool;
     /// Side: server.
     /// The stored light of one layer at `pos` (`BlockAndLightGetter.getBrightness`), 0 to 15.
     /// None as for `block_state`: a position that isn't loaded has no light to read.
-    fn level_brightness(&self, level: LevelRef, layer: LightLayer, pos: [i32; 3]) -> Option<i32> {
-        crate::phase::unprovided(
-            "Backend::level_brightness",
-            "level_brightness",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_brightness(&self, level: LevelRef, layer: LightLayer, pos: [i32; 3]) -> Option<i32>;
     /// Side: both.
     /// The lowest block `y` and the height of the level
     /// (`LevelHeightAccessor.getMinY`, `getHeight`). Reads any loaded server level
     /// or the client's current level. None for a stale handle, before client login,
     /// or for a dimension unavailable on this side. Does not load chunks. API 381.
-    fn level_height(&self, level: LevelRef) -> Option<(i32, i32)> {
-        crate::phase::unprovided(
-            "Backend::level_height",
-            "level_height",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_height(&self, level: LevelRef) -> Option<(i32, i32)>;
     /// Side: both.
     /// `Level.isInWorldBounds`: `pos` within 30,000,000 blocks on x and z and inside the level's
     /// build height. None as for `native_level_height`. Does not load chunks.
-    fn level_in_world_bounds(&self, level: LevelRef, pos: [i32; 3]) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::level_in_world_bounds",
-            "level_in_world_bounds",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_in_world_bounds(&self, level: LevelRef, pos: [i32; 3]) -> Option<bool>;
     /// Side: both.
     /// `Level.isInSpawnableBounds`: 30,000,000 blocks on x and z, 20,000,000 on y. None as for
     /// `native_level_height`. Does not load chunks.
-    fn level_in_spawnable_bounds(&self, level: LevelRef, pos: [i32; 3]) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::level_in_spawnable_bounds",
-            "level_in_spawnable_bounds",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_in_spawnable_bounds(&self, level: LevelRef, pos: [i32; 3]) -> Option<bool>;
     /// Side: server.
     /// The ticks the server has run (`Level.getGameTime`), shared by every
     /// level as in vanilla. API 381.
-    fn level_game_time(&self, level: LevelRef) -> Option<i64> {
-        crate::phase::unprovided(
-            "Backend::level_game_time",
-            "level_game_time",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_game_time(&self, level: LevelRef) -> Option<i64>;
     /// Side: both.
     /// The time of day in ticks (`Level.getOverworldClockTime`), shared by
     /// every level; it keeps counting past 24000. On a client, the synchronized
     /// Overworld clock, advanced at its server-supplied rate, even when the
     /// displayed dimension has a different default clock. API 381.
-    fn level_day_time(&self, level: LevelRef) -> Option<i64> {
-        crate::phase::unprovided(
-            "Backend::level_day_time",
-            "level_day_time",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_day_time(&self, level: LevelRef) -> Option<i64>;
     /// Side: both.
     /// `FluidState.getFlow` at `pos`: the current that pushes an entity there, after the
     /// `fluid_flow` hook, as entities feel it. Zero where no fluid flows. None as for
     /// `block_state`.
-    fn level_fluid_flow(&self, level: LevelRef, pos: [i32; 3]) -> Option<Vec3> {
-        crate::phase::unprovided(
-            "Backend::level_fluid_flow",
-            "level_fluid_flow",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_fluid_flow(&self, level: LevelRef, pos: [i32; 3]) -> Option<Vec3>;
     /// Side: server.
     /// Block-local outline or collision boxes with an empty context. Interaction,
     /// visual, occlusion and support shapes are not exposed. Returns None on a
     /// client, for a stale handle, or for a closed level. Unloaded blocks read
     /// as air; collision errors return no boxes, like `native_block_collision`.
+    #[access(WorldOnly)]
     fn level_block_shape(
         &self,
         level: LevelRef,
         pos: [i32; 3],
         kind: NativeBlockShapeKind,
-    ) -> Option<Vec<[f64; 6]>> {
-        crate::phase::unprovided(
-            "Backend::level_block_shape",
-            "level_block_shape",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<Vec<[f64; 6]>>;
     /// Side: server.
     /// Clip an empty-context ray against collider or outline shapes, without fluids.
     /// None on failed reads, dynamic shapes, invalid rays or traversal limits.
+    #[access(WorldOnly)]
     fn level_clip(
         &self,
         level: LevelRef,
@@ -331,198 +209,107 @@ pub trait LevelsBackend {
         to: [f64; 3],
         blocks: NativeClipBlock,
         fluids: NativeClipFluid,
-    ) -> Option<NativeClipHit> {
-        crate::phase::unprovided(
-            "Backend::level_clip",
-            "level_clip",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<NativeClipHit>;
     /// Side: server.
     /// Gameplay's face support in the current or a parked server level, including
     /// live block entities for dynamic shapes. None for stale or closed levels,
     /// unloaded blocks, unsupported states or a shape query error.
+    #[access(WorldOnly)]
     fn level_block_face_sturdy(
         &self,
         level: LevelRef,
         pos: [i32; 3],
         face: NativeBlockFace,
         support: NativeSupportType,
-    ) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::level_block_face_sturdy",
-            "level_block_face_sturdy",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<bool>;
     /// Side: server.
     /// How strongly the block at `pos` powers the block on its `direction` side, power it
     /// conducts included (`SignalGetter.getSignal(pos, direction)`, as a block reads its
     /// neighbour `pos` that lies `direction` from it), 0 to 15. None for another level, a stale
     /// handle or a client. Takes a shared host and opens no transaction.
-    fn level_signal(&self, level: LevelRef, pos: [i32; 3], direction: Direction) -> Option<i32> {
-        crate::phase::unprovided(
-            "Backend::level_signal",
-            "level_signal",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_signal(&self, level: LevelRef, pos: [i32; 3], direction: Direction) -> Option<i32>;
     /// Side: server.
     /// The strong power alone that the block at `pos` gives that way
     /// (`SignalGetter.getDirectSignal(pos, direction)`), 0 to 15. None as for `signal`.
+    #[access(WorldOnly)]
     fn level_direct_signal(
         &self,
         level: LevelRef,
         pos: [i32; 3],
         direction: Direction,
-    ) -> Option<i32> {
-        crate::phase::unprovided(
-            "Backend::level_direct_signal",
-            "level_direct_signal",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<i32>;
     /// Side: server.
     /// The strongest strong power reaching the block at `pos` from its six neighbours
     /// (`SignalGetter.getDirectSignalTo`), 0 to 15. None as for `signal`.
-    fn level_direct_signal_to(&self, level: LevelRef, pos: [i32; 3]) -> Option<i32> {
-        crate::phase::unprovided(
-            "Backend::level_direct_signal_to",
-            "level_direct_signal_to",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_direct_signal_to(&self, level: LevelRef, pos: [i32; 3]) -> Option<i32>;
     /// Side: server.
     /// The strongest power reaching the block at `pos` from its six neighbours
     /// (`SignalGetter.getBestNeighborSignal`, what a dispenser or a piston reads), 0 to 15.
     /// None as for `signal`.
-    fn level_best_neighbor_signal(&self, level: LevelRef, pos: [i32; 3]) -> Option<i32> {
-        crate::phase::unprovided(
-            "Backend::level_best_neighbor_signal",
-            "level_best_neighbor_signal",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_best_neighbor_signal(&self, level: LevelRef, pos: [i32; 3]) -> Option<i32>;
     /// Side: server.
     /// Whether any neighbour powers the block at `pos` (`SignalGetter.hasNeighborSignal`),
     /// asking no side past the first that does. False where `signal` is None.
-    fn level_has_neighbor_signal(&self, level: LevelRef, pos: [i32; 3]) -> bool {
-        crate::phase::unprovided(
-            "Backend::level_has_neighbor_signal",
-            "level_has_neighbor_signal",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_has_neighbor_signal(&self, level: LevelRef, pos: [i32; 3]) -> bool;
     /// Side: both.
     /// Dimension shape of a loaded server level, including parked levels.
-    fn level_dimension_shape(&self, level: LevelRef) -> Option<LevelDimensionShape> {
-        crate::phase::unprovided(
-            "Backend::level_dimension_shape",
-            "level_dimension_shape",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_dimension_shape(&self, level: LevelRef) -> Option<LevelDimensionShape>;
     /// Side: server.
     /// The world's seed (`WorldOptions.seed`), as `/seed` shows it.
-    fn level_seed(&self, level: LevelRef) -> Option<i64> {
-        crate::phase::unprovided(
-            "Backend::level_seed",
-            "level_seed",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_seed(&self, level: LevelRef) -> Option<i64>;
     /// Side: server.
     /// The difficulty (`Level.getDifficulty`): `peaceful`, `easy`, `normal`
     /// or `hard`, as `/difficulty` names it.
-    fn level_difficulty(&self, level: LevelRef) -> Option<&'static str> {
-        crate::phase::unprovided(
-            "Backend::level_difficulty",
-            "level_difficulty",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_difficulty(&self, level: LevelRef) -> Option<&'static str>;
     /// Side: server.
     /// Read a registered boolean game rule.
-    fn level_game_rule_bool(&self, level: LevelRef, key: BoolGameRuleKey) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::level_game_rule_bool",
-            "level_game_rule_bool",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_game_rule_bool(&self, level: LevelRef, key: BoolGameRuleKey) -> Option<bool>;
     /// Side: server.
     /// Game rule `rule` (`minecraft:keep_inventory` or `keep_inventory`), as
     /// `/gamerule` queries it: None for an unknown rule.
-    fn level_game_rule(&self, level: LevelRef, rule: &str) -> Option<GameRuleValue> {
-        crate::phase::unprovided(
-            "Backend::level_game_rule",
-            "level_game_rule",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_game_rule(&self, level: LevelRef, rule: &str) -> Option<GameRuleValue>;
     /// Side: server.
     /// Every game rule the world has (`GameRules`) with its current value, by `minecraft:` id
     /// (`max_minecart_speed` only with minecart improvements): None for a stale handle and on
     /// a client.
-    fn level_game_rules(&self, level: LevelRef) -> Option<Vec<(String, GameRuleValue)>> {
-        crate::phase::unprovided(
-            "Backend::level_game_rules",
-            "level_game_rules",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_game_rules(&self, level: LevelRef) -> Option<Vec<(String, GameRuleValue)>>;
     /// Side: both.
     /// The rain and thunder levels, each 0.0 to 1.0 (`Level.getRainLevel`,
     /// `getThunderLevel` at partial tick 1.0): both 0 in a level with no weather.
     /// Reads any open server level or the client's current synchronized level;
     /// None for a stale handle, an unavailable level or a client not logged in.
-    fn level_weather(&self, level: LevelRef) -> Option<(f32, f32)> {
-        crate::phase::unprovided(
-            "Backend::level_weather",
-            "level_weather",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_weather(&self, level: LevelRef) -> Option<(f32, f32)>;
     /// Side: server.
     /// Whether it rains (`Level.isRaining`: a rain level above 0.2).
-    fn level_is_raining(&self, level: LevelRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::level_is_raining",
-            "level_is_raining",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_is_raining(&self, level: LevelRef) -> Option<bool>;
     /// Side: server.
     /// `Level.isRainingAt(pos)` in the level a handle names, the one in place or a parked one:
     /// it rains there and `pos` is under open sky in a biome that rains. None for a stale
     /// handle, on a client, and where `pos` is not loaded or outside the world's height; a
     /// read never loads a chunk.
-    fn level_is_raining_at(&self, level: LevelRef, pos: [i32; 3]) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::level_is_raining_at",
-            "level_is_raining_at",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_is_raining_at(&self, level: LevelRef, pos: [i32; 3]) -> Option<bool>;
     /// Side: server.
     /// `LevelReader.enabledFeatures` of the level a handle names. Every level of a world shares
     /// the world's flags. None for a stale handle and on a client.
-    fn level_enabled_features(&self, level: LevelRef) -> Option<FeatureFlags> {
-        crate::phase::unprovided(
-            "Backend::level_enabled_features",
-            "level_enabled_features",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_enabled_features(&self, level: LevelRef) -> Option<FeatureFlags>;
     /// Side: server.
     /// Whether it thunders (`Level.isThundering`: a thunder level above 0.9).
-    fn level_is_thundering(&self, level: LevelRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::level_is_thundering",
-            "level_is_thundering",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_is_thundering(&self, level: LevelRef) -> Option<bool>;
     /// Side: server.
     /// The random of the server level `level` names: vanilla's `Level.random`
     /// (`level.getRandom()`), the one its explosions, block drops and other
@@ -534,77 +321,43 @@ pub trait LevelsBackend {
     /// server, for a stale handle and for a level not open: the Nether and
     /// the End open when someone first goes there and close after 300 ticks
     /// with nobody in them (`close_idle_levels`).
-    fn level_random(&self, level: LevelRef) -> Option<LegacyRandom> {
-        crate::phase::unprovided(
-            "Backend::level_random",
-            "level_random",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_random(&self, level: LevelRef) -> Option<LegacyRandom>;
     /// Side: server.
     /// `Raids.get(id)`: the raid saved under `id` in the requested level, if
     /// `Raids` still holds it (a stopped raid goes at its next tick).
-    fn level_raid(&self, level: LevelRef, id: i32) -> Option<RaidRef> {
-        crate::phase::unprovided(
-            "Backend::level_raid",
-            "level_raid",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_raid(&self, level: LevelRef, id: i32) -> Option<RaidRef>;
     /// Side: server.
     /// `ServerLevel.getRaidAt(pos)`: the closest active raid whose centre is
     /// less than 96 blocks away (`Raids.getNearbyRaid`, 9216 squared).
-    fn level_raid_at(&self, level: LevelRef, pos: [i32; 3]) -> Option<RaidRef> {
-        crate::phase::unprovided(
-            "Backend::level_raid_at",
-            "level_raid_at",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_raid_at(&self, level: LevelRef, pos: [i32; 3]) -> Option<RaidRef>;
     /// Side: server.
     /// Every raid `Raids` holds, in its iteration order, stopped ones
     /// included until their next tick. None for a closed or stale level.
-    fn level_raids(&self, level: LevelRef) -> Option<Vec<RaidRef>> {
-        crate::phase::unprovided(
-            "Backend::level_raids",
-            "level_raids",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_raids(&self, level: LevelRef) -> Option<Vec<RaidRef>>;
     /// Side: server.
     /// The fluid state at `pos` of the level `level` names (`BlockGetter.getFluidState`). None
     /// for a stale handle, a chunk that isn't loaded or a `y` outside the world: a read never
     /// loads a chunk.
-    fn level_fluid_state(&self, level: LevelRef, pos: [i32; 3]) -> Option<FluidState> {
-        crate::phase::unprovided(
-            "Backend::level_fluid_state",
-            "level_fluid_state",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_fluid_state(&self, level: LevelRef, pos: [i32; 3]) -> Option<FluidState>;
     /// Side: both.
     /// Every loaded chunk of an open server level as handles, ordered by chunk x then z. None for
     /// a stale handle or on a client. Loads nothing.
-    fn level_loaded_chunks(&self, level: LevelRef) -> Option<Vec<ChunkRef>> {
-        crate::phase::unprovided(
-            "Backend::level_loaded_chunks",
-            "level_loaded_chunks",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_loaded_chunks(&self, level: LevelRef) -> Option<Vec<ChunkRef>>;
     /// Side: both.
     /// World-space block collision boxes under an empty collision context, without entities or border. Refuses a stale or nonresident level and invalid or overlarge boxes.
-    fn level_collision_boxes(&self, level: LevelRef, aabb: [f64; 6]) -> Option<Vec<[f64; 6]>> {
-        crate::phase::unprovided(
-            "Backend::level_collision_boxes",
-            "level_collision_boxes",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_collision_boxes(&self, level: LevelRef, aabb: [f64; 6]) -> Option<Vec<[f64; 6]>>;
 }
 /// The handles' writes of the `levels` area, implemented by the game and reached through [`BackendMut`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait
 #[doc(hidden)]
+#[horizon_mod_api_macros::host_area]
 pub trait LevelsBackendMut {
     /// Side: server.
     /// `/forceload add` or `remove` of one chunk (`ServerLevel.setChunkForced`):
@@ -617,13 +370,8 @@ pub trait LevelsBackendMut {
     /// this returns: it loads over the next ticks, as after `/forceload`.
     /// False for a stale handle, on a client, and for a level the server
     /// has not opened.
-    fn chunk_set_forced(&mut self, chunk: ChunkRef, forced: bool) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::chunk_set_forced",
-            "chunk_set_forced",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn chunk_set_forced(&mut self, chunk: ChunkRef, forced: bool) -> bool;
     /// Side: server.
     /// The chunk ticket of `controller` for `owner` on `chunk`
     /// (`TicketController.forceChunk`): true when the controller's tickets
@@ -642,6 +390,7 @@ pub trait LevelsBackendMut {
     /// discarded. False outside a mod's hook, for another mod's controller, on
     /// a client, for a chunk outside the world and for a level the server has
     /// not opened.
+    #[access(WorldOnly)]
     fn chunk_set_mod_forced(
         &mut self,
         chunk: ChunkRef,
@@ -649,39 +398,23 @@ pub trait LevelsBackendMut {
         owner: NativeTicketOwner,
         forced: bool,
         natural_spawning: bool,
-    ) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::chunk_set_mod_forced",
-            "chunk_set_mod_forced",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> bool;
     /// Side: server.
     /// Set a block in the level in place (`Level.setBlock`). Parked levels,
     /// stale handles, clients and unloaded or out-of-height positions return
     /// false. Client notification follows the supplied update flags.
+    #[access(WorldOnly)]
     fn level_set_block(
         &mut self,
         level: LevelRef,
         pos: [i32; 3],
         state: BlockStateId,
         flags: NativeBlockUpdateFlags,
-    ) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_set_block",
-            "level_set_block",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> bool;
     /// Side: server.
     /// Remove a block in place (`Level.removeBlock`), preserving its fluid.
-    fn level_remove_block(&mut self, level: LevelRef, pos: [i32; 3], moved: bool) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_remove_block",
-            "level_remove_block",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_remove_block(&mut self, level: LevelRef, pos: [i32; 3], moved: bool) -> bool;
     /// Side: server.
     /// Destroy a block in the level in place (`Level.destroyBlock`), optionally dropping
     /// resources with `tool` (None is an empty hand). With `collect`, return the dropped
@@ -690,6 +423,7 @@ pub trait LevelsBackendMut {
     /// once, in vanilla's random order. `drop` false suppresses resources entirely.
     /// None means nothing broke: air, a refused write, a stale handle, a client, an
     /// unloaded/out-of-height position, or a parked level.
+    #[access(WorldOnly)]
     fn level_destroy_block(
         &mut self,
         level: LevelRef,
@@ -697,29 +431,18 @@ pub trait LevelsBackendMut {
         drop: bool,
         tool: Option<&ItemStack>,
         collect: bool,
-    ) -> Option<Vec<ItemStack>> {
-        crate::phase::unprovided(
-            "BackendMut::level_destroy_block",
-            "level_destroy_block",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<Vec<ItemStack>>;
     /// Side: server.
     /// Send `ServerLevel.destroyBlockProgress` in this level: stages 0..9 show a crack,
     /// any other stage removes it. A machine uses a stable negative breaker id.
+    #[access(WorldOnly)]
     fn level_set_break_progress(
         &mut self,
         level: LevelRef,
         breaker: i32,
         pos: [i32; 3],
         progress: i32,
-    ) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_set_break_progress",
-            "level_set_break_progress",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> bool;
     /// Side: server.
     /// Plays sound event `sound` at `at` for the players in this level
     /// within range (16 blocks, times the volume above 1), as
@@ -727,6 +450,7 @@ pub trait LevelsBackendMut {
     /// slider. A `minecraft:` event must be registered; a mod's goes by name
     /// and is heard where its resources define it. True means queued, not
     /// heard.
+    #[access(WorldOnly)]
     fn level_play_sound(
         &mut self,
         level: LevelRef,
@@ -735,13 +459,7 @@ pub trait LevelsBackendMut {
         source: SoundSource,
         volume: f32,
         pitch: f32,
-    ) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_play_sound",
-            "level_play_sound",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> bool;
     /// Side: server.
     /// Sends `count` particles around `at` to the players in this level
     /// within 32 blocks, as `ServerLevel.sendParticles` does: each offset is
@@ -749,6 +467,7 @@ pub trait LevelsBackendMut {
     /// count sends one particle moving along `spread`). Block particle types
     /// need `state`; item, trail and vibration particles aren't supported.
     /// True means queued, not drawn.
+    #[access(WorldOnly)]
     fn level_send_particles(
         &mut self,
         level: LevelRef,
@@ -758,13 +477,7 @@ pub trait LevelsBackendMut {
         spread: [f64; 3],
         speed: f64,
         count: i32,
-    ) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_send_particles",
-            "level_send_particles",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> bool;
     /// Side: server.
     /// Plays level event `id` at `pos` with `data` for the players near it
     /// (`Level.levelEvent(null, id, pos, data)`): `1000`s are sounds, `2000`s
@@ -772,25 +485,15 @@ pub trait LevelsBackendMut {
     /// block with state id `data`). No player is left out, the acting one
     /// included. False for an event that carries a block state (2001, 2014,
     /// 3008) when `data` isn't one.
-    fn level_level_event(&mut self, level: LevelRef, id: i32, pos: [i32; 3], data: i32) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_level_event",
-            "level_level_event",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_level_event(&mut self, level: LevelRef, id: i32, pos: [i32; 3], data: i32) -> bool;
     /// Side: server.
     /// Sends game event `event` (`minecraft:block_change`...) from `at`, as
     /// `Level.gameEvent(null, event, at)` does: sculk sensors, shriekers,
     /// wardens and allays in range hear it. False for an event vanilla
     /// doesn't have.
-    fn level_game_event(&mut self, level: LevelRef, event: &str, at: [f64; 3]) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_game_event",
-            "level_game_event",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_game_event(&mut self, level: LevelRef, event: &str, at: [f64; 3]) -> bool;
     /// Side: server.
     /// Explodes at `center` with no source entity, as `Level.explode(null,
     /// x, y, z, radius, fire, interaction)` does (`native_explode`): `fire`
@@ -798,6 +501,7 @@ pub trait LevelsBackendMut {
     /// blocks: `None`, `Block` or `Tnt` (vanilla's `Mob` and `Trigger` aren't
     /// offered yet). False for a chunk that isn't loaded or a radius outside
     /// `0 < radius <= 32`.
+    #[access(WorldOnly)]
     fn level_explode(
         &mut self,
         level: LevelRef,
@@ -805,13 +509,7 @@ pub trait LevelsBackendMut {
         radius: f32,
         fire: bool,
         interaction: NativeExplosionInteraction,
-    ) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_explode",
-            "level_explode",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> bool;
     /// Side: server.
     /// Strikes lightning at `at`, as summoning a `minecraft:lightning_bolt`
     /// does: it sets fire, hurts and converts what it hits (a pig to a
@@ -819,13 +517,8 @@ pub trait LevelsBackendMut {
     /// `visual_only` it only flashes and sounds (`setVisualOnly`). The
     /// `lightning_strike` hook hears it first with the cause `mod` and may
     /// cancel it. False for a chunk that isn't loaded or a canceled strike.
-    fn level_strike_lightning(&mut self, level: LevelRef, at: [f64; 3], visual_only: bool) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_strike_lightning",
-            "level_strike_lightning",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_strike_lightning(&mut self, level: LevelRef, at: [f64; 3], visual_only: bool) -> bool;
     /// Side: server.
     /// Drops `stack` as a broken block drops it (`Block.popResource`): an
     /// item entity at a random point within a quarter block of the middle of
@@ -835,18 +528,13 @@ pub trait LevelsBackendMut {
     /// empty stack or an unknown item, with the `block_drops` rule off, on a
     /// client, for a stale handle, a level not in place, or an item a mod
     /// kept out (`native_entity_join_level`).
+    #[access(WorldOnly)]
     fn level_pop_resource(
         &mut self,
         level: LevelRef,
         pos: [i32; 3],
         stack: ItemStack,
-    ) -> Option<EntityRef> {
-        crate::phase::unprovided(
-            "BackendMut::level_pop_resource",
-            "level_pop_resource",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<EntityRef>;
     /// Side: server.
     /// Spawns `stack` as an item entity at `x y z` (`new ItemEntity(level, x,
     /// y, z, stack)` and `addFreshEntity`): its own random motion (up 0.2, up
@@ -857,6 +545,7 @@ pub trait LevelsBackendMut {
     /// spawned, for an empty stack or an unknown item, a value that isn't
     /// finite, on a client, for a stale handle, a level not in place, or an
     /// item a mod kept out (`native_entity_join_level`).
+    #[access(WorldOnly)]
     fn level_spawn_item(
         &mut self,
         level: LevelRef,
@@ -865,19 +554,14 @@ pub trait LevelsBackendMut {
         z: f64,
         stack: ItemStack,
         pickup_delay: u32,
-    ) -> Option<EntityRef> {
-        crate::phase::unprovided(
-            "BackendMut::level_spawn_item",
-            "level_spawn_item",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<EntityRef>;
     /// Side: server.
     /// `spawn_item` with the item entity's motion set to
     /// `motion` (blocks a tick), as `new ItemEntity(level, x, y, z, stack,
     /// deltaX, deltaY, deltaZ)`, and the same `pickup_delay` ticks before it
     /// can be picked up (`ItemEntity.setPickupDelay`). None in the same
     /// cases, and for a motion that isn't finite.
+    #[access(WorldOnly)]
     fn level_spawn_item_with_motion(
         &mut self,
         level: LevelRef,
@@ -887,13 +571,7 @@ pub trait LevelsBackendMut {
         stack: ItemStack,
         motion: [f64; 3],
         pickup_delay: u32,
-    ) -> Option<EntityRef> {
-        crate::phase::unprovided(
-            "BackendMut::level_spawn_item_with_motion",
-            "level_spawn_item_with_motion",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<EntityRef>;
     /// Side: server.
     /// Awards `amount` experience at `x y z` as vanilla's `ExperienceOrb.award`
     /// does: orbs of the largest sizes first (2477, 1237, ... 3, 1), each
@@ -905,6 +583,7 @@ pub trait LevelsBackendMut {
     /// one out (`native_entity_join_level`). False, with no orbs, for 0, a
     /// value that isn't finite, on a client, for a stale handle or a level
     /// not in place.
+    #[access(WorldOnly)]
     fn level_award_experience(
         &mut self,
         level: LevelRef,
@@ -912,13 +591,7 @@ pub trait LevelsBackendMut {
         y: f64,
         z: f64,
         amount: u32,
-    ) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_award_experience",
-            "level_award_experience",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> bool;
     /// Side: server.
     /// Tell the neighbours of `pos` that a block changed there, as vanilla's own writes do:
     /// `Neighbours` (`Level.updateNeighborsAt`: a lever's or a button's own block, and the one
@@ -928,68 +601,43 @@ pub trait LevelsBackendMut {
     /// changes without its state changing). `source` is the state whose block vanilla passes as
     /// the one that changed. False, with nothing done, off the level in place, for a position
     /// that isn't loaded, or for a `source` that is no block state.
+    #[access(WorldOnly)]
     fn level_update_neighbors(
         &mut self,
         level: LevelRef,
         pos: [i32; 3],
         source: BlockStateId,
         update: NeighbourUpdate,
-    ) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_update_neighbors",
-            "level_update_neighbors",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> bool;
     /// Side: server.
     /// Tell the block at `pos` that `source`'s block beside it changed (`Level.neighborChanged`),
     /// as a diode tells the block in front of it before updating that block's neighbours. False,
     /// with nothing done, as for `update_neighbors`: off the level in place, for a position that
     /// isn't loaded, or for a `source` that is no block state.
+    #[access(WorldOnly)]
     fn level_neighbor_changed(
         &mut self,
         level: LevelRef,
         pos: [i32; 3],
         source: BlockStateId,
-    ) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_neighbor_changed",
-            "level_neighbor_changed",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> bool;
     /// Side: server.
     /// Replace the random of the server level `level` names with `random`,
     /// a stream `native_level_random` gave and the mod drew from. False where
     /// that gives `None`.
-    fn level_set_random(&mut self, level: LevelRef, random: LegacyRandom) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_set_random",
-            "level_set_random",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_set_random(&mut self, level: LevelRef, random: LegacyRandom) -> bool;
     /// Side: both.
     /// Apply bone meal to the block at `pos` as a dispenser does (`BoneMealItem.growCrop`, then
     /// `growWaterPlant`), with no player and no item: the mods' `bonemeal` hook first, level event
     /// 1505 when something grew. True when something grew; false for a refused write, a stale or
     /// parked handle, a client, and a block that did not grow.
-    fn level_bone_meal(&mut self, level: LevelRef, pos: [i32; 3]) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_bone_meal",
-            "level_bone_meal",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_bone_meal(&mut self, level: LevelRef, pos: [i32; 3]) -> bool;
     /// Side: both.
     /// Set the biome of the 4x4x4 cell holding `pos` to `biome` (`minecraft:plains`), as
     /// `/fillbiome` does for one cell. False for a refused write, a stale or parked handle, a
     /// client, an unknown biome and an unchanged cell.
-    fn level_set_biome(&mut self, level: LevelRef, pos: [i32; 3], biome: &str) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::level_set_biome",
-            "level_set_biome",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn level_set_biome(&mut self, level: LevelRef, pos: [i32; 3], biome: &str) -> bool;
 }

@@ -185,7 +185,7 @@ fn level_event_excludes_its_source_even_during_another_guests_turn() {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn another_guest_and_online_players_are_visible_during_a_turn() {
     with_guests(|game| {
-        let rider = game.native_entity(13).unwrap();
+        let rider = game.entity(13).unwrap();
         game.as_guest(12, |game| {
             assert_eq!(rider.position(game), Some([3.0, 64.0, 5.0]));
             let online = game.native_server_players();
@@ -213,10 +213,10 @@ fn another_guests_menu_and_push_work_during_a_turn() {
             })
             .unwrap();
         }
-        let a = game.native_player_ref(12).unwrap();
-        let b = game.native_player_ref(13).unwrap();
-        let a_menu = game.native_menu_ref(a).unwrap();
-        let b_menu = game.native_menu_ref(b).unwrap();
+        let a = game.player(12).unwrap();
+        let b = game.player(13).unwrap();
+        let a_menu = game.player_container_menu(a).unwrap();
+        let b_menu = game.player_container_menu(b).unwrap();
         let stone = ItemStack::new("minecraft:stone", 4);
         game.lan
             .as_mut()
@@ -225,25 +225,25 @@ fn another_guests_menu_and_push_work_during_a_turn() {
             .update_guest(13, |guest| guest.inventory[0] = Some(stone.clone()))
             .unwrap();
         game.as_guest(12, |game| {
-            assert!(game.native_menu_ref(a).is_none());
+            assert!(game.player_container_menu(a).is_none());
             assert_eq!(a_menu.slot_count(game), None);
-            assert_eq!(game.native_menu_ref(b), Some(b_menu));
+            assert_eq!(game.player_container_menu(b), Some(b_menu));
             assert_eq!(b_menu.slot_count(game), Some(46));
             assert_eq!(b_menu.slot(game, 36), Some(Some(stone.clone())));
-            assert!(game.native_entity_set_rotation(b.entity(), 90.0, 10.0));
-            assert!(game.native_entity_set_head_yaw(b.entity(), 45.0));
-            assert_eq!(game.native_entity_head_yaw(b.entity()), Some(45.0));
-            assert!(game.native_entity_push(b.entity(), [0.25, 0.5, -0.25]));
-            assert!(game.native_entity_push(a.entity(), [0.5, 0.0, 0.0]));
+            assert!(game.entity_set_rotation(b.entity(), 90.0, 10.0));
+            assert!(game.entity_set_head_yaw(b.entity(), 45.0));
+            assert_eq!(game.entity_head_yaw(b.entity()), Some(45.0));
+            assert!(game.entity_push(b.entity(), [0.25, 0.5, -0.25]));
+            assert!(game.entity_push(a.entity(), [0.5, 0.0, 0.0]));
             game.as_guest(13, |game| {
                 assert_eq!(
                     game.player.as_ref().unwrap().velocity,
                     Vec3::new(0.25, 0.5, -0.25)
                 );
-                assert!(game.native_menu_ref(a).is_none());
-                assert!(game.native_menu_ref(b).is_none());
+                assert!(game.player_container_menu(a).is_none());
+                assert!(game.player_container_menu(b).is_none());
                 assert_eq!(b_menu.slot_count(game), None);
-                assert!(!game.native_entity_push(a.entity(), [1.0, 0.0, 0.0]));
+                assert!(!game.entity_push(a.entity(), [1.0, 0.0, 0.0]));
             })
             .unwrap();
             assert_eq!(
@@ -320,8 +320,8 @@ fn another_guests_services_work_during_a_turn() {
             .hub
             .update_guest(13, |guest| guest.inventory[0] = Some(stone.clone()))
             .unwrap();
-        let a = game.native_player_ref(12).unwrap();
-        let b = game.native_player_ref(13).unwrap();
+        let a = game.player(12).unwrap();
+        let b = game.player(13).unwrap();
         game.as_guest(12, |game| {
             assert_eq!(game.native_entity_target(a.entity()), Some(Target::Player));
             assert_eq!(
@@ -537,8 +537,8 @@ fn another_guest_follows_a_vehicle_teleported_during_a_turn() {
             .push(Mob::new(42, horse, Vec3::new(3.0, 64.0, 5.0), 0.0));
         // Boarding publishes the seat back to the hub after positioning the body.
         game.guest_boarded(13, None);
-        let vehicle = game.native_entity(42).unwrap();
-        let rider = game.native_entity(13).unwrap();
+        let vehicle = game.entity(42).unwrap();
+        let rider = game.entity(13).unwrap();
         let before = [3.0, 64.0 + (1.44375 - 0.6), 5.0];
         let after = [10.0, 70.0 + (1.44375 - 0.6), -4.0];
         game.as_guest(12, |game| {
@@ -761,7 +761,7 @@ fn canonical_permissions_preserve_owner_and_fake_player_reads() {
         body.entity_id = 99;
         game.player = Some(body);
         game.set_mode(horizon_client::command::args::GameMode::Creative);
-        let owner = game.native_player_ref(99).unwrap();
+        let owner = game.player(99).unwrap();
         for (allow, permission) in [(false, 0), (true, 4)] {
             game.set_allow_commands(allow);
             assert_eq!(owner.permission_level(game), Some(permission));
@@ -772,8 +772,8 @@ fn canonical_permissions_preserve_owner_and_fake_player_reads() {
         assert_eq!(owner.can_use_game_master_blocks(game), Some(false));
 
         game.next_entity = 100;
-        let level = game.native_level(game.dim.id()).unwrap();
-        let fake = game.native_fake_player(level, 1234, "machine").unwrap();
+        let level = game.level(game.dim.id()).unwrap();
+        let fake = game.fake_player(level, 1234, "machine").unwrap();
         assert!(!game.players().server_players().contains(&fake));
         assert_eq!(game.players().player_by_name("machine"), None);
         assert_eq!(fake.permission_level(game), Some(0));
@@ -806,7 +806,7 @@ fn canonical_permissions_preserve_owner_and_fake_player_reads() {
             assert_eq!(fake.can_use_game_master_blocks(game), Some(false));
         })
         .unwrap();
-        assert!(game.native_player_remove_fake(fake));
+        assert!(game.player_remove_fake(fake));
         assert_eq!(fake.permission_level(game), None);
         assert_eq!(fake.address(game), None);
     });
@@ -877,8 +877,8 @@ fn level_players_exclude_fake_players() {
         let _serving = super::integrated::tests::install_serving(game, false);
         place_host(game);
         game.next_entity = 100;
-        let level = game.native_level(game.dim.id()).unwrap();
-        let fake = game.native_fake_player(level, 1234, "machine").unwrap();
+        let level = game.level(game.dim.id()).unwrap();
+        let fake = game.fake_player(level, 1234, "machine").unwrap();
         let conn = game
             .lan
             .as_ref()

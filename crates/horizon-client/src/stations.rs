@@ -200,13 +200,10 @@ pub fn apply_enchantment(
 
 /// `ItemStack.isDamageableItem`: durability, and not `minecraft:unbreakable`.
 pub fn is_damageable(items: &Items, stack: &ItemStack) -> bool {
-    items.get(&stack.item).is_some_and(|i| i.max_damage > 0)
-        && stack
-            .data()
-            .is_none_or(|d| d.other("minecraft:unbreakable").is_none())
+    horizon_items::properties::damageable(|id| stack.carries_component(items.get(&stack.item), id))
 }
 fn max_damage(items: &Items, stack: &ItemStack) -> i32 {
-    items.get(&stack.item).map_or(0, |i| i.max_damage as i32)
+    stack.max_damage(items.get(&stack.item))
 }
 /// `ItemStack.isValidRepairItem`.
 pub fn is_valid_repair_item(
@@ -215,6 +212,16 @@ pub fn is_valid_repair_item(
     stack: &ItemStack,
     material: &ItemStack,
 ) -> bool {
+    if let Some(data) = stack.data() {
+        if let Some(component) = data.other("minecraft:repairable") {
+            return horizon_items::properties::repairable(component, &material.item, |tag| {
+                items.item_in_tag(tag, &material.item)
+            });
+        }
+        if data.other("!minecraft:repairable").is_some() {
+            return false;
+        }
+    }
     e.props(&stack.item)
         .is_some_and(|p| Enchantments::item_in(items, &p.repairable, &material.item))
 }

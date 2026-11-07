@@ -2,17 +2,17 @@
 //! entries name the places its `mod.wasm` fills. At load each is checked against this game's
 //! points and against the mod's own listeners, then the mod registers in the points crate's one
 //! list of listeners, exactly as a native mod does: its places fire it through
-//! `mod_points::wire::forwarded`, as hook calls within its group's limits.
+//! checked export indices, as hook calls within its group's limits.
 use crate::Refusal;
 use horizon_mod_package::manifest::{
     InjectionKind, Manifest,
     inject::{Access, Inject, Kind},
 };
-use mod_api::__private::wasm_host::{CallHost, Exports};
-use mod_points::__private::wire::{Forward, HostKind, PointHost, Record, Value, forwarded};
+use mod_api::__private::wasm_host::{CallHost, Exports, LoadError};
+use mod_points::__private::wire::{Forward, HostKind, PointHost, Record, Value};
 use mod_points::PointId;
 use mod_points::places::{IDS, NAMES, SHAPES, TARGETS};
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 type Subscribed = wasmtime::component::TypedFunc<(), (Vec<(String, String)>,)>;
 type Fire = wasmtime::component::TypedFunc<(u32, HostKind, Vec<Value>), (Vec<Value>,)>;
@@ -22,18 +22,10 @@ type Fire = wasmtime::component::TypedFunc<(u32, HostKind, Vec<Value>), (Vec<Val
 struct Listeners {
     exports: Exports,
     fire: Fire,
-    places: &'static [Option<PointId>],
 }
 
 impl Forward for Listeners {
-    fn subscribed(&self) -> &'static [Option<PointId>] {
-        self.places
-    }
-
-    fn forward(&self, place: PointId, host: PointHost<'_>, record: &mut dyn Record) {
-        let Some(index) = self.places.iter().position(|p| *p == Some(place)) else {
-            return;
-        };
+    fn forward(&self, index: u32, host: PointHost<'_>, record: &mut dyn Record) {
         let (host, wire) = match host {
             PointHost::Read(h) => (CallHost::Read(h), HostKind::Read),
             PointHost::Server(h) | PointHost::Side(mod_api::HostSide::Server(h)) => {
@@ -46,7 +38,7 @@ impl Forward for Listeners {
         };
         let fields = record.lower();
         let answer = self.exports.call(host, |store| {
-            Ok(self.fire.call(store, (index as u32, wire, fields))?.0)
+            Ok(self.fire.call(store, (index, wire, fields))?.0)
         });
         let written = match answer {
             Some(fields) => record.write_back(fields),
@@ -60,9 +52,9 @@ impl Forward for Listeners {
         };
         if let Err(why) = written {
             log::error!(
-                "wasm mod {} stopped listening at points: at {}, {why}",
+                "wasm mod {} stopped listening at points: at export {}, {why}",
                 self.exports.id(),
-                NAMES[place as usize]
+                index
             );
             mod_points::stop(self.exports.id());
         }
@@ -71,12 +63,12 @@ impl Forward for Listeners {
 
 /// Resolve the API function slots currently supported by the guest export path.
 fn declared_place(inject: &Inject) -> Result<usize, Refusal> {
-    let kind = match (inject.access, inject.kind, inject.priority) {
-        (Access::Api, Kind::Head, 0) => InjectionKind::Head,
-        (Access::Api, Kind::Return, 0) => InjectionKind::Return,
+    let kind = match (inject.access, inject.kind) {
+        (Access::Api, Kind::Head) => InjectionKind::Head,
+        (Access::Api, Kind::Return) => InjectionKind::Return,
         _ => {
             return Err(Refusal::Points(format!(
-                "{}: wasm injects currently require API head/return with priority 0",
+                "{}: wasm injects currently require API head/return",
                 inject.id
             )));
         }
@@ -113,11 +105,16 @@ pub(crate) fn target_place(target: &str, kind: InjectionKind) -> Result<usize, R
 pub struct Listening {
     exports: Exports,
     fire: Option<Fire>,
-    places: Vec<Option<PointId>>,
+    places: Vec<(PointId, i32, String)>,
     raw: Option<crate::raw::Listeners>,
 }
 
 impl Listening {
+    /// The installed owner whose slots these are.
+    pub fn id(&self) -> &'static str {
+        self.exports.id()
+    }
+
     /// Registers the listeners in the points crate's one list, which keeps them for good.
     pub fn register(self) -> Result<(), mod_points::RegisterError> {
         let id = self.exports.id();
@@ -125,14 +122,34 @@ impl Listening {
             let listeners = Listeners {
                 exports: self.exports,
                 fire,
-                places: Box::leak(self.places.into_boxed_slice()),
             };
-            mod_points::register(id, Box::leak(forwarded(Box::new(listeners))))?;
+            let listeners = Box::leak(Box::new(listeners));
+            for (index, (place, priority, inject)) in self.places.into_iter().enumerate() {
+                let inject = Box::leak(inject.into_boxed_str());
+                mod_points::register(
+                    &mod_points::__private::SlotListener::forwarded(
+                        id,
+                        place,
+                        listeners,
+                        index as u32,
+                    )
+                    .ordered(priority, inject),
+                )?;
+            }
         }
         if let Some(raw) = self.raw {
             raw.register()?;
         }
         Ok(())
+    }
+}
+
+fn export_refusal(error: LoadError, point: &str) -> Refusal {
+    match error {
+        LoadError::MissingExport(_) => Refusal::UnfilledPoint {
+            point: point.into(),
+        },
+        other => Refusal::Load(other),
     }
 }
 
@@ -151,26 +168,25 @@ pub(crate) fn listen(manifest: &Manifest, exports: &Exports) -> Result<Option<Li
             raw: Some(raw),
         }));
     }
-    let mut declared = BTreeSet::new();
+    let mut declared = BTreeMap::new();
     for inject in &manifest.inject {
-        if !declared.insert(declared_place(inject)?) {
-            return Err(Refusal::Points(format!(
-                "{}: multiple injects at one wasm API place await the function registry",
-                inject.id
-            )));
-        }
+        declared.insert(inject.id.as_str(), (declared_place(inject)?, inject));
     }
     let interface = format!(
         "{}-listeners",
         horizon_mod_package::manifest::export_prefix(&manifest.id)
     );
-    let unfilled = || Refusal::UnfilledPoint {
-        point: NAMES[*declared.first().expect("nonempty inject declarations")].to_owned(),
+    let refused = |error| {
+        export_refusal(
+            error,
+            declared
+                .first_key_value()
+                .expect("nonempty inject declarations")
+                .0,
+        )
     };
-    let subscribed: Subscribed = exports
-        .func(&interface, "subscribed")
-        .map_err(|_| unfilled())?;
-    let fire: Fire = exports.func(&interface, "fire").map_err(|_| unfilled())?;
+    let subscribed: Subscribed = exports.func(&interface, "subscribed").map_err(refused)?;
+    let fire: Fire = exports.func(&interface, "fire").map_err(refused)?;
     let listed = exports
         .load(|store| Ok(subscribed.call(store, ())?.0))
         .ok_or_else(|| {
@@ -178,16 +194,11 @@ pub(crate) fn listen(manifest: &Manifest, exports: &Exports) -> Result<Option<Li
         })?;
     let mut places = Vec::with_capacity(listed.len());
     for (name, shape) in &listed {
-        let Some(place) = NAMES.iter().position(|place| place == name) else {
-            return Err(Refusal::NoSuchPoint {
-                point: name.clone(),
-            });
-        };
-        if !declared.remove(&place) {
+        let Some((place, inject)) = declared.remove(name.as_str()) else {
             return Err(Refusal::UndeclaredPoint {
                 point: name.clone(),
             });
-        }
+        };
         if SHAPES[place] != shape {
             return Err(Refusal::ChangedPoint {
                 point: name.clone(),
@@ -195,11 +206,11 @@ pub(crate) fn listen(manifest: &Manifest, exports: &Exports) -> Result<Option<Li
                 game: SHAPES[place].to_owned(),
             });
         }
-        places.push(Some(IDS[place]));
+        places.push((IDS[place], inject.priority, inject.id.clone()));
     }
-    if let Some(&place) = declared.first() {
+    if let Some((&id, _)) = declared.first_key_value() {
         return Err(Refusal::UnfilledPoint {
-            point: NAMES[place].to_owned(),
+            point: id.to_owned(),
         });
     }
     Ok(Some(Listening {
@@ -213,6 +224,51 @@ pub(crate) fn listen(manifest: &Manifest, exports: &Exports) -> Result<Option<Li
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mod_points::places::NAMES;
+
+    #[test]
+    fn a_guest_export_with_the_wrong_type_retains_its_load_refusal() {
+        let mut resolve = wit_parser::Resolve::default();
+        let package = resolve
+            .push_str(
+                "wrong.wit",
+                "package test:wrong; world wrong { export fire: func(); }",
+            )
+            .unwrap();
+        let world = resolve.select_world(&[package], Some("wrong")).unwrap();
+        let mut module =
+            wit_component::dummy_module(&resolve, world, wit_parser::ManglingAndAbi::Standard32);
+        wit_component::embed_component_metadata(
+            &mut module,
+            &resolve,
+            world,
+            wit_component::StringEncoding::UTF8,
+            true,
+        )
+        .unwrap();
+        let bytes = wit_component::ComponentEncoder::default()
+            .module(&module)
+            .unwrap()
+            .encode()
+            .unwrap();
+        let engine = wasmtime::Engine::default();
+        let component = wasmtime::component::Component::new(&engine, bytes).unwrap();
+        let mut store = wasmtime::Store::new(&engine, ());
+        let instance = wasmtime::component::Linker::<()>::new(&engine)
+            .instantiate(&mut store, &component)
+            .unwrap();
+        let wrong: Result<Fire, _> = instance.get_typed_func(&mut store, "fire");
+        let error = LoadError::ChangedExport(
+            "test-listeners#fire".into(),
+            wrong.err().unwrap().to_string(),
+        );
+        assert!(
+            matches!(export_refusal(error, "listen"), Refusal::Load(LoadError::ChangedExport(name, _)) if name == "test-listeners#fire")
+        );
+        assert!(
+            matches!(export_refusal(LoadError::MissingExport("test-listeners#fire".into()), "listen"), Refusal::UnfilledPoint { point } if point == "listen")
+        );
+    }
 
     const TICK: &str = "horizon_client::game::Game<'_>::tick";
 
@@ -231,12 +287,12 @@ mod tests {
             ctx: None,
         };
         assert_eq!(NAMES[declared_place(&inject).unwrap()], "tick");
+        inject.priority = 10;
         inject.kind = Kind::Return;
         assert_eq!(NAMES[declared_place(&inject).unwrap()], "tick_return");
         for (access, kind, priority) in [
             (Access::Internals, Kind::Head, 0),
             (Access::Api, Kind::WrapCall, 0),
-            (Access::Api, Kind::Head, 1),
         ] {
             inject.access = access;
             inject.kind = kind;

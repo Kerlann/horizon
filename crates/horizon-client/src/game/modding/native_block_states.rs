@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 
 impl Game<'_> {
     /// The exported definition of a world fluid, or a tank-only identity.
-    pub(super) fn native_fluid_state_definition(&self, fluid: FluidKey) -> Option<FluidDefinition> {
+    pub(super) fn fluid_state_definition(&self, fluid: FluidKey) -> Option<FluidDefinition> {
         let id = mod_api::__private::fluid_id(fluid)?;
         let Some(definition) = self.res.behaviours().fluid_definitions().get(id) else {
             return Some(FluidDefinition::TankOnly);
@@ -31,7 +31,7 @@ impl Game<'_> {
     }
 
     /// Validate fluid constraints against the exported property definition.
-    pub(super) fn native_fluid_state_validate(
+    pub(super) fn fluid_state_validate(
         &self,
         fluid: FluidKey,
         constraints: &[StateConstraint],
@@ -63,31 +63,31 @@ impl Game<'_> {
         Ok(())
     }
     /// Resolve a registered fluid identifier.
-    pub(super) fn native_fluid_key(&self, id: &str) -> Option<FluidKey> {
+    pub(super) fn fluid_key(&self, id: &str) -> Option<FluidKey> {
         mod_api::__private::fluid_key(id)
     }
     /// The canonical block id retained by the load-owned registration slot. An invalid slot
     /// is a boundary error, including when a wasm guest supplies it.
-    pub(super) fn native_block_key_id(&self, key: BlockKey) -> String {
+    pub(super) fn block_key_id(&self, key: BlockKey) -> String {
         mod_api::__private::block_key_id(key)
             .expect("invalid block key slot")
             .to_owned()
     }
     /// The canonical item id retained by the load-owned registration slot.
-    pub(super) fn native_item_key_id(&self, key: ItemKey) -> String {
+    pub(super) fn item_key_id(&self, key: ItemKey) -> String {
         mod_api::__private::item_key_id(key)
             .expect("invalid item key slot")
             .to_owned()
     }
     /// The canonical effect id retained by the load-owned registration slot.
-    pub(super) fn native_effect_key_id(&self, key: EffectKey) -> String {
+    pub(super) fn effect_key_id(&self, key: EffectKey) -> String {
         mod_api::__private::effect_key_id(key)
             .expect("invalid effect key slot")
             .to_owned()
     }
 
     /// The canonical block entity type id retained by the load-owned slot.
-    pub(super) fn native_block_entity_type_key_id(&self, key: BlockEntityTypeKey) -> String {
+    pub(super) fn block_entity_type_key_id(&self, key: BlockEntityTypeKey) -> String {
         mod_api::__private::block_entity_type_name(key)
             .expect("invalid block entity type key slot")
             .to_owned()
@@ -100,7 +100,7 @@ impl Game<'_> {
     /// a property it doesn't have or a value it can't take, or block NBT
     /// (`{...}`); and, as `/setblock`'s argument, for anything after the
     /// block.
-    pub(super) fn native_block_state_id(&self, name: &str) -> Option<BlockStateId> {
+    pub(super) fn block_state_id(&self, name: &str) -> Option<BlockStateId> {
         parse(&self.pack.block_registries, self.pack.assets.registry, name)
     }
     /// The state `state` as `/setblock` takes it back
@@ -108,30 +108,30 @@ impl Game<'_> {
     /// name order, `minecraft:oak_stairs[facing=east,half=bottom,...]`, or
     /// the block alone for one with no properties. None for an id no state
     /// has (`Block.stateById` gives air for one).
-    pub(super) fn native_block_state_string(&self, state: BlockStateId) -> Option<String> {
+    pub(super) fn block_state_string(&self, state: BlockStateId) -> Option<String> {
         self.pack.assets.registry.state(state).map(serialize)
     }
     /// The default state of `block` (`minecraft:oak_stairs`, or `oak_stairs`):
     /// `Block.defaultBlockState`, the one a block takes when nothing else
     /// says. None for an unknown block.
-    pub(super) fn native_block_state_default(&self, block: BlockKey) -> Option<BlockStateId> {
+    pub(super) fn block_state_default(&self, block: BlockKey) -> Option<BlockStateId> {
         Some(mod_api::__private::resolved_block(block)?.default)
     }
     /// `BlockState.canBeReplaced()`: whether placing a block where this state stands
     /// replaces it (air, grass, water, snow layers). None for an unknown state.
-    pub(super) fn native_block_state_replaceable(&self, state: BlockStateId) -> Option<bool> {
+    pub(super) fn block_state_replaceable(&self, state: BlockStateId) -> Option<bool> {
         self.pack.assets.registry.state(state)?;
         Some(self.res.facts().get(state).replaceable)
     }
     /// `BlockBehaviour.Properties.destroyTime`, as `BlockState.getDestroySpeed` reads it:
     /// stone 1.5, obsidian 50, bedrock -1 (it can't be broken). None for an unknown state.
-    pub(super) fn native_block_state_destroy_speed(&self, state: BlockStateId) -> Option<f32> {
+    pub(super) fn block_state_destroy_speed(&self, state: BlockStateId) -> Option<f32> {
         self.pack.assets.registry.state(state)?;
         Some(self.res.facts().get(state).hardness)
     }
     /// `BlockState.getSoundType()`: its volume, pitch and the sound events for breaking,
     /// stepping on, placing, hitting and falling on it. None for an unknown state.
-    pub(super) fn native_block_state_sound(&self, state: BlockStateId) -> Option<BlockSoundType> {
+    pub(super) fn block_state_sound(&self, state: BlockStateId) -> Option<BlockSoundType> {
         self.pack.assets.registry.state(state)?;
         let sounds = &self.res.facts().get(state).sounds;
         Some(BlockSoundType {
@@ -145,21 +145,18 @@ impl Game<'_> {
         })
     }
     /// `BlockState.hasBlockEntity()`. None for an unknown state.
-    pub(super) fn native_block_state_has_block_entity(&self, state: BlockStateId) -> Option<bool> {
+    pub(super) fn block_state_has_block_entity(&self, state: BlockStateId) -> Option<bool> {
         self.pack.assets.registry.state(state)?;
         Some(self.res.facts().get(state).block_entity)
     }
     /// The states of `block` (`StateDefinition.getPossibleStates`), as the consecutive ids the
     /// registry numbers them with. None for an unknown block.
-    pub(super) fn native_block_states_of(&self, block: BlockKey) -> Option<BlockStateRange> {
+    pub(super) fn block_states_of(&self, block: BlockKey) -> Option<BlockStateRange> {
         Some(mod_api::__private::resolved_block(block)?.states)
     }
 
     /// The properties of a resolved block, copied for the mod as plain data.
-    pub(super) fn native_block_state_definition(
-        &self,
-        block: BlockKey,
-    ) -> Option<Vec<StateProperty>> {
+    pub(super) fn block_state_definition(&self, block: BlockKey) -> Option<Vec<StateProperty>> {
         let resolved = mod_api::__private::resolved_block(block)?;
         let state = self.pack.assets.registry.state(resolved.default)?;
         let properties = self.pack.block_registries.blocks.get(&state.name)?;
@@ -172,7 +169,7 @@ impl Game<'_> {
     }
 
     /// Match against the existing command registry definitions without allocating on the call.
-    pub(super) fn native_block_state_matches(
+    pub(super) fn block_state_matches(
         &self,
         state: BlockStateId,
         block: BlockKey,
@@ -198,7 +195,7 @@ impl Game<'_> {
 
     /// `Item.getCraftingRemainder`: Horizon currently stores the remainder's
     /// item id, so the result is a single plain stack.
-    pub(super) fn native_item_crafting_remainder(&self, stack: &ItemStack) -> Option<ItemStack> {
+    pub(super) fn item_crafting_remainder(&self, stack: &ItemStack) -> Option<ItemStack> {
         let item = self.res.items().get(&stack.item)?;
         let remainder = item.crafting_remainder.as_deref()?;
         Some(ItemStack::new(remainder, 1))
@@ -206,7 +203,7 @@ impl Game<'_> {
 
     /// `Block.asItem`: the block's item name, including air for a block with
     /// no item; None if the block name is unknown.
-    pub(super) fn native_block_item(&self, block: BlockKey) -> Option<String> {
+    pub(super) fn block_item(&self, block: BlockKey) -> Option<String> {
         let behaviours = self.res.behaviours();
         let id = mod_api::__private::resolved_block(block)?.block;
         Some(behaviours.block_data(id).item.to_string())
@@ -218,7 +215,7 @@ impl Game<'_> {
     /// and content mods included. An empty stack tests `minecraft:air`, an
     /// unknown tag is false. None on a server's client or before the world
     /// has loaded its tags.
-    pub(super) fn native_item_stack_in_tag(&self, stack: &ItemStack, tag: &str) -> Option<bool> {
+    pub(super) fn item_stack_in_tag(&self, stack: &ItemStack, tag: &str) -> Option<bool> {
         Some(super::native_world_read::stack_in_tag(
             self.native_tag_items()?,
             stack,

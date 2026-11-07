@@ -1,296 +1,174 @@
-//! The `mobs` area: host methods the game implements (`game/host/mobs.rs`).
+//! Host method declarations; access defaults and game forwarders are generated.
 #![allow(unused_variables)]
 use crate::*;
 /// The host's methods both sides share of the `mobs` area, implemented by the game and reached through [`Host`].
+#[horizon_mod_api_macros::host_area]
 pub trait MobsHost {
     /// Side: both.
     /// The entity as a vanilla Mob: a mob or the ender dragon. Players, armor
     /// stands, stale handles and clients are rejected. Mobs taken out for
     /// ticking are unavailable (a #29 follow-up).
-    fn mob(&self, entity: EntityRef) -> Option<MobRef> {
-        crate::phase::unprovided("Host::mob", "mob", crate::phase::LoadAccess::WorldOnly)
-    }
+    #[access(WorldOnly)]
+    fn mob(&self, entity: EntityRef) -> Option<MobRef>;
 }
 /// The server host's methods of the `mobs` area, implemented by the game and reached through [`ServerHost`].
+#[horizon_mod_api_macros::host_area]
 pub trait MobsServerHost {
     /// Side: server.
     /// Kills mob `id` as `/kill` does: it falls and drops its loot. False for
     /// no such living mob or another dimension.
-    fn kill_mob(&mut self, dimension: &str, id: u32) -> bool {
-        crate::phase::unprovided(
-            "ServerHost::kill_mob",
-            "kill_mob",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn kill_mob(&mut self, dimension: &str, id: u32) -> bool;
     /// Side: server.
     /// The entity as the ender dragon, or None for another kind, a stale
     /// handle or a client.
-    fn dragon(&self, entity: EntityRef) -> Option<DragonRef> {
-        crate::phase::unprovided(
-            "ServerHost::dragon",
-            "dragon",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn dragon(&self, entity: EntityRef) -> Option<DragonRef>;
 }
 /// The handles' reads of the `mobs` area, implemented by the game and reached through [`Backend`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait
 #[doc(hidden)]
+#[horizon_mod_api_macros::host_area]
 pub trait MobsBackend {
     /// Side: server.
     /// `EnderDragonPhaseManager.getCurrentPhase`.
-    fn dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase> {
-        crate::phase::unprovided(
-            "Backend::dragon_phase",
-            "dragon_phase",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase>;
     /// Side: server.
     /// `EnderDragonFight.aliveCrystals`: the crystals the last scan found
     /// (every 100 ticks). None for a stale handle, a client, or a dragon
     /// outside the End or whose fight is not loaded.
-    fn dragon_alive_crystals(&self, dragon: DragonRef) -> Option<i32> {
-        crate::phase::unprovided(
-            "Backend::dragon_alive_crystals",
-            "dragon_alive_crystals",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn dragon_alive_crystals(&self, dragon: DragonRef) -> Option<i32>;
     /// Side: server.
     /// `EnderDragonFight.hasPreviouslyKilledDragon`. None as
     /// `alive_crystals` is.
-    fn dragon_previously_killed(&self, dragon: DragonRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::dragon_previously_killed",
-            "dragon_previously_killed",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn dragon_previously_killed(&self, dragon: DragonRef) -> Option<bool>;
     /// Side: server.
     /// `GoalSelector.getRunningGoals` read wider: every goal of the goal
     /// selector as a `NativeMobGoalEntry` (the priority, the kind id and
     /// whether it runs), in registration order. None for a stale or
     /// unavailable mob, a client, and the dragon.
-    fn mob_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> {
-        crate::phase::unprovided(
-            "Backend::mob_goals",
-            "mob_goals",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>>;
     /// Side: server.
     /// Every goal of the target selector, as `goals` reads the goal
     /// selector's.
-    fn mob_target_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> {
-        crate::phase::unprovided(
-            "Backend::mob_target_goals",
-            "mob_target_goals",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_target_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>>;
     /// Side: server.
     /// `PathNavigation.isDone`; None for a stale or unavailable mob, or on a
     /// client, and for the dragon (no navigation).
-    fn mob_is_done(&self, mob: MobRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::mob_is_done",
-            "mob_is_done",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_is_done(&self, mob: MobRef) -> Option<bool>;
     /// Side: server.
     /// `PathNavigation.getSpeedModifier`: the multiplier the current path
     /// is followed at (1.0 is the mob's normal speed; 0 until a path sets
     /// one). This is not the mob's movement-speed attribute. None for a
     /// stale or unavailable mob, or on a client, and for the dragon.
-    fn mob_navigation_speed(&self, mob: MobRef) -> Option<f64> {
-        crate::phase::unprovided(
-            "Backend::mob_navigation_speed",
-            "mob_navigation_speed",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_navigation_speed(&self, mob: MobRef) -> Option<f64>;
     /// Side: server.
     /// `Mob.getPathfindingMalus`: what a node of `kind` costs this mob's
     /// pathfinder — its own override, else the kind's default (a negative
     /// malus closes the kind). None for a stale or unavailable mob, the
     /// dragon, or on a client.
-    fn mob_pathfinding_malus(&self, mob: MobRef, kind: PathType) -> Option<f32> {
-        crate::phase::unprovided(
-            "Backend::mob_pathfinding_malus",
-            "mob_pathfinding_malus",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_pathfinding_malus(&self, mob: MobRef, kind: PathType) -> Option<f32>;
     /// Side: both.
     /// The existing portal decision for an available mob in the current level.
-    fn mob_can_use_portal(&self, mob: MobRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::mob_can_use_portal",
-            "mob_can_use_portal",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_can_use_portal(&self, mob: MobRef) -> Option<bool>;
     /// Side: server.
     /// The live leash holder, refusing unresolved saved and unavailable holders.
-    fn mob_leash_holder(&self, mob: MobRef) -> Option<MobLeashHolder> {
-        crate::phase::unprovided(
-            "Backend::mob_leash_holder",
-            "mob_leash_holder",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_leash_holder(&self, mob: MobRef) -> Option<MobLeashHolder>;
     /// Side: server.
     /// `Mob.getTarget`. Brain-backed mobs read their attack memory; piglins
     /// and hoglins use Horizon's `ai.target` stand-in. Invalid targets, an
     /// unavailable mob or player binding, or a target without a living handle
     /// read as None. The dragon reads what a mod set, while it stays a valid
     /// target (`EnderDragon.canAttack`); its flight never sets one.
-    fn mob_target(&self, mob: MobRef) -> Option<LivingRef> {
-        crate::phase::unprovided(
-            "Backend::mob_target",
-            "mob_target",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_target(&self, mob: MobRef) -> Option<LivingRef>;
     /// Side: server.
     /// `Mob.isAggressive`, the synced mob flag (the dragon's reaches its
     /// clients as `DATA_MOB_FLAGS_ID`).
-    fn mob_is_aggressive(&self, mob: MobRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::mob_is_aggressive",
-            "mob_is_aggressive",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_is_aggressive(&self, mob: MobRef) -> Option<bool>;
     /// Side: server.
     /// `Mob.isPersistenceRequired`. The dragon never despawns
     /// (`EnderDragon.checkDespawn` is empty), but keeps and saves the flag
     /// (`PersistenceRequired`).
-    fn mob_persistence_required(&self, mob: MobRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::mob_persistence_required",
-            "mob_persistence_required",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_persistence_required(&self, mob: MobRef) -> Option<bool>;
     /// Side: server.
     /// `Mob.requiresCustomPersistence` and its species overrides: passengers,
     /// leashed mobs and species-specific reasons to stay, such as an enderman
     /// carrying a block. Independent of `PersistenceRequired` and `NoAI`.
     /// None for an unavailable mob or the separately modeled dragon.
-    fn mob_requires_custom_persistence(&self, mob: MobRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::mob_requires_custom_persistence",
-            "mob_requires_custom_persistence",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_requires_custom_persistence(&self, mob: MobRef) -> Option<bool>;
     /// Side: server.
     /// `Mob.isNoAi`: the mob stands where it is and its goals do not run,
     /// while what NoAI keeps running in vanilla (the daylight burn of the
     /// undead, a horse's tail) still does. Saved with it as `NoAI`. None
     /// for anything but a mob.
-    fn mob_no_ai(&self, mob: MobRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::mob_no_ai",
-            "mob_no_ai",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_no_ai(&self, mob: MobRef) -> Option<bool>;
     /// Side: server.
     /// `Mob.getRestrictCenter`: the restriction's block position, kept
     /// after `clear_restriction` and after a load (`[0, 0, 0]` for a mob
     /// that never had one, vanilla's `ZERO`). None for a stale or
     /// unavailable mob, a client, and the dragon.
-    fn mob_restrict_center(&self, mob: MobRef) -> Option<[i32; 3]> {
-        crate::phase::unprovided(
-            "Backend::mob_restrict_center",
-            "mob_restrict_center",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_restrict_center(&self, mob: MobRef) -> Option<[i32; 3]>;
     /// Side: server.
     /// `Mob.getRestrictRadius`: `-1` while the mob has no restriction.
     /// None for a stale or unavailable mob, a client, and the dragon.
-    fn mob_restrict_radius(&self, mob: MobRef) -> Option<i32> {
-        crate::phase::unprovided(
-            "Backend::mob_restrict_radius",
-            "mob_restrict_radius",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_restrict_radius(&self, mob: MobRef) -> Option<i32>;
     /// Side: server.
     /// `Mob.hasRestriction`. None for a stale or unavailable mob, a client,
     /// and the dragon.
-    fn mob_has_restriction(&self, mob: MobRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::mob_has_restriction",
-            "mob_has_restriction",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_has_restriction(&self, mob: MobRef) -> Option<bool>;
     /// Side: server.
     /// `Mob.isWithinRestriction(pos)`: whether the block position is inside
     /// the home area; a mob without a restriction is within everywhere, as
     /// in vanilla. None for a stale or unavailable mob, a client, and the
     /// dragon.
-    fn mob_is_within_restriction(&self, mob: MobRef, at: [i32; 3]) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::mob_is_within_restriction",
-            "mob_is_within_restriction",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_is_within_restriction(&self, mob: MobRef, at: [i32; 3]) -> Option<bool>;
     /// Side: server.
     /// `Mob.isLeftHanded`: whether the mob holds things in its left hand
     /// (the mob flags in its entity data). None for anything but a mob.
-    fn mob_left_handed(&self, mob: MobRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::mob_left_handed",
-            "mob_left_handed",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_left_handed(&self, mob: MobRef) -> Option<bool>;
     /// Side: server.
     /// `Mob.canPickUpLoot`, with the overrides of an allay (holding
     /// something) and a sulfur cube (with no block). None for anything but
     /// a mob.
-    fn mob_can_pick_up_loot(&self, mob: MobRef) -> Option<bool> {
-        crate::phase::unprovided(
-            "Backend::mob_can_pick_up_loot",
-            "mob_can_pick_up_loot",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_can_pick_up_loot(&self, mob: MobRef) -> Option<bool>;
     /// Side: server.
     /// `LivingEntity.getNoActionTime`: the ticks since the mob last had a
     /// reason to stay (a player near, a hit). Despawning and a raid's
     /// recruiting read it. None for a stale or unavailable mob, the dragon,
     /// or on a client.
-    fn mob_no_action_time(&self, mob: MobRef) -> Option<i32> {
-        crate::phase::unprovided(
-            "Backend::mob_no_action_time",
-            "mob_no_action_time",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_no_action_time(&self, mob: MobRef) -> Option<i32>;
     /// Side: server.
     /// `Raider.getCurrentRaid`: the raid a raider belongs to, even a stopped
     /// one. None for a mob that is no raider or in no raid.
-    fn mob_raid(&self, mob: MobRef) -> Option<RaidRef> {
-        crate::phase::unprovided(
-            "Backend::mob_raid",
-            "mob_raid",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_raid(&self, mob: MobRef) -> Option<RaidRef>;
 }
 /// The handles' writes of the `mobs` area, implemented by the game and reached through [`BackendMut`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait
 #[doc(hidden)]
+#[horizon_mod_api_macros::host_area]
 pub trait MobsBackendMut {
     /// Side: server.
     /// `EnderDragonPhaseManager.setPhase`: the dragon ends its phase and
@@ -299,13 +177,8 @@ pub trait MobsBackendMut {
     /// nothing, as in vanilla (a strafing dragon keeps its player). No
     /// random draw. False for a stale handle or a client. The new phase
     /// runs from the dragon's next tick.
-    fn dragon_set_phase(&mut self, dragon: DragonRef, phase: NativeDragonPhase) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::dragon_set_phase",
-            "dragon_set_phase",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn dragon_set_phase(&mut self, dragon: DragonRef, phase: NativeDragonPhase) -> bool;
     /// Side: server.
     /// `GoalSelector.addGoal(priority, goal)` on a mob's goal selector.
     /// Refuses a stale or unavailable mob, a client, and the dragon (it
@@ -318,23 +191,13 @@ pub trait MobsBackendMut {
     /// (`nearest_target`, `hurt_by_target`) go in through
     /// `add_target_goal`; both selectors take them, as vanilla's two
     /// selectors do.
-    fn mob_add_goal(&mut self, mob: MobRef, priority: i32, goal: &NativeGoal) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_add_goal",
-            "mob_add_goal",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_add_goal(&mut self, mob: MobRef, priority: i32, goal: &NativeGoal) -> bool;
     /// Side: server.
     /// `GoalSelector.addGoal` on the mob's target selector. The same rules
     /// as `add_goal`.
-    fn mob_add_target_goal(&mut self, mob: MobRef, priority: i32, goal: &NativeGoal) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_add_target_goal",
-            "mob_add_target_goal",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_add_target_goal(&mut self, mob: MobRef, priority: i32, goal: &NativeGoal) -> bool;
     /// Side: server.
     /// `GoalSelector.removeGoal` on the goal selector, by kind: every goal
     /// whose id, as `goals` reads it, is `id` goes (`removeAllGoals`), a
@@ -342,72 +205,42 @@ pub trait MobsBackendMut {
     /// unavailable mob, a client, and the dragon. Nothing in a mob's tick
     /// resolves, as its copy is held out there: add what a mod needs in
     /// `entity_join`, which fires for a loaded chunk's mobs too.
-    fn mob_remove_goal(&mut self, mob: MobRef, id: &str) -> Option<usize> {
-        crate::phase::unprovided(
-            "BackendMut::mob_remove_goal",
-            "mob_remove_goal",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_remove_goal(&mut self, mob: MobRef, id: &str) -> Option<usize>;
     /// Side: server.
     /// `GoalSelector.removeGoal` on the target selector, by kind, as
     /// `remove_goal` does on the goal selector.
-    fn mob_remove_target_goal(&mut self, mob: MobRef, id: &str) -> Option<usize> {
-        crate::phase::unprovided(
-            "BackendMut::mob_remove_target_goal",
-            "mob_remove_target_goal",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_remove_target_goal(&mut self, mob: MobRef, id: &str) -> Option<usize>;
     /// Side: server.
     /// `PathNavigation.moveTo(x, y, z, speed)`: true if a path was started.
     /// Refuses a stale or unavailable mob, a client, non-finite arguments,
     /// and coordinates too large for safe block arithmetic. As in vanilla,
     /// the mob's own goals may replace the path next tick. False for the
     /// dragon, which flies by its phase and keeps no navigation.
-    fn mob_move_to(&mut self, mob: MobRef, at: [f64; 3], speed: f64) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_move_to",
-            "mob_move_to",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_move_to(&mut self, mob: MobRef, at: [f64; 3], speed: f64) -> bool;
     /// Side: server.
     /// `PathNavigation.stop`. False for a stale or unavailable mob, or on a
     /// client, and for the dragon (no navigation).
-    fn mob_stop(&mut self, mob: MobRef) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_stop",
-            "mob_stop",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_stop(&mut self, mob: MobRef) -> bool;
     /// Side: server.
     /// `PathNavigation.setSpeedModifier`: sets the multiplier the current
     /// path is followed at, as `move_to`'s speed argument does. The mob's
     /// own AI — a goal's or a brain species' next `moveTo` — sets its own
     /// again, as in vanilla. False for a non-finite speed, a stale or
     /// unavailable mob, or on a client, and for the dragon.
-    fn mob_set_navigation_speed(&mut self, mob: MobRef, speed: f64) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_set_navigation_speed",
-            "mob_set_navigation_speed",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_set_navigation_speed(&mut self, mob: MobRef, speed: f64) -> bool;
     /// Side: server.
     /// `Mob.setPathfindingMalus`: what the mob's next paths cost through
     /// `kind` (negative closes it, as the species' own overrides do); not
     /// saved, as in vanilla, so a reload or conversion keeps the species'
     /// own. False for a malus that is not finite, a stale or unavailable mob,
     /// the dragon, or on a client.
-    fn mob_set_pathfinding_malus(&mut self, mob: MobRef, kind: PathType, malus: f32) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_set_pathfinding_malus",
-            "mob_set_pathfinding_malus",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_set_pathfinding_malus(&mut self, mob: MobRef, kind: PathType, malus: f32) -> bool;
     /// Side: server.
     /// `Mob.setTarget`; None clears it. Only mobs and players whose binding
     /// can be stored in the current level are supported; armor stands are
@@ -419,43 +252,23 @@ pub trait MobsBackendMut {
     /// Invalid targets are refused (false, mob unchanged); vanilla instead
     /// stores `asValidTarget(target)`, clearing the target when it is invalid.
     /// False also means a stale handle, client, or an unavailable mob/player.
-    fn mob_set_target(&mut self, mob: MobRef, target: Option<LivingRef>) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_set_target",
-            "mob_set_target",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_set_target(&mut self, mob: MobRef, target: Option<LivingRef>) -> bool;
     /// Side: server.
     /// `Mob.setAggressive`. False for an unavailable mob.
-    fn mob_set_aggressive(&mut self, mob: MobRef, value: bool) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_set_aggressive",
-            "mob_set_aggressive",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_set_aggressive(&mut self, mob: MobRef, value: bool) -> bool;
     /// Side: server.
     /// `Mob.setPersistenceRequired`, which sets the flag and cannot clear it.
     /// False for an unavailable mob.
-    fn mob_set_persistence_required(&mut self, mob: MobRef) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_set_persistence_required",
-            "mob_set_persistence_required",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_set_persistence_required(&mut self, mob: MobRef) -> bool;
     /// Side: server.
     /// `Mob.setNoAi`: whether the mob's own AI runs. With no AI the mob
     /// stands (what NoAI keeps in vanilla still runs), and the flag is
     /// saved with it as `NoAI`. False for anything but a mob.
-    fn mob_set_no_ai(&mut self, mob: MobRef, no_ai: bool) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_set_no_ai",
-            "mob_set_no_ai",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_set_no_ai(&mut self, mob: MobRef, no_ai: bool) -> bool;
     /// Side: server.
     /// `Mob.setBaby` through the species' setter: ageable mobs use their
     /// baby start age (`-48000` for sniffers, otherwise `-24000`) or `0`,
@@ -463,13 +276,8 @@ pub trait MobsBackendMut {
     /// babies, such as zombies, keep their non-growing baby state instead.
     /// Leaves `NoAI` and `PersistenceRequired` unchanged. False, with no
     /// changes, for an unavailable mob or a species with no baby form.
-    fn mob_set_baby(&mut self, mob: MobRef, baby: bool) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_set_baby",
-            "mob_set_baby",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_set_baby(&mut self, mob: MobRef, baby: bool) -> bool;
     /// Side: server.
     /// `LookControl.setLookAt`, by the mob's `lookAt` path: the wanted
     /// position its look control rotates the head toward over the next
@@ -480,13 +288,8 @@ pub trait MobsBackendMut {
     /// hold their look control, as in vanilla: the wanted position waits
     /// until it runs again. False for non-finite coordinates, a stale or
     /// unavailable mob, a client, and the dragon.
-    fn mob_look_at(&mut self, mob: MobRef, at: [f64; 3]) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_look_at",
-            "mob_look_at",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_look_at(&mut self, mob: MobRef, at: [f64; 3]) -> bool;
     /// Side: server.
     /// `JumpControl.jump`: the mob jumps on its next own tick by its own
     /// jump path — no velocity is written, and the control consumes the
@@ -495,13 +298,8 @@ pub trait MobsBackendMut {
     /// species refuses. A creaking being looked at holds its jump control,
     /// as in vanilla: the wish waits until it runs again. False for a stale
     /// or unavailable mob, a client, and the dragon.
-    fn mob_jump(&mut self, mob: MobRef) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_jump",
-            "mob_jump",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_jump(&mut self, mob: MobRef) -> bool;
     /// Side: server.
     /// `Mob.restrictTo(pos, radius)`: the home area the mob keeps to — its
     /// own stroll and wander goals pick their positions inside it, as a
@@ -509,59 +307,34 @@ pub trait MobsBackendMut {
     /// while keeping `pos` as the center, `clear_restriction`'s shape. The
     /// area is saved with the mob (`home_pos`, `home_radius`). False for a
     /// stale or unavailable mob, a client, and the dragon.
-    fn mob_restrict_to(&mut self, mob: MobRef, at: [i32; 3], radius: i32) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_restrict_to",
-            "mob_restrict_to",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_restrict_to(&mut self, mob: MobRef, at: [i32; 3], radius: i32) -> bool;
     /// Side: server.
     /// `Mob.clearRestriction`: the restriction goes, the center stays (its
     /// own goals read no restriction, as vanilla's `-1` radius). False for
     /// a stale or unavailable mob, a client, and the dragon.
-    fn mob_clear_restriction(&mut self, mob: MobRef) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_clear_restriction",
-            "mob_clear_restriction",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_clear_restriction(&mut self, mob: MobRef) -> bool;
     /// Side: server.
     /// `Mob.setLeftHanded`: sets the mob flag the players around get with
     /// the mob's next entity data and see in its swing and held items.
     /// Saved with the mob as `LeftHanded`. False for anything but a mob.
-    fn mob_set_left_handed(&mut self, mob: MobRef, left_handed: bool) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_set_left_handed",
-            "mob_set_left_handed",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_set_left_handed(&mut self, mob: MobRef, left_handed: bool) -> bool;
     /// Side: server.
     /// `Mob.setCanPickUpLoot`: whether the mob picks up the items it sees
     /// (saved with it as `CanPickUpLoot`; clients are not told, as in
     /// vanilla). An allay and a sulfur cube decide for themselves. False
     /// for anything but a mob.
-    fn mob_set_can_pick_up_loot(&mut self, mob: MobRef, can_pick_up: bool) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_set_can_pick_up_loot",
-            "mob_set_can_pick_up_loot",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_set_can_pick_up_loot(&mut self, mob: MobRef, can_pick_up: bool) -> bool;
     /// Side: server.
     /// `LivingEntity.setNoActionTime`: the count the mob's own tick carries
     /// on from (a far-away mob's despawn chance starts past 600). Not saved,
     /// as in vanilla. False for a stale or unavailable mob, the dragon, or
     /// on a client.
-    fn mob_set_no_action_time(&mut self, mob: MobRef, ticks: i32) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_set_no_action_time",
-            "mob_set_no_action_time",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_set_no_action_time(&mut self, mob: MobRef, ticks: i32) -> bool;
     /// Side: server.
     /// `Brain.setMemory(ATTACK_TARGET, target)`, or `eraseMemory` for None:
     /// the target a brain-driven mob — an axolotl, a breeze, a creaking, a
@@ -577,11 +350,6 @@ pub trait MobsBackendMut {
     /// False for a fake player, a player in another level, a mob without an
     /// attack-target brain (`MobRef::set_target` writes those), a stale or
     /// unavailable mob, the dragon, or on a client.
-    fn mob_set_brain_target(&mut self, mob: MobRef, target: Option<LivingRef>) -> bool {
-        crate::phase::unprovided(
-            "BackendMut::mob_set_brain_target",
-            "mob_set_brain_target",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn mob_set_brain_target(&mut self, mob: MobRef, target: Option<LivingRef>) -> bool;
 }

@@ -6,6 +6,7 @@ use std::path::Path;
 /// An already-validated API head/return declaration, projected from the package manifest.
 /// `with` names a function in the guest crate root.
 pub struct GuestInject<'a> {
+    pub id: &'a str,
     pub at: &'a str,
     pub at_return: bool,
     pub with: &'a str,
@@ -32,11 +33,7 @@ fn emit(points: &[GamePoint], entries: &[GuestInject<'_>]) -> Result<String, Str
                     if entry.at_return { "return" } else { "head" }
                 )
             })?;
-        let name = if entry.at_return {
-            format!("{}_return", point.name)
-        } else {
-            point.name.clone()
-        };
+        let name = entry.id;
         let record = format_ident!("{}", point.record);
         let record = if point.args.iter().any(|(_, ty)| ty.starts_with('&')) {
             quote!(mod_points::#record<'_>)
@@ -93,11 +90,13 @@ mod tests {
         };
         let entries = [
             GuestInject {
+                id: "before_id",
                 at: "game::read",
                 at_return: false,
                 with: "before",
             },
             GuestInject {
+                id: "after_id",
                 at: "game::read",
                 at_return: true,
                 with: "after",
@@ -126,7 +125,7 @@ mod tests {
             {generated}
             fn main() {{
                 use mod_points::__private::wire::Guest;
-                assert_eq!(HorizonInjects::subscribed(), [("read".into(), "value:u32".into()), ("read_return".into(), "value:u32".into())]);
+                assert_eq!(HorizonInjects::subscribed(), [("before_id".into(), "value:u32".into()), ("after_id".into(), "value:u32".into())]);
                 assert_eq!(HorizonInjects::fire(0, (), vec![3]), [10]);
                 assert_eq!(HorizonInjects::fire(1, (), vec![3]), [6]);
             }}

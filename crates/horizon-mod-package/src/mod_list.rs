@@ -23,7 +23,7 @@ pub struct ModList {
     /// Ids of the mods the player turned on.
     pub enabled: BTreeSet<String>,
     /// Ids of the native mods the player turned off: they rest
-    /// (`native_on`) until the launcher's next build leaves them out.
+    /// (`on`) until the launcher's next build leaves them out.
     pub disabled: BTreeSet<String>,
     /// The keys the player chose for mods' keys, mod id → key name → key
     /// (`key.<id>.<name>:key.keyboard.x` lines).

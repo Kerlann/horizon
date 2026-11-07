@@ -25,7 +25,7 @@ impl Game<'_> {
     /// Refuses stale menus, invalid slots/hotbar indices, spectators, non-client hosts,
     /// the creative inventory screen and empty batches without changing items.
     /// True means submitted, not accepted by the server: its corrections win.
-    pub(super) fn native_menu_click(&mut self, menu: MenuRef, clicks: &[MenuClick]) -> bool {
+    pub(super) fn menu_click(&mut self, menu: MenuRef, clicks: &[MenuClick]) -> bool {
         if self.is_logical_server() || self.screen == super::Screen::Creative || self.spectator() {
             return false;
         }
@@ -43,7 +43,7 @@ impl Game<'_> {
     /// server is told (`ContainerClose`) and the screen goes. Refuses stale
     /// menus, non-client hosts and a menu whose screen is not open, such as
     /// the inventory menu while playing.
-    pub(super) fn native_menu_close(&mut self, menu: MenuRef) -> bool {
+    pub(super) fn menu_close(&mut self, menu: MenuRef) -> bool {
         if self.is_logical_server()
             || self.screen != super::Screen::Inventory
             || self.native_client_menu_name(menu).is_none()
@@ -64,7 +64,7 @@ impl Game<'_> {
     /// such as a key or the wheel; no sound, that is the screen's. Refuses
     /// stale menus, non-client hosts and the inventory menu, which no server
     /// opened. True means sent, not that the menu took it.
-    pub(super) fn native_menu_click_button(&mut self, menu: MenuRef, button: i32) -> bool {
+    pub(super) fn menu_click_button(&mut self, menu: MenuRef, button: i32) -> bool {
         !self.is_logical_server()
             && self.native_client_menu_name(menu).is_some()
             && self.remote_button_click(button)
@@ -89,9 +89,9 @@ impl Game<'_> {
     }
 
     /// The local player in a logged-in client world.
-    pub(super) fn native_local_player(&self) -> Option<PlayerRef> {
+    pub(super) fn local_player(&self) -> Option<PlayerRef> {
         let remote = self.remote.as_ref().filter(|remote| remote.logged_in)?;
-        self.native_player_ref(remote.profile)
+        self.player(remote.profile)
     }
 
     fn native_menu_guest(&self, menu: MenuRef) -> Option<&Guest> {
@@ -125,15 +125,15 @@ impl Game<'_> {
     /// A player's current supported menu. Refuses crafting tables, merchants,
     /// workstations, lecterns, mounts and menus with hidden slots; also refuses
     /// clients, stale players and players whose state is swapped out.
-    pub(super) fn native_menu_ref(&self, player: PlayerRef) -> Option<MenuRef> {
+    pub(super) fn player_container_menu(&self, player: PlayerRef) -> Option<MenuRef> {
         if self.remote.is_some() {
             let remote = self.remote.as_ref()?;
-            (self.native_local_player()? == player).then_some(())?;
+            (self.local_player()? == player).then_some(())?;
             let name = remote
                 .menu
                 .as_ref()
                 .map_or("inventory", |entry| entry.1.as_str());
-            Self::menu_slot(name, 0)?;
+            Self::inventory_screen_slot(name, 0)?;
             return Some(mod_api::__private::game::menu_ref(
                 player,
                 remote.menu.as_ref().map_or(0, |entry| entry.0),
@@ -154,14 +154,14 @@ impl Game<'_> {
     }
 
     /// Container id (0 for the player's inventory menu).
-    pub(super) fn native_menu_container_id(&self, menu: MenuRef) -> Option<i32> {
+    pub(super) fn menu_container_id(&self, menu: MenuRef) -> Option<i32> {
         self.native_menu_guest(menu)?;
         Some(menu.fields().window)
     }
 
     /// Registry menu type; the inventory menu has no MenuType in vanilla.
     /// The outer None means an unavailable menu.
-    pub(super) fn native_menu_kind(&self, menu: MenuRef) -> Option<Option<String>> {
+    pub(super) fn menu_kind(&self, menu: MenuRef) -> Option<Option<String>> {
         let guest = self.native_menu_guest(menu)?;
         match &guest.menu {
             Some(m) => Some(Some(
@@ -176,10 +176,14 @@ impl Game<'_> {
     }
 
     /// Number of slots in AbstractContainerMenu.slots.
-    pub(super) fn native_menu_slot_count(&self, menu: MenuRef) -> Option<usize> {
+    pub(super) fn menu_slot_count(&self, menu: MenuRef) -> Option<usize> {
         if self.remote.is_some() {
             let name = self.native_client_menu_name(menu)?;
-            return Some((0..).map_while(|slot| Self::menu_slot(name, slot)).count());
+            return Some(
+                (0..)
+                    .map_while(|slot| Self::inventory_screen_slot(name, slot))
+                    .count(),
+            );
         }
         let guest = self.native_menu_guest(menu)?;
         Some(guest.menu.as_ref().map_or(46, |m| m.size + 36))
@@ -189,11 +193,7 @@ impl Game<'_> {
     /// player's inventory by `ENTITY_ITEMS` index (`InventoryMenu`'s armour slots 5..9 go head
     /// to feet), a block entity's or an entity's slot, the ender chest's, the crafting grid's
     /// or a mod's chest menu's.
-    pub(super) fn native_menu_slot_backing(
-        &self,
-        menu: MenuRef,
-        slot: usize,
-    ) -> Option<MenuSlotBacking> {
+    pub(super) fn menu_slot_backing(&self, menu: MenuRef, slot: usize) -> Option<MenuSlotBacking> {
         let guest = self.native_menu_guest(menu)?;
         let Some(open) = &guest.menu else {
             return match slot {
@@ -209,7 +209,7 @@ impl Game<'_> {
         // A block menu whose block entities no longer show its slots (a chest's, over a
         // furnace set in its place) backs none of them, the player's included, until the close
         // pass ends it (`Container.stillValid`).
-        let level = self.native_level(&guest.dimension)?;
+        let level = self.level(&guest.dimension)?;
         let world = self.native_level_world(level)?;
         if open
             .slots
@@ -242,17 +242,17 @@ impl Game<'_> {
 
     /// Full stack at a menu index. Outer None means unavailable or out of
     /// range; Some(None) means an empty slot.
-    pub(super) fn native_menu_slot(&self, menu: MenuRef, slot: usize) -> Option<Option<ItemStack>> {
+    pub(super) fn menu_slot(&self, menu: MenuRef, slot: usize) -> Option<Option<ItemStack>> {
         if self.remote.is_some() {
             let name = self.native_client_menu_name(menu)?;
-            let index = Self::menu_slot(name, i32::try_from(slot).ok()?)?;
+            let index = Self::inventory_screen_slot(name, i32::try_from(slot).ok()?)?;
             return Some(self.slot_view(index));
         }
-        let backing = self.native_menu_slot_backing(menu, slot)?;
+        let backing = self.menu_slot_backing(menu, slot)?;
         let guest = self.native_menu_guest(menu)?;
         Some(match backing {
             MenuSlotBacking::BlockEntity { .. } | MenuSlotBacking::Entity { .. } => {
-                let world = self.native_level_world(self.native_level(&guest.dimension)?)?;
+                let world = self.native_level_world(self.level(&guest.dimension)?)?;
                 guest.menu.as_ref()?.slots.get(world, guest, slot)
             }
             MenuSlotBacking::Player(n @ 0..36) => guest.inventory.get(n)?.clone(),
@@ -269,7 +269,7 @@ impl Game<'_> {
     /// How many of `stack` menu slot `slot` holds (`Slot.mayPlace`, then `Slot.getMaxStackSize`):
     /// a furnace's fuel slot one bucket, an armour slot one piece that fits it, a crafting result
     /// none.
-    pub(super) fn native_menu_slot_holds(
+    pub(super) fn menu_slot_holds(
         &self,
         menu: MenuRef,
         slot: usize,
@@ -281,7 +281,7 @@ impl Game<'_> {
 
     /// Whether menu slot `slot` gives up what it holds (`Slot.mayPickup`): bound armour stays
     /// on outside creative.
-    pub(super) fn native_menu_slot_gives(&self, menu: MenuRef, slot: usize) -> Option<bool> {
+    pub(super) fn menu_slot_gives(&self, menu: MenuRef, slot: usize) -> Option<bool> {
         let rules = self.native_menu_rules(menu, slot)?;
         Some(rules.slot_gives(&self.menu_env(), slot))
     }
@@ -289,14 +289,14 @@ impl Game<'_> {
     /// The menu engine's model of `menu`, holding slot `slot`, for its slots' rules: the
     /// inventory menu, a furnace's, brewing stand's, crafter's or content mod's menu over its
     /// block entity, a shulker box's, or a plain container of the menu's size. None for a slot
-    /// with no backing (`native_menu_slot_backing`), and for one the model hasn't.
+    /// with no backing (`menu_slot_backing`), and for one the model hasn't.
     fn native_menu_rules(&self, menu: MenuRef, slot: usize) -> Option<Box<Menu>> {
-        self.native_menu_slot_backing(menu, slot)?;
+        self.menu_slot_backing(menu, slot)?;
         let guest = self.native_menu_guest(menu)?;
         let (kind, disabled, menu_id) = match &guest.menu {
             None => (Kind::Inventory, None, None),
             Some(open) => {
-                let world = self.native_level_world(self.native_level(&guest.dimension)?)?;
+                let world = self.native_level_world(self.level(&guest.dimension)?)?;
                 let name = self
                     .lan
                     .as_ref()?
@@ -338,7 +338,7 @@ impl Game<'_> {
         menu: MenuRef,
         slot: usize,
     ) -> Option<&mut Option<ItemStack>> {
-        let backing = self.native_menu_slot_backing(menu, slot)?;
+        let backing = self.menu_slot_backing(menu, slot)?;
         let guests = &mut self.lan.as_mut()?.hub.guests;
         let index = guests.iter().position(|g| {
             g.placed
@@ -354,7 +354,7 @@ impl Game<'_> {
     }
 
     /// Carried (cursor) stack; outer None means unavailable.
-    pub(super) fn native_menu_carried(&self, menu: MenuRef) -> Option<Option<ItemStack>> {
+    pub(super) fn menu_carried(&self, menu: MenuRef) -> Option<Option<ItemStack>> {
         if self.remote.is_some() {
             self.native_client_menu_name(menu)?;
             return Some(self.carried.clone());
@@ -370,7 +370,8 @@ fn client_click_ops(
     if clicks.is_empty() {
         return None;
     }
-    let mapped_slot = |slot| Game::menu_slot(menu, i32::from(i16::try_from(slot).ok()?));
+    let mapped_slot =
+        |slot| Game::inventory_screen_slot(menu, i32::from(i16::try_from(slot).ok()?));
     let mut ops = Vec::new();
     for click in clicks {
         let op = match click {
@@ -599,18 +600,18 @@ mod tests {
             )
             .unwrap();
             game.lan.as_mut().unwrap().hub.guests.push(guest());
-            let player = game.native_player_ref(123).unwrap();
-            let inventory = game.native_menu_ref(player).unwrap();
+            let player = game.player(123).unwrap();
+            let inventory = game.player_container_menu(player).unwrap();
             assert_eq!(inventory.container_id(game), Some(0));
             assert_eq!(inventory.kind(game), Some(None));
             assert_eq!(inventory.slot_count(game), Some(46));
             assert_eq!(inventory.slot(game, 0), Some(None));
             assert_eq!(
-                game.native_menu_slot_backing(inventory, 36),
+                game.menu_slot_backing(inventory, 36),
                 Some(MenuSlotBacking::Player(0))
             );
             assert_eq!(
-                game.native_menu_slot_backing(inventory, 45),
+                game.menu_slot_backing(inventory, 45),
                 Some(MenuSlotBacking::Player(40))
             );
             assert_eq!(inventory.slot(game, 46), None);
@@ -630,7 +631,7 @@ mod tests {
                 .open_native_menu(1, 1, title.clone(), vec![Some(stone.clone())])
                 .unwrap();
             assert_eq!(inventory.slot_count(game), None);
-            let menu = game.native_menu_ref(player).unwrap();
+            let menu = game.player_container_menu(player).unwrap();
             assert_eq!(menu.container_id(game), Some(window));
             assert_eq!(menu.kind(game), Some(Some("minecraft:generic_9x1".into())));
             assert_eq!(menu.slot_count(game), Some(45));
@@ -639,18 +640,18 @@ mod tests {
             assert_eq!(menu.slot(game, 9), Some(Some(stone.clone())));
             assert_eq!(menu.carried(game), Some(Some(stone)));
             assert_eq!(
-                game.native_menu_slot_backing(menu, 0),
+                game.menu_slot_backing(menu, 0),
                 Some(MenuSlotBacking::Native(0))
             );
             assert_eq!(
-                game.native_menu_slot_backing(menu, 9),
+                game.menu_slot_backing(menu, 9),
                 Some(MenuSlotBacking::Player(9))
             );
             assert_eq!(
-                game.native_menu_slot_backing(menu, 36),
+                game.menu_slot_backing(menu, 36),
                 Some(MenuSlotBacking::Player(0))
             );
-            assert_eq!(game.native_menu_slot_backing(menu, 45), None);
+            assert_eq!(game.menu_slot_backing(menu, 45), None);
             let host = game.lan.as_mut().unwrap();
             for _ in 0..100 {
                 host.hub
@@ -659,11 +660,11 @@ mod tests {
             }
             assert_eq!(host.hub.guests[0].menu.as_ref().unwrap().window, window);
             assert_eq!(menu.slot_count(game), None);
-            let newer = game.native_menu_ref(player).unwrap();
+            let newer = game.player_container_menu(player).unwrap();
             let host = game.lan.as_mut().unwrap();
             host.hub.close_container(1);
             assert_eq!(newer.slot_count(game), None);
-            let inventory = game.native_menu_ref(player).unwrap();
+            let inventory = game.player_container_menu(player).unwrap();
             let host = game.lan.as_mut().unwrap();
             host.play.entry(1).or_default().crafting.table = Some((
                 7,
@@ -673,7 +674,7 @@ mod tests {
                 )),
                 [0; 3],
             ));
-            assert_eq!(game.native_menu_ref(player), None);
+            assert_eq!(game.player_container_menu(player), None);
             assert_eq!(inventory.slot_count(game), None);
             let host = game.lan.as_mut().unwrap();
             host.play.clear();
@@ -699,11 +700,11 @@ mod tests {
                 vec![None; 5],
                 None,
             );
-            let menu = game.native_menu_ref(player).unwrap();
+            let menu = game.player_container_menu(player).unwrap();
             assert_eq!(
-                game.native_menu_slot_backing(menu, 2),
+                game.menu_slot_backing(menu, 2),
                 Some(MenuSlotBacking::BlockEntity {
-                    level: game.native_level("minecraft:overworld").unwrap(),
+                    level: game.level("minecraft:overworld").unwrap(),
                     pos: [b.0, b.1, b.2],
                     slot: 0
                 })
@@ -722,14 +723,11 @@ mod tests {
                 vec![None],
                 None,
             );
-            let menu = game.native_menu_ref(player).unwrap();
+            let menu = game.player_container_menu(player).unwrap();
             assert_eq!(
-                game.native_menu_slot_backing(menu, 0),
+                game.menu_slot_backing(menu, 0),
                 Some(MenuSlotBacking::Entity {
-                    entity: EntityRef::new(
-                        game.native_level("minecraft:overworld").unwrap().epoch(),
-                        42
-                    ),
+                    entity: EntityRef::new(game.level("minecraft:overworld").unwrap().epoch(), 42),
                     slot: 0
                 })
             );
@@ -751,8 +749,8 @@ mod tests {
                 vec![Some(gold.clone())],
                 None,
             );
-            let overworld_menu = game.native_menu_ref(player).unwrap();
-            let overworld = game.native_level("minecraft:overworld").unwrap();
+            let overworld_menu = game.player_container_menu(player).unwrap();
+            let overworld = game.level("minecraft:overworld").unwrap();
             assert!(
                 game.enter_command_level(super::super::Dim::Nether)
                     .is_some()
@@ -775,12 +773,12 @@ mod tests {
                 vec![Some(emerald.clone())],
                 None,
             );
-            let other_player = game.native_player_ref(456).unwrap();
-            let nether_menu = game.native_menu_ref(other_player).unwrap();
-            let nether = game.native_level("minecraft:the_nether").unwrap();
+            let other_player = game.player(456).unwrap();
+            let nether_menu = game.player_container_menu(other_player).unwrap();
+            let nether = game.level("minecraft:the_nether").unwrap();
             assert_eq!(overworld_menu.slot(game, 0), Some(Some(gold)));
             assert_eq!(
-                game.native_menu_slot_backing(overworld_menu, 0),
+                game.menu_slot_backing(overworld_menu, 0),
                 Some(MenuSlotBacking::BlockEntity {
                     level: overworld,
                     pos: [a.0, a.1, a.2],
@@ -793,7 +791,7 @@ mod tests {
             );
             assert_eq!(nether_menu.slot(game, 0), Some(Some(emerald)));
             assert_eq!(
-                game.native_menu_slot_backing(nether_menu, 0),
+                game.menu_slot_backing(nether_menu, 0),
                 Some(MenuSlotBacking::BlockEntity {
                     level: nether,
                     pos: [a.0, a.1, a.2],

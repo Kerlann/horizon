@@ -1,7 +1,8 @@
-//! The `world_edit` area: host methods the game implements (`game/host/world_edit.rs`).
+//! Host method declarations; access defaults and game forwarders are generated.
 #![allow(unused_variables)]
 use crate::*;
 /// The server host's methods of the `world_edit` area, implemented by the game and reached through [`ServerHost`].
+#[horizon_mod_api_macros::host_area]
 pub trait WorldEditServerHost {
     /// Side: server.
     /// For a server mod: the runs made at once, straight into the chunks of the authoritative level `dimension`
@@ -12,29 +13,19 @@ pub trait WorldEditServerHost {
     /// why the edit was left out, with nothing changed: another dimension, a client of a server, a palette entry
     /// or filter that doesn't read or carries NBT (refused), a run naming a palette entry or filter past the end,
     /// or more than 65536 filters.
-    fn edit_blocks(&mut self, dimension: &str, edit: &NativeBlockEdit) -> Result<u64, String> {
-        crate::phase::unprovided(
-            "ServerHost::edit_blocks",
-            "edit_blocks",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    #[access(WorldOnly)]
+    fn edit_blocks(&mut self, dimension: &str, edit: &NativeBlockEdit) -> Result<u64, String>;
     /// Side: server.
     /// For a server mod: each column's height by `heightmap` in the authoritative level `dimension` (the one being
     /// ticked), none for a column not loaded. `Err` says why nothing was read: another dimension or a client of a
     /// server, or more than 65,536 columns (`MAX_COLUMNS`).
+    #[access(WorldOnly)]
     fn surface_heights(
         &self,
         dimension: &str,
         columns: &[(i32, i32)],
         heightmap: NativeHeightmap,
-    ) -> Result<Vec<Option<i32>>, String> {
-        crate::phase::unprovided(
-            "ServerHost::surface_heights",
-            "surface_heights",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Result<Vec<Option<i32>>, String>;
     /// Side: server.
     /// For a server mod: `below` blocks under and `above` blocks from each column's height by `heightmap`, as a
     /// palette and indexes, with the biome's grass, foliage and water tints (air outside the column and in columns
@@ -42,19 +33,14 @@ pub trait WorldEditServerHost {
     /// game draws them: near a biome border they can differ from what players see. `Err` says why nothing was
     /// read: another dimension or a client of a server, `below + above` of 0 or more than the level's height, or
     /// a read of more than 1,048,576 blocks (`MAX_READ`; it runs on the server tick, so read big areas in pieces).
+    #[access(WorldOnly)]
     fn read_columns(
         &self,
         dimension: &str,
         columns: &[(i32, i32)],
         heightmap: NativeHeightmap,
         range: (u32, u32),
-    ) -> Result<NativeColumnBlocks, String> {
-        crate::phase::unprovided(
-            "ServerHost::read_columns",
-            "read_columns",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Result<NativeColumnBlocks, String>;
     /// Side: server.
     /// For a server mod: structure template `id` (`mymod:hut`, found as
     /// `StructureTemplateManager.get` finds it: the world's saved structures,
@@ -66,17 +52,12 @@ pub trait WorldEditServerHost {
     /// entities are left out. None for an id that doesn't parse or has a `.`
     /// or `..` part, a template the game doesn't have, and on a client.
     /// API @API:structure_template@.
+    #[access(WorldOnly)]
     fn structure_template(
         &mut self,
         id: &str,
         at: [i32; 3],
         rotation: StructureRotation,
         mirror: StructureMirror,
-    ) -> Option<StructureTemplateSnapshot> {
-        crate::phase::unprovided(
-            "ServerHost::structure_template",
-            "structure_template",
-            crate::phase::LoadAccess::WorldOnly,
-        )
-    }
+    ) -> Option<StructureTemplateSnapshot>;
 }

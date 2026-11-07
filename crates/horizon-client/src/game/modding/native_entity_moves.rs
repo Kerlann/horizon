@@ -31,7 +31,7 @@ impl Game<'_> {
     /// `rotation` (yaw, pitch in degrees) it also turns. False for a position
     /// outside the world's bounds, for wall-mounted entities, or when the
     /// requested rotation cannot be stored.
-    pub(super) fn native_entity_teleport_to(
+    pub(super) fn entity_teleport_to(
         &mut self,
         entity: EntityRef,
         pos: [f64; 3],
@@ -59,12 +59,7 @@ impl Game<'_> {
     /// `setXRot`): the pitch wraps and is clamped to -90..90. False for kinds
     /// whose rotation Horizon does not fully store, or an unavailable player.
     /// Does not teleport or dismount.
-    pub(super) fn native_entity_set_rotation(
-        &mut self,
-        entity: EntityRef,
-        yaw: f32,
-        pitch: f32,
-    ) -> bool {
+    pub(super) fn entity_set_rotation(&mut self, entity: EntityRef, yaw: f32, pitch: f32) -> bool {
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };
@@ -93,11 +88,13 @@ impl Game<'_> {
                 true
             }
             Target::Other(id) => {
-                let Some(o) = self.others.iter_mut().find(|o| o.id == id) else {
+                let Some(i) = self.others.iter().position(|o| o.id == id) else {
                     return false;
                 };
-                o.yaw = yaw;
-                o.pitch = pitch;
+                self.others.update(i, |o| {
+                    o.yaw = yaw;
+                    o.pitch = pitch;
+                });
                 true
             }
             _ => false,
@@ -105,7 +102,7 @@ impl Game<'_> {
     }
     /// The yaw of the entity's head (`Entity.getYHeadRot`): a mob's or a
     /// player's own, zero for the kinds without a head.
-    pub(super) fn native_entity_head_yaw(&self, entity: EntityRef) -> Option<f32> {
+    pub(super) fn entity_head_yaw(&self, entity: EntityRef) -> Option<f32> {
         let t = self.native_entity_target(entity)?;
         if let Some(g) = self.native_target_guest(t) {
             return Some(g.head_yaw);
@@ -118,7 +115,7 @@ impl Game<'_> {
     /// Turns a mob's head to `yaw` (`Entity.setYHeadRot`); its body follows
     /// as its AI turns it. Players' heads can turn too; false for other kinds
     /// or an unavailable player.
-    pub(super) fn native_entity_set_head_yaw(&mut self, entity: EntityRef, yaw: f32) -> bool {
+    pub(super) fn entity_set_head_yaw(&mut self, entity: EntityRef, yaw: f32) -> bool {
         if !yaw.is_finite() {
             return false;
         }
@@ -150,20 +147,20 @@ impl Game<'_> {
     }
     /// The horizontal direction the entity faces (`Entity.getDirection`):
     /// `north`, `south`, `east` or `west`.
-    pub(super) fn native_entity_direction(&self, entity: EntityRef) -> Option<&'static str> {
+    pub(super) fn entity_direction(&self, entity: EntityRef) -> Option<&'static str> {
         let t = self.native_entity_target(entity)?;
         Some(facing(self.target_rotation(t)[0]))
     }
     /// The entity's width and height (`Entity.getBbWidth`, `getBbHeight`):
     /// its box's, so a baby's or a scaled entity's own.
-    pub(super) fn native_entity_dimensions(&self, entity: EntityRef) -> Option<[f64; 2]> {
-        let [min, max] = self.native_entity_bounding_box(entity)?;
+    pub(super) fn entity_dimensions(&self, entity: EntityRef) -> Option<[f64; 2]> {
+        let [min, max] = self.entity_bounding_box(entity)?;
         Some([max[0] - min[0], max[1] - min[1]])
     }
     /// Adds `delta` to the entity's velocity (`Entity.push`,
     /// `addDeltaMovement`). False for an unavailable player, an entity
     /// Horizon doesn't simulate, or a value that isn't finite.
-    pub(super) fn native_entity_push(&mut self, entity: EntityRef, delta: [f64; 3]) -> bool {
+    pub(super) fn entity_push(&mut self, entity: EntityRef, delta: [f64; 3]) -> bool {
         if !delta.iter().all(|v| v.is_finite()) {
             return false;
         }
@@ -252,7 +249,7 @@ mod tests {
             mob.fall_distance = 5.0;
             mob.velocity.y = -2.0;
             game.mobs.push(mob);
-            let entity = game.native_entity(12).unwrap();
+            let entity = game.entity(12).unwrap();
             assert!(entity.teleport_to(game, [5.0, 70.0, -3.0], Some([90.0, 120.0])));
             let mob = &game.mobs[0];
             assert!(mob.ai.nav.path.is_none());
@@ -284,7 +281,7 @@ mod tests {
                     Vec3::ZERO,
                     0.0,
                 ));
-            let stand = game.native_entity(13).unwrap();
+            let stand = game.entity(13).unwrap();
             assert!(!stand.set_rotation(game, 30.0, 10.0));
             game.others.push(super::super::commands::OtherEntity {
                 id: 14,
@@ -293,7 +290,7 @@ mod tests {
                 yaw: 60.0,
                 pitch: 0.0,
             });
-            let marker = game.native_entity(14).unwrap();
+            let marker = game.entity(14).unwrap();
             assert_eq!(marker.head_yaw(game), Some(0.0));
             assert!(!marker.set_head_yaw(game, 10.0));
             game.paintings.push(horizon_client::entities::Painting {
@@ -307,7 +304,7 @@ mod tests {
                 height: 1,
                 check_interval: 0,
             });
-            let painting = game.native_entity(15).unwrap();
+            let painting = game.entity(15).unwrap();
             assert!(!painting.teleport_to(game, [1.0, 64.0, 0.0], None));
             assert!(!painting.set_rotation(game, 30.0, 10.0));
         });

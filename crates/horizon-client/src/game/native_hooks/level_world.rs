@@ -29,7 +29,7 @@ impl Game<'_> {
     /// server, for a stale handle and for a level not open: the Nether and
     /// the End open when someone first goes there and close after 300 ticks
     /// with nobody in them (`close_idle_levels`).
-    pub(in crate::game) fn native_level_random(&self, level: LevelRef) -> Option<LegacyRandom> {
+    pub(in crate::game) fn level_random(&self, level: LevelRef) -> Option<LegacyRandom> {
         self.native_level_world(level)?;
         if level.dimension() == self.dim.key() {
             Some(self.world.random.clone())
@@ -42,7 +42,7 @@ impl Game<'_> {
     /// Replace the random of the server level `level` names with `random`,
     /// a stream `native_level_random` gave and the mod drew from. False where
     /// that gives `None`.
-    pub(in crate::game) fn native_level_set_random(
+    pub(in crate::game) fn level_set_random(
         &mut self,
         level: LevelRef,
         random: LegacyRandom,

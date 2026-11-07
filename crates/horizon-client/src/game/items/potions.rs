@@ -707,7 +707,7 @@ impl Game<'_> {
         if &*stack.item != "minecraft:potion"
             || stack.potion() != Some("minecraft:water")
             || face == [0, -1, 0]
-            || !self.block_in_tag("minecraft:convertible_to_mud", &self.block_name(pos))
+            || !self.named_block_in_tag("minecraft:convertible_to_mud", &self.block_name(pos))
         {
             return Ok(false);
         }
@@ -751,13 +751,13 @@ impl Game<'_> {
     /// `ItemUtils.createFilledResult`: replace one of the held stack.
     fn fill_held(&mut self, filled: ItemStack) {
         if self.creative {
-            let _ = self.give(filled);
+            let _ = self.add_stack_to_inventory(filled);
             return;
         }
         self.consume_held();
         if self.held().is_none() {
             *self.held_mut() = Some(filled);
-        } else if let Some(rest) = self.give(filled)
+        } else if let Some(rest) = self.add_stack_to_inventory(filled)
             && let Some(eye) = self.eye_position()
         {
             // `player.drop(stack, false)`.
@@ -834,7 +834,7 @@ impl Game<'_> {
             let bottle = ItemStack::new("minecraft:glass_bottle", 1);
             if self.stack_in(slot).is_none() {
                 *self.stack_in_mut(slot) = Some(bottle);
-            } else if let Some(rest) = self.give(bottle) {
+            } else if let Some(rest) = self.add_stack_to_inventory(bottle) {
                 self.spawn_item(rest, eye, [0.0, 0.1, 0.0], 40);
             }
         }

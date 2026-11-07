@@ -62,7 +62,7 @@ pub enum SleepProblem {
     /// The bed rule no longer lets a player sleep: it is daytime.
     NotPossibleNow,
 }
-/// The world's clock as a client mod reads it (`native_clock`).
+/// The world's clock as a client mod reads it (`clock`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
 pub struct NativeClock {
@@ -73,7 +73,7 @@ pub struct NativeClock {
     /// it modulo 24000 for the hour; `/time set` can make it negative.
     pub day_time: i64,
 }
-/// What `native_read_columns` read: the blocks round each column's height (`bases`, none where it isn't loaded),
+/// What `read_columns` read: the blocks round each column's height (`bases`, none where it isn't loaded),
 /// as indexes into `palette`, a column after another, and three biome tints a column (grass, foliage, water).
 #[derive(Clone, Debug, PartialEq, Default)]
 // exhaustive: the game builds it with a literal; mods only read it
@@ -156,7 +156,7 @@ pub struct NativeDataMapType {
     /// The registry it is for: `minecraft:item` or `minecraft:block`.
     pub registry: String,
 }
-/// An experience orb as a server mod reads it (`native_experience_orbs`).
+/// An experience orb as a server mod reads it (`experience_orbs`).
 /// Read by mods only.
 #[derive(Clone, Debug)]
 // exhaustive: the game builds it with a literal; mods only read it

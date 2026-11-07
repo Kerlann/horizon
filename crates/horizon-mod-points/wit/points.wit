@@ -1,5 +1,5 @@
 // How a wasm mod listens at the game's points: one generic interface, whatever the points, so it
-// never grows with them. A record crosses as its fields in order; `subscribed` names each place
+// never grows with them. A record crosses as its fields in order; `subscribed` names each inject ID
 // with its record's shape, which the game checks against its own at load.
 package horizon:mod-points@0.1.0;
 
@@ -11,7 +11,7 @@ interface listeners {
   /// game, with no `Game` behind it).
   enum host-kind { read, server, client, none }
 
-  /// The places the mod listens at, each its `Points` method's name and its record's shape.
+  /// The mod's declared inject IDs, each with its checked place's record shape.
   subscribed: func() -> list<tuple<string, string>>;
 
   /// Runs the listener at `place`, an index into `subscribed`, with the record's fields, and

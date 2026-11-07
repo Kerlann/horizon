@@ -253,20 +253,19 @@ pub fn rarity<'a>(stack: &ItemStack, default: &'a str) -> &'a str {
         },
         _ => None,
     };
-    let rarity = if stack.data().is_some_and(|d| d.ominous_banner) {
+    let rarity = if let Some(set) = set {
+        set
+    } else if stack
+        .data()
+        .is_some_and(|data| data.other("!minecraft:rarity").is_some())
+    {
+        "common"
+    } else if stack.data().is_some_and(|data| data.ominous_banner) {
         "uncommon"
     } else {
-        set.unwrap_or(default)
+        default
     };
-    if stack.enchantments().is_empty() {
-        rarity
-    } else {
-        match rarity {
-            "common" | "uncommon" => "rare",
-            "rare" => "epic",
-            r => r,
-        }
-    }
+    horizon_items::properties::ItemRarity::of(rarity, !stack.enchantments().is_empty()).as_str()
 }
 
 /// `BundleItem.getTooltipImage`: the contents grid of a bundle, or None when

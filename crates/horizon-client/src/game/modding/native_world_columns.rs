@@ -10,7 +10,7 @@ impl Game<'_> {
     /// For a server mod: each column's height by `heightmap` in the authoritative level `dimension` (the one being
     /// ticked), none for a column not loaded. `Err` says why nothing was read: another dimension or a client of a
     /// server, or more than 65,536 columns (`MAX_COLUMNS`).
-    pub(super) fn native_surface_heights(
+    pub(super) fn surface_heights(
         &self,
         dimension: &str,
         columns: &[(i32, i32)],
@@ -26,7 +26,7 @@ impl Game<'_> {
             ));
         }
         let started = std::time::Instant::now();
-        let out = self.surface_heights(columns, heightmap);
+        let out = self.loaded_column_heights(columns, heightmap);
         self.native_read_logged(started, "height query", columns.len());
         Ok(out)
     }
@@ -36,7 +36,7 @@ impl Game<'_> {
     /// game draws them: near a biome border they can differ from what players see. `Err` says why nothing was
     /// read: another dimension or a client of a server, `below + above` of 0 or more than the level's height, or
     /// a read of more than 1,048,576 blocks (`MAX_READ`; it runs on the server tick, so read big areas in pieces).
-    pub(super) fn native_read_columns(
+    pub(super) fn read_columns(
         &self,
         dimension: &str,
         columns: &[(i32, i32)],
@@ -48,7 +48,7 @@ impl Game<'_> {
             return Err(format!("{dimension} is not the level being ticked"));
         }
         let started = std::time::Instant::now();
-        let out = self.read_columns(columns, heightmap, below, above)?;
+        let out = self.read_loaded_block_columns(columns, heightmap, below, above)?;
         self.native_read_logged(started, "column read", columns.len());
         Ok(out)
     }

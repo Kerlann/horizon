@@ -1,8 +1,13 @@
 <!-- chapter: Registry keys -->
 <!-- separator: 1 -->
 
-`Registrar::block_key(id)` and `Registrar::effect_key(id)` request registry entries, not new
-content. Declare them in `register`, retain the returned `BlockKey` or `EffectKey` in the
+On `r: &mut dyn Registrar`, `r.block_key(id)` and `r.effect_key(id)` request registry entries,
+not new content. `Registrar` is the generated union of the kind-local registration traits
+(such as `BlocksRegistrar` and `EffectsRegistrar`); mod registration hooks and the
+[horizon-machine-sample](https://github.com/arismoko/horizon-machine-sample) continue to
+use `dyn Registrar`. Each kind owns its declarations and implementation in `parts/<kind>.rs`;
+the union and WebAssembly bindings discover those traits without a shared method list.
+The capability-provider lookup union is assembled the same way. Declare them in `register`, retain the returned `BlockKey` or `EffectKey` in the
 mod or Part, and reuse them for registry operations. Requests are canonicalized (a bare id
 uses `minecraft:`), deduplicated across mods and checked after every mod's content is known.
 An unknown entry refuses the load with the requesting mod and canonical id, even if the

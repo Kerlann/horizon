@@ -94,3 +94,26 @@ pub mod tests {
         assert!(std::panic::catch_unwind(|| keys[0].id(&NoGame)).is_err());
     }
 }
+
+/// Registrar operations for effects.
+pub trait EffectsRegistrar {
+    /// Request an effect by canonical registry id. All mods' declarations are checked at load.
+    fn effect_key(&mut self, id: &str) -> crate::EffectKey;
+}
+
+impl EffectsRegistrar for PartRegistrar {
+    fn effect_key(&mut self, id: &str) -> crate::EffectKey {
+        match self
+            .registry_keys
+            .borrow_mut()
+            .effects
+            .request(self.mod_id, id)
+        {
+            Ok(slot) => crate::EffectKey(slot),
+            Err(error) => {
+                self.refused.push(error);
+                crate::EffectKey(u32::MAX)
+            }
+        }
+    }
+}

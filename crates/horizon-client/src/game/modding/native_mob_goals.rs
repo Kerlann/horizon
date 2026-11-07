@@ -59,12 +59,7 @@ impl Game<'_> {
     /// (`nearest_target`, `hurt_by_target`) go in through
     /// `add_target_goal`; both selectors take them, as vanilla's two
     /// selectors do.
-    pub(super) fn native_mob_add_goal(
-        &mut self,
-        mob: MobRef,
-        priority: i32,
-        goal: &NativeGoal,
-    ) -> bool {
+    pub(super) fn mob_add_goal(&mut self, mob: MobRef, priority: i32, goal: &NativeGoal) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
@@ -88,7 +83,7 @@ impl Game<'_> {
 
     /// `GoalSelector.addGoal` on the mob's target selector. The same rules
     /// as `add_goal`.
-    pub(super) fn native_mob_add_target_goal(
+    pub(super) fn mob_add_target_goal(
         &mut self,
         mob: MobRef,
         priority: i32,
@@ -121,7 +116,7 @@ impl Game<'_> {
     /// unavailable mob, a client, and the dragon. Nothing in a mob's tick
     /// resolves, as its copy is held out there: add what a mod needs in
     /// `entity_join`, which fires for a loaded chunk's mobs too.
-    pub(super) fn native_mob_remove_goal(&mut self, mob: MobRef, id: &str) -> Option<usize> {
+    pub(super) fn mob_remove_goal(&mut self, mob: MobRef, id: &str) -> Option<usize> {
         let Some(Target::Mob(entity)) = self.native_entity_target(mob.entity()) else {
             return None;
         };
@@ -131,7 +126,7 @@ impl Game<'_> {
 
     /// `GoalSelector.removeGoal` on the target selector, by kind, as
     /// `remove_goal` does on the goal selector.
-    pub(super) fn native_mob_remove_target_goal(&mut self, mob: MobRef, id: &str) -> Option<usize> {
+    pub(super) fn mob_remove_target_goal(&mut self, mob: MobRef, id: &str) -> Option<usize> {
         let Some(Target::Mob(entity)) = self.native_entity_target(mob.entity()) else {
             return None;
         };
@@ -143,7 +138,7 @@ impl Game<'_> {
     /// selector as a `NativeMobGoalEntry` (the priority, the kind id and
     /// whether it runs), in registration order. None for a stale or
     /// unavailable mob, a client, and the dragon.
-    pub(super) fn native_mob_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> {
+    pub(super) fn mob_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return None;
         };
@@ -162,7 +157,7 @@ impl Game<'_> {
 
     /// Every goal of the target selector, as `goals` reads the goal
     /// selector's.
-    pub(super) fn native_mob_target_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> {
+    pub(super) fn mob_target_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return None;
         };
@@ -487,8 +482,8 @@ mod tests {
         let mut m = Mob::new(id, t, Vec3::new(3.5, 65.0, 3.5), 0.0);
         m.on_ground = true;
         game.mobs.push(m);
-        let entity = game.native_entity(id).unwrap();
-        game.native_mob_ref(entity).unwrap()
+        let entity = game.entity(id).unwrap();
+        game.mob(entity).unwrap()
     }
 
     /// Whether the mob's goal selector holds a goal of kind `id`.
@@ -599,8 +594,8 @@ mod tests {
                 },
             ] {
                 game.mobs[0].ai.nav.kind = nav;
-                assert!(!game.native_mob_add_goal(mob, 0, &goal));
-                assert!(!game.native_mob_add_target_goal(mob, 0, &goal));
+                assert!(!game.mob_add_goal(mob, 0, &goal));
+                assert!(!game.mob_add_target_goal(mob, 0, &goal));
             }
             for nav in [
                 super::NavKind::Ground,
@@ -608,8 +603,8 @@ mod tests {
                 super::NavKind::Flying,
             ] {
                 game.mobs[0].ai.nav.kind = nav;
-                assert!(game.native_mob_add_goal(mob, 0, &goal));
-                assert!(game.native_mob_add_target_goal(mob, 0, &goal));
+                assert!(game.mob_add_goal(mob, 0, &goal));
+                assert!(game.mob_add_target_goal(mob, 0, &goal));
             }
         });
     }

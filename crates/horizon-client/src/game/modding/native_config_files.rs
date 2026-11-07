@@ -25,13 +25,13 @@ impl Game<'_> {
     /// running, so a mod never names its id and can't reach another mod's
     /// files; a world's `serverconfig/` is read only through
     /// `config_loading`.
-    pub(super) fn native_config_files() -> &'static dyn ConfigFiles {
+    pub(super) fn config_files() -> &'static dyn ConfigFiles {
         &CONFIG_FILES
     }
     /// Whether a mod with the `horizon-mod.toml` id `id` is installed: a
     /// native, wasm or content package (Fabric's `FabricLoader.isModLoaded`,
     /// NeoForge's `ModList.isLoaded`). The list is fixed at startup.
-    pub(super) fn native_is_loaded(id: &str) -> bool {
+    pub(super) fn is_loaded(id: &str) -> bool {
         mod_api::__private::loaded_mods().get(id).is_some()
     }
 }
@@ -380,7 +380,7 @@ mod tests {
         assert!(!config.join("other").exists());
         // Outside the mod's hooks the service is no one's.
         assert_eq!(
-            Game::native_config_files().read(&path("proof-common.toml")),
+            Game::config_files().read(&path("proof-common.toml")),
             Err(ConfigFileError::NoCallingMod)
         );
     }

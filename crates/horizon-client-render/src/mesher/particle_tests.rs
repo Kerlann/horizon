@@ -50,6 +50,7 @@ fn terrain_particles_use_the_particle_sprite_and_vanilla_tint_sources() {
             &biomes,
             BiomeZoom::new(0),
             2,
+            false,
         )
     };
     // grassBlock() overrides colorAsTerrainParticle to -1: the dirt stays untinted.
@@ -97,6 +98,7 @@ fn block_tints_match_the_chunk_mesh_for_grass_blocks() {
             &biomes,
             BiomeZoom::new(0),
             2,
+            false,
         )
     };
     let grass = tints("minecraft:grass_block");

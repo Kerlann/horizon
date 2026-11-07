@@ -717,7 +717,7 @@ impl Bundle {
     }
 
     /// Whether horizon-mixins changes the game's source for it: a helper injection or a module.
-    /// A `trait_method` or `raw` injection listens at a point instead ([`inject`]).
+    /// A raw injection listens at a point instead ([`inject`]).
     fn needs_mixins(&self) -> bool {
         !self.native().module.is_empty()
             || self
@@ -2136,10 +2136,6 @@ fn pipeline(
             ))?;
         }
     }
-    let point_injections: Vec<_> = ordered
-        .iter()
-        .flat_map(|bundle| inject::of(&bundle.manifest))
-        .collect();
     let revision = match &built_on {
         Some(about) => about.horizon.clone(),
         None => revision_of(base)?,
@@ -2207,10 +2203,7 @@ fn pipeline(
             None => match prebuilt::fetch(&revision, target, || {
                 progress(Step::PrebuiltGame(revision.clone()))
             })? {
-                Ok(game) => {
-                    prebuilt::serves_points(&game, &point_injections)?;
-                    Ok(game)
-                }
+                Ok(game) => Ok(game),
                 Err(reason) => Err(reason),
             },
         };
@@ -2394,12 +2387,6 @@ fn pipeline(
         mods.iter()
             .try_for_each(|bundle| catalog.check(&bundle.manifest))
             .map_err(|error| discard(&pending, &catalog_dir, error))?;
-        inject::check(
-            &point_injections,
-            &inject::listed(&catalog_dir.join(inject::POINTS))
-                .map_err(|error| discard(&pending, &catalog_dir, error))?,
-        )
-        .map_err(|error| discard(&pending, &catalog_dir, error))?;
         let _ = fs::remove_dir_all(&fresh);
         fs::rename(&pending, &fresh).map_err(|error| discard(&pending, &catalog_dir, error))?;
         fs::rename(catalog_dir.join(inject::POINTS), &listed)
@@ -3522,8 +3509,8 @@ mod tests {
                 "[[native.injection]]\nid='ordinary'\ntarget='horizon_client::game::tick'\nkind='HEAD'\nhelper='src/lib.rs'\n",
             ),
             (
-                "trait_injection",
-                "[[native.injection]]\nid='hook'\ntarget='horizon_client::game::tick'\nkind='HEAD'\ntrait_method='tick'\n",
+                "slot_injection",
+                "[[inject]]\nid='hook'\nat='horizon_client::game::tick'\nkind='head'\nwith='hook'\nhash='signature'\n",
             ),
         ] {
             let project = incoming.join(id);
@@ -3539,12 +3526,12 @@ mod tests {
             }
         }
         let mods = bundles(&incoming).unwrap();
-        // A point injection (`trait_method`) is the launcher's: it never reaches horizon-mixins.
+        // A unified slot declaration is the launcher's: it never reaches horizon-mixins.
         assert!(mods[0].needs_mixins());
         assert!(!mods[1].needs_mixins() && !mods[2].needs_mixins());
         let input = root.join("mixins");
         stage_mixins(&mods, &input).unwrap();
-        assert!(!input.join("plain").exists() && !input.join("trait_injection").exists());
+        assert!(!input.join("plain").exists() && !input.join("slot_injection").exists());
         assert!(input.join("ordinary").join(MANIFEST).is_file());
         assert!(mods
             .iter()

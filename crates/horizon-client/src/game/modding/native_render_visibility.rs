@@ -10,7 +10,7 @@ impl Game<'_> {
     /// from those in use, remeshes every loaded section with them. Call it when your answer changes (a toggle key, a scan
     /// finishing) and once when the player joins, not every frame: a rebuild takes the workers a
     /// few seconds. With no part answering, nothing is asked and the mesher keeps its no-mod path.
-    pub(super) fn native_refresh_render_visibility(&mut self) {
+    pub(super) fn refresh_render_visibility(&mut self) {
         let asked = mod_api::__private::has_scoped_hook(mod_api::HookId::BlockRenderVisibility);
         let mut hidden: Arc<[bool]> = if asked {
             (0..self.pack.assets.registry.len())

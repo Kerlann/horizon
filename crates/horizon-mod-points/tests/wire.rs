@@ -1,9 +1,9 @@
 //! How records cross to a wasm mod (`mod_points::wire`), on the real points: an integration test, so
 //! the generated points compile once for the tests, not again as a unit-test copy of the crate.
 #![cfg(feature = "wasm-host")]
-use mod_points::__private::wire::{Forward, Mismatch, PointHost, Record, Value, Wire, forwarded};
+use mod_points::__private::wire::{Forward, Mismatch, PointHost, Record, Value, Wire};
+use mod_points::PointId;
 use mod_points::places::{NAMES, SHAPES};
-use mod_points::{PointId, ids};
 use std::borrow::Cow;
 
 struct Host;
@@ -12,21 +12,36 @@ mod_api::impl_host_areas!(Host);
 impl mod_api::ServerHost for Host {}
 mod_api::impl_server_host_areas!(Host);
 
-struct Listener(fn(PointId, PointHost<'_>, &mut dyn Record));
+struct Listener;
 impl Forward for Listener {
-    fn subscribed(&self) -> &'static [Option<PointId>] {
-        &[
-            ids::handle_chat_input,
-            ids::reach,
-            ids::reach_return,
-            ids::turn_player,
-            ids::slot_candidates,
-        ]
+    fn forward(&self, index: u32, host: PointHost<'_>, record: &mut dyn Record) {
+        forward(index, host, record);
     }
+}
 
-    fn forward(&self, place: PointId, host: PointHost<'_>, record: &mut dyn Record) {
-        self.0(place, host, record);
-    }
+fn install() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        for (index, place) in [
+            PointId::HandleChatInput,
+            PointId::Reach,
+            PointId::ReachReturn,
+            PointId::TurnPlayer,
+            PointId::SlotCandidates,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            mod_points::register(&mod_points::__private::SlotListener::forwarded(
+                "wire",
+                place,
+                &Listener,
+                index as u32,
+            ))
+            .unwrap();
+        }
+        mod_points::__private::seal();
+    });
 }
 
 /// The field types a record's shape may name: each one [`Wire`] carries with the same range in
@@ -66,30 +81,35 @@ fn every_point_of_the_game_crosses_to_a_wasm_mod() {
     }
 }
 
-#[test]
-fn a_record_crosses_and_takes_back_what_a_listener_changed() {
-    let listener = forwarded(Box::new(Listener(|place, host, record| match place {
-        PointId::HandleChatInput => {
+fn forward(index: u32, host: PointHost<'_>, record: &mut dyn Record) {
+    match index {
+        0 => {
             assert!(matches!(
                 host,
                 PointHost::Side(mod_api::HostSide::Server(_))
             ));
             let fields = record.lower();
-            assert!(matches!(&fields[..], [Value::Str(text), Value::B(false)] if text == "hi"));
-            record
-                .write_back(vec![Value::Str("hello".into()), Value::B(true)])
-                .unwrap();
+            assert!(
+                matches!(&fields[..], [Value::Str(text), Value::B(false)] if text == "hi" || text == "keep")
+            );
+            if matches!(&fields[0], Value::Str(text) if text == "hi") {
+                record
+                    .write_back(vec![Value::Str("hello".into()), Value::B(true)])
+                    .unwrap();
+            } else {
+                record.write_back(fields).unwrap();
+            }
         }
-        PointId::Reach => {
+        1 => {
             assert!(matches!(host, PointHost::Read(_)));
             assert!(matches!(&record.lower()[..], [Value::None]));
             record.write_back(vec![Value::F(6.0)]).unwrap();
         }
-        PointId::ReachReturn => {
+        2 => {
             assert!(matches!(&record.lower()[..], [Value::F(6.0)]));
             record.write_back(vec![Value::F(7.0)]).unwrap();
         }
-        PointId::TurnPlayer => {
+        3 => {
             // A mod answering another shape is refused, and the record is left as it was.
             assert_eq!(record.write_back(vec![Value::F(3.0)]), Err(Mismatch));
             assert_eq!(
@@ -106,38 +126,36 @@ fn a_record_crosses_and_takes_back_what_a_listener_changed() {
                 Err(Mismatch)
             );
         }
-        _ => panic!("unexpected place {place:?}"),
-    })));
-    assert_eq!(
-        listener.subscribed(),
-        &[
-            Some(PointId::HandleChatInput),
-            Some(PointId::Reach),
-            Some(PointId::ReachReturn),
-            Some(PointId::TurnPlayer),
-            Some(PointId::SlotCandidates),
-        ]
-    );
+        4 => {
+            let fields = record.lower();
+            assert!(matches!(&fields[0], Value::U(u64::MAX)));
+            assert_eq!(u64::lift(&fields[0]), Ok(u64::MAX));
+            record.write_back(fields).unwrap();
+        }
+        _ => panic!("unexpected export {index}"),
+    }
+}
+
+#[test]
+fn a_record_crosses_and_takes_back_what_a_listener_changed() {
+    install();
     let mut record = mod_points::HandleChatInputArgs::__new("hi");
-    listener.handle_chat_input(mod_api::HostSide::Server(&mut Host), &mut record);
+    mod_points::dispatch::handle_chat_input(mod_api::HostSide::Server(&mut Host), &mut record);
     assert_eq!((&*record.message, record.cancel), ("hello", true));
 
     // Unchanged text stays the game's own borrow.
-    let unchanged = forwarded(Box::new(Listener(|_, _, record| {
-        record.write_back(record.lower()).unwrap();
-    })));
-    let mut kept = mod_points::HandleChatInputArgs::__new("hi");
-    unchanged.handle_chat_input(mod_api::HostSide::Server(&mut Host), &mut kept);
-    assert!(matches!(kept.message, Cow::Borrowed("hi")));
+    let mut kept = mod_points::HandleChatInputArgs::__new("keep");
+    mod_points::dispatch::handle_chat_input(mod_api::HostSide::Server(&mut Host), &mut kept);
+    assert!(matches!(kept.message, Cow::Borrowed("keep")));
 
     let mut reach = mod_points::ReachArgs::__new();
-    listener.reach(&Host, &mut reach);
+    mod_points::dispatch::reach(&Host, &mut reach);
     assert_eq!(reach.result, Some(6.0));
-    listener.reach_return(&Host, &mut reach);
+    mod_points::dispatch::reach_return(&Host, &mut reach);
     assert_eq!(reach.result, Some(7.0));
 
     let mut turn = mod_points::TurnPlayerArgs::__new(1.0, 2.0);
-    listener.turn_player(mod_api::HostSide::Server(&mut Host), &mut turn);
+    mod_points::dispatch::turn_player(mod_api::HostSide::Server(&mut Host), &mut turn);
     assert_eq!((turn.xo, turn.yo, turn.cancel), (1.0, 2.0, false));
 }
 
@@ -150,15 +168,8 @@ fn a_native_width_sentinel_survives_a_listener_that_leaves_it() {
         .map(|place| mod_points::places::SHAPES[place])
         .expect("slot_candidates is a point");
     assert!(shape.contains("limit:u64"), "{shape}");
-    let listener = forwarded(Box::new(Listener(|place, _, record| {
-        assert_eq!(place, PointId::SlotCandidates);
-        let fields = record.lower();
-        assert!(matches!(&fields[0], Value::U(u64::MAX)));
-        // As the mod lifts it, on any target.
-        assert_eq!(u64::lift(&fields[0]), Ok(u64::MAX));
-        record.write_back(fields).unwrap();
-    })));
+    install();
     let mut record = mod_points::SlotCandidatesArgs::__new(usize::MAX);
-    listener.slot_candidates(mod_api::HostSide::Server(&mut Host), &mut record);
+    mod_points::dispatch::slot_candidates(mod_api::HostSide::Server(&mut Host), &mut record);
     assert_eq!((record.limit, record.cancel), (u64::MAX, false));
 }

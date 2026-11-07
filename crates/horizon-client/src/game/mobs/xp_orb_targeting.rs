@@ -32,9 +32,7 @@ impl Game<'_> {
             return nearest.map(|c| c.1);
         };
         let orb = mod_api::EntityRef::new(epoch, id);
-        let found = nearest
-            .and_then(|c| c.2)
-            .and_then(|uuid| self.native_player_ref(uuid));
+        let found = nearest.and_then(|c| c.2).and_then(|uuid| self.player(uuid));
         let mut following = found;
         self.native_xp_orb_targeting(orb, SCAN_DISTANCE, &mut following);
         if following == found {

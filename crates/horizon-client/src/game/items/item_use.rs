@@ -10,7 +10,6 @@ use horizon_client::{
     first_person::Hand,
     items::{ItemInfo, ItemStack},
     mobs::spear_use,
-    spear::Kinetic,
 };
 use horizon_core::use_animation::UseAnimation;
 
@@ -70,18 +69,7 @@ impl Game<'_> {
         };
         let data = stack.data();
         let mut animation = fixed.unwrap_or_else(|| {
-            let consumable = data.and_then(|d| d.other("minecraft:consumable"));
-            if let Some(component) = consumable {
-                let name = component.get("animation");
-                use horizon_core::nbt::Tag;
-                if let Some(Tag::String(name)) = name {
-                    horizon_items::use_animation::animation_name(name.0.iter().copied())
-                } else {
-                    UseAnimation::Eat
-                }
-            } else if data.is_none_or(|d| d.other("!minecraft:consumable").is_none())
-                && let Some(consumable) = info.and_then(|i| i.consumable.as_ref())
-            {
+            if let Some(consumable) = stack.consumable(info) {
                 consumable.animation
             } else if data.is_some_and(|d| d.other("minecraft:blocks_attacks").is_some())
                 || (data.is_none_or(|d| d.other("!minecraft:blocks_attacks").is_none())
@@ -140,13 +128,19 @@ impl Game<'_> {
             "minecraft:spyglass" => 1200,
             "minecraft:brush" => 200,
             _ if info.is_some_and(|i| i.bundle) => 200,
-            _ if let Some(i) = self.res.items().instrument(stack) => i.use_ticks(),
-            _ => match info {
-                Some(i) if let Some(c) = &i.consumable => c.ticks(),
-                Some(i) if i.blocks_attacks.is_some() => 72_000,
-                _ if Kinetic::of(&stack.item).is_some() => 72_000,
-                _ => 0,
-            },
+            "minecraft:ender_eye" => 0,
+            "minecraft:goat_horn" => self.native_item_instrument_duration(stack),
+            _ => {
+                if let Some(consumable) = stack.consumable(info) {
+                    consumable.ticks()
+                } else if stack.carries_component(info, "minecraft:blocks_attacks")
+                    || stack.carries_component(info, "minecraft:kinetic_weapon")
+                {
+                    72_000
+                } else {
+                    0
+                }
+            }
         };
         self.native_use_duration(stack, &mut duration);
         duration
@@ -155,12 +149,12 @@ impl Game<'_> {
     /// `consumable`, `blocks_attacks` or kinetic weapon of vanilla's own, and
     /// a `native_use_duration` above 0. Its use is its own `Item.use`.
     pub(super) fn mod_use(&self, stack: &ItemStack) -> bool {
+        let info = self.items().get(&stack.item);
         !stack.item.starts_with("minecraft:")
-            && self
-                .items()
-                .get(&stack.item)
-                .is_some_and(|i| i.consumable.is_none() && i.blocks_attacks.is_none())
-            && Kinetic::of(&stack.item).is_none()
+            && info.is_some()
+            && stack.consumable(info).is_none()
+            && !stack.carries_component(info, "minecraft:blocks_attacks")
+            && !stack.carries_component(info, "minecraft:kinetic_weapon")
             && self.use_duration(stack) > 0
     }
     /// A right click with a `mod_use` item: `startUsingItem` (CONSUME).
@@ -201,7 +195,7 @@ impl Game<'_> {
         self.using = None;
         self.send_use_item_complete();
         self.apply_use_cooldown(stack);
-        if let Some(consumable) = &info.consumable {
+        if let Some(consumable) = stack.consumable(Some(info)) {
             self.finish_consuming(info, consumable, stack);
         } else if &*stack.item == "minecraft:spyglass" {
             self.stop_spyglass();

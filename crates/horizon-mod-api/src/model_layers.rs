@@ -7,7 +7,7 @@
 //! `setupAnim` does, and draws it with `native_draw_model_part`
 //! (`ModelPart.render`). Mods register their layers by id
 //! (`native_layer_definitions`, NeoForge's
-//! `EntityRenderersEvent.RegisterLayerDefinitions`), and `native_bake_layer`
+//! `EntityRenderersEvent.RegisterLayerDefinitions`), and `bake_layer`
 //! bakes one of them or a vanilla layer (`EntityModelSet.bakeLayer`).
 
 use horizon_core::geometry::Direction;
