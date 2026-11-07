@@ -551,3 +551,7 @@ mod tests {
         assert!(!roots[0].receiver);
     }
 }
+
+#[cfg(test)]
+#[path = "raw/controlled_exports.rs"]
+mod controlled_exports;
