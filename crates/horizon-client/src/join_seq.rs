@@ -458,9 +458,10 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     fn retain_where(&mut self, mut keep: impl FnMut(&mut T) -> bool) {
         let binding = &self.1;
         self.0.retain_mut(|entity| {
+            let before = binding.as_ref().map(|b| b.read(entity));
             let retained = keep(entity);
-            if !retained && let Some(binding) = binding {
-                binding.entity(entity, residency::Change::Remove);
+            if !retained && let (Some(binding), Some((id, join))) = (binding, before) {
+                binding.identity(id, join, residency::Change::Remove);
             }
             retained
         });
@@ -1101,6 +1102,22 @@ mod tests {
             changes(&journal),
             keys.into_iter().map(Remove).collect::<Vec<_>>()
         );
+        for id in [0, 7] {
+            let mut list = JoinList::default();
+            list.push(entity(id));
+            list.bind_residency(&journal, journal_owner(), |e| (e.value, e.join));
+            let expected: Vec<_> = residency::Identity::new(id, list[0].join)
+                .map(Remove)
+                .into_iter()
+                .collect();
+            changes(&journal);
+            list.retain_mut(|e| {
+                e.value = 70;
+                e.join = JoinSeq::next();
+                false
+            });
+            assert_eq!(changes(&journal), expected);
+        }
     }
 
     #[test]

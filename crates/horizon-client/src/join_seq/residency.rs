@@ -178,8 +178,11 @@ impl<T> Binding<T> {
             self.marker(change(identity));
         }
     }
+    pub(super) fn read(&self, entity: &T) -> (u32, JoinSeq) {
+        (self.identity)(entity)
+    }
     pub(super) fn entity(&self, entity: &T, change: fn(Identity) -> Change) {
-        let (id, join) = (self.identity)(entity);
+        let (id, join) = self.read(entity);
         self.identity(id, join, change);
     }
     pub(super) fn all(&self, entities: &[T], change: fn(Identity) -> Change) {
