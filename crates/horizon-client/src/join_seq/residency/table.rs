@@ -82,8 +82,7 @@ impl EntityTable {
     /// Apply pending operations in mutation order, reusing the event buffer.
     pub fn drain(&mut self) {
         self.journal.drain_into(&mut self.pending);
-        for index in 0..self.pending.len() {
-            let event = self.pending[index];
+        for &event in &self.pending {
             let location = |identity: Identity| Location {
                 owner: event.owner,
                 join: identity.join,
@@ -225,6 +224,7 @@ mod tests {
                 }
             );
         }
+        f.admit(1, HOME);
         assert_eq!(
             f.table
                 .lookup::<()>(0, |_| panic!("zero id inspected storage")),
