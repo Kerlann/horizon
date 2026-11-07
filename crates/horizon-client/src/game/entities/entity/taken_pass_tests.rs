@@ -69,39 +69,48 @@ pub(in crate::game) struct SlotIdentities {
 }
 
 impl SlotIdentities {
-    pub fn observe<T: HasAttachmentLifetime, const DIRECT: bool>(
+    pub fn observe<T: HasAttachmentLifetime>(
         &mut self,
-        owners: &mut JoinList<T, DIRECT>,
+        owners: &mut JoinList<T, false>,
         epoch: NativeWorldEpoch,
         id: fn(&T) -> u32,
     ) {
-        use std::collections::hash_map::Entry;
         owners.for_each_mut(|owner| {
             let id = id(owner);
-            match self.registrations.entry(id) {
-                Entry::Occupied(original) => {
-                    let current = owner
-                        .attachment_lifetime()
-                        .registration()
-                        .expect("known owner lost its registration");
-                    assert!(
-                        original.get().same_registration(&current),
-                        "owner {id} changed registration"
-                    );
-                }
-                Entry::Vacant(entry) => {
-                    LIFECYCLE_VALUE
-                        .set(&mut self.values, Holder::Entity(id), id as i32)
-                        .unwrap();
-                    owner.attachment_lifetime().bind(
-                        &mut self.values,
-                        &self.index,
-                        EntityRef::new(epoch, id),
-                    );
-                    entry.insert(owner.attachment_lifetime().registration().unwrap());
-                }
-            }
+            self.observe_one(owner, epoch, id);
         });
+    }
+
+    pub fn observe_one<T: HasAttachmentLifetime>(
+        &mut self,
+        owner: &mut T,
+        epoch: NativeWorldEpoch,
+        id: u32,
+    ) {
+        use std::collections::hash_map::Entry;
+        match self.registrations.entry(id) {
+            Entry::Occupied(original) => {
+                let current = owner
+                    .attachment_lifetime()
+                    .registration()
+                    .expect("known owner lost its registration");
+                assert!(
+                    original.get().same_registration(&current),
+                    "owner {id} changed registration"
+                );
+            }
+            Entry::Vacant(entry) => {
+                LIFECYCLE_VALUE
+                    .set(&mut self.values, Holder::Entity(id), id as i32)
+                    .unwrap();
+                owner.attachment_lifetime().bind(
+                    &mut self.values,
+                    &self.index,
+                    EntityRef::new(epoch, id),
+                );
+                entry.insert(owner.attachment_lifetime().registration().unwrap());
+            }
+        }
     }
 }
 
