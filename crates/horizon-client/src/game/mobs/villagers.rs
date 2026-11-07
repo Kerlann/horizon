@@ -277,7 +277,7 @@ impl Game<'_> {
         let Some(ty) = horizon_client::particles::ParticleType::from_name(kind) else {
             return;
         };
-        let options = mod_api::particles::ParticleOptions::simple(ty);
+        let options = horizon_client::particles::ParticleOptions::simple(ty);
         let mut spawned = Vec::new();
         horizon_client::particles::around_self(
             self.particles.random(),

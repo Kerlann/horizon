@@ -80,6 +80,8 @@ and remain strings, as do labels and tags.
 | Previous engine value | API-owned value | Mod changes |
 | --- | --- | --- |
 | Engine stack in `TooltipDisplay::for_stack` | `mod_api::ItemStack` | Pass the owned API stack supplied to the tooltip event. Its effective tooltip component includes vanilla's implicit defaults. Normal game rendering borrows the engine component without creating an API stack. |
+| Engine loot context and candidate stack | `mod_api::{NativeLootContext, LootStack}` | Contexts own their facts; candidate items are `ItemKey`s. Counts remain signed. Ordered `Option<Tag>` patches preserve removals and NBT types, and names are API `Text` trees. Writeback is atomic. |
+| Engine `ParticleType` and options | `ParticleKey` and API `ParticleOptions` | Retain a key requested through `Registrar::particle_key`. Every parameter-family constructor takes its key; `simple(key)` also replaces string-based custom provider construction. The engine enum is no longer exported. |
 | Engine damage containers | `mod_api::{DamageContainer, DamageValues, Reduction}` | Hooks receive an owned scalar snapshot. Read reductions with `reduction`; edit damage and cooldown through the container setters. Sequencing methods remain game-only. |
 | Engine item property values | `mod_api::{ItemBar, ItemRarity}` | Resource methods retain their signatures; damageability, glint and repair checks use game-owned metadata reads. |
 | Package manifest `Side` | `mod_api::Side` | Match `Client` and `Both` on the package metadata snapshot. This is not `HostSide` or the executing logical side. |

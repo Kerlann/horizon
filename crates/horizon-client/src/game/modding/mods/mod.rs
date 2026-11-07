@@ -555,6 +555,32 @@ pub(super) fn content_root(
         );
     }
     register_mob_effects(&overlay.mods);
+    // Resolve all particle providers once, alongside the other load-owned registries.
+    let mut particles: Vec<String> = horizon_client::particles::ParticleType::ALL
+        .iter()
+        .map(|ty| format!("minecraft:{}", ty.name()))
+        .collect();
+    particles.extend(
+        overlay
+            .root
+            .source()
+            .list_under("assets", &["particles"])
+            .into_iter()
+            .filter_map(|path| {
+                let path = path.strip_prefix("assets/")?;
+                let (namespace, path) = path.split_once("/particles/")?;
+                let path = path.strip_suffix(".json")?;
+                Some(format!("{namespace}:{path}"))
+            }),
+    );
+    mod_api::__private::resolve_particles(particles.iter().map(String::as_str), |id| {
+        horizon_client::particles::ParticleType::from_name(id)
+            .map(|ty| mod_api::__private::ParticleKind::Vanilla(ty as u32))
+            .or_else(|| {
+                (!id.starts_with("minecraft:")).then_some(mod_api::__private::ParticleKind::Custom)
+            })
+    })
+    .map_err(|errors| errors.join("\n"))?;
     mod_api::__private::resolve_effects(
         horizon_client_core::potions::all_effects()
             .map(|def| horizon_client_core::potions::namespaced(def.id)),

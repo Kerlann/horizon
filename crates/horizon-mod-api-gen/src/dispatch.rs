@@ -332,6 +332,19 @@ pub(super) fn emit<'a>(
                 syn::parse_str(&format!("&mut dyn {}", context.trait_name)).expect("a trait name")
             });
             let ty = drawn.as_ref().unwrap_or(ty);
+            let mut owned_ty = ty.clone();
+            struct OwnedLootContext;
+            impl syn::visit_mut::VisitMut for OwnedLootContext {
+                fn visit_path_segment_mut(&mut self, segment: &mut syn::PathSegment) {
+                    if segment.ident == "NativeLootContext" {
+                        segment.arguments = syn::PathArguments::None;
+                    } else {
+                        syn::visit_mut::visit_path_segment_mut(self, segment);
+                    }
+                }
+            }
+            syn::visit_mut::VisitMut::visit_type_mut(&mut OwnedLootContext, &mut owned_ty);
+            let ty = &owned_ty;
             dispatch_params.push(format!("{name}: {}", ty.to_token_stream()));
             let mutable_entity = ty.to_token_stream().to_string() == "& mut ModBlockEntity";
             let field_ty = if mutable_entity {
@@ -641,6 +654,9 @@ fn stack_crossing(
         "Suggestion",
         "GameRuleValue",
         "PlacementContext",
+        "LootStack",
+        "NativeLootContext",
+        "ParticleOptions",
     ];
     const INFALLIBLE_VALUES: &[&str] = &["GuiDraw", "Text"];
     fn contains_boundary(ty: &Type, names: &[&str]) -> bool {
@@ -728,7 +744,11 @@ fn stack_crossing(
                 format!("{local}.try_into_engine(&()).unwrap()")
             } else if stack {
                 let result = format!("__checked_{name}");
-                validations.push_str(&format!("let {result}: Result<_, mod_api::StackWriteError> = self.boundary_items().ok_or(mod_api::StackWriteError::Unavailable).and_then(|items| {local}.try_into_engine(items)); "));
+                if contains_boundary(ty, &["LootStack", "ParticleOptions"]) {
+                    validations.push_str(&format!("let {result} = {local}.try_into_engine(&()); "));
+                } else {
+                    validations.push_str(&format!("let {result}: Result<_, mod_api::StackWriteError> = self.boundary_items().ok_or(mod_api::StackWriteError::Unavailable).and_then(|items| {local}.try_into_engine(items)); "));
+                }
                 format!("match {result} {{ Ok(value) => value, Err(_) => return }}")
             } else {
                 local

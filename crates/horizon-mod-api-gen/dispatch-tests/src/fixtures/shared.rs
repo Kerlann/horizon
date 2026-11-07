@@ -515,7 +515,7 @@ mod stubs {
         }
     }
     pub(super) struct LootStack;
-    pub(super) struct NativeLootContext<'a>(pub &'a ());
+    pub(super) struct NativeLootContext;
     pub(super) struct NativeReloadListener;
     pub(super) struct RecipePropertyAddition;
     pub(super) struct AdvancementProgress {

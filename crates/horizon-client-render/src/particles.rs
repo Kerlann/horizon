@@ -19,7 +19,8 @@ use horizon_core::{
     random::{LegacyRandom, RandomSource},
 };
 use horizon_world::block_collision::BlockCollisionRegistry;
-pub use mod_api::particles::ParticleOptions;
+mod options;
+pub use options::ParticleOptions;
 use std::{
     array,
     collections::{HashMap, HashSet},

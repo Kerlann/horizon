@@ -1989,7 +1989,7 @@ impl Game<'_> {
                 };
             }
             self.particles.add(
-                &mod_api::particles::ParticleOptions::dust([1.0, 0.0, 0.0], 1.0),
+                &horizon_client::particles::ParticleOptions::dust([1.0, 0.0, 0.0], 1.0),
                 [
                     f64::from(pos[0]) + at[0],
                     f64::from(pos[1]) + at[1],

@@ -581,7 +581,7 @@ fn postorder<T, R>(
         .remove(&(std::ptr::from_ref(root) as usize))
         .expect("root visited")
 }
-fn captured_text(value: &serde_json::Value) -> mod_api::text::Text {
+pub(super) fn captured_text(value: &serde_json::Value) -> mod_api::text::Text {
     postorder(value, captured_node, mod_api::text::Text::default)
 }
 fn owned_text_component(text: &mod_api::text::Text) -> serde_json::Value {

@@ -180,10 +180,10 @@ pub fn main_with(
                 mod_api::dispatch_modify_default_components(&context, item, components);
             },
             loot_function: |kind, data, ctx, stack| {
-                mod_api::dispatch_loot_function(kind, data, ctx, stack);
+                crate::game::api_values::dispatch_loot_function(kind, data, ctx, stack);
             },
             loot_condition: |kind, data, ctx, holds| {
-                mod_api::dispatch_loot_condition(kind, data, ctx, holds);
+                crate::game::api_values::dispatch_loot_condition(kind, data, ctx, holds);
             },
         },
     )

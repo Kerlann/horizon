@@ -22,7 +22,7 @@ pub enum PositionSource {
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods use the constructors
 pub struct ParticleOptions {
-    pub ty: ParticleType,
+    pub ty: ParticleKey,
     /// `BlockParticleOption`: the block's particle sprite and terrain tint.
     pub block: Option<(String, u32)>,
     /// RGB(A) for dust, spells, entity effects and tinted leaves.
@@ -45,12 +45,9 @@ pub struct ParticleOptions {
     /// sent to clients; the resolved point is used for local rendering
     /// (`ParticleEngine::vibration` is the same particle).
     pub vibration: Option<(PositionSource, [f64; 3], i32)>,
-    /// A native mod's own particle type, by its namespaced name (`mymod:spark`):
-    /// `SimpleParticleType` plus the provider `particles/<name>.json` names.
-    pub mod_particle: Option<String>,
 }
 impl ParticleOptions {
-    pub fn simple(ty: ParticleType) -> Self {
+    pub fn simple(ty: ParticleKey) -> Self {
         Self {
             ty,
             block: None,
@@ -61,26 +58,17 @@ impl ParticleOptions {
             item: None,
             geyser: None,
             vibration: None,
-            mod_particle: None,
-        }
-    }
-    /// A native mod's `SimpleParticleType`: the sprite set of
-    /// `assets/<namespace>/particles/<path>.json`, drawn as a plain billboard.
-    pub fn named(name: impl Into<String>) -> Self {
-        Self {
-            mod_particle: Some(name.into()),
-            ..Self::simple(ParticleType::Smoke)
         }
     }
     /// `GeyserParticleOptions(type, waterBlocks)`.
-    pub fn geyser(ty: ParticleType, water_blocks: i32) -> Self {
+    pub fn geyser(ty: ParticleKey, water_blocks: i32) -> Self {
         Self {
             geyser: Some((water_blocks, 0.0)),
             ..Self::simple(ty)
         }
     }
     /// `GeyserBaseParticleOptions(type, waterBlocks, burstImpulseBase)`.
-    pub fn geyser_base(ty: ParticleType, water_blocks: i32, burst_impulse_base: f32) -> Self {
+    pub fn geyser_base(ty: ParticleKey, water_blocks: i32, burst_impulse_base: f32) -> Self {
         Self {
             geyser: Some((water_blocks, burst_impulse_base)),
             ..Self::simple(ty)
@@ -88,30 +76,30 @@ impl ParticleOptions {
     }
     /// `VibrationParticleOption(destination, arrivalInTicks)`: the listener's
     /// position source and the resolved point this engine flies the signal to.
-    pub fn vibration(source: PositionSource, dest: [f64; 3], ticks: i32) -> Self {
+    pub fn vibration(ty: ParticleKey, source: PositionSource, dest: [f64; 3], ticks: i32) -> Self {
         Self {
             vibration: Some((source, dest, ticks)),
-            ..Self::simple(ParticleType::Vibration)
+            ..Self::simple(ty)
         }
     }
     /// `ItemParticleOption`: the stack's layer particle sprites (`BreakingItemParticle`).
-    pub fn item(layers: Vec<String>) -> Self {
+    pub fn item(ty: ParticleKey, layers: Vec<String>) -> Self {
         Self {
             item: Some(layers),
-            ..Self::simple(ParticleType::Item)
+            ..Self::simple(ty)
         }
     }
     /// `DustColorTransitionOptions`.
-    pub fn dust_transition(from: [f32; 3], to: [f32; 3], scale: f32) -> Self {
+    pub fn dust_transition(ty: ParticleKey, from: [f32; 3], to: [f32; 3], scale: f32) -> Self {
         Self {
             color: [from[0], from[1], from[2], 1.0],
             to_color: to,
             scale: scale.clamp(0.01, 4.0),
-            ..Self::simple(ParticleType::DustColorTransition)
+            ..Self::simple(ty)
         }
     }
     /// `DustColorTransitionOptions.SCULK_TO_REDSTONE`.
-    pub fn sculk_to_redstone() -> Self {
+    pub fn sculk_to_redstone(ty: ParticleKey) -> Self {
         let rgb = |c: u32| {
             [
                 ((c >> 16) & 255) as f32 / 255.0,
@@ -119,24 +107,24 @@ impl ParticleOptions {
                 (c & 255) as f32 / 255.0,
             ]
         };
-        Self::dust_transition(rgb(3_790_560), rgb(16_711_680), 1.0)
+        Self::dust_transition(ty, rgb(3_790_560), rgb(16_711_680), 1.0)
     }
     /// `SculkChargeParticleOptions(roll)`.
-    pub fn sculk_charge(roll: f32) -> Self {
+    pub fn sculk_charge(ty: ParticleKey, roll: f32) -> Self {
         Self {
             scale: roll,
-            ..Self::simple(ParticleType::SculkCharge)
+            ..Self::simple(ty)
         }
     }
     /// `ShriekParticleOption(delay)`.
-    pub fn shriek(delay: i32) -> Self {
+    pub fn shriek(ty: ParticleKey, delay: i32) -> Self {
         Self {
             scale: delay as f32,
-            ..Self::simple(ParticleType::Shriek)
+            ..Self::simple(ty)
         }
     }
     /// `TrailParticleOption(target, color, duration)`.
-    pub fn trail(target: [f64; 3], rgb: u32, duration: i32) -> Self {
+    pub fn trail(ty: ParticleKey, target: [f64; 3], rgb: u32, duration: i32) -> Self {
         Self {
             color: [
                 ((rgb >> 16) & 255) as f32 / 255.0,
@@ -145,24 +133,24 @@ impl ParticleOptions {
                 1.0,
             ],
             trail: Some((target, duration)),
-            ..Self::simple(ParticleType::Trail)
+            ..Self::simple(ty)
         }
     }
-    pub fn block(ty: ParticleType, sprite: String, tint: u32) -> Self {
+    pub fn block(ty: ParticleKey, sprite: String, tint: u32) -> Self {
         Self {
             block: Some((sprite, tint)),
             ..Self::simple(ty)
         }
     }
     /// `DustParticleOptions(color, scale)`.
-    pub fn dust(rgb: [f32; 3], scale: f32) -> Self {
+    pub fn dust(ty: ParticleKey, rgb: [f32; 3], scale: f32) -> Self {
         Self {
             color: [rgb[0], rgb[1], rgb[2], 1.0],
             scale: scale.clamp(0.01, 4.0),
-            ..Self::simple(ParticleType::Dust)
+            ..Self::simple(ty)
         }
     }
-    pub fn colored(ty: ParticleType, rgba: [f32; 4]) -> Self {
+    pub fn colored(ty: ParticleKey, rgba: [f32; 4]) -> Self {
         Self {
             color: rgba,
             ..Self::simple(ty)

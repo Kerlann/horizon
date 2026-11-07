@@ -51,6 +51,17 @@ pub fn particle_key(id: &crate::Identifier) -> Option<ParticleKey> {
     Some(ParticleKey(*resolved().get()?.names.identifiers.get(id)?))
 }
 
+/// Map an engine vanilla provider index without a name lookup or allocation.
+#[doc(hidden)]
+pub fn particle_vanilla_key(index: u32) -> Option<ParticleKey> {
+    Some(ParticleKey(*resolved().get()?.vanilla_slots.get(&index)?))
+}
+/// Map an already retained custom provider name at an engine capture boundary.
+#[doc(hidden)]
+pub fn particle_named_key(name: &str) -> Option<ParticleKey> {
+    Some(ParticleKey(*resolved().get()?.names.slots.get(name)?))
+}
+
 /// Read the already-resolved provider identity for a retained key.
 // hidden: the game's particle conversion boundary consumes the provider index.
 #[doc(hidden)]

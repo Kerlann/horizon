@@ -4954,6 +4954,7 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_mod_changes_the_effect_particles_players_are_sent() {
+        use super::super::api_values::{TryIntoApi, TryIntoEngine};
         use super::super::lan::LanSettings;
         use horizon_client::effects::EffectInstance;
         use horizon_client::lan::{Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig};
@@ -5010,16 +5011,24 @@ mod tests {
                     id,
                     name.clone(),
                     event.effect.amplifier,
-                    event.original_particle.clone(),
-                    event.particle.clone(),
+                    event.original_particle.try_into_engine(&()).unwrap(),
+                    event.particle.try_into_engine(&()).unwrap(),
                     event.visible,
                 ));
                 match name.as_str() {
                     "minecraft:speed" if id == ZOMBIE as u32 => {
-                        *event.particle = Some(ParticleOptions::simple(ParticleType::Flame))
+                        *event.particle = Some(
+                            ParticleOptions::simple(ParticleType::Flame)
+                                .try_into_api()
+                                .unwrap(),
+                        )
                     }
                     "minecraft:trial_omen" => {
-                        *event.particle = Some(ParticleOptions::simple(ParticleType::Flame))
+                        *event.particle = Some(
+                            ParticleOptions::simple(ParticleType::Flame)
+                                .try_into_api()
+                                .unwrap(),
+                        )
                     }
                     "minecraft:strength" | "minecraft:weakness" => event.visible = true,
                     "minecraft:regeneration" | "minecraft:slowness" => event.visible = false,
@@ -5039,7 +5048,11 @@ mod tests {
                 if event.effect.id.id(host) == "minecraft:trial_omen" {
                     assert_eq!(
                         *event.particle,
-                        Some(ParticleOptions::simple(ParticleType::Flame))
+                        Some(
+                            ParticleOptions::simple(ParticleType::Flame)
+                                .try_into_api()
+                                .unwrap()
+                        )
                     );
                     *event.particle = None;
                 }

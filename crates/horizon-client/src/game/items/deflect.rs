@@ -145,7 +145,7 @@ impl Game<'_> {
         self.audio
             .play("minecraft:entity.shulker_bullet.hurt", Some(at), 1.0, 1.0);
         if let Some(ty) = horizon_client::particles::ParticleType::from_name("crit") {
-            let options = mod_api::particles::ParticleOptions::simple(ty);
+            let options = horizon_client::particles::ParticleOptions::simple(ty);
             self.particles
                 .send_particles(&options, at, [0.2, 0.2, 0.2], 0.0, 15);
             self.lan_level_particles(&options, at, [0.2, 0.2, 0.2], 0.0, 15, None);

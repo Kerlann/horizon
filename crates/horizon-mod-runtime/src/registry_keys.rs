@@ -136,6 +136,8 @@ pub enum ParticleKind {
 pub struct Particles {
     pub names: Names,
     pub kinds: Vec<ParticleKind>,
+    /// Reverse vanilla-provider lookup, built once with the forward table.
+    pub vanilla_slots: HashMap<u32, u32>,
 }
 
 /// Resolve each provider once, keeping the same requested-slot lifecycle as other keys.
@@ -147,7 +149,19 @@ pub fn resolve_particles<'a>(
     let unknown = |owner, id: &str| format!("mod {owner} requested unknown particle {id}");
     let names = requested.complete(ids, unknown)?;
     let kinds = names.resolve(resolve, unknown)?;
-    Ok(Particles { names, kinds })
+    let vanilla_slots = kinds
+        .iter()
+        .enumerate()
+        .filter_map(|(slot, kind)| match kind {
+            ParticleKind::Vanilla(index) => Some((*index, slot as u32)),
+            ParticleKind::Custom => None,
+        })
+        .collect();
+    Ok(Particles {
+        names,
+        kinds,
+        vanilla_slots,
+    })
 }
 
 // Tag names are process-lifetime identities; only membership belongs to reloadable data.

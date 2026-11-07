@@ -19,7 +19,6 @@ pub use {
     },
     horizon_world::{
         level::{BlockId, LandingWrite},
-        loot::{LootStack, NativeLootContext},
         registry::BlockStateId,
     },
 };

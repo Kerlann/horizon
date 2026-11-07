@@ -233,3 +233,62 @@ mod tests {
         );
     }
 }
+
+impl LootStack {
+    /// A candidate with signed count, before inventory materialization.
+    pub fn new(item: ItemKey, count: i32) -> Self {
+        Self {
+            item,
+            count,
+            damage: 0,
+            enchantments: Vec::new(),
+            potion: None,
+            map: false,
+            exploration: None,
+            ominous_amplifier: None,
+            stew_effects: Vec::new(),
+            names: Vec::new(),
+            components: Vec::new(),
+        }
+    }
+}
+impl NativeLootContext {
+    /// An empty roll context with its captured random seed.
+    pub fn new(seed: i64) -> Self {
+        Self {
+            entity: None,
+            damage: None,
+            player: None,
+            tool: None,
+            block: None,
+            luck: 0.0,
+            biome: None,
+            seed,
+            place: None,
+        }
+    }
+}
+impl NativeLootTool {
+    /// Tool facts for a resolved item.
+    pub fn new(item: ItemKey, enchantments: Vec<(String, i32)>) -> Self {
+        Self { item, enchantments }
+    }
+}
+impl ExplorationMap {
+    /// A deferred vanilla exploration-map request, without running its search.
+    pub fn new(
+        destination: String,
+        decoration: String,
+        zoom: u8,
+        search_radius: i32,
+        skip_existing_chunks: bool,
+    ) -> Self {
+        Self {
+            destination,
+            decoration,
+            zoom,
+            search_radius,
+            skip_existing_chunks,
+        }
+    }
+}

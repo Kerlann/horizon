@@ -917,7 +917,7 @@ impl Game<'_> {
         // DATA_WAITING for its 20-tick wait, and DATA_PARTICLE): the
         // client draws them from these (`tick_remote_clouds`).
         let breath = hub.particle(
-            &mod_api::particles::ParticleOptions::simple(
+            &horizon_client::particles::ParticleOptions::simple(
                 horizon_client::particles::ParticleType::DragonBreath,
             ),
             None,

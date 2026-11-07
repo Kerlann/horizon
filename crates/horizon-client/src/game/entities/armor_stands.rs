@@ -829,7 +829,7 @@ impl Game<'_> {
         let Some((sprite, tint)) = self.particle_sprite(state, block) else {
             return;
         };
-        let options = mod_api::particles::ParticleOptions::block(
+        let options = horizon_client::particles::ParticleOptions::block(
             horizon_client::particles::ParticleType::Block,
             sprite,
             tint,

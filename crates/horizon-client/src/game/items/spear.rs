@@ -268,7 +268,7 @@ impl Game<'_> {
         let actual = old_health - self.mobs[index].health;
         self.award_custom_stat("damage_dealt", (actual * 10.0).round() as i32);
         if actual > 2.0 {
-            let indicator = mod_api::particles::ParticleOptions::simple(
+            let indicator = horizon_client::particles::ParticleOptions::simple(
                 horizon_client::particles::ParticleType::DamageIndicator,
             );
             self.particles.send_particles(

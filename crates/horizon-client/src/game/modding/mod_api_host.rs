@@ -576,8 +576,12 @@ impl<'a: 'b, 'b> mod_api::LevelWriteHost for LevelTicks<'b, &mut super::GameLeve
         speed: f64,
         count: i32,
     ) -> bool {
+        use super::api_values::TryIntoEngine;
+        let Ok(options) = options.try_into_engine(&()) else {
+            return false;
+        };
         self.level
-            .native_send_particles(options, state, at, spread, speed, count)
+            .native_send_particles(&options, state, at, spread, speed, count)
     }
 
     fn level_event(&mut self, id: i32, pos: [i32; 3], data: i32) -> bool {
