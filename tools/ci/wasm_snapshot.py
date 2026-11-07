@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Bounded, slot-independent snapshots of wasm-mods' complete Cargo working set."""
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -36,6 +37,13 @@ def fits(archive_bytes, occupied_bytes):
     return archive_bytes <= MAX_ARCHIVE and occupied_bytes + archive_bytes <= MAX_TOTAL
 
 
+def footprint():
+    paths = [TARGET, TARGET / "internals-catalog-coverage", TARGET / "internals-catalog-check"]
+    present = [str(path) for path in paths if path.exists()]
+    report("Target/subtree apparent bytes:\n\n```\n" +
+           capture("du", "-sbl", *present).decode().strip() + "\n```")
+
+
 def key():
     toolchains = b"".join(capture("rustup", "run", toolchain, "rustc", "-vV")
                          for toolchain in ("stable", "1.99.1"))
@@ -59,6 +67,8 @@ def restore():
         subprocess.run(["tar", "--zstd", "-xf", str(ARCHIVE), "-C", str(TARGET)], check=True)
     extraction = time.monotonic() - started
     elapsed = time.time() - int(os.environ["RESTORE_STARTED"])
+    if ARCHIVE.exists():
+        footprint()
     report(f"Snapshot matched key: `{matched or 'miss'}`. Restore including extraction: "
            f"{elapsed:.2f} s; extraction: {extraction:.2f} s; "
            f"compressed bytes: {ARCHIVE.stat().st_size if ARCHIVE.exists() else 0}.")
@@ -67,29 +77,44 @@ def restore():
         report("Warm target unmet: restore exceeded 120 seconds. Checks still run normally.")
 
 
+def cache_metadata(endpoint):
+    response = subprocess.run(["gh", "api", f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/{endpoint}"],
+                              capture_output=True, text=True)
+    if response.returncode:
+        report("Snapshot not published: cache metadata unavailable; protect lint's cache budget.")
+        return None
+    return json.loads(response.stdout)
+
+
 def pack():
     output("publish", "false")
     # Do not republish an exact hit or reinforce a restore that missed the warm budget.
     if os.environ.get("EXACT_HIT") == "true" or os.environ.get("WITHIN_TIME") != "true":
         return
-    usage = subprocess.run(["gh", "api", f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/cache/usage"],
-                           capture_output=True, text=True)
-    if usage.returncode:
-        report("Snapshot not published: cache occupancy unavailable; protect lint's cache budget.")
+    if os.environ.get("GITHUB_REF") == "refs/heads/main":
+        recent = cache_metadata("caches?ref=refs%2Fheads%2Fmain&key=wasm-snapshot-v1-"
+                                "&sort=created_at&direction=desc&per_page=1")
+        if recent is None:
+            return
+        caches = recent["actions_caches"]
+        if caches and time.time() - datetime.fromisoformat(caches[0]["created_at"].replace("Z", "+00:00")).timestamp() < 21600:
+            report("Snapshot publication limited to once per six hours; checks still run normally.")
+            return
+    usage = cache_metadata("cache/usage")
+    if usage is None:
         return
-    occupied = json.loads(usage.stdout)["active_caches_size_in_bytes"]
+    occupied = usage["active_caches_size_in_bytes"]
     if type(occupied) is not int or occupied < 0:
         raise ValueError("invalid GitHub cache occupancy")
-    total = capture("du", "-sb", str(TARGET)).decode().split()[0]
-    parts = capture("du", "-sb", str(TARGET / "internals-catalog-coverage"),
-                    str(TARGET / "internals-catalog-check")).decode().strip()
+    footprint()
     ARCHIVE.parent.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
-    subprocess.run(["tar", "--exclude=./wasm-snapshot", "-I", "zstd -T2 -3", "-cf", str(ARCHIVE),
+    # Cargo compares subsecond mtimes; GNU's default tar format loses that precision.
+    subprocess.run(["tar", "--format=pax", "--pax-option=delete=atime,delete=ctime",
+                    "--exclude=./wasm-snapshot", "-I", "zstd -T2 -3", "-cf", str(ARCHIVE),
                     "-C", str(TARGET), "."], check=True)
     size = ARCHIVE.stat().st_size
-    report(f"Target apparent bytes: {total}. Coverage subtree apparent bytes:\n\n```\n{parts}\n```\n\n"
-           f"Compressed snapshot bytes: {size}; compression: {time.monotonic() - started:.2f} s; "
+    report(f"Compressed snapshot bytes: {size}; compression: {time.monotonic() - started:.2f} s; "
            f"existing repository cache bytes: {occupied}.")
     if not fits(size, occupied):
         report("Warm target unmet: snapshot exceeds 2 GB compressed or 8 GB combined occupancy. "
