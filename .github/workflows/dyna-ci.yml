@@ -24,9 +24,6 @@ concurrency:
   # progress finishes, and only the newest waiting push runs next, so main is always checked.
   group: dyna-checks-${{ github.event.pull_request.number || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'main') || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-env:
-  # sccache (shared per Dyna host) cannot cache incremental compiles, so every Rust job builds non-incremental.
-  CARGO_INCREMENTAL: 0
 jobs:
   # Dyna runners accept dispatches, not scheduled events.
   nightly-dispatch:
@@ -109,6 +106,8 @@ jobs:
     # A cold lint (two full clippy graphs) takes 40+ minutes on GitHub runners: room to finish, main to save its cache.
     timeout-minutes: ${{ github.event_name == 'pull_request' && 75 || 100 }}
     env:
+      # Keep incremental check state too: changed workspace crates can reuse unchanged queries.
+      CARGO_INCREMENTAL: 1
       # Like verify, avoid scheduling eight large rustc processes inside a 16 GiB slot.
       JOBS: ${{ needs.changes.outputs.self_hosted == 'true' && '-j4' || '' }}
     steps:
