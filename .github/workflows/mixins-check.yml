@@ -13,6 +13,9 @@ concurrency:
   # One run per ref, queued: a started run finishes, and a newer main push replaces only the waiting one.
   group: mixins-check-${{ github.ref }}
   cancel-in-progress: false
+env:
+  # sccache (shared per Dyna host) cannot cache incremental compiles, so every Rust job builds non-incremental.
+  CARGO_INCREMENTAL: 0
 jobs:
   mixins-check:
     runs-on: ubuntu-latest

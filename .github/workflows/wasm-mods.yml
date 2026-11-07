@@ -21,6 +21,9 @@ permissions:
 concurrency:
   group: wasm-mods-${{ github.ref }}
   cancel-in-progress: false
+env:
+  # sccache (shared per Dyna host) cannot cache incremental compiles, so every Rust job builds non-incremental.
+  CARGO_INCREMENTAL: 0
 jobs:
   # The same runner choice dyna-checks makes: Dyna's large runner while the pool is up, else GitHub's.
   runner:
