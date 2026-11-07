@@ -11,13 +11,14 @@
 //! copy and is refused with `Expired`.
 
 use super::Game;
+use super::api_values::{TryIntoApi, TryIntoEngine};
 use super::living_attributes::{AttributeWrite, collect_equipment, write_unspawned_attribute};
 use horizon_client::mobs::finalize::{Ageable, Group};
 use horizon_client::mobs::{Mob, equine, llama, render, tame};
 use horizon_world::attribute_map::ValueKind;
 use horizon_world::attributes::Operation;
 use mod_api::{
-    AttributeModifier, AttributeOperation, EntityRef, EquipmentSlot, Identifier, ItemResource,
+    AttributeModifier, AttributeOperation, EntityRef, EquipmentSlot, Identifier, ItemStack,
     NativeAgeableGroup, NativeSpawnGroup, NativeTropicalVariant, NativeWorldEpoch, Text,
     UnspawnedMobEdits, UnspawnedMobError, UnspawnedMobRef,
 };
@@ -159,11 +160,11 @@ impl Game<'_> {
         &self,
         mob: UnspawnedMobRef,
         slot: EquipmentSlot,
-    ) -> Result<Option<(ItemResource, u32)>, UnspawnedMobError> {
+    ) -> Result<Option<ItemStack>, UnspawnedMobError> {
         self.with_lent_mob(mob, |m| {
-            Ok(m.equipment_stacks()[slot as usize]
-                .as_ref()
-                .map(|s| (ItemResource::of(s), s.count)))
+            m.equipment_stacks()[slot as usize]
+                .try_into_api()
+                .map_err(|_| UnspawnedMobError::Invalid)
         })
     }
 
@@ -420,12 +421,12 @@ impl UnspawnedMobEdits for Edits<'_, '_> {
         &self,
         mob: UnspawnedMobRef,
         slot: EquipmentSlot,
-        item: Option<(ItemResource, u32)>,
+        item: Option<ItemStack>,
     ) -> Result<(), UnspawnedMobError> {
-        let stack = item
-            .map(|(item, count)| item.to_stack(count))
-            .filter(|s| s.count > 0 && &*s.item != "minecraft:air");
         self.game.edit_lent_mob(mob, |game, m| {
+            let stack = item
+                .try_into_engine(world_items!(game))
+                .map_err(|_| UnspawnedMobError::Invalid)?;
             if !m.set_equipment_stack(slot as usize, stack) {
                 return Err(UnspawnedMobError::Unsupported);
             }
@@ -549,7 +550,6 @@ mod tests {
     use super::super::creatures::SpawnSite;
     use super::super::native_entity_refs::tests::with_game;
     use super::*;
-    use horizon_client::items::ItemStack;
     use horizon_client::mobs::finalize::{self, Attr};
     use horizon_client::mobs::spawn_rules::Reason;
     use mod_api::{FinalizeSpawnEvent, Flow, Host};
@@ -579,9 +579,11 @@ mod tests {
     fn id(s: &str) -> Identifier {
         Identifier::parse(s).unwrap()
     }
-    fn pumpkin() -> (ItemResource, u32) {
-        let stack = ItemStack::new("minecraft:carved_pumpkin", 1);
-        (ItemResource::of(&stack), 1)
+    fn pumpkin() -> ItemStack {
+        super::super::api_values::test_snapshot(&horizon_client::items::ItemStack::new(
+            "minecraft:carved_pumpkin",
+            1,
+        ))
     }
     fn spawn_pig(game: &mut Game<'_>) -> Option<u32> {
         game.spawn_mob(
@@ -611,6 +613,21 @@ mod tests {
                 edits
                     .set_equipment(mob, EquipmentSlot::Head, Some(pumpkin()))
                     .unwrap();
+                let mut oversized = pumpkin();
+                oversized.set_count(100).unwrap();
+                assert_eq!(
+                    edits.set_equipment(mob, EquipmentSlot::Head, Some(oversized)),
+                    Err(UnspawnedMobError::Invalid)
+                );
+                assert_eq!(
+                    mob.equipment(host, EquipmentSlot::Head),
+                    Ok(Some(pumpkin()))
+                );
+                edits.set_equipment(mob, EquipmentSlot::Head, None).unwrap();
+                assert_eq!(mob.equipment(host, EquipmentSlot::Head), Ok(None));
+                edits
+                    .set_equipment(mob, EquipmentSlot::Head, Some(pumpkin()))
+                    .unwrap();
                 edits.set_attribute_base(mob, &max_health, 20.0).unwrap();
                 assert_eq!(edits.add_tag(mob, "test:tagged"), Ok(true));
                 edits
@@ -620,7 +637,7 @@ mod tests {
                     mob.kind(host),
                     mob.attribute_base(host, &max_health),
                     mob.equipment(host, EquipmentSlot::Head)
-                        .map(|e| e.map(|(item, count)| (item.item().to_owned(), count))),
+                        .map(|e| e.map(|item| (host.item_key_id(item.item()), item.count()))),
                 ));
                 Flow::Continue
             },

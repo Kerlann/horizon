@@ -2,7 +2,7 @@
 //! hook gets beside its [`UnspawnedMobRef`](crate::UnspawnedMobRef), and the spawn group data
 //! (`SpawnGroupData`) the mobs of one pack share.
 
-use crate::{AttributeModifier, EntityRef, EquipmentSlot, Identifier, ItemResource, Text};
+use crate::{AttributeModifier, EntityRef, EquipmentSlot, Identifier, ItemStack, Text};
 
 /// Why a read or an edit of an unspawned mob was refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,7 +15,7 @@ pub enum UnspawnedMobError {
     /// ender dragon, which it stores apart from mobs).
     Unsupported,
     /// The value is refused: an unknown attribute, a non-finite number, a modifier id the
-    /// attribute already has, an empty or full tag list.
+    /// attribute already has, an empty or full tag list, or invalid item data.
     Invalid,
 }
 
@@ -34,13 +34,14 @@ impl crate::NoBackend for UnspawnedMobError {
 /// listener, see it. The editor works where the hook's host is the read-only one: it changes
 /// nothing in the level, only the mob that is about to join it.
 pub trait UnspawnedMobEdits {
-    /// Puts `item` in `slot` (`Mob.setItemSlot`): the stack and its count; `None` or a count of
-    /// zero empties the slot. The stack's attribute modifiers apply to the mob at once.
+    /// Puts `item` in `slot` (`Mob.setItemSlot`): an API-owned stack; `None` empties the slot. Invalid
+    /// item keys, counts, damage or components are refused with `Invalid`, without changing the
+    /// slot. The stack's attribute modifiers apply to the mob at once.
     fn set_equipment(
         &self,
         mob: crate::UnspawnedMobRef,
         slot: EquipmentSlot,
-        item: Option<(ItemResource, u32)>,
+        item: Option<ItemStack>,
     ) -> Result<(), UnspawnedMobError>;
 
     /// Sets an attribute's base value (`AttributeInstance.setBaseValue`), kept within the

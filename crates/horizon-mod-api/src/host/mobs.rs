@@ -175,7 +175,7 @@ pub trait MobsBackend {
         &self,
         mob: UnspawnedMobRef,
         slot: EquipmentSlot,
-    ) -> Result<Option<(ItemResource, u32)>, UnspawnedMobError>;
+    ) -> Result<Option<ItemStack>, UnspawnedMobError>;
     /// Side: server.
     /// An attribute's base value, before modifiers; `Unsupported` for one the mob's type does not have. `Expired` once the hook that lent it has returned.
     #[access(WorldOnly)]
