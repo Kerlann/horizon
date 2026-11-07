@@ -3,6 +3,7 @@ exclude = ["launcher", "crates/horizon-mod-registry", "third_party/wgpu-hal", "t
 members = [
     "crates/horizon-core",
     "crates/horizon-mod-runtime",
+    "crates/horizon-mod-render",
     "docs/modding/examples",
     "crates/horizon-dualsense",
     "crates/horizon-narrator",
@@ -98,7 +99,17 @@ debug = "line-tables-only"
 [profile.dev.package.sha2]
 opt-level = 3
 
+[profile.dev.package.horizon-mod-api-gen]
+opt-level = 3
 [profile.dev.package.syn]
+opt-level = 3
+[profile.dev.package.proc-macro2]
+opt-level = 3
+[profile.release.package.horizon-mod-api-gen]
+opt-level = 3
+[profile.release.package.syn]
+opt-level = 3
+[profile.release.package.proc-macro2]
 opt-level = 3
 
 [profile.release]

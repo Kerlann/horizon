@@ -1,5 +1,10 @@
 //! `FlowingFluid` (water and lava) ticking and spreading, `LiquidBlock`
 //! interactions, liquid containers (waterlogging) and bucket pickup.
+use super::{
+    Behaviours, LevelAccess, Sim, Spread,
+    classes::{Class, Interface},
+    update::{HORIZONTAL, above, below, rel},
+};
 use crate::{
     fluid::{FluidKind, FluidState},
     registry::BlockStateId,
@@ -8,14 +13,6 @@ use horizon_core::{
     geometry::{Axis, Direction, ShapeOp, VoxelShape},
     position::BlockPos,
     random::RandomSource,
-};
-use {
-    super::{
-        Behaviours, LevelAccess, Sim, Spread,
-        classes::{Class, Interface},
-        update::{HORIZONTAL, above, below, rel},
-    },
-    horizon_core::dimension::Dimension,
 };
 
 /// `LiquidBlock.POSSIBLE_FLOW_DIRECTIONS`.
@@ -108,7 +105,7 @@ impl Behaviours {
 
 impl<L: LevelAccess + ?Sized> Sim<'_, L> {
     fn fast_lava(&self) -> bool {
-        self.level.dimension() == Dimension::Nether
+        self.level.dimension_type().fast_lava
     }
     /// `Fluid.getTickDelay`.
     pub(crate) fn fluid_tick_delay(&self, kind: FluidKind) -> i32 {

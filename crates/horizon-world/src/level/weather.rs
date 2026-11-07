@@ -1,22 +1,16 @@
 //! Biome weather queries for a live level: `ServerLevel.tickPrecipitation`'s
 //! inputs (`Biome.shouldFreeze`, `shouldSnow`, `getPrecipitationAt`) and
 //! `Level.isRainingAt`, from the biome temperatures of the worldgen bundle.
+use super::vanilla_sea_level;
+use super::{Behaviours, LevelAccess, Precipitation, PrecipitationKind};
 use crate::{
     fluid::FluidKind,
     worldgen::biome_temperature::{BiomeTemperatureSettings, Precipitation as BiomePrecipitation},
 };
 use horizon_core::{geometry::Direction, position::BlockPos};
-use {
-    super::{Behaviours, LevelAccess, Precipitation, PrecipitationKind},
-    horizon_core::dimension::Dimension,
-};
 
 fn sea_level<L: LevelAccess + ?Sized>(level: &L) -> i32 {
-    match level.dimension() {
-        Dimension::Nether => 32,
-        Dimension::End => 0,
-        Dimension::Overworld => 63,
-    }
+    vanilla_sea_level(level.level_key())
 }
 
 impl Behaviours {

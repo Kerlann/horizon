@@ -344,7 +344,7 @@ mod lod;
 mod native_material;
 mod native_pack;
 mod native_post;
-pub use mod_api::render as native_render;
+pub use mod_render::render as native_render;
 mod native_shadow;
 mod native_sky;
 mod occlusion;
@@ -6706,7 +6706,7 @@ impl Renderer {
             && !self.frame_gen.on
             && self.pack_post.as_ref().is_none_or(|(_, post)| {
                 post.as_ref().is_some_and(|post| post.skins_entities())
-                    && !native_render::render_needs().entity_spans
+                    && !native_render::needs().entity_spans
             })
             && self.native.is_none()
     }
@@ -6810,6 +6810,7 @@ impl Renderer {
                 post,
                 self.frame_format,
                 world,
+                &std::sync::atomic::AtomicBool::new(false),
             )
         });
         self.pack_loading = None;
@@ -6926,6 +6927,8 @@ impl Renderer {
             .map(|f| f.draw_layout.clone());
         let terrain = self.pack_atlas.is_some();
         let clouds = self.cloud_bindings.clone();
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let cancelled = cancel.clone();
         let build = move || {
             let instance = wgpu::vertex_attr_array![5=>Float32x4];
             let vertex = wgpu::VertexBufferLayout {
@@ -6960,7 +6963,7 @@ impl Renderer {
                 weather: true,
                 hand: true,
             };
-            pack_post::PackPost::new(&device, &queue, &adapter, pack, format, world)
+            pack_post::PackPost::new(&device, &queue, &adapter, pack, format, world, &cancelled)
         };
         // A pack is not the game's code: a panic building it turns the pack off (#3525).
         let thread = std::thread::Builder::new()
@@ -6975,9 +6978,15 @@ impl Renderer {
                     thread,
                     label,
                     started,
+                    _cancel: CancelOnDrop(cancel),
                 });
             }
-            Err(e) => log::error!("shader pack {label}: no thread to build it on: {e}"),
+            Err(e) => {
+                log::error!("shader pack {label}: no thread to build it on: {e}");
+                // Off for this dimension, as a pack that fails, not tried again every frame.
+                self.pack_loading = None;
+                self.pack_post = Some((dimension, None));
+            }
         }
     }
     /// The pack `load_shader_pack` builds, once its thread is done: it runs from now on, as
@@ -9551,7 +9560,7 @@ impl Renderer {
         let keep_depth = pack_reads_world
             || (taa && self.world_post.taa)
             || oit_on
-            || native_render::render_needs().world_depth
+            || native_render::needs().world_depth
             || fg;
         // The pack's program reads the vertices this frame's draws bind.
         let pack_draws_terrain = pack_terrain && flat_frame == self.pack_terrain_flat;
@@ -9613,7 +9622,7 @@ impl Renderer {
         }
         // The hand draws at the end of the world pass, after a depth reset, when nothing runs
         // between them (a scaled world's post pass, HDR's world copy, a native mod's
-        // `native_world_drawn`): one render pass fewer, ~10 µs of wgpu's encoding a frame.
+        // `world_drawn`): one render pass fewer, ~10 µs of wgpu's encoding a frame.
         let hand_in_world = (frame.hand.len() / 4) > 0
             && !pack_draws_hand
             && scaled.is_none()
@@ -11249,8 +11258,8 @@ impl Renderer {
                 Some((_, depth)) => (depth, self.world_post.size().unwrap_or(size)),
                 None => (&self.depth, size),
             };
-            native_render::native_world_drawn(&mut native_render::WorldDrawn::from(
-                mod_api::__private::built::WorldDrawn {
+            native_render::world_drawn(&mut native_render::WorldDrawn::from(
+                mod_render::render::built::WorldDrawn {
                     device: &self.device,
                     queue: &self.queue,
                     encoder: &mut encoder,
@@ -11269,7 +11278,7 @@ impl Renderer {
                     atlas: self.hud.atlas_texture.as_ref(),
                     quad_indices: &self.indices,
                     block_sprites: native_render::BlockSpriteArrays::from(
-                        mod_api::__private::built::BlockSpriteArrays {
+                        mod_render::render::built::BlockSpriteArrays {
                             views: &self.sprite_views,
                             split: self.sprite_split,
                             size: self.sprite_textures[0].width(),
@@ -11604,8 +11613,8 @@ impl Renderer {
         }
         // A native mod's turn after the hand, on the real frame only.
         if overlay.real && !frame.title {
-            native_render::native_hand_drawn(&mut native_render::HandDrawn::from(
-                mod_api::__private::built::HandDrawn {
+            native_render::hand_drawn(&mut native_render::HandDrawn::from(
+                mod_render::render::built::HandDrawn {
                     device: &self.device,
                     queue: &self.queue,
                     encoder: &mut *encoder,
@@ -14764,12 +14773,25 @@ mod shadow_caster_tests {
 
 /// A `shaders/` pack building on its own thread (`Renderer::load_shader_pack`): the dimension it
 /// is for, the thread (a panic in it contained), and what the game named it with and when.
+/// Dropping it (another pack, none, or another dimension) cancels the build: the thread stops at
+/// the next program instead of compiling the rest for nothing.
 struct PackLoading {
     dimension: i32,
+    /// Held to be dropped with it: that cancels the build.
+    _cancel: CancelOnDrop,
     #[allow(clippy::type_complexity)]
     thread: std::thread::JoinHandle<
         std::result::Result<std::result::Result<pack_post::PackPost, pack_post::Refused>, String>,
     >,
     label: String,
     started: std::time::Instant,
+}
+
+/// Sets its flag when dropped: `PackLoading`'s cancel, which `PackPost::new` checks per program.
+struct CancelOnDrop(std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
 }

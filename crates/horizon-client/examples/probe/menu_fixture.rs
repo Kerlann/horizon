@@ -23,13 +23,22 @@ use std::{
 };
 
 /// The case's maps: (locked, scale) by id, and the next free id.
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct CaseMaps {
     maps: RefCell<HashMap<i32, (bool, u8)>>,
     next: Cell<i32>,
 }
 
 impl horizon_client::menu::Maps for CaseMaps {
+    fn with_staged(&self, edit: &mut dyn FnMut(&dyn horizon_client::menu::Maps) -> bool) -> bool {
+        let staged = self.clone();
+        if !edit(&staged) {
+            return false;
+        }
+        self.maps.replace(staged.maps.into_inner());
+        self.next.set(staged.next.get());
+        true
+    }
     fn state(&self, id: i32) -> Option<(bool, u8)> {
         self.maps.borrow().get(&id).copied()
     }

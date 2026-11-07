@@ -997,7 +997,17 @@ fn canonical_other_component(id: &str, tag: &Tag) -> Tag {
 /// The saved `DataComponentPatch.CODEC` compound, or None when default.
 /// A filled map's empty decorations equal its prototype (`Items.mapProperties`).
 pub fn encode_components(stack: &ItemStack) -> Option<Tag> {
-    let mut components = components_tag(stack.damage, stack.data())?;
+    encode_stack_components(stack, true)
+}
+
+/// Encode the extra patch for a snapshot whose typed scalar already carries damage.
+/// This uses the same component codec and canonicalization as persistent stacks.
+pub fn encode_extra_components(stack: &ItemStack) -> Option<Tag> {
+    encode_stack_components(stack, false)
+}
+
+fn encode_stack_components(stack: &ItemStack, include_damage: bool) -> Option<Tag> {
+    let mut components = components_tag_inner(stack.damage, stack.data(), include_damage)?;
     // LodestoneTracker.CODEC: optionalFieldOf("tracked", true).
     if let Some(Tag::Compound(tracker)) = components.get_mut("minecraft:lodestone_tracker")
         && tracker.get(&JavaString::from("tracked")) == Some(&Tag::Byte(1))
@@ -1029,10 +1039,39 @@ pub fn encode_components(stack: &ItemStack) -> Option<Tag> {
     }
     Some(components)
 }
+/// Saved patch with the loaded item's prototype available.
+/// Context-free callers and the live `components_tag` view stay unchanged.
+pub fn encode_components_with_items(stack: &ItemStack, items: &crate::items::Items) -> Option<Tag> {
+    let mut components = encode_components(stack)?;
+    // PatchedDataComponentMap.set removes values equal to the prototype.
+    if let Some(prototype) = items.get(&stack.item)
+        && prototype
+            .components
+            .iter()
+            .any(|id| id == "minecraft:max_stack_size")
+        && matches!(components.get("minecraft:max_stack_size"), Some(Tag::Int(size))
+            if *size > 0 && *size as u32 == prototype.max_stack)
+        && let Tag::Compound(entries) = &mut components
+    {
+        entries.remove(&JavaString::from("minecraft:max_stack_size"));
+        if entries.is_empty() {
+            return None;
+        }
+    }
+    Some(components)
+}
 /// `encode_components` from the damage value and extra components.
 pub fn components_tag(damage: u32, data: Option<&StackData>) -> Option<Tag> {
+    components_tag_inner(damage, data, true)
+}
+
+fn components_tag_inner(
+    damage: u32,
+    data: Option<&StackData>,
+    include_damage: bool,
+) -> Option<Tag> {
     let mut entries: Vec<(&str, Tag)> = Vec::new();
-    if damage > 0 || data.is_some_and(|data| data.damage_set) {
+    if include_damage && (damage > 0 || data.is_some_and(|data| data.damage_set)) {
         entries.push(("minecraft:damage", Tag::Int(damage as i32)));
     }
     if let Some(d) = data {
@@ -1837,6 +1876,126 @@ mod tests {
         }
     }
 
+    fn check_max_stack_saved_prototype(decoded: bool) {
+        use crate::items::Items;
+        use horizon_world::loot::PackOverlay;
+        let root =
+            std::env::temp_dir().join(format!("h088-prototypes-{}-{decoded}", std::process::id()));
+        std::fs::create_dir_all(root.join("data/minecraft/loot_table")).unwrap();
+        std::fs::write(root.join("items.json"), r#"{"minecraft:iron_helmet":{"minecraft:max_stack_size":1},"minecraft:stone":{"minecraft:max_stack_size":64},"minecraft:ender_pearl":{"minecraft:max_stack_size":16},"audit:changed":{"minecraft:max_stack_size":7},"audit:missing":{}}"#).unwrap();
+        let items = Items::catalog(
+            &root,
+            &PackOverlay::NONE,
+            &horizon_world::item_defaults::read(&root).unwrap(),
+        )
+        .unwrap();
+        let parse = |text| horizon_core::nbt::parse_snbt(text).unwrap().0;
+        for (id, prototype, has_default) in [
+            ("minecraft:iron_helmet", 1, true),
+            ("minecraft:stone", 64, true),
+            ("minecraft:ender_pearl", 16, true),
+            ("audit:changed", 7, true),
+            ("audit:missing", 64, false),
+            ("audit:unknown", 7, false),
+        ] {
+            assert!(encode_components_with_items(&ItemStack::new(id, 1), &items).is_none());
+            for (key, value) in [
+                ("minecraft:max_stack_size", Tag::Int(prototype)),
+                ("minecraft:max_stack_size", Tag::Int(3)),
+                ("!minecraft:max_stack_size", parse("{}")),
+            ] {
+                let input = Tag::compound([
+                    (key, value.clone()),
+                    ("minecraft:custom_data", parse("{keep:88}")),
+                ]);
+                let mut stack = ItemStack::new(id, 1);
+                if decoded {
+                    (stack.damage, stack.extra) = decode_components(Some(&input));
+                } else {
+                    assert!(stack.extra.is_none());
+                    stack.data_mut().set_other(key, Some(value.clone()));
+                    stack
+                        .data_mut()
+                        .set_other("minecraft:custom_data", Some(parse("{keep:88}")));
+                }
+                let before = stack.clone();
+                assert_eq!(
+                    components_tag(stack.damage, stack.data()),
+                    Some(input.clone())
+                );
+                assert_eq!(
+                    encode_components(&stack),
+                    Some(input.clone()),
+                    "context-free API stays unchanged"
+                );
+                let default = key == "minecraft:max_stack_size"
+                    && value == Tag::Int(prototype)
+                    && has_default;
+                let expected = if default {
+                    Some(parse(r#"{"minecraft:custom_data":{keep:88}}"#))
+                } else {
+                    Some(input.clone())
+                };
+                assert_eq!(
+                    encode_components_with_items(&stack, &items),
+                    expected,
+                    "{id}, decoded={decoded}"
+                );
+                assert_eq!(
+                    crate::item_nbt::item_to_nbt_with_items(&stack, &items).get("components"),
+                    expected.as_ref()
+                );
+                assert_eq!(stack, before, "no live stack mutation");
+                assert_eq!(components_tag(stack.damage, stack.data()), Some(input));
+            }
+            // Removing a sole default must also omit the empty components compound.
+            let mut only = ItemStack::new(id, 1);
+            only.data_mut()
+                .set_other("minecraft:max_stack_size", Some(Tag::Int(prototype)));
+            assert_eq!(
+                encode_components_with_items(&only, &items).is_none(),
+                has_default
+            );
+        }
+        // Reload the same known item's prototype through the real catalog loader.
+        std::fs::write(
+            root.join("items.json"),
+            r#"{"minecraft:stone":{"minecraft:max_stack_size":7}}"#,
+        )
+        .unwrap();
+        let changed = Items::catalog(
+            &root,
+            &PackOverlay::NONE,
+            &horizon_world::item_defaults::read(&root).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(items.get("minecraft:stone").unwrap().max_stack, 64);
+        assert_eq!(changed.get("minecraft:stone").unwrap().max_stack, 7);
+        for size in [7, 64] {
+            let mut stack = ItemStack::new("minecraft:stone", 1);
+            stack
+                .data_mut()
+                .set_other("minecraft:max_stack_size", Some(Tag::Int(size)));
+            assert_eq!(
+                encode_components_with_items(&stack, &items).is_none(),
+                size == 64
+            );
+            assert_eq!(
+                encode_components_with_items(&stack, &changed).is_none(),
+                size == 7
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn decoded_max_stack_saved_patch_uses_loaded_prototype() {
+        check_max_stack_saved_prototype(true);
+    }
+    #[test]
+    fn modeled_max_stack_saved_patch_uses_loaded_prototype() {
+        check_max_stack_saved_prototype(false);
+    }
     #[test]
     fn decoded_hive_saved_patch_uses_whole_prototype() {
         check_hive_saved_patch(true);
@@ -2193,6 +2352,40 @@ mod carried_component_tests {
         let removed = Tag::compound([("!minecraft:damage", Tag::Compound(Default::default()))]);
         let (damage, extra) = decode_components(Some(&removed));
         assert_eq!(components_tag(damage, extra.as_deref()), Some(removed));
+    }
+
+    #[test]
+    fn extra_snapshot_codec_omits_typed_damage_but_preserves_the_patch() {
+        for damage in [0, 5] {
+            let original = Tag::compound([("minecraft:damage", Tag::Int(damage))]);
+            let (damage, extra) = decode_components(Some(&original));
+            let stack = ItemStack {
+                damage,
+                extra,
+                ..ItemStack::new("minecraft:iron_sword", 1)
+            };
+            assert_eq!(encode_extra_components(&stack), None);
+            assert_eq!(encode_components(&stack), Some(original));
+        }
+        let patch = Tag::compound([
+            ("minecraft:damage", Tag::Int(5)),
+            (
+                "minecraft:custom_name",
+                Tag::String(JavaString::from("Snapshot")),
+            ),
+            ("!minecraft:consumable", Tag::Compound(Default::default())),
+        ]);
+        let (damage, extra) = decode_components(Some(&patch));
+        let stack = ItemStack {
+            damage,
+            extra,
+            ..ItemStack::new("minecraft:iron_sword", 1)
+        };
+        let mut expected = patch;
+        if let Tag::Compound(entries) = &mut expected {
+            entries.remove(&JavaString::from("minecraft:damage"));
+        }
+        assert_eq!(encode_extra_components(&stack), Some(expected));
     }
 
     #[test]

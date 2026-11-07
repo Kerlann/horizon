@@ -23,6 +23,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools import lab
+
 KNOWN = Path(__file__).with_name("ignored-tests-known-failures.txt")
 RESULT = re.compile(r"^test (\S+) \.\.\. (ok|FAILED)$")
 SUMMARY = re.compile(r"^test result: ")
@@ -57,14 +60,14 @@ def run(package, skip):
     skips = [arg for test in skip for arg in ("--skip", test)]
     # Resource-backed fixtures need a fresh home, not the runner user's game files.
     with tempfile.TemporaryDirectory(prefix="horizon-ignored-") as scratch:
-        env = os.environ.copy()
+        homes = {}
         for key in ("HORIZON_HOME", "HORIZON_LAUNCHER_HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME"):
             home = Path(scratch) / key.lower()
             home.mkdir()
-            env[key] = str(home)
+            homes[key] = home
         for key in ("HORIZON_LAUNCHER_TRASH", "HORIZON_LAUNCHER_CLIPBOARD", "HORIZON_LAUNCHER_DESKTOP"):
-            env[key] = str(Path(scratch) / key.lower())
-        env.update(HORIZON_LAUNCHER_NO_SELF_UPDATE="1", HORIZON_NO_AUDIO="1")
+            homes[key] = Path(scratch) / key.lower()
+        env = lab.game_env(**homes)
         process = subprocess.run(
             [
                 "cargo", "test", "-p", package, "--lib", *(["--bins", "--tests"] if package in INTEGRATION_TESTS else []),

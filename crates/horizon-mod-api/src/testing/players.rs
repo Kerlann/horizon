@@ -105,48 +105,48 @@ impl FakePlayer {
         self.slots.get(&(self.selected_slot as i32))
     }
 
-    /// Puts up to `stack.count` of `stack` into slot `slot`, up to `max_stack`; the rest is
-    /// given to them. How much went: all of it.
-    pub(super) fn insert(&mut self, slot: i32, stack: ItemStack, max_stack: u32) -> u32 {
-        let mut rest = stack.clone();
+    /// Puts up to `amount` into slot `slot`, up to `max_stack`; the rest is given to them.
+    /// How much went: all of it. The give log records transfer remainders, not resident slots.
+    pub(super) fn insert(
+        &mut self,
+        slot: i32,
+        resource: &crate::ItemResource,
+        amount: u32,
+        max_stack: u32,
+    ) -> u32 {
         let held = self.slots.get(&slot);
         let room = match held {
-            Some(held) if !held.same_item_same_components(&rest) => 0,
-            Some(held) => max_stack.saturating_sub(held.count),
+            Some(held) if !resource.matches(held) => 0,
+            Some(held) => max_stack.saturating_sub(held.count()),
             None => max_stack,
         };
-        let put = room.min(rest.count);
+        let put = room.min(amount);
         if put > 0 {
-            let count = held.map_or(0, |held| held.count) + put;
-            self.slots.insert(
-                slot,
-                ItemStack {
-                    count,
-                    ..rest.clone()
-                },
-            );
-            rest.count -= put;
+            let count = held.map_or(0, ItemStack::count) + put;
+            self.slots
+                .extend(resource.to_stack(count).map(|stack| (slot, stack)));
         }
-        if rest.count > 0 {
-            self.given.push(rest);
-        }
-        stack.count
+        self.given.extend(resource.to_stack(amount - put));
+        amount
     }
-    /// Takes up to `stack.count` of `stack`'s item and components out of slot `slot`; how many
-    /// came.
-    pub(super) fn extract(&mut self, slot: i32, stack: &ItemStack) -> u32 {
-        let Some(held) = self.slots.get_mut(&slot) else {
+    /// Takes up to `amount` of this resource out of slot `slot`; how many came.
+    pub(super) fn extract(
+        &mut self,
+        slot: i32,
+        resource: &crate::ItemResource,
+        amount: u32,
+    ) -> u32 {
+        let std::collections::btree_map::Entry::Occupied(entry) = self.slots.entry(slot) else {
             return 0;
         };
-        if !held.same_item_same_components(stack) {
+        if !resource.matches(entry.get()) {
             return 0;
         }
-        let took = held.count.min(stack.count);
-        held.count -= took;
-        if held.count == 0 {
-            self.slots.remove(&slot);
-        }
-        took
+        let (slot, stack) = entry.remove_entry();
+        let split = stack.split(amount);
+        self.slots
+            .extend(split.remainder.map(|stack| (slot, stack)));
+        split.taken.as_ref().map_or(0, ItemStack::count)
     }
 }
 

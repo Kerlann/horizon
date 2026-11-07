@@ -6,7 +6,8 @@ use horizon_client::{
     hud::{HudBatch, rgba},
     hud_layout::GuiDraw,
 };
-use mod_api::{ItemStack, Text, TextFieldLayout, TextFieldView};
+use horizon_items::items::ItemStack as EngineStack;
+use mod_api::{Text, TextFieldLayout, TextFieldView};
 
 impl Game<'_> {
     /// Paint GUI extraction calls through this window's atlas, including player faces.
@@ -88,7 +89,7 @@ impl Game<'_> {
     pub(super) fn native_gui_draw_item_with(
         &self,
         batch: &mut HudBatch,
-        stack: &ItemStack,
+        stack: &EngineStack,
         at: [f32; 2],
         text: Option<&str>,
     ) {
@@ -120,7 +121,7 @@ mod tests {
             game.physical_keys.clear();
             assert!(!game.is_key_down("key.keyboard.left.shift"));
 
-            let stack = ItemStack::new("minecraft:diamond", 5);
+            let stack = EngineStack::new("minecraft:diamond", 5);
             let mut automatic = HudBatch::scratch([320, 240]);
             game.native_gui_draw_item_with(&mut automatic, &stack, [16.0, 32.0], None);
             let mut custom = HudBatch::scratch([320, 240]);
