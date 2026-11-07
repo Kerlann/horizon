@@ -46,7 +46,7 @@ impl DebugHost for Host<'_, '_> {
         self.game.open_screen()
     }
     fn toggle_overlay(&mut self) {
-        self.game.debug = !self.game.debug;
+        self.game.set_debug_overlay(!self.game.debug);
     }
     fn pause_game(&mut self, without_menu: bool) {
         // Gui.setPauseScreen: PauseScreen(false) only when the game really
@@ -67,6 +67,14 @@ impl DebugHost for Host<'_, '_> {
 }
 
 impl Game<'_> {
+    /// `DebugScreenEntryList.setOverlayVisible`: rebuild on each visibility transition.
+    fn set_debug_overlay(&mut self, visible: bool) {
+        if self.debug != visible {
+            self.debug = visible;
+            self.debug_entries.invalidate();
+        }
+    }
+
     fn open_screen(&self) -> OpenScreen {
         if self.title.is_some() {
             return OpenScreen::Other;
@@ -751,15 +759,21 @@ impl Game<'_> {
                 true
             }
             DebugAction::FpsCharts => {
-                self.debug_charts.toggle_fps(&mut self.debug);
+                let mut visible = self.debug;
+                self.debug_charts.toggle_fps(&mut visible);
+                self.set_debug_overlay(visible);
                 true
             }
             DebugAction::NetworkCharts => {
-                self.debug_charts.toggle_network(&mut self.debug);
+                let mut visible = self.debug;
+                self.debug_charts.toggle_network(&mut visible);
+                self.set_debug_overlay(visible);
                 true
             }
             DebugAction::LightmapTexture => {
-                self.debug_charts.toggle_lightmap(&mut self.debug);
+                let mut visible = self.debug;
+                self.debug_charts.toggle_lightmap(&mut visible);
+                self.set_debug_overlay(visible);
                 true
             }
             // The debug options screen is not wired over the title screen yet:

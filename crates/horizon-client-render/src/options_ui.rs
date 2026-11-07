@@ -1551,6 +1551,8 @@ pub enum Event {
     Close,
     /// Settings changed: apply and save them.
     Changed,
+    /// The reduced-debug-info option rebuilt the debug entry list.
+    DebugEntriesChanged,
     /// A slider is being dragged: apply settings live but defer saving.
     SliderDrag,
     /// A category volume slider (`SoundSource` index) moved to a new value,
@@ -4565,6 +4567,9 @@ impl OptionsUi {
     ) -> Vec<Event> {
         let mut events = Vec::new();
         opt.cycle(s, back, framebuffer);
+        if opt == Opt::ReducedDebugInfo {
+            events.push(Event::DebugEntriesChanged);
+        }
         if opt == Opt::Preset {
             apply_preset(s);
         }
