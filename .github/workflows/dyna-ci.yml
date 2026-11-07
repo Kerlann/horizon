@@ -344,13 +344,14 @@ jobs:
         if: steps.rust.outputs.required != 'false'
         run: cargo +stable test $JOBS --workspace --lib --bins --tests
       # Separate timings make rebuilds between Cargo invocations visible without changing the test selection.
-      # The full content-root tests (#[ignore]d: minutes each on a laptop). They live in horizon-client-lib's library
-      # alone (as in pr_ready.py), so only that binary is launched, not all ~150 of the workspace's; they need the
-      # prepared vanilla data, so without it they pass at once.
+      # The full content-root tests (#[ignore]d: minutes each on a laptop). The same build as above; they need the
+      # prepared vanilla data, so without it they pass at once. Keep the target selection identical to avoid
+      # recompiling the workspace with a different dependency graph (selecting only horizon-client-lib rebuilt
+      # it in 2 minutes).
       - name: Test ignored mod content roots
         if: steps.rust.outputs.required != 'false'
         run: |
-          cargo +stable test $JOBS -p horizon-client-lib --lib mod_content::tests:: -- --ignored
+          cargo +stable test $JOBS --workspace --lib --bins --tests mod_content::tests:: -- --ignored
       - name: Test Rust documentation examples
         if: steps.rust.outputs.required != 'false'
         run: cargo +stable test $JOBS --workspace --doc
