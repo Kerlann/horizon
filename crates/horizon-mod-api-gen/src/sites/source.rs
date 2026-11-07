@@ -93,6 +93,7 @@ mod tests {
         let sites = stage(&root, &entries, std::slice::from_ref(&request)).unwrap();
         assert_eq!(sites.len(), 1);
         assert_eq!(read(&root).unwrap()[0].ctx, request.ctx);
+        assert!(!root.join("points.json").exists());
         assert!(
             super::super::stage::ids(&root)
                 .unwrap()
