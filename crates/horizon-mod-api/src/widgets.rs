@@ -3,13 +3,14 @@
 //! `screen_render_post`, and hand them the presses, releases, drags, keys and typed characters of
 //! `screen_mouse_button_pressed_pre`, `screen_mouse_button_released_pre`,
 //! `screen_mouse_dragged_pre`, `screen_key_pressed_pre` and `screen_char_typed_pre`. Each input
-//! call answers an [`Outcome`]: set the hook's `canceled` when it [`Outcome::handled`] the input.
+//! call answers an [`Outcome`](crate::widgets::Outcome): set the hook's `canceled` when it
+//! [`Outcome::handled`](crate::widgets::Outcome::handled) the input.
 //!
 //! They behave as vanilla's `Button` and `EditBox` do: the game draws them with its own sprites,
 //! label and caret (`DrawContext::widget_button`, `DrawContext::widget_text_field`), so they get
 //! its narration and controller support, and a text field edits with the same core as the
-//! game's own ([`TextEdit`]). Everything else is plain Rust in the mod, the same in a native and
-//! a wasm build.
+//! game's own ([`TextEdit`](crate::widgets::TextEdit)). Everything else is plain Rust in the mod,
+//! the same in a native and a wasm build.
 //!
 //! ```
 //! use mod_api::widgets::{Button, Outcome, TextField, Widgets};
@@ -111,7 +112,7 @@ pub struct TextField {
     pub text_color: u32,
     /// Grey text shown after the end of the text (`EditBox.setSuggestion`).
     pub suggestion: Option<String>,
-    /// What the narrator calls it (`EditBox`'s message: "<message> edit box: <text>").
+    /// What the narrator calls it (`EditBox`'s message: `<message> edit box: <text>`).
     pub message: String,
     /// The first character shown, as the game left it after the last draw.
     scroll: usize,
