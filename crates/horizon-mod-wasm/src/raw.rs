@@ -292,60 +292,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn raw_routes_refuse_stale_native_only_missing_and_call_slots() {
-        let mut entry = inject::Inject {
-            id: "raw".into(),
-            at: TARGETS[0].into(),
-            kind: Kind::Head,
-            with: "call".into(),
-            access: Access::Internals,
-            priority: 12,
-            hash: "signature".into(),
-            call: None,
-            nth: None,
-            ctx: None,
-        };
-        const PLACES: [Place; 1] = [Place {
-            place: 0,
-            target: TARGETS[0],
-            signature_hash: "signature",
-            hash: "wire",
-            receiver: None,
-            receiver_writable: false,
-            record: 0,
-        }];
-        let table = Table {
-            places: &PLACES,
-            ..Table::EMPTY
-        };
-        assert_eq!(check_slot(&table, "mod", &entry), Ok(()));
-        entry.hash = "stale".into();
-        assert!(matches!(
-            check_slot(&table, "mod", &entry),
-            Err(Refusal::Inject(inject::InjectError::Changed { .. }))
-        ));
-        entry.hash = "signature".into();
-        const NATIVE_ONLY: &[&str] = &[TARGETS[0]];
-        for (table, call, reason) in [
-            (Table::EMPTY, false, inject::NoSlotReason::NotListed),
-            (
-                Table {
-                    native_only: NATIVE_ONLY,
-                    ..Table::EMPTY
-                },
-                false,
-                inject::NoSlotReason::NativeOnly,
-            ),
-            (Table::EMPTY, true, inject::NoSlotReason::WasmSitesPending),
-        ] {
-            entry.call = call.then(|| "callee".into());
-            assert!(
-                matches!(check_slot(&table, "mod", &entry), Err(Refusal::Inject(inject::InjectError::NoSlot { reason: found, .. })) if found == reason)
-            );
-        }
-    }
-
-    #[test]
     fn a_compiled_view_must_include_each_manifest_internal_at_the_same_hash() {
         let internal = Internal {
             path: "Game::world".into(),

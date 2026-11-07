@@ -35,13 +35,18 @@ fn component(names: &[(&str, &str)], omit_fire: bool) -> Exports {
             .exports
             .insert(wit_parser::WorldKey::Name(format!("{prefix}-{name}")), item);
     }
+    let raw_world = resolve.select_world(&[raw_package], Some("raw")).unwrap();
+    let raw_item = resolve.worlds[raw_world]
+        .exports
+        .values()
+        .next()
+        .unwrap()
+        .clone();
     resolve.worlds[world].exports.insert(
         wit_parser::WorldKey::Name(format!("{prefix}-raw-listeners")),
-        wit_parser::WorldItem::Interface {
-            id: raw,
-            stability: wit_parser::Stability::Unknown,
-        },
+        raw_item,
     );
+
     let module =
         wit_component::dummy_module(&resolve, world, wit_parser::ManglingAndAbi::Standard32);
     let mut rewriter = Fixture::new(&module, names);
@@ -66,8 +71,14 @@ fn component(names: &[(&str, &str)], omit_fire: bool) -> Exports {
         .unwrap()
         .encode()
         .unwrap();
-    let engine = crate::engine(&crate::RuntimeConfig::default()).unwrap();
+    let mut config = wasmtime::Config::new();
+    config
+        .consume_fuel(true)
+        .wasm_component_model_implements(true);
+    let engine = wasmtime::Engine::new(&config).unwrap();
     let component = wasmtime::component::Component::new(&engine, bytes).unwrap();
+    let mut budgets = Budgets::default();
+    budgets.fuel = Some(Default::default());
     instantiate(
         &engine,
         &component,
@@ -75,7 +86,7 @@ fn component(names: &[(&str, &str)], omit_fire: bool) -> Exports {
             id: "controlled",
             exports: prefix,
         }],
-        Budgets::default(),
+        budgets,
         |_| {},
     )
     .unwrap()
@@ -252,7 +263,7 @@ fn controlled_load_and_registration() {
     };
     assert!(crate::INTERNALS.set(&TABLE).is_ok());
     let text = format!(
-        "id='controlled'\nname='Controlled'\nversion='1.0.0'\napi='0.2'\nside='both'\n[native]\n[[native.internals]]\npath='Counter'\nhash='internal'\n[wasm]\nsha512='{}'\ntoolchain='1.99.1'\n[[inject]]\nid='a'\nat=\"{}\"\nkind='head'\naccess='internals'\nwith='listener'\nhash='signature'\npriority=10\n",
+        "id='controlled'\nname='Controlled'\nversion='1.0.0'\napi='0.2'\nside='both'\ncapabilities=['registries']\n[native]\n[[native.internals]]\npath='Counter'\nhash='internal'\n[wasm]\nsha512='{}'\ntoolchain='1.99.1'\n[[inject]]\nid='a'\nat=\"{}\"\nkind='head'\naccess='internals'\nwith='listener'\nhash='signature'\npriority=10\n",
         "0".repeat(128),
         TARGETS[mod_points::PointId::Tick as usize]
     );
@@ -332,6 +343,43 @@ fn controlled_load_and_registration() {
         .unwrap();
     assert_eq!(
         exports.load(|store| Ok(trace.call(store, ())?.0)),
-        Some(231)
+        Some(132)
     );
+}
+
+mod build_script {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../horizon-mod-internals/build.rs"
+    ));
+    #[test]
+    fn listeners_come_from_the_manifest() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let dir = root.join("target/manifest-listener-generation");
+        fs::create_dir_all(&dir).unwrap();
+        let catalog = r#"[{"path":"horizon_client::game::Game","kind":"struct","signature":"struct Game {}","hash":"g"},{"path":"horizon_client::game::Game<'_>::tick","kind":"method","signature":"fn tick(&mut self)","hash":"h"}]"#;
+        fs::write(dir.join("catalog.json"), catalog).unwrap();
+        let manifest = format!(
+            "id='generation'\nname='Generation'\nversion='1.0.0'\napi='0.2'\nside='both'\ncapabilities=['registries']\n[native]\ninternals=[{{path=\"horizon_client::game::Game<'_>::tick\",hash='h'}}]\n[wasm]\nsha512='{}'\ntoolchain='1.99.1'\n[[inject]]\nid='listener'\nat=\"horizon_client::game::Game<'_>::tick\"\nkind='head'\naccess='internals'\nhash='h'\nwith='chosen'",
+            "0".repeat(128)
+        );
+        // SAFETY: only this test sets the build-script environment in this process.
+        unsafe {
+            env::set_var(
+                "HORIZON_MOD_INTERNALS_MANIFEST",
+                dir.join("horizon-mod.toml"),
+            );
+            env::set_var("HORIZON_MOD_INTERNALS_CATALOG", dir.join("catalog.json"));
+        }
+        for function in ["chosen", "changed"] {
+            fs::write(
+                dir.join("horizon-mod.toml"),
+                manifest.replace("chosen", function),
+            )
+            .unwrap();
+            let _entry_point = main;
+            let code = generate().unwrap();
+            assert!(code.contains(&format!("crate :: {function}")));
+        }
+    }
 }

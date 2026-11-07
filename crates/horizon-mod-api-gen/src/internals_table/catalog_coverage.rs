@@ -293,7 +293,7 @@ fn prepare(stage: &Path, build: &Path) {
     )
     .unwrap();
     let mut manifest = String::from(
-        "id='coverage'\nname='Coverage'\nversion='1.0.0'\napi='0.2'\nside='both'\n[native]\n",
+        "id='coverage'\nname='Coverage'\nversion='1.0.0'\napi='0.2'\nside='both'\ncapabilities=['registries']\n[native]\n",
     );
     for d in &declared {
         manifest.push_str(&format!(
