@@ -314,20 +314,37 @@ mod tests {
             let (a, b) = (game.player(123).unwrap(), game.player(456).unwrap());
             assert!(game.boss_bar("mod:bar").is_none());
             assert!(
-                game.create_boss_bar("not a valid id", Text::literal("x"))
-                    .is_none()
+                mod_api::prelude::BossBarsServerHost::create_boss_bar(
+                    game,
+                    "not a valid id",
+                    mod_api::Text::literal("x")
+                )
+                .unwrap()
+                .is_none()
             );
-            let bar = game
-                .create_boss_bar("mod:bar", Text::literal("Hi"))
-                .unwrap();
+            let bar = mod_api::prelude::BossBarsServerHost::create_boss_bar(
+                game,
+                "mod:bar",
+                mod_api::Text::literal("Hi"),
+            )
+            .unwrap()
+            .unwrap();
             assert!(
-                game.create_boss_bar("mod:bar", Text::literal("Again"))
-                    .is_none()
+                mod_api::prelude::BossBarsServerHost::create_boss_bar(
+                    game,
+                    "mod:bar",
+                    mod_api::Text::literal("Again")
+                )
+                .unwrap()
+                .is_none()
             );
             assert_eq!(game.boss_bar("mod:bar"), Some(bar));
             assert_eq!(game.boss_bars(), vec![bar]);
             assert_eq!(bar.id(game).as_deref(), Some("mod:bar"));
-            assert_eq!(bar.name(game).unwrap(), mod_api::Text::literal("Hi"));
+            assert_eq!(
+                bar.name(game).unwrap().unwrap(),
+                mod_api::Text::literal("Hi")
+            );
             assert_eq!(bar.color(game), Some(BossBarColor::White));
             assert_eq!(bar.overlay(game), Some(BossBarOverlay::Progress));
             assert_eq!(bar.visible(game), Some(true));
@@ -344,7 +361,7 @@ mod tests {
             assert_eq!(seen(game, 123), Some((0.0, 6, 0, false, false, false)));
             assert_eq!(seen(game, 456), None);
 
-            assert!(bar.set_name(game, mod_api::Text::literal("Boss")));
+            assert!(bar.set_name(game, mod_api::Text::literal("Boss")).unwrap());
             assert!(bar.set_color(game, BossBarColor::Red));
             assert!(bar.set_overlay(game, BossBarOverlay::Notched10));
             assert!(bar.set_darken_screen(game, true));
@@ -352,7 +369,10 @@ mod tests {
             assert!(bar.set_create_world_fog(game, true));
             assert!(bar.set_max(game, 50));
             assert!(bar.set_value(game, 25));
-            assert_eq!(bar.name(game).unwrap(), mod_api::Text::literal("Boss"));
+            assert_eq!(
+                bar.name(game).unwrap().unwrap(),
+                mod_api::Text::literal("Boss")
+            );
             assert_eq!(bar.color(game), Some(BossBarColor::Red));
             assert_eq!(bar.overlay(game), Some(BossBarOverlay::Notched10));
             assert_eq!(
@@ -437,12 +457,19 @@ mod tests {
             assert!(!bar.set_value(game, 3));
             assert!(!bar.add_player(game, a));
             assert!(game.boss_bar("mod:bar").is_none());
-            let again = game
-                .create_boss_bar("mod:bar", Text::literal("New"))
-                .unwrap();
+            let again = mod_api::prelude::BossBarsServerHost::create_boss_bar(
+                game,
+                "mod:bar",
+                mod_api::Text::literal("New"),
+            )
+            .unwrap()
+            .unwrap();
             assert_ne!(again, bar);
-            assert_eq!(bar.name(game), None);
-            assert_eq!(again.name(game).unwrap(), mod_api::Text::literal("New"));
+            assert_eq!(bar.name(game).unwrap(), None);
+            assert_eq!(
+                again.name(game).unwrap().unwrap(),
+                mod_api::Text::literal("New")
+            );
             assert!(game.run_command("bossbar remove mod:bar"));
             assert_eq!(again.id(game), None);
         });
@@ -454,9 +481,13 @@ mod tests {
         with_game(|game| {
             let dir = std::env::temp_dir().join(format!("boss-early-{}", std::process::id()));
             game.world_root = dir.clone();
-            let bar = game
-                .create_boss_bar("mod:saved", Text::literal("Kept"))
-                .unwrap();
+            let bar = mod_api::prelude::BossBarsServerHost::create_boss_bar(
+                game,
+                "mod:saved",
+                mod_api::Text::literal("Kept"),
+            )
+            .unwrap()
+            .unwrap();
             assert!(bar.set_value(game, 7));
             game.save_bossbars();
             // The world opens again and loads the bars, as `finish_open_world` does.

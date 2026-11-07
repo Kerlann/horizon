@@ -289,7 +289,10 @@ mod tests {
             let mob = push_mob(game, 12, "minecraft:zombie");
             assert_eq!(mob.custom_name_visible(game), Some(false));
             let name = Text::colored("Grumbles", 0xFF5555);
-            assert!(mob.set_custom_name(game, Some(name.try_into_api().unwrap())));
+            assert!(
+                mob.set_custom_name(game, Some(name.try_into_api().unwrap()))
+                    .unwrap()
+            );
             assert!(mob.set_custom_name_visible(game, true));
             assert_eq!(mob.name(game).as_deref(), Some("Grumbles"));
             assert_eq!(mob.custom_name_visible(game), Some(true));
@@ -297,7 +300,7 @@ mod tests {
             assert_eq!(saved.get(&"CustomNameVisible".into()), Some(&Tag::Byte(1)));
 
             // Taken away: neither the name nor the flag is saved.
-            assert!(mob.set_custom_name(game, None));
+            assert!(mob.set_custom_name(game, None).unwrap());
             assert!(mob.set_custom_name_visible(game, false));
             assert_ne!(mob.name(game).as_deref(), Some("Grumbles"));
             assert_eq!(mob.custom_name_visible(game), Some(false));
@@ -316,14 +319,18 @@ mod tests {
             // An armor stand keeps its name in its own field.
             game.armor_stands.push(ArmorStand::new(13, Vec3::ZERO, 0.0));
             let stand = game.entity(13).unwrap();
-            assert!(stand.set_custom_name(game, Some(mod_api::Text::literal("Sign"))));
+            assert!(
+                stand
+                    .set_custom_name(game, Some(mod_api::Text::literal("Sign")))
+                    .unwrap()
+            );
             assert_eq!(stand.name(game).as_deref(), Some("Sign"));
             let saved = game.entity_nbt(stand).unwrap();
             let loaded = saved
                 .get(&"CustomName".into())
                 .map(horizon_client::entity_nbt::name_text);
             assert_eq!(loaded, Some(Text::literal("Sign")));
-            assert!(stand.set_custom_name(game, None));
+            assert!(stand.set_custom_name(game, None).unwrap());
             let saved = game.entity_nbt(stand).unwrap();
             assert!(!saved.contains_key(&"CustomName".into()));
 
@@ -332,10 +339,17 @@ mod tests {
             dragon.id = 14;
             game.dragon.replace(dragon);
             let dragon = game.entity(14).unwrap();
-            assert!(!dragon.set_custom_name(game, Some(mod_api::Text::literal("Puff"))));
+            assert!(
+                !dragon
+                    .set_custom_name(game, Some(mod_api::Text::literal("Puff")))
+                    .unwrap()
+            );
             assert!(!dragon.set_custom_name_visible(game, true));
             assert!(mob.discard(game));
-            assert!(!mob.set_custom_name(game, Some(mod_api::Text::literal("Gone"))));
+            assert!(
+                !mob.set_custom_name(game, Some(mod_api::Text::literal("Gone")))
+                    .unwrap()
+            );
             assert_eq!(mob.custom_name_visible(game), None);
         });
     }

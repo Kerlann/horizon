@@ -690,7 +690,10 @@ mod tests {
             assert_eq!(text.background(game), Some(0x4000_0000));
             assert_eq!(text.text_opacity(game), Some(-1));
             assert_eq!(text.alignment(game), Some(NativeTextAlignment::Center));
-            assert!(text.set_text(game, mod_api::Text::literal("hello")));
+            assert!(
+                text.set_text(game, mod_api::Text::literal("hello"))
+                    .unwrap()
+            );
             assert!(text.set_line_width(game, 80));
             assert!(text.set_background(game, 0x20ff0000));
             assert!(text.set_text_opacity(game, 100));
@@ -698,7 +701,10 @@ mod tests {
             assert!(text.set_see_through(game, true));
             assert!(text.set_default_background(game, true));
             assert!(text.set_alignment(game, NativeTextAlignment::Right));
-            assert_eq!(text.text(game).unwrap(), mod_api::Text::literal("hello"));
+            assert_eq!(
+                text.text(game).unwrap().unwrap(),
+                mod_api::Text::literal("hello")
+            );
             assert_eq!(
                 (
                     text.line_width(game),
@@ -760,8 +766,8 @@ mod tests {
             assert_eq!(item.item(game), None);
 
             // The wrong kind reads None and writes nothing.
-            assert_eq!(block.text(game), None);
-            assert!(!block.set_text(game, mod_api::Text::literal("x")));
+            assert_eq!(block.text(game).unwrap(), None);
+            assert!(!block.set_text(game, mod_api::Text::literal("x")).unwrap());
             assert!(!text.set_block_state(game, stone));
             assert_eq!(text.block_state(game), None);
             assert!(!block.set_item_context(game, NativeItemDisplayContext::Gui));
@@ -775,7 +781,10 @@ mod tests {
     fn display_writes_reach_entity_data_and_the_saved_entity() {
         with_game(|game| {
             let text = push(game, 21, "minecraft:text_display");
-            assert!(text.set_text(game, mod_api::Text::literal("saved")));
+            assert!(
+                text.set_text(game, mod_api::Text::literal("saved"))
+                    .unwrap()
+            );
             assert!(text.set_billboard(game, NativeBillboard::Vertical));
             assert!(text.set_view_range(game, 2.5));
             let raw = game.persist.raw.get(&21).unwrap().clone();
@@ -834,7 +843,7 @@ mod tests {
             assert_eq!(stale.kind(game), None);
             assert_eq!(stale.view_range(game), None);
             assert!(!stale.set_view_range(game, 2.0));
-            assert!(!stale.set_text(game, mod_api::Text::literal("x")));
+            assert!(!stale.set_text(game, mod_api::Text::literal("x")).unwrap());
             assert!(text.entity().discard(game));
             assert_eq!(text.kind(game), None);
             assert!(!text.set_width(game, 1.0));
