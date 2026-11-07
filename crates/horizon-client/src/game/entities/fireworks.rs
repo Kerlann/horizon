@@ -50,6 +50,9 @@ pub(super) struct Rocket {
     /// `Projectile.getOwner`: the player who launched it, credited with
     /// what its blast hurts.
     pub(super) owner: Option<Who>,
+    /// `Projectile.getOwner` when `owner` can't name it: the UUID of an owner
+    /// that is neither a player nor a mob.
+    pub(super) owner_uuid: Option<[i32; 4]>,
     /// `Projectile.leftOwner`: until then it can't hit its owner.
     left_owner: bool,
     /// `DATA_ATTACHED_TO_TARGET`: the server entity the rocket follows;
@@ -80,6 +83,7 @@ impl Rocket {
             attached: false,
             guest: None,
             owner: None,
+            owner_uuid: None,
             left_owner: false,
             attached_to: None,
             angled: false,
@@ -87,7 +91,18 @@ impl Rocket {
             random: horizon_client::projectiles::unique_random(position),
         }
     }
-    /// `FireworkRocketEntity.addAdditionalSaveData`; the owner only when it is `player`.
+    /// `Projectile.setOwner`; the UUID is kept only for an owner `who` can't name.
+    pub(in crate::game) fn set_owner(
+        &mut self,
+        who: Option<Who>,
+        uuid: Option<[i32; 4]>,
+        guest: Option<u32>,
+    ) {
+        (self.owner, self.guest) = (who, guest);
+        self.owner_uuid = uuid.filter(|_| who.is_none());
+    }
+    /// `FireworkRocketEntity.addAdditionalSaveData`; the owner when it is
+    /// `player`, or an entity that is neither a player nor a mob.
     pub(super) fn to_nbt(
         &self,
         uuid: [i32; 4],
@@ -106,7 +121,7 @@ impl Rocket {
                 owner: if matches!(self.owner, Some(Who::Player)) {
                     player
                 } else {
-                    None
+                    self.owner_uuid
                 },
                 left_owner: self.left_owner,
             },
@@ -133,6 +148,7 @@ impl Rocket {
             attached: false,
             guest: None,
             owner: r.owner,
+            owner_uuid: r.owner_uuid.filter(|_| r.owner.is_none()),
             left_owner: r.left_owner,
             attached_to: None,
             angled: r.angled,
@@ -253,6 +269,7 @@ impl Game<'_> {
             attached,
             guest: None,
             owner: None,
+            owner_uuid: None,
             left_owner: false,
             attached_to: None,
             angled: false,

@@ -346,6 +346,11 @@ impl RenderAssets {
         for name in MATERIALS {
             sprites.insert(&format!("minecraft:block/{name}"))?;
         }
+        if draws {
+            for id in root.runtime_block_sprites() {
+                sprites.insert(id)?;
+            }
+        }
         // A server draws no block and no item: its block models (about 24 MB
         // baked) and item model library (7 MB) stay empty.
         let parsed = match parsed {

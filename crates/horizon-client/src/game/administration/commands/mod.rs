@@ -78,6 +78,9 @@ pub(super) enum Target {
     Spawner(u32),
     /// A simulated lingering, creeper or dragon area-effect cloud.
     Cloud(u32),
+    /// A cast fishing hook (`minecraft:fishing_bobber`), which lives with the
+    /// player who cast it. Only a mod's handle names one.
+    Hook(u32),
 }
 /// `Entity.setXRot`: wrap before clamping the pitch.
 pub(super) fn entity_pitch(pitch: f32) -> f32 {
@@ -185,7 +188,8 @@ fn non_player_entity_id(t: Target) -> Option<i32> {
     | Target::Rocket(id)
     | Target::Trident(id)
     | Target::Spawner(id)
-    | Target::Cloud(id)) = t
+    | Target::Cloud(id)
+    | Target::Hook(id)) = t
     else {
         return None;
     };
@@ -610,6 +614,10 @@ impl Game<'_> {
                 .find(|r| r.id == id)
                 .map(|r| [r.position.x, r.position.y, r.position.z]),
             Target::Cloud(id) => self.breath_clouds.iter().find(|c| c.id == id).map(|c| c.at),
+            Target::Hook(id) => self.fishing_hook_by_id(id).map(|(h, _)| {
+                let p = h.position;
+                [p.x, p.y, p.z]
+            }),
             Target::Trident(id) => self
                 .tridents
                 .iter()
@@ -674,6 +682,7 @@ impl Game<'_> {
             Target::Fangs(_) => "minecraft:evoker_fangs".into(),
             Target::Spawner(_) => "minecraft:ominous_item_spawner".into(),
             Target::Cloud(_) => "minecraft:area_effect_cloud".into(),
+            Target::Hook(_) => "minecraft:fishing_bobber".into(),
         }
     }
     /// The name of the player the game acts for: a guest's own while their
@@ -959,6 +968,10 @@ impl Game<'_> {
                 .filter(|c| c.id != 0)
                 .map(|c| Target::Cloud(c.id)),
         );
+        // `isRemoved` from a mod's call on, though the sweep has not taken it out.
+        if !self.persist.removals.is_empty() {
+            candidates.retain(|t| !self.persist.removals.contains(t));
+        }
         candidates
     }
     /// The loaded levels, in the order the server holds them: the
@@ -1005,6 +1018,10 @@ impl Game<'_> {
     /// `ServerLevel.getEntity`: whether the level in place still holds the
     /// entity a target names. Discard removes mobs from lookup immediately.
     fn level_holds(&self, t: Target) -> bool {
+        // Removed by a mod and waiting for the sweep: `isRemoved` from the call on.
+        if self.persist.removals.contains(&t) {
+            return false;
+        }
         match t {
             // A player is in no level of its own.
             Target::Player | Target::Guest(_) => true,
@@ -1027,6 +1044,7 @@ impl Game<'_> {
             Target::Trident(id) => self.tridents.iter().any(|t| t.id == id),
             Target::Spawner(id) => self.ominous_spawners.iter().any(|s| s.id == id),
             Target::Cloud(id) => self.breath_clouds.iter().any(|c| c.id == id),
+            Target::Hook(id) => self.fishing_hook_by_id(id).is_some(),
         }
     }
     /// Run `f` with the level that holds the entity a target names in place
@@ -1832,8 +1850,8 @@ impl Game<'_> {
                     });
                 }
             }
-            // Wall-mounted entities do not move.
-            Target::Frame(_) | Target::Painting(_) => {}
+            // Wall-mounted entities do not move; a hook follows its own tick.
+            Target::Frame(_) | Target::Painting(_) | Target::Hook(_) => {}
         }
         // Entity.teleportSameDimension: the riders go with their vehicle at
         // once, by the offset it took and the turn it was given.
@@ -2494,6 +2512,7 @@ impl Game<'_> {
             Target::Trident(id) => self.tridents.retain(|t| t.id != id),
             Target::Spawner(id) => self.ominous_spawners.retain(|s| s.id != id),
             Target::Cloud(id) => self.breath_clouds.retain(|c| c.id != id),
+            Target::Hook(id) => self.remove_fishing_hook(id),
         }
         // The orbs marked for removal are gone (Entity.kill removes them).
         self.orbs.retain(|o| o.age < u32::MAX / 2);

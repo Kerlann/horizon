@@ -4,6 +4,11 @@
 //! and the game applies once it exists (`start_game`).
 use mod_api::__private::game::*;
 
+mod runtime_sprites;
+#[cfg(test)]
+pub(in crate::game) use runtime_sprites::fixture_png;
+pub(in crate::game) use runtime_sprites::{collect_runtime_sprites, stage_runtime_sprites};
+
 #[cfg(test)]
 #[path = "client_reload_tests.rs"]
 mod tests;

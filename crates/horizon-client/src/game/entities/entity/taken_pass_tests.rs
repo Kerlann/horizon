@@ -350,6 +350,60 @@ pub(in crate::game) fn assert_mob_spawn_survives(
     );
 }
 
+/// Check a real player/guest projectile pickup pass and the next server flight pass.
+pub(in crate::game) fn assert_projectile_spawn_survives(
+    game: &mut Game<'_>,
+    action: impl FnOnce(&mut Game<'_>),
+) {
+    const ID: u32 = 1_900_000_002;
+    fn spawn(game: &mut Game<'_>) {
+        let mut p = horizon_client::projectiles::Projectile::new(
+            horizon_client::projectiles::ProjectileKind::Egg,
+            horizon_core::geometry::Vec3::new(3.5, 80.0, 3.5),
+            None,
+        );
+        p.id = ID;
+        game.creatures.projectiles.push(p);
+    }
+    let mut expected: Vec<_> = game
+        .creatures
+        .projectiles
+        .iter()
+        .filter(|p| p.id != 72)
+        .map(|p| (p.id, p.join))
+        .collect();
+    with_spawn(spawn, || action(game));
+    let p = game
+        .creatures
+        .projectiles
+        .iter()
+        .find(|p| p.id == ID)
+        .expect("pickup dropped a nested projectile");
+    assert_eq!(p.age, 0);
+    let join = p.join;
+    expected.push((ID, join));
+    assert_eq!(
+        game.creatures
+            .projectiles
+            .iter()
+            .map(|p| (p.id, p.join))
+            .collect::<Vec<_>>(),
+        expected
+    );
+    let mut original = game.creatures.projectiles.lift();
+    game.creatures
+        .projectiles
+        .push(original.extract(join).unwrap());
+    game.tick_projectiles().unwrap();
+    assert_eq!(game.creatures.projectiles[0].age, 1);
+    assert_eq!(game.creatures.projectiles[0].join, join);
+    game.creatures.projectiles.clear();
+    game.creatures.projectiles.restore(
+        original,
+        horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
+    );
+}
+
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn data_merge_preserves_two_distinct_other_joins_for_every_runtime_kind() {

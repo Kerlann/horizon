@@ -320,7 +320,7 @@ fn within_budget(source: &ResourceSource, files: &[&String], budget: u64) -> Has
 }
 /// A PNG's width and height from its first 24 bytes (`IHDR`), before any
 /// pixel buffer is made.
-fn png_bytes_size(data: &[u8]) -> Option<(u32, u32)> {
+pub fn png_bytes_size(data: &[u8]) -> Option<(u32, u32)> {
     let header = data.get(..24)?;
     if header[..8] != *b"\x89PNG\r\n\x1a\n" || header[12..16] != *b"IHDR" {
         return None;

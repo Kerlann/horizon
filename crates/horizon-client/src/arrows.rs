@@ -888,7 +888,7 @@ impl Ticker<'_, '_, '_, '_> {
         }
         let owner = targets
             .iter()
-            .find(|(who, _)| Some(*who) == self.p.owner)
+            .find(|(who, _)| Some(*who) == self.p.collision_owner())
             .map(|(_, b)| *b);
         let swept = bounds(self.p.position)
             .expand_towards(self.p.velocity)
@@ -938,7 +938,7 @@ impl Ticker<'_, '_, '_, '_> {
         // ThrownTrident.findHitEntity: none once it has dealt damage.
         let targets = if self.st.dealt_damage { &[] } else { targets };
         for (who, b) in targets {
-            if Some(*who) == self.p.owner && !self.p.left_owner || !b.intersects(area) {
+            if Some(*who) == self.p.collision_owner() && !self.p.left_owner || !b.intersects(area) {
                 continue;
             }
             // canHitEntity: not an entity a piercing arrow has gone through.

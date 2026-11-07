@@ -1338,6 +1338,50 @@ impl Game<'_> {
             })
             .collect()
     }
+    /// The cast hooks of the level in place and who cast each: the player in
+    /// place, then the guests here. A guest displaced by a nested swap holds
+    /// someone else's hook for the moment, so theirs is left out.
+    pub(in crate::game) fn fishing_hooks_here(
+        &self,
+    ) -> impl Iterator<Item = (&Hook, super::commands::Target)> {
+        use super::commands::Target;
+        let own = self.hook.iter().map(|hook| (hook, Target::Player));
+        let guests = self.lan.iter().flat_map(|host| {
+            host.hub
+                .guests
+                .iter()
+                .filter(|g| {
+                    host.hub.here(g)
+                        && self.lan_acting != Some(g.conn)
+                        && !self.lan_guest_swaps.contains(&g.conn)
+                })
+                .filter_map(|g| Some((host.play.get(&g.conn)?.hook.as_ref()?, g.conn)))
+                .map(|(hook, conn)| (hook, Target::Guest(conn)))
+        });
+        own.chain(guests)
+    }
+    /// The cast hook with an entity id, and who cast it.
+    pub(in crate::game) fn fishing_hook_by_id(
+        &self,
+        id: u32,
+    ) -> Option<(&Hook, super::commands::Target)> {
+        self.fishing_hooks_here().find(|(hook, _)| hook.id == id)
+    }
+    /// Takes a cast hook out of the level (`Entity.discard`).
+    pub(in crate::game) fn remove_fishing_hook(&mut self, id: u32) {
+        if self.hook.as_ref().is_some_and(|hook| hook.id == id) {
+            self.hook = None;
+            return;
+        }
+        let Some(host) = self.lan.as_mut() else {
+            return;
+        };
+        for play in host.play.values_mut() {
+            if play.hook.as_ref().is_some_and(|hook| hook.id == id) {
+                play.hook = None;
+            }
+        }
+    }
     /// The hook for `horizon-ctl status`.
     pub(super) fn hook_status(&self) -> Option<serde_json::Value> {
         let h = self.hook.as_ref()?;
@@ -1419,6 +1463,21 @@ impl Hook {
     pub(super) fn id(&self) -> u32 {
         self.id
     }
+    /// `FishingHook.getHookedIn`, by entity id.
+    pub(in crate::game) fn hooked_in(&self) -> Option<u32> {
+        match self.state {
+            State::Hooked(id) => Some(id),
+            _ => None,
+        }
+    }
+    /// `FishingHook.isOpenWaterFishing`.
+    pub(in crate::game) fn open_water(&self) -> bool {
+        self.open_water
+    }
+    #[cfg(test)]
+    pub(in crate::game) fn set_hooked_in(&mut self, id: u32) {
+        self.state = State::Hooked(id);
+    }
     /// A server's update of this client's own hook (`handleMoveEntity` also
     /// sets `onGround`).
     pub(super) fn move_to(&mut self, target: [f64; 3], on_ground: bool) {
@@ -1439,7 +1498,7 @@ impl RemoteHook {
 
 impl Hook {
     /// This client's own hook as its server tracks it: drawn, never ticked here.
-    fn remote(id: u32, at: Vec3) -> Self {
+    pub(in crate::game) fn remote(id: u32, at: Vec3) -> Self {
         Self {
             id,
             position: at,

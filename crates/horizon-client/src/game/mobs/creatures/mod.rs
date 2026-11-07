@@ -4661,6 +4661,8 @@ impl Game<'_> {
         // Player.hasInfiniteMaterials.
         let creative = self.creative;
         let mut projectiles = self.creatures.projectiles.lift();
+        #[cfg(test)]
+        super::entity::taken_pass_tests::after_take(self);
         let mut picked = Vec::new();
         projectiles.retain(|shot| {
             let Some(a) = shot.arrow.as_ref().filter(|a| !a.removed) else {
@@ -4693,7 +4695,10 @@ impl Game<'_> {
             }
             !taken
         });
-        self.creatures.projectiles = projectiles;
+        self.creatures.projectiles.restore(
+            projectiles,
+            horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
+        );
         for shot in picked {
             self.add_pickup(
                 super::pickups::Taken::Arrow(Box::new(shot)),
@@ -4702,7 +4707,7 @@ impl Game<'_> {
         }
     }
 
-    fn tick_projectiles(&mut self) -> Result<()> {
+    pub(super) fn tick_projectiles(&mut self) -> Result<()> {
         if self.creatures.projectiles.is_empty() {
             self.flush_lan_explosions();
             return self.flush_wind_bursts();

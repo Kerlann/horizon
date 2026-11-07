@@ -24,6 +24,8 @@ mod painting_tests;
 mod player_tests;
 #[cfg(test)]
 mod query_tests;
+#[cfg(test)]
+mod saved_entity_tests;
 
 impl Game<'_> {
     pub(in crate::game) fn attachment_query(

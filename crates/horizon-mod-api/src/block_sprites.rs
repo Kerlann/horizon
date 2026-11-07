@@ -79,6 +79,18 @@ pub enum TextureAtlas {
     Gui,
 }
 
+/// A mod-generated PNG to stitch into the next client resource generation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+// exhaustive: mods submit declarations by value
+pub struct RuntimeSprite {
+    /// The target client atlas.
+    pub atlas: TextureAtlas,
+    /// A namespaced texture id including the `block/` or `gui/` path prefix.
+    pub id: Identifier,
+    /// A static PNG. Images must be at most 256 pixels wide and high.
+    pub png: Vec<u8>,
+}
+
 /// Where a sprite lies in the GUI atlas, as `gui_sprite` answers it: plain data, a snapshot of the
 /// atlas built last. It stays right until the next `texture_atlas_stitched` for
 /// [`TextureAtlas::Gui`], when a mod reads it again.

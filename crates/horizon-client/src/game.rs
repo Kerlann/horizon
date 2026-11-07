@@ -13711,6 +13711,8 @@ impl Game<'_> {
             self.merge_orbs();
         }
         let mut orbs = self.orbs.lift();
+        #[cfg(test)]
+        entity::taken_pass_tests::after_take(self);
         let mut gained = 0;
         let mut taken = Vec::new();
         if let Some((min, max)) = bounds {
@@ -13733,7 +13735,8 @@ impl Game<'_> {
                 true
             });
         }
-        self.orbs = orbs;
+        self.orbs
+            .restore(orbs, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
         if gained > 0 {
             gained = self.mending(gained);
         }
@@ -17833,6 +17836,12 @@ fn load_resources(
 ) -> Result<Loaded> {
     let mut root = resolved.prepared().to_path_buf();
     let headless = !role.is_client();
+    let runtime_sprites = if headless {
+        Vec::new()
+    } else {
+        client_reload::collect_runtime_sprites()
+    };
+    resolved = client_reload::stage_runtime_sprites(resolved, &runtime_sprites);
     let threads = settings.horizon.worker_threads();
     // One pool of workers for every level's streaming, the client's and the
     // server thread's (horizon_threads::jobs), sized before any world opens.
@@ -17914,7 +17923,10 @@ fn load_resources(
         pack_error = Some(failure);
         can_rollback = false;
         root = vanilla_root.to_path_buf();
-        resolved = horizon_assets::resource_source::ResourceRoot::directory(root.clone());
+        resolved = client_reload::stage_runtime_sprites(
+            horizon_assets::resource_source::ResourceRoot::directory(root.clone()),
+            &runtime_sprites,
+        );
     };
     log::info!("load core tables: {:.2}s", started.elapsed().as_secs_f32());
     let entity_models = entity_models.map(Arc::new);
@@ -19587,4 +19599,49 @@ fn test_server_load() -> horizon_world::native_load_context::LoadContext {
         Arc::new(LoadInputs::new(Default::default(), Default::default())),
         [],
     )
+}
+
+#[cfg(test)]
+mod nested_orb_spawn_tests {
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn experience_pickup_keeps_nested_orbs_until_the_next_ordered_pass() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
+            game.block_ticks
+                .add_empty_chunk(horizon_core::position::ChunkPos::new(0, 0))
+                .unwrap();
+            for (x, value) in [(7.5, 1), (9.5, 3), (11.5, 7)] {
+                game.add_orb([x, 80.0, 3.5], value);
+            }
+            let _ = game.orbs.remove(1);
+            let mut expected: Vec<_> = game.orbs.iter().map(|o| (o.id, o.join)).collect();
+            crate::game::entity::taken_pass_tests::with_spawn(
+                |g| g.add_orb([3.5, 80.0, 3.5], 1),
+                || game.tick_experience(),
+            );
+            assert_eq!(game.orbs.len(), 3);
+            let join = game.orbs[2].join;
+            expected.push((game.orbs[2].id, join));
+            assert_eq!(
+                game.orbs.iter().map(|o| (o.id, o.join)).collect::<Vec<_>>(),
+                expected
+            );
+            assert_eq!(game.orbs[2].age, 0);
+            game.ordered.announced = horizon_client::join_seq::JoinSeq::MAX;
+            game.tickets.update(None);
+            game.begin_ordered_ticks();
+            game.run_ordered_ticks(horizon_client::join_seq::JoinSeq::MAX, false)
+                .unwrap();
+            let spawned = game.orbs.iter().find(|o| o.join == join).unwrap();
+            assert_eq!(spawned.age, 1);
+            assert_eq!(
+                game.orbs.iter().map(|o| (o.id, o.join)).collect::<Vec<_>>(),
+                expected
+            );
+        });
+    }
 }

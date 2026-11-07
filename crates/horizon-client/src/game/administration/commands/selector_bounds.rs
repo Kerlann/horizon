@@ -26,6 +26,7 @@ impl Game<'_> {
         match target {
             Target::Player => self.player.as_ref().map(|p| p.bounds()),
             Target::Guest(conn) => self.command_guest(conn).map(|p| p.bounds()),
+            Target::Hook(id) => self.fishing_hook_by_id(id).map(|(h, _)| h.bounds()),
             Target::Mob(id) => self.mobs.iter().find(|e| e.id == id).map(Entity::bounds),
             Target::Item(id) => self.dropped.iter().find(|e| e.id == id).map(Entity::bounds),
             Target::Orb(id) => self.orbs.iter().find(|e| e.id == id).map(Entity::bounds),

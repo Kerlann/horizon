@@ -632,11 +632,16 @@ impl Game<'_> {
             return;
         }
         let mut rockets = self.rockets.lift();
+        #[cfg(test)]
+        nested_spawn_tests::after_lift(self, nested_spawn_tests::Point::OwnRocket);
         for r in rockets.iter_mut().filter(|r| r.attached_to == Some(me)) {
             self.follow_own_player(r);
             self.rocket_spark(r);
         }
-        self.rockets = rockets;
+        self.rockets.restore(
+            rockets,
+            horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
+        );
     }
 
     /// One tick of interpolation, as `tick_remote_objects`.
@@ -681,22 +686,31 @@ impl Game<'_> {
         // itself between the server's updates (every 20 ticks), then waits
         // where it lands for the server to place it and remove it.
         let mut falling = self.falling.lift();
+        #[cfg(test)]
+        nested_spawn_tests::after_lift(self, nested_spawn_tests::Point::Falling);
         falling.for_each_mut(|f| {
             if let Ok(FallStep::Landed(_)) = self.fall_step(f, false, &[]) {
                 // Block.updateEntityMovementAfterFallOn, then the air drag.
                 f.velocity = Vec3::new(f.velocity.x * 0.98, 0.0, f.velocity.z * 0.98);
             }
         });
-        self.falling = falling;
+        self.falling.restore(
+            falling,
+            horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
+        );
         // Projectiles tick on the client too and fly on between the tracker's
         // updates (10 to 20 ticks apart); a block stops them there, and only
         // the server decides what they hit.
         let mut projectiles = self.creatures.projectiles.lift();
+        #[cfg(test)]
+        nested_spawn_tests::after_lift(self, nested_spawn_tests::Point::Projectile);
         let bubbles: Vec<_> = projectiles
             .iter()
             .filter_map(Projectile::water_bubbles)
             .collect();
         let mut tridents = self.tridents.lift();
+        #[cfg(test)]
+        nested_spawn_tests::after_lift(self, nested_spawn_tests::Point::Trident);
         let mut arrow_events = Vec::new();
         let rain = self.arrow_rain();
         let arrow_scene = self.arrow_scene(&rain);
@@ -733,8 +747,14 @@ impl Game<'_> {
             }
         }
         drop(rain);
-        self.creatures.projectiles = projectiles;
-        self.tridents = tridents;
+        self.creatures.projectiles.restore(
+            projectiles,
+            horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
+        );
+        self.tridents.restore(
+            tridents,
+            horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
+        );
         for (at, event) in arrow_events {
             self.arrow_event(at, event);
         }
@@ -754,6 +774,8 @@ impl Game<'_> {
         // boosting this client's own player ticks after it (`tick_own_rockets`).
         let me = self.remote_player_id();
         let mut rockets = self.rockets.lift();
+        #[cfg(test)]
+        nested_spawn_tests::after_lift(self, nested_spawn_tests::Point::RemoteRocket);
         for r in &mut rockets {
             r.remote_step(&mut SceneCollisions {
                 world: &self.world,
@@ -776,7 +798,10 @@ impl Game<'_> {
             }
             self.rocket_spark(r);
         }
-        self.rockets = rockets;
+        self.rockets.restore(
+            rockets,
+            horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
+        );
         for c in &mut self.crystals {
             c.time += 1;
             c.position = step(c.id, c.position);
@@ -1064,5 +1089,205 @@ mod tests {
         );
         remote_projectile_item(&mut list, 14, ItemStack::new("minecraft:diamond", 1));
         assert_eq!(list[2].item, None);
+    }
+}
+
+#[cfg(test)]
+mod nested_spawn_tests {
+    use super::*;
+    use std::cell::Cell;
+    const ID: u32 = 1_900_000_001;
+    const AT: Vec3 = Vec3::new(3.5, 80.0, 3.5);
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(super) enum Point {
+        Falling,
+        Projectile,
+        Trident,
+        RemoteRocket,
+        OwnRocket,
+    }
+    type Spawn = fn(&mut Game<'_>, u32);
+    thread_local! { static PENDING: Cell<Option<(Point, Spawn)>> = const { Cell::new(None) }; }
+    pub(super) fn after_lift(game: &mut Game<'_>, point: Point) {
+        if let Some((expected, spawn)) = PENDING.get()
+            && point == expected
+        {
+            PENDING.set(None);
+            spawn(game, ID);
+        }
+    }
+    fn with_spawn(point: Point, spawn: Spawn, action: impl FnOnce()) {
+        assert!(PENDING.replace(Some((point, spawn))).is_none());
+        action();
+        assert!(PENDING.take().is_none(), "requested lift was not exercised");
+    }
+    fn spawn(game: &mut Game<'_>, kind: &str, data: i32, id: u32) {
+        assert!(game.spawn_remote_projectile(
+            id as i32,
+            kind,
+            [AT.x, AT.y, AT.z],
+            (0.0, 0.0),
+            [1.0, 0.0, 0.0],
+            data
+        ));
+    }
+    fn falling(game: &mut Game<'_>, id: u32) {
+        let sand = game
+            .pack
+            .assets
+            .registry
+            .default_state("minecraft:sand")
+            .unwrap();
+        spawn(game, "minecraft:falling_block", sand.0 as i32, id);
+    }
+    fn projectile(game: &mut Game<'_>, id: u32) {
+        spawn(game, "minecraft:shulker_bullet", 0, id);
+    }
+    fn trident(game: &mut Game<'_>, id: u32) {
+        spawn(game, "minecraft:trident", 0, id);
+    }
+    fn rocket(game: &mut Game<'_>, id: u32) {
+        spawn(game, "minecraft:firework_rocket", 0, id);
+    }
+    fn own_rocket(game: &mut Game<'_>, id: u32) {
+        rocket(game, id);
+        let me = game.remote.as_ref().unwrap().entity_id as u32;
+        game.rockets.for_each_mut(|r| {
+            if r.id == id {
+                r.attached_to = Some(me);
+            }
+        });
+    }
+    fn identities(
+        game: &mut Game<'_>,
+        point: Point,
+        remove: bool,
+    ) -> Vec<(u32, horizon_client::join_seq::JoinSeq)> {
+        macro_rules! rows {
+            ($list:expr) => {{
+                if remove {
+                    let _ = $list.remove(1);
+                }
+                $list.iter().map(|e| (e.id, e.join)).collect()
+            }};
+        }
+        match point {
+            Point::Falling => rows!(game.falling),
+            Point::Projectile => rows!(game.creatures.projectiles),
+            Point::Trident => rows!(game.tridents),
+            Point::RemoteRocket | Point::OwnRocket => rows!(game.rockets),
+        }
+    }
+    struct Case {
+        point: Point,
+        spawn: Spawn,
+        position: fn(&Game<'_>) -> Vec3,
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn remote_lift_restores_each_nested_spawn_without_ticking_it_early() {
+        crate::game::native_entity_refs::tests::with_client_game(|game| {
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
+            game.block_ticks
+                .add_empty_chunk(horizon_core::position::ChunkPos::new(0, 0))
+                .unwrap();
+            for case in [
+                Case {
+                    point: Point::Falling,
+                    spawn: falling,
+                    position: |g| g.falling.iter().find(|e| e.id == ID).unwrap().position,
+                },
+                Case {
+                    point: Point::Projectile,
+                    spawn: projectile,
+                    position: |g| {
+                        g.creatures
+                            .projectiles
+                            .iter()
+                            .find(|e| e.id == ID)
+                            .unwrap()
+                            .position
+                    },
+                },
+                Case {
+                    point: Point::Trident,
+                    spawn: trident,
+                    position: |g| g.tridents.iter().find(|e| e.id == ID).unwrap().position,
+                },
+                Case {
+                    point: Point::RemoteRocket,
+                    spawn: rocket,
+                    position: |g| g.rockets.iter().find(|e| e.id == ID).unwrap().position,
+                },
+            ] {
+                game.clear_remote_projectiles();
+                for id in [71, 72, 73] {
+                    (case.spawn)(game, id);
+                }
+                let mut expected = identities(game, case.point, true);
+                with_spawn(case.point, case.spawn, || {
+                    game.tick_remote_projectiles(|_, at| at)
+                });
+                assert_eq!(
+                    (case.position)(game),
+                    AT,
+                    "{:?} ticked during its spawn pass",
+                    case.point
+                );
+                let actual = identities(game, case.point, false);
+                expected.push(*actual.iter().find(|e| e.0 == ID).unwrap());
+                assert_eq!(
+                    actual, expected,
+                    "{:?} whole-list identity/order",
+                    case.point
+                );
+                game.tick_remote_projectiles(|_, at| at);
+                assert!(
+                    (case.position)(game).x > AT.x,
+                    "{:?} missed the next pass",
+                    case.point
+                );
+            }
+        });
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn own_rocket_lift_keeps_a_new_attachment_until_the_next_pass() {
+        crate::game::native_entity_refs::tests::with_client_game(|game| {
+            let (client, _server) = horizon_protocol::connection::Pipe::pair();
+            game.connect_local(client, "NestedRocket").unwrap();
+            game.remote.as_mut().unwrap().entity_id = 99;
+            game.player = Some(
+                horizon_client::motion::PlayerMotion::new(game.motion, Vec3::new(20.0, 80.0, 20.0))
+                    .unwrap(),
+            );
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
+            game.block_ticks
+                .add_empty_chunk(horizon_core::position::ChunkPos::new(0, 0))
+                .unwrap();
+            for id in [7, 8, 9] {
+                own_rocket(game, id);
+            }
+            let mut expected = identities(game, Point::OwnRocket, true);
+            with_spawn(Point::OwnRocket, own_rocket, || game.tick_own_rockets());
+            assert_eq!(
+                game.rockets.iter().find(|r| r.id == ID).unwrap().position,
+                AT
+            );
+            let actual = identities(game, Point::OwnRocket, false);
+            expected.push(*actual.iter().find(|e| e.0 == ID).unwrap());
+            assert_eq!(actual, expected);
+            game.tick_own_rockets();
+            assert_ne!(
+                game.rockets.iter().find(|r| r.id == ID).unwrap().position,
+                AT
+            );
+        });
     }
 }

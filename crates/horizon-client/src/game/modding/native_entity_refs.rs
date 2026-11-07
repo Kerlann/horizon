@@ -111,11 +111,13 @@ impl Game<'_> {
             // An outer guest in a nested swap has a displaced record.
             return (!self.lan_guest_swaps.contains(&g.conn)).then_some(Target::Guest(g.conn));
         }
+        // Not in `level_entity`: packets and cameras never reach a hook.
+        if self.fishing_hook_by_id(entity.id()).is_some() {
+            return (!self.persist.removals.contains(&Target::Hook(entity.id())))
+                .then_some(Target::Hook(entity.id()));
+        }
         match self.level_entity(id)? {
             Target::Mob(id) if !self.mobs.iter().any(|m| m.id == id && !m.removed) => None,
-            // Removed by a mod and waiting for the sweep: `isRemoved` is
-            // true from the call on.
-            t if self.persist.removals.contains(&t) => None,
             t => Some(t),
         }
     }
@@ -225,6 +227,11 @@ impl Game<'_> {
                 ids.push(entity.id());
             }
         });
+        ids.extend(
+            self.fishing_hooks_here()
+                .filter(|(hook, _)| bounds.intersects(hook.bounds()))
+                .map(|(hook, _)| hook.id()),
+        );
         for guest in self.lan.iter().flat_map(|h| &h.hub.guests) {
             if !guest.participates_in_player_simulation()
                 || !guest.placed

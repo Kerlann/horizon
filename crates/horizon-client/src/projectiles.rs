@@ -294,6 +294,8 @@ pub struct Projectile {
     pub id: u32,
     pub kind: ProjectileKind,
     pub owner: Option<Who>,
+    /// A non-living vehicle owner, for collision exclusion only, never hit credit.
+    pub owner_vehicle: Option<u32>,
     /// `Projectile.owner`'s UUID, kept while the owner is away (a guest who
     /// left, a mob not loaded): what its save writes as `Owner`.
     pub owner_uuid: Option<[i32; 4]>,
@@ -486,6 +488,10 @@ impl Projectile {
             Vec3::new(p.x + half, p.y + height, p.z + half),
         )
     }
+    /// The collision target of the owner, independent of living damage credit.
+    pub fn collision_owner(&self) -> Option<Who> {
+        self.owner_vehicle.map(Who::Mob).or(self.owner)
+    }
     pub fn new(kind: ProjectileKind, position: Vec3, owner: Option<Who>) -> Self {
         let kind_is_arrow = matches!(kind, ProjectileKind::Arrow { .. } | ProjectileKind::Trident);
         // `Fireball.defineSynchedData`: DATA_ITEM_STACK starts as a fire charge.
@@ -512,6 +518,7 @@ impl Projectile {
             id: 0,
             kind,
             owner,
+            owner_vehicle: None,
             owner_uuid: None,
             guest: None,
             position,
@@ -594,6 +601,7 @@ impl Projectile {
             self.needs_sync = true;
         }
         (self.owner, self.owner_uuid, self.guest) = owner;
+        self.owner_vehicle = None;
         if self.is_hurting() {
             self.acceleration = if by_attack {
                 0.1
@@ -1104,7 +1112,7 @@ impl Projectile {
         let end = block.map_or(to, |b| b.0);
         let mut best: Option<(Who, Vec3, f64)> = None;
         for (who, b) in w.targets() {
-            if Some(*who) == self.owner && !self.left_owner {
+            if Some(*who) == self.collision_owner() && !self.left_owner {
                 continue;
             }
             if let Some(at) = b.inflate(Vec3::new(0.3, 0.3, 0.3)).clip(from, end) {
@@ -1118,7 +1126,7 @@ impl Projectile {
             let owner_box = w
                 .targets()
                 .iter()
-                .find(|(who, _)| Some(*who) == self.owner)
+                .find(|(who, _)| Some(*who) == self.collision_owner())
                 .map(|(_, b)| *b);
             self.left_owner =
                 owner_box.is_none_or(|b| !b.inflate(Vec3::new(1.0, 1.0, 1.0)).contains(from));
@@ -1391,7 +1399,7 @@ impl Projectile {
         // ProjectileUtil.getEntityHitResult: boxes inflated by 0.3 along the path.
         let mut best: Option<(Who, Vec3, f64)> = None;
         for (who, b) in w.targets() {
-            if Some(*who) == self.owner && !self.left_owner {
+            if Some(*who) == self.collision_owner() && !self.left_owner {
                 continue;
             }
             let inflated = b.inflate(Vec3::new(0.3, 0.3, 0.3));
@@ -1407,7 +1415,7 @@ impl Projectile {
             let owner_box = w
                 .targets()
                 .iter()
-                .find(|(who, _)| Some(*who) == self.owner)
+                .find(|(who, _)| Some(*who) == self.collision_owner())
                 .map(|(_, b)| *b);
             self.left_owner = owner_box
                 .is_none_or(|b| !b.inflate(Vec3::new(1.0, 1.0, 1.0)).contains(self.position));

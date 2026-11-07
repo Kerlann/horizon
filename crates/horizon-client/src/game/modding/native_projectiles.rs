@@ -213,7 +213,10 @@ impl Game<'_> {
         arrow_events: &mut Vec<(Vec3, ArrowEvent)>,
     ) {
         // The mods see the projectiles where they will be, as `projectile_hit` does.
-        self.creatures.projectiles = projectiles.lift();
+        self.creatures.projectiles.restore(
+            projectiles.lift(),
+            horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
+        );
         let canceled = self.native_projectile_impacts(&impacts);
         *projectiles = self.creatures.projectiles.lift();
         if !canceled.contains(&true) {
@@ -316,5 +319,67 @@ impl Game<'_> {
             .map(|a| a.events.drain(..).map(|e| (at, e)).collect())
             .unwrap_or_default();
         (p, keep, events)
+    }
+}
+
+#[cfg(test)]
+mod nested_spawn_tests {
+    use super::*;
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn impact_exposure_retains_the_existing_spawn_buffer_for_the_next_pass() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            fn shot(id: u32) -> Projectile {
+                let mut p = Projectile::new(
+                    horizon_client::projectiles::ProjectileKind::Egg,
+                    horizon_core::geometry::Vec3::new(3.5, 80.0, 3.5),
+                    None,
+                );
+                p.id = id;
+                p
+            }
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
+            game.block_ticks
+                .add_empty_chunk(horizon_core::position::ChunkPos::new(0, 0))
+                .unwrap();
+            let mut taken = JoinList::default();
+            for id in [71, 73, 74] {
+                taken.push(shot(id));
+            }
+            let _ = taken.remove(1);
+            let mut expected: Vec<_> = taken.iter().map(|p| (p.id, p.join)).collect();
+            game.creatures.projectiles.push(shot(72));
+            let join = game.creatures.projectiles[0].join;
+            expected.push((72, join));
+            game.native_settle_impacts(
+                &mut taken,
+                &mut JoinList::default(),
+                &[],
+                Vec::new(),
+                &mut Vec::new(),
+                &mut Vec::new(),
+            );
+            assert_eq!(
+                taken.iter().map(|p| (p.id, p.join)).collect::<Vec<_>>(),
+                expected
+            );
+            assert_eq!(taken[2].age, 0);
+            assert_eq!(taken[2].join, join);
+            game.creatures
+                .projectiles
+                .restore(taken, horizon_client::join_seq::RestoreOrder::SpawnsFirst);
+            game.tick_projectiles().unwrap();
+            let spawned = game
+                .creatures
+                .projectiles
+                .iter()
+                .find(|p| p.id == 72)
+                .unwrap();
+            assert_eq!(spawned.age, 1);
+            assert_eq!(spawned.join, join);
+        });
     }
 }

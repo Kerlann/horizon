@@ -15,6 +15,13 @@ pub trait ClientRenderClientHost {
     /// Set the drawn length; use [`InstanceGroupRef::set_len`].
     #[access(PublishedResources)]
     fn instance_group_set_len(&self, group: InstanceGroupRef, len: u32) -> Result<(), GroupError>;
+    /// Replace the group pose; use [`InstanceGroupRef::set_group_transform`].
+    #[access(PublishedResources)]
+    fn instance_group_set_transform(
+        &self,
+        group: InstanceGroupRef,
+        transform: [f32; 12],
+    ) -> Result<(), GroupError>;
     /// Retire retained model copies; use [`InstanceGroupRef::destroy`].
     #[access(PublishedResources)]
     fn instance_group_destroy(&self, group: InstanceGroupRef) -> Result<(), GroupError>;

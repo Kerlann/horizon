@@ -103,6 +103,8 @@ impl Game<'_> {
     fn entity_nbt_in_level(&mut self, t: Target) -> Option<Tag> {
         let player_uuid = self.saved_player_uuid();
         Some(match t {
+            // `FishingHook.shouldBeSaved` is false, and it keeps no compound here.
+            Target::Hook(_) => return None,
             Target::Guest(_) => {
                 return self
                     .for_player(t, |g| g.command_target_nbt(Target::Player))

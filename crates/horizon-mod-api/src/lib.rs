@@ -2238,6 +2238,26 @@ impl ProjectileRef {
     }
 }
 
+/// A cast fishing hook of the open world (vanilla's `FishingHook`), narrowed
+/// from an entity with `host.fishing_hook(entity)`. It does not narrow to a
+/// [`ProjectileRef`]: a hook's owner is always the player who cast it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+// exhaustive: its fields are private, so mods cannot build or destructure it
+pub struct FishingHookRef(EntityRef);
+
+impl FishingHookRef {
+    /// Create a handle for the game.
+    // hidden: a game-side helper, not part of the mod surface
+    #[doc(hidden)]
+    pub fn new(entity: EntityRef) -> Self {
+        Self(entity)
+    }
+    /// The same entity as an [`EntityRef`].
+    pub fn entity(self) -> EntityRef {
+        self.0
+    }
+}
+
 /// A villager or wandering trader (vanilla's `AbstractVillager`, a `Merchant`),
 /// narrowed from an entity with `host.merchant(entity)`. If a villager's saved
 /// profession is unresolved, offers read empty and merchant mutations are
