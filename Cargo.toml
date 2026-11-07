@@ -93,6 +93,13 @@ libmimalloc-sys = { path = "third_party/libmimalloc-sys" }
 [profile.dev]
 debug = "line-tables-only"
 
+# CI only (`cargo test --profile ci`): no debuginfo, so the ~200 test binaries link faster; local dev keeps
+# line tables. Not incremental: sccache cannot cache incremental compiles.
+[profile.ci]
+inherits = "dev"
+debug = 0
+incremental = false
+
 # The 512 MiB jar-boundary test still hashes every byte; run the hash kernel optimized.
 # Likewise, the API generator repeatedly parses the game's sources with syn.
 # These dependencies stay cached in CI, unlike workspace test binaries.

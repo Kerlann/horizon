@@ -339,7 +339,7 @@ jobs:
       # these 4-core runners it was no faster (#4978).
       - name: Test Rust core and voxel kernel correctness
         if: steps.rust.outputs.required != 'false'
-        run: cargo +stable test $JOBS --workspace --lib --bins --tests
+        run: cargo +stable test $JOBS --profile ci --workspace --lib --bins --tests
       # Separate timings make rebuilds between Cargo invocations visible without changing the test selection.
       # The full content-root tests (#[ignore]d: minutes each on a laptop). The same build as above; they need the
       # prepared vanilla data, so without it they pass at once. Keep the target selection identical to avoid
@@ -347,10 +347,10 @@ jobs:
       - name: Test ignored mod content roots
         if: steps.rust.outputs.required != 'false'
         run: |
-          cargo +stable test $JOBS --workspace --lib --bins --tests mod_content::tests:: -- --ignored
+          cargo +stable test $JOBS --profile ci --workspace --lib --bins --tests mod_content::tests:: -- --ignored
       - name: Test Rust documentation examples
         if: steps.rust.outputs.required != 'false'
-        run: cargo +stable test $JOBS --workspace --doc
+        run: cargo +stable test $JOBS --profile ci --workspace --doc
       - name: Report test compiler cache
         if: ${{ !cancelled() && steps.rust.outputs.required != 'false' && needs.changes.outputs.self_hosted == 'true' }}
         run: sccache --show-stats | tee -a "$GITHUB_STEP_SUMMARY"
