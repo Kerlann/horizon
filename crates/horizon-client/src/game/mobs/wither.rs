@@ -248,7 +248,9 @@ impl Game<'_> {
         ) {
             self.combat.blast_resistance_cap = Some(0.8);
         }
+        self.combat.explosion_direct = Some(p.id);
         let result = self.with_hive_emptying_blast(|g| g.explode(Some(p.id), at, 1.0));
+        self.combat.explosion_direct = None;
         self.combat.blast_resistance_cap = None;
         self.set_blast_by_player(false);
         self.combat.explosion_owner = None;

@@ -1253,6 +1253,7 @@ impl Goal for AttackTurtleEgg {
                 pos: eat,
                 drop: false,
                 by: Some(m.id),
+                breaker: None,
             });
             // The egg's particles and sound follow only a destruction.
             let effects = cx.events.len();

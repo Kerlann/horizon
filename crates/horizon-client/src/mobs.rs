@@ -2373,6 +2373,10 @@ pub enum MobEvent {
         /// The mob whose breaking this is, when it is one `LivingDestroyBlockEvent`
         /// hears (a wither's, a ravager's, a silverfish's, a zombie's).
         by: Option<u32>,
+        /// The entity `destroyBlock` names when that event doesn't hear of it (a
+        /// villager's harvest, a ravager's crop): it asks the mods nothing, and
+        /// its loot's `LootContextParams.THIS_ENTITY` is this one, as `by`'s is.
+        breaker: Option<u32>,
     },
     /// `EndermanTakeBlockGoal`: the enderman `mob` picks up the block `state` at
     /// `pos` (it already holds it); the block turns to air unless a mod stops it

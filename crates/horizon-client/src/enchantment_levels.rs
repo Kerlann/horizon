@@ -52,7 +52,7 @@ pub fn get_enchantment_level(
 }
 
 /// `id` parsed, from the cache after the first time.
-fn identifier(id: &str) -> Option<Identifier> {
+pub fn identifier(id: &str) -> Option<Identifier> {
     IDS.with_borrow_mut(|ids| {
         if let Some(parsed) = ids.get(id) {
             return parsed.clone();

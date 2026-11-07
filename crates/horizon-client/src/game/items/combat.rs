@@ -151,6 +151,10 @@ pub(super) struct CombatTracker {
     /// The mob exploding now (`ServerExplosion.source`): its team's friendly
     /// fire decides whom the blast may hurt.
     pub(super) explosion_source: Option<u32>,
+    /// The primed TNT, TNT cart, fireball, wither skull or end crystal
+    /// exploding now, by entity id (`Explosion.getDirectSourceEntity`; a
+    /// mob's is `explosion_source`).
+    pub(super) explosion_direct: Option<u32>,
     /// The exploding mob as predicates see it (`ServerExplosion.source`,
     /// `ServerPlayer.currentExplosionCause`), for a mob already out of the list.
     pub(super) explosion_cause: Option<horizon_client::advancements::EntityView>,

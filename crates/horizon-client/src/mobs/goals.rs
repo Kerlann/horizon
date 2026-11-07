@@ -2874,6 +2874,7 @@ impl Goal for EatBlock {
                         pos: [x, y, z],
                         by: None,
                         drop: false,
+                        breaker: None,
                     });
                 }
                 super::ai::ate(m, cx.events);

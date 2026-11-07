@@ -1326,14 +1326,6 @@ impl Items {
         };
         ctx.evaluate(table, random)
     }
-    /// The server random sequence the block's loot table draws from.
-    pub fn block_loot_sequence(
-        &self,
-        registry: &BlockRegistry,
-        state: BlockStateId,
-    ) -> Option<String> {
-        self.loot_sequence(&self.block_loot_table(registry, state)?)
-    }
     /// The id of the block's loot table (`minecraft:blocks/stone`), when it
     /// has one. `Blocks.wallVariant`: wall signs, banners, heads, fans and
     /// torches use the standing block's table.
@@ -1357,102 +1349,18 @@ impl Items {
         let standing = format!("{namespace}:blocks/{standing}");
         self.loot.contains_key(&standing).then_some(standing)
     }
-    /// Evaluate the block's loot table for a player break without explosions.
-    pub fn block_drops<R: RandomSource>(
+    /// `Block.getDrops`: the block's loot table rolled with `roll`, drawing
+    /// from the table's random sequence when it has one (`sequences`: the
+    /// world's sequences and seed), else from `random`.
+    pub fn block_drops(
         &self,
         registry: &BlockRegistry,
         state: BlockStateId,
-        held: Option<&ItemStack>,
-        random: &mut R,
-    ) -> Vec<ItemStack> {
-        self.block_drops_in(registry, state, held, random, None)
-    }
-    /// `LootCommand.dropBlockLoot`: only replacement retains empty result positions.
-    pub fn block_drops_for_command<R: RandomSource>(
-        &self,
-        registry: &BlockRegistry,
-        state: BlockStateId,
-        held: Option<&ItemStack>,
-        random: &mut R,
-        keep_empty: bool,
-    ) -> Vec<ItemStack> {
-        if !keep_empty {
-            return self.block_drops(registry, state, held, random);
-        }
-        self.block_drops_raw(registry, state, held, random, None, None, false, true)
-            .into_iter()
-            .filter(|drop| !drop.item.starts_with(DYNAMIC))
-            .collect()
-    }
-    /// `block_drops` drawing from the table's random sequence when it has one
-    /// (`sequences`: the world's sequences and seed), as BlockState.getDrops.
-    pub fn block_drops_in<R: RandomSource>(
-        &self,
-        registry: &BlockRegistry,
-        state: BlockStateId,
-        held: Option<&ItemStack>,
-        random: &mut R,
-        sequences: Option<(&mut crate::random_sequences::RandomSequences, i64)>,
-    ) -> Vec<ItemStack> {
-        self.block_drops_full(registry, state, held, &[], random, sequences)
-    }
-    /// `block_drops` with the block entity's dynamic drops (`LootParams.withDynamicDrop`:
-    /// a decorated pot's sherds) in place of the `minecraft:dynamic` entries.
-    pub fn block_drops_with(
-        &self,
-        registry: &BlockRegistry,
-        state: BlockStateId,
-        held: Option<&ItemStack>,
-        dynamic: &[ItemStack],
-        random: &mut impl RandomSource,
-    ) -> Vec<ItemStack> {
-        self.block_drops_full(registry, state, held, dynamic, random, None)
-    }
-    /// `block_drops_in` with dynamic drops.
-    pub fn block_drops_full(
-        &self,
-        registry: &BlockRegistry,
-        state: BlockStateId,
-        held: Option<&ItemStack>,
-        dynamic: &[ItemStack],
+        roll: BlockLootRoll<'_>,
         random: &mut impl RandomSource,
         sequences: Option<(&mut crate::random_sequences::RandomSequences, i64)>,
     ) -> Vec<ItemStack> {
-        self.block_drops_exploded(
-            registry, state, held, dynamic, random, sequences, None, false,
-        )
-    }
-    /// `block_drops_with` for a block a player breaks (`Block.playerDestroy`):
-    /// the player is the loot context's `this` entity, so snow and chorus
-    /// flower tables see an entity.
-    pub fn block_drops_by_player(
-        &self,
-        registry: &BlockRegistry,
-        state: BlockStateId,
-        held: Option<&ItemStack>,
-        dynamic: &[ItemStack],
-        random: &mut impl RandomSource,
-    ) -> Vec<ItemStack> {
-        self.block_drops_exploded(registry, state, held, dynamic, random, None, None, true)
-    }
-    /// `block_drops_full` for a block an explosion destroys: `explosion`
-    /// is its radius when the explosion decays drops (`DESTROY_WITH_DECAY`);
-    /// `breaker` is whether an entity (the player) broke the block.
-    #[allow(clippy::too_many_arguments)]
-    pub fn block_drops_exploded(
-        &self,
-        registry: &BlockRegistry,
-        state: BlockStateId,
-        held: Option<&ItemStack>,
-        dynamic: &[ItemStack],
-        random: &mut impl RandomSource,
-        sequences: Option<(&mut crate::random_sequences::RandomSequences, i64)>,
-        explosion: Option<f32>,
-        breaker: bool,
-    ) -> Vec<ItemStack> {
-        let drops = self.block_drops_raw(
-            registry, state, held, random, sequences, explosion, breaker, false,
-        );
+        let drops = self.block_drops_raw(registry, state, roll, random, sequences);
         if !drops.iter().any(|d| d.item.starts_with(DYNAMIC)) {
             return drops;
         }
@@ -1460,24 +1368,20 @@ impl Items {
             .into_iter()
             .flat_map(|d| {
                 if d.item.starts_with(DYNAMIC) {
-                    dynamic.to_vec()
+                    roll.dynamic.to_vec()
                 } else {
                     vec![d]
                 }
             })
             .collect()
     }
-    #[allow(clippy::too_many_arguments)]
     fn block_drops_raw(
         &self,
         registry: &BlockRegistry,
         state: BlockStateId,
-        held: Option<&ItemStack>,
+        roll: BlockLootRoll<'_>,
         random: &mut impl RandomSource,
         sequences: Option<(&mut crate::random_sequences::RandomSequences, i64)>,
-        explosion_radius: Option<f32>,
-        breaker: bool,
-        keep_empty: bool,
     ) -> Vec<ItemStack> {
         let Some(block) = registry.state(state) else {
             return vec![];
@@ -1492,29 +1396,29 @@ impl Items {
             sequences,
         ) {
             let random = sequences.0.get(seq, sequences.1);
-            let ctx = LootContext {
-                items: self,
-                block: &block.name,
-                properties: &block.properties,
-                held,
-                killed_by_player: false,
-                explosion_radius,
-                this_entity: breaker,
-                levels: None,
-                keep_empty,
-            };
-            return ctx.evaluate(table, random);
+            return self.roll_block_table(table, &block.name, &block.properties, roll, random);
         }
+        self.roll_block_table(table, &block.name, &block.properties, roll, random)
+    }
+    fn roll_block_table<R: RandomSource>(
+        &self,
+        table: &Value,
+        block: &str,
+        properties: &horizon_world::chunk::BlockProperties,
+        roll: BlockLootRoll<'_>,
+        random: &mut R,
+    ) -> Vec<ItemStack> {
+        let ask = |_: &mut R, id: &str, level: u32| roll.levels.map_or(level, |ask| ask(id, level));
         let ctx = LootContext {
             items: self,
-            block: &block.name,
-            properties: &block.properties,
-            held,
+            block,
+            properties,
+            held: roll.held,
             killed_by_player: false,
-            explosion_radius,
-            this_entity: breaker,
-            levels: None,
-            keep_empty,
+            explosion_radius: roll.explosion,
+            this_entity: roll.breaker,
+            levels: roll.levels.map(|_| &ask as &LootLevels<'_, R>),
+            keep_empty: roll.keep_empty,
         };
         ctx.evaluate(table, random)
     }
@@ -1743,6 +1647,30 @@ impl<R: RandomSource> LootContext<'_, R> {
 /// roll's random, the enchantment and the level, the level to use. The random
 /// is the roll's own, so whoever answers can keep draws made meanwhile in order.
 pub type LootLevels<'a, R> = dyn Fn(&mut R, &str, u32) -> u32 + 'a;
+/// The game's say on an enchantment level a block's table reads: the
+/// enchantment and the tool's level in, the level to use out. A block's
+/// listeners make no draws, so the roll's random isn't theirs.
+pub type BlockLootLevels<'a> = dyn Fn(&str, u32) -> u32 + 'a;
+/// What a block's table rolls with, beside the block (`LootParams` as
+/// `BlockState.getDrops` is given them).
+#[derive(Clone, Copy, Default)]
+pub struct BlockLootRoll<'a> {
+    /// Retain emitted empty slots for command replacement output.
+    pub keep_empty: bool,
+    /// `LootContextParams.TOOL`; none is the empty stack.
+    pub held: Option<&'a ItemStack>,
+    /// What the `minecraft:dynamic` entries become
+    /// (`LootParams.withDynamicDrop`: a decorated pot's sherds).
+    pub dynamic: &'a [ItemStack],
+    /// `LootContextParams.EXPLOSION_RADIUS`: the radius of an explosion that
+    /// decays drops (`DESTROY_WITH_DECAY`).
+    pub explosion: Option<f32>,
+    /// `LootContextParams.THIS_ENTITY` is set (a player broke the block).
+    pub breaker: bool,
+    /// Asked at each level `ApplyBonusCount` and `BonusLevelTableCondition`
+    /// read, in the roll's order; none keeps the tool's.
+    pub levels: Option<&'a BlockLootLevels<'a>>,
+}
 struct LootContext<'a, R> {
     items: &'a Items,
     block: &'a str,
@@ -1777,6 +1705,15 @@ impl<R: RandomSource> LootContext<'_, R> {
             .levels
             .map_or(level, |levels| levels(random, id, level));
         level.min(MAX_LOOT_LEVEL as u32)
+    }
+    /// The level `ApplyBonusCount.run` and `BonusLevelTableCondition.test`
+    /// use: the tool's, as the game leaves it, up to what a table reads.
+    fn bonus_level(&self, id: &str, random: &mut R) -> i32 {
+        let level = self.enchantment_level(id);
+        let level = self
+            .levels
+            .map_or(level, |levels| levels(random, id, level));
+        level.min(MAX_LOOT_LEVEL as u32) as i32
     }
     /// The context a mod's own loot kind sees in this engine: the block and
     /// the tool it has, and a seed from the roll's random. The entity, the
@@ -1881,7 +1818,7 @@ impl<R: RandomSource> LootContext<'_, R> {
             "minecraft:table_bonus" => {
                 // BonusLevelTableCondition: chances[min(level, len - 1)].
                 let level =
-                    self.enchantment_level(c["enchantment"].as_str().unwrap_or("")) as usize;
+                    self.bonus_level(c["enchantment"].as_str().unwrap_or(""), random) as usize;
                 let chances = c["chances"].as_array().map_or(&[][..], Vec::as_slice);
                 let chance = chances
                     .get(level.min(chances.len().saturating_sub(1)))
@@ -2043,7 +1980,7 @@ impl<R: RandomSource> LootContext<'_, R> {
                 true
             }
             // DynamicLoot: what the block entity adds (a cracked decorated
-            // pot's sherds), filled in by `block_drops_with`.
+            // pot's sherds), filled in by `block_drops`.
             "minecraft:dynamic" => {
                 out.push((
                     e["weight"].as_i64().unwrap_or(1) as i32,
@@ -2212,18 +2149,19 @@ impl<R: RandomSource> LootContext<'_, R> {
                     stack.damage = ((1.0 - remaining) * max as f32).floor() as u32;
                 }
                 "minecraft:apply_bonus" => {
-                    let level =
-                        self.enchantment_level(f["enchantment"].as_str().unwrap_or("")) as i32;
+                    let level = self.bonus_level(f["enchantment"].as_str().unwrap_or(""), random);
                     let count = stack.count as i32;
                     let params = &f["parameters"];
                     stack.count = match f["formula"].as_str().unwrap_or("") {
                         "minecraft:ore_drops" if level > 0 => {
-                            let bonus = (random.next_int_bound(level + 2).unwrap_or(0) - 1).max(0);
-                            count * (bonus + 1)
+                            let bound = level.saturating_add(2);
+                            let bonus = (random.next_int_bound(bound).unwrap_or(0) - 1).max(0);
+                            count.saturating_mul(bonus + 1)
                         }
                         "minecraft:uniform_bonus_count" => {
                             let multiplier = params["bonusMultiplier"].as_i64().unwrap_or(1) as i32;
-                            count + random.next_int_bound(multiplier * level + 1).unwrap_or(0)
+                            let bound = multiplier.saturating_mul(level).saturating_add(1);
+                            count.saturating_add(random.next_int_bound(bound).unwrap_or(0))
                         }
                         "minecraft:binomial_with_bonus_count" => {
                             let (extra, p) = (
@@ -2231,9 +2169,9 @@ impl<R: RandomSource> LootContext<'_, R> {
                                 params["probability"].as_f64().unwrap_or(0.0) as f32,
                             );
                             let mut n = count;
-                            for _ in 0..level + extra {
+                            for _ in 0..level.saturating_add(extra) {
                                 if random.next_float() < p {
-                                    n += 1;
+                                    n = n.saturating_add(1);
                                 }
                             }
                             n
@@ -3521,6 +3459,91 @@ mod tests {
             context.evaluate(&squared, &mut LegacyRandom::new(7)).len(),
             1
         );
+    }
+
+    /// The game's answer is the level a block table's count and condition
+    /// use; the tool keeps its own, and the table's draws stay the formula's.
+    #[test]
+    fn a_game_level_replaces_the_tools_in_a_block_table() {
+        let items = Items::for_tests(HashMap::new());
+        let props = horizon_world::chunk::BlockProperties::new();
+        let mut pick = ItemStack::new("minecraft:iron_pickaxe", 1);
+        pick.enchant("minecraft:fortune", 1);
+        let reads = std::cell::RefCell::new(Vec::new());
+        let levels = |_: &mut LegacyRandom, id: &str, level: u32| {
+            reads.borrow_mut().push((id.to_owned(), level));
+            3
+        };
+        let answered = |pick| LootContext {
+            levels: Some(&levels),
+            ..ctx(&items, pick, &props, "minecraft:stone")
+        };
+        let count = json!({"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:diamond","modifier":[{"type":"minecraft:apply_bonus","enchantment":"minecraft:fortune","formula":"minecraft:uniform_bonus_count","parameters":{"bonusMultiplier":2}}]}]}]});
+        let mut random = LegacyRandom::new(7);
+        let got = answered(Some(&pick)).evaluate(&count, &mut random);
+        let mut expected = LegacyRandom::new(7);
+        let bonus = expected.next_int_bound(7).unwrap() as u32;
+        assert_eq!(got[0].count, 1 + bonus);
+        assert_eq!(random.next_int(), expected.next_int());
+        assert_eq!(*reads.borrow(), [("minecraft:fortune".to_owned(), 1)]);
+        assert_eq!(pick.enchantment_level("minecraft:fortune"), 1);
+
+        let chance = json!({"pools":[{"rolls":1,"conditions":[{"type":"minecraft:table_bonus","enchantment":"minecraft:fortune","chances":[0.0,0.0,0.0,1.0]}],"entries":[{"type":"minecraft:item","name":"minecraft:apple"}]}]});
+        assert!(
+            ctx(&items, None, &props, "minecraft:stone")
+                .evaluate(&chance, &mut LegacyRandom::new(7))
+                .is_empty()
+        );
+        let got = answered(None).evaluate(&chance, &mut LegacyRandom::new(7));
+        assert_eq!(&*got[0].item, "minecraft:apple");
+        assert_eq!(reads.borrow()[1], ("minecraft:fortune".to_owned(), 0));
+    }
+
+    /// A mod can answer any level, and it counts as `MAX_LOOT_LEVEL`: no
+    /// formula overflows, and `binomial_with_bonus_count` draws once a level
+    /// up to there, so its loop stays short.
+    #[test]
+    fn the_largest_level_counts_as_the_most_a_table_reads() {
+        let items = Items::for_tests(HashMap::new());
+        let props = horizon_world::chunk::BlockProperties::new();
+        let levels = |_: &mut LegacyRandom, _: &str, _: u32| u32::MAX;
+        let context = LootContext {
+            levels: Some(&levels),
+            ..ctx(&items, None, &props, "minecraft:stone")
+        };
+        for bonus in [
+            json!({"type":"minecraft:apply_bonus","enchantment":"minecraft:fortune","formula":"minecraft:ore_drops"}),
+            json!({"type":"minecraft:apply_bonus","enchantment":"minecraft:fortune","formula":"minecraft:uniform_bonus_count","parameters":{"bonusMultiplier":2}}),
+        ] {
+            let table = json!({"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:diamond","modifier":[bonus, bonus, bonus]}]}]});
+            for seed in 0..32 {
+                let drops = context.evaluate(&table, &mut LegacyRandom::new(seed));
+                assert!(drops.iter().all(|stack| stack.count <= i32::MAX as u32));
+            }
+        }
+        let binomial = json!({"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:wheat_seeds","modifier":[{"type":"minecraft:apply_bonus","enchantment":"minecraft:fortune","formula":"minecraft:binomial_with_bonus_count","parameters":{"extra":3,"probability":1.0}}]}]}]});
+        let mut random = LegacyRandom::new(7);
+        let drops = context.evaluate(&binomial, &mut random);
+        assert_eq!(drops[0].count, 1 + MAX_LOOT_LEVEL as u32 + 3);
+        let mut expected = LegacyRandom::new(7);
+        for _ in 0..MAX_LOOT_LEVEL + 3 {
+            expected.next_float();
+        }
+        assert_eq!(random.next_long(), expected.next_long());
+    }
+
+    /// Vanilla's levels stop at 255, below the bound: such a level reads and
+    /// draws in full.
+    #[test]
+    fn the_largest_vanilla_level_is_read_in_full() {
+        let items = Items::for_tests(HashMap::new());
+        let props = horizon_world::chunk::BlockProperties::new();
+        let mut pick = ItemStack::new("minecraft:iron_pickaxe", 1);
+        pick.enchant("minecraft:fortune", 255);
+        let binomial = json!({"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:wheat_seeds","modifier":[{"type":"minecraft:apply_bonus","enchantment":"minecraft:fortune","formula":"minecraft:binomial_with_bonus_count","parameters":{"extra":3,"probability":1.0}}]}]}]});
+        let context = ctx(&items, Some(&pick), &props, "minecraft:stone");
+        let drops = context.evaluate(&binomial, &mut LegacyRandom::new(7));
+        assert_eq!(drops[0].count, 1 + 255 + 3);
     }
 
     /// `/loot give` and every other table this dispatcher rolls: the two

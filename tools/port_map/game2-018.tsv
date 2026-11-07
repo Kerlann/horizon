@@ -127,7 +127,7 @@ AmbientLeavesBlockSoundPlayer.of	inline	crates/horizon-client/src/animate_tick.r
 BlockBehaviour.isPathfindable	port	crates/horizon-client/src/game/mobs/natural_spawning.rs::GameLevel::pathfindable_land	gap: minor: only the LAND type; WATER is read as a fluid state in dolphin.rs and AIR is not used
 BlockBehaviour.showAsInteractableInSpectatorMode	port	crates/horizon-client/src/game/items/hand.rs::Game::spectator_crosshair	the block branch lists the menu blocks and portals; a chest with a redstone block on top is not interactable
 BlockBehaviour.canBeReplaced	port	crates/horizon-world/src/level/place.rs::Sim::can_be_replaced	default case: replaceable, and not the same item as the one in hand
-BlockBehaviour.getDrops	port	crates/horizon-items/src/items.rs::Items::block_drops	the block's loot table for a player break
+BlockBehaviour.getDrops	port	crates/horizon-items/src/items.rs::Items::block_drops	the block's loot table, rolled with its BlockLootRoll
 BlockBehaviour.getLightDampening	skip:data		the dampening value is read from the block data table (level/data.rs)
 BlockBehaviour.propagatesSkylightDown	skip:data		the skylight_down flag is read from the block data table (level/data.rs)
 BlockBehaviour.BlockStateBase.<init>	skip:java		precomputed state cache; Horizon keeps these values in its block tables

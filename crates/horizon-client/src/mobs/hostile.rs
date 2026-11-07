@@ -146,6 +146,7 @@ impl Goal for SilverfishWakeUpFriends {
                             pos,
                             drop: true,
                             by: Some(m.id),
+                            breaker: None,
                         });
                     } else {
                         cx.events.push(MobEvent::Infest {

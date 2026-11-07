@@ -814,6 +814,8 @@ struct GameLevel<'w> {
     /// The tool a mod's machine breaks blocks with (`native_machine_destroy_block`):
     /// `Block.dropResources` rolls the loot with it instead of with none.
     drop_tool: Option<ItemStack>,
+    /// The entity `destroyBlock` names (`LootContextParams.THIS_ENTITY`).
+    drop_entity: Option<mod_api::EntityRef>,
     /// Where `Block.dropResources` puts the drops instead of popping them,
     /// while a mod's machine breaks a block (`native_machine_destroy_block`).
     drop_into: Option<Vec<ItemStack>>,
@@ -4536,26 +4538,18 @@ impl Game<'_> {
         held: Option<&ItemStack>,
         block_entity: Option<horizon_core::nbt::Tag>,
     ) -> Vec<ItemStack> {
-        let registry = self.pack.assets.registry;
         let dynamic = self.pending.dynamic(pos);
         let place = self.loot_place_at(pos.map(|v| f64::from(v) + 0.5), block_entity);
-        let mut drops =
-            horizon_world::loot::with_native_loot_place(place, || {
-                match world_items!(self).block_loot_sequence(registry, state) {
-                    Some(sequence) => {
-                        let random = self.rand_sequences.get(&sequence, self.level.seed);
-                        world_items!(self)
-                            .block_drops_by_player(registry, state, held, &dynamic, random)
-                    }
-                    None => world_items!(self).block_drops_by_player(
-                        registry,
-                        state,
-                        held,
-                        &dynamic,
-                        &mut self.world.random,
-                    ),
-                }
-            });
+        let (_, entity) = self.native_clicker();
+        let mut drops = horizon_world::loot::with_native_loot_place(place, || {
+            let roll = horizon_client::items::BlockLootRoll {
+                held,
+                dynamic: &dynamic,
+                breaker: true,
+                ..Default::default()
+            };
+            self.roll_block_loot(pos, state, Some(entity as u32), roll)
+        });
         let player = self.native_acting_id();
         self.native_block_loot(pos, state, Some(player), held, None, &mut drops);
         drops
@@ -5203,6 +5197,7 @@ impl Game<'_> {
             native_particles: &mut self.creatures.lan_particles,
             sound_seeds: self.lan.as_ref().map(|host| &host.hub),
             drop_tool: None,
+            drop_entity: None,
             drop_into: None,
         };
         let result = f(self.res.behaviours(), &mut level, &mut self.block_ticks);

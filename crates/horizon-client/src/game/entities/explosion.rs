@@ -1128,17 +1128,18 @@ impl Game<'_> {
                 pos.map(|v| f64::from(v) + 0.5),
                 self.loot_block_entity(pos, &name),
             );
+            // `Explosion.getDirectSourceEntity`.
+            let entity = self
+                .combat
+                .explosion_direct
+                .or(self.combat.explosion_source);
             let mut drops = horizon_world::loot::with_native_loot_place(place, || {
-                world_items!(self).block_drops_exploded(
-                    self.pack.assets.registry,
-                    state,
-                    None,
-                    &dynamic,
-                    &mut self.world.random,
-                    Some((&mut self.rand_sequences, self.level.seed)),
-                    decay,
-                    false,
-                )
+                let roll = horizon_client::items::BlockLootRoll {
+                    dynamic: &dynamic,
+                    explosion: decay,
+                    ..Default::default()
+                };
+                self.roll_block_loot(pos, state, entity, roll)
             });
             self.native_block_loot(pos, state, None, None, Some(radius), &mut drops);
             let mut pieces: Vec<ExplosionDropPiece> = Vec::new();
@@ -1467,6 +1468,7 @@ mod tests {
                         pos: [x, 64, 1],
                         drop: true,
                         by: None,
+                        breaker: None,
                     }])
                     .unwrap();
                     if x == 3 {
@@ -1485,6 +1487,7 @@ mod tests {
                     pos: [5, 64, 1],
                     drop: true,
                     by: None,
+                    breaker: None,
                 }])
                 .unwrap();
                 assert!(game.dropped.is_empty() && game.orbs.is_empty());

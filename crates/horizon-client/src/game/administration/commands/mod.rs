@@ -2860,8 +2860,17 @@ impl Game<'_> {
     /// destroy event, the block's drops without a tool or breaker, then its
     /// fluid's block, the block entity spilling its contents on the way.
     pub(super) fn destroy_block_dropping(&mut self, pos: [i32; 3]) -> R<()> {
+        self.destroy_block_by(pos, None)
+    }
+    /// `Level.destroyBlock(pos, true, entity)`: [`Self::destroy_block_dropping`]
+    /// with `entity` as the loot's `LootContextParams.THIS_ENTITY`.
+    pub(super) fn destroy_block_by(&mut self, pos: [i32; 3], entity: Option<u32>) -> R<()> {
         let at = horizon_core::position::BlockPos::new(pos[0], pos[1], pos[2]);
-        self.with_level(|b, level, ticks| b.destroy_block(level, ticks, at, true));
+        let entity = self.loot_entity_ref(entity);
+        self.with_level(|b, level, ticks| {
+            level.drop_entity = entity;
+            b.destroy_block(level, ticks, at, true)
+        });
         self.process_level_events()
             .map_err(|e| CommandError::new(Text::literal(e.to_string())))
     }

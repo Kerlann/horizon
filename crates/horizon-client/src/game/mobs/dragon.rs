@@ -1446,7 +1446,9 @@ impl Game<'_> {
                 Vec3::new(x - 1.0, y, z - 1.0),
                 Vec3::new(x + 1.0, y + 2.0, z + 1.0),
             ));
+            self.combat.explosion_direct = Some(c.id);
             let _ = self.server_explode(at, 6.0, interaction, false);
+            self.combat.explosion_direct = None;
             self.combat.explosion_in_water = false;
             self.fight.blast_by = None;
         }

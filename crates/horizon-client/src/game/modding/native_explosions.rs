@@ -91,6 +91,7 @@ impl Game<'_> {
         let c = &mut self.combat;
         BlastState {
             source: c.explosion_source.take(),
+            direct: c.explosion_direct.take(),
             cause: c.explosion_cause.take(),
             source_named: std::mem::take(&mut c.explosion_source_named),
             in_water: std::mem::take(&mut c.explosion_in_water),
@@ -104,6 +105,7 @@ impl Game<'_> {
     fn restore_blast_state(&mut self, s: BlastState) {
         let c = &mut self.combat;
         c.explosion_source = s.source;
+        c.explosion_direct = s.direct;
         c.explosion_cause = s.cause;
         c.explosion_source_named = s.source_named;
         c.explosion_in_water = s.in_water;
@@ -116,6 +118,7 @@ impl Game<'_> {
 /// The fields of `CombatTracker` that describe the blast going off now.
 struct BlastState {
     source: Option<u32>,
+    direct: Option<u32>,
     cause: Option<horizon_client::advancements::EntityView>,
     source_named: bool,
     in_water: bool,

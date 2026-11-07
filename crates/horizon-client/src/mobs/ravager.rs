@@ -122,6 +122,7 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
                             pos: [x, y, z],
                             drop: true,
                             by: Some(m.id),
+                            breaker: None,
                         });
                         destroyed = true;
                     }
@@ -168,6 +169,7 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
                             pos: [x, y, z],
                             drop: true,
                             by: None,
+                            breaker: Some(m.id),
                         });
                     }
                 }
@@ -375,6 +377,50 @@ mod tests {
             assert!(mob.ai.jumping);
             assert!(!events.iter().any(|e| matches!(e, MobEvent::IfBroke { .. })));
         }));
+    }
+
+    /// `CropBlock.entityInside` and `PitcherCropBlock.entityInside`:
+    /// `destroyBlock(pos, true, ravager)` names the ravager for the loot, and
+    /// `LivingDestroyBlockEvent` doesn't hear of it.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_trampled_crop_names_the_ravager() {
+        for crop in ["minecraft:wheat", "minecraft:pitcher_crop"] {
+            let build =
+                |world: &mut crate::world::World,
+                 registry: &horizon_world::registry::BlockRegistry| {
+                    world
+                        .chunks
+                        .insert((0, 0), Arc::new(crate::chunk::Chunk::empty(0, 0)));
+                    let state = registry.default_state(crop).unwrap();
+                    world.set(0, 64, 0, state).unwrap();
+                };
+            assert!(super::super::world::with_built_test_world(
+                &[],
+                build,
+                |world, types| {
+                    let mut world = world.clone();
+                    world.mob_griefing = true;
+                    let mut mob = Mob::new(
+                        1,
+                        Arc::new(types.types.get("minecraft:ravager").unwrap().clone()),
+                        Vec3::new(0.5, 64.0, 0.5),
+                        0.0,
+                    );
+                    let mut events = Vec::new();
+                    ai_step(&mut mob, &world, &mut events);
+                    assert!(events.iter().any(|e| matches!(
+                        e,
+                        MobEvent::BreakBlock {
+                            pos: [0, 64, 0],
+                            drop: true,
+                            by: None,
+                            breaker: Some(1),
+                        }
+                    )));
+                },
+            ));
+        }
     }
 
     #[test]

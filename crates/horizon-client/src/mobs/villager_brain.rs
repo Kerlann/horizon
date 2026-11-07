@@ -3638,6 +3638,7 @@ fn harvest_tick(
             pos: p,
             drop: true,
             by: None,
+            breaker: Some(m.id),
         });
     }
     if air && farmland(w, [p[0], p[1] - 1, p[2]]) {

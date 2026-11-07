@@ -1540,7 +1540,9 @@ impl Game<'_> {
         // fell unprimed blows rails up like any blast.
         self.combat.rail_proof_blast = c.fuse >= 0;
         self.combat.explosion_in_water = self.bounds_in_water(c.bounds());
+        self.combat.explosion_direct = Some(c.id);
         let _ = self.with_hive_emptying_blast(|g| g.server_explode(at, power, interaction, false));
+        self.combat.explosion_direct = None;
         self.combat.explosion_in_water = false;
         self.combat.rail_proof_blast = false;
     }

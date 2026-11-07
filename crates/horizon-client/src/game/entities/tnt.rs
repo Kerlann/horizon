@@ -342,6 +342,7 @@ impl Game<'_> {
             let interaction =
                 self.destroy_type(horizon_client::gamerules::vanilla::TNT_EXPLOSION_DROP_DECAY);
             self.combat.explosion_in_water = in_water;
+            self.combat.explosion_direct = Some(id);
             // `Explosion.getIndirectSourceEntity`: a player-lit TNT names
             // its igniter, which `blast_attacker` and the damage type read.
             self.combat.blast_guest = guest;
@@ -355,6 +356,7 @@ impl Game<'_> {
             self.combat.blast_owner = None;
             self.combat.blast_guest = None;
             self.combat.explosion_in_water = false;
+            self.combat.explosion_direct = None;
             result?;
         }
         Ok(())

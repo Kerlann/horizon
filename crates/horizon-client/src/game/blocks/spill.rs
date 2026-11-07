@@ -10,11 +10,12 @@ use horizon_client::{
     containers::{Banner, BlockEntity},
     furnace::FurnaceCooking,
     item_data,
-    items::ItemStack,
+    items::{BlockLootRoll, ItemStack},
     save,
 };
 use horizon_core::position::BlockPos;
 use horizon_core::random::RandomSource;
+use mod_api::EntityRef;
 use std::collections::HashMap;
 use {
     horizon_core::nbt::{Compound, JavaString, Tag},
@@ -485,20 +486,12 @@ impl GameLevel<'_> {
         }
         let dynamic = self.pending.dynamic(at);
         let tool = self.drop_tool.clone();
-        let drops = match self.items.block_loot_sequence(self.registry, state) {
-            Some(sequence) => {
-                let random = self.rand_sequences.get(&sequence, self.seed);
-                self.items
-                    .block_drops_with(self.registry, state, tool.as_ref(), &dynamic, random)
-            }
-            None => self.items.block_drops_with(
-                self.registry,
-                state,
-                tool.as_ref(),
-                &dynamic,
-                &mut self.world.random,
-            ),
+        let roll = horizon_client::items::BlockLootRoll {
+            held: tool.as_ref(),
+            dynamic: &dynamic,
+            ..Default::default()
         };
+        let drops = self.roll_block_loot(pos, state, self.drop_entity, roll);
         let dropped = self.block_dropped(pos, state, None, tool.as_ref(), drops, None);
         for item in dropped.items {
             if let Some(kept) = self.drop_into.as_mut() {
@@ -899,6 +892,33 @@ impl GameLevel<'_> {
 }
 
 impl Game<'_> {
+    /// [`GameLevel::roll_block_loot`] for a roll outside a level write:
+    /// `entity` is `THIS_ENTITY`'s id. With no listener it builds no level.
+    pub(in crate::game) fn roll_block_loot(
+        &mut self,
+        pos: [i32; 3],
+        state: BlockStateId,
+        entity: Option<u32>,
+        roll: BlockLootRoll<'_>,
+    ) -> Vec<ItemStack> {
+        if mod_api::__private::listened(mod_api::HookId::EnchantedBlockLoot) {
+            let at = BlockPos::new(pos[0], pos[1], pos[2]);
+            let entity = self.loot_entity_ref(entity);
+            return self.with_level(|_, level, _| level.roll_block_loot(at, state, entity, roll));
+        }
+        world_items!(self).block_drops(
+            self.pack.assets.registry,
+            state,
+            roll,
+            &mut self.world.random,
+            Some((&mut self.rand_sequences, self.level.seed)),
+        )
+    }
+    /// The handle of `LootContextParams.THIS_ENTITY`, by its id.
+    pub(in crate::game) fn loot_entity_ref(&self, id: Option<u32>) -> Option<EntityRef> {
+        let epoch = self.native_lifecycle.epoch()?;
+        Some(EntityRef::new(epoch, id.filter(|id| *id != 0)?))
+    }
     /// Apply the shared block-drop event's item entities and experience unchanged.
     pub(super) fn spawn_block_drops(&mut self, pos: [i32; 3], dropped: BlockDrops) {
         for item in dropped.items {

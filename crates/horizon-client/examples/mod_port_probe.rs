@@ -191,7 +191,11 @@ fn main() -> Result<()> {
                     let mut random = LegacyRandom::new(0);
                     let held = tool(t);
                     let mut counts: BTreeMap<String, u32> = BTreeMap::new();
-                    for s in items.block_drops(registry, id, held.as_ref(), &mut random) {
+                    let roll = horizon_client::items::BlockLootRoll {
+                        held: held.as_ref(),
+                        ..Default::default()
+                    };
+                    for s in items.block_drops(registry, id, roll, &mut random, None) {
                         *counts.entry(s.item.to_string()).or_default() += s.count;
                     }
                     drops.insert(t.clone(), json!(counts));

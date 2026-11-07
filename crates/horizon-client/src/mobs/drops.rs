@@ -25,7 +25,7 @@ pub enum Drop {
     /// components), dropped as it is.
     Stack(crate::items::ItemStack),
     /// `Enderman.dropCustomDeathLoot`: the carried block's own drops, rolled
-    /// with `enderman::carried_block_tool` (`enderman::carried_block_drops`).
+    /// with `enderman::carried_block_tool` (`enderman::carried_block_roll`).
     CarriedBlock(BlockStateId),
     /// The experience the mob is worth (`getExperienceReward`), before
     /// `ExperienceOrb.award` splits it into orbs.

@@ -929,6 +929,7 @@ fn effects_from_blocks(
                                 pos: p,
                                 drop: false,
                                 by: None,
+                                breaker: None,
                             });
                         }
                         m.extinguish_fire();
