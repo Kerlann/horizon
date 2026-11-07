@@ -81,7 +81,9 @@ jobs:
               curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal
             fi
             export PATH="$CARGO_HOME/bin:$PATH"
-            export CARGO_TARGET_DIR="$CARGO_TARGET_DIR/wasm-mods-v2"
+            # The room image also exports a target under /box, which is disposable in CI.
+            # Only DYNA_CI_BUILD is mounted from the runner host between jobs.
+            export CARGO_TARGET_DIR="$DYNA_CI_BUILD/wasm-mods-v3/target"
             echo "CARGO_TARGET_DIR=$CARGO_TARGET_DIR" >> "$GITHUB_ENV"
             mkdir -p "$CARGO_TARGET_DIR"
             ln -s "$CARGO_TARGET_DIR" target
