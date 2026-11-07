@@ -25,15 +25,18 @@ class SnapshotTests(unittest.TestCase):
             original_mtime = 1234567890123456789
             os.utime(source, ns=(original_mtime, original_mtime))
             (root / "internals-catalog-check").mkdir()
+            (root / "wasm-source-mtimes.json").write_text("{}")
+            uncached = root / "runtime-binary"
+            uncached.write_text("not part of the coverage cache")
             archive = root / "wasm-snapshot/payload.tar.zst"
             env = {"GITHUB_OUTPUT": str(root / "outputs"), "GITHUB_STEP_SUMMARY": str(root / "summary"),
                    "GITHUB_REPOSITORY": "owner/repo", "WITHIN_TIME": "true", "EXACT_HIT": "false",
-                   "MATCHED_KEY": "fixture", "RESTORE_STARTED": str(int(time.time())),
+                   "GH_TOKEN": "fixture", "MATCHED_KEY": "fixture", "RESTORE_STARTED": str(int(time.time())),
                    "GITHUB_REF": "refs/heads/proof"}
             real_run = subprocess.run
 
             def command(args, **kwargs):
-                if args[0] == "gh":
+                if args[0] == "curl":
                     return SimpleNamespace(returncode=0, stdout='{"active_caches_size_in_bytes": 0}')
                 return real_run(args, **kwargs)
 
@@ -43,7 +46,9 @@ class SnapshotTests(unittest.TestCase):
                 snapshot.pack()
                 self.assertIn("publish=true", (root / "outputs").read_text())
                 source.write_text("changed after snapshot")
+                uncached.write_text("must not be restored")
                 snapshot.restore()
+            self.assertEqual(uncached.read_text(), "must not be restored")
             self.assertEqual(source.read_text(), "original staged source")
             self.assertEqual(source.stat().st_mtime_ns, original_mtime)
             self.assertIn("internals-catalog-check", (root / "summary").read_text())
@@ -59,7 +64,7 @@ class SnapshotTests(unittest.TestCase):
             archive = root / "wasm-snapshot/payload.tar.zst"
             env = {"GITHUB_OUTPUT": str(root / "outputs"), "GITHUB_STEP_SUMMARY": str(root / "summary"),
                    "GITHUB_REPOSITORY": "owner/repo", "WITHIN_TIME": "true", "EXACT_HIT": "false",
-                   "GITHUB_REF": "refs/heads/proof"}
+                   "GITHUB_REF": "refs/heads/proof", "GH_TOKEN": "fixture"}
             for occupied, size, status, expected in ((0, 1024, 0, "true"),
                                                     (7_999_999_999, 1024, 0, "false"),
                                                     (0, 2_000_000_001, 0, "false"),
@@ -67,7 +72,7 @@ class SnapshotTests(unittest.TestCase):
                 (root / "outputs").write_text("")
 
                 def command(args, **kwargs):
-                    if args[0] == "gh":
+                    if args[0] == "curl":
                         return SimpleNamespace(returncode=status,
                                                stdout=f'{{"active_caches_size_in_bytes": {occupied}}}')
                     self.assertEqual(args[0], "tar")
@@ -118,7 +123,7 @@ class SnapshotTests(unittest.TestCase):
         build.mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=build) as directory:
             outputs = Path(directory) / "outputs"
-            for namespace in ("wasm-snapshot-v1", "wasm-snapshot-proof-v1-head"):
+            for namespace in ("wasm-coverage-v2", "wasm-coverage-proof-v2-head"):
                 outputs.write_text("")
                 env = {"GITHUB_OUTPUT": str(outputs), "GITHUB_STEP_SUMMARY": str(Path(directory) / "summary"),
                        "CACHE_NAMESPACE": namespace}

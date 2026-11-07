@@ -65,8 +65,10 @@ jobs:
     # lint and verify of a newer main commit.
     timeout-minutes: 150
     env:
+      CARGO_PROFILE_DEV_OPT_LEVEL: 2
+      CARGO_PROFILE_TEST_OPT_LEVEL: 2
       # A proof namespace can never be restored by main, even through fallback keys.
-      CACHE_NAMESPACE: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.cache_proof && format('wasm-snapshot-proof-v1-{0}', github.sha) || 'wasm-snapshot-v1' }}
+      CACHE_NAMESPACE: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.cache_proof && format('wasm-coverage-proof-v2-{0}', github.sha) || 'wasm-coverage-v2' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -146,7 +148,7 @@ jobs:
           import json, sys
           for line in sys.stdin:
               artifact = json.loads(line)
-              if artifact["reason"] == "compiler-artifact" and artifact["target"]["kind"] == ["test"] and artifact["executable"]:
+              if artifact["reason"] == "compiler-artifact" and artifact["profile"]["test"] and artifact["executable"]:
                   print("WASM_TEST_" + artifact["target"]["name"].upper() + "=" + artifact["executable"])
           ' >> "$GITHUB_ENV"
       - name: Load it in the runtime
@@ -173,14 +175,14 @@ jobs:
         env:
           HORIZON_WASM_INTERNALS: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/internals
           HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
-        run: 'cargo +stable test -j4 -p horizon-mod-wasm --lib "view::tests::" -- --ignored'
+        run: '"$WASM_TEST_HORIZON_MOD_WASM" "view::tests::" --ignored'
       - name: A listener refused with its library keeps nothing of their group
         env:
           HORIZON_WASM_GROUPS: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/groups
           HORIZON_WASM_POINTS: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/points
           HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
         run: '"$WASM_TEST_REFUSED_POINTS" --ignored'
-      # Freeze head artifacts before the WIT comparison compiles a different source worktree.
+      # Freeze staged coverage artifacts before the WIT comparison builds another worktree.
       - name: Measure and prepare a bounded snapshot
         id: packed
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.cache_proof

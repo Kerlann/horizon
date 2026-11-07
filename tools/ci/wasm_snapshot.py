@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bounded, slot-independent snapshots of wasm-mods' complete Cargo working set."""
+"""Bounded, slot-independent snapshots of staged wasm internals coverage."""
 from datetime import datetime
 import hashlib
 import json
@@ -13,6 +13,7 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 TARGET = ROOT / "target"
 ARCHIVE = TARGET / "wasm-snapshot/payload.tar.zst"
+MEMBERS = ("internals-catalog-coverage", "internals-catalog-check", "wasm-source-mtimes.json")
 MAX_ARCHIVE = 2_000_000_000
 MAX_TOTAL = 8_000_000_000
 MAX_RESTORE_SECONDS = 120
@@ -51,7 +52,7 @@ def key():
     lock = hashlib.sha256((ROOT / "Cargo.lock").read_bytes()).hexdigest()
     # Conservative catalog-input hash, not a generated internals.json output hash.
     inputs = hashlib.sha256(capture("git", "ls-files", "-s", "-z")).hexdigest()
-    namespace = os.environ.get("CACHE_NAMESPACE", "wasm-snapshot-v1")
+    namespace = os.environ.get("CACHE_NAMESPACE", "wasm-coverage-v2")
     prefix = f"{namespace}-{platform.system()}-{platform.machine()}-{compiler}-{lock}-"
     output("key", prefix + inputs)
     output("prefix", prefix)
@@ -78,8 +79,13 @@ def restore():
 
 
 def cache_metadata(endpoint):
-    response = subprocess.run(["gh", "api", f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/{endpoint}"],
-                              capture_output=True, text=True)
+    api = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+    response = subprocess.run(
+        ["curl", "--fail", "--silent", "--show-error", "--header", "@-",
+         f"{api}/repos/{os.environ['GITHUB_REPOSITORY']}/actions/{endpoint}"],
+        input=f"Authorization: Bearer {os.environ['GH_TOKEN']}\nAccept: application/vnd.github+json\n",
+        capture_output=True, text=True,
+    )
     if response.returncode:
         report("Snapshot not published: cache metadata unavailable; protect lint's cache budget.")
         return None
@@ -92,7 +98,7 @@ def pack():
     if os.environ.get("EXACT_HIT") == "true" or os.environ.get("WITHIN_TIME") != "true":
         return
     if os.environ.get("GITHUB_REF") == "refs/heads/main":
-        recent = cache_metadata("caches?ref=refs%2Fheads%2Fmain&key=wasm-snapshot-v1-"
+        recent = cache_metadata("caches?ref=refs%2Fheads%2Fmain&key=wasm-coverage-v2-"
                                 "&sort=created_at&direction=desc&per_page=1")
         if recent is None:
             return
@@ -111,8 +117,8 @@ def pack():
     started = time.monotonic()
     # Cargo compares subsecond mtimes; GNU's default tar format loses that precision.
     subprocess.run(["tar", "--format=pax", "--pax-option=delete=atime,delete=ctime",
-                    "--exclude=./wasm-snapshot", "-I", "zstd -T2 -3", "-cf", str(ARCHIVE),
-                    "-C", str(TARGET), "."], check=True)
+                    "-I", "zstd -T2 -3", "-cf", str(ARCHIVE),
+                    "-C", str(TARGET), *MEMBERS], check=True)
     size = ARCHIVE.stat().st_size
     report(f"Compressed snapshot bytes: {size}; compression: {time.monotonic() - started:.2f} s; "
            f"existing repository cache bytes: {occupied}.")
