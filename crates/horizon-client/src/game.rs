@@ -23248,7 +23248,9 @@ fn load_world_rest(
                 .entity_row(&declaration.id)
                 .map(std::sync::Arc::new);
             match (types.types.get_mut(&declaration.id), row) {
-                (Some(kind), Some(row)) => kind.take_attribute_row(row),
+                (Some(kind), Some(row)) => {
+                    kind.take_attribute_row(row, &resources.motion().attributes)
+                }
                 (Some(_), None) => log::warn!(
                     "Horizon: mod entity attributes of {} never reached the catalog; ignored",
                     declaration.id

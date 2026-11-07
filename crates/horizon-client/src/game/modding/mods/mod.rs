@@ -1238,7 +1238,8 @@ mod tests {
         // attribute map and fields (`take_attribute_row`).
         let mut types = living_mod_types();
         let ghoul = types.get_mut("ruby:ghoul").unwrap();
-        Arc::make_mut(ghoul).take_attribute_row(Arc::new(merged.entity_row("ruby:ghoul").unwrap()));
+        Arc::make_mut(ghoul)
+            .take_attribute_row(Arc::new(merged.entity_row("ruby:ghoul").unwrap()), &merged);
         let ghoul = Mob::new(7, types["ruby:ghoul"].clone(), Vec3::ZERO, 0.0);
         assert_eq!(ghoul.health, 55.0, "the spawn's health");
         assert_eq!(ghoul.attrs.max_health, 55.0);
@@ -1275,7 +1276,8 @@ mod tests {
         let mut types = living_mod_types();
         let ghoul = types.get_mut("ruby:ghoul").unwrap();
         assert_eq!(ghoul.max_health, 40.0, "the content row's own value");
-        Arc::make_mut(ghoul).take_attribute_row(Arc::new(merged.entity_row("ruby:ghoul").unwrap()));
+        Arc::make_mut(ghoul)
+            .take_attribute_row(Arc::new(merged.entity_row("ruby:ghoul").unwrap()), &merged);
         let ghoul = Mob::new(7, types["ruby:ghoul"].clone(), Vec3::ZERO, 0.0);
         assert_eq!(
             ghoul.health, 20.0,

@@ -412,6 +412,11 @@ only for attributes the template has; one it lacks stops the content root's buil
 { "template": "minecraft:zombie", "attributes": { "minecraft:max_health": 40.0, "minecraft:movement_speed": 0.3 } }
 ```
 
+A code mod can also use `Registrar::declare_entity_attributes(path, template, attributes)` during registration.
+That declaration starts from the vanilla template's attribute row, replacing the content row's overrides.
+Declared bases remain available to base-value reads, but computed values and spawn fields clamp them to each
+attribute's vanilla range (for example, `minecraft:max_health` is clamped to 1–1024).
+
 It is a mob of its template's class under its own id, `<id>:<name>`: the template's size, model, texture, sounds and
 behaviour, with its own attributes. It saves what its template's class saves under its own id (a zombie's `IsBaby`,
 `CanBreakDoors` and conversion times) and loads back as itself. Its entity data is its template's class's. Its loot

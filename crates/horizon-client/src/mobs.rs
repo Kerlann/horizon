@@ -508,8 +508,8 @@ impl MobType {
     /// a mob of the type spawns with, over the loader's own fallback. The
     /// json's parser and the rest loader of a declared set (#845) both take
     /// it, so the fields cannot drift from the row they read.
-    pub(crate) fn attribute_fields(attributes: &HashMap<String, f64>) -> MobTypeAttributeFields {
-        let attr = |k: &str| attributes.get(&format!("minecraft:{k}")).copied();
+    pub(crate) fn attribute_fields(value: impl Fn(&str) -> Option<f64>) -> MobTypeAttributeFields {
+        let attr = |k: &str| value(&format!("minecraft:{k}"));
         MobTypeAttributeFields {
             max_health: attr("max_health").unwrap_or(10.0) as f32,
             speed: attr("movement_speed").unwrap_or(0.25),
@@ -532,9 +532,18 @@ impl MobType {
     /// Takes the type's row from the live attribute map's catalog (#845):
     /// the merged row the map itself answers (the template's with the
     /// declared set on top), as its attribute map and its spawn fields, so
-    /// the two records cannot diverge.
-    pub fn take_attribute_row(&mut self, attributes: Arc<HashMap<String, f64>>) {
-        let fields = Self::attribute_fields(&attributes);
+    /// the two records cannot diverge. Bases stay raw for base-value reads;
+    /// spawn fields use the catalog's computed-value sanitizer before narrowing.
+    pub fn take_attribute_row(
+        &mut self,
+        attributes: Arc<HashMap<String, f64>>,
+        catalog: &horizon_world::attributes::entity::Catalog,
+    ) {
+        let fields = Self::attribute_fields(|name| {
+            let base = *attributes.get(name)?;
+            let id = catalog.id(name)?;
+            Some(catalog.attribute(id).definition.sanitize(base))
+        });
         self.attributes = attributes;
         self.max_health = fields.max_health;
         self.speed = fields.speed;
@@ -693,7 +702,7 @@ impl MobTypes {
                 continue;
             }
             let defaults = exact.get(&id).cloned().unwrap_or_default();
-            let fields = MobType::attribute_fields(&defaults);
+            let fields = MobType::attribute_fields(|name| defaults.get(name).copied());
             let mut layers = crate::fast_hash::FxHashMap::default();
             if let Some(all) = models
                 .as_ref()
@@ -5317,6 +5326,49 @@ pub(crate) mod sensor_scan_tests {
             tempt: Arc::default(),
         })
     }
+    #[test]
+    #[ignore = "needs prepared attributes in HORIZON_TEST_RESOURCES"]
+    fn declared_health_spawn_fields_match_computed_values() {
+        use horizon_world::attributes::entity::Catalog;
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let catalog = Catalog::from_json(
+            &horizon_world::json_file::read(&root.join("attributes.json")).unwrap(),
+        )
+        .unwrap();
+        // Attributes.MAX_HEALTH is ranged from 1 to 1024 in vanilla.
+        for (declared, expected) in [(-5.0, 1.0), (5000.0, 1024.0), (1e300, 1024.0)] {
+            let merged = Arc::new(
+                catalog
+                    .with_entity_row(
+                        "ruby:ghoul",
+                        "minecraft:zombie",
+                        &[("minecraft:max_health".into(), declared)],
+                    )
+                    .unwrap(),
+            );
+            let mut mob_type = Arc::unwrap_or_clone(kind());
+            mob_type.id = "ruby:ghoul".into();
+            mob_type
+                .take_attribute_row(Arc::new(merged.entity_row("ruby:ghoul").unwrap()), &merged);
+            let mut live = merged.create("ruby:ghoul").unwrap();
+            let health = merged.id("minecraft:max_health").unwrap();
+            assert_eq!(live.base_value(health).unwrap(), declared);
+            assert_eq!(mob_type.attributes["minecraft:max_health"], declared);
+            assert_eq!(live.value(health).unwrap(), expected);
+            for mob in [
+                Mob::new(7, Arc::new(mob_type.clone()), Vec3::ZERO, 0.0),
+                Mob::new_remote(7, Arc::new(mob_type.clone()), Vec3::ZERO, 0.0),
+            ] {
+                assert_eq!(f64::from(mob.health), expected, "declared {declared}");
+                assert_eq!(
+                    f64::from(mob.attrs.max_health),
+                    expected,
+                    "declared {declared}"
+                );
+            }
+        }
+    }
+
     /// `n` mobs in pens of 20 spread over a square of `side` blocks, as on a
     /// server's farms; their snapshot and its grid.
     fn herd(n: u32, side: f64) -> (Vec<Seen>, seen_grid::SeenGrid) {
