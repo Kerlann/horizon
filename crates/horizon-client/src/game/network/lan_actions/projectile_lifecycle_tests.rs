@@ -1,6 +1,6 @@
 //! Production residency regressions for projectile ownership.
 #![cfg(test)]
-use super::{Game, commands::Target};
+use crate::game::{Game, commands::Target};
 use horizon_client::{
     motion::PlayerMotion,
     projectiles::{Projectile, ProjectileKind},
@@ -28,7 +28,7 @@ fn arrow(id: u32, at: [f64; 3]) -> Projectile {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn projectile_lifecycle_commands_unload_park_and_remote() {
-    use super::entity::taken_pass_tests::{LifecycleFixture, RemoteLifecycle};
+    use crate::game::entity::taken_pass_tests::{LifecycleFixture, RemoteLifecycle};
     LifecycleFixture {
         seed: |game, entries| {
             game.creatures.projectiles.clear();
@@ -123,9 +123,9 @@ fn projectile_restore_entries_keep_the_bound_arrow() {
             assert_eq!(before[0].entry.read(&VALUE), Ok(&10));
         };
         if path == 0 {
-            super::native_entity_refs::tests::with_client_game(exercise);
+            crate::game::native_entity_refs::tests::with_client_game(exercise);
         } else {
-            super::native_guest_turn_tests::with_guests(exercise);
+            crate::game::native_guest_turn_tests::with_guests(exercise);
         }
     }
 }
