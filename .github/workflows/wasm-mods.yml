@@ -2,8 +2,8 @@ name: wasm-mods
 # What dyna-checks used to run as its wasm-mods job: the wasm32 mod API, the real game's internals
 # bindings, mods built to mod.wasm and loaded by the runtime, and the mod API's generated WIT as an
 # artifact with its diff in the job summary. Main pushes and dispatches only, never pull requests.
-# Its own workflow so that dyna-checks (never cancelled on main) is not held up by it: a newer main
-# push supersedes this run, as with mixins-check.
+# Its own queue never holds up lint/verify. Started runs finish and publish their snapshot;
+# GitHub replaces only the pending run with the newest push.
 on:
   push:
     branches: [main]
@@ -14,12 +14,16 @@ on:
         type: choice
         default: auto
         options: [auto, ubuntu-latest, dyna-large]
+      cache_proof:
+        description: Isolated non-main cache proof (delete its namespace after measurement)
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
 concurrency:
   group: wasm-mods-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   # The same runner choice dyna-checks makes: Dyna's large runner while the pool is up, else GitHub's.
   runner:
@@ -60,6 +64,9 @@ jobs:
     # for the whole job on the desktop runner). This workflow has its own queue, so it never holds up the
     # lint and verify of a newer main commit.
     timeout-minutes: 150
+    env:
+      # A proof namespace can never be restored by main, even through fallback keys.
+      CACHE_NAMESPACE: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.cache_proof && format('wasm-snapshot-proof-v1-{0}', github.sha) || 'wasm-snapshot-v1' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -78,32 +85,31 @@ jobs:
               curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal
             fi
             export PATH="$CARGO_HOME/bin:$PATH"
-            mkdir -p "$CARGO_TARGET_DIR"
-            ln -s "$CARGO_TARGET_DIR" target
           fi
+          # Stable checkout paths, not an arbitrary slot's persistent target or its symlink.
+          echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"
+          mkdir -p target
           rustup toolchain install stable --profile minimal --component rustfmt
           rustup toolchain install 1.99.1 --profile minimal --component rust-src --target wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        if: runner.environment == 'github-hosted'
-        with:
-          shared-key: wasm-mods
-          # Every fixture uses this workspace's target, so its std and shared dependencies
-          # are cached once rather than in seven independent target directories.
-          workspaces: .
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      # Unlike rust-cache, retain the staged workspace artifacts and source mtimes.
-      # Dyna's target symlink already persists these directories between jobs.
+      - name: Identify the catalog-input snapshot
+        id: snapshot
+        run: python3 tools/ci/wasm_snapshot.py key
       - uses: actions/cache/restore@v4
-        if: runner.environment == 'github-hosted'
         id: coverage-cache
         with:
-          path: |
-            target/internals-catalog-coverage
-            target/internals-catalog-check
-          key: internals-coverage-v1-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          path: target/wasm-snapshot/payload.tar.zst
+          key: ${{ steps.snapshot.outputs.key }}
           restore-keys: |
-            internals-coverage-v1-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
-            internals-coverage-v1-${{ runner.os }}-
+            ${{ steps.snapshot.outputs.prefix }}
+            ${{ steps.snapshot.outputs.fallback }}
+      - name: Extract and report the snapshot
+        id: restored
+        env:
+          MATCHED_KEY: ${{ steps.coverage-cache.outputs.cache-matched-key }}
+          RESTORE_STARTED: ${{ steps.snapshot.outputs.started }}
+        run: |
+          python3 tools/ci/wasm_snapshot.py restore
+          python3 tools/ci/source_mtimes.py target/wasm-source-mtimes.json
       - name: The mod API, points and internals crates build for wasm32
         run: cargo +1.99.1 check -p horizon-mod-api -p horizon-mod-points -p horizon-mod-internals --target wasm32-unknown-unknown
       - name: Generated internals copies, containers and functions compile for wasm32
@@ -117,13 +123,6 @@ jobs:
           export HORIZON_COVERAGE_WASM_RUSTC="$(rustup which --toolchain 1.99.1 rustc)"
           cargo +stable test -j4 -p horizon-mod-api-gen --lib guest_compiler_ignores_another_toolchains_driver -- --ignored --nocapture
           cargo +stable test -j4 -p horizon-mod-api-gen --lib real_catalog_has_compiling_host_and_guest_bindings -- --ignored --nocapture
-      - uses: actions/cache/save@v4
-        if: runner.environment == 'github-hosted' && steps.coverage-cache.outputs.cache-hit != 'true'
-        with:
-          path: |
-            target/internals-catalog-coverage
-            target/internals-catalog-check
-          key: ${{ steps.coverage-cache.outputs.cache-primary-key }}
       - name: Build all wasm fixtures and the std member in one shared target
         run: |
           cargo +stable build -p cargo-horizon-mod -p xtask
@@ -181,6 +180,15 @@ jobs:
           HORIZON_WASM_POINTS: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/points
           HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
         run: '"$WASM_TEST_REFUSED_POINTS" --ignored'
+      # Freeze head artifacts before the WIT comparison compiles a different source worktree.
+      - name: Measure and prepare a bounded snapshot
+        id: packed
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.cache_proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXACT_HIT: ${{ steps.coverage-cache.outputs.cache-hit }}
+          WITHIN_TIME: ${{ steps.restored.outputs.within-time }}
+        run: python3 tools/ci/wasm_snapshot.py pack
       - name: The mod API's WIT, and what this change does to it
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -204,4 +212,9 @@ jobs:
             target/wit-head/mod-api.wit
             target/horizon-wasm-std.wasm
             docs/modding/examples/wasm-hello/target/horizon-mod/hello_wasm.hmod
+      - uses: actions/cache/save@v4
+        if: success() && steps.packed.outputs.publish == 'true'
+        with:
+          path: target/wasm-snapshot/payload.tar.zst
+          key: ${{ steps.snapshot.outputs.key }}
 
