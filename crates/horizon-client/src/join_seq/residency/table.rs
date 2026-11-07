@@ -1,6 +1,6 @@
 //! A journal-fed index. Every hit is checked against its named storage owner;
 //! there is no owner reconciliation scan or reference back to the game.
-use super::{Change, Event, Identity, Journal, Owner};
+use super::{Change, DimensionKey, Event, Identity, Journal, Owner};
 use crate::join_seq::JoinSeq;
 use horizon_core::fast_hash::{FxHashMap, FxHashSet};
 use std::num::NonZeroU32;
@@ -21,10 +21,10 @@ pub struct SourceEntity<T> {
 
 /// A validated result or a narrowly scoped temporary absence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Lookup<T> {
+pub enum EntityLookup<T> {
     Missing,
     Taken,
-    Present { location: Location, value: T },
+    Found { location: Location, value: T },
 }
 
 /// One game's index, shared by active and parked dimensions through the journal.
@@ -50,21 +50,25 @@ impl EntityTable {
     /// Check the current owner and id once, returning its already located value.
     /// The callback must only inspect the supplied owner, not scan other kinds
     /// or dimensions. A missing or mismatched source retires the stale cache row.
-    pub fn lookup<T>(
+    pub fn entity_lookup<T>(
         &mut self,
+        dimension: &DimensionKey,
         id: u32,
         locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
-    ) -> Lookup<T> {
+    ) -> EntityLookup<T> {
         let Some(id) = NonZeroU32::new(id) else {
-            return Lookup::Missing;
+            return EntityLookup::Missing;
         };
         self.drain();
         let Some(&location) = self.rows.get(&id) else {
-            return Lookup::Missing;
+            return EntityLookup::Missing;
         };
+        if location.owner.dimension != *dimension {
+            return EntityLookup::Missing;
+        }
         if let Some(source) = locate(location) {
             if source.id == id.get() {
-                return Lookup::Present {
+                return EntityLookup::Found {
                     location,
                     value: source.value,
                 };
@@ -73,16 +77,16 @@ impl EntityTable {
         } else if self.extracted.get(&id) == Some(&location)
             || self.lifted.contains(&location.owner)
         {
-            return Lookup::Taken;
+            return EntityLookup::Taken;
         }
         forget(&mut self.rows, id, location);
         forget(&mut self.extracted, id, location);
-        Lookup::Missing
+        EntityLookup::Missing
     }
     /// Apply pending operations in mutation order, reusing the event buffer.
     pub fn drain(&mut self) {
         self.journal.drain_into(&mut self.pending);
-        for &event in &self.pending {
+        for event in self.pending.drain(..) {
             let location = |identity: Identity| Location {
                 owner: event.owner,
                 join: identity.join,
@@ -114,7 +118,6 @@ impl EntityTable {
                 }
             }
         }
-        self.pending.clear();
     }
     /// Expire every open marker before the debug leak assertion. Release builds
     /// therefore validate a leaked owner as missing, never permanently Taken.
@@ -126,9 +129,13 @@ impl EntityTable {
         self.lifted.clear();
         debug_assert_eq!(leaked, 0, "entity residency operation did not finish");
     }
-    /// Clear the old epoch without detaching active or parked producer bindings.
+    /// Clone the current producer authority when binding storage.
+    pub fn producer(&self) -> Journal {
+        self.journal.clone()
+    }
+    /// Retire the epoch and clear cached state. Rebind every retained owner.
     pub fn reset(&mut self) {
-        self.journal.clear();
+        self.journal.reset_epoch();
         self.pending.clear();
         self.rows.clear();
         self.extracted.clear();
@@ -154,6 +161,7 @@ mod tests {
         journal: Journal,
         table: EntityTable,
         source: FxHashMap<Location, SourceEntity<usize>>,
+        dimension: DimensionKey,
     }
     impl Fixture {
         fn new() -> Self {
@@ -162,6 +170,7 @@ mod tests {
                 table: EntityTable::new(journal.clone()),
                 journal,
                 source: FxHashMap::default(),
+                dimension: HOME.dimension,
             }
         }
         fn admit(&mut self, id: u32, owner: Owner) -> Location {
@@ -182,10 +191,72 @@ mod tests {
                 change,
             });
         }
-        fn lookup(&mut self, id: u32) -> Lookup<usize> {
-            self.table
-                .lookup(id, |location| self.source.get(&location).copied())
+        fn entity_lookup(&mut self, id: u32) -> EntityLookup<usize> {
+            self.table.entity_lookup(&self.dimension, id, |location| {
+                self.source.get(&location).copied()
+            })
         }
+    }
+
+    #[test]
+    fn a_spawn_during_a_real_lift_is_found_while_the_survivor_is_taken() {
+        use crate::join_seq::{JoinList, Joined, RestoreOrder};
+        struct Stored(u32, JoinSeq);
+        impl Joined for Stored {
+            fn join_seq(&self) -> JoinSeq {
+                self.1
+            }
+            fn set_join_seq(&mut self, join: JoinSeq) {
+                self.1 = join;
+            }
+        }
+        fn locate(list: &JoinList<Stored>, at: Location) -> Option<SourceEntity<usize>> {
+            list.locate(at.join).map(|i| SourceEntity {
+                id: list[i].0,
+                value: i,
+            })
+        }
+        let mut list = JoinList::default();
+        list.push(Stored(7, JoinSeq::UNJOINED));
+        let mut table = EntityTable::new(Journal::default());
+        list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
+        let first = Location {
+            owner: HOME,
+            join: list[0].1,
+        };
+        let taken = list.lift();
+        assert_eq!(
+            table.entity_lookup(&HOME.dimension, 7, |at| locate(&list, at)),
+            EntityLookup::Taken
+        );
+        list.push(Stored(8, JoinSeq::UNJOINED));
+        let second = Location {
+            owner: HOME,
+            join: list[0].1,
+        };
+        assert_eq!(
+            table.entity_lookup(&HOME.dimension, 8, |at| locate(&list, at)),
+            EntityLookup::Found {
+                location: second,
+                value: 0
+            }
+        );
+        list.restore(taken, RestoreOrder::SurvivorsFirst);
+        table.end_tick();
+        assert_eq!(
+            table.entity_lookup(&HOME.dimension, 7, |at| locate(&list, at)),
+            EntityLookup::Found {
+                location: first,
+                value: 0
+            }
+        );
+        assert_eq!(
+            table.entity_lookup(&HOME.dimension, 8, |at| locate(&list, at)),
+            EntityLookup::Found {
+                location: second,
+                value: 1
+            }
+        );
     }
 
     #[test]
@@ -193,8 +264,8 @@ mod tests {
         let mut f = Fixture::new();
         let location = f.admit(7, HOME);
         assert_eq!(
-            f.lookup(7),
-            Lookup::Present {
+            f.entity_lookup(7),
+            EntityLookup::Found {
                 location,
                 value: 42
             }
@@ -208,17 +279,17 @@ mod tests {
                     f.source.insert(location, source);
                 }
             }
-            assert_eq!(f.lookup(7), Lookup::Missing);
+            assert_eq!(f.entity_lookup(7), EntityLookup::Missing);
             // A physical row alone must not resurrect a purged cache entry.
             f.source.insert(location, SourceEntity { id: 7, value: 42 });
-            assert_eq!(f.lookup(7), Lookup::Missing);
+            assert_eq!(f.entity_lookup(7), EntityLookup::Missing);
             f.emit(
                 location,
                 Change::Install(Identity::new(7, location.join).unwrap()),
             );
             assert_eq!(
-                f.lookup(7),
-                Lookup::Present {
+                f.entity_lookup(7),
+                EntityLookup::Found {
                     location,
                     value: 42
                 }
@@ -227,8 +298,8 @@ mod tests {
         f.admit(1, HOME);
         assert_eq!(
             f.table
-                .lookup::<()>(0, |_| panic!("zero id inspected storage")),
-            Lookup::Missing
+                .entity_lookup::<()>(&HOME.dimension, 0, |_| panic!("zero id inspected storage")),
+            EntityLookup::Missing
         );
     }
 
@@ -239,12 +310,12 @@ mod tests {
         let identity = Identity::new(7, location.join).unwrap();
         let source = f.source.remove(&location).unwrap();
         f.emit(location, Change::Extract(identity));
-        assert_eq!(f.lookup(7), Lookup::Taken);
+        assert_eq!(f.entity_lookup(7), EntityLookup::Taken);
         f.source.insert(location, source);
         // Exposed replay storage is readable even before its marker closes.
         assert_eq!(
-            f.lookup(7),
-            Lookup::Present {
+            f.entity_lookup(7),
+            EntityLookup::Found {
                 location,
                 value: 42
             }
@@ -254,10 +325,10 @@ mod tests {
         f.source.remove(&location);
         f.emit(location, Change::Lifted);
         let spawned = f.admit(8, HOME);
-        assert_eq!(f.lookup(7), Lookup::Taken);
+        assert_eq!(f.entity_lookup(7), EntityLookup::Taken);
         assert_eq!(
-            f.lookup(8),
-            Lookup::Present {
+            f.entity_lookup(8),
+            EntityLookup::Found {
                 location: spawned,
                 value: 42
             }
@@ -266,8 +337,8 @@ mod tests {
         f.emit(location, Change::Restored);
         f.table.end_tick();
         assert_eq!(
-            f.lookup(7),
-            Lookup::Present {
+            f.entity_lookup(7),
+            EntityLookup::Found {
                 location,
                 value: 42
             }
@@ -275,7 +346,7 @@ mod tests {
         // Retirement is authoritative, even if an unreported old view remains.
         f.emit(location, Change::Extract(identity));
         f.emit(location, Change::Remove(identity));
-        assert_eq!(f.lookup(7), Lookup::Missing);
+        assert_eq!(f.entity_lookup(7), EntityLookup::Missing);
         f.table.end_tick();
         f.source.remove(&location);
     }
@@ -295,9 +366,9 @@ mod tests {
                     Change::Extract(identity)
                 },
             );
-            assert_eq!(f.lookup(7), Lookup::Missing);
+            assert_eq!(f.entity_lookup(7), EntityLookup::Missing);
             f.source.get_mut(&location).unwrap().id = 7;
-            assert_eq!(f.lookup(7), Lookup::Missing);
+            assert_eq!(f.entity_lookup(7), EntityLookup::Missing);
             if lift {
                 f.emit(location, Change::Restored);
             }
@@ -309,7 +380,7 @@ mod tests {
     fn parked_transfer_and_late_retirement_cannot_erase_a_new_owner() {
         let mut f = Fixture::new();
         let old = f.admit(7, HOME);
-        assert!(matches!(f.lookup(7), Lookup::Present { .. }));
+        assert!(matches!(f.entity_lookup(7), EntityLookup::Found { .. }));
         let new = Location {
             owner: Owner {
                 dimension: DimensionKey::NETHER,
@@ -321,18 +392,25 @@ mod tests {
         let identity = Identity::new(7, old.join).unwrap();
         f.emit(old, Change::Remove(identity));
         f.source.insert(new, source);
+        f.dimension = new.owner.dimension;
         f.emit(new, Change::Install(identity));
         assert_eq!(
-            f.lookup(7),
-            Lookup::Present {
+            f.table.entity_lookup::<()>(&HOME.dimension, 7, |_| panic!(
+                "wrong dimension inspected storage"
+            )),
+            EntityLookup::Missing
+        );
+        assert_eq!(
+            f.entity_lookup(7),
+            EntityLookup::Found {
                 location: new,
                 value: 42
             }
         );
         f.emit(old, Change::Remove(identity));
         assert_eq!(
-            f.lookup(7),
-            Lookup::Present {
+            f.entity_lookup(7),
+            EntityLookup::Found {
                 location: new,
                 value: 42
             }
@@ -342,8 +420,8 @@ mod tests {
         let replacement = f.admit(7, new.owner);
         f.emit(new, Change::Remove(identity));
         assert_eq!(
-            f.lookup(7),
-            Lookup::Present {
+            f.entity_lookup(7),
+            EntityLookup::Found {
                 location: replacement,
                 value: 42
             }
@@ -365,32 +443,40 @@ mod tests {
                     Change::Extract(identity)
                 },
             );
-            assert_eq!(f.lookup(7), Lookup::Taken);
+            assert_eq!(f.entity_lookup(7), EntityLookup::Taken);
+            f.admit(8, HOME);
             let result =
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f.table.end_tick()));
             assert_eq!(result.is_err(), cfg!(debug_assertions));
-            assert_eq!(f.lookup(7), Lookup::Missing);
+            let mut leftover = Vec::new();
+            f.journal.drain_into(&mut leftover);
+            assert!(leftover.is_empty(), "end_tick did not drain the journal");
+            assert!(f.table.pending.is_empty());
+            assert_eq!(f.entity_lookup(7), EntityLookup::Missing);
             f.table.end_tick();
         }
     }
 
     #[test]
-    fn reset_clears_pending_rows_and_markers_but_keeps_producers_connected() {
+    fn reset_discards_pending_state_and_requires_fresh_producers() {
         let mut f = Fixture::new();
         let old = f.admit(7, HOME);
-        assert!(matches!(f.lookup(7), Lookup::Present { .. }));
+        assert!(matches!(f.entity_lookup(7), EntityLookup::Found { .. }));
         f.emit(old, Change::Extract(Identity::new(7, old.join).unwrap()));
         f.emit(old, Change::Lifted);
         f.table.drain();
         f.admit(9, HOME);
         f.table.reset();
-        assert_eq!(f.lookup(7), Lookup::Missing);
-        assert_eq!(f.lookup(9), Lookup::Missing);
+        assert_eq!(f.entity_lookup(7), EntityLookup::Missing);
+        assert_eq!(f.entity_lookup(9), EntityLookup::Missing);
         f.table.end_tick();
+        f.admit(8, HOME);
+        assert_eq!(f.entity_lookup(8), EntityLookup::Missing);
+        f.journal = f.table.producer();
         let new = f.admit(8, HOME);
         assert_eq!(
-            f.lookup(8),
-            Lookup::Present {
+            f.entity_lookup(8),
+            EntityLookup::Found {
                 location: new,
                 value: 42
             }
