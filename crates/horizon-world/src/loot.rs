@@ -1645,9 +1645,6 @@ impl<R: RandomSource> Context<'_, R> {
                         .random
                         .next_int_bound(options.len() as i32)
                         .unwrap_or(0) as usize;
-                    stack
-                        .components
-                        .retain(|(k, _)| k != "minecraft:instrument");
                     stack.components.push((
                         "minecraft:instrument".to_owned(),
                         Some(Tag::String(options[pick].as_str().into())),
@@ -2175,6 +2172,38 @@ mod namespace_tests {
         let count: i32 = filled.iter().flatten().map(|s| s.count).sum();
         assert_eq!(count, 3);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn component_functions_decode_json_to_ordered_nbt_patches() {
+        let root =
+            std::env::temp_dir().join(format!("horizon-loot-patches-{}", std::process::id()));
+        let table = r#"{"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:stone","modifier":[
+            {"type":"minecraft:set_components","components":{"test:value":7}},
+            {"type":"minecraft:set_components","components":{"test:value":null}},
+            {"type":"minecraft:set_components","components":{"test:value":[7]}}
+        ]}]}]}"#;
+        for (name, text) in [
+            ("items.json", r#"{"minecraft:stone":{}}"#),
+            ("data/minecraft/loot_table/patches.json", table),
+        ] {
+            let path = root.join(name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        }
+        let defaults = crate::item_defaults::read(&root).unwrap();
+        let data = LootData::load(&root, &PackOverlay::NONE, &defaults).unwrap();
+        let filled = data.fill("minecraft:patches", 7, 27, None);
+        let stack = filled.iter().flatten().next().unwrap();
+        assert_eq!(
+            stack.components,
+            vec![
+                ("test:value".into(), Some(Tag::Byte(7))),
+                ("test:value".into(), None),
+                ("test:value".into(), Some(Tag::List(vec![Tag::Byte(7)]))),
+            ]
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     /// `SetInstrumentFunction`: a goat horn from a loot table gets one of the options as its instrument.

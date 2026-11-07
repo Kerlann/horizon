@@ -27,6 +27,13 @@ impl ParticleKey {
     }
 }
 
+/// Whether the immutable provider table has already been published for these Parts.
+// hidden: the owning content loader retains this process-lifetime table across pack reloads.
+#[doc(hidden)]
+pub fn particles_resolved() -> bool {
+    resolved().get().is_some()
+}
+
 /// Resolve provider names once at load, before publishing either names or providers.
 // hidden: only the game supplies the completed particle registry.
 #[doc(hidden)]
@@ -52,11 +59,13 @@ pub fn particle_key(id: &crate::Identifier) -> Option<ParticleKey> {
 }
 
 /// Map an engine vanilla provider index without a name lookup or allocation.
+// hidden: only the game's conversion boundary knows engine provider indices.
 #[doc(hidden)]
 pub fn particle_vanilla_key(index: u32) -> Option<ParticleKey> {
     Some(ParticleKey(*resolved().get()?.vanilla_slots.get(&index)?))
 }
 /// Map an already retained custom provider name at an engine capture boundary.
+// hidden: the game's capture boundary reads already retained engine provider names.
 #[doc(hidden)]
 pub fn particle_named_key(name: &str) -> Option<ParticleKey> {
     Some(ParticleKey(*resolved().get()?.names.slots.get(name)?))

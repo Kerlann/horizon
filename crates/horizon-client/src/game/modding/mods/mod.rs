@@ -534,6 +534,67 @@ pub(super) fn content_overlay(
     })
 }
 
+fn resolve_particle_providers(
+    source: &horizon_assets::resource_source::ResourceSource,
+) -> Result<(), String> {
+    if mod_api::__private::particles_resolved() {
+        return Ok(());
+    }
+    // Resolve all particle providers once, alongside the other load-owned registries.
+    let mut particles: Vec<String> = horizon_client::particles::ParticleType::ALL
+        .iter()
+        .map(|ty| format!("minecraft:{}", ty.name()))
+        .collect();
+    particles.extend(
+        source
+            .list_under("assets", &["particles"])
+            .into_iter()
+            .filter_map(|path| {
+                let path = path.strip_prefix("assets/")?;
+                let (namespace, path) = path.split_once("/particles/")?;
+                let path = path.strip_suffix(".json")?;
+                let id = format!("{namespace}:{path}");
+                mod_api::Identifier::parse_namespaced(&id)?;
+                Some(id)
+            }),
+    );
+    mod_api::__private::resolve_particles(particles.iter().map(String::as_str), |id| {
+        horizon_client::particles::ParticleType::from_name(id)
+            .map(|ty| mod_api::__private::ParticleKind::Vanilla(ty as u32))
+            .or_else(|| {
+                (!id.starts_with("minecraft:")).then_some(mod_api::__private::ParticleKind::Custom)
+            })
+    })
+    .map_err(|errors| errors.join("\n"))?;
+    Ok(())
+}
+#[cfg(test)]
+mod particle_registry_reload_tests {
+    #[test]
+    fn repeated_particle_content_load_keeps_the_published_keys() {
+        mod_api::__private::part_tests::install_parts_fixture(&[]).unwrap();
+        let source = horizon_assets::resource_source::ResourceSource::indexed(
+            [(
+                "assets/invalid namespace/particles/bad name.json".into(),
+                horizon_assets::resource_source::Resource::bytes(Vec::new()),
+            )]
+            .into(),
+        );
+        super::resolve_particle_providers(&source).unwrap();
+        let first = mod_api::__private::particle_vanilla_key(
+            horizon_client::particles::ParticleType::Smoke as u32,
+        )
+        .unwrap();
+        super::resolve_particle_providers(&source).unwrap();
+        assert_eq!(
+            mod_api::__private::particle_vanilla_key(
+                horizon_client::particles::ParticleType::Smoke as u32
+            ),
+            Some(first)
+        );
+    }
+}
+
 /// The content root with everything the mods declare registered against the
 /// process: block entities, mob effects, entity and menu types, fluid looks,
 /// and the protocol's local mod list, each set once.
@@ -555,32 +616,7 @@ pub(super) fn content_root(
         );
     }
     register_mob_effects(&overlay.mods);
-    // Resolve all particle providers once, alongside the other load-owned registries.
-    let mut particles: Vec<String> = horizon_client::particles::ParticleType::ALL
-        .iter()
-        .map(|ty| format!("minecraft:{}", ty.name()))
-        .collect();
-    particles.extend(
-        overlay
-            .root
-            .source()
-            .list_under("assets", &["particles"])
-            .into_iter()
-            .filter_map(|path| {
-                let path = path.strip_prefix("assets/")?;
-                let (namespace, path) = path.split_once("/particles/")?;
-                let path = path.strip_suffix(".json")?;
-                Some(format!("{namespace}:{path}"))
-            }),
-    );
-    mod_api::__private::resolve_particles(particles.iter().map(String::as_str), |id| {
-        horizon_client::particles::ParticleType::from_name(id)
-            .map(|ty| mod_api::__private::ParticleKind::Vanilla(ty as u32))
-            .or_else(|| {
-                (!id.starts_with("minecraft:")).then_some(mod_api::__private::ParticleKind::Custom)
-            })
-    })
-    .map_err(|errors| errors.join("\n"))?;
+    resolve_particle_providers(overlay.root.source())?;
     mod_api::__private::resolve_effects(
         horizon_client_core::potions::all_effects()
             .map(|def| horizon_client_core::potions::namespaced(def.id)),

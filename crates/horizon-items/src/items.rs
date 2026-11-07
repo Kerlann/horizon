@@ -2419,8 +2419,20 @@ fn apply_loot(
     }
     // `SetComponentsFunction`'s patch: the components the hook changed or
     // added are set, and the ones it dropped (gone from the stack) removed.
-    if after.components != before.components {
-        for (id, value) in &after.components {
+    for (id, value) in &after.components {
+        // Replay changed per-ID sequences in order, not unchanged captured values:
+        // an unrelated patch must not undo a separately edited loot name.
+        let unchanged = before
+            .components
+            .iter()
+            .filter(|(key, _)| key == id)
+            .map(|(_, value)| value)
+            .eq(after
+                .components
+                .iter()
+                .filter(|(key, _)| key == id)
+                .map(|(_, value)| value));
+        if !unchanged {
             stack.data_mut().set_loot_component(id, value);
         }
     }
@@ -3283,6 +3295,27 @@ mod tests {
             Some(&Tag::ByteArray(vec![7]))
         );
         assert_eq!(stack.data().unwrap().other("test:byte"), None);
+    }
+
+    #[test]
+    fn an_unrelated_loot_patch_does_not_restore_a_captured_name() {
+        let mut stack = ItemStack::new("minecraft:stick", 1);
+        stack
+            .data_mut()
+            .set_loot_name("minecraft:custom_name", &json!("Old"));
+        let before = loot_of(&stack);
+        let mut after = before.clone();
+        after
+            .names
+            .push(("minecraft:custom_name".into(), json!("New")));
+        after
+            .components
+            .push(("test:byte".into(), Some(horizon_core::nbt::Tag::Byte(7))));
+        apply_loot(&before, &after, &mut stack);
+        assert_eq!(
+            stack.data().unwrap().custom_name,
+            Some(horizon_core::nbt::Tag::String("New".into()))
+        );
     }
 
     /// A function that leaves the stack alone keeps its own form: the round

@@ -43,6 +43,7 @@ thread_local! { static CONVERSIONS: std::cell::Cell<usize> = const { std::cell::
 pub(crate) enum LootValueError {
     UnknownItem,
     InvalidName,
+    InvalidPatch,
 }
 
 impl TryIntoApi for engine::LootStack {
@@ -82,10 +83,30 @@ impl<C: ?Sized> TryIntoEngine<C> for api::LootStack {
     type Error = LootValueError;
     fn try_into_engine(&self, _: &C) -> Result<Self::Engine, Self::Error> {
         let id = mod_api::__private::item_key_id(self.item).ok_or(LootValueError::UnknownItem)?;
+        // NBT's vanilla container-depth limit applies before copying mod-owned trees.
+        let mut pending: Vec<_> = self
+            .components
+            .iter()
+            .filter_map(|(_, tag)| tag.as_ref().map(|tag| (tag, 0)))
+            .collect();
+        while let Some((tag, depth)) = pending.pop() {
+            use horizon_core::nbt::Tag;
+            if matches!(tag, Tag::List(_) | Tag::Compound(_)) && depth >= 512 {
+                return Err(LootValueError::InvalidPatch);
+            }
+            match tag {
+                Tag::List(values) => pending.extend(values.iter().map(|value| (value, depth + 1))),
+                Tag::Compound(values) => {
+                    pending.extend(values.values().map(|value| (value, depth + 1)))
+                }
+                _ => {}
+            }
+        }
         let names = self
             .names
             .iter()
             .map(|(id, name)| {
+                mod_api::text::TextForm::try_from(name).map_err(|_| LootValueError::InvalidName)?;
                 let name: horizon_client::text::Text = name
                     .try_into_engine(&())
                     .map_err(|_| LootValueError::InvalidName)?;
@@ -303,6 +324,24 @@ mod tests {
             assert_eq!(CONVERSIONS.with(|count| count.get()), 0);
         });
     }
+    #[test]
+    fn loot_patch_depth_matches_the_vanilla_nbt_limit() {
+        super::super::prepare_stack_boundary_tests();
+        let mut value = stack().try_into_api().unwrap();
+        let mut tag = Tag::Byte(7);
+        for _ in 0..512 {
+            tag = Tag::List(vec![tag]);
+        }
+        value.components = vec![("test:deep".into(), Some(tag))];
+        assert!(value.try_into_engine(&()).is_ok());
+        let tag = value.components[0].1.take().unwrap();
+        value.components[0].1 = Some(Tag::List(vec![tag]));
+        assert_eq!(
+            value.try_into_engine(&()),
+            Err(LootValueError::InvalidPatch)
+        );
+    }
+
     struct Invalid;
     #[mod_api::__subscriptions]
     impl Hooks for Invalid {
