@@ -47,7 +47,13 @@ impl Game<'_> {
         living: LivingRef,
         pose: Pose,
     ) -> Option<[f64; 3]> {
-        match self.native_living_read_target(living)? {
+        let target = self.native_living_read_target(living)?;
+        // LivingEntity.getDimensions is final: sleeping wins over every
+        // species' default dimensions, but never makes a stale handle valid.
+        if pose == Pose::Sleeping {
+            return Some([f64::from(0.2_f32); 3]);
+        }
+        match target {
             t @ (Target::Player | Target::Guest(_)) => {
                 // `Avatar.getDefaultDimensions(pose).scale(getScale())`.
                 let scale = self.native_target_attribute(
@@ -55,8 +61,12 @@ impl Game<'_> {
                     "minecraft:scale",
                     horizon_world::attribute_map::ValueKind::Computed,
                 )? as f32;
-                let d = crate::pose::Pose::from(pose).dimensions(scale);
-                Some([f64::from(d.width), f64::from(d.height), f64::from(d.eye_height)])
+                let d = crate::pose::Dimensions::avatar(pose, scale);
+                Some([
+                    f64::from(d.width),
+                    f64::from(d.height),
+                    f64::from(d.eye_height),
+                ])
             }
             Target::Mob(id) => {
                 let (w, h, e) = self
@@ -75,15 +85,23 @@ impl Game<'_> {
                 } else {
                     a.probe_dimensions()
                 };
-                Some([dims.0, dims.1, dims.2])
+                let scale = self.native_target_attribute(
+                    target,
+                    "minecraft:scale",
+                    horizon_world::attribute_map::ValueKind::Computed,
+                )? as f32;
+                Some([dims.0, dims.1, dims.2].map(|v| f64::from(v as f32 * scale)))
             }
-            // The dragon's box follows no pose (EntityType.ENDER_DRAGON):
-            // the type's own row (`entity-types.json`), the one box the
-            // engine keeps for it.
             Target::Dragon(id) => {
                 self.dragon.as_ref().filter(|d| d.id == id)?;
-                let ty = self.res.mob_types().get("minecraft:ender_dragon")?;
-                Some([ty.width, ty.height, ty.eye_height])
+                // EntityTypes.ENDER_DRAGON: scalable(16, 8), default eye
+                // height 8 * 0.85. Dragons are not in the ordinary mob table.
+                let scale = self.native_target_attribute(
+                    target,
+                    "minecraft:scale",
+                    horizon_world::attribute_map::ValueKind::Computed,
+                )? as f32;
+                Some([16.0_f32, 8.0, 6.8].map(|v| f64::from(v * scale)))
             }
             _ => None,
         }
@@ -147,6 +165,132 @@ mod tests {
     use super::*;
     use horizon_client::mobs::Mob;
     use mod_api::PathType;
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn pose_regression_dying_avatar_is_fixed() {
+        with_game(|game| {
+            let ty = game
+                .res
+                .mob_types()
+                .get("minecraft:mannequin")
+                .unwrap()
+                .clone();
+            game.mobs.push(Mob::new(55, ty, Vec3::ZERO, 0.0));
+            let living = game.native_living(game.native_entity(55).unwrap()).unwrap();
+            assert!(game.native_living_set_attribute_base(living, "minecraft:scale", 2.0));
+            assert_eq!(
+                living.dimensions_for_pose(game, Pose::Dying),
+                Some([f64::from(0.2_f32), f64::from(0.2_f32), f64::from(1.62_f32)])
+            );
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn pose_regression_sleeping_stand() {
+        with_game(|game| {
+            game.armor_stands
+                .push(horizon_client::entities::ArmorStand::new(
+                    55,
+                    Vec3::ZERO,
+                    0.0,
+                ));
+            let living = game.native_living(game.native_entity(55).unwrap()).unwrap();
+            assert_eq!(
+                living.dimensions_for_pose(game, Pose::Sleeping),
+                Some([f64::from(0.2_f32); 3])
+            );
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn pose_regression_dragon_dimensions() {
+        with_game(|game| {
+            let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
+            dragon.id = 55;
+            game.dragon = Some(dragon);
+            let living = game.native_living(game.native_entity(55).unwrap()).unwrap();
+            assert_eq!(
+                living.dimensions_for_pose(game, Pose::Standing),
+                Some([16.0, 8.0, f64::from(6.8_f32)])
+            );
+            // A saved attribute exercises the live map without the public
+            // attribute writer, which deliberately refuses dragon writes.
+            use horizon_core::nbt::Tag;
+            game.dragon.as_mut().unwrap().live.load(
+                Some(&Tag::List(vec![Tag::compound([
+                    ("id", Tag::String("minecraft:scale".into())),
+                    ("base", Tag::Double(2.0_f64.to_bits())),
+                ])])),
+                |_| true,
+            );
+            assert_eq!(
+                living.dimensions_for_pose(game, Pose::Standing),
+                Some([32.0, 16.0, f64::from(13.6_f32)])
+            );
+            assert_eq!(
+                living.dimensions_for_pose(game, Pose::Sleeping),
+                Some([f64::from(0.2_f32); 3])
+            );
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn pose_regression_scaled_stand() {
+        with_game(|game| {
+            game.armor_stands
+                .push(horizon_client::entities::ArmorStand::new(
+                    55,
+                    Vec3::ZERO,
+                    0.0,
+                ));
+            let living = game.native_living(game.native_entity(55).unwrap()).unwrap();
+            assert!(game.native_living_set_attribute_base(living, "minecraft:scale", 2.0));
+            assert_eq!(
+                living.dimensions_for_pose(game, Pose::Standing),
+                Some([1.0, f64::from(3.95_f32), f64::from(3.555_f32)])
+            );
+            game.armor_stands[0].small = true;
+            assert_eq!(
+                living.dimensions_for_pose(game, Pose::Standing),
+                Some([0.5, f64::from(1.975_f32), f64::from(1.975_f32)])
+            );
+            game.armor_stands[0].marker = true;
+            assert_eq!(
+                living.dimensions_for_pose(game, Pose::Standing),
+                Some([0.0; 3])
+            );
+            assert_eq!(
+                living.dimensions_for_pose(game, Pose::Sleeping),
+                Some([f64::from(0.2_f32); 3])
+            );
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn pose_regression_scaled_digging_warden_is_fixed() {
+        with_game(|game| {
+            let ty = game
+                .res
+                .mob_types()
+                .get("minecraft:warden")
+                .unwrap()
+                .clone();
+            let mut mob = Mob::new(55, ty, Vec3::ZERO, 0.0);
+            horizon_client::mobs::sync::set_pose(&mut mob, horizon_client::mobs::sync::DIGGING);
+            mob.extra.model_scale = 2.0;
+            game.mobs.push(mob);
+            let living = game.native_living(game.native_entity(55).unwrap()).unwrap();
+            assert_eq!(
+                living.dimensions_for_pose(game, Pose::Standing),
+                Some([f64::from(0.9_f32), 1.0, f64::from(0.85_f32)])
+            );
+        });
+    }
 
     /// Lit empty chunks around the origin, a stone floor at y 63 over
     /// -8..8, and two zombies standing on it five blocks apart.
@@ -247,9 +391,7 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn dimensions_follow_the_pose_asked() {
         use super::super::lan::LanSettings;
-        use horizon_client::lan::{
-            Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig,
-        };
+        use horizon_client::lan::{Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig};
         use horizon_protocol::packets::configuration::ClientInformation;
         use std::sync::{
             Arc,
@@ -332,11 +474,17 @@ mod tests {
                 living.dimensions_for_pose(game, Pose::Roaring),
                 Some([f64::from(0.6_f32), f64::from(1.8_f32), f64::from(1.62_f32)])
             );
+            assert!(game.native_living_set_attribute_base(living, "minecraft:scale", 2.0));
+            assert_eq!(
+                living.dimensions_for_pose(game, Pose::Dying),
+                Some([f64::from(0.2_f32), f64::from(0.2_f32), f64::from(1.62_f32)]),
+                "Avatar.POSES dying dimensions remain fixed even at scale 2"
+            );
             game.lan.as_mut().unwrap().hub.guests.clear();
             assert_eq!(
-                living.dimensions_for_pose(game, Pose::Standing),
+                living.dimensions_for_pose(game, Pose::Sleeping),
                 None,
-                "a gone player"
+                "a gone player must not acquire sleeping dimensions"
             );
         });
     }
@@ -346,12 +494,7 @@ mod tests {
     fn camel_sitting_is_lower_even_while_standing() {
         with_game(|game| {
             floor_and_zombies(game);
-            let ty = game
-                .res
-                .mob_types()
-                .get("minecraft:camel")
-                .unwrap()
-                .clone();
+            let ty = game.res.mob_types().get("minecraft:camel").unwrap().clone();
             game.mobs
                 .push(Mob::new(20, ty, Vec3::new(0.5, 64.0, 0.5), 0.0));
             let camel = game.native_living(game.native_entity(20).unwrap()).unwrap();

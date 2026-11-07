@@ -66,11 +66,8 @@ impl From<Pose> for mod_api::Pose {
     }
 }
 impl From<mod_api::Pose> for Pose {
-    /// The avatar's stance of a living entity's pose: the six `Avatar.POSES`
-    /// holds (sleeping is the fixed 0.2 box every living entity takes);
-    /// every other stance (the mob poses and dying, which this game's
-    /// players never take) answers standing, as `Avatar.getDefaultDimensions`'
-    /// fallback does.
+    /// Narrow a living entity's pose to a movement stance. Dimension queries
+    /// use `Dimensions::avatar` to preserve Avatar.POSES's fixed dying box.
     fn from(pose: mod_api::Pose) -> Self {
         match pose {
             mod_api::Pose::FallFlying => Self::FallFlying,
@@ -89,6 +86,20 @@ pub struct Dimensions {
     pub eye_height: f32,
 }
 impl Dimensions {
+    /// `Avatar.getDefaultDimensions` with the living scale applied, including
+    /// the fixed DYING entry that is not a movement stance.
+    pub fn avatar(pose: mod_api::Pose, scale: f32) -> Self {
+        if pose == mod_api::Pose::Dying {
+            Self {
+                width: 0.2,
+                height: 0.2,
+                eye_height: 1.62,
+            }
+        } else {
+            Pose::from(pose).dimensions(scale)
+        }
+    }
+
     pub fn bounds(self, position: Vec3) -> Aabb {
         let half = f64::from(self.width / 2.0);
         Aabb::new(

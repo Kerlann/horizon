@@ -494,8 +494,8 @@ impl Mob {
     /// fish, the shulker's lid, the salmon's variant and the polar bear's
     /// rear-up read the mob's own state, as their `getDefaultDimensions`
     /// do) times its `minecraft:scale` (`getScale`), width, height and eye
-    /// height alike — except the fixed 0.2 box every living entity sleeps
-    /// in (`LivingEntity.SLEEPING_DIMENSIONS`).
+    /// height alike — except fixed boxes: sleeping, dying avatars and
+    /// digging/emerging wardens (`EntityDimensions.fixed`).
     pub fn dims_in_pose(&self, pose: mod_api::Pose) -> (f64, f64, f64) {
         if pose == mod_api::Pose::Sleeping {
             return (f64::from(0.2_f32), f64::from(0.2_f32), f64::from(0.2_f32));
@@ -503,7 +503,7 @@ impl Mob {
         let k = &self.kind;
         let scale = self.model_scale();
         if matches!(&*k.id, "minecraft:player" | "minecraft:mannequin") {
-            let d = crate::pose::Pose::from(pose).dimensions(scale);
+            let d = crate::pose::Dimensions::avatar(pose, scale);
             return (
                 f64::from(d.width),
                 f64::from(d.height),
@@ -535,10 +535,10 @@ impl Mob {
         if super::camel::is_camel(k.species) && pose == mod_api::Pose::Sitting {
             (w, h, e) = super::camel::sitting_dims(self.is_baby());
         }
-        // Warden.getDefaultDimensions: a metre tall while digging or emerging.
-        if self.kind.species == super::Species::Warden && super::warden::digging_or_emerging(self) {
-            h = 1.0;
-            e = 0.85;
+        // Warden.getDefaultDimensions returns fixed dimensions while digging
+        // or emerging: EntityDimensions.scale leaves every component alone.
+        if k.species == super::Species::Warden && super::warden::digging_or_emerging(self) {
+            return (f64::from(w), 1.0, f64::from(0.85_f32));
         }
         if self.kind.species == super::Species::Pufferfish {
             let s = super::aquatic::puff_scale(self.extra.size) as f32;
