@@ -11,9 +11,11 @@ player's own input; it reaches the client of a guest acting in their own turn to
 thrown_by_player)`: the stack is thrown from the eyes as an item entity and `item_toss` may
 cancel it. It takes nothing from an inventory, so take the stack out through the item places
 first; that is what separates it from giving a stack that falls back to a drop when the
-inventory is full. It returns `None` once the item is in the world, and otherwise hands the
-stack back untouched (empty, a stale or dead player, a vetoed toss) for the caller to put back,
-so a refused drop never loses items.
+inventory is full. It returns `Ok(None)` once the item is in the world, and otherwise hands the
+stack back untouched as `Ok(Some(stack))` (empty, a stale or dead player, a vetoed toss) for the caller to put back,
+so a refused drop never loses items. As with other checked stack writes, a failure to convert
+the API-owned stack returns `StackWriteError` before any game operation. API stacks are nonempty;
+the engine empty-stack refusal remains internal.
 
 `MenuRef::close_container(host)` closes a player's open menu on a server as
 `ServerPlayer.closeContainer`

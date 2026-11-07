@@ -356,7 +356,7 @@ fn server_inventory_operations_take_a_server_host(
     player: PlayerRef,
     menu: MenuRef,
     stack: ItemStack,
-) -> (bool, Option<ItemStack>, bool) {
+) -> (bool, Result<Option<ItemStack>, StackWriteError>, bool) {
     (
         player.set_selected_slot(host, 0),
         player.drop_stack(host, stack, false),

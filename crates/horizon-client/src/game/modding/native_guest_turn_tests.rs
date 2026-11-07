@@ -1028,6 +1028,7 @@ fn set_selected_slot_tells_an_acting_guests_client() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_vetoed_drop_gives_the_stack_back() {
+    use super::api_values::TryIntoApi;
     use horizon_client::items::ItemStack;
     use mod_api::{Flow, Hooks, ItemTossEvent, ModEntry, ServerHost, testing::with_mods};
 
@@ -1045,13 +1046,16 @@ fn a_vetoed_drop_gives_the_stack_back() {
             let stone = ItemStack::new("minecraft:stone", 3);
             let before = game.dropped.len();
             assert_eq!(
-                player.drop_stack(game, stone.clone(), true),
-                Some(stone.clone()),
+                player.drop_stack(game, stone.try_into_api().unwrap(), true),
+                Ok(Some(stone.try_into_api().unwrap())),
                 "a vetoed toss comes back whole"
             );
             assert_eq!(game.dropped.len(), before, "and makes no item entity");
             let empty = ItemStack::new("minecraft:stone", 0);
-            assert_eq!(player.drop_stack(game, empty.clone(), false), Some(empty));
+            assert_eq!(
+                game.player_drop_stack(player, empty.clone(), false),
+                Some(empty)
+            );
         });
     });
 }
