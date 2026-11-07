@@ -1,4 +1,4 @@
-//! One-shot spawn injection while a production tick owns a lifted batch.
+//! Production-path storage lifecycle and lifted-pass test support.
 use crate::game::Game;
 use std::cell::Cell;
 
@@ -33,17 +33,35 @@ pub(in crate::game) struct RemoteLifecycle {
     pub apply: fn(&mut Game<'_>, u32, u32),
 }
 
+struct ScratchDirectory(std::path::PathBuf);
+
+impl Drop for ScratchDirectory {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 impl LifecycleFixture {
     /// Adapters seed owners and read ordered identities; all exchanges and
     /// removals run through production entry points, never a substitute model.
     pub fn run(self) {
+        self.run_with(|_| {});
+    }
+
+    /// Observe each seeded or transformed storage before checking its order.
+    /// Slot-bearing adapters bind new owners and compare remembered registrations here.
+    pub fn run_with(self, mut observe: impl FnMut(&mut Game<'_>)) {
         crate::game::native_entity_refs::tests::with_game(|game| {
-            let root = std::env::temp_dir().join(format!(
+            let mut ids = |game: &mut Game<'_>| {
+                observe(game);
+                (self.ids)(game)
+            };
+            let root = ScratchDirectory(std::env::temp_dir().join(format!(
                 "horizon-lifecycle-{}-{:?}",
                 std::process::id(),
                 std::thread::current().id()
-            ));
-            game.world_root = root.clone();
+            )));
+            game.world_root = root.0.clone();
             (self.seed)(
                 game,
                 &[
@@ -53,33 +71,29 @@ impl LifecycleFixture {
                     (104, [2.0, 80.0, 1.0]),
                 ],
             );
-            assert_eq!((self.ids)(game), [101, 102, 103, 104]);
+            assert_eq!(ids(game), [101, 102, 103, 104]);
             game.kill_target((self.target)(102));
-            assert_eq!((self.ids)(game), [101, 103, 104], "command removal");
+            assert_eq!(ids(game), [101, 103, 104], "command removal");
             game.entity_chunks(&[(0, 0)].into_iter().collect(), true);
             let active = if self.unloads_with_chunk {
                 vec![103]
             } else {
                 vec![101, 103, 104]
             };
-            assert_eq!(
-                (self.ids)(game),
-                active,
-                "selected versus unselected chunk unload"
-            );
+            assert_eq!(ids(game), active, "selected versus unselected chunk unload");
             game.enter_level(crate::game::Dim::Nether).unwrap();
             assert!(
-                (self.ids)(game).is_empty(),
+                ids(game).is_empty(),
                 "new dimension inherited the active owners"
             );
             (self.seed)(game, &[(201, [1.0, 80.0, 1.0]), (202, [33.0, 80.0, 1.0])]);
-            assert_eq!((self.ids)(game), [201, 202]);
+            assert_eq!(ids(game), [201, 202]);
             game.enter_level(crate::game::Dim::Overworld).unwrap();
-            assert_eq!((self.ids)(game), active, "active owner restore");
+            assert_eq!(ids(game), active, "active owner restore");
             game.enter_level(crate::game::Dim::Nether).unwrap();
-            assert_eq!((self.ids)(game), [201, 202], "parked owner restore");
+            assert_eq!(ids(game), [201, 202], "parked owner restore");
             game.enter_level(crate::game::Dim::Overworld).unwrap();
-            assert_eq!((self.ids)(game), active, "second active restore");
+            assert_eq!(ids(game), active, "second active restore");
             if let Some(remote) = self.remote {
                 (remote.prepare)(game);
                 (self.seed)(
@@ -90,12 +104,28 @@ impl LifecycleFixture {
                         (303, [33.0, 80.0, 1.0]),
                     ],
                 );
+                assert_eq!(ids(game), [301, 302, 303], "remote owner install");
                 (remote.apply)(game, 302, 303);
-                assert_eq!((self.ids)(game), [301, 303], "remote update and removal");
+                assert_eq!(ids(game), [301, 303], "remote update and removal");
             }
-            let _ = std::fs::remove_dir_all(root);
         });
     }
+}
+
+#[test]
+fn lifecycle_scratch_is_removed_when_an_assertion_unwinds() {
+    let path = std::env::temp_dir().join(format!(
+        "horizon-lifecycle-cleanup-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    let result = std::panic::catch_unwind(|| {
+        let _scratch = ScratchDirectory(path.clone());
+        std::fs::create_dir_all(&path).unwrap();
+        panic!("fixture assertion");
+    });
+    assert!(result.is_err());
+    assert!(!path.exists());
 }
 
 #[test]
