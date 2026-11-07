@@ -2,20 +2,24 @@ use super::*;
 use mod_api::__private::wasm_host::{Budgets, Member, instantiate};
 use wasm_encoder::{CodeSection, Function, Instruction as Op, Module, reencode::Reencode};
 
+/// The production WIT, generated once per test process: generating it reads the whole API and takes seconds,
+/// and every case of this file needs the same text.
+fn api_wit() -> &'static str {
+    static WIT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    WIT.get_or_init(|| {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let dir = root.join(format!("target/raw-exports-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        horizon_mod_api_gen::generate(&root, &dir, horizon_mod_api_gen::Target::Api).unwrap();
+        std::fs::read_to_string(dir.join("mod-api.wit")).unwrap()
+    })
+}
+
 // The production WIT supplies all mandatory API exports. Only load metadata and
 // this fixture's raw functions have bodies; every other dummy function traps.
 fn component(names: &[(&str, &str)], omit_fire: bool) -> Exports {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let dir = root.join(format!("target/raw-exports-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    horizon_mod_api_gen::generate(&root, &dir, horizon_mod_api_gen::Target::Api).unwrap();
     let mut resolve = wit_parser::Resolve::default();
-    let package = resolve
-        .push_str(
-            "api.wit",
-            &std::fs::read_to_string(dir.join("mod-api.wit")).unwrap(),
-        )
-        .unwrap();
+    let package = resolve.push_str("api.wit", api_wit()).unwrap();
     let world = resolve.select_world(&[package], Some("mod")).unwrap();
     let raw_package = resolve.push_str("raw.wit", "package test:raw; interface listeners { enum host-kind { read, server, client, none } declared: func() -> list<tuple<string, string>>; subscribed: func() -> list<tuple<string, string>>; fire: func(place: u32, host: host-kind); trace: func() -> u32; fallback: func(place: u32, host: host-kind); } world raw { export listeners; }").unwrap();
     let raw = resolve.packages[raw_package].interfaces["listeners"];
