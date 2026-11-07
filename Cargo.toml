@@ -3,6 +3,7 @@ exclude = ["launcher", "crates/horizon-mod-registry", "third_party/wgpu-hal", "t
 members = [
     "crates/horizon-core",
     "crates/horizon-mod-runtime",
+    "crates/horizon-mod-render",
     "docs/modding/examples",
     "crates/horizon-dualsense",
     "crates/horizon-narrator",
@@ -39,6 +40,7 @@ members = [
     "crates/horizon-mod-wasm",
     "crates/horizon-mod-api-gen",
     "crates/horizon-mod-api",
+    "crates/horizon-mod-dimension-game",
     "crates/horizon-mod-api-macros",
     "crates/horizon-mod-point-shape",
     "crates/horizon-mod-api-gen/dispatch-tests",
@@ -46,6 +48,7 @@ members = [
     "crates/horizon-port-pack",
     "crates/horizon-shaders",
     "crates/horizon-optifine",
+    "crates/horizon-polytone",
     "crates/horizon-shader-api",
     "crates/horizon-release-sign",
     "crates/horizon-mod-deps",
@@ -96,7 +99,17 @@ debug = "line-tables-only"
 [profile.dev.package.sha2]
 opt-level = 3
 
+[profile.dev.package.horizon-mod-api-gen]
+opt-level = 3
 [profile.dev.package.syn]
+opt-level = 3
+[profile.dev.package.proc-macro2]
+opt-level = 3
+[profile.release.package.horizon-mod-api-gen]
+opt-level = 3
+[profile.release.package.syn]
+opt-level = 3
+[profile.release.package.proc-macro2]
 opt-level = 3
 
 [profile.release]

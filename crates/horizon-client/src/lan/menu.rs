@@ -347,17 +347,17 @@ impl View<'_> {
     /// (`ArmorSlot.mayPickup`: `PREVENT_ARMOR_CHANGE` and no creative); the
     /// menu's rules answer for their own slots.
     fn may_pickup(&self, i: usize, rules: &dyn Rules) -> bool {
-        let stack = self.get(i);
+        self.may_pickup_item(i, self.get(i).as_ref(), rules)
+    }
+    fn may_pickup_item(&self, i: usize, stack: Option<&ItemStack>, rules: &dyn Rules) -> bool {
         if self.container.is_none()
             && (5..=8).contains(&i)
             && !self.guest.creative()
-            && stack
-                .as_ref()
-                .is_some_and(|s| rules.enchantments().prevents_armor_change(s))
+            && stack.is_some_and(|s| rules.enchantments().prevents_armor_change(s))
         {
             return false;
         }
-        stack.is_none_or(|s| rules.may_pickup(i, &s))
+        stack.is_none_or(|s| rules.may_pickup(i, s))
     }
     /// The ranges quick move uses: (container start..end, main, hotbar).
     fn player_ranges(&self) -> (std::ops::Range<usize>, std::ops::Range<usize>) {
@@ -372,17 +372,49 @@ struct HostedSlotView<'a, 'v> {
     view: &'a mut View<'v>,
     slot: usize,
     rules: &'a dyn Rules,
+    staged: Option<Option<ItemStack>>,
+}
+
+impl HostedSlotView<'_, '_> {
+    fn set(&mut self, value: Option<ItemStack>) {
+        if let Some(staged) = &mut self.staged {
+            *staged = value;
+        } else {
+            self.view.set(self.slot, value);
+        }
+    }
 }
 
 impl crate::menu::SlotView for HostedSlotView<'_, '_> {
+    fn with_staged(
+        &mut self,
+        edit: &mut dyn FnMut(&mut dyn crate::menu::SlotView) -> bool,
+    ) -> bool {
+        let initial = self.item();
+        let previous = self.staged.replace(initial);
+        let accepted = edit(self);
+        let value = self.staged.take().expect("a staged slot");
+        self.staged = previous;
+        if accepted {
+            self.set(value);
+        }
+        accepted
+    }
+    fn items(&self) -> &crate::items::Items {
+        self.rules.items()
+    }
+
     fn item(&self) -> Option<ItemStack> {
-        self.view.get(self.slot)
+        self.staged
+            .clone()
+            .unwrap_or_else(|| self.view.get(self.slot))
     }
     fn may_place(&self, stack: &ItemStack) -> bool {
         self.view.may_place(self.slot, stack, self.rules)
     }
     fn may_pickup(&self) -> bool {
-        self.view.may_pickup(self.slot, self.rules)
+        self.view
+            .may_pickup_item(self.slot, self.item().as_ref(), self.rules)
     }
     fn allow_modification(&self) -> bool {
         let item = self
@@ -412,12 +444,12 @@ impl crate::menu::SlotView for HostedSlotView<'_, '_> {
                 let mut part = input.clone();
                 part.count = moved;
                 input.count -= moved;
-                self.view.set(self.slot, Some(part));
+                self.set(Some(part));
             }
             Some(mut current) if current.same_item_same_components(input) => {
                 current.count += moved;
                 input.count -= moved;
-                self.view.set(self.slot, Some(current));
+                self.set(Some(current));
             }
             Some(_) => {}
         }
@@ -438,8 +470,7 @@ impl crate::menu::SlotView for HostedSlotView<'_, '_> {
         let mut taken = current.clone();
         taken.count = moved;
         current.count -= moved;
-        self.view
-            .set(self.slot, (current.count > 0).then_some(current));
+        self.set((current.count > 0).then_some(current));
         Some(taken)
     }
 }
@@ -739,6 +770,7 @@ fn pickup(view: &mut View, slot: i32, button: i32, rules: &dyn Rules) {
             view,
             slot: i,
             rules,
+            staged: None,
         };
         let mut event = crate::menu::StackedOnOther {
             player: Some(player),
@@ -811,6 +843,7 @@ fn pickup(view: &mut View, slot: i32, button: i32, rules: &dyn Rules) {
                         view,
                         slot: i,
                         rules,
+                        staged: None,
                     };
                     if let Some(taken) = crate::menu::SlotView::safe_take(&mut slot, s.count, max) {
                         c.count += taken.count;
@@ -853,6 +886,7 @@ fn bundle_click(view: &mut View, i: usize, right: bool, rules: &dyn Rules) -> bo
                         view,
                         slot: i,
                         rules,
+                        staged: None,
                     };
                     if let Some(mut taken) =
                         crate::menu::SlotView::safe_take(&mut slot, other.count, amount)
@@ -1064,6 +1098,7 @@ fn pickup_all(view: &mut View, slot: i32, button: i32, rules: &dyn Rules) {
                 view,
                 slot: i,
                 rules,
+                staged: None,
             };
             if let Some(taken) =
                 crate::menu::SlotView::safe_take(&mut slot, s.count, max - carried.count)
@@ -1270,6 +1305,7 @@ mod tests {
             view: &mut view,
             slot: 0,
             rules: &rules,
+            staged: None,
         };
         let rest = slot
             .safe_insert(Some(ItemStack::new("minecraft:stone", 10)), 10)

@@ -391,6 +391,8 @@ impl Game<'_> {
         if self.riding == Some(c.id) {
             self.dismount_removed_vehicle(p.y);
         }
+        // BlockAttachedEntity.kill, before dropItem.
+        self.entity_killed_event([p.x, p.y, p.z], by_player);
         self.audio.play(
             "minecraft:entity.cushion.break",
             Some([p.x, p.y, p.z]),
@@ -583,7 +585,7 @@ impl Game<'_> {
     pub(super) fn cushion_geometry(
         &self,
         camera: glam::DVec3,
-        out: &mut Vec<mod_api::render::Vertex>,
+        out: &mut Vec<mod_render::render::Vertex>,
     ) {
         let Some(model) = self.cushion_model.as_ref() else {
             return;

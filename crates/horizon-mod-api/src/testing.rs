@@ -4,13 +4,16 @@
 //!
 //! ```
 //! use mod_api::testing::FakeHost;
+//! use mod_api::prelude::ItemsHost;
 //! use mod_api::{HostTransaction, ITEMS, ItemResource, ItemStack, ServerHost, move_resources};
 //!
 //! let mut host = FakeHost::new();
 //! let level = host.level.level();
 //! host.level.block_entity([0, 64, 0]).with_items(1);
 //! host.level.block_entity([1, 64, 0]).with_items(1);
-//! let stone = ItemStack { item: "minecraft:stone".into(), count: 5, damage: 0, extra: None };
+//! let stone_id = mod_api::Identifier::parse("minecraft:stone").unwrap();
+//! host.registries.resolve_items([stone_id.clone()]).unwrap();
+//! let stone = ItemStack::new(host.item_key(&stone_id).unwrap(), 5).unwrap();
 //! host.level.block_entity([0, 64, 0]).items.as_mut().unwrap().slots[0] = Some(stone);
 //!
 //! let server: &mut dyn ServerHost = &mut host;
@@ -34,6 +37,8 @@ mod registries;
 #[path = "testing/services.rs"]
 mod services;
 
+/// An item forward reference missing from a fake's load-owned catalog.
+pub use crate::parts::ItemKeyError;
 pub use journal::FakeJournal;
 pub use level::{FakeBattery, FakeBlockEntity, FakeContainer, FakeEntity, FakeLevel, FakeTank};
 pub use players::{FakePlayer, FakePlayers};
@@ -118,8 +123,12 @@ impl FakeHost {
         self.players.join(uuid, entity, self.level.level())
     }
 
-    fn max_stack(&self, stack: &ItemStack) -> u32 {
-        self.registries.max_stack_size(&stack.item)
+    fn max_stack(&self, resource: &crate::ItemResource) -> u32 {
+        match resource.value_id(self, "minecraft:max_stack_size") {
+            Some(Tag::Int(size)) if (1..=99).contains(&size) => size as u32,
+            None => 1,
+            _ => 0,
+        }
     }
 }
 impl Host for FakeHost {
@@ -153,11 +162,34 @@ impl crate::prelude::PlayersHost for FakeHost {
     }
 }
 impl crate::prelude::ItemsHost for FakeHost {
-    fn item_default_component(&self, item: &str, component: &str) -> Option<Tag> {
-        self.registries.default_component(item, component)
+    fn item_key(&self, id: &crate::Identifier) -> Option<crate::ItemKey> {
+        crate::registry_keys::item_key_by_identifier(id)
     }
-    fn max_stack_size(&self, item: &str) -> Option<u32> {
-        Some(self.registries.max_stack_size(item))
+    fn item_default_component(&self, item: crate::ItemKey, component: &str) -> Option<Tag> {
+        self.registries
+            .default_component(FakeRegistries::resolved_item_id(item)?, component)
+    }
+    fn max_stack_size(&self, item: crate::ItemKey) -> Option<u32> {
+        Some(
+            self.registries
+                .max_stack_size(FakeRegistries::resolved_item_id(item)?),
+        )
+    }
+    fn max_damage(&self, item: crate::ItemKey) -> Option<u32> {
+        let id = FakeRegistries::resolved_item_id(item)?;
+        match self
+            .registries
+            .default_component(id, "minecraft:max_damage")
+        {
+            Some(Tag::Int(damage)) => u32::try_from(damage).ok(),
+            None => Some(0),
+            _ => None,
+        }
+    }
+}
+impl crate::prelude::TagsHost for FakeHost {
+    fn tags(&self) -> &dyn crate::Tags {
+        &self.registries
     }
 }
 impl crate::prelude::LevelsHost for FakeHost {
@@ -167,7 +199,7 @@ impl crate::prelude::LevelsHost for FakeHost {
 }
 crate::impl_host_areas!(
     FakeHost,
-    except(block_entities, entities, items, levels, players)
+    except(block_entities, entities, items, levels, players, tags)
 );
 
 impl ServerHost for FakeHost {
@@ -230,7 +262,9 @@ impl crate::prelude::ItemsBackend for FakeHost {
             .level
             .standing(at.level, at.pos)
             .and_then(|standing| standing.items.as_ref());
-        items.map_or(0, |items| items.capacity(slot, self.max_stack(stack)))
+        items.map_or(0, |items| {
+            items.capacity(slot, self.max_stack(&crate::ItemResource::of(stack)))
+        })
     }
     fn entity_container_size(&self, _: u32) -> Option<usize> {
         None
@@ -281,6 +315,13 @@ impl crate::prelude::EntitiesBackend for FakeHost {
         Some(self.level.entity_at(entity.id())?.level)
     }
 }
+impl crate::prelude::KeysBackend for FakeHost {
+    fn item_key_id(&self, key: crate::ItemKey) -> String {
+        crate::registry_keys::item_id(key)
+            .expect("fake item key belongs to its load")
+            .to_owned()
+    }
+}
 impl crate::prelude::PlayersBackend for FakeHost {
     fn player_selected_slot(&self, player: PlayerRef) -> Option<usize> {
         Some(self.players.get(player.uuid())?.selected_slot)
@@ -296,6 +337,7 @@ crate::impl_backend_areas!(
         entities,
         fluids_energy,
         items,
+        keys,
         levels,
         players
     )
@@ -307,15 +349,20 @@ impl crate::prelude::ItemsBackendMut for FakeHost {
         &mut self,
         at: BlockSide,
         slot: usize,
-        stack: ItemStack,
+        resource: &crate::ItemResource,
+        amount: u32,
         _: &Transaction,
-    ) -> Option<ItemStack> {
-        let max_stack = self.max_stack(&stack);
-        let standing = self.level.standing_mut(at.level, at.pos);
-        match standing.and_then(|standing| standing.items.as_mut()) {
-            Some(items) => items.insert(slot, stack, max_stack),
-            None => Some(stack),
+    ) -> Result<Option<ItemStack>, crate::StackWriteError> {
+        let max_stack = self.max_stack(resource);
+        if max_stack == 0 {
+            return Err(crate::StackWriteError::InvalidMaximum);
         }
+        let standing = self.level.standing_mut(at.level, at.pos);
+        let put = match standing.and_then(|standing| standing.items.as_mut()) {
+            Some(items) => items.insert(slot, resource, amount, max_stack),
+            None => 0,
+        };
+        Ok(resource.to_stack(amount - put))
     }
     fn container_extract(
         &mut self,
@@ -331,17 +378,33 @@ impl crate::prelude::ItemsBackendMut for FakeHost {
         let (player, slot) = self.players.place(place)?;
         player.slots.get(&slot).cloned()
     }
-    fn game_insert(&mut self, place: &ItemPlace, stack: ItemStack, _: &Transaction) -> u32 {
-        let max_stack = self.max_stack(&stack);
-        match self.players.place(place) {
-            Some((player, slot)) if stack.count > 0 => player.insert(slot, stack, max_stack),
-            _ => 0,
+    fn game_insert(
+        &mut self,
+        place: &ItemPlace,
+        resource: &crate::ItemResource,
+        amount: u32,
+        _: &Transaction,
+    ) -> Result<u32, crate::StackWriteError> {
+        let max_stack = self.max_stack(resource);
+        if max_stack == 0 {
+            return Err(crate::StackWriteError::InvalidMaximum);
         }
+        Ok(match self.players.place(place) {
+            Some((player, slot)) => player.insert(slot, resource, amount, max_stack),
+            _ => 0,
+        })
     }
-    fn game_extract(&mut self, place: &ItemPlace, stack: ItemStack, _: &Transaction) -> u32 {
-        self.players
+    fn game_extract(
+        &mut self,
+        place: &ItemPlace,
+        resource: &crate::ItemResource,
+        amount: u32,
+        _: &Transaction,
+    ) -> Result<u32, crate::StackWriteError> {
+        Ok(self
+            .players
             .place(place)
-            .map_or(0, |(player, slot)| player.extract(slot, &stack))
+            .map_or(0, |(player, slot)| player.extract(slot, resource, amount)))
     }
 }
 impl crate::prelude::FluidsEnergyBackendMut for FakeHost {
@@ -405,6 +468,7 @@ impl crate::prelude::PlayersClientBackend for FakeHost {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::ItemsHost;
     use crate::{FLUIDS, FluidResource, Hand, HostTransaction, ItemResource, move_resources};
 
     fn water(amount: u32) -> FluidStack {
@@ -466,12 +530,9 @@ mod tests {
             player: 7,
             hand: Hand::Main,
         };
-        let eggs = ItemResource::of(&ItemStack {
-            item: "minecraft:egg".into(),
-            count: 1,
-            damage: 0,
-            extra: None,
-        });
+        let egg = crate::Identifier::parse("minecraft:egg").unwrap();
+        host.registries.resolve_items([egg.clone()]).unwrap();
+        let eggs = ItemResource::of(&ItemStack::of(host.item_key(&egg).unwrap()));
         let server: &mut dyn ServerHost = &mut host;
         let aborted = server.transaction(|host, tx| Err::<(), _>(hand.insert(host, tx, &eggs, 20)));
         assert_eq!(aborted, Err(20));
@@ -480,9 +541,9 @@ mod tests {
         let went = server.transaction(|host, tx| Ok::<_, ()>(hand.insert(host, tx, &eggs, 20)));
         assert_eq!(went, Ok(20));
         let player = host.players.get(7).unwrap();
-        assert_eq!(player.main_hand().map(|held| held.count), Some(16));
+        assert_eq!(player.main_hand().map(ItemStack::count), Some(16));
         assert_eq!(player.slots.keys().collect::<Vec<_>>(), [&2]);
-        let given: Vec<u32> = player.given.iter().map(|stack| stack.count).collect();
+        let given: Vec<u32> = player.given.iter().map(ItemStack::count).collect();
         assert_eq!(given, [4]);
     }
 }

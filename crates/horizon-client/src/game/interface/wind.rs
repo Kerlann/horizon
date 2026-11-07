@@ -540,6 +540,8 @@ impl Game<'_> {
                 let swap = self.world.random.next_int_bound(i as i32).unwrap_or(0) as usize;
                 targets.swap(i - 1, swap);
             }
+            let dimension = self.dim.id();
+            self.native_wind_burst(dimension, center, &mut targets);
             for pos in targets {
                 self.wind_trigger_block(pos)?;
             }
@@ -667,7 +669,7 @@ impl Game<'_> {
         at: glam::Vec3,
         light: u32,
         partial: f32,
-        out: &mut Vec<mod_api::render::Vertex>,
+        out: &mut Vec<mod_render::render::Vertex>,
     ) {
         let Some(model) = self.entity_models.wind_charge.as_ref() else {
             return;

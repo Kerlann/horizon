@@ -76,6 +76,8 @@ getrandom = "0.3"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 # Screenshots read a row at a time and shrunk as they come (`pictures`): the version `image` uses.
 png = "0.18"
+cap-std = "3"
+cap-fs-ext = "3"
 
 # Native builds at low priority (rust_toolchain::low_priority); already in the lockfile.
 [target.'cfg(unix)'.dependencies]
@@ -112,6 +114,7 @@ winreg = "0.56"
 winresource = "0.1"
 
 [dev-dependencies]
+tempfile = "3"
 # Tokenize source strings for the translation completeness test, including multiline calls.
 syn = "2"
 

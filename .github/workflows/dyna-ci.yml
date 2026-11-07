@@ -486,6 +486,7 @@ jobs:
           cargo +stable fmt --check
           cargo +stable clippy $JOBS --all-targets --locked -- -D warnings
           cargo +stable test $JOBS --locked --lib --bins
+          cargo +stable test $JOBS --locked --test storage
   # The fork's Dyna runners have the owner's prepared vanilla data in a read-only cache.
   prepared-output-check:
     if: github.event_name == 'workflow_dispatch' && inputs.prepare-output-check && github.repository == 'arismoko/horizon'

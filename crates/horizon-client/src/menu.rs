@@ -17,10 +17,11 @@ use crate::{
 #[cfg(test)]
 use horizon_world::native_load_context::{DataLoadOrigin, LoadContext, LoadInputs};
 use horizon_world::native_load_context::{LoopContext, LoopSide};
-use mod_api::__private::game::IngredientTest;
-pub use mod_api::menu::{
+pub use mod_api::menu::{LogicalSide, MenuButtonContext};
+mod models;
+pub use models::{
     AnvilCraft, AnvilUpdate, AnvilVanilla, CarriedAccess, GrindstonePlace, GrindstoneTake,
-    LogicalSide, MenuButtonContext, SlotView, StackedOnOther,
+    SlotView, StackedOnOther,
 };
 use std::sync::Arc;
 
@@ -81,6 +82,7 @@ impl KnownRecipes for &[&str] {
 }
 
 /// What a menu needs to know about items and recipes.
+#[derive(Clone, Copy)]
 pub struct Env<'a> {
     /// UUID of the player operating this menu, when a player is available.
     pub player: Option<u128>,
@@ -113,6 +115,8 @@ pub struct Env<'a> {
 
 /// The maps of the level a menu is in.
 pub trait Maps {
+    /// Stage derived maps and id reservations with a menu edit.
+    fn with_staged(&self, edit: &mut dyn FnMut(&dyn Maps) -> bool) -> bool;
     /// `MapItem.getSavedData`: whether map `id` is locked, and its scale;
     /// None when the level has no such map.
     fn state(&self, id: i32) -> Option<(bool, u8)>;
@@ -313,6 +317,41 @@ struct MenuSlotView<'a, 'e> {
 }
 
 impl SlotView for MenuSlotView<'_, '_> {
+    fn with_staged(&mut self, edit: &mut dyn FnMut(&mut dyn SlotView) -> bool) -> bool {
+        let mut menu = self.menu.clone();
+        let mut run = |maps: Option<&dyn Maps>, maker: Option<&dyn crate::merchant::MapMaker>| {
+            let trade = self.env.trade.map(|trade| crate::merchant::TradeEnv {
+                maps: maker,
+                ..*trade
+            });
+            let env = Env {
+                maps,
+                trade: trade.as_ref(),
+                ..*self.env
+            };
+            edit(&mut MenuSlotView {
+                menu: &mut menu,
+                env: &env,
+                slot: self.slot,
+            })
+        };
+        let mut with_maps = |maker: Option<&dyn crate::merchant::MapMaker>| match self.env.maps {
+            Some(maps) => maps.with_staged(&mut |maps| run(Some(maps), maker)),
+            None => run(None, maker),
+        };
+        let accepted = match self.env.trade.and_then(|trade| trade.maps) {
+            Some(maker) => maker.with_staged(&mut |maker| with_maps(Some(maker))),
+            None => with_maps(None),
+        };
+        if accepted {
+            *self.menu = menu;
+        }
+        accepted
+    }
+    fn items(&self) -> &crate::items::Items {
+        self.env.items
+    }
+
     fn item(&self) -> Option<ItemStack> {
         self.menu.slot(self.slot).cloned()
     }
@@ -385,6 +424,7 @@ const RESULT: usize = 3;
 const CONTAINER_MAX: u32 = 99;
 const OFFHAND: usize = 40;
 
+#[derive(Clone)]
 pub struct Menu {
     kind: Kind,
     registry_id: Option<Box<str>>,
@@ -3778,7 +3818,6 @@ pub(crate) mod tests {
     use super::*;
     use crate::{banner::Banners, brewing::Brewing, crafting::Recipes};
     use horizon_world::loot::PackOverlay;
-    use mod_api::testing::FakeHost;
 
     fn stack(item: &str, count: u32) -> Option<ItemStack> {
         Some(ItemStack {
@@ -3846,6 +3885,52 @@ pub(crate) mod tests {
         let mut menu = Menu::new(kind);
         menu.creative = true;
         test(&env, &mut menu);
+    }
+
+    #[test]
+    #[ignore = "requires prepared resources"]
+    fn staged_slot_refusal_restores_contents_and_on_take_side_effects() {
+        let mut ran = false;
+        with_menu(Kind::Brewing, |env, menu| {
+            ran = true;
+            let potion = ItemStack::new("minecraft:potion", 1);
+            for take in [false, true] {
+                for accepted in [false, true] {
+                    *menu = Menu::new(Kind::Brewing);
+                    menu.brewed_potion_hook = true;
+                    if take {
+                        menu.set_slot(env, 0, Some(potion.clone()));
+                    }
+                    let committed = MenuSlotView { menu, env, slot: 0 }.with_staged(&mut |slot| {
+                        if take {
+                            assert_eq!(slot.safe_take(1, 1), Some(potion.clone()));
+                        } else {
+                            assert!(slot.safe_insert(Some(potion.clone()), 1).is_none());
+                        }
+                        accepted
+                    });
+                    assert_eq!(committed, accepted);
+                    assert_eq!(menu.slot(0), (take != accepted).then_some(&potion));
+                    assert_eq!(
+                        menu.brewed_potion_takes.as_slice(),
+                        if take && accepted {
+                            std::slice::from_ref(&potion)
+                        } else {
+                            &[]
+                        }
+                    );
+                    assert_eq!(
+                        menu.brewed.as_slice(),
+                        if take && accepted {
+                            std::slice::from_ref(&potion)
+                        } else {
+                            &[]
+                        }
+                    );
+                }
+            }
+        });
+        assert!(ran, "prepared menu fixture was not loaded");
     }
 
     #[test]
@@ -5543,26 +5628,11 @@ pub(crate) mod tests {
         );
     }
 
-    /// Records what `player_brewed_potion` told it.
-    struct BrewWatcher(std::sync::Arc<std::sync::Mutex<Vec<(u128, i32, ItemStack)>>>);
-
-    #[mod_api::__subscriptions]
-    impl mod_api::Hooks for BrewWatcher {
-        fn player_brewed_potion(
-            &self,
-            _host: &mut dyn mod_api::ServerHost,
-            event: &mut mod_api::PlayerBrewedPotionEvent<'_>,
-        ) {
-            let seen = (event.player, event.player_entity_id, event.stack.clone());
-            self.0.lock().unwrap().push(seen);
-        }
-    }
-
     /// `BrewingStandMenu.PotionSlot.onTake`: a pickup and a shift-click on a
-    /// bottle slot each tell a listening mod once, with the taken stack and
-    /// the player's UUID and entity id; with no listener nothing is kept.
+    /// bottle slot each queue the taken stack once for the game's hook adapter;
+    /// with no listener nothing is kept.
     #[test]
-    fn a_bottle_slot_take_tells_the_listener_once_with_the_player() {
+    fn a_bottle_slot_take_records_once_when_a_hook_listens() {
         let root = std::env::temp_dir().join(format!("horizon-brewed-{}", std::process::id()));
         std::fs::create_dir_all(root.join("data/minecraft/recipe")).unwrap();
         let items = horizon_items::items::Items::for_tests(Default::default());
@@ -5595,36 +5665,28 @@ pub(crate) mod tests {
             known_recipes: None,
         };
         let potion = ItemStack::new("minecraft:potion", 1);
-        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let mods: Vec<mod_api::ModEntry> = vec![mod_api::ModEntry::new(
-            "brew-watcher",
-            Box::new(BrewWatcher(seen.clone())),
-        )];
-        let mut host = FakeHost::new();
-        mod_api::testing::with_mods(mods.into(), || {
-            for input in [Input::Pickup, Input::QuickMove] {
-                let mut menu = Menu::new(Kind::Brewing);
-                menu.set_slot(env, 0, Some(potion.clone()));
-                menu.click(env, 0, 0, input).unwrap();
-                // Without a listener the take is only the advancement's.
-                assert!(menu.brewed_potion_takes.is_empty(), "{input:?}");
-                assert_eq!(menu.brewed, std::slice::from_ref(&potion), "{input:?}");
+        let mut seen = Vec::new();
+        for input in [Input::Pickup, Input::QuickMove] {
+            let mut menu = Menu::new(Kind::Brewing);
+            menu.set_slot(env, 0, Some(potion.clone()));
+            menu.click(env, 0, 0, input).unwrap();
+            // Without a listener the take is only the advancement's.
+            assert!(menu.brewed_potion_takes.is_empty(), "{input:?}");
+            assert_eq!(menu.brewed, std::slice::from_ref(&potion), "{input:?}");
 
-                let mut menu = Menu::new(Kind::Brewing);
-                menu.brewed_potion_hook = true;
-                menu.set_slot(env, 0, Some(potion.clone()));
-                menu.click(env, 0, 0, input).unwrap();
-                assert_eq!(
-                    menu.brewed_potion_takes,
-                    std::slice::from_ref(&potion),
-                    "{input:?}"
-                );
-                for stack in &menu.brewed_potion_takes {
-                    mod_api::dispatch_player_brewed_potion(&mut host, 7, 41, stack);
-                }
+            let mut menu = Menu::new(Kind::Brewing);
+            menu.brewed_potion_hook = true;
+            menu.set_slot(env, 0, Some(potion.clone()));
+            menu.click(env, 0, 0, input).unwrap();
+            assert_eq!(
+                menu.brewed_potion_takes,
+                std::slice::from_ref(&potion),
+                "{input:?}"
+            );
+            for stack in &menu.brewed_potion_takes {
+                seen.push(stack.clone());
             }
-        });
-        let told = (7, 41, potion);
-        assert_eq!(*seen.lock().unwrap(), [told.clone(), told]);
+        }
+        assert_eq!(seen, [potion.clone(), potion]);
     }
 }

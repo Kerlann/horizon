@@ -148,8 +148,8 @@ impl FakeContainer {
         self.slots
             .iter()
             .flatten()
-            .filter(|held| &*held.item == item)
-            .map(|held| held.count)
+            .filter(|held| crate::registry_keys::item_id(held.item()) == Some(item))
+            .map(ItemStack::count)
             .sum()
     }
 
@@ -161,48 +161,36 @@ impl FakeContainer {
             0
         }
     }
-    /// Puts what of `stack` fits into slot `slot`; the rest.
+    /// Puts up to `amount` of `resource` into slot `slot`; how much fit.
     pub(super) fn insert(
         &mut self,
         slot: usize,
-        stack: ItemStack,
+        resource: &crate::ItemResource,
+        amount: u32,
         max_stack: u32,
-    ) -> Option<ItemStack> {
+    ) -> u32 {
         let capacity = self.capacity(slot, max_stack);
         let Some(held) = self.slots.get_mut(slot) else {
-            return Some(stack);
+            return 0;
         };
         let room = match held {
-            Some(held) if !held.same_item_same_components(&stack) => 0,
-            Some(held) => capacity.saturating_sub(held.count),
+            Some(held) if !resource.matches(held) => 0,
+            Some(held) => capacity.saturating_sub(held.count()),
             None => capacity,
         };
-        let put = room.min(stack.count);
+        let put = room.min(amount);
         if put > 0 {
-            let count = held.as_ref().map_or(0, |held| held.count) + put;
-            *held = Some(ItemStack {
-                count,
-                ..stack.clone()
-            });
+            let count = held.as_ref().map_or(0, ItemStack::count) + put;
+            *held = resource.to_stack(count);
         }
-        (put < stack.count).then(|| ItemStack {
-            count: stack.count - put,
-            ..stack
-        })
+        put
     }
     /// Takes up to `max` out of slot `slot`; what came out.
     pub(super) fn extract(&mut self, slot: usize, max: u32) -> Option<ItemStack> {
         let held = self.slots.get_mut(slot)?;
-        let stack = held.as_mut().filter(|_| max > 0)?;
-        let out = ItemStack {
-            count: max.min(stack.count),
-            ..stack.clone()
-        };
-        stack.count -= out.count;
-        if stack.count == 0 {
-            *held = None;
-        }
-        Some(out)
+        let split = held.take()?.split(max);
+        *held = split.remainder;
+        split.taken
     }
 }
 

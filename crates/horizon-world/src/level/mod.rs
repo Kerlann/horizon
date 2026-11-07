@@ -87,16 +87,18 @@
 //! behaviours.falling_block_landed(&mut level, &mut ticks, landing_pos, carried_state, false);
 //! ```
 use crate::{
+    dimension_type::DimensionFacts,
     fluid::{FluidBlockBindings, FluidKind, FluidState},
     registry::{BlockRegistry, BlockStateId},
 };
 use horizon_core::{
-    connection_kind::ConnectionKind, dimension::Dimension, neighbour_update::NeighbourUpdate,
-};
-use horizon_core::{
+    LevelKey,
     geometry::{Aabb, Direction, VoxelShape},
     position::{BlockPos, ChunkPos},
     random::LegacyRandom,
+};
+use horizon_core::{
+    connection_kind::ConnectionKind, dimension::Dimension, neighbour_update::NeighbourUpdate,
 };
 use std::{collections::HashMap, io, path::Path, sync::Arc, sync::RwLock};
 
@@ -187,6 +189,15 @@ pub mod flags {
     pub const UPDATE_SKIP_ALL_SIDEEFFECTS: i32 = 816;
     /// `Block.UPDATE_LIMIT`, the recursion budget of shape updates.
     pub const UPDATE_LIMIT: i32 = 512;
+}
+
+/// The sea level of a built-in level (a custom level gets the Overworld's).
+pub fn vanilla_sea_level(level: LevelKey) -> i32 {
+    match level {
+        LevelKey::NETHER => 32,
+        LevelKey::END => 0,
+        _ => 63,
+    }
 }
 
 /// Game rules consulted by block behaviour (vanilla defaults).
@@ -711,6 +722,14 @@ pub trait LevelAccess {
     }
     fn dimension(&self) -> Dimension {
         Dimension::Overworld
+    }
+    /// The level's key.
+    fn level_key(&self) -> LevelKey {
+        self.dimension().key()
+    }
+    /// The level's dimension type.
+    fn dimension_type(&self) -> &DimensionFacts {
+        DimensionFacts::of_builtin_level(self.level_key())
     }
     fn game_rules(&self) -> GameRules {
         GameRules::default()
@@ -1376,7 +1395,7 @@ impl Behaviours {
         ticks: &mut Ticks,
         pos: BlockPos,
     ) {
-        if level.dimension() == Dimension::Nether || level.game_time() % 20 != 0 {
+        if !level.dimension_type().height.has_skylight || level.game_time() % 20 != 0 {
             return;
         }
         let mut sim = self.sim(level, ticks);
@@ -1533,5 +1552,26 @@ impl Behaviours {
             ticks,
             wire_signal_off: std::cell::Cell::new(false),
         }
+    }
+}
+
+#[cfg(test)]
+mod dimension_key_tests {
+    use super::*;
+
+    #[test]
+    fn dimension_and_key_round_trip_and_sea_levels() {
+        for (dim, key, sea) in [
+            (Dimension::Overworld, LevelKey::OVERWORLD, 63),
+            (Dimension::Nether, LevelKey::NETHER, 32),
+            (Dimension::End, LevelKey::END, 0),
+        ] {
+            assert_eq!(dim.key(), key);
+            assert_eq!(Dimension::of_level(key), dim);
+            assert_eq!(vanilla_sea_level(key), sea);
+        }
+        let custom = LevelKey::parse("example:sky").unwrap();
+        assert_eq!(Dimension::of_level(custom), Dimension::Overworld);
+        assert_eq!(vanilla_sea_level(custom), 63);
     }
 }

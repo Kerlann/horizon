@@ -3,6 +3,7 @@
 //! breeding, conversions, drops), projectiles, player interactions
 //! (feeding, shearing, milking, spawn eggs, throwing) and rendering.
 mod pufferfish_player;
+use super::api_values::{TryIntoApi, TryIntoEngine};
 
 use super::level_sounds::LevelSound;
 use super::{
@@ -36,7 +37,7 @@ use horizon_core::{
     position::BlockPos,
     random::RandomSource,
 };
-use mod_api::{EquipmentSlot, NativeItemDrop, NativeLootDrops, SoundSource};
+use mod_api::{EquipmentSlot, NativeLootDrops, SoundSource};
 use std::sync::Arc;
 
 /// `AbstractArrow.onHitEntity` when `hurtOrSimulate` returned false.
@@ -686,7 +687,9 @@ impl Game<'_> {
         }
         // ArmorHurtEvent for a mob's body armor.
         let mut amount = amount;
-        if mod_api::__private::listened(mod_api::HookId::ArmorHurt) {
+        if mod_api::__private::listened(mod_api::HookId::ArmorHurt)
+            && let Ok(body_snapshot) = body.try_into_api()
+        {
             let kind = self
                 .mobs
                 .iter()
@@ -695,7 +698,7 @@ impl Game<'_> {
                 .unwrap_or_default();
             let mut entries = vec![mod_api::NativeArmorHurt {
                 slot: EquipmentSlot::Body,
-                stack: body.clone(),
+                stack: body_snapshot,
                 damage: super::durability_damage(damage),
                 new_damage: super::durability_damage(damage),
             }];
@@ -1180,6 +1183,9 @@ impl Game<'_> {
     }
     /// Advance every mob one tick, then apply their events.
     pub(super) fn tick_creatures(&mut self) -> Result<()> {
+        // Hurts dealt since the last creature tick (explosions, commands, the
+        // systems after it) teleport an enderman before it ticks, not in its AI step.
+        self.settle_hurt_teleports()?;
         self.attack_ticks = self.attack_ticks.saturating_add(1);
         self.refresh_gear_knockback_resistance();
         self.tick_leads();
@@ -1642,6 +1648,8 @@ impl Game<'_> {
             queued.append(&mut m.outbox);
         }
         self.handle_mob_events(queued)?;
+        // The enderman teleports those hurts asked for (`Enderman.hurtServer`).
+        self.settle_hurt_teleports()?;
         laps.lap("creature_outbox");
         Ok(())
     }
@@ -2085,6 +2093,9 @@ impl Game<'_> {
                     _ => return choice.chance,
                 };
                 let mut chance = choice.chance;
+                let Ok(stack) = stack.try_into_api() else {
+                    return chance;
+                };
                 self.native_get_equipment_drop_chance(
                     mod_api::__private::GetEquipmentDropChanceCall {
                         entity: id,
@@ -2202,22 +2213,35 @@ impl Game<'_> {
         };
         // Vanilla builds each item entity (and draws its motion) when it
         // collects the drop, before the event sees the list.
-        let mut drops: Vec<NativeItemDrop> = stacks
+        let mut drops: Vec<super::spill::BlockItemDrop> = stacks
             .into_iter()
-            .map(|(stack, position)| {
-                NativeItemDrop::new(stack, position, velocity(self), pickup_delay)
+            .map(|(stack, position)| super::spill::BlockItemDrop {
+                stack,
+                position,
+                velocity: velocity(self),
+                pickup_delay,
             })
+            .filter(|drop| drop.stack.count > 0 && &*drop.stack.item != "minecraft:air")
             .collect();
         let mut cancel = false;
-        self.native_living_drops(mod_api::__private::LivingDropsCall {
-            entity: dying.entity,
-            kind: dying.kind,
-            player: dying.player,
-            source,
-            recently_hit: dying.recently_hit,
-            drops: &mut drops,
-            cancel: &mut cancel,
-        });
+        if mod_api::__private::listened(mod_api::HookId::LivingDrops)
+            && let Ok(mut snapshots) = drops.try_into_api()
+        {
+            self.native_living_drops(mod_api::__private::LivingDropsCall {
+                entity: dying.entity,
+                kind: dying.kind,
+                player: dying.player,
+                source,
+                recently_hit: dying.recently_hit,
+                drops: &mut snapshots,
+                cancel: &mut cancel,
+            });
+            if let Ok(next) = snapshots.try_into_engine(self.items()) {
+                drops = next;
+            } else {
+                cancel = false;
+            }
+        }
         if cancel {
             return;
         }
@@ -2633,7 +2657,8 @@ impl Game<'_> {
                 // A mob's own `gameEvent(..)` calls: Armadillo.rollUp/rollOut's
                 // ENTITY_ACTION, Creeper.tick's PRIME_FUSE, Mob.ate's EAT, the
                 // shulker's lid (Shulker.setRawPeekAmount), an evoker's vexes
-                // (ENTITY_PLACE), Enderman.teleport's TELEPORT where it was.
+                // (ENTITY_PLACE), Enderman.teleport's TELEPORT,
+                // LivingEntity.onEquipItem's EQUIP/UNEQUIP.
                 MobEvent::GameEvent {
                     event, at, source, ..
                 } if matches!(
@@ -2645,6 +2670,8 @@ impl Game<'_> {
                         | "minecraft:container_close"
                         | "minecraft:entity_place"
                         | "minecraft:teleport"
+                        | "minecraft:equip"
+                        | "minecraft:unequip"
                 ) =>
                 {
                     let ctx = self.who_context(Some(Who::Mob(source)), None);
@@ -5973,6 +6000,7 @@ impl Game<'_> {
                         pl.position = to;
                         pl.velocity = Vec3::ZERO;
                         pl.fall_distance = 0.0;
+                        pl.impulse.reset();
                         pl.teleported = true;
                         pl.teleported_delta = [false; 3];
                     }
@@ -6600,6 +6628,7 @@ impl Game<'_> {
         let center = m.center();
         // Wolf armor the owner takes off with shears or leaves a dropped stack of.
         let mut armor_drop: Option<ItemStack> = None;
+        let mut equip_event: Option<bool> = None;
         let mut consume = false;
         let mut give: Option<&str> = None;
         let mut sound: Option<&str> = None;
@@ -6714,6 +6743,7 @@ impl Game<'_> {
                 armor_drop = m.equipment_stacks()[6].clone();
                 m.extra.set_body_stack(None);
                 eat = Some(("item.armor.unequip_wolf", 1.0, 1.0));
+                equip_event = Some(false);
                 self.damage_held_tool();
             }
             // Wolf.mobInteract: heal, dye the collar or sit/stand when tame;
@@ -6744,6 +6774,7 @@ impl Game<'_> {
                 m.extra.set_body_stack(Some(body));
                 consume = true;
                 eat = Some(("item.armor.equip_wolf", 1.0, 1.0));
+                equip_event = Some(true);
             }
             // Wolf.mobInteract: an armadillo scute repairs a sitting wolf's
             // armor by an eighth of its durability.
@@ -7216,6 +7247,11 @@ impl Game<'_> {
             let target = self.mob_entity(&self.mobs[index]);
             self.trigger_item_entity("minecraft:player_sheared_equipment", &stack, &target);
             self.spawn_item(stack, [center[0], center[1] + 0.5, center[2]], [0.0; 3], 10);
+        }
+        if let Some(equip) = equip_event {
+            let id = self.mobs[index].id;
+            let pos = self.mobs[index].position;
+            self.mob_equip_event(id, [pos.x, pos.y, pos.z], equip);
         }
         let mut drops: Vec<ItemStack> = drops
             .into_iter()
@@ -7698,6 +7734,9 @@ impl Game<'_> {
         match renderer.and_then(|r| r.skinned_models()) {
             Some(stored) => {
                 let mut models = self.skin_models.borrow_mut();
+                // Reuse helps CPU-bound crowds, but regressed TAA frame tails in
+                // windowed measurements. Keep the original arithmetic with TAA on.
+                models.set_rotation_cache_enabled(!self.settings.horizon.taa);
                 models.begin(&mut self.skin_frame.borrow_mut(), stored);
                 models.tagged = renderer.is_some_and(|r| r.skins_tagged());
             }
@@ -7760,7 +7799,7 @@ impl Game<'_> {
                 if hidden {
                     let mut skin = self.skin_frame.borrow_mut();
                     let end = skin.vertices as usize;
-                    mod_api::render::EntitySpan::hide(&mut skin.spans, mark.2 as usize, end);
+                    mod_render::render::EntitySpan::hide(&mut skin.spans, mark.2 as usize, end);
                 }
             }
             out.truncate(len - 2);
@@ -7810,7 +7849,7 @@ impl Game<'_> {
             time: self.world.game_time as f64 + alpha,
             day_time: self.world.day_time as f64 + alpha,
             dimension: match self.dim {
-                Dim::Overworld => 0.0,
+                Dim::Overworld | Dim::Extra(_) => 0.0,
                 Dim::Nether => -1.0,
                 Dim::End => 1.0,
             },
@@ -9246,6 +9285,85 @@ mod tests {
             corners.iter().copied().reduce(glam::Vec3::min).unwrap(),
             corners.iter().copied().reduce(glam::Vec3::max).unwrap(),
         )
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn ender_pearl_clears_impulse_before_next_fall() {
+        use super::{Game, Hit, Projectile, Vec3, Who};
+        use crate::game::{Audio, Options, Progress, Settings, load_resources};
+        use horizon_client::motion::{MotionWorld, PlayerMotion};
+
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            horizon_assets::resource_source::ResourceRoot::directory(root.clone()),
+            Vec::new(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            crate::game::execution_role::ExecutionRole::IntegratedServer,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&horizon_assets::resource_source::ResourceSource::directory(
+                root.clone(),
+            )),
+            None,
+        )
+        .unwrap();
+        let mut player = PlayerMotion::new(game.motion, Vec3::new(0.0, 64.0, 0.0)).unwrap();
+        player
+            .impulse
+            .set_ignore_fall_damage(true, Some(player.position));
+        player.fall_distance = 4.0;
+        game.player = Some(player);
+        let destination = Vec3::new(0.0, 80.0, 0.0);
+        let mut pearl = Projectile::new(ProjectileKind::EnderPearl, destination, Some(Who::Player));
+        pearl.previous = destination;
+        game.projectile_hit(
+            &pearl,
+            Hit::Block {
+                pos: [0, 80, 0],
+                at: destination,
+                face: [0; 3],
+            },
+        )
+        .unwrap();
+        let player = game.player.as_mut().unwrap();
+        assert_eq!(player.position, destination);
+        assert_eq!(player.fall_distance, 0.0);
+        let damaged = MotionWorld {
+            entities: &[],
+            player,
+            scene: &mut game.world,
+            assets: &game.pack.assets,
+            collision_binding: game.collision,
+            resources: game.motion,
+            health: &game.health_resources,
+            tag_items: Some(game.res.items()),
+            loop_context: &game.loop_context,
+            damage_hooks: &horizon_client::health::DamageHooks::NONE,
+            block_registries: Some(&game.ui.registries),
+        }
+        .cause_mount_fall(10.0, 1.0)
+        .unwrap();
+        assert!(
+            damaged,
+            "a ten-block fall after the teleport must cause damage"
+        );
     }
 
     #[test]
@@ -10874,7 +10992,11 @@ mod living_drops_tests {
                 let items: Vec<_> = event
                     .drops
                     .iter()
-                    .map(|d| d.stack.item.to_string())
+                    .map(|d| {
+                        mod_api::__private::item_key_id(d.stack.item())
+                            .unwrap()
+                            .to_string()
+                    })
                     .collect();
                 self.0.lock().unwrap().push(format!(
                     "{} {:?} {} {}",
@@ -10954,6 +11076,7 @@ mod living_drops_tests {
 #[cfg(test)]
 mod armor_destroy_tests {
     use super::MobEvent;
+    use horizon_client::items::ItemStack;
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
@@ -11013,12 +11136,16 @@ mod armor_destroy_tests {
         });
     }
     use crate::game::{answered_wear, durability_damage, native_entity_refs::tests::with_game};
-    use mod_api::{EquipmentSlot, ItemStack, NativeArmorHurt};
+    use mod_api::{EquipmentSlot, NativeArmorHurt};
 
     fn entry(slot: EquipmentSlot, new_damage: f32) -> NativeArmorHurt {
         NativeArmorHurt {
             slot,
-            stack: ItemStack::new("minecraft:diamond_helmet", 1),
+            stack: mod_api::ItemStack::new(
+                mod_api::__private::item_key("minecraft:diamond_helmet").unwrap(),
+                1,
+            )
+            .unwrap(),
             damage: 2.0,
             new_damage,
         }
@@ -11027,14 +11154,17 @@ mod armor_destroy_tests {
     /// A mod that clears the entries, or removes one, leaves vanilla's wear (no panic).
     #[test]
     fn a_cleared_armor_hurt_entry_keeps_vanilla_wear() {
-        assert_eq!(answered_wear(&[], EquipmentSlot::Body, 3), 3);
-        let entries = [entry(EquipmentSlot::Head, 5.0)];
-        assert_eq!(answered_wear(&entries, EquipmentSlot::Chest, 2), 2);
-        assert_eq!(answered_wear(&entries, EquipmentSlot::Head, 2), 5);
-        assert_eq!(
-            answered_wear(&[entry(EquipmentSlot::Head, -1.0)], EquipmentSlot::Head, 2),
-            0
-        );
+        mod_api::testing::with_mods(Vec::<mod_api::ModEntry>::new().into(), || {
+            mod_api::__private::resolve_items(["minecraft:diamond_helmet"]).unwrap();
+            assert_eq!(answered_wear(&[], EquipmentSlot::Body, 3), 3);
+            let entries = [entry(EquipmentSlot::Head, 5.0)];
+            assert_eq!(answered_wear(&entries, EquipmentSlot::Chest, 2), 2);
+            assert_eq!(answered_wear(&entries, EquipmentSlot::Head, 2), 5);
+            assert_eq!(
+                answered_wear(&[entry(EquipmentSlot::Head, -1.0)], EquipmentSlot::Head, 2),
+                0
+            );
+        });
     }
 
     /// `(int) Math.max(1.0F, damage / 4.0F)`.

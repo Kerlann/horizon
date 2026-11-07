@@ -7,7 +7,7 @@
 //! The prepared bundles are the built-in pack, so the packs above it are
 //! entries that replace or join a bundle's (`GeneratorData::load_with`).
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::OnceLock};
 
 /// The bundle of `dimension/<id>.json` level stems. Nothing prepared has
 /// it: a pack's level stem stands in for the world preset's.
@@ -51,6 +51,55 @@ pub const PACK_KINDS: [&str; 5] = [
     "tags",
     "worldgen",
 ];
+
+/// Whether `namespace` is a resource location namespace (`[a-z0-9_.-]`) that is also one safe
+/// folder name: not empty, not `.` or `..`.
+pub fn valid_level_namespace(namespace: &str) -> bool {
+    !matches!(namespace, "" | "." | "..")
+        && namespace
+            .bytes()
+            .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'-'))
+}
+
+/// Whether `path` is a resource location path (`[a-z0-9_.-/]`) a level can be stored under:
+/// every `/`-separated segment is a safe folder name, so no empty segment (a leading, trailing
+/// or doubled `/`) and no `.` or `..`.
+pub fn valid_level_path(path: &str) -> bool {
+    !path.is_empty() && path.split('/').all(valid_level_namespace)
+}
+
+/// Whether `id` (`namespace:path`) names a level whose folder stays inside the world's
+/// `dimensions` folder. Vanilla keeps a level's folder under it through
+/// `Identifier.resolveAgainst`.
+pub fn valid_level_id(id: &str) -> bool {
+    id.split_once(':')
+        .is_some_and(|(namespace, path)| valid_level_namespace(namespace) && valid_level_path(path))
+}
+
+/// A level a mod registered at startup: a level stem and a dimension type
+/// that sit below every data pack, which can replace either.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModDimension {
+    pub id: String,
+    /// The level stem's JSON text.
+    pub stem: String,
+    /// The fields of its dimension type the mod sets, as JSON text: the rest
+    /// are the overworld's.
+    pub dimension_type: String,
+}
+
+static MOD_DIMENSIONS: OnceLock<Vec<ModDimension>> = OnceLock::new();
+
+/// Hands the mods' levels to the engine, once at startup, before any world
+/// opens. The first table stays.
+pub fn install_mod_dimensions(dimensions: Vec<ModDimension>) -> Result<(), Vec<ModDimension>> {
+    MOD_DIMENSIONS.set(dimensions)
+}
+
+/// The levels the mods registered; empty before they are installed.
+pub fn mod_dimensions() -> &'static [ModDimension] {
+    MOD_DIMENSIONS.get().map_or(&[], Vec::as_slice)
+}
 
 /// `ns:path` for a pack file `data/<ns>/<kind>/<path>.json`.
 fn resource_id(file: &str, kind: &str) -> Option<String> {
@@ -123,7 +172,7 @@ impl LevelHeight {
             && height % 16 == 0
             && height >= 16
             && min_y >= -2032
-            && min_y + height <= 2032
+            && i64::from(min_y) + i64::from(height) <= 2032
             && (0..=height).contains(&logical_height);
         valid.then_some(Self {
             min_y,
@@ -181,6 +230,15 @@ impl WorldgenOverrides {
             .entry(bundle.to_owned())
             .or_default()
             .insert(id.to_owned(), json);
+    }
+    /// A mod's level: called before any pack's file, so a pack's replaces it.
+    pub fn add_mod_dimension(&mut self, dimension: &ModDimension) {
+        self.set(DIMENSIONS, &dimension.id, dimension.stem.clone());
+        self.set(
+            DIMENSION_TYPES,
+            &dimension.id,
+            dimension.dimension_type.clone(),
+        );
     }
     /// A pack's tag file for the tag `id` in the tag bundle `bundle`, in
     /// pack order.
@@ -344,6 +402,42 @@ impl WorldgenOverrides {
 
 #[cfg(test)]
 mod tests {
+
+    /// A level's id is a folder under the world: nothing may climb out of it or name nothing.
+    #[test]
+    fn level_ids_must_be_safe_folder_names() {
+        for id in [
+            "test:pocket",
+            "test:a/b",
+            "test:deep/pocket-1.x",
+            "my_mod.2:a_b/c-d",
+        ] {
+            assert!(valid_level_id(id), "{id}");
+        }
+        for id in [
+            "test:../minecraft/overworld",
+            "test:a/../../b",
+            "test:a/../b",
+            "test:/abs",
+            "test:trailing/",
+            "test:a//b",
+            "test:.",
+            "test:..",
+            "test:./a",
+            "test:",
+            ":pocket",
+            "..:pocket",
+            ".:pocket",
+            "pocket",
+            "test:Pocket",
+            "test:my pocket",
+            "test:a\\b",
+            "te st:pocket",
+            "test:a:b",
+        ] {
+            assert!(!valid_level_id(id), "{id}");
+        }
+    }
     use super::*;
     #[test]
     fn a_template_id_comes_from_a_structure_nbt_file_only() {

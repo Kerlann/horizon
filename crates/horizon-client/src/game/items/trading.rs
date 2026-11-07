@@ -52,6 +52,7 @@ pub(super) fn inventory_slot(i: usize) -> (f32, f32) {
 /// `ExplorationMapFunction` in the game world: the nearest structure of the
 /// tag through the generator's `/locate`, a new map centred on it with its
 /// target decoration.
+#[derive(Clone)]
 pub(super) struct GameMaps<'a> {
     pub(super) terrain: Option<std::sync::Arc<horizon_client::vanillagen::VanillaTerrain>>,
     /// Structure tag -> its structures.
@@ -61,6 +62,15 @@ pub(super) struct GameMaps<'a> {
     pub(super) next_id: std::cell::Cell<i32>,
 }
 impl merchant::MapMaker for GameMaps<'_> {
+    fn with_staged(&self, edit: &mut dyn FnMut(&dyn merchant::MapMaker) -> bool) -> bool {
+        let staged = self.clone();
+        if !edit(&staged) {
+            return false;
+        }
+        self.next_id.set(staged.next_id.get());
+        self.made.replace(staged.made.into_inner());
+        true
+    }
     fn exploration_map(
         &self,
         stack: ItemStack,

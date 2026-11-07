@@ -91,7 +91,7 @@ type Pending = (String, PathBuf, PathBuf, Vec<String>);
 /// declarations (and `#[path]`s, and inline modules that declare files). With `every_build`, a
 /// module behind a `cfg` is left out with everything under it (the points: functions every build
 /// compiles); without, it is kept with its conditions (the internals, listed with the builds they
-/// exist in). Test-only modules are always left out.
+/// exist in). Test-only modules are always left out, including files gated by inner attributes.
 pub(crate) fn module_files(
     module: String,
     path: PathBuf,
@@ -103,6 +103,13 @@ pub(crate) fn module_files(
     while let Some((module, path, dir, cfg)) = pending.pop() {
         let source = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let file = crate::game_modules::parse(&path, &source)?;
+        if test_only(&file.attrs) || (every_build && gated(&file.attrs)) {
+            continue;
+        }
+        let cfg = cfg
+            .into_iter()
+            .chain(conditions(&file.attrs))
+            .collect::<Vec<_>>();
         let here = path
             .parent()
             .expect("a source file has a folder")

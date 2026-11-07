@@ -34,6 +34,7 @@ pub(super) const IMPORTS: &[&str] = &[
     "Players",
     "ClientSession",
     "RenderAssets",
+    "Tags",
     "menu::SlotView",
     "Registrar",
     "CapabilityProviders",
@@ -62,6 +63,11 @@ pub(super) const REACHED: &[(&str, &str, &str)] = &[
     ("Players", "server_host", "Ok(h.players())"),
     ("ClientSession", "client_host", "Ok(h.client_session())"),
     ("RenderAssets", "client_host", "Ok(h.render_assets())"),
+    (
+        "Tags",
+        "",
+        "level_host().map(|h| h.tags()).or_else(|_| host().map(|h| h.tags()))",
+    ),
     // A level hook's host first: inside a level write it is the one the call hands over.
     (
         "AttachmentStore",
@@ -839,7 +845,6 @@ mod tests {
                     ("mod_api_generated.rs", generated.hooks.as_str()),
                     ("mod_api_generated_host.rs", generated.host.as_str()),
                     ("mod_api_host_areas.rs", generated.areas.as_str()),
-                    ("native_render_generated.rs", generated.render.as_str()),
                 ];
                 let wasm = super::generate(&root, &included).unwrap();
                 let mut resolve = wit_parser::Resolve::default();
@@ -864,7 +869,6 @@ mod tests {
                     ("mod_api_generated.rs", generated.hooks.as_str()),
                     ("mod_api_generated_host.rs", generated.host.as_str()),
                     ("mod_api_host_areas.rs", generated.areas.as_str()),
-                    ("native_render_generated.rs", generated.render.as_str()),
                 ];
                 let wasm = super::generate(&root, &included).unwrap();
                 assert!(
@@ -915,7 +919,6 @@ mod tests {
                 ("mod_api_generated.rs", generated.hooks.as_str()),
                 ("mod_api_generated_host.rs", generated.host.as_str()),
                 ("mod_api_host_areas.rs", generated.areas.as_str()),
-                ("native_render_generated.rs", generated.render.as_str()),
             ];
             let wasm = super::generate(&root, &included).unwrap();
             assert!(types.types.contains_key("world-line"));
@@ -992,7 +995,6 @@ mod tests {
                     ("mod_api_generated.rs", generated.hooks.as_str()),
                     ("mod_api_generated_host.rs", generated.host.as_str()),
                     ("mod_api_host_areas.rs", generated.areas.as_str()),
-                    ("native_render_generated.rs", generated.render.as_str()),
                 ];
                 let wasm = super::generate(&root, &included).unwrap();
                 let mut resolve = wit_parser::Resolve::default();
@@ -1046,7 +1048,6 @@ mod tests {
                     ("mod_api_generated.rs", generated.hooks.as_str()),
                     ("mod_api_generated_host.rs", generated.host.as_str()),
                     ("mod_api_host_areas.rs", generated.areas.as_str()),
-                    ("native_render_generated.rs", generated.render.as_str()),
                 ];
                 let wasm = super::generate(&root, &included).unwrap();
                 let mut resolve = wit_parser::Resolve::default();
@@ -1175,7 +1176,6 @@ mod tests {
                     ("mod_api_generated.rs", generated.hooks.as_str()),
                     ("mod_api_generated_host.rs", generated.host.as_str()),
                     ("mod_api_host_areas.rs", generated.areas.as_str()),
-                    ("native_render_generated.rs", generated.render.as_str()),
                 ];
                 let wasm = super::generate(&root, &included).unwrap();
                 let mut resolve = wit_parser::Resolve::default();
@@ -1210,7 +1210,6 @@ mod tests {
                     ("mod_api_generated.rs", generated.hooks.as_str()),
                     ("mod_api_generated_host.rs", generated.host.as_str()),
                     ("mod_api_host_areas.rs", generated.areas.as_str()),
-                    ("native_render_generated.rs", generated.render.as_str()),
                 ];
                 let wasm = super::generate(&root, &included).unwrap();
                 let mut resolve = wit_parser::Resolve::default();
@@ -1242,7 +1241,6 @@ mod tests {
                     ("mod_api_generated.rs", generated.hooks.as_str()),
                     ("mod_api_generated_host.rs", generated.host.as_str()),
                     ("mod_api_host_areas.rs", generated.areas.as_str()),
-                    ("native_render_generated.rs", generated.render.as_str()),
                 ];
                 let wasm = super::generate(&root, &included).unwrap();
                 let mut resolve = wit_parser::Resolve::default();
@@ -1274,7 +1272,6 @@ mod tests {
                     ("mod_api_generated.rs", generated.hooks.as_str()),
                     ("mod_api_generated_host.rs", generated.host.as_str()),
                     ("mod_api_host_areas.rs", generated.areas.as_str()),
-                    ("native_render_generated.rs", generated.render.as_str()),
                 ];
                 let wasm = super::generate(&root, &included).unwrap();
                 let mut resolve = wit_parser::Resolve::default();
@@ -1325,7 +1322,6 @@ mod tests {
                     ("mod_api_generated.rs", generated.hooks.as_str()),
                     ("mod_api_generated_host.rs", generated.host.as_str()),
                     ("mod_api_host_areas.rs", generated.areas.as_str()),
-                    ("native_render_generated.rs", generated.render.as_str()),
                 ];
                 let wasm = super::generate(&root, &included).unwrap();
                 let mut resolve = wit_parser::Resolve::default();
@@ -1364,7 +1360,6 @@ mod tests {
             ("mod_api_generated.rs", generated.hooks.as_str()),
             ("mod_api_generated_host.rs", generated.host.as_str()),
             ("mod_api_host_areas.rs", generated.areas.as_str()),
-            ("native_render_generated.rs", generated.render.as_str()),
         ];
         let wasm = super::generate(&root, &included).unwrap();
         for u in &wasm.unbound {

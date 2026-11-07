@@ -2484,6 +2484,11 @@ impl Game<'_> {
                 self.carts.insert(i, c);
             } else {
                 let at = [c.position.x, c.position.y, c.position.z];
+                // VehicleEntity.destroy: `kill` (the cart's own ENTITY_DIE),
+                // then the drops; a creative hit only discards it.
+                if !creative {
+                    self.entity_killed_event(at, false);
+                }
                 if self
                     .ui
                     .rules

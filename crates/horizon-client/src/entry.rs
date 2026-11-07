@@ -35,7 +35,6 @@ pub fn main_with(
             std::process::exit(game::exit_code::ERROR);
         }
     };
-    crate::gfx::native_render::set_mods_built_in(!native.built().is_empty());
     horizon_threads::configure_allocator();
     horizon_client::spans::startup::init(std::time::Instant::now());
     horizon_client::spans::trace::start_from_env();
@@ -170,19 +169,6 @@ pub fn main_with(
         log::info!("Horizon {}", crash::version());
         crash::install(home.clone(), side);
     }
-    let renderers = mod_api::__private::mods()
-        .iter()
-        .enumerate()
-        .filter_map(|(index, m)| {
-            m.fields()
-                .hooks
-                .render()
-                .map(|hooks| mod_api::render::RenderEntry::new(index, hooks))
-        })
-        .collect();
-    if crate::gfx::native_render::install(renderers).is_err() {
-        log::warn!("Trait renderers already installed; keeping the first list");
-    }
     if horizon_world::native_load_hooks::install(
         horizon_world::native_load_hooks::NativeLoadHooks {
             loot_table_load: |context, id, table| {
@@ -240,14 +226,11 @@ pub fn main_with(
 }
 
 pub(crate) fn install_client_hooks() {
+    game::api_values::install_stack_hooks();
     if !crate::native_client_hooks::install(crate::native_client_hooks::NativeClientHooks {
-        menu_slot_rules: |context, menu, slot, stack, may_place, max_stack| {
-            let context = mod_api::OwningLoop::new(context);
-            mod_api::dispatch_menu_slot_rules(&context, menu, slot, stack, may_place, max_stack);
-        },
+        menu_slot_rules: game::api_values::menu_slot_rules,
         item_stacked_on_other: |context, event, canceled| {
-            let context = mod_api::OwningLoop::new(context);
-            mod_api::dispatch_item_stacked_on_other(&context, event, canceled);
+            game::api_values::stacked_on_other(context, event, canceled);
         },
         living_heal: |context, entity, amount, cancel| {
             let context = mod_api::OwningLoop::new(context);

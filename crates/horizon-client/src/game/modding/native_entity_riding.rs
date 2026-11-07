@@ -1212,6 +1212,7 @@ mod tests {
             assert_eq!(cow.dismount_location(game, LivingRef::new(player)), None);
             // An entity Horizon doesn't simulate keeps no box to stand on.
             game.others.push(super::super::commands::OtherEntity {
+                item_transformation: None,
                 id: 132,
                 kind: "minecraft:marker".into(),
                 position: at,

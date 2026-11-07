@@ -310,7 +310,7 @@ impl Game<'_> {
     /// The environment attributes of the current dimension.
     pub(super) fn dim_environment(&self) -> &Environment {
         match self.dim {
-            Dim::Overworld => self.res.environment(),
+            Dim::Overworld | Dim::Extra(_) => self.res.environment(),
             Dim::Nether => self.res.nether_environment(),
             Dim::End => self.res.end_environment(),
         }
@@ -1541,10 +1541,11 @@ impl Game<'_> {
         }
         let tag = if let Some(i) = self.dropped.iter().position(|e| e.id == id) {
             let uuid = self.uuid_for(id);
-            let tag = horizon_client::entity_nbt::item_entity_to_nbt(
+            let tag = horizon_client::entity_nbt::item_entity_to_nbt_with_items(
                 &self.dropped[i],
                 uuid,
                 self.persist_raw(id),
+                self.items(),
             );
             // A gateway keeps the item in its level (teleportSameDimension
             // moves it): it doesn't leave, so no native_entity_leave_level.
