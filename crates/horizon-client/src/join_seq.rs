@@ -173,11 +173,49 @@ impl<T, const DIRECT: bool> Drop for JoinList<T, DIRECT> {
 /// let mut owner = ResidentSlot::<u32>::default();
 /// owner.take();
 /// ```
-pub struct ResidentSlot<T>(Option<T>);
+pub struct ResidentSlot<T>(Option<T>, Option<residency::Binding<T>>);
 
 impl<T> Default for ResidentSlot<T> {
     fn default() -> Self {
-        Self(None)
+        Self(None, None)
+    }
+}
+impl<T> Drop for ResidentSlot<T> {
+    fn drop(&mut self) {
+        self.discard();
+    }
+}
+impl<T> ResidentSlot<T> {
+    /// Bind the singleton to its owning dimension and journal.
+    pub fn bind_residency(
+        &mut self,
+        journal: &residency::Journal,
+        owner: residency::Owner,
+        identity: fn(&T) -> (u32, JoinSeq),
+    ) {
+        self.emit_current(residency::Change::Remove);
+        self.1 = Some(journal.bind(owner, identity));
+        self.emit_current(residency::Change::Install);
+    }
+    fn emit_current(&self, change: fn(residency::Identity) -> residency::Change) {
+        if let (Some(binding), Some(entity)) = (&self.1, &self.0) {
+            binding.entity(entity, change);
+        }
+    }
+    /// Report the existing allocator's delayed zero-to-live id assignment.
+    pub fn id_assigned(&self) {
+        self.emit_current(residency::Change::Install);
+    }
+    /// Finish a consumed extraction after its terminal work has completed.
+    pub fn retire_extracted(&self, id: u32, join: JoinSeq) {
+        if let Some(binding) = &self.1 {
+            binding.identity(id, join, residency::Change::Remove);
+        }
+    }
+    /// Physically discard the owner, if present.
+    pub fn discard(&mut self) {
+        self.emit_current(residency::Change::Remove);
+        self.0 = None;
     }
 }
 
@@ -200,15 +238,20 @@ impl<T: Joined> ResidentSlot<T> {
     /// Explicitly retire any previous owner and install its replacement.
     pub fn replace(&mut self, mut entity: T) {
         JoinList::<T>::number(&mut entity);
+        self.discard();
         self.0 = Some(entity);
+        self.emit_current(residency::Change::Install);
     }
-    /// Move the owner out without dropping it.
+    /// Temporarily move the owner out without retiring its membership.
     pub fn extract(&mut self) -> Option<T> {
+        self.emit_current(residency::Change::Extract);
         self.0.take()
     }
-    /// Physically discard the owner, if present.
-    pub fn discard(&mut self) {
-        drop(self.extract());
+    /// Return an extracted owner, replacing any intervening singleton as before.
+    pub fn put_back(&mut self, entity: T) {
+        self.discard();
+        self.0 = Some(entity);
+        self.emit_current(residency::Change::PutBack);
     }
     /// Borrow entity state; identity and whole-value replacement stay audited.
     pub fn as_mut(&mut self) -> Option<&mut T> {
@@ -262,6 +305,19 @@ impl<T> Default for ResidentList<T> {
 }
 
 impl<T: Joined> ResidentList<T> {
+    /// Bind this family's storage to its owning dimension and journal.
+    pub fn bind_residency(
+        &mut self,
+        journal: &residency::Journal,
+        owner: residency::Owner,
+        identity: fn(&T) -> (u32, JoinSeq),
+    ) {
+        self.0.bind_residency(journal, owner, identity);
+    }
+    /// Report the existing allocator's delayed zero-to-live id assignment.
+    pub fn id_assigned(&self, index: usize) {
+        self.0.id_assigned(index);
+    }
     /// Find an owner using the same lookup as the joined entity lists.
     pub fn locate(&self, join: JoinSeq) -> Option<usize> {
         self.0.locate(join)
@@ -1180,6 +1236,138 @@ mod tests {
         list.id_assigned(0);
         let assigned = residency::Identity::new(7, join).unwrap();
         list.clear();
+        assert_eq!(changes(&journal), [Install(assigned), Remove(assigned)]);
+    }
+
+    #[test]
+    fn journal_singleton_replacement_and_extraction_have_distinct_terminals() {
+        use residency::Change::{Extract, Install, PutBack, Remove};
+        let journal = residency::Journal::default();
+        let mut slot = super::ResidentSlot::default();
+        slot.bind_residency(&journal, journal_owner(), |e: &Entity| (e.value, e.join));
+        slot.install(entity(1)).unwrap();
+        let first = key(slot.as_ref().unwrap());
+        assert!(!slot.install(entity(99)).unwrap_err().join.is_joined());
+        assert_eq!(changes(&journal), [Install(first)]);
+        let held = slot.extract().unwrap();
+        assert_eq!(slot.locate(first.join), None);
+        slot.replace(entity(2));
+        let nested = key(slot.as_ref().unwrap());
+        slot.put_back(held);
+        assert_eq!(key(slot.as_ref().unwrap()), first);
+        assert_eq!(
+            changes(&journal),
+            [
+                Extract(first),
+                Install(nested),
+                Remove(nested),
+                PutBack(first)
+            ]
+        );
+        slot.replace(entity(4));
+        let replacement = key(slot.as_ref().unwrap());
+        assert_eq!(changes(&journal), [Remove(first), Install(replacement)]);
+        assert_eq!(slot.locate(first.join), None);
+        let _ = slot.extract().unwrap();
+        slot.retire_extracted(4, replacement.join);
+        slot.discard();
+        assert_eq!(
+            changes(&journal),
+            [Extract(replacement), Remove(replacement)]
+        );
+        slot.replace(entity(3));
+        let last = key(slot.as_ref().unwrap());
+        assert_eq!(changes(&journal), [Install(last)]);
+        drop(slot);
+        assert_eq!(changes(&journal), [Remove(last)]);
+    }
+
+    #[test]
+    fn journal_singleton_delayed_id_and_rebind_report_the_actual_owner() {
+        use residency::{
+            Change::{Install, Remove},
+            Event, Kind, Owner,
+        };
+        let journal = residency::Journal::default();
+        let home = Owner {
+            kind: Kind::Dragon,
+            ..journal_owner()
+        };
+        let away = Owner {
+            dimension: mod_api::DimensionKey::NETHER,
+            ..home
+        };
+        let mut slot = super::ResidentSlot::default();
+        slot.replace(entity(0));
+        slot.bind_residency(&journal, home, |e| (e.value, e.join));
+        assert!(changes(&journal).is_empty());
+        let join = slot.as_ref().unwrap().join;
+        slot.as_mut().unwrap().value = 7;
+        slot.id_assigned();
+        let identity = residency::Identity::new(7, join).unwrap();
+        let mut events = Vec::new();
+        journal.drain_into(&mut events);
+        assert_eq!(
+            events,
+            [Event {
+                owner: home,
+                change: Install(identity)
+            }]
+        );
+        events.clear();
+        slot.bind_residency(&journal, away, |e| (e.value, e.join));
+        journal.drain_into(&mut events);
+        assert_eq!(
+            events,
+            [
+                Event {
+                    owner: home,
+                    change: Remove(identity)
+                },
+                Event {
+                    owner: away,
+                    change: Install(identity)
+                }
+            ]
+        );
+        events.clear();
+        slot.discard();
+        drop(slot);
+        journal.drain_into(&mut events);
+        assert_eq!(
+            events,
+            [Event {
+                owner: away,
+                change: Remove(identity)
+            }]
+        );
+    }
+
+    #[test]
+    fn journal_resident_wrapper_shares_lift_and_delayed_assignment_protocol() {
+        use residency::Change::{Install, Lifted, Remove, Restored};
+        let journal = residency::Journal::default();
+        let mut list: super::ResidentList<_> = (1..=2).map(entity).collect();
+        list.bind_residency(&journal, journal_owner(), |e| (e.value, e.join));
+        let original: Vec<_> = list.iter().map(key).collect();
+        assert_eq!(
+            changes(&journal),
+            original.into_iter().map(Install).collect::<Vec<_>>()
+        );
+        let taken = list.lift();
+        list.push(entity(3));
+        let spawned = key(&list[0]);
+        list.restore(taken, super::RestoreOrder::SurvivorsFirst);
+        assert_eq!(list.iter().map(|e| e.value).collect::<Vec<_>>(), [1, 2, 3]);
+        assert_eq!(changes(&journal), [Lifted, Install(spawned), Restored]);
+        list.clear();
+        changes(&journal);
+        list.push(entity(0));
+        let join = list[0].join;
+        list.update(0, |e| e.value = 7);
+        list.id_assigned(0);
+        list.clear();
+        let assigned = residency::Identity::new(7, join).unwrap();
         assert_eq!(changes(&journal), [Install(assigned), Remove(assigned)]);
     }
 
