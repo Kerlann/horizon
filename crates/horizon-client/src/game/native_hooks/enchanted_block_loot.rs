@@ -1,4 +1,5 @@
 use super::*;
+use crate::game::api_values::TryIntoApi;
 use horizon_client::items::BlockLootRoll;
 
 impl GameLevel<'_> {
@@ -34,6 +35,7 @@ impl GameLevel<'_> {
         }
         let mut random = self.world.random.clone();
         let mut sequences = std::mem::take(&mut *self.rand_sequences);
+        let tool = roll.held.and_then(|tool| tool.try_into_api().ok());
         let level = &*self;
         let levels = |enchantment: &str, mut read: u32| {
             if let Some(enchantment) = horizon_client::enchantment_levels::identifier(enchantment) {
@@ -41,7 +43,7 @@ impl GameLevel<'_> {
                     dimension: level.dimension,
                     pos,
                     state,
-                    tool: roll.held,
+                    tool: tool.as_ref(),
                     enchantment: &enchantment,
                     level: &mut read,
                     entity,
@@ -69,6 +71,7 @@ impl GameLevel<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::api_values::TryIntoApi;
     use crate::game::native_entity_refs::tests::with_game;
     use horizon_core::random::{LegacyRandom, RandomSource};
     use mod_api::{EnchantedBlockLootEvent, Hooks, LevelHost, ModEntry, testing::with_mods};
@@ -95,7 +98,11 @@ mod tests {
             self.reads.lock().unwrap().push(Read {
                 pos: [event.pos.x, event.pos.y, event.pos.z],
                 state: event.state,
-                tool: event.tool.map(|tool| tool.item.to_string()),
+                tool: event.tool.map(|tool| {
+                    mod_api::__private::item_key_id(tool.item())
+                        .unwrap()
+                        .to_string()
+                }),
                 enchantment: event.enchantment.to_string(),
                 level: event.level,
                 entity: event.entity.map(|entity| entity.id()),
