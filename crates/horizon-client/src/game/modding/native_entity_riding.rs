@@ -1509,10 +1509,11 @@ mod tests {
             assert!(game.start_riding_target(Target::Mob(30), Target::Mob(31), true));
             assert!(!game.start_riding_target(Target::Mob(30), Target::Mob(31), true));
             assert!(!game.start_riding_target(Target::Mob(31), Target::Mob(30), true));
-            assert!(!game.start_riding_target(Target::Mob(32), Target::Mob(31), true));
+            assert!(!game.start_riding_target(Target::Mob(32), Target::Mob(31), false));
+            assert!(game.start_riding_target(Target::Mob(32), Target::Mob(31), true));
             assert_eq!(game.mobs[0].extra.mount, Some(31));
             assert_eq!(game.mobs[1].extra.rider, Some(30));
-            assert_eq!(game.mobs[2].extra.mount, None);
+            assert_eq!(game.mobs[2].extra.mount, Some(31));
             game.dismount_mob(30);
             assert_eq!(game.mobs[0].extra.mount, None);
             assert_eq!(game.mobs[0].extra.boarding_cooldown, 60);
