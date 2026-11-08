@@ -20,6 +20,8 @@ use std::{io::Read, path::Path};
 pub const SCHEMA: u32 = 1;
 /// The biggest file the registry takes (a `.hmod` with content, a `.hpack`).
 pub const MAX_FILE: u64 = 64 << 20;
+/// The biggest native binary build ID, in bytes.
+pub const MAX_NATIVE_BUILD: usize = 128;
 /// Where files may be downloaded from: the registry's release assets.
 pub const FILE_HOST: &str = "https://github.com/horizon-rust/horizon-mods/releases/download/";
 
@@ -179,7 +181,35 @@ pub struct Version {
     /// A modpack's mods, as its manifest lists them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requires: Vec<Requirement>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_binaries: Vec<NativeBinary>,
     pub file: File,
+}
+
+/// Registry-produced metadata; signature acceptance belongs to the binary verifier.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeBinary {
+    pub build: String,
+    pub target: String,
+    pub file: File,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NativeBinaryAbsent;
+
+impl Version {
+    /// Exact lookup only. Absence lets the caller prepare from source.
+    pub fn native_binary(
+        &self,
+        build: &str,
+        target: &str,
+    ) -> Result<&NativeBinary, NativeBinaryAbsent> {
+        self.native_binaries
+            .iter()
+            .find(|b| b.build == build && b.target == target)
+            .ok_or(NativeBinaryAbsent)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -298,6 +328,38 @@ impl Index {
                     || p.versions[..j].iter().any(|w| w.version == v.version)
                 {
                     return Err(at("empty or repeated version".into()));
+                }
+                let mut pairs = std::collections::HashSet::new();
+                for b in &v.native_binaries {
+                    if b.build.len() > MAX_NATIVE_BUILD
+                        || b.build.bytes().any(|c| c.is_ascii_control())
+                        || b.build.is_empty()
+                        || b.build.trim() != b.build
+                        || b.target.split('-').count() < 3
+                        || !b.target.bytes().all(|c| {
+                            c.is_ascii_lowercase() || c.is_ascii_digit() || b"-_.".contains(&c)
+                        })
+                        || b.target.split('-').any(str::is_empty)
+                    {
+                        return Err(at("invalid native build or canonical target triple".into()));
+                    }
+                    if !pairs.insert((&b.build, &b.target)) {
+                        return Err(at("duplicate native build and target".into()));
+                    }
+                    let f = &b.file;
+                    if !plain_name(&f.name) || f.size == 0 || f.size > MAX_FILE {
+                        return Err(at("invalid native binary file".into()));
+                    }
+                    if !(local_files && f.url.starts_with("file:///")) {
+                        https(&f.url).map_err(at)?;
+                    }
+                    hex64(&f.sha256).map_err(at)?;
+                    let signature = f
+                        .signature
+                        .as_deref()
+                        .ok_or_else(|| at("native binary needs a signature".into()))?;
+                    minisign_verify::Signature::decode(signature)
+                        .map_err(|e| at(format!("native signature: {e}")))?;
                 }
                 let f = &v.file;
                 let extension_ok = p

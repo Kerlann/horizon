@@ -225,6 +225,8 @@ impl Entry {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct EntryVersion {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_binaries: Vec<super::NativeBinary>,
     pub version: String,
     /// `YYYY-MM-DD`.
     pub published: String,
@@ -507,6 +509,7 @@ fn version_at(
         ));
     }
     Ok(Version {
+        native_binaries: v.native_binaries.clone(),
         version: v.version.clone(),
         published: v.published.clone(),
         changelog: v.changelog.clone(),
@@ -580,6 +583,7 @@ pub fn release_version(entry: &Entry, r: &Release, path: &Path) -> Result<Versio
         notes.push_str("\n\n(Cut: the full notes are on the release.)");
     }
     let v = EntryVersion {
+        native_binaries: Vec::new(),
         game: facts.game.clone().unwrap_or_else(|| r.game.to_owned()),
         file: r.asset.to_owned(),
         sha256: super::sha256_file(path)?,

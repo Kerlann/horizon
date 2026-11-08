@@ -121,6 +121,7 @@ fn searches_by_kind_and_words() {
     let mut dated = counted.clone();
     let base = dated.projects[0].versions[0].clone();
     let version_on = |day: &str| index::Version {
+        native_binaries: Vec::new(),
         published: day.into(),
         ..base.clone()
     };

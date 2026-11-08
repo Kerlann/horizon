@@ -67,7 +67,6 @@ horizon-client game::native_player_break::tests::drops_go_into_the_inventory_rol
 horizon-client game::explosion::tests::explosion_items_parity_fixture #2177 harness
 horizon-client game::native_live_holder_tests::thousand_live_block_entity_ticks #2177 harness
 horizon-client game::remote_vehicles::tests::steering_mount_control_matches_vanilla #2177 harness
-horizon-client game::falling_damage::tests::no_helmet_or_a_refused_hit_fires_no_helmet_wear #2178
 horizon-client game::native_damage_tests::arrow_hits_name_the_projectile_on_players_mobs_and_the_dragon #2178
 horizon-client game::native_player_modes::tests::one_player_may_harm_another_by_the_pvp_rule_and_their_teams #2178
 horizon-client game::functions::tests::world_open_loads_functions_before_first_tick #2179
@@ -79,15 +78,12 @@ horizon-client game::server_reload::tests::server_reload_skips_unparsable_files_
 horizon-client game::world_test_def_tests::a_world_keeps_the_test_instances_it_opened_with #2179
 horizon-client game::item_contact_tests::the_active_stack_survives_a_partial_contact_and_consumption_removes_the_entity #2180
 horizon-client game::item_interact_mob_tests::actual_item_interact_mob_fallback_priority_and_filters #2180
-horizon-client game::native_hooks::fluid_draw::tests::a_mod_edits_a_fluid_tooltip #2180
 horizon-client game::spill::tests::a_block_entity_removing_itself_in_its_tick_is_not_asked #2180
 horizon-client game::lan::tests::datapack_damage_lazy_wire_load_caches_after_all_packs_are_removed #2181
 horizon-client game::lan::world_spawn_sync_tests::setworldspawn_reaches_guests_in_other_dimensions_and_keeps_compass_overrides #2181
 horizon-client game::lan_actions::crack_feedback_tests::crack_packets_follow_start_clock_and_strict_observer_radius #2181
 horizon-client game::remote::level_sound_tests::packets_ask_client_level_before_playback_not_ui #2181
-horizon-client game::native_block_entity_item_tests::internal_slots_preserve_automation_limits_and_nested_transactions #2182
 horizon-client game::native_hooks::tests::declared_types_create_tick_and_reload_through_game #2182
-horizon-client game::native_live_holder_tests::data_slot_sizing_after_creation_and_load_joins_the_existing_journal #2182
 horizon-client game::stateful_block_entity_tests::stateful_creation_uses_actual_state_and_preserves_existing_entity #2182
 horizon-client game::native_components::item_resource_property_tests::effective_resource_properties_match_vanilla #2183
 horizon-client game::native_components::item_resource_property_tests::item_resource_changed_defaults_and_consumption #2183

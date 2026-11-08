@@ -97,10 +97,10 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_mod_edits_a_fluid_tooltip() {
-        mod_api::__private::part_tests::game_thread();
-        let water = mod_api::__private::fluid_key("minecraft:water").unwrap();
-        let stack = FluidStack::new(water, 750);
-        crate::game::native_entity_refs::tests::with_game(|game| {
+        // Load the real registries on the client side before resolving the fluid.
+        crate::game::native_entity_refs::tests::with_client_game(|game| {
+            let water = mod_api::__private::fluid_key("minecraft:water").unwrap();
+            let stack = FluidStack::new(water, 750);
             let plain = |lines: Vec<(Text, u32)>| -> Vec<(String, u32)> {
                 lines.into_iter().map(|(t, c)| (t.plain(), c)).collect()
             };

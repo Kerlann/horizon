@@ -251,6 +251,7 @@
   "E_INTERNAL_GATED: {mod} uses {path}, which exists only under a cfg; target-specific internals aren't supported.": "E_INTERNAL_GATED: {mod} uses {path}, which exists only under a cfg; target-specific internals aren't supported.",
   "E_INTERNAL_MISSING: {mod} uses {path}, which this game doesn't have; run cargo horizon-mod internals sync to discover this pin's used internals.": "E_INTERNAL_MISSING: {mod} uses {path}, which this game doesn't have; run cargo horizon-mod internals sync to discover this pin's used internals.",
   "E_INTERNAL_SOURCE_UNAVAILABLE: internals sync needs the source for {revision}. It is not cached and could not be downloaded: {error}": "E_INTERNAL_SOURCE_UNAVAILABLE: internals sync needs the source for {revision}. It is not cached and could not be downloaded: {error}",
+  "Registry native binary for {mod}: {url}": "Native Binärdatei aus der Registry für {mod}: {url}",
   "{path} is not a native mod project.": "{path} is not a native mod project.",
   "Internals discovery failed; the manifest was not changed. {error}": "Internals discovery failed; the manifest was not changed. {error}",
   "Game internals must be declared: run cargo horizon-mod internals sync in the mod's folder, then build again.": "Game internals must be declared: run cargo horizon-mod internals sync in the mod's folder, then build again.",

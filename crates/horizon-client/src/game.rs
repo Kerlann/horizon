@@ -12348,6 +12348,10 @@ impl Game<'_> {
             }
             Some(stack)
         });
+        // No equipment can wear: there is no armor damage event to dispatch.
+        if eligible.iter().all(Option::is_none) {
+            return;
+        }
         // ArmorHurtEvent: once for the pieces that would wear, a server player's only.
         let mut amounts = [amount; 4];
         if mod_api::__private::listened(mod_api::HookId::ArmorHurt)

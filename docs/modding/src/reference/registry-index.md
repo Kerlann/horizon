@@ -58,6 +58,16 @@ Level: preview ([API stability](../../../api/stability.md)). Schema 1.
 Readers ignore fields they don't know, so an optional field can be added to schema 1. Renaming or removing a field, or
 changing what one means, makes schema 2.
 
+Each version may list `native_binaries`, an array of records with `build` (the
+exact game build ID, at most 128 bytes with no ASCII control characters), `target` (the canonical Rust target triple), and `file`.
+The file uses the index's existing name, URL, size, SHA-256 and minisign signature
+fields; the signature is required. Records live only in the registry, never in
+`horizon-mod.toml`. Duplicate build/target pairs are rejected. Lookup returns a
+typed absence when the exact pair is unavailable, so source preparation can
+handle it without selecting another build or architecture. These signatures are
+registry-produced metadata; binary trust acceptance belongs to the verifier
+([#804](https://github.com/arismoko/horizon/issues/804)), independently of project package keys.
+
 ## Before a file is installed
 
 `index::check_file` runs on the downloaded file, before it reaches the game folder:
@@ -243,6 +253,7 @@ API line are its facts. A new kind gets its own check before it opens.
 
 ## Changelog
 
+- 2026-11-08: per-version `native_binaries` records index native mod files by exact game build and Rust target triple.
 - 2026-11-05: `projects[].stars` adds the GitHub source repository's star count without changing schema 1.
 - 2026-11-05: every listed project needs a description of 50 characters or more, 1 to 3 categories and an icon kept in the registry (`icons/<id>.png`); screenshots are kept in the registry too (`registry build` refuses https:// images in entries).
 - 2026-10-30: an entry names its GitHub repository (`repo`) and its versions are the repository's releases, read by the registry's CI; `file.url` may be a release asset of that repository. The index's schema is unchanged.

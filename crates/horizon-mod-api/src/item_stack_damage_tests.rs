@@ -32,7 +32,20 @@ impl crate::Host for Definitions {
     }
 }
 crate::impl_host_areas!(Definitions, except(items));
-crate::impl_backend_areas!(Definitions, except(keys));
+impl crate::prelude::ItemsBackend for Definitions {
+    /// `ItemStack.isDamageableItem` over this fixture's prototypes: maximum damage and damage
+    /// after the stack's patch, and no unbreakable component.
+    fn item_resource_damageable(&self, stack: &ItemStack) -> bool {
+        let resource = crate::ItemResource::of(stack);
+        let has = |id: &str| {
+            resource
+                .value(self, &crate::ComponentId::new(id).unwrap())
+                .is_some()
+        };
+        has("minecraft:max_damage") && has("minecraft:damage") && !has("minecraft:unbreakable")
+    }
+}
+crate::impl_backend_areas!(Definitions, except(keys, items));
 impl crate::Backend for Definitions {}
 
 #[test]
