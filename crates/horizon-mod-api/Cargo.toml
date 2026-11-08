@@ -35,6 +35,7 @@ wasm-guest = []
 # Measurement-only pool accounting; not enabled in production.
 wire-pool-profile = []
 wire-phase-profile = []
+wire-roundtrip-profile = ["wasm-guest"]
 
 [lints]
 workspace = true
