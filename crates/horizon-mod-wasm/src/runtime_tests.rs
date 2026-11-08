@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "runtime_export_bench.rs"]
+mod export_profile;
+
 struct Random<F>(F);
 impl<F: FnMut() -> i64> mod_api::StructureRandom for Random<F> {
     fn next_int_bound(&mut self, _: i32) -> i32 {
