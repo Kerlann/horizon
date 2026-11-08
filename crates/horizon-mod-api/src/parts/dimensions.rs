@@ -66,7 +66,6 @@ impl dyn Registrar + '_ {
 pub trait DimensionsRegistrar {
     /// Register dimension `name` with `settings`; mods reach it through
     /// `register_dimension`.
-    /// Not on wasm: dimension settings have no wire layout yet.
     fn add_dimension(&mut self, name: &str, settings: crate::DimensionSettings);
     /// Register chunk generator `name` with `generator`; mods reach it through
     /// `register_chunk_generator`.

@@ -284,6 +284,7 @@ fn evict(state: &[AtomicUsize; GROUP_WORDS]) -> bool {
     ran
 }
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// The group's allocator: `inner` first, and when it answers null, the group's eviction callbacks
 /// and `inner` once more. The success path is `inner` and one null check.
 pub struct EvictingAlloc<A> {
@@ -384,6 +385,7 @@ pub fn begin() -> Writer {
     writer
 }
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// The game's answer to a call, read once; its buffer goes back to the pool when it drops.
 pub struct Reply(Vec<u8>);
 
@@ -574,6 +576,7 @@ pub fn unsupported(what: &str) -> ! {
     panic!("{what} is not available to wasm mods yet")
 }
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// The game's object the mod holds by `id`: each of its methods is a call to the game, and it
 /// is released when the mod drops it.
 #[derive(Debug)]
@@ -634,6 +637,7 @@ fn dispatch(id: u32, input: &mut Reader<'_>, out: &mut Writer) -> Result<(), Wir
     }
 }
 
+// hidden: wasm boundary plumbing used by generated code, not a mod's API
 /// Installs the guest's resource registry for a synchronous wire operation.
 #[doc(hidden)]
 pub fn resource_scope() -> crate::wire::ResourceScope {

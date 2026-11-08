@@ -630,11 +630,10 @@ mod tests {
             pack.left_off,
             ["allthemodium: CurseForge downloads coming soon"]
         );
-        assert!(
-            pack.jars()
-                .unwrap()
-                .contains("CurseForge downloads coming soon")
-        );
+        assert!(pack
+            .jars()
+            .unwrap()
+            .contains("CurseForge downloads coming soon"));
         fs::remove_dir_all(&work).unwrap();
     }
 
@@ -697,10 +696,9 @@ mod tests {
         apply_profile(&mut cmd, &work).unwrap();
         assert_eq!(cmd.get_args().count(), 0);
         assert_eq!(cmd.get_current_dir(), Some(home.as_path()));
-        assert!(
-            cmd.get_envs()
-                .any(|(k, v)| k == "HORIZON_HOME" && v == Some(home.as_os_str()))
-        );
+        assert!(cmd
+            .get_envs()
+            .any(|(k, v)| k == "HORIZON_HOME" && v == Some(home.as_os_str())));
         assert!(home.join("resourcepacks/Look/pack.mcmeta").is_file());
         assert_eq!(
             fs::read(home.join("resourcepacks/look.zip")).unwrap(),
@@ -714,11 +712,10 @@ mod tests {
         assert!(pack.can_play());
         assert!(!pack.can_port());
         assert_eq!(pack.resourcepacks, 2);
-        assert!(
-            pack.left_off
-                .iter()
-                .any(|l| l.contains("Conflict") && l.contains("look.zip"))
-        );
+        assert!(pack
+            .left_off
+            .iter()
+            .any(|l| l.contains("Conflict") && l.contains("look.zip")));
         assert!(outcome(&pack).contains("2 resource packs available"));
         apply_profile(&mut Command::new("true"), &work).unwrap();
         fs::remove_dir_all(root).unwrap();

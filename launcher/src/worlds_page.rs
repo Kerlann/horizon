@@ -219,7 +219,11 @@ impl Launcher {
         facts.push(megabytes(w.size));
         let act = |id: &str, label: &'static str, kind: Kind| {
             let b = button(SharedString::from(format!("{id}-{i}")), label, kind, &t);
-            if busy { disabled(b) } else { b }
+            if busy {
+                disabled(b)
+            } else {
+                b
+            }
         };
         let mut actions = div().flex().items_center().gap(px(6.));
         if confirming {

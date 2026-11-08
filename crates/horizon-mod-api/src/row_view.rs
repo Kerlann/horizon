@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::wire::{Reader, RecordPatch, Wire, WireError};
 use crate::{Row, RowError, RowPages, RowWindow};
 
+// exhaustive: generated boundary code builds it; its fields are private
 /// A node and an owned snapshot of rows, with an optional source for further windows.
 /// Cached rows remain readable after the source expires; uncached reads report its refusal.
 #[derive(Clone)]

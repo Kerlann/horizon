@@ -79,11 +79,9 @@ fn lists_adds_and_removes_as_the_game_reads_them() {
     // A pack disabled before it was taken out comes back on.
     let gone = add(&world, &drops.join("Gone.zip")).unwrap();
     assert!(gone.enabled);
-    assert!(
-        !fs::read_to_string(world.join("datapacks.json"))
-            .unwrap()
-            .contains("Gone.zip")
-    );
+    assert!(!fs::read_to_string(world.join("datapacks.json"))
+        .unwrap()
+        .contains("Gone.zip"));
     assert_eq!(
         add(&world, &drops.join("Trades.zip")).unwrap().file,
         "Trades (2).zip"
@@ -97,11 +95,9 @@ fn lists_adds_and_removes_as_the_game_reads_them() {
     remove(&world, &folder).unwrap();
     std::env::remove_var(crate::desktop_seams::TRASH_ENV);
     assert!(trash.join("folder pack/pack.mcmeta").is_file());
-    assert!(
-        !fs::read_to_string(world.join("datapacks.json"))
-            .unwrap()
-            .contains("folder pack")
-    );
+    assert!(!fs::read_to_string(world.join("datapacks.json"))
+        .unwrap()
+        .contains("folder pack"));
     assert_eq!(find(&world, "Trades").unwrap().file, "Trades.zip");
     fs::remove_dir_all(&root).unwrap();
 }

@@ -407,11 +407,9 @@ fn curseforge_instances_read_their_version_and_loader() {
         );
     }
     // Without a recorded version, a version is still asked for; with one, it is not.
-    assert!(
-        import(by("neither"), "x", None)
-            .unwrap_err()
-            .contains("--minecraft")
-    );
+    assert!(import(by("neither"), "x", None)
+        .unwrap_err()
+        .contains("--minecraft"));
     // The Instances folder itself reads all of them the same way.
     let all = in_folder(&root.join("Instances"), None);
     assert_eq!(all, found);

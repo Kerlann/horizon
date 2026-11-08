@@ -31,17 +31,15 @@ struct Pack { assets: Assets }
 struct Audio { capture: Option<()> }
 mod horizon_client { pub mod particles {
     pub enum ParticleType { Block }
-} }
-mod mod_api { pub mod particles {
     pub struct ParticleOptions;
     impl ParticleOptions {
-        pub fn block(_: crate::horizon_client::particles::ParticleType, _: String, _: u32) -> Self { Self }
+        pub fn block(_: ParticleType, _: String, _: u32) -> Self { Self }
     }
 } }
 #[derive(Default)]
 struct Particles { count: u32 }
 impl Particles {
-    fn send_particles(&mut self, _: &mod_api::particles::ParticleOptions,
+    fn send_particles(&mut self, _: &horizon_client::particles::ParticleOptions,
         at: [f64; 3], spread: [f64; 3], speed: f64, count: u32) {
         assert!((at[1] - (10.0 + 1.0/6.0)).abs() < 1e-12);
         assert_eq!(spread, [0.25, 0.0625, 0.25]);
