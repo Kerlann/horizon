@@ -729,7 +729,7 @@ mod tests {
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
-    fn full_vehicles_do_not_fire_mount_hooks_for_commands_or_handles() {
+    fn full_vehicle_checks_distinguish_forced_mobs_from_storage_limits() {
         use super::super::boats::Boat;
         let events = Arc::new(Mutex::new(Vec::new()));
         let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
@@ -765,14 +765,21 @@ mod tests {
                 game.mobs[3].extra.mount = Some(44);
                 game.riding = Some(44);
                 events.lock().unwrap().clear();
-                assert!(!game.run_command(pig));
-                assert!(!game.run_command(boat));
                 let rider = game.entity(40).unwrap();
                 for id in [41, 44] {
                     let vehicle = game.entity(id).unwrap();
-                    assert!(!game.entity_start_riding(rider, vehicle, true));
+                    assert!(!game.entity_start_riding(rider, vehicle, false));
                 }
+                // Boats keep their storage limit even for commands and forced handles.
+                assert!(!game.run_command(boat));
+                let vehicle = game.entity(44).unwrap();
+                assert!(!game.entity_start_riding(rider, vehicle, true));
                 assert!(events.lock().unwrap().is_empty());
+                // /ride forces mob boarding: capacity alone must not suppress its hook.
+                assert!(game.run_command(pig));
+                assert_eq!(*events.lock().unwrap(), [true]);
+                assert_eq!(game.mobs[0].extra.mount, Some(41));
+                assert_eq!(game.mobs[2].extra.mount, Some(41));
             });
         });
     }
