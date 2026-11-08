@@ -448,22 +448,8 @@ fn import_body(types: &Types<'_>, m: &Method, id: usize, prefix: &str) -> String
             "let answer: {owned} = r.take().expect(\"the host answered with a value of the wrong type\"); {lent}"
         )
     };
-    // Only dimension() is approved for root-call memoization. The key excludes
-    // its static-reply acknowledgement, which is transport state, not an argument.
-    if m.owner == "Host" && m.name == "dimension" && static_string {
-        return format!(
-            "{sig} {{ let mut w = {guest}::begin(); {prefix} {put} let key = {guest}::memo_key({id}u32, &w.bytes()[4..]); let (answer,()):(&'static str,()) = {guest}::memoized({id}u32, key, w, |r| r.take_static()).expect(\"the host answered with an invalid static string\"); answer }}"
-        );
-    }
-    // These lookups preserve dimension context, but their own results are NOT memoized.
-    // Unknown imports invalidate even with &self: set_setting has interior effects.
-    let call = match (m.owner, m.name.as_str()) {
-        ("Host", "level" | "max_stack_size")
-        | ("Backend", "level_block" | "recipe_ingredient_test") => "host_preserving",
-        _ => "host",
-    };
     format!(
-        "{sig} {{ let mut w = {guest}::begin(); {prefix} {put} let r = {guest}::{call}({id}u32, w); {take} }}"
+        "{sig} {{ let mut w = {guest}::begin(); {prefix} {put} let r = {guest}::host({id}u32, w); {take} }}"
     )
 }
 
